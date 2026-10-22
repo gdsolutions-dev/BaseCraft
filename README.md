@@ -49,6 +49,13 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 
 Not planned: VBA compatibility, concurrent design by several people, a web or mobile version.
 
+## Download
+
+Preview builds for Windows and Linux (x64) are on the [Releases page](https://github.com/gdsolutions-dev/BaseCraft/releases). They are early previews: do not use them for important data yet.
+
+- **Windows:** `BaseCraft-x.y.z-win-x64.exe` (installer) or `.zip` (portable). The builds are not signed yet, so Windows SmartScreen may warn you: choose *More info*, then *Run anyway*.
+- **Linux:** `BaseCraft-x.y.z-linux-x86_64.AppImage` (make it executable, then run it) or `.tar.gz`.
+
 ## Build from source
 
 Requirements: [Node.js](https://nodejs.org/) 24 or later (BaseCraft uses the built-in `node:sqlite`).
@@ -59,6 +66,8 @@ npm run dev        # start the app in development mode
 npm test           # unit tests (Vitest)
 npm run typecheck  # TypeScript checks
 npm run e2e        # end-to-end tests (Playwright + Electron)
+npm run dist:win   # Windows installer and zip, in dist/ (run on Windows)
+npm run dist:linux # Linux AppImage and tar.gz, in dist/ (run on Linux)
 ```
 
 Stack: Electron, React, TypeScript, Vite, Glide Data Grid, SQLite.

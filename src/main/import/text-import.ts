@@ -9,7 +9,7 @@ import {
   type ImportEncoding, type ImportPlan, type ImportResult, type ImportSpec, type ResolvedEncoding, type TextPreview,
 } from '../../shared/import-text';
 import type { LocaleInfo } from '../../shared/locale-format';
-import { createTable, DesignValidationError, listTables, NameExistsError, tableDesign } from '../db/schema';
+import { createTable, DanglingKeyError, DesignValidationError, listTables, NameExistsError, tableDesign } from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
 import { insertRow } from '../db/write-layer';
 import { detectHeader, inferFields, SAMPLE } from './infer';
@@ -121,6 +121,7 @@ function prepare(db: DatabaseSync, plan: ImportPlan, idName: string): { design: 
     } catch (e) {
       if (e instanceof DesignValidationError) throw new ImportFailure({ ok: false, reason: 'design', errors: e.errors });
       if (e instanceof NameExistsError) throw new ImportFailure({ ok: false, reason: 'nameExists' });
+      if (e instanceof DanglingKeyError) throw new ImportFailure({ ok: false, reason: 'danglingKey', table: e.table });
       throw e;
     }
     return { design: tableDesign(db, r.design.name), columns: r.columns };

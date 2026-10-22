@@ -16,7 +16,8 @@ import { acquireLock, peekLock, takeOverStaleLock, type HeldLock, type LockDeps,
 import { detectLocationRisk, type LocationRisk, type RiskProbe } from './db/location-risk';
 import { countRows, readRows, type PageRequest, type RowPage } from './db/rows';
 import {
-  createTable, DesignValidationError, dropTable, listTables, NameExistsError, reconcile, renameTable, tableDesign, type TableSummary,
+  cascadeChildren, createTable, DanglingKeyError, DesignValidationError, dropTable, listTables, NameExistsError, reconcile, renameTable, tableDesign,
+  ViewBrokenError, type TableSummary,
 } from './db/schema';
 import { deleteRows, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
@@ -215,6 +216,7 @@ export class Session {
     } catch (e) {
       if (e instanceof DesignValidationError) return { ok: false, reason: 'design', errors: e.errors };
       if (e instanceof NameExistsError) return { ok: false, reason: 'nameExists' };
+      if (e instanceof DanglingKeyError) return { ok: false, reason: 'danglingKey', table: e.table };
       throw e;
     }
   }
@@ -227,6 +229,8 @@ export class Session {
     } catch (e) {
       if (e instanceof DesignValidationError) return { ok: false, reason: 'nameInvalid' };
       if (e instanceof NameExistsError) return { ok: false, reason: 'nameExists' };
+      if (e instanceof DanglingKeyError) return { ok: false, reason: 'danglingKey', table: e.table };
+      if (e instanceof ViewBrokenError) return { ok: false, reason: 'viewBroken', view: e.view };
       throw e;
     }
   }
@@ -254,6 +258,7 @@ export class Session {
   deleteRelation(name: string): OpResult { return deleteRelation(this.writeDb(), name, this.info); }
   relationsLayout(): RelationsLayout { return relationsLayout(this.conn()); }
   saveRelationsLayout(layout: RelationsLayout): void { saveRelationsLayout(this.writeDb(), layout); }
+  cascadeChildren(table: string): string[] { return cascadeChildren(this.conn(), table); }
 
   importPreview(path: string, spec: ImportSpec | null, fieldPrefix: string): TextPreview {
     this.conn();

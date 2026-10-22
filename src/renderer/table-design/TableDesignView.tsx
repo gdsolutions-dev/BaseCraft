@@ -87,7 +87,11 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
       case 'required': await message('designer.required', { count: r.rows, field: r.field }); return false;
       case 'duplicate': await message('designer.duplicate', { field: r.field }); return false;
       case 'external': await message('designer.external'); return false;
-      case 'relationField': await message('designer.relationField', { field: r.field, relation: r.relation }); return false;
+      case 'relationField':
+        await message(r.relation ? 'designer.relationField' : 'designer.foreignKeyField', { field: r.field, relation: r.relation, table: r.table });
+        return false;
+      case 'viewBroken': await message('designer.viewBroken', { name: r.view }); return false;
+      case 'danglingKey': await message('designer.danglingKey', { name: r.table }); return false;
       case 'validationExisting':
         return (await modal.confirm({ titleKey: 'designer.validationExistingTitle', messageKey: 'designer.validationExisting', params: { count: r.rows }, buttons: ['yes', 'no'], defaultButton: 'no' })) === 'yes';
       case 'readOnly': await message('dialog.op.readOnly'); return false;

@@ -167,6 +167,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(str(n))));
   handle(CH.relationsLayout, () => need().relationsLayout());
   handle(CH.relationsSaveLayout, (l) => rowWrite(() => need().saveRelationsLayout(relationsLayout(l))));
+  handle(CH.relationsCascadeChildren, (t) => need().cascadeChildren(str(t)));
 
   handle(CH.importPick, async () => {
     const p = await pickImportPath({ text: catalog().importText.filterText, all: catalog().importText.filterAll });

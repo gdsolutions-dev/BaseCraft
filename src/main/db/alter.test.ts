@@ -142,7 +142,7 @@ describe('alterTable (guards and edge cases)', () => {
     expect(rowsOf(db, 'Personnes "VIP" été').map((r) => r.Nom)).toEqual(['Dupont', 'Durand']);
     expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'bcx_%'`).all()).toEqual([{ name: 'bcx_Personnes "VIP" été.Nom' }]);
     expect(db.prepare('SELECT DISTINCT table_name AS n FROM bc_fields').all()).toEqual([{ n: 'Personnes "VIP" été' }]);
-    expect(reconcile(db)).toEqual({ addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [] });
+    expect(reconcile(db)).toEqual({ addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [] });
     expect(insertRaw(db, 'Personnes "VIP" été', { Nom: 'X' })).toBe(4);
     expect(() => createTable(db, t('T', [f('A', 'shortText')]))).not.toThrow();
   });

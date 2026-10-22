@@ -58,7 +58,7 @@ export function NavPane({ tables, readOnly, activeName, visible, onToggle, dispa
     try {
       const r = await api.tables.rename(name, to);
       if (r.ok) dispatch({ type: 'tableRenamed', from: name, to });
-      else await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, params: { name: 'table' in r ? r.table : name }, buttons: ['ok'] });
+      else await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, params: { name: 'table' in r ? r.table : 'view' in r ? r.view : name }, buttons: ['ok'] });
     } catch (e) { await showError(e); }
   };
 
@@ -68,7 +68,7 @@ export function NavPane({ tables, readOnly, activeName, visible, onToggle, dispa
     try {
       const r = await api.tables.drop(name);
       if (r.ok) dispatch({ type: 'tableDropped', name });
-      else await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, params: { name: 'table' in r ? r.table : name }, buttons: ['ok'] });
+      else await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, params: { name: 'table' in r ? r.table : 'view' in r ? r.view : name }, buttons: ['ok'] });
     } catch (e) { await showError(e); }
   };
 

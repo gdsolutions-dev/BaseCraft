@@ -52,6 +52,7 @@ export interface ImportProgress { done: number; total: number }
 export type ImportResult =
   | { ok: true; table: string; imported: number; errors: number; errorTable?: string }
   | { ok: false; reason: 'nameExists' }
+  | { ok: false; reason: 'danglingKey'; table: string } // `table` has a FOREIGN KEY to a dropped table of that name
   | { ok: false; reason: 'design'; errors: DesignError[] };
 
 const MAX_FIELDS = 255;

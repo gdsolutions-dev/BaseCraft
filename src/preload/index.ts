@@ -52,6 +52,7 @@ const api: BasecraftApi = {
     delete: (name) => ipcRenderer.invoke(CH.relationsDelete, name),
     layout: () => ipcRenderer.invoke(CH.relationsLayout),
     saveLayout: (l) => ipcRenderer.invoke(CH.relationsSaveLayout, l),
+    cascadeChildren: (table) => ipcRenderer.invoke(CH.relationsCascadeChildren, table),
   },
   importText: {
     pickFile: () => ipcRenderer.invoke(CH.importPick),

@@ -82,8 +82,8 @@ export function saveRelation(db: DatabaseSync, rel: Relation, originalName: stri
   if (originalName !== null && !original) throw new Error(`unknown relation: ${originalName}`);
   // An external table cannot join a relation. One already in it stays editable: withChildren refuses only a rebuild, and
   // a key to an external parent is only added when the relation has integrity.
-  if ((rel.enforce || !original || !sameName(original.parentTable, parent.name)) && isExternal(db, parent)) return { ok: false, reason: 'external' };
-  if ((!original || !sameName(original.childTable, child.name)) && isExternal(db, child)) return { ok: false, reason: 'external' };
+  if ((rel.enforce || !original || !sameName(original.parentTable, parent.name)) && isExternal(db, parent)) return { ok: false, reason: 'external', table: parent.name };
+  if ((!original || !sameName(original.childTable, child.name)) && isExternal(db, child)) return { ok: false, reason: 'external', table: child.name };
   const parentFields = pf.map((x) => x!.name);
   if (rel.enforce && !uniqueKey(parent, parentFields)) return { ok: false, reason: 'parentNotUnique' };
   if (pf.some((x, i) => keyType(x!) !== keyType(cf[i]!))) return { ok: false, reason: 'typesMismatch' };
@@ -107,14 +107,13 @@ export function saveRelation(db: DatabaseSync, rel: Relation, originalName: stri
     const rows = orphans(db, relation);
     if (rows > 0) return { ok: false, reason: 'violations', rows };
   }
-  const r = withChildren(db, original ? [original.childTable, child.name] : [child.name], info, () => {
+  return withChildren(db, original ? [original.childTable, child.name] : [child.name], info, () => {
     const kept = original ? storedProps(db, original.name) : {};
     if (original) db.prepare('DELETE FROM bc_relations WHERE name = ?').run(original.name);
     const { name: _name, ...props } = relation;
     db.prepare('INSERT INTO bc_relations (name, props) VALUES (?, ?)').run(name, JSON.stringify({ ...kept, ...props }));
     return { ok: true as const, relation };
   });
-  return r.ok || r.reason !== 'external' ? r : { ok: false, reason: 'external' };
 }
 
 /** Deletes a relation; with integrity, its child is rebuilt without the FOREIGN KEY clause. */

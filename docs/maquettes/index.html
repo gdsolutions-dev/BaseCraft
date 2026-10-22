@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BaseCraft — maquettes</title>
+<style>
+/* ==== Jetons de thème BaseCraft : bloc recopié tel quel dans src/renderer/theme.css ==== */
+:root {
+  color-scheme: light;
+  --bc-bg: #f2f3f5;
+  --bc-surface: #ffffff;
+  --bc-surface-2: #f7f8fa;
+  --bc-text: #1b1f27;
+  --bc-text-muted: #5f6775;
+  --bc-border: #e1e4e9;
+  --bc-accent: #3e63dd;
+  --bc-accent-contrast: #ffffff;
+  --bc-danger: #d92d20;
+  --bc-warning: #b45309;
+  --bc-radius: 6px;
+  --bc-space-1: 4px;
+  --bc-space-2: 8px;
+  --bc-space-3: 12px;
+  --bc-space-4: 16px;
+  --bc-font: "Inter Variable", "Inter", system-ui, sans-serif;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bc-bg: #121418;
+  --bc-surface: #1a1d23;
+  --bc-surface-2: #22262d;
+  --bc-text: #e6e8ec;
+  --bc-text-muted: #9aa1ad;
+  --bc-border: #2e333c;
+  --bc-accent: #7b93f7;
+  --bc-accent-contrast: #0b1020;
+  --bc-danger: #f87171;
+  --bc-warning: #f0a43a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bc-bg: #121418;
+    --bc-surface: #1a1d23;
+    --bc-surface-2: #22262d;
+    --bc-text: #e6e8ec;
+    --bc-text-muted: #9aa1ad;
+    --bc-border: #2e333c;
+    --bc-accent: #7b93f7;
+    --bc-accent-contrast: #0b1020;
+    --bc-danger: #f87171;
+    --bc-warning: #f0a43a;
+  }
+}
+/* ==== Fin des jetons ==== */
+
+/* Police servie localement (dans l'application : @fontsource-variable/inter) */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(fonts/inter-latin-wght-normal.woff2) format("woff2-variations");
+}
+
+/* Teintes dérivées des jetons, propres à la maquette */
+:root {
+  --hover: color-mix(in srgb, var(--bc-text) 6%, transparent);
+  --accent-soft: color-mix(in srgb, var(--bc-accent) 14%, transparent);
+  --accent-faint: color-mix(in srgb, var(--bc-accent) 7%, transparent);
+  --grid-line: color-mix(in srgb, var(--bc-border) 70%, transparent);
+  --dot: color-mix(in srgb, var(--bc-text-muted) 28%, transparent);
+  --shadow: 0 1px 2px color-mix(in srgb, #000 7%, transparent), 0 1px 1px color-mix(in srgb, #000 3%, transparent);
+  --radius-card: calc(var(--bc-radius) + 2px);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column; overflow: hidden;
+  font: 13px/1.4 var(--bc-font); color: var(--bc-text); background: var(--bc-bg);
+  -webkit-font-smoothing: antialiased;
+}
+button, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: default; }
+.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-lg { width: 22px; height: 22px; stroke-width: 1.5; }
+.ic-sm { width: 14px; height: 14px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--bc-text-muted) 35%, transparent) padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--bc-text-muted) 60%, transparent); }
+.muted { color: var(--bc-text-muted); }
+.iconbtn { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--bc-radius); color: var(--bc-text-muted); }
+.iconbtn:hover { background: var(--hover); color: var(--bc-text); }
+
+/* Visibilité selon l'écran affiché */
+.app[data-screen="main"] [data-show]:not([data-show~="main"]),
+.app[data-screen="form"] [data-show]:not([data-show~="form"]),
+.app[data-screen="qbe"] [data-show]:not([data-show~="qbe"]) { display: none !important; }
+
+/* ---------- Barre de la maquette (hors application) ---------- */
+.harness {
+  flex: none; height: 34px; display: flex; align-items: center; gap: var(--bc-space-3);
+  padding: 0 var(--bc-space-3); background: var(--bc-text); color: var(--bc-bg); font-size: 12px;
+}
+.harness b { font-weight: 600; display: flex; align-items: center; gap: var(--bc-space-2); }
+.harness .sub { opacity: .6; }
+.seg { display: flex; gap: 2px; padding: 2px; border-radius: var(--bc-radius); background: color-mix(in srgb, var(--bc-bg) 12%, transparent); }
+.seg button { height: 24px; padding: 0 10px; border-radius: 4px; display: flex; align-items: center; gap: 6px; opacity: .75; }
+.seg button:hover { opacity: 1; }
+.seg button.is-active { background: var(--bc-bg); color: var(--bc-text); opacity: 1; }
+.harness .seg:first-of-type { margin-left: auto; }
+
+/* ---------- Application ---------- */
+.app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Ruban */
+.ribbon { flex: none; padding: 0 var(--bc-space-2); }
+.rtabs { display: flex; align-items: flex-end; gap: 2px; height: 40px; padding: 0 var(--bc-space-1); }
+.rtab { position: relative; height: 32px; padding: 0 10px; color: var(--bc-text-muted); font-weight: 500; white-space: nowrap; }
+.rtab:hover { color: var(--bc-text); }
+.rtab.is-active { color: var(--bc-text); }
+.rtab.is-active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: var(--bc-accent); }
+.rtab-file { align-self: center; height: 26px; margin-right: 6px; padding: 0 12px; border-radius: var(--bc-radius); background: var(--bc-accent); color: var(--bc-accent-contrast); }
+.rtab-file:hover { color: var(--bc-accent-contrast); filter: brightness(1.08); }
+.rtab-sep { align-self: center; width: 1px; height: 16px; margin: 0 6px; background: var(--bc-border); }
+.rtab-ctx, .rtab-ctx:hover, .rtab-ctx.is-active { color: var(--bc-accent); }
+.rbody {
+  height: 96px; display: flex; overflow: hidden; padding: 6px var(--bc-space-1) var(--bc-space-1);
+  background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--radius-card); box-shadow: var(--shadow);
+}
+.rpanel { display: none; }
+.rpanel.is-active { display: flex; }
+.rgroup { position: relative; display: flex; flex-direction: column; padding: 0 var(--bc-space-2); }
+.rgroup + .rgroup::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 6px; width: 1px; background: var(--grid-line); }
+.ritems { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
+.rlabel { font-size: 11px; line-height: 16px; color: var(--bc-text-muted); text-align: center; white-space: nowrap; }
+.rbtn-lg {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; max-width: 84px; height: 66px;
+  padding: 6px 6px 4px; border-radius: var(--bc-radius); font-size: 12px; line-height: 1.2; text-align: center;
+}
+.rstack { display: flex; flex-direction: column; }
+.rbtn-sm { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-radius: var(--bc-radius); font-size: 12px; white-space: nowrap; }
+.rbtn-sm .ic { color: var(--bc-text-muted); }
+.rbtn-lg:hover, .rbtn-sm:hover { background: var(--hover); }
+.rbtn-lg.is-on, .rbtn-sm.is-on { background: var(--accent-soft); color: var(--bc-accent); }
+.rbtn-sm.is-on .ic { color: var(--bc-accent); }
+
+/* Espace de travail */
+.work { flex: 1; min-height: 0; display: flex; gap: var(--bc-space-2); padding: var(--bc-space-2); }
+.card { background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--radius-card); box-shadow: var(--shadow); }
+
+/* Volet de navigation */
+.nav { width: 236px; flex: none; display: flex; flex-direction: column; min-height: 0; }
+.nav-head { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 0 0 var(--bc-space-2); }
+.nav-filter { display: flex; align-items: center; gap: 6px; font-weight: 600; border-radius: var(--bc-radius); padding: 4px 6px; margin-left: -6px; }
+.nav-filter:hover { background: var(--hover); }
+.search {
+  display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 var(--bc-space-2);
+  background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); color: var(--bc-text-muted);
+}
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--bc-text); }
+.search input::placeholder { color: var(--bc-text-muted); }
+.search:focus-within { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.nav .search { margin: var(--bc-space-1) 0 var(--bc-space-2); }
+.nav-list { flex: 1; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.ngroup > summary {
+  list-style: none; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px;
+  border-radius: var(--bc-radius); font-size: 12px; font-weight: 600; color: var(--bc-text-muted);
+}
+.ngroup > summary::-webkit-details-marker { display: none; }
+.ngroup > summary:hover { background: var(--hover); }
+.ngroup > summary .chev { transition: transform .15s; }
+.ngroup[open] > summary .chev { transform: rotate(90deg); }
+.ngroup .count { margin-left: auto; font-weight: 500; font-size: 11px; }
+.ngroup { margin-bottom: 2px; }
+.nitem { display: flex; align-items: center; gap: var(--bc-space-2); width: 100%; height: 28px; padding: 0 var(--bc-space-2) 0 26px; border-radius: var(--bc-radius); text-align: left; white-space: nowrap; }
+.nitem .ic { color: var(--bc-text-muted); }
+.nitem:hover { background: var(--hover); }
+.nitem.is-active { background: var(--accent-soft); font-weight: 500; }
+.nitem.is-active .ic { color: var(--bc-accent); }
+.nav-rail { display: none; width: 36px; flex: none; flex-direction: column; align-items: center; gap: var(--bc-space-2); padding-top: 2px; color: var(--bc-text-muted); }
+.nav-rail span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 500; }
+
+/* Zone de documents */
+.docs { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.dtabs { flex: none; display: flex; gap: 2px; height: 40px; padding: 0 6px; border-bottom: 1px solid var(--bc-border); }
+.dtab { position: relative; display: flex; align-items: center; gap: var(--bc-space-2); padding: 0 6px 0 10px; color: var(--bc-text-muted); white-space: nowrap; }
+.dtab:hover { color: var(--bc-text); }
+.dtab.is-active { color: var(--bc-text); font-weight: 500; }
+.dtab.is-active > .ic { color: var(--bc-accent); }
+.dtab.is-active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--bc-accent); }
+.dtab .x { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; color: var(--bc-text-muted); visibility: hidden; }
+.dtab.is-active .x, .dtab:hover .x { visibility: visible; }
+.dtab .x:hover { background: var(--hover); }
+.doc { flex: 1; min-height: 0; display: flex; }
+
+/* Feuille de données */
+.doc-sheet { flex-direction: column; }
+.sheet { flex: 1; min-height: 0; overflow: auto; }
+.ds { min-width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+.ds th, .ds td { height: 30px; padding: 0 10px; white-space: nowrap; border-right: 1px solid var(--grid-line); border-bottom: 1px solid var(--grid-line); }
+.ds th {
+  position: sticky; top: 0; z-index: 2; height: 34px; text-align: left; font-size: 12px; font-weight: 600;
+  background: var(--bc-surface-2); border-bottom-color: var(--bc-border);
+}
+.ds th .h { display: flex; align-items: center; gap: 6px; }
+.ds th .h .ic { color: var(--bc-text-muted); }
+.ds th .h .sort { color: var(--bc-accent); }
+.ds th .h .dd { position: absolute; right: 6px; visibility: hidden; }
+.ds th:hover .h .dd { visibility: visible; }
+.ds th.add { color: var(--bc-text-muted); font-weight: 500; border-right: 0; }
+.ds .gutter { position: sticky; left: 0; z-index: 1; width: 32px; min-width: 32px; padding: 0; text-align: center; background: var(--bc-surface); color: var(--bc-text-muted); }
+.ds th.gutter { z-index: 3; background: var(--bc-surface-2); }
+.ds td.num { text-align: right; }
+.ds td.c { text-align: center; }
+.ds td.add { border-right: 0; }
+.ds tbody tr:hover td { background: var(--hover); }
+.ds tr.is-current td { background: var(--accent-faint); }
+.ds tr.is-current td.gutter { box-shadow: inset 3px 0 0 var(--bc-accent); color: var(--bc-accent); }
+.ds td.is-cell { box-shadow: inset 0 0 0 2px var(--bc-accent); }
+.ds tr.new td { color: var(--bc-text-muted); }
+.box { display: inline-grid; place-items: center; width: 15px; height: 15px; border: 1.5px solid var(--bc-text-muted); border-radius: 4px; vertical-align: middle; }
+.box.on { background: var(--bc-accent); border-color: var(--bc-accent); color: var(--bc-accent-contrast); }
+.box .ic { width: 11px; height: 11px; stroke-width: 3; }
+.recnav {
+  flex: none; display: flex; align-items: center; gap: 2px; height: 38px; padding: 0 var(--bc-space-2);
+  border-top: 1px solid var(--bc-border); font-size: 12px; color: var(--bc-text-muted); white-space: nowrap;
+}
+.recnav .iconbtn { width: 26px; height: 26px; }
+.recpos { height: 26px; display: flex; align-items: center; margin: 0 2px; padding: 0 10px; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); color: var(--bc-text); font-variant-numeric: tabular-nums; }
+.vsep { width: 1px; height: 18px; margin: 0 var(--bc-space-2); background: var(--bc-border); }
+.chip { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; background: var(--bc-surface-2); border: 1px solid var(--grid-line); }
+.recnav .search { height: 26px; width: 200px; }
+.recnav .lbl { margin-right: 6px; }
+
+/* Concepteur de formulaires */
+.toolbox { flex: none; display: grid; grid-template-columns: repeat(2, 32px); gap: 2px; align-content: start; padding: var(--bc-space-2); border-right: 1px solid var(--bc-border); overflow: auto; }
+.toolbox .ttl { grid-column: 1 / -1; padding: 2px 2px 6px; font-size: 11px; font-weight: 600; color: var(--bc-text-muted); }
+.toolbox .sep { grid-column: 1 / -1; height: 1px; margin: 4px 0; background: var(--bc-border); }
+.tool { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--bc-radius); color: var(--bc-text-muted); }
+.tool:hover { background: var(--hover); color: var(--bc-text); }
+.tool.is-on { background: var(--accent-soft); color: var(--bc-accent); }
+.canvas { flex: 1; min-width: 0; overflow: auto; padding: 20px; background: var(--bc-surface-2); }
+.fsheet { width: 560px; background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); box-shadow: var(--shadow); overflow: hidden; }
+.band { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 var(--bc-space-2); background: var(--bc-surface-2); border-bottom: 1px solid var(--bc-border); font-size: 12px; font-weight: 600; color: var(--bc-text-muted); }
+.sbody + .band { border-top: 1px solid var(--bc-border); }
+.sbody { position: relative; background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.3px); background-size: 12px 12px; background-position: 0 0; }
+.ctl { position: absolute; display: flex; align-items: center; height: 28px; font-size: 12.5px; white-space: nowrap; }
+.ctl-label { color: var(--bc-text); }
+.ctl-text { padding: 0 var(--bc-space-2); background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: 4px; }
+.ctl-text.r { justify-content: flex-end; }
+.ctl-combo { justify-content: space-between; }
+.ctl-combo .ic { color: var(--bc-text-muted); }
+.ctl-title { height: 36px; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.ctl-check { gap: var(--bc-space-2); }
+.ctl-img { display: grid; place-items: center; border: 1px dashed var(--bc-text-muted); border-radius: var(--bc-radius); color: var(--bc-text-muted); background: var(--bc-surface); }
+.ctl-btn { justify-content: center; height: 30px; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); font-weight: 500; }
+.ctl-btn.primary { background: var(--bc-accent); border-color: var(--bc-accent); color: var(--bc-accent-contrast); }
+.ctl-sub { display: block; height: auto; border: 1px solid var(--bc-border); border-radius: 4px; background: var(--bc-surface); overflow: hidden; }
+.ctl-sub .row { display: grid; grid-template-columns: 1fr 1fr 1fr; height: 26px; border-bottom: 1px solid var(--grid-line); }
+.ctl-sub .row span { padding: 0 var(--bc-space-2); line-height: 26px; border-right: 1px solid var(--grid-line); }
+.ctl-sub .row.h { background: var(--bc-surface-2); font-weight: 600; font-size: 12px; }
+.ctl.is-sel { z-index: 1; }
+.selframe { position: absolute; z-index: 2; pointer-events: none; border: 1.5px solid var(--bc-accent); border-radius: 5px; }
+.selframe i { position: absolute; width: 7px; height: 7px; background: var(--bc-surface); border: 1.5px solid var(--bc-accent); border-radius: 2px; }
+.selframe i:nth-child(1) { left: -4px; top: -4px; }
+.selframe i:nth-child(2) { left: calc(50% - 3.5px); top: -4px; }
+.selframe i:nth-child(3) { right: -4px; top: -4px; }
+.selframe i:nth-child(4) { right: -4px; top: calc(50% - 3.5px); }
+.selframe i:nth-child(5) { right: -4px; bottom: -4px; }
+.selframe i:nth-child(6) { left: calc(50% - 3.5px); bottom: -4px; }
+.selframe i:nth-child(7) { left: -4px; bottom: -4px; }
+.selframe i:nth-child(8) { left: -4px; top: calc(50% - 3.5px); }
+
+/* Feuille de propriétés */
+.props { width: 300px; flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.props-head { display: flex; align-items: center; justify-content: space-between; padding: var(--bc-space-2) 6px 2px var(--bc-space-3); font-weight: 600; }
+.props-type { padding: 0 var(--bc-space-3); font-size: 12px; color: var(--bc-text-muted); }
+.select { display: flex; align-items: center; justify-content: space-between; height: 30px; margin: var(--bc-space-2) var(--bc-space-3) var(--bc-space-2); padding: 0 6px 0 10px; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); }
+.select .ic { color: var(--bc-text-muted); }
+.ptabs { display: flex; padding: 0 6px; border-bottom: 1px solid var(--bc-border); }
+.ptab { position: relative; flex: 1 1 auto; padding: 8px 2px; font-size: 12px; color: var(--bc-text-muted); white-space: nowrap; }
+.ptab:hover { color: var(--bc-text); }
+.ptab.is-active { color: var(--bc-text); font-weight: 500; }
+.ptab.is-active::after { content: ""; position: absolute; left: 2px; right: 2px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--bc-accent); }
+.plist { flex: 1; overflow: auto; }
+.prow { display: grid; grid-template-columns: 52% 1fr; min-height: 30px; align-items: stretch; border-bottom: 1px solid var(--grid-line); font-size: 12px; }
+.prow > span { display: flex; align-items: center; padding: 0 var(--bc-space-2) 0 var(--bc-space-3); color: var(--bc-text-muted); }
+.pval { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 4px 0 var(--bc-space-2); border-left: 1px solid var(--grid-line); }
+.pval:hover { background: var(--hover); }
+.pval .v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pval .ic { color: var(--bc-text-muted); }
+.pval .bld { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; border: 1px solid var(--bc-border); }
+.swatch { width: 14px; height: 14px; flex: none; border-radius: 3px; border: 1px solid var(--bc-border); }
+
+/* Grille QBE */
+.doc-qbe { flex-direction: column; }
+.qbe-top {
+  position: relative; flex: 1; min-height: 120px; overflow: auto; background-color: var(--bc-surface-2);
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.3px); background-size: 16px 16px;
+}
+.joins { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.joins path { fill: none; stroke: var(--bc-text-muted); stroke-width: 1.5; }
+.joins circle { fill: var(--bc-text-muted); }
+.joins text { fill: var(--bc-text-muted); font: 600 12px var(--bc-font); }
+.qtable { position: absolute; z-index: 1; width: 200px; overflow: hidden; }
+.qtable-head { display: flex; align-items: center; gap: var(--bc-space-2); height: 34px; padding: 0 4px 0 10px; border-bottom: 1px solid var(--bc-border); font-weight: 600; }
+.qtable-head > .ic { color: var(--bc-accent); }
+.qtable-head .iconbtn { margin-left: auto; width: 24px; height: 24px; }
+.qfields { max-height: 208px; overflow: auto; padding: 4px; }
+.qfield { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12.5px; }
+.qfield:hover { background: var(--hover); }
+.qfield .ic { color: var(--bc-text-muted); }
+.qfield .key { color: var(--bc-warning); }
+.qfield.star { color: var(--bc-text-muted); }
+.qbe-split { flex: none; height: 9px; display: grid; place-items: center; border-top: 1px solid var(--bc-border); border-bottom: 1px solid var(--bc-border); cursor: row-resize; }
+.qbe-split::before { content: ""; width: 32px; height: 3px; border-radius: 2px; background: var(--bc-border); }
+.qbe-grid { flex: none; overflow: auto; }
+.qg { border-collapse: separate; border-spacing: 0; }
+.qg th, .qg td { height: 26px; padding: 0 var(--bc-space-2); border-right: 1px solid var(--grid-line); border-bottom: 1px solid var(--grid-line); white-space: nowrap; font-size: 12.5px; }
+.qg th { position: sticky; left: 0; z-index: 1; width: 104px; min-width: 104px; padding: 0 var(--bc-space-3); text-align: left; font-weight: 500; font-size: 12px; color: var(--bc-text-muted); background: var(--bc-surface-2); border-right-color: var(--bc-border); }
+.qg td { width: 200px; min-width: 200px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.qg tr.colsel td, .qg tr.colsel th { height: 10px; padding: 0; background: var(--bc-surface-2); }
+.qg tr.colsel td:hover { background: var(--hover); }
+.qg tr.colsel td.is-on { background: var(--bc-accent); }
+.qg td.on { background: var(--accent-faint); }
+.qg td .cell { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.qg td .cell .ic { color: var(--bc-text-muted); }
+.qg td.c { text-align: center; }
+.qg code { font: inherit; }
+
+/* Barre d'état */
+.status { flex: none; display: flex; align-items: center; gap: var(--bc-space-3); height: 30px; padding: 0 var(--bc-space-2) 0 var(--bc-space-4); font-size: 12px; color: var(--bc-text-muted); }
+.views { margin-left: auto; display: flex; gap: 2px; }
+.views button { width: 30px; height: 24px; display: grid; place-items: center; border-radius: var(--bc-radius); }
+.views button:hover { background: var(--hover); color: var(--bc-text); }
+.views button.is-on { background: var(--accent-soft); color: var(--bc-accent); }
+
+/* Fenêtres étroites (900 px) : volet replié, petites commandes du ruban sans libellé */
+@media (max-width: 1100px) {
+  .rbtn-sm span { display: none; }
+  .rbtn-sm { width: 26px; justify-content: center; padding: 0; }
+  .harness .sub { display: none; }
+}
+@media (max-width: 1000px) {
+  .nav { display: none; }
+  .nav-rail { display: flex; }
+  .props { width: 268px; }
+}
+</style>
+</head>
+<body>
+<!-- ICONES:debut -->
+<!-- Icônes : lucide (https://lucide.dev), licence ISC, Copyright (c) 2026 Lucide Icons and Contributors -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-align-start-vertical" viewBox="0 0 24 24"><rect width="9" height="6" x="6" y="14" rx="2"/><rect width="16" height="6" x="6" y="4" rx="2"/><path d="M2 2v20"/></symbol>
+<symbol id="i-app-window" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/></symbol>
+<symbol id="i-arrow-down-z-a" viewBox="0 0 24 24"><path d="m3 16 4 4 4-4"/><path d="M7 4v16"/><path d="M15 4h5l-5 6h5"/><path d="M15 20v-3.5a2.5 2.5 0 0 1 5 0V20"/><path d="M20 18h-5"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+<symbol id="i-arrow-up-a-z" viewBox="0 0 24 24"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></symbol>
+<symbol id="i-asterisk" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m18.065 8.496-12.125 7"/><path d="m5.94 8.504 12.125 7"/></symbol>
+<symbol id="i-between-vertical-start" viewBox="0 0 24 24"><rect width="7" height="13" x="3" y="8" rx="1"/><path d="m15 2-3 3-3-3"/><rect width="7" height="13" x="14" y="8" rx="1"/></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/></symbol>
+<symbol id="i-bring-to-front" viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="2"/><path d="M4 10a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2"/><path d="M14 20a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></symbol>
+<symbol id="i-calendar-clock" viewBox="0 0 24 24"><path d="M16 14v2.2l1.6 1"/><path d="M16 2v3"/><path d="M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338"/><path d="M3 9h5.859"/><path d="M8 2v3"/><circle cx="16" cy="16" r="6"/></symbol>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chevron-first" viewBox="0 0 24 24"><path d="m17 18-6-6 6-6"/><path d="M7 6v12"/></symbol>
+<symbol id="i-chevron-last" viewBox="0 0 24 24"><path d="m7 18 6-6-6-6"/><path d="M17 6v12"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-circle-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="12" r="10"/></symbol>
+<symbol id="i-clipboard-paste" viewBox="0 0 24 24"><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></symbol>
+<symbol id="i-code-xml" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+<symbol id="i-columns-3" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+<symbol id="i-corner-down-right" viewBox="0 0 24 24"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-eraser" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
+<symbol id="i-euro" viewBox="0 0 24 24"><path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/></symbol>
+<symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+<symbol id="i-file-down" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></symbol>
+<symbol id="i-file-pen" viewBox="0 0 24 24"><path d="M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-funnel" viewBox="0 0 24 24"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-git-fork" viewBox="0 0 24 24"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/></symbol>
+<symbol id="i-grid-3x3" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+<symbol id="i-heading" viewBox="0 0 24 24"><path d="M6 12h12"/><path d="M6 20V4"/><path d="M18 20V4"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+<symbol id="i-key-round" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+<symbol id="i-layout-panel-top" viewBox="0 0 24 24"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></symbol>
+<symbol id="i-list-filter" viewBox="0 0 24 24"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></symbol>
+<symbol id="i-list-ordered" viewBox="0 0 24 24"><path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/></symbol>
+<symbol id="i-list-plus" viewBox="0 0 24 24"><path d="M16 5H3"/><path d="M11 12H3"/><path d="M16 19H3"/><path d="M18 9v6"/><path d="M21 12h-6"/></symbol>
+<symbol id="i-list-x" viewBox="0 0 24 24"><path d="M16 5H3"/><path d="M11 12H3"/><path d="M16 19H3"/><path d="m15.5 9.5 5 5"/><path d="m20.5 9.5-5 5"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></symbol>
+<symbol id="i-mouse-pointer-2" viewBox="0 0 24 24"><path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-panel-left-open" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></symbol>
+<symbol id="i-panel-right" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
+<symbol id="i-panels-top-left" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></symbol>
+<symbol id="i-pencil-line" viewBox="0 0 24 24"><path d="M13 21h8"/><path d="m15 5 4 4"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+<symbol id="i-pencil-ruler" viewBox="0 0 24 24"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-refresh-cw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="i-replace" viewBox="0 0 24 24"><path d="M14 4a1 1 0 0 1 1-1"/><path d="M15 10a1 1 0 0 1-1-1"/><path d="M21 4a1 1 0 0 0-1-1"/><path d="M21 9a1 1 0 0 1-1 1"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a2 2 0 0 1 2-2h2"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+<symbol id="i-rows-3" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/></symbol>
+<symbol id="i-ruler" viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+<symbol id="i-scaling" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M14 15H9v-5"/><path d="M16 3h5v5"/><path d="M21 3 9 15"/></symbol>
+<symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+<symbol id="i-separator-horizontal" viewBox="0 0 24 24"><path d="m16 16-4 4-4-4"/><path d="M3 12h18"/><path d="m8 8 4-4 4 4"/></symbol>
+<symbol id="i-sheet" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="3" x2="21" y1="15" y2="15"/><line x1="9" x2="9" y1="9" y2="21"/><line x1="15" x2="15" y1="9" y2="21"/></symbol>
+<symbol id="i-sigma" viewBox="0 0 24 24"><path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/></symbol>
+<symbol id="i-sliders-horizontal" viewBox="0 0 24 24"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></symbol>
+<symbol id="i-square" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+<symbol id="i-square-check" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m16 9-5.5 5.5L8 12"/></symbol>
+<symbol id="i-square-chevron-down" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m16 10-4 4-4-4"/></symbol>
+<symbol id="i-square-mouse-pointer" viewBox="0 0 24 24"><path d="M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z"/><path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-table" viewBox="0 0 24 24"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></symbol>
+<symbol id="i-table-2" viewBox="0 0 24 24"><path d="M3 9h18"/><path d="M9 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/></symbol>
+<symbol id="i-table-properties" viewBox="0 0 24 24"><path d="M15 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/></symbol>
+<symbol id="i-text-cursor-input" viewBox="0 0 24 24"><path d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6"/><path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"/><path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"/><path d="M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1"/><path d="M9 6v12"/></symbol>
+<symbol id="i-toggle-left" viewBox="0 0 24 24"><circle cx="9" cy="12" r="3"/><rect width="20" height="14" x="2" y="5" rx="7"/></symbol>
+<symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="i-type" viewBox="0 0 24 24"><path d="M12 4v16"/><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"/><path d="M9 20h6"/></symbol>
+<symbol id="i-wand" viewBox="0 0 24 24"><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M15 9h.01"/><path d="M17.8 6.2 19 5"/><path d="m3 21 9-9"/><path d="M12.2 6.2 11 5"/></symbol>
+<symbol id="i-workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/></symbol>
+</svg>
+<!-- ICONES:fin -->
+
+<div class="harness" role="toolbar" aria-label="Maquette">
+  <b><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="4" fill="var(--bc-accent)"/><path d="M4 6h8M4 10h8M8 6v5" stroke="var(--bc-accent-contrast)" stroke-width="1.6" stroke-linecap="round"/></svg>Maquettes BaseCraft</b>
+  <span class="sub">Écrans statiques, à valider avant développement</span>
+  <div class="seg" aria-label="Écran">
+    <button data-screen-btn="main">Écran principal</button>
+    <button data-screen-btn="form">Concepteur de formulaires</button>
+    <button data-screen-btn="qbe">Grille QBE</button>
+  </div>
+  <div class="seg" aria-label="Thème">
+    <button data-theme-btn="light"><svg class="ic ic-sm"><use href="#i-sun"/></svg>Clair</button>
+    <button data-theme-btn="dark"><svg class="ic ic-sm"><use href="#i-moon"/></svg>Sombre</button>
+    <button data-theme-btn="system"><svg class="ic ic-sm"><use href="#i-monitor"/></svg>Système</button>
+  </div>
+</div>
+
+<div class="app" id="app" data-screen="main">
+  <header class="ribbon">
+    <nav class="rtabs" id="rtabs">
+      <button class="rtab rtab-file">Fichier</button>
+      <button class="rtab" data-tab="accueil">Accueil</button>
+      <button class="rtab" data-tab="creer">Créer</button>
+      <button class="rtab" data-tab="externes">Données externes</button>
+      <button class="rtab" data-tab="outils">Outils de base de données</button>
+      <span class="rtab-sep"></span>
+      <button class="rtab rtab-ctx" data-tab="champs" data-show="main">Champs</button>
+      <button class="rtab rtab-ctx" data-tab="formulaire" data-show="form">Création de formulaire</button>
+      <button class="rtab rtab-ctx" data-tab="requete" data-show="qbe">Création de requête</button>
+    </nav>
+    <div class="rbody" id="rbody"></div>
+  </header>
+
+  <div class="work">
+    <aside class="nav" aria-label="Volet de navigation">
+      <div class="nav-head">
+        <button class="nav-filter">Tous les objets <svg class="ic ic-sm"><use href="#i-chevron-down"/></svg></button>
+        <button class="iconbtn" title="Replier le volet (F11)" aria-label="Replier le volet"><svg class="ic"><use href="#i-panel-left-close"/></svg></button>
+      </div>
+      <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="nav-search" placeholder="Rechercher…"></label>
+      <div class="nav-list" id="nav-list"></div>
+    </aside>
+    <aside class="nav-rail" aria-label="Volet de navigation replié">
+      <button class="iconbtn" title="Déplier le volet (F11)" aria-label="Déplier le volet"><svg class="ic"><use href="#i-panel-left-open"/></svg></button>
+      <span>Volet de navigation</span>
+    </aside>
+
+    <main class="docs card">
+      <div class="dtabs" role="tablist">
+        <button class="dtab" data-screen-btn="main"><svg class="ic"><use href="#i-table"/></svg>Clients<span class="x" title="Fermer"><svg class="ic ic-sm"><use href="#i-x"/></svg></span></button>
+        <button class="dtab" data-screen-btn="form"><svg class="ic"><use href="#i-app-window"/></svg>Fiche client<span class="x" title="Fermer"><svg class="ic ic-sm"><use href="#i-x"/></svg></span></button>
+        <button class="dtab" data-screen-btn="qbe"><svg class="ic"><use href="#i-list-filter"/></svg>Commandes par client<span class="x" title="Fermer"><svg class="ic ic-sm"><use href="#i-x"/></svg></span></button>
+      </div>
+
+      <!-- Écran 1 : feuille de données -->
+      <section class="doc doc-sheet" data-show="main">
+        <div class="sheet">
+          <table class="ds" id="ds">
+            <thead><tr>
+              <th class="gutter"></th>
+              <th style="min-width:76px"><span class="h"><svg class="ic ic-sm"><use href="#i-hash"/></svg>N°<svg class="ic ic-sm sort"><use href="#i-arrow-up"/></svg><svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:140px"><span class="h"><svg class="ic ic-sm"><use href="#i-type"/></svg>Nom<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:130px"><span class="h"><svg class="ic ic-sm"><use href="#i-type"/></svg>Prénom<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:140px"><span class="h"><svg class="ic ic-sm"><use href="#i-type"/></svg>Ville<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:118px"><span class="h"><svg class="ic ic-sm"><use href="#i-calendar"/></svg>Inscrit le<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:80px"><span class="h"><svg class="ic ic-sm"><use href="#i-square-check"/></svg>Actif<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th style="min-width:130px"><span class="h"><svg class="ic ic-sm"><use href="#i-euro"/></svg>Solde<svg class="ic ic-sm dd"><use href="#i-chevron-down"/></svg></span></th>
+              <th class="add" style="min-width:150px"><span class="h"><svg class="ic ic-sm"><use href="#i-plus"/></svg>Ajouter un champ</span></th>
+            </tr></thead>
+            <tbody id="ds-body"></tbody>
+          </table>
+        </div>
+        <div class="recnav">
+          <span class="lbl">Enregistrement :</span>
+          <button class="iconbtn" title="Premier enregistrement"><svg class="ic"><use href="#i-chevron-first"/></svg></button>
+          <button class="iconbtn" title="Enregistrement précédent"><svg class="ic"><use href="#i-chevron-left"/></svg></button>
+          <span class="recpos" id="recpos">3 sur 120</span>
+          <button class="iconbtn" title="Enregistrement suivant"><svg class="ic"><use href="#i-chevron-right"/></svg></button>
+          <button class="iconbtn" title="Dernier enregistrement"><svg class="ic"><use href="#i-chevron-last"/></svg></button>
+          <button class="iconbtn" title="Nouvel enregistrement"><svg class="ic"><use href="#i-plus"/></svg></button>
+          <span class="vsep"></span>
+          <span class="chip"><svg class="ic ic-sm"><use href="#i-funnel"/></svg>Aucun filtre</span>
+          <span class="vsep"></span>
+          <label class="search"><svg class="ic ic-sm"><use href="#i-search"/></svg><input placeholder="Rechercher"></label>
+        </div>
+      </section>
+
+      <!-- Écran 2 : concepteur de formulaires -->
+      <section class="doc doc-form" data-show="form">
+        <div class="toolbox" id="toolbox" aria-label="Boîte à outils"></div>
+        <div class="canvas">
+          <div class="fsheet" id="fsheet">
+            <div class="band"><svg class="ic ic-sm"><use href="#i-chevron-down"/></svg>En-tête de formulaire</div>
+            <div class="sbody" style="height:72px">
+              <div class="ctl ctl-title ctl-label" style="left:20px;top:18px" data-name="Titre" data-type="Étiquette">Fiche client</div>
+              <div class="ctl ctl-img" style="left:500px;top:14px;width:44px;height:44px" data-name="Logo" data-type="Image"><svg class="ic"><use href="#i-image"/></svg></div>
+            </div>
+            <div class="band"><svg class="ic ic-sm"><use href="#i-chevron-down"/></svg>Détail</div>
+            <div class="sbody" style="height:264px">
+              <div class="ctl ctl-label" style="left:20px;top:20px" data-name="Étiquette_N" data-type="Étiquette">N°</div>
+              <div class="ctl ctl-text" style="left:116px;top:20px;width:84px" data-name="N°" data-src="N°" data-type="Zone de texte" data-tab="0">N°</div>
+              <div class="ctl ctl-label" style="left:20px;top:58px" data-name="Étiquette_Nom" data-type="Étiquette">Nom</div>
+              <div class="ctl ctl-text" style="left:116px;top:58px;width:180px" data-name="Nom" data-src="Nom" data-type="Zone de texte" data-tab="1" id="ctl-default">Nom</div>
+              <div class="ctl ctl-label" style="left:20px;top:96px" data-name="Étiquette_Prénom" data-type="Étiquette">Prénom</div>
+              <div class="ctl ctl-text" style="left:116px;top:96px;width:180px" data-name="Prénom" data-src="Prénom" data-type="Zone de texte" data-tab="2">Prénom</div>
+              <div class="ctl ctl-label" style="left:20px;top:134px" data-name="Étiquette_Ville" data-type="Étiquette">Ville</div>
+              <div class="ctl ctl-text ctl-combo" style="left:116px;top:134px;width:180px" data-name="Ville" data-src="Ville" data-type="Zone de liste déroulante" data-tab="3">Ville<svg class="ic ic-sm"><use href="#i-chevron-down"/></svg></div>
+              <div class="ctl ctl-label" style="left:20px;top:172px" data-name="Étiquette_Inscrit" data-type="Étiquette">Inscrit le</div>
+              <div class="ctl ctl-text" style="left:116px;top:172px;width:120px" data-name="Inscrit" data-src="Inscrit" data-type="Zone de texte" data-tab="4">Inscrit</div>
+              <div class="ctl ctl-label" style="left:20px;top:210px" data-name="Étiquette_Solde" data-type="Étiquette">Solde</div>
+              <div class="ctl ctl-text r" style="left:116px;top:210px;width:120px" data-name="Solde" data-src="Solde" data-type="Zone de texte" data-tab="5">Solde</div>
+              <div class="ctl ctl-check" style="left:324px;top:20px" data-name="Actif" data-src="Actif" data-type="Case à cocher" data-tab="6"><span class="box on"><svg class="ic"><use href="#i-check"/></svg></span>Client actif</div>
+              <div class="ctl ctl-label" style="left:324px;top:56px" data-name="Étiquette_Commandes" data-type="Étiquette">Commandes</div>
+              <div class="ctl ctl-sub" style="left:324px;top:86px;width:216px;height:158px" data-name="Sous-formulaire Commandes" data-src="Saisie des commandes" data-type="Sous-formulaire" data-tab="7">
+                <div class="row h"><span>Date</span><span>Montant</span><span>Statut</span></div>
+                <div class="row"><span></span><span></span><span></span></div>
+                <div class="row"><span></span><span></span><span></span></div>
+                <div class="row"><span></span><span></span><span></span></div>
+              </div>
+            </div>
+            <div class="band"><svg class="ic ic-sm"><use href="#i-chevron-down"/></svg>Pied de formulaire</div>
+            <div class="sbody" style="height:58px">
+              <div class="ctl ctl-btn" style="left:350px;top:14px;width:90px" data-name="Fermer" data-type="Bouton" data-tab="9">Fermer</div>
+              <div class="ctl ctl-btn primary" style="left:448px;top:14px;width:96px" data-name="Enregistrer" data-type="Bouton" data-tab="8">Enregistrer</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Écran 3 : grille QBE -->
+      <section class="doc doc-qbe" data-show="qbe">
+        <div class="qbe-top" id="qbe-top">
+          <svg class="joins" id="joins"></svg>
+          <div class="qtable card" style="left:28px;top:20px" id="qt-clients"></div>
+          <div class="qtable card" style="left:330px;top:44px" id="qt-commandes"></div>
+        </div>
+        <div class="qbe-split" title="Redimensionner"></div>
+        <div class="qbe-grid"><table class="qg" id="qg"></table></div>
+      </section>
+    </main>
+
+    <aside class="props card" data-show="form" aria-label="Feuille de propriétés">
+      <div class="props-head">Feuille de propriétés<button class="iconbtn" title="Fermer (F4)" aria-label="Fermer"><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div class="props-type">Type de sélection : <span id="sel-type">Zone de texte</span></div>
+      <div class="select"><span id="sel-name">Nom</span><svg class="ic"><use href="#i-chevron-down"/></svg></div>
+      <div class="ptabs" id="ptabs"></div>
+      <div class="plist" id="plist"></div>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span id="status-mode">Mode Feuille de données</span>
+    <div class="views" id="views"></div>
+  </footer>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const ic = (n, c = '') => `<svg class="ic ${c}"><use href="#i-${n}"/></svg>`;
+const app = $('#app');
+
+/* ---------- Ruban : [groupe, éléments] ; élément = [icône, libellé, actif?] ou pile [[…], […]] ---------- */
+const RIBBON = {
+  accueil: [
+    ['Affichage', [['sheet', 'Affichage']]],
+    ['Presse-papiers', [['clipboard-paste', 'Coller'], [['scissors', 'Couper'], ['copy', 'Copier']]]],
+    ['Trier et filtrer', [['funnel', 'Filtrer'], [['arrow-up-a-z', 'Croissant'], ['arrow-down-z-a', 'Décroissant'], ['eraser', 'Supprimer le tri']], [['list-filter', 'Sélection'], ['sliders-horizontal', 'Options avancées'], ['funnel', 'Activer le filtre']]]],
+    ['Enregistrements', [[['refresh-cw', 'Actualiser tout'], ['plus', 'Nouveau'], ['save', 'Enregistrer']], [['trash-2', 'Supprimer'], ['sigma', 'Totaux']]]],
+    ['Rechercher', [['search', 'Rechercher'], [['replace', 'Remplacer'], ['corner-down-right', 'Atteindre']]]],
+  ],
+  creer: [
+    ['Tables', [['table', 'Table'], ['table-properties', 'Création de table']]],
+    ['Requêtes', [['list-filter', 'Création de requête'], ['code-xml', 'Requête SQL']]],
+    ['Formulaires', [['app-window', 'Formulaire'], ['pencil-ruler', 'Création de formulaire'], [['file', 'Formulaire vierge'], ['wand', 'Assistant Formulaire']]]],
+    ['États', [['file-text', 'État'], ['pencil-ruler', 'Création d’état'], [['file', 'État vide'], ['wand', 'Assistant État']]]],
+    ['Macros et code', [['zap', 'Macro'], ['file-code', 'Module Python']]],
+  ],
+  externes: [
+    ['Importer et lier', [['database', 'Nouvelle source de données'], [['history', 'Importations enregistrées'], ['link', 'Gestionnaire de tables liées']]]],
+    ['Exporter', [['sheet', 'Tableur'], ['file-text', 'Fichier texte'], ['file-down', 'PDF'], [['history', 'Exportations enregistrées']]]],
+  ],
+  outils: [
+    ['Outils', [['wrench', 'Compacter et réparer']]],
+    ['Relations', [['workflow', 'Relations'], [['git-fork', 'Dépendances d’objet']]]],
+    ['Analyser', [[['book-open', 'Documentation de la base'], ['gauge', 'Analyse des performances'], ['table-2', 'Analyser la table']]]],
+    ['Macros et code', [['play', 'Exécuter une macro'], [['file-code', 'Éditeur Python']]]],
+  ],
+  champs: [
+    ['Affichage', [['pencil-ruler', 'Affichage']]],
+    ['Ajouter et supprimer', [[['type', 'Texte court'], ['hash', 'Nombre'], ['euro', 'Monétaire']], [['calendar', 'Date et heure'], ['square-check', 'Oui/Non'], ['trash-2', 'Supprimer']]]],
+    ['Propriétés', [[['pencil-line', 'Nom et légende'], ['file-pen', 'Valeur par défaut'], ['ruler', 'Taille du champ']]]],
+    ['Validation', [[['asterisk', 'Obligatoire'], ['key-round', 'Unique'], ['list-ordered', 'Indexé']]]],
+  ],
+  formulaire: [
+    ['Affichage', [['app-window', 'Affichage']]],
+    ['En-tête et pied', [[['heading', 'Titre'], ['image', 'Logo'], ['calendar-clock', 'Date et heure']]]],
+    ['Disposition', [['rows-3', 'Empilé'], ['columns-3', 'Tabulaire']]],
+    ['Organiser', [[['align-start-vertical', 'Aligner'], ['scaling', 'Taille et espace'], ['bring-to-front', 'Premier plan']]]],
+    ['Outils', [['list-plus', 'Ajouter des champs'], ['panel-right', 'Feuille de propriétés', 1], [['list-ordered', 'Ordre de tabulation'], ['file-code', 'Code Python']]]],
+  ],
+  requete: [
+    ['Résultats', [['sheet', 'Affichage'], ['play', 'Exécuter']]],
+    ['Type de requête', [['list-filter', 'Sélection', 1], [['table-2', 'Création de table'], ['list-plus', 'Ajout'], ['pencil-line', 'Mise à jour']], [['grid-3x3', 'Analyse croisée'], ['list-x', 'Suppression'], ['layers', 'Union']]]],
+    ['Paramètres de requête', [['table', 'Ajouter des tables'], [['wand', 'Générateur'], ['between-vertical-start', 'Insérer des colonnes'], ['trash-2', 'Supprimer des colonnes']]]],
+    ['Afficher/Masquer', [['sigma', 'Totaux', 1], [['sliders-horizontal', 'Paramètres'], ['panel-right', 'Feuille de propriétés'], ['table', 'Noms des tables']]]],
+  ],
+};
+const on = a => (a ? ' is-on' : '');
+$('#rbody').innerHTML = Object.entries(RIBBON).map(([id, groups]) =>
+  `<div class="rpanel" data-panel="${id}">${groups.map(([label, items]) =>
+    `<div class="rgroup"><div class="ritems">${items.map(it => Array.isArray(it[0])
+      ? `<div class="rstack">${it.map(([i, t, a]) => `<button class="rbtn-sm${on(a)}" title="${t}">${ic(i)}<span>${t}</span></button>`).join('')}</div>`
+      : `<button class="rbtn-lg${on(it[2])}" title="${it[1]}">${ic(it[0], 'ic-lg')}<span>${it[1]}</span></button>`).join('')}</div><div class="rlabel">${label}</div></div>`
+  ).join('')}</div>`).join('');
+
+function setTab(id) {
+  $$('#rtabs [data-tab]').forEach(t => t.classList.toggle('is-active', t.dataset.tab === id));
+  $$('.rpanel').forEach(p => p.classList.toggle('is-active', p.dataset.panel === id));
+}
+$$('#rtabs [data-tab]').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+
+/* ---------- Volet de navigation ---------- */
+const NAV = [
+  ['Tables', 'table', ['Clients', 'Commandes', 'Lignes de commande', 'Produits', 'Fournisseurs']],
+  ['Requêtes', 'list-filter', ['Commandes par client', 'Chiffre d’affaires 2026', 'Clients inactifs']],
+  ['Formulaires', 'app-window', ['Fiche client', 'Saisie des commandes']],
+  ['États', 'file-text', ['Factures', 'Liste des clients']],
+  ['Macros', 'zap', ['Au démarrage']],
+  ['Modules', 'file-code', ['outils_import']],
+];
+const OPENS = { 'Clients': 'main', 'Fiche client': 'form', 'Commandes par client': 'qbe' };
+$('#nav-list').innerHTML = NAV.map(([g, i, items]) =>
+  `<details class="ngroup" open><summary>${ic('chevron-right', 'ic-sm chev')}${g}<span class="count">${items.length}</span></summary>${
+    items.map(n => `<button class="nitem" data-name="${n}">${ic(i)}<span>${n}</span></button>`).join('')}</details>`).join('');
+$$('.nitem').forEach(b => b.addEventListener('dblclick', () => OPENS[b.dataset.name] && setScreen(OPENS[b.dataset.name])));
+$('#nav-search').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  $$('.nitem').forEach(b => { b.hidden = q && !b.dataset.name.toLowerCase().includes(q); });
+});
+
+/* ---------- Écran 1 : feuille de données ---------- */
+const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+const CLIENTS = [
+  [1, 'Martin', 'Claire', 'Lyon', '12/01/2025', 1, 1234.5],
+  [2, 'Bernard', 'Hugo', 'Paris', '03/02/2025', 1, 0],
+  [3, 'Dubois', 'Léa', 'Bordeaux', '17/02/2025', 1, 482.9],
+  [4, 'Thomas', 'Julien', 'Lille', '28/02/2025', 0, -120],
+  [5, 'Robert', 'Camille', 'Nantes', '09/03/2025', 1, 2610],
+  [6, 'Richard', 'Manon', 'Strasbourg', '21/03/2025', 1, 75.4],
+  [7, 'Petit', 'Louis', 'Toulouse', '04/04/2025', 1, 0],
+  [8, 'Durand', 'Chloé', 'Marseille', '15/04/2025', 0, 318.75],
+  [9, 'Leroy', 'Antoine', 'Rennes', '30/04/2025', 1, 1045],
+  [10, 'Moreau', 'Inès', 'Montpellier', '12/05/2025', 1, 56.2],
+  [11, 'Simon', 'Gabriel', 'Nice', '26/05/2025', 1, 4980],
+  [12, 'Laurent', 'Sarah', 'Grenoble', '06/06/2025', 0, 0],
+  [13, 'Lefèvre', 'Théo', 'Dijon', '19/06/2025', 1, 712.3],
+  [14, 'Michel', 'Zoé', 'Angers', '02/07/2025', 1, 1890],
+  [15, 'Garcia', 'Nathan', 'Reims', '18/07/2025', 1, 64],
+  [16, 'David', 'Jade', 'Le Havre', '01/08/2025', 0, 225.1],
+  [17, 'Bertrand', 'Raphaël', 'Saint-Étienne', '22/08/2025', 1, 3402.6],
+  [18, 'Roux', 'Alice', 'Toulon', '09/09/2025', 1, 0],
+  [19, 'Vincent', 'Lucas', 'Brest', '23/09/2025', 1, 158.9],
+  [20, 'Fournier', 'Emma', 'Aix-en-Provence', '07/10/2025', 1, 940],
+  [21, 'Morel', 'Hugo', 'Clermont-Ferrand', '05/01/2026', 1, 1312.45],
+  [22, 'Girard', 'Lina', 'Tours', '14/03/2026', 1, 0],
+  [23, 'André', 'Noah', 'Limoges', '02/06/2026', 0, 87.5],
+  [24, 'Mercier', 'Louise', 'Annecy', '21/10/2026', 1, 250],
+];
+const box = v => `<span class="box${v ? ' on' : ''}">${v ? ic('check') : ''}</span>`;
+$('#ds-body').innerHTML = CLIENTS.map(([n, nom, pre, ville, date, actif, solde]) =>
+  `<tr data-id="${n}"><td class="gutter"></td><td class="num">${n}</td><td>${nom}</td><td>${pre}</td><td>${ville}</td><td>${date}</td><td class="c">${box(actif)}</td><td class="num">${eur.format(solde)}</td><td class="add"></td></tr>`
+).join('') + `<tr class="new"><td class="gutter">${ic('plus', 'ic-sm')}</td><td class="num">(Nouveau)</td><td></td><td></td><td></td><td></td><td class="c"></td><td class="num"></td><td class="add"></td></tr>`;
+function setRecord(tr, td) {
+  $$('#ds-body tr').forEach(r => r.classList.remove('is-current'));
+  $$('#ds-body td.is-cell').forEach(c => c.classList.remove('is-cell'));
+  tr.classList.add('is-current');
+  if (td && !td.classList.contains('gutter')) td.classList.add('is-cell');
+  if (tr.dataset.id) $('#recpos').textContent = `${tr.dataset.id} sur 120`;
+}
+$('#ds-body').addEventListener('click', e => { const td = e.target.closest('td'); if (td) setRecord(td.parentElement, td); });
+{ const tr = $('#ds-body tr[data-id="3"]'); setRecord(tr, tr.children[2]); }
+
+/* ---------- Écran 2 : concepteur de formulaires ---------- */
+const TOOLS = [
+  ['mouse-pointer-2', 'Sélectionner', 1], ['wand', 'Assistants Contrôle'], 0,
+  ['type', 'Étiquette'], ['text-cursor-input', 'Zone de texte'],
+  ['square-mouse-pointer', 'Bouton'], ['square-chevron-down', 'Zone de liste déroulante'],
+  ['list', 'Zone de liste'], ['square-check', 'Case à cocher'],
+  ['circle-dot', 'Case d’option'], ['toggle-left', 'Bouton bascule'],
+  ['panels-top-left', 'Contrôle Onglet'], ['layout-panel-top', 'Sous-formulaire'],
+  ['image', 'Image'], ['chart-column', 'Graphique'],
+  ['square', 'Rectangle'], ['minus', 'Trait'],
+  ['link', 'Lien'], ['separator-horizontal', 'Saut de page'],
+];
+$('#toolbox').innerHTML = '<div class="ttl">Contrôles</div>' + TOOLS.map(t => t
+  ? `<button class="tool${on(t[2])}" title="${t[1]}" aria-label="${t[1]}">${ic(t[0])}</button>`
+  : '<div class="sep"></div>').join('');
+
+const PROPS = {
+  'Format': [['Format', '', 'v'], ['Décimales', 'Auto', 'v'], ['Visible', 'Oui', 'v'], ['Largeur', '5,2 cm'], ['Hauteur', '0,74 cm'],
+    ['Haut', '1,53 cm'], ['Gauche', '3,07 cm'], ['Couleur du fond', 'Fond 1', 'c'], ['Style de bordure', 'Plein', 'v'],
+    ['Couleur de bordure', 'Bordure', 'c'], ['Police', 'Inter', 'v'], ['Taille de police', '11', 'v'],
+    ['Épaisseur de police', 'Normal', 'v'], ['Couleur du texte', 'Texte 1', 'c'], ['Aligner le texte', 'Standard', 'v']],
+  'Données': [['Source contrôle', '{src}', 'vb'], ['Format', '', 'v'], ['Masque de saisie', '', 'b'], ['Valeur par défaut', '', 'b'],
+    ['Valide si', '', 'b'], ['Message si erreur', ''], ['Activé', 'Oui', 'v'], ['Verrouillé', 'Non', 'v']],
+  'Événement': [['Sur clic', '', 'vb'], ['Avant MAJ', '', 'vb'], ['Après MAJ', '[Procédure événementielle]', 'vb'], ['Sur changement', '', 'vb'],
+    ['Sur entrée', '', 'vb'], ['Sur sortie', '', 'vb'], ['Sur réception focus', '', 'vb'], ['Sur perte focus', '', 'vb'], ['Sur double clic', '', 'vb']],
+  'Autres': [['Nom', '{name}'], ['Texte barre d’état', ''], ['Arrêt tabulation', 'Oui', 'v'], ['Index tabulation', '{tab}'],
+    ['Texte d’info-bulle', ''], ['Balise', '']],
+};
+PROPS['Toutes'] = Object.values(PROPS).flat().filter((p, i, a) => a.findIndex(q => q[0] === p[0]) === i);
+let propTab = 'Format';
+let selected = null;
+$('#ptabs').innerHTML = Object.keys(PROPS).map(k => `<button class="ptab" data-ptab="${k}">${k}</button>`).join('');
+$$('.ptab').forEach(b => b.addEventListener('click', () => { propTab = b.dataset.ptab; renderProps(); }));
+const SWATCH = { 'Fond 1': 'var(--bc-surface)', 'Bordure': 'var(--bc-border)', 'Texte 1': 'var(--bc-text)' };
+function renderProps() {
+  $$('.ptab').forEach(b => b.classList.toggle('is-active', b.dataset.ptab === propTab));
+  const d = selected.dataset;
+  $('#plist').innerHTML = PROPS[propTab].map(([k, v, f = '']) => {
+    v = v.replace('{src}', d.src || '').replace('{name}', d.name).replace('{tab}', d.tab || '');
+    return `<div class="prow"><span>${k}</span><div class="pval">${f.includes('c') ? `<i class="swatch" style="background:${SWATCH[v]}"></i>` : ''}<span class="v">${v}</span>${
+      f.includes('v') ? ic('chevron-down', 'ic-sm') : ''}${f.includes('b') ? `<span class="bld" title="Générateur">${ic('ellipsis', 'ic-sm')}</span>` : ''}</div></div>`;
+  }).join('');
+}
+const frame = Object.assign(document.createElement('div'), { className: 'selframe', innerHTML: '<i></i>'.repeat(8) });
+function select(ctl) {
+  selected?.classList.remove('is-sel');
+  selected = ctl;
+  ctl.classList.add('is-sel');
+  ctl.parentElement.appendChild(frame);
+  Object.assign(frame.style, { left: ctl.offsetLeft - 3 + 'px', top: ctl.offsetTop - 3 + 'px', width: ctl.offsetWidth + 6 + 'px', height: ctl.offsetHeight + 6 + 'px' });
+  $('#sel-type').textContent = ctl.dataset.type;
+  $('#sel-name').textContent = ctl.dataset.name;
+  renderProps();
+}
+$$('#fsheet .ctl').forEach(c => c.addEventListener('mousedown', () => select(c)));
+
+/* ---------- Écran 3 : grille QBE ---------- */
+const QTABLES = {
+  'qt-clients': ['Clients', ['N°', 'Nom', 'Prénom', 'Ville', 'Inscrit', 'Actif', 'Solde']],
+  'qt-commandes': ['Commandes', ['N° commande', 'N° client', 'Date commande', 'Montant', 'Statut', 'Livrée']],
+};
+for (const [id, [name, fields]] of Object.entries(QTABLES)) {
+  $('#' + id).innerHTML = `<div class="qtable-head">${ic('table')}${name}<button class="iconbtn" title="Retirer la table">${ic('x', 'ic-sm')}</button></div><div class="qfields"><div class="qfield star">*</div>${
+    fields.map((f, i) => `<div class="qfield" data-f="${name}.${f}">${i === 0 ? ic('key-round', 'ic-sm key') : '<span style="width:14px"></span>'}${f}</div>`).join('')}</div>`;
+}
+const QROWS = ['Champ', 'Table', 'Opération', 'Tri', 'Afficher', 'Critères', 'Ou'];
+const QCOLS = [
+  ['Nom', 'Clients', 'Regroupement', 'Croissant', 1, '', ''],
+  ['Ville', 'Clients', 'Regroupement', '', 1, '"Lyon"', '"Paris"'],
+  ['Nb commandes: N° commande', 'Commandes', 'Compte', '', 1, '', ''],
+  ['Total: Montant', 'Commandes', 'Somme', 'Décroissant', 1, '', ''],
+  ['Date commande', 'Commandes', 'Où', '', 0, '>=#01/01/2026#', '>=#01/01/2026#'],
+  ['', '', '', '', null, '', ''],
+  ['', '', '', '', null, '', ''],
+];
+const QSEL = 1;
+$('#qg').innerHTML = `<tr class="colsel"><th></th>${QCOLS.map((_, c) => `<td class="${c === QSEL ? 'is-on' : ''}"></td>`).join('')}</tr>` +
+  QROWS.map((r, ri) => `<tr><th>${r}</th>${QCOLS.map((col, c) => {
+    const v = col[ri], cls = c === QSEL ? 'on' : '';
+    if (ri === 4) return `<td class="c ${cls}">${v === null ? '' : box(v)}</td>`;
+    const dd = c === QSEL && ri < 4 ? ic('chevron-down', 'ic-sm') : '';
+    return `<td class="${cls}"><span class="cell"><code>${v.replace(/</g, '&lt;')}</code>${dd}</span></td>`;
+  }).join('')}</tr>`).join('');
+
+function drawJoins() {
+  const top = $('#qbe-top'), svg = $('#joins');
+  if (!top.offsetParent) return;
+  svg.setAttribute('width', 0); svg.setAttribute('height', 0);
+  const o = top.getBoundingClientRect();
+  const pos = (sel, side) => {
+    const f = $(sel).getBoundingClientRect(), t = $(sel).closest('.qtable').getBoundingClientRect();
+    return [(side ? t.right : t.left) - o.left + top.scrollLeft, f.top + f.height / 2 - o.top + top.scrollTop];
+  };
+  const [x1, y1] = pos('[data-f="Clients.N°"]', 1), [x2, y2] = pos('[data-f="Commandes.N° client"]', 0);
+  svg.setAttribute('width', top.scrollWidth); svg.setAttribute('height', top.scrollHeight);
+  svg.innerHTML = `<path d="M${x1} ${y1} C${x1 + 50} ${y1} ${x2 - 50} ${y2} ${x2} ${y2}"/>` +
+    `<circle cx="${x1}" cy="${y1}" r="3"/><circle cx="${x2}" cy="${y2}" r="3"/>` +
+    `<text x="${x1 + 8}" y="${y1 - 7}">1</text><text x="${x2 - 18}" y="${y2 - 7}">∞</text>`;
+}
+addEventListener('resize', drawJoins);
+
+/* ---------- Écrans, thème, barre d'état ---------- */
+const SCREENS = {
+  main: { tab: 'accueil', status: 'Mode Feuille de données', nav: 'Clients', views: [['sheet', 'Mode Feuille de données', 1], ['pencil-ruler', 'Mode Création']] },
+  form: { tab: 'formulaire', status: 'Mode Création', nav: 'Fiche client', views: [['app-window', 'Mode Formulaire'], ['sheet', 'Mode Feuille de données'], ['pencil-ruler', 'Mode Création', 1]] },
+  qbe: { tab: 'requete', status: 'Mode Création', nav: 'Commandes par client', views: [['sheet', 'Mode Feuille de données'], ['code-xml', 'Mode SQL'], ['pencil-ruler', 'Mode Création', 1]] },
+};
+function setScreen(s) {
+  const cfg = SCREENS[s];
+  app.dataset.screen = s;
+  $$('[data-screen-btn]').forEach(b => b.classList.toggle('is-active', b.dataset.screenBtn === s));
+  $$('.nitem').forEach(b => b.classList.toggle('is-active', b.dataset.name === cfg.nav));
+  setTab(cfg.tab);
+  $('#status-mode').textContent = cfg.status;
+  $('#views').innerHTML = cfg.views.map(([i, t, a]) => `<button class="${a ? 'is-on' : ''}" title="${t}" aria-label="${t}">${ic(i)}</button>`).join('');
+  if (s === 'form' && !selected) select($('#ctl-default'));
+  if (s === 'qbe') drawJoins();
+  saveHash();
+}
+function setTheme(t) {
+  if (t === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  $$('[data-theme-btn]').forEach(b => b.classList.toggle('is-active', b.dataset.themeBtn === t));
+  saveHash();
+}
+function saveHash() {
+  history.replaceState(null, '', `#${app.dataset.screen}/${document.documentElement.dataset.theme || 'system'}`);
+}
+$$('[data-screen-btn]').forEach(b => b.addEventListener('click', () => setScreen(b.dataset.screenBtn)));
+$$('[data-theme-btn]').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.themeBtn)));
+const [hs, ht] = location.hash.slice(1).split('/');
+setTheme(['light', 'dark'].includes(ht) ? ht : 'system');
+setScreen(SCREENS[hs] ? hs : 'main');
+</script>
+</body>
+</html>

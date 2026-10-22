@@ -1,0 +1,49 @@
+/* Mode Création : grille des champs (style de la feuille de données de la maquette) et feuille de propriétés
+   (style de la feuille de propriétés du concepteur de formulaires). */
+.designer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dgrid-wrap { flex: 1; min-height: 120px; overflow: auto; }
+.dgrid { width: 100%; min-width: 560px; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.dgrid .c-sel { width: 32px; }
+.dgrid .c-name { width: 30%; }
+.dgrid .c-type { width: 190px; }
+.dgrid th, .dgrid td { height: 30px; padding: 0; border-right: 1px solid var(--grid-line); border-bottom: 1px solid var(--grid-line); }
+.dgrid th {
+  position: sticky; top: 0; z-index: 2; height: 34px; padding: 0 10px; text-align: left; font-size: 12px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--bc-surface-2); border-bottom-color: var(--bc-border);
+}
+.dgrid .gutter { background: var(--bc-surface); color: var(--bc-text-muted); }
+.dgrid th.gutter { padding: 0; background: var(--bc-surface-2); }
+.dgrid .gutter button { width: 100%; height: 29px; display: grid; place-items: center; border-radius: 0; }
+.dgrid .gutter .key { color: var(--bc-warning); }
+.dgrid input, .dgrid select {
+  display: block; width: 100%; height: 29px; padding: 0 10px; border: 0; border-radius: 0; background: transparent; outline: 0;
+}
+.dgrid select { padding-left: 6px; }
+.dgrid input:focus, .dgrid select:focus, .dgrid select:focus-visible { border-color: transparent; box-shadow: inset 0 0 0 2px var(--bc-accent); }
+.dgrid :is(input, select):disabled { color: var(--bc-text); opacity: 1; }
+.dgrid tbody tr:hover td { background: var(--hover); }
+.dgrid tr.is-current td { background: var(--accent-faint); }
+.dgrid tr.is-current td.gutter { box-shadow: inset 3px 0 0 var(--bc-accent); color: var(--bc-accent); }
+.dgrid tr.is-picked td { background: var(--accent-soft); }
+
+.fprops { flex: none; height: 236px; display: flex; flex-direction: column; border-top: 1px solid var(--bc-border); }
+.fprops-head { padding: var(--bc-space-2) var(--bc-space-3) 2px; font-weight: 600; }
+.fprops .ptabs { display: flex; padding: 0 6px; border-bottom: 1px solid var(--bc-border); }
+.fprops .ptab { position: relative; padding: 8px 10px; font-size: 12px; color: var(--bc-text-muted); white-space: nowrap; }
+.fprops .ptab.is-active { color: var(--bc-text); font-weight: 500; }
+.fprops .ptab.is-active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--bc-accent); }
+.fprops .plist { flex: 1; overflow: auto; max-width: 560px; }
+.fprops-empty { margin: var(--bc-space-3); font-size: 12px; }
+.prow { display: grid; grid-template-columns: 44% 1fr; min-height: 30px; align-items: stretch; border-bottom: 1px solid var(--grid-line); font-size: 12px; }
+.prow > label { display: flex; align-items: center; padding: 0 var(--bc-space-2) 0 var(--bc-space-3); color: var(--bc-text-muted); }
+.pval { display: flex; align-items: center; min-width: 0; padding: 0 4px 0 var(--bc-space-2); border-left: 1px solid var(--grid-line); }
+.pval:hover { background: var(--hover); }
+.pval:focus-within { box-shadow: inset 0 0 0 2px var(--bc-accent); }
+.pval input:not([type="checkbox"]), .pval select {
+  flex: 1; min-width: 0; height: 28px; padding: 0 2px; border: 0; border-radius: 0; background: transparent; outline: 0; font-size: 12px;
+}
+.pval select:focus-visible { box-shadow: none; }
+.pval input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--bc-accent); }
+.pval :disabled { color: var(--bc-text-muted); }
+.pval:has(.pval-error) { flex-wrap: wrap; }
+.pval-error { flex-basis: 100%; padding: 2px 0 4px; color: var(--bc-danger); font-size: 12px; }

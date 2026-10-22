@@ -1,0 +1,52 @@
+/* ==== Jetons de thème BaseCraft : bloc recopié tel quel dans src/renderer/theme.css ==== */
+:root {
+  color-scheme: light;
+  --bc-bg: #f2f3f5;
+  --bc-surface: #ffffff;
+  --bc-surface-2: #f7f8fa;
+  --bc-text: #1b1f27;
+  --bc-text-muted: #5f6775;
+  --bc-border: #e1e4e9;
+  --bc-accent: #3e63dd;
+  --bc-accent-contrast: #ffffff;
+  --bc-danger: #c8261a;
+  --bc-warning: #b45309;
+  --bc-radius: 6px;
+  --bc-space-1: 4px;
+  --bc-space-2: 8px;
+  --bc-space-3: 12px;
+  --bc-space-4: 16px;
+  --bc-font: "Inter Variable", "Inter", system-ui, sans-serif;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bc-bg: #121418;
+  --bc-surface: #1a1d23;
+  --bc-surface-2: #22262d;
+  --bc-text: #e6e8ec;
+  --bc-text-muted: #9aa1ad;
+  --bc-border: #2e333c;
+  --bc-accent: #7b93f7;
+  --bc-accent-contrast: #0b1020;
+  --bc-danger: #f87171;
+  --bc-warning: #f0a43a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bc-bg: #121418;
+    --bc-surface: #1a1d23;
+    --bc-surface-2: #22262d;
+    --bc-text: #e6e8ec;
+    --bc-text-muted: #9aa1ad;
+    --bc-border: #2e333c;
+    --bc-accent: #7b93f7;
+    --bc-accent-contrast: #0b1020;
+    --bc-danger: #f87171;
+    --bc-warning: #f0a43a;
+  }
+}
+/* ==== Fin des jetons ==== */
+
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bc-bg); color: var(--bc-text); font-family: var(--bc-font); }

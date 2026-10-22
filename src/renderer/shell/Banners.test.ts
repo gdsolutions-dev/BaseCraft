@@ -43,7 +43,7 @@ describe('readOnlyBanner (R23: "Reprendre" if and only if lockStale)', () => {
 });
 
 describe('reconcileBanners', () => {
-  const empty = { addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [] };
+  const empty = { addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [] };
   it('nothing changed: no banner', () => {
     expect(reconcileBanners(undefined)).toEqual([]);
     expect(reconcileBanners(empty)).toEqual([]);
@@ -53,6 +53,16 @@ describe('reconcileBanners', () => {
       { kind: 'reconcile', key: 'banner.reconcile', params: { count: 4 } },
       { kind: 'relationsRemoved', key: 'banner.relationsRemoved', params: { names: 'ClientsCommandes' } },
       { kind: 'relationsDowngraded', key: 'banner.relationsDowngraded', params: { names: 'A, B' } },
+    ]);
+  });
+});
+
+describe('reconcileBanners (A2-R14)', () => {
+  const empty = { addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [] };
+  it('relations that followed their key are counted and named', () => {
+    expect(reconcileBanners({ ...empty, updatedRelations: ['ClientsCommandes'] })).toEqual([
+      { kind: 'reconcile', key: 'banner.reconcile', params: { count: 1 } },
+      { kind: 'relationsUpdated', key: 'banner.relationsUpdated', params: { names: 'ClientsCommandes' } },
     ]);
   });
 });

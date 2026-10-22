@@ -105,7 +105,8 @@
     "migrated": "The database was upgraded. Backup copy: {{path}}",
     "dismiss": "Dismiss this message",
     "relationsRemoved": "Relationships deleted because one of their tables or fields no longer exists: {{names}}.",
-    "relationsDowngraded": "Relationships whose foreign key was removed outside BaseCraft, kept without referential integrity: {{names}}."
+    "relationsDowngraded": "Relationships whose foreign key was removed or changed outside BaseCraft, kept without referential integrity: {{names}}.",
+    "relationsUpdated": "Relationships updated from their foreign key, changed outside BaseCraft (table, field or cascade rule): {{names}}."
   },
   "dialog": {
     "newBaseName": "Database1",
@@ -137,7 +138,10 @@
       "nameInvalid": "This name is not valid.",
       "readOnly": "The database is open read-only.",
       "hasRelations": "This table is part of relationships: delete its relationships first.",
-      "external": "The table “{{name}}” was changed outside BaseCraft; its design cannot be changed here."
+      "external": "The table “{{name}}” was changed outside BaseCraft; its design cannot be changed here.",
+      "referenced": "The table “{{name}}” has a foreign key to this table, defined outside BaseCraft: it cannot be deleted here.",
+      "danglingKey": "The table “{{name}}” has a foreign key to a table of this name that was deleted outside BaseCraft: choose another name.",
+      "viewBroken": "The view or trigger “{{name}}”, defined outside BaseCraft, is no longer valid: SQLite refuses to rename the table until it is fixed or deleted."
     }
   },
   "designer": {
@@ -181,7 +185,10 @@
     "validationExisting": "{{count}} rows do not satisfy the rule. Save anyway? The rule will apply to future entries.",
     "invalidExpressions": "Some properties are invalid; fix them before saving:\n{{detail}}",
     "propError": "{{prop}}: {{message}}",
-    "relationField": "The field “{{field}}” is part of the relationship “{{relation}}”: it cannot be renamed, deleted, or change its type, size or index while the relationship exists. Delete the relationship first."
+    "relationField": "The field “{{field}}” is part of the relationship “{{relation}}”: it cannot be renamed, deleted, or change its type, size or index while the relationship exists. Delete the relationship first.",
+    "foreignKeyField": "The field “{{field}}” is used by a foreign key of the table “{{table}}”, defined outside BaseCraft: it cannot be renamed, deleted, or change its type, size or index.",
+    "viewBroken": "The view or trigger “{{name}}”, defined outside BaseCraft, would no longer be valid after this change (or already is not): the design is not changed.",
+    "danglingKey": "The table “{{name}}” has a foreign key to a table of this name that was deleted outside BaseCraft: choose another name."
   },
   "fieldType": {
     "autoNumber": "AutoNumber",
@@ -525,7 +532,8 @@
       "otherChar": "Specify a single delimiter character.",
       "specName": "The name must have 1 to 64 characters, without leading or trailing spaces.",
       "emptyFile": "The file is empty.",
-      "pendingRow": "Save or cancel the record being edited in table {{table}} before appending records to it."
+      "pendingRow": "Save or cancel the record being edited in table {{table}} before appending records to it.",
+      "danglingKey": "The table “{{table}}” has a foreign key to a table named “{{name}}” that was deleted outside BaseCraft: choose another name."
     },
     "fieldPrefix": "Field",
     "errorSuffix": "_ImportErrors",

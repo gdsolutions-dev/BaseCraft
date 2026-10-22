@@ -4,52 +4,15 @@ import { coerce, numberToText, toDecimal, type CellInput, type SqlValue } from '
 import { sameName, validateDesign, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { parseDecimal, type LocaleInfo } from '../../shared/locale-format';
 import {
-  createTableStatements, foreignKeyClauses, foreignKeyRefs, listTables, NameExistsError, purgeMetadata, quoteIdent, relationsOf, renameTable,
-  tableDesign, usableProps, writeTableMetadata,
+  brokenObject, createTableStatements, DanglingKeyError, foreignKeyClauses, foreignKeys, isExternal, listTables, metadataNames, NameExistsError, purgeMetadata,
+  quoteIdent, refColumns, relationsOf, renameTable, sqliteSameName, tableDesign, usableProps, ViewBrokenError, writeTableMetadata,
 } from './schema';
 import type { AlterResult, FieldMapping, Relation } from '../../shared/api';
 import { countViolations } from './rules';
 export type { AlterResult, FieldMapping };
+export { isExternal, sqlTokens } from './schema';
 
 interface AlterOptions { allowDataLoss: boolean; info: LocaleInfo; acceptExistingViolations?: boolean }
-
-/**
- * Tokens of an SQL text, comparable whatever the spacing, comments, identifier quoting ("x", [x], `x`, bare) and ASCII case
- * (SQLite's own rule for names and keywords). String literals are kept as written.
- */
-export function sqlTokens(sql: string): string[] {
-  const re = /\s+|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|('(?:[^']|'')*')|"((?:[^"]|"")*)"|\[([^\]]*)\]|`((?:[^`]|``)*)`|([\w$\u0080-\uffff]+)|([\s\S])/g;
-  const out: string[] = [];
-  const lower = (x: string) => x.replace(/[A-Z]+/g, (c) => c.toLowerCase());
-  for (const m of sql.matchAll(re)) {
-    if (m[1] !== undefined) out.push(m[1]);
-    else if (m[2] !== undefined) out.push(`n:${lower(m[2].replace(/""/g, '"'))}`);
-    else if (m[3] !== undefined) out.push(`n:${lower(m[3])}`);
-    else if (m[4] !== undefined) out.push(`n:${lower(m[4].replace(/``/g, '`'))}`);
-    else if (m[5] !== undefined) out.push(`n:${lower(m[5])}`);
-    else if (m[6] !== undefined) out.push(m[6]);
-  }
-  return out;
-}
-const sameSql = (a: string, b: string): boolean => sqlTokens(a).join(' ') === sqlTokens(b).join(' ');
-
-/**
- * A table BaseCraft does not manage (A2-R13: worked out from the schema, never stored), so never rebuilds: a rebuild would
- * lose what it does not know. Managed = no field adopted from outside (A1), no trigger, and the CREATE TABLE and the CREATE
- * INDEX statements are exactly what BaseCraft generates for the design and its relations with integrity.
- */
-export function isExternal(db: DatabaseSync, design: TableDesign): boolean {
-  if (design.fields.some((x) => x.props.external === true)) return true;
-  const objects = db.prepare(`SELECT type, sql FROM sqlite_master WHERE tbl_name = ? COLLATE NOCASE AND type IN ('table', 'index', 'trigger')`)
-    .all(design.name) as { type: string; sql: string | null }[];
-  const table = objects.find((x) => x.type === 'table');
-  if (!table?.sql || objects.some((x) => x.type === 'trigger')) return true;
-  const [create, ...indexes] = createTableStatements(design, foreignKeyClauses(db, design.name));
-  // Indexes without sql are the ones a PRIMARY KEY or UNIQUE of the CREATE TABLE makes: compared with it.
-  const live = objects.filter((x) => x.type === 'index' && x.sql !== null).map((x) => sqlTokens(x.sql!).join(' ')).sort();
-  const expected = indexes.map((x) => sqlTokens(x).join(' ')).sort();
-  return !sameSql(table.sql, create!) || live.join('\n') !== expected.join('\n');
-}
 
 /** The fields form the primary key, or are one field with a "no duplicates" index: what a foreign key needs in its parent. */
 export function uniqueKey(design: TableDesign, fields: string[]): boolean {
@@ -59,28 +22,46 @@ export function uniqueKey(design: TableDesign, fields: string[]): boolean {
 }
 
 /**
- * A field of a relation that this alteration renames, deletes, retypes or resizes; or a parent key that loses its uniqueness
- * while a relation with integrity needs it. Access refuses these: the relation is deleted first.
+ * A field of a relation, or a column another table's real FOREIGN KEY references (A2-R14), that this alteration renames,
+ * deletes, retypes or resizes; or a referenced key that loses its uniqueness. Access refuses these: the relation is deleted
+ * first. `relation` is '' for a key that is no relation (another tool's); `table` is the other table.
  */
-function relationField(old: TableDesign, design: TableDesign, sources: (string | null)[], relations: Relation[]): AlterResult {
+function relationField(db: DatabaseSync, old: TableDesign, design: TableDesign, sources: (string | null)[], relations: Relation[]): AlterResult {
+  const uses: { fields: string[]; unique: boolean; relation: string; table: string }[] = [];
   for (const r of relations) {
-    const sides: { fields: string[]; parent: boolean }[] = [];
-    if (sameName(r.parentTable, old.name)) sides.push({ fields: r.parentFields, parent: true });
-    if (sameName(r.childTable, old.name)) sides.push({ fields: r.childFields, parent: false });
-    for (const side of sides) {
-      for (const name of side.fields) {
-        const before = old.fields.find((x) => x.name === name);
-        const i = sources.indexOf(name);
-        const after = i < 0 ? undefined : design.fields[i]!;
-        if (!before || !after || after.name !== name || after.props.type !== before.props.type
-          || after.props.numberSize !== before.props.numberSize || after.props.size !== before.props.size) {
-          return { ok: false, reason: 'relationField', field: name, relation: r.name };
-        }
+    if (sqliteSameName(r.parentTable, old.name)) uses.push({ fields: r.parentFields, unique: r.enforce, relation: r.name, table: r.childTable });
+    if (sqliteSameName(r.childTable, old.name)) uses.push({ fields: r.childFields, unique: false, relation: r.name, table: r.parentTable });
+  }
+  for (const k of foreignKeys(db).filter((x) => x.child !== old.name && sqliteSameName(x.parent, old.name))) {
+    const fields = refColumns(db, k, old.name).map((c) => old.fields.find((x) => sameName(x.name, c))?.name ?? c);
+    const rel = relations.find((r) => r.enforce && sqliteSameName(r.childTable, k.child) && r.childFields.every((x, i) => sameName(x, k.from[i] ?? '')));
+    uses.push({ fields, unique: true, relation: rel?.name ?? '', table: k.child });
+  }
+  for (const u of uses) {
+    for (const name of u.fields) {
+      const before = old.fields.find((x) => x.name === name);
+      const i = sources.indexOf(name);
+      const after = i < 0 ? undefined : design.fields[i]!;
+      if (!before || !after || after.name !== name || after.props.type !== before.props.type
+        || after.props.numberSize !== before.props.numberSize || after.props.size !== before.props.size) {
+        return { ok: false, reason: 'relationField', field: name, relation: u.relation, table: u.table };
       }
-      if (side.parent && r.enforce && !uniqueKey(design, side.fields)) return { ok: false, reason: 'relationField', field: side.fields[0]!, relation: r.name };
     }
+    if (u.unique && !uniqueKey(design, u.fields)) return { ok: false, reason: 'relationField', field: u.fields[0]!, relation: u.relation, table: u.table };
   }
   return { ok: true };
+}
+
+/** Views of the base that no longer parse (SQLite reads a view when a statement uses it). */
+function brokenViews(db: DatabaseSync): string[] {
+  return (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'view'`).all() as { name: string }[]).map((x) => x.name).filter((v) => {
+    try {
+      db.prepare(`SELECT 1 FROM ${quoteIdent(v)} LIMIT 0`);
+      return false;
+    } catch {
+      return true;
+    }
+  });
 }
 
 /** PRAGMA foreign_key_check of these tables only: an unrelated violation elsewhere is not this operation's business. */
@@ -90,7 +71,7 @@ export function checkForeignKeys(db: DatabaseSync, tables: string[]): void {
 
 /** The table and every table whose FOREIGN KEY references it (relations, or another tool's): what a rebuild of it can break. */
 export function keyedTables(db: DatabaseSync, table: string): string[] {
-  return [table, ...new Set(foreignKeyRefs(db).filter((r) => sameName(r.parent, table) && r.child !== table).map((r) => r.child))];
+  return [table, ...new Set(foreignKeys(db).filter((k) => sqliteSameName(k.parent, table) && k.child !== table).map((k) => k.child))];
 }
 
 /**
@@ -131,9 +112,8 @@ export function rebuildSame(db: DatabaseSync, name: string, info: LocaleInfo): A
   }
 }
 
-/** SQLite refused the rebuild because of something outside the design: rows breaking its constraints (copy, unique index),
- *  or a view or trigger of another tool that no longer parses during the rename. */
-const refusedBySqlite = (e: unknown): boolean => e instanceof Error && /constraint failed|^error in (view|trigger) /.test(e.message);
+/** SQLite refused the rebuild because of rows outside the design: they break its constraints (copy, unique index). */
+const refusedBySqlite = (e: unknown): boolean => e instanceof Error && /constraint failed/.test(e.message);
 
 /**
  * Rebuilds `oldName` with `design` (which may rename the table) in one transaction.
@@ -157,16 +137,18 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
   if (new Set(used).size !== used.length) throw new Error('mapping: a source field is used twice');
   // A1 only rebuilds tables it fully manages: the rebuild would drop or change what it does not know (R17).
   if (isExternal(db, old)) return { ok: false, reason: 'external' };
-  if (listTables(db).some((x) => x.name !== old.name && sameName(x.name, design.name))) throw new NameExistsError(design.name);
+  // Only a new name can clash (a twin another tool made, "été" beside "Été", does not stop altering "Été").
+  if (design.name !== old.name && listTables(db).some((x) => x.name !== old.name && sameName(x.name, design.name))) throw new NameExistsError(design.name);
   if (db.isTransaction) throw new Error('alterTable cannot run inside a transaction');
   const relations = relationsOf(db, old.name);
-  const guarded = relationField(old, design, sources, relations);
+  const guarded = relationField(db, old, design, sources, relations);
   if (!guarded.ok) return guarded;
 
   const fk = (db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys;
   db.exec('PRAGMA foreign_keys=OFF'); // no effect inside a transaction: must come first (a dropped parent must not cascade)
   try {
     db.exec('BEGIN');
+    const viewsBroken = brokenViews(db); // already broken (another tool's): not this alteration's doing
     let from = old;
     // A renamed table is renamed first: SQLite rewrites every REFERENCES to it (relations and other tools' keys alike), and
     // bc_relations follows. A rename by the rebuild (DROP, then RENAME of the copy) would leave them on the old name.
@@ -178,6 +160,9 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
     // ponytail: awaited inside the open transaction; the evaluator only awaits settled promises (microtasks), so no other
     // IPC call can run on this connection meanwhile. A truly asynchronous function in a rule would need a lock here.
     if (r.ok && !opts.acceptExistingViolations) r = await existingViolations(db, old, design, sources, opts.info);
+    // A view (of another tool) reading a field this alteration removes or renames would no longer parse: refused, named.
+    const view = r.ok ? brokenViews(db).find((v) => !viewsBroken.includes(v)) : undefined;
+    if (view !== undefined) r = { ok: false, reason: 'viewBroken', view };
     if (r.ok) {
       checkForeignKeys(db, keyedTables(db, design.name));
       db.exec('COMMIT');
@@ -187,7 +172,10 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
     if (db.isTransaction) db.exec('ROLLBACK');
     const field = duplicateField(e, design.fields);
     if (field !== undefined) return { ok: false, reason: 'duplicate', field };
-    if (e instanceof Error && /^error in (view|trigger) /.test(e.message)) return { ok: false, reason: 'external' };
+    if (e instanceof DanglingKeyError) return { ok: false, reason: 'danglingKey', table: e.table };
+    if (e instanceof ViewBrokenError) return { ok: false, reason: 'viewBroken', view: e.view };
+    const view = brokenObject(e);
+    if (view !== undefined) return { ok: false, reason: 'viewBroken', view };
     throw e;
   } finally {
     db.exec(`PRAGMA foreign_keys=${fk ? 'ON' : 'OFF'}`);
@@ -264,12 +252,21 @@ function replaceTable(db: DatabaseSync, old: TableDesign, design: TableDesign, s
   const auto = design.fields.findIndex((x) => x.props.type === 'autoNumber');
   // Access never reuses an AutoNumber: carry the old sequence over.
   const seq = auto >= 0 ? ((db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(old.name) as { seq: number } | undefined)?.seq ?? 0) : 0;
-  const metaTable = (db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[]).find((x) => sameName(x.name, old.name));
+  // Its metadata, exact name first: a twin's (another tool's "été" beside "Été") is never taken (A2-R14).
+  const names = metadataNames(db, old.name);
+  const metaTable = (db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[]).find((x) => x.name === names.table);
   const metaFields = (db.prepare('SELECT table_name, field_name, props FROM bc_fields').all() as { table_name: string; field_name: string; props: string }[])
-    .filter((x) => sameName(x.table_name, old.name));
+    .filter((x) => names.fields !== undefined && sqliteSameName(x.table_name, names.fields));
 
   db.exec(`DROP TABLE ${quoteIdent(old.name)}`);
-  db.exec(`ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${quoteIdent(design.name)}`);
+  // The copy takes the name with legacy_alter_table ON (SQLite's 12-step rebuild): nothing refers to the copy, foreign keys
+  // are OFF, and a view elsewhere in the base that no longer parses (another tool's) must not refuse the rename.
+  db.exec('PRAGMA legacy_alter_table=ON');
+  try {
+    db.exec(`ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${quoteIdent(design.name)}`);
+  } finally {
+    db.exec('PRAGMA legacy_alter_table=OFF');
+  }
   for (const s of createTableStatements(design).slice(1)) db.exec(s);
   if (auto >= 0 && seq > 0) {
     const upd = db.prepare('UPDATE sqlite_sequence SET seq = max(seq, ?) WHERE name = ?').run(seq, design.name);

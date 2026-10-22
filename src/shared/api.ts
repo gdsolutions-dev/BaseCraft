@@ -16,7 +16,8 @@ export interface ReconcileReport {
   addedFields: { table: string; field: string }[];
   removedFields: { table: string; field: string }[];
   removedRelations: string[]; // a table or field of the relation is gone
-  downgradedRelations: string[]; // its FOREIGN KEY was removed outside BaseCraft: kept without integrity
+  downgradedRelations: string[]; // its FOREIGN KEY was removed or replaced outside BaseCraft: kept without integrity
+  updatedRelations: string[]; // follows its FOREIGN KEY, changed outside BaseCraft (a table or field renamed, the actions)
 }
 export interface FieldMapping { name: string; sourceName: string | null } // null = nouveau champ
 export type AlterResult =
@@ -27,7 +28,10 @@ export type AlterResult =
   | { ok: false; reason: 'duplicate'; field: string }
   | { ok: false; reason: 'external' }
   | { ok: false; reason: 'validationExisting'; field: string; rows: number }
-  | { ok: false; reason: 'relationField'; field: string; relation: string };
+  // `relation` '' : a FOREIGN KEY of another tool, no relation; `table`: the other table.
+  | { ok: false; reason: 'relationField'; field: string; relation: string; table: string }
+  | { ok: false; reason: 'viewBroken'; view: string } // a view or trigger of the base would no longer parse (or already does not)
+  | { ok: false; reason: 'danglingKey'; table: string }; // `table` has a FOREIGN KEY to a dropped table of the new name
 export interface PageRequest { offset: number; limit: number; sort?: { field: string; dir: 'asc' | 'desc' } }
 export interface RowPage { rows: { rowid: number; values: SqlValue[] }[] }
 export type RowWriteResult =
@@ -55,7 +59,10 @@ export interface SessionState {
 export interface SaveTableRequest { originalName: string | null; design: TableDesign; mapping: FieldMapping[]; allowDataLoss: boolean; acceptExistingViolations?: boolean }
 export type SaveTableResult = AlterResult | { ok: false; reason: 'nameExists' | 'readOnly' };
 export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'hasRelations' }
-  | { ok: false; reason: 'external'; table: string }; // a table changed outside BaseCraft: it is never rebuilt
+  | { ok: false; reason: 'external'; table: string } // a table changed outside BaseCraft: it is never rebuilt
+  | { ok: false; reason: 'referenced'; table: string } // `table` has a FOREIGN KEY (not a relation) to this table
+  | { ok: false; reason: 'danglingKey'; table: string } // `table` has a FOREIGN KEY to a dropped table of the new name
+  | { ok: false; reason: 'viewBroken'; view: string }; // SQLite refuses the rename: this view or trigger no longer parses
 export type DeleteResult = { ok: true; count: number } | { ok: false; reason: 'related'; table: string };
 
 /** joinType as in Access: 1 = matching rows only, 2 = every parent row, 3 = every child row. */
@@ -64,7 +71,8 @@ export interface Relation {
   enforce: boolean; cascadeUpdate: boolean; cascadeDelete: boolean; joinType: 1 | 2 | 3;
 }
 export type RelationResult = { ok: true; relation: Relation }
-  | { ok: false; reason: 'fieldsMismatch' | 'typesMismatch' | 'parentNotUnique' | 'external' | 'readOnly' | 'nameExists' | 'nameInvalid' | 'sameTable' }
+  | { ok: false; reason: 'fieldsMismatch' | 'typesMismatch' | 'parentNotUnique' | 'readOnly' | 'nameExists' | 'nameInvalid' | 'sameTable' }
+  | { ok: false; reason: 'external'; table: string }
   | { ok: false; reason: 'violations'; rows: number };
 export interface RelationsLayout { tables: Record<string, { x: number; y: number }> }
 
@@ -100,6 +108,7 @@ export const CH = {
   relationsDelete: 'bc:relations:delete',
   relationsLayout: 'bc:relations:layout',
   relationsSaveLayout: 'bc:relations:saveLayout',
+  relationsCascadeChildren: 'bc:relations:cascadeChildren',
   importPick: 'bc:importText:pick',
   importPreview: 'bc:importText:preview',
   importRun: 'bc:importText:run',
@@ -148,6 +157,8 @@ export interface BasecraftApi {
     delete(name: string): Promise<OpResult>;
     layout(): Promise<RelationsLayout>;
     saveLayout(l: RelationsLayout): Promise<void>;
+    /** Tables whose real FOREIGN KEY to `table` has ON DELETE CASCADE: a delete of its rows deletes theirs too. */
+    cascadeChildren(table: string): Promise<string[]>;
   };
   /** Import d'un fichier texte : le fichier est lu par le processus principal, jamais par le rendu. Écritures : bc:readOnly. */
   importText: {

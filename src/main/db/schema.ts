@@ -30,6 +30,24 @@ export class NameExistsError extends Error {
     this.name = 'NameExistsError';
   }
 }
+/** A FOREIGN KEY of `table` references this name, whose table another tool dropped: a new table under it would become its parent. */
+export class DanglingKeyError extends Error {
+  constructor(public table: string) {
+    super(`table "${table}" has a foreign key to a dropped table of that name`);
+    this.name = 'DanglingKeyError';
+  }
+}
+/** SQLite refused a rename because a view or trigger of the base no longer parses (`view`: its name). */
+export class ViewBrokenError extends Error {
+  constructor(public view: string) {
+    super(`view or trigger "${view}" is broken`);
+    this.name = 'ViewBrokenError';
+  }
+}
+/** The view or trigger named by SQLite's `error in view|trigger <name>: …`, if that is the error. */
+export function brokenObject(e: unknown): string | undefined {
+  return e instanceof Error ? /^error in (?:view|trigger) (.+?): /.exec(e.message)?.[1] : undefined;
+}
 
 const FIELD_TYPES: readonly string[] = ['autoNumber', 'shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink'];
 const NUMBER_SIZES: readonly string[] = ['byte', 'integer', 'longInteger', 'single', 'double', 'decimal'];
@@ -125,8 +143,35 @@ function liveTableNames(db: DatabaseSync): string[] {
   return rows.map((r) => r.name).filter((n) => !isReservedName(n));
 }
 
+/**
+ * The exact name first, then the same name ignoring case (A2-R14). SQLite keeps tables whose names differ only in
+ * non-ASCII case apart ("Été", "été"): another tool can make such twins, and each must be found as itself.
+ */
+export function pickName(names: readonly string[], name: string): string | undefined {
+  return names.find((n) => n === name) ?? names.find((n) => sameName(n, name));
+}
+
+const asciiLower = (x: string) => x.replace(/[A-Z]+/g, (c) => c.toLowerCase());
+/** SQLite's own comparison of names (ASCII letters only ignore case): for what SQLite resolves, a key's parent table. */
+export const sqliteSameName = (a: string, b: string): boolean => asciiLower(a) === asciiLower(b);
+
 function findTable(db: DatabaseSync, name: string): string | undefined {
-  return liveTableNames(db).find((n) => sameName(n, name));
+  return pickName(liveTableNames(db), name);
+}
+
+/** The metadata name of live table `table`: its exact name, else a case variant that is not itself a live table (a twin). */
+function metaName(metas: readonly string[], live: readonly string[], table: string): string | undefined {
+  return metas.includes(table) ? table : metas.find((n) => sameName(n, table) && !live.includes(n));
+}
+
+/** `table`'s metadata names, for a live table (exact first, see metaName). */
+export const metadataNames = (db: DatabaseSync, table: string) => metaOf(db, liveTableNames(db), table);
+
+/** The names under which bc_tables and bc_fields hold `table`'s metadata (exact first, see metaName). */
+function metaOf(db: DatabaseSync, live: readonly string[], table: string): { table?: string; fields?: string } {
+  const tables = (db.prepare('SELECT name FROM bc_tables').all() as { name: string }[]).map((x) => x.name);
+  const fields = (db.prepare('SELECT DISTINCT table_name FROM bc_fields').all() as { table_name: string }[]).map((x) => x.table_name);
+  return { table: metaName(tables, live, table), fields: metaName(fields, live, table) };
 }
 
 function inferProps(col: Column, pkCount: number): FieldProps {
@@ -232,86 +277,177 @@ export function listRelations(db: DatabaseSync): Relation[] {
   return out;
 }
 
-/** Relations where `table` is the parent or the child. */
+/** Relations where `table` is the parent or the child (table names resolved exactly first). */
 export function relationsOf(db: DatabaseSync, table: string): Relation[] {
-  return listRelations(db).filter((r) => sameName(r.parentTable, table) || sameName(r.childTable, table));
+  const live = liveTableNames(db);
+  const t = pickName(live, table) ?? table;
+  return listRelations(db).filter((r) => pickName(live, r.parentTable) === t || pickName(live, r.childTable) === t);
 }
 
 /** FOREIGN KEY clauses of `childTable`: one per relation with integrity where it is the child. */
 export function foreignKeyClauses(db: DatabaseSync, childTable: string): string[] {
+  const live = liveTableNames(db);
+  const t = pickName(live, childTable) ?? childTable;
   const cols = (xs: string[]) => xs.map(quoteIdent).join(', ');
-  return listRelations(db).filter((r) => r.enforce && sameName(r.childTable, childTable)).map((r) =>
+  return listRelations(db).filter((r) => r.enforce && (pickName(live, r.childTable) ?? r.childTable) === t).map((r) =>
     `FOREIGN KEY (${cols(r.childFields)}) REFERENCES ${quoteIdent(r.parentTable)} (${cols(r.parentFields)})`
     + (r.cascadeUpdate ? ' ON UPDATE CASCADE' : '') + (r.cascadeDelete ? ' ON DELETE CASCADE' : ''));
 }
 
-/** Rewrites the table names stored in bc_relations (unknown keys kept). */
-function renameInRelations(db: DatabaseSync, from: string, to: string): void {
+/** Rewrites the table names stored in bc_relations (unknown keys kept); `live`: the names before the rename. */
+function renameInRelations(db: DatabaseSync, live: string[], from: string, to: string): void {
   const upd = db.prepare('UPDATE bc_relations SET props = ? WHERE name = ?');
   for (const r of db.prepare('SELECT name, props FROM bc_relations').all() as { name: string; props: string }[]) {
     const p = parseObject(r.props);
     let changed = false;
-    for (const k of ['parentTable', 'childTable']) if (isStr(p[k]) && sameName(p[k], from)) [p[k], changed] = [to, true];
+    for (const k of ['parentTable', 'childTable']) if (isStr(p[k]) && pickName(live, p[k]) === from) [p[k], changed] = [to, true];
     if (changed) upd.run(JSON.stringify(p), r.name);
   }
 }
 
-/** Every real FOREIGN KEY of the base (BaseCraft's relations and other tools' alike), as child → parent table names. */
-export function foreignKeyRefs(db: DatabaseSync): { child: string; parent: string }[] {
-  return db.prepare(`SELECT DISTINCT m.name AS child, f."table" AS parent FROM sqlite_master AS m, pragma_foreign_key_list(m.name) AS f WHERE m.type = 'table'`)
-    .all() as { child: string; parent: string }[];
+/** A real FOREIGN KEY: `to` null when it names no parent columns (the parent's primary key then). Actions as SQLite gives them. */
+export interface ForeignKey { child: string; parent: string; from: string[]; to: string[] | null; onUpdate: string; onDelete: string }
+
+/** Every real FOREIGN KEY of the base, BaseCraft's relations and other tools' alike (A2-R14: they decide). */
+export function foreignKeys(db: DatabaseSync): ForeignKey[] {
+  const rows = db.prepare(`SELECT m.name AS child, f.id, f."table" AS parent, f."from" AS col, f."to" AS ref, f.on_update AS onUpdate, f.on_delete AS onDelete
+    FROM sqlite_master AS m, pragma_foreign_key_list(m.name) AS f WHERE m.type = 'table' ORDER BY m.name, f.id, f.seq`)
+    .all() as { child: string; id: number; parent: string; col: string; ref: string | null; onUpdate: string; onDelete: string }[];
+  const out: ForeignKey[] = [];
+  rows.forEach((r, i) => {
+    const prev = rows[i - 1];
+    if (!prev || prev.child !== r.child || prev.id !== r.id) {
+      out.push({ child: r.child, parent: r.parent, from: [], to: [], onUpdate: r.onUpdate, onDelete: r.onDelete });
+    }
+    const k = out[out.length - 1]!;
+    k.from.push(r.col);
+    if (r.ref === null) k.to = null;
+    else k.to?.push(r.ref);
+  });
+  return out;
 }
 
-/** The FOREIGN KEY of `r` is in its child's schema: same parent table, same columns in order (names compared ignoring case). */
-function hasForeignKey(db: DatabaseSync, r: Relation): boolean {
-  const rows = db.prepare('SELECT id, "table" AS parent, "from" AS col, "to" AS ref FROM pragma_foreign_key_list(?) ORDER BY id, seq')
-    .all(r.childTable) as { id: number; parent: string; col: string; ref: string | null }[];
-  return [...new Set(rows.map((x) => x.id))].some((id) => {
-    const fk = rows.filter((x) => x.id === id);
-    return sameName(fk[0]!.parent, r.parentTable) && fk.length === r.childFields.length
-      && fk.every((x, i) => sameName(x.col, r.childFields[i]!) && (x.ref === null || sameName(x.ref, r.parentFields[i]!)));
-  });
+/** The live table a key's parent name designates, as SQLite resolves it. */
+export function parentOf(live: readonly string[], k: ForeignKey): string | undefined {
+  return live.find((n) => n === k.parent) ?? live.find((n) => sqliteSameName(n, k.parent));
+}
+
+/** The parent columns of a key: its own, else the primary key of `parent`. */
+export function refColumns(db: DatabaseSync, k: ForeignKey, parent: string): string[] {
+  return k.to ?? columns(db, parent).filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.name);
+}
+
+/** Tables with a key on `table` whose ON DELETE is CASCADE: what a delete of its rows also deletes (the datasheet warns). */
+export function cascadeChildren(db: DatabaseSync, table: string): string[] {
+  const live = liveTableNames(db);
+  const t = pickName(live, table);
+  return [...new Set(foreignKeys(db).filter((k) => t !== undefined && parentOf(live, k) === t && k.onDelete === 'CASCADE').map((k) => k.child))];
+}
+
+/** Keys whose parent was dropped by another tool, by the name they reference. */
+function danglingKeys(db: DatabaseSync, live: readonly string[]): ForeignKey[] {
+  return foreignKeys(db).filter((k) => parentOf(live, k) === undefined);
 }
 
 /**
- * bc_relations follows the schema (A2-R13). A relation whose table or field is gone is dropped. An enforced relation whose
- * FOREIGN KEY another tool removed or replaced is kept without integrity. Names take the live spelling. Both are reported.
+ * bc_relations follows the real keys (A2-R13, A2-R14). An enforced relation follows its key: a table or column another tool
+ * renamed (SQLite moved the key), and the ON DELETE / ON UPDATE actions. Without its key it is kept without integrity while
+ * its tables and fields remain, and dropped when they are gone. Each change is reported.
  */
 function reconcileRelations(db: DatabaseSync, live: string[], report: ReconcileReport): void {
-  const resolve = (table: string | undefined, fields: string[]) => {
-    if (table === undefined) return undefined;
-    const cols = columns(db, table).map((c) => c.name);
-    const out = fields.map((x) => cols.find((c) => sameName(c, x)));
+  const keys = foreignKeys(db);
+  const colsOf = (t: string) => columns(db, t).map((c) => c.name);
+  const fieldsIn = (t: string | undefined, fields: string[]) => {
+    if (t === undefined) return undefined;
+    const cols = colsOf(t);
+    const out = fields.map((x) => pickName(cols, x));
     return out.every((x) => x !== undefined) ? (out as string[]) : undefined;
   };
+  const sameFields = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => sameName(x, b[i]!));
   for (const r of listRelations(db)) {
-    const parentTable = live.find((n) => sameName(n, r.parentTable));
-    const childTable = live.find((n) => sameName(n, r.childTable));
-    const parentFields = resolve(parentTable, r.parentFields);
-    const childFields = resolve(childTable, r.childFields);
-    if (!parentFields || !childFields) {
-      db.prepare('DELETE FROM bc_relations WHERE name = ?').run(r.name);
-      report.removedRelations.push(r.name);
-      continue;
+    const childT = pickName(live, r.childTable);
+    const parentT = pickName(live, r.parentTable);
+    let next: Relation | undefined;
+    if (r.enforce) {
+      // Its key: on the child, by its columns; else by its parent and parent columns (a child or child column renamed).
+      const byChild = keys.find((k) => k.child === childT && sameFields(k.from, r.childFields));
+      const byParent = keys.find((k) => parentT !== undefined && parentOf(live, k) === parentT && (childT === undefined || k.child === childT)
+        && k.from.length === r.childFields.length && sameFields(refColumns(db, k, parentT), r.parentFields));
+      const k = byChild ?? byParent;
+      const parent = k && parentOf(live, k);
+      if (k && parent) {
+        const parentFields = fieldsIn(parent, refColumns(db, k, parent));
+        const childFields = fieldsIn(k.child, k.from);
+        if (parentFields && childFields) {
+          next = { ...r, parentTable: parent, childTable: k.child, parentFields, childFields, cascadeUpdate: k.onUpdate === 'CASCADE', cascadeDelete: k.onDelete === 'CASCADE' };
+        }
+      }
     }
-    const next: Relation = { ...r, parentTable: parentTable!, childTable: childTable!, parentFields, childFields };
-    if (next.enforce && !hasForeignKey(db, next)) {
-      next.enforce = false;
-      report.downgradedRelations.push(r.name);
+    if (!next) {
+      const parentFields = fieldsIn(parentT, r.parentFields);
+      const childFields = fieldsIn(childT, r.childFields);
+      if (!parentFields || !childFields) {
+        db.prepare('DELETE FROM bc_relations WHERE name = ?').run(r.name);
+        report.removedRelations.push(r.name);
+        continue;
+      }
+      next = { ...r, parentTable: parentT!, childTable: childT!, parentFields, childFields, enforce: false };
+      if (r.enforce) report.downgradedRelations.push(r.name);
     }
     if (JSON.stringify(next) === JSON.stringify(r)) continue;
+    if (next.enforce) report.updatedRelations.push(r.name);
     const row = db.prepare('SELECT props FROM bc_relations WHERE name = ?').get(r.name) as { props: string };
     const { name: _name, ...props } = next;
     db.prepare('UPDATE bc_relations SET props = ? WHERE name = ?').run(JSON.stringify({ ...parseObject(row.props), ...props }), r.name);
   }
 }
 
+/**
+ * Tokens of an SQL text, comparable whatever the spacing, comments, identifier quoting ("x", [x], `x`, bare) and ASCII case
+ * (SQLite's own rule for names and keywords). String literals are kept as written.
+ */
+export function sqlTokens(sql: string): string[] {
+  const re = /\s+|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|('(?:[^']|'')*')|"((?:[^"]|"")*)"|\[([^\]]*)\]|`((?:[^`]|``)*)`|([\w$\u0080-\uffff]+)|([\s\S])/g;
+  const out: string[] = [];
+  for (const m of sql.matchAll(re)) {
+    if (m[1] !== undefined) out.push(m[1]);
+    else if (m[2] !== undefined) out.push(`n:${asciiLower(m[2].replace(/""/g, '"'))}`);
+    else if (m[3] !== undefined) out.push(`n:${asciiLower(m[3])}`);
+    else if (m[4] !== undefined) out.push(`n:${asciiLower(m[4].replace(/``/g, '`'))}`);
+    else if (m[5] !== undefined) out.push(`n:${asciiLower(m[5])}`);
+    else if (m[6] !== undefined) out.push(m[6]);
+  }
+  return out;
+}
+const sameSql = (a: string, b: string): boolean => sqlTokens(a).join(' ') === sqlTokens(b).join(' ');
+
+/**
+ * A table BaseCraft does not manage (A2-R13: worked out from the schema, never stored), so never rebuilds: a rebuild would
+ * lose what it does not know. Managed = no field adopted from outside (A1), no trigger, and the CREATE TABLE and the CREATE
+ * INDEX statements are exactly what BaseCraft generates for the design and its relations with integrity. Views are not the
+ * table's own objects: they are not looked at.
+ */
+export function isExternal(db: DatabaseSync, design: TableDesign): boolean {
+  if (design.fields.some((x) => x.props.external === true)) return true;
+  const objects = db.prepare(`SELECT type, sql FROM sqlite_master WHERE tbl_name = ? COLLATE NOCASE AND type IN ('table', 'index', 'trigger')`)
+    .all(design.name) as { type: string; sql: string | null }[];
+  const table = objects.find((x) => x.type === 'table');
+  if (!table?.sql || objects.some((x) => x.type === 'trigger')) return true;
+  const [create, ...indexes] = createTableStatements(design, foreignKeyClauses(db, design.name));
+  // Indexes without sql are the ones a PRIMARY KEY or UNIQUE of the CREATE TABLE makes: compared with it.
+  const live = objects.filter((x) => x.type === 'index' && x.sql !== null).map((x) => sqlTokens(x.sql!).join(' ')).sort();
+  const expected = indexes.map((x) => sqlTokens(x).join(' ')).sort();
+  return !sameSql(table.sql, create!) || live.join('\n') !== expected.join('\n');
+}
+
 // ---------- operations ----------
 
-// Stale metadata of an externally dropped table must not leak into a table taking its name.
+// Stale metadata of an externally dropped table must not leak into a table taking its name. A case variant that is a live
+// table itself (a twin made by another tool) keeps its own.
 export function purgeMetadata(db: DatabaseSync, name: string): void {
+  const live = liveTableNames(db);
   for (const r of db.prepare('SELECT name FROM bc_tables').all() as { name: string }[]) {
-    if (!sameName(r.name, name)) continue;
+    if (r.name !== name && (!sameName(r.name, name) || live.includes(r.name))) continue;
     db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(r.name);
     db.prepare('DELETE FROM bc_tables WHERE name = ?').run(r.name);
   }
@@ -322,6 +458,7 @@ export function createTable(db: DatabaseSync, design: TableDesign): void {
   if (errors.length > 0) throw new DesignValidationError(errors);
   inTransaction(db, () => {
     if (findTable(db, design.name)) throw new NameExistsError(design.name);
+    refuseDangling(db, design.name);
     for (const fd of design.fields) if (!usableProps(fd.props)) throw new Error(`invalid field properties: ${fd.name}`);
     purgeMetadata(db, design.name);
     for (const s of createTableStatements(design)) db.exec(s);
@@ -329,6 +466,27 @@ export function createTable(db: DatabaseSync, design: TableDesign): void {
   });
 }
 
+/** A key another tool left on a dropped table of that name would make a new table under it its parent. */
+function refuseDangling(db: DatabaseSync, name: string): void {
+  const k = danglingKeys(db, liveTableNames(db)).find((x) => sqliteSameName(x.parent, name));
+  if (k) throw new DanglingKeyError(k.child);
+}
+
+/** ALTER TABLE … RENAME (SQLite rewrites every reference); a broken view or trigger of the base makes it a ViewBrokenError. */
+function alterRename(db: DatabaseSync, from: string, to: string): void {
+  try {
+    db.exec(`ALTER TABLE ${quoteIdent(from)} RENAME TO ${quoteIdent(to)}`);
+  } catch (e) {
+    const view = brokenObject(e);
+    if (view !== undefined) throw new ViewBrokenError(view);
+    throw e;
+  }
+}
+
+/**
+ * Renames a table; SQLite rewrites the references to it (legacy_alter_table OFF) and bc_relations follows. A managed table's
+ * bcx_ indexes take the new name; an external table's indexes are left as they are (SQLite already rewrote their ON).
+ */
 export function renameTable(db: DatabaseSync, oldName: string, newName: string): void {
   const errors = validateDesign({ name: newName, fields: [{ name: 'x', props: defaultProps('longText') }] });
   if (errors.length > 0) throw new DesignValidationError(errors);
@@ -338,9 +496,12 @@ export function renameTable(db: DatabaseSync, oldName: string, newName: string):
     if (cur === newName) return;
     const clash = findTable(db, newName);
     if (clash && clash !== cur) throw new NameExistsError(newName);
+    if (!sqliteSameName(cur, newName)) refuseDangling(db, newName);
+    const live = liveTableNames(db);
     const prefix = `bcx_${cur}.`;
+    const external = isExternal(db, tableDesign(db, cur));
     const idx = (db.prepare(`PRAGMA index_list(${quoteIdent(cur)})`).all() as { name: string; unique: number }[])
-      .filter((i) => i.name.startsWith(prefix))
+      .filter((i) => !external && i.name.startsWith(prefix))
       .map((i) => ({
         name: i.name,
         unique: i.unique,
@@ -349,58 +510,66 @@ export function renameTable(db: DatabaseSync, oldName: string, newName: string):
     // SQLite compares ASCII names case-insensitively: a case-only rename goes through a temporary name.
     if (sameName(cur, newName)) {
       const tmp = `bcx_tmp_${Math.random().toString(36).slice(2)}`;
-      db.exec(`ALTER TABLE ${quoteIdent(cur)} RENAME TO ${quoteIdent(tmp)}`);
-      db.exec(`ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${quoteIdent(newName)}`);
-    } else db.exec(`ALTER TABLE ${quoteIdent(cur)} RENAME TO ${quoteIdent(newName)}`);
+      alterRename(db, cur, tmp);
+      alterRename(db, tmp, newName);
+    } else alterRename(db, cur, newName);
     for (const i of idx) {
       db.exec(`DROP INDEX ${quoteIdent(i.name)}`);
       db.exec(
         `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${quoteIdent(indexName(newName, i.field))} ON ${quoteIdent(newName)} (${quoteIdent(i.field)})`,
       );
     }
+    const meta = metaOf(db, live, cur);
     if (!sameName(cur, newName)) purgeMetadata(db, newName);
-    db.prepare('UPDATE bc_tables SET name = ? WHERE name = ?').run(newName, cur);
-    db.prepare('UPDATE bc_fields SET table_name = ? WHERE table_name = ?').run(newName, cur);
-    renameInRelations(db, cur, newName); // the REFERENCES clauses were rewritten by SQLite (legacy_alter_table OFF)
+    if (meta.table !== undefined) db.prepare('UPDATE bc_tables SET name = ? WHERE name = ?').run(newName, meta.table);
+    if (meta.fields !== undefined) db.prepare('UPDATE bc_fields SET table_name = ? WHERE table_name = ?').run(newName, meta.fields);
+    renameInRelations(db, live, cur, newName); // the REFERENCES clauses were rewritten by SQLite (legacy_alter_table OFF)
   });
 }
 
 /**
- * A table in a relation is refused (hasRelations): as in Access, its relations are deleted first. So is a table that any
- * other table's real FOREIGN KEY references (another tool's, or one whose relation reconcile dropped): DROP TABLE would
- * otherwise run its ON DELETE CASCADE or SET NULL on that other table's rows.
+ * A table in a relation is refused (hasRelations): as in Access, its relations are deleted first. A table that another
+ * table's real FOREIGN KEY references (another tool's) is refused too (referenced, naming that table): DROP TABLE would
+ * otherwise run its ON DELETE CASCADE or SET NULL on that table's rows. A key of the table on itself does not count.
  */
 export function dropTable(db: DatabaseSync, name: string): OpResult {
   return inTransaction(db, (): OpResult => {
-    const cur = findTable(db, name);
+    const live = liveTableNames(db);
+    const cur = pickName(live, name);
     if (!cur) throw new Error(`unknown table: ${name}`);
-    if (relationsOf(db, cur).length > 0 || foreignKeyRefs(db).some((x) => sameName(x.parent, cur) && !sameName(x.child, cur))) {
-      return { ok: false, reason: 'hasRelations' };
-    }
+    if (relationsOf(db, cur).length > 0) return { ok: false, reason: 'hasRelations' };
+    const k = foreignKeys(db).find((x) => x.child !== cur && parentOf(live, x) === cur);
+    if (k) return { ok: false, reason: 'referenced', table: k.child };
+    const meta = metaOf(db, live, cur);
     db.exec(`DROP TABLE ${quoteIdent(cur)}`);
-    db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(cur);
-    db.prepare('DELETE FROM bc_tables WHERE name = ?').run(cur);
+    if (meta.fields !== undefined) db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(meta.fields);
+    if (meta.table !== undefined) db.prepare('DELETE FROM bc_tables WHERE name = ?').run(meta.table);
     return { ok: true };
   });
 }
 
 export function listTables(db: DatabaseSync): TableSummary[] {
   const meta = db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[];
-  return liveTableNames(db).map((name) => {
-    const m = meta.find((r) => sameName(r.name, name));
+  const live = liveTableNames(db);
+  return live.map((name) => {
+    const mn = metaName(meta.map((r) => r.name), live, name);
+    const m = meta.find((r) => r.name === mn);
     const d = m ? parseObject(m.props).description : undefined;
     return typeof d === 'string' ? { name, description: d } : { name };
   });
 }
 
 export function tableDesign(db: DatabaseSync, name: string): TableDesign {
-  const cur = findTable(db, name);
+  const live = liveTableNames(db);
+  const cur = pickName(live, name);
   if (!cur) throw new Error(`unknown table: ${name}`);
   const cols = columns(db, cur);
   const pkCount = cols.filter((c) => c.pk > 0).length;
-  const metaRows = (db.prepare('SELECT table_name, field_name, position, props FROM bc_fields ORDER BY position').all() as {
+  const allRows = db.prepare('SELECT table_name, field_name, position, props FROM bc_fields ORDER BY position').all() as {
     table_name: string; field_name: string; position: number; props: string
-  }[]).filter((r) => sameName(r.table_name, cur));
+  }[];
+  const fieldsMeta = metaName([...new Set(allRows.map((r) => r.table_name))], live, cur);
+  const metaRows = allRows.filter((r) => fieldsMeta !== undefined && sqliteSameName(r.table_name, fieldsMeta));
   const known: { pos: number; fd: FieldDef }[] = [];
   const unknown: FieldDef[] = [];
   for (const col of cols) {
@@ -412,7 +581,8 @@ export function tableDesign(db: DatabaseSync, name: string): TableDesign {
   known.sort((a, b) => a.pos - b.pos);
   const design: TableDesign = { name: cur, fields: [...known.map((k) => k.fd), ...unknown] };
   const tm = db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[];
-  const row = tm.find((r) => sameName(r.name, cur));
+  const tableMeta = metaName(tm.map((r) => r.name), live, cur);
+  const row = tm.find((r) => r.name === tableMeta);
   if (row) {
     const { description, ...extra } = parseObject(row.props);
     if (typeof description === 'string') design.description = description;
@@ -423,18 +593,23 @@ export function tableDesign(db: DatabaseSync, name: string): TableDesign {
 
 export function reconcile(db: DatabaseSync): ReconcileReport {
   return inTransaction(db, () => {
-    const report: ReconcileReport = { addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [] };
+    const report: ReconcileReport = {
+      addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [],
+    };
     const live = liveTableNames(db);
     const metaTables = (db.prepare('SELECT name FROM bc_tables').all() as { name: string }[]).map((r) => r.name);
+    // Each live table's metadata, exact name first: a twin another tool made never takes the managed table's (A2-R14).
+    const owner = new Map(live.map((t) => [t, metaName(metaTables, live, t)]));
+    const owned = new Set(owner.values());
     for (const m of metaTables) {
-      if (live.some((n) => sameName(n, m))) continue;
+      if (owned.has(m)) continue;
       report.removedTables.push(m);
       db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(m);
       db.prepare('DELETE FROM bc_tables WHERE name = ?').run(m);
     }
     const allFields = db.prepare('SELECT table_name, field_name FROM bc_fields').all() as { table_name: string; field_name: string }[];
     for (const table of live) {
-      const m = metaTables.find((n) => sameName(n, table));
+      const m = owner.get(table);
       if (!m) {
         report.addedTables.push(table);
         writeTableMetadata(db, tableDesign(db, table));
@@ -442,7 +617,7 @@ export function reconcile(db: DatabaseSync): ReconcileReport {
       }
       const cols = columns(db, table);
       const pkCount = cols.filter((c) => c.pk > 0).length;
-      const rows = allFields.filter((r) => sameName(r.table_name, table));
+      const rows = allFields.filter((r) => sqliteSameName(r.table_name, m));
       for (const col of cols) {
         if (rows.some((r) => sameName(r.field_name, col.name))) continue;
         report.addedFields.push({ table, field: col.name });

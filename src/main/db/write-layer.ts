@@ -1,14 +1,14 @@
 // Couche d'écriture unique : toute écriture de données passe ici (conversion, validation, transaction).
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, type CellInput, type FieldErrorCode, type SqlValue } from '../../shared/coerce';
-import { MASK_TYPES, sameName, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { MASK_TYPES, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { checkMasked, parseMask } from '../../shared/expr/input-mask';
 import type { LocaleInfo } from '../../shared/locale-format';
-import { listRelations, quoteIdent } from './schema';
+import { foreignKeys, listTables, parentOf, quoteIdent, refColumns, sqliteSameName } from './schema';
 import { applyDefaults, checkRules, DefaultValueError } from './rules';
 import { inTransaction } from './tx';
 
-import type { DeleteResult, Relation, RowWriteResult } from '../../shared/api';
+import type { DeleteResult, RowWriteResult } from '../../shared/api';
 export type { DeleteResult, RowWriteResult };
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
 
@@ -54,42 +54,52 @@ function duplicateOrThrow(design: TableDesign, e: unknown): RowWriteResult {
 }
 
 // SQLite says `FOREIGN KEY constraint failed` without naming the constraint (immediate constraints: the statement fails and
-// its savepoint is rolled back). The relation is found again from the data, after the rollback.
+// its savepoint is rolled back). The key is found again from the data, after the rollback, among the real keys (A2-R14):
+// a relation's, or another tool's.
 const isForeignKeyError = (e: unknown): boolean => e instanceof Error && /FOREIGN KEY constraint failed/.test(e.message);
 
-/** noParent on the first child field of the relation with integrity whose parent row is missing for `row` (child values). */
-function missingParent(db: DatabaseSync, table: string, row: Record<string, SqlValue>): FieldError | undefined {
-  for (const r of listRelations(db)) {
-    if (!r.enforce || !sameName(r.childTable, table)) continue;
-    const key = r.childFields.map((x) => row[x] ?? null);
+/** The design field a key column names (SQLite ignores ASCII case in column names). */
+const fieldOf = (design: TableDesign, column: string): string | undefined =>
+  design.fields.find((fd) => fd.name === column)?.name ?? design.fields.find((fd) => sqliteSameName(fd.name, column))?.name;
+
+/** noParent on the first column of the real key of `design` whose parent row is missing for `row` (child values), parent named. */
+function missingParent(db: DatabaseSync, design: TableDesign, row: Record<string, SqlValue>): FieldError | undefined {
+  const live = listTables(db).map((x) => x.name);
+  for (const k of foreignKeys(db).filter((x) => x.child === design.name)) {
+    const fields = k.from.map((c) => fieldOf(design, c));
+    if (fields.some((x) => x === undefined)) continue;
+    const key = fields.map((x) => row[x!] ?? null);
     if (key.some((v) => v === null)) continue; // a Null part references nothing
-    const where = r.parentFields.map((x) => `${quoteIdent(x)} = ?`).join(' AND ');
-    if (!db.prepare(`SELECT 1 FROM ${quoteIdent(r.parentTable)} WHERE ${where} LIMIT 1`).get(...key)) {
-      return { field: r.childFields[0]!, code: 'noParent', table: r.parentTable };
+    const parent = parentOf(live, k);
+    const where = parent && refColumns(db, k, parent).map((c) => `${quoteIdent(c)} = ?`).join(' AND ');
+    if (!parent || !where || !db.prepare(`SELECT 1 FROM ${quoteIdent(parent)} WHERE ${where} LIMIT 1`).get(...key)) {
+      return { field: fields[0]!, code: 'noParent', table: parent ?? k.parent };
     }
   }
   return undefined;
 }
 
 /**
- * The relation with integrity, without cascade, whose child rows reference these parent rows: delete (`changed` null) or
- * change of the parent fields in `changed`.
+ * The real key (NO ACTION or RESTRICT) whose child rows reference these rows of `table`: delete (`changed` null) or change of
+ * the referenced fields in `changed`. `field`: the first changed field it references.
  */
-function blockingRelation(db: DatabaseSync, table: string, rowids: number[], changed: string[] | null): Relation | undefined {
-  const rels = listRelations(db).filter((r) => r.enforce && sameName(r.parentTable, table)
-    && (changed === null || r.parentFields.some((x) => changed.includes(x))));
-  for (const r of rels) {
-    if (changed === null ? r.cascadeDelete : r.cascadeUpdate) continue;
-    const c = r.childFields.map(quoteIdent).join(', ');
-    const p = r.parentFields.map(quoteIdent).join(', ');
+function blockingKey(db: DatabaseSync, table: string, rowids: number[], changed: string[] | null): { child: string; field?: string } | undefined {
+  const keys = foreignKeys(db).filter((k) => sqliteSameName(k.parent, table)).map((k) => {
+    const to = refColumns(db, k, table);
+    return { k, to, field: changed?.find((x) => to.some((c) => sqliteSameName(c, x))) };
+  }).filter((x) => changed === null || x.field !== undefined);
+  for (const { k, to, field } of keys) {
+    if (['CASCADE', 'SET NULL', 'SET DEFAULT'].includes(changed === null ? k.onDelete : k.onUpdate)) continue;
+    const c = k.from.map(quoteIdent).join(', ');
+    const p = to.map(quoteIdent).join(', ');
     for (let i = 0; i < rowids.length; i += CHUNK) {
       const ids = rowids.slice(i, i + CHUNK);
-      const sql = `SELECT 1 FROM ${quoteIdent(r.childTable)} WHERE (${c}) IN (SELECT ${p} FROM ${quoteIdent(table)} WHERE rowid IN (${ids.map(() => '?').join(', ')})) LIMIT 1`;
-      if (db.prepare(sql).get(...ids)) return r;
+      const sql = `SELECT 1 FROM ${quoteIdent(k.child)} WHERE (${c}) IN (SELECT ${p} FROM ${quoteIdent(table)} WHERE rowid IN (${ids.map(() => '?').join(', ')})) LIMIT 1`;
+      if (db.prepare(sql).get(...ids)) return { child: k.child, field };
     }
   }
   // ponytail: a cascade that reaches a grandchild without cascade is reported on the first cascading child, not the grandchild.
-  return rels[0];
+  return keys[0] && { child: keys[0].k.child, field: keys[0].field };
 }
 
 /** Options of a write. `enforceMask`: datasheet/form entry only; imports and other programmatic writes ignore input masks,
@@ -146,7 +156,7 @@ export async function insertRow(db: DatabaseSync, design: TableDesign, values: R
       return { ok: true as const, rowid, values: readBack(db, design, rowid) };
     });
   } catch (e) {
-    const p = isForeignKeyError(e) ? missingParent(db, design.name, stored) : undefined;
+    const p = isForeignKeyError(e) ? missingParent(db, design, stored) : undefined;
     if (p) return { ok: false, errors: [p] };
     return duplicateOrThrow(design, e);
   }
@@ -178,11 +188,10 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
       // As a child: the new values must have a parent. As a parent: the changed key must not leave children behind.
       const current = readBack(db, design, rowid);
       const row = { ...Object.fromEntries(design.fields.map((fd, i) => [fd.name, current[i] ?? null])), ...storedOf(cols) };
-      const p = missingParent(db, design.name, row);
+      const p = missingParent(db, design, row);
       if (p) return { ok: false, errors: [p] };
-      const changed = cols.map((c) => c.fd.name);
-      const r = blockingRelation(db, design.name, [rowid], changed);
-      if (r) return { ok: false, errors: [{ field: r.parentFields.find((x) => changed.includes(x))!, code: 'related', table: r.childTable }] };
+      const b = blockingKey(db, design.name, [rowid], cols.map((c) => c.fd.name));
+      if (b) return { ok: false, errors: [{ field: b.field!, code: 'related', table: b.child }] };
     }
     return duplicateOrThrow(design, e);
   }
@@ -201,8 +210,8 @@ export function deleteRows(db: DatabaseSync, table: string, rowids: number[]): D
     });
     return { ok: true, count };
   } catch (e) {
-    const r = isForeignKeyError(e) ? blockingRelation(db, table, rowids, null) : undefined;
-    if (!r) throw e;
-    return { ok: false, reason: 'related', table: r.childTable };
+    const b = isForeignKeyError(e) ? blockingKey(db, table, rowids, null) : undefined;
+    if (!b) throw e;
+    return { ok: false, reason: 'related', table: b.child };
   }
 }

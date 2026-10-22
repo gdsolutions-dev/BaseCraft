@@ -162,6 +162,7 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
       const r = await api.importText.run(loaded, plan);
       if (r.ok) { setResult(r); onImported(r); }
       else if (r.reason === 'nameExists') { setStep('finish'); setError(t('importText.error.tableExists', { name: table })); }
+      else if (r.reason === 'danglingKey') { setStep('finish'); setError(t('importText.error.danglingKey', { name: table, table: r.table })); }
       else { setStep('fields'); setError(r.errors.map((x) => t(`designError.${x.code}`, { field: x.field ?? '' })).join('\n')); }
     } catch (e) {
       void showError(e);

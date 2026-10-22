@@ -191,6 +191,21 @@ describe('session (lock lifecycle and data access)', () => {
     expect(s.delete('Cmd', [1])).toEqual({ ok: true, count: 1 });
   });
 
+  it('A2-R14: refusals from the real keys and the schema are typed results; the cascade warning follows the real keys', async () => {
+    const s = create();
+    await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    const raw = rawDb(s);
+    raw.exec('CREATE TABLE "Kids" ("c" INTEGER REFERENCES "Clients" ("N°") ON DELETE CASCADE)');
+    expect(s.cascadeChildren('clients')).toEqual(['Kids']);
+    expect(s.dropTable('Clients')).toEqual({ ok: false, reason: 'referenced', table: 'Kids' });
+    raw.exec('CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id"))');
+    expect(await s.saveTable({ originalName: null, design: { ...clients, name: 'Ghost' }, mapping: [], allowDataLoss: false }))
+      .toEqual({ ok: false, reason: 'danglingKey', table: 'Orph' });
+    expect(s.renameTable('Clients', 'Ghost')).toEqual({ ok: false, reason: 'danglingKey', table: 'Orph' });
+    raw.exec('CREATE TABLE "Tmp" ("a" TEXT); CREATE VIEW "VV" AS SELECT "a" FROM "Tmp"; DROP TABLE "Tmp"');
+    expect(s.renameTable('Clients', 'Personnes')).toEqual({ ok: false, reason: 'viewBroken', view: 'VV' });
+  });
+
   it('read-only open does not reconcile; write open reports external changes', () => {
     createBaseFile(p, '0.0.0');
     const { db } = openBaseFile(p, 'write', '0.0.0');

@@ -53,7 +53,7 @@ Not planned: VBA compatibility, concurrent design by several people, a web or mo
 
 Preview builds for Windows and Linux (x64) are on the [Releases page](https://github.com/gdsolutions-dev/BaseCraft/releases). They are early previews: do not use them for important data yet.
 
-- **Windows:** `BaseCraft-x.y.z-win-x64.exe` (installer) or `.zip` (portable). The builds are not signed yet, so Windows SmartScreen may warn you: choose *More info*, then *Run anyway*.
+- **Windows:** `BaseCraft-x.y.z-win-x64.exe` (installer) or `.zip` (portable). The builds are signed by SARL IN SET. As the certificate is new, Windows SmartScreen may still warn you for a while: choose *More info*, then *Run anyway*.
 - **Linux:** `BaseCraft-x.y.z-linux-x86_64.AppImage` (make it executable, then run it) or `.tar.gz`.
 
 ## Build from source

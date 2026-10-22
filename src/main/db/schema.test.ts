@@ -237,6 +237,6 @@ describe('schema', () => {
     expect(db.prepare('SELECT count(*) AS n FROM bc_fields').get()).toEqual({ n: 0 });
     expect(listTables(db).map((x) => x.name)).toEqual(['Other']);
     reconcile(db);
-    expect(reconcile(db)).toEqual({ addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [] });
+    expect(reconcile(db)).toEqual({ addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [] });
   });
 });

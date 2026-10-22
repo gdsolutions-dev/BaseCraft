@@ -105,7 +105,8 @@
     "migrated": "La base a été mise à jour. Copie de sauvegarde : {{path}}",
     "dismiss": "Masquer ce message",
     "relationsRemoved": "Relations supprimées, car une de leurs tables ou un de leurs champs n'existe plus : {{names}}.",
-    "relationsDowngraded": "Relations dont la clé étrangère a été retirée hors de BaseCraft, conservées sans intégrité référentielle : {{names}}."
+    "relationsDowngraded": "Relations dont la clé étrangère a été retirée ou modifiée hors de BaseCraft, conservées sans intégrité référentielle : {{names}}.",
+    "relationsUpdated": "Relations mises à jour d'après leur clé étrangère, modifiée hors de BaseCraft (table, champ ou règle de cascade) : {{names}}."
   },
   "dialog": {
     "newBaseName": "Base de données1",
@@ -137,7 +138,10 @@
       "nameInvalid": "Ce nom n'est pas valide.",
       "readOnly": "La base est ouverte en lecture seule.",
       "hasRelations": "Cette table participe à des relations : supprimez d'abord ses relations.",
-      "external": "La table « {{name}} » a été modifiée hors de BaseCraft ; sa structure ne peut pas être changée ici."
+      "external": "La table « {{name}} » a été modifiée hors de BaseCraft ; sa structure ne peut pas être changée ici.",
+      "referenced": "La table « {{name}} » a une clé étrangère vers cette table, définie hors de BaseCraft : elle ne peut pas être supprimée ici.",
+      "danglingKey": "La table « {{name}} » a une clé étrangère vers une table de ce nom supprimée hors de BaseCraft : choisissez un autre nom.",
+      "viewBroken": "La vue ou le déclencheur « {{name}} », défini hors de BaseCraft, n'est plus valide : SQLite refuse de renommer la table tant qu'il n'est pas corrigé ou supprimé."
     }
   },
   "designer": {
@@ -181,7 +185,10 @@
     "validationExisting": "{{count}} lignes ne respectent pas la règle. Enregistrer quand même ? La règle s'appliquera aux prochaines saisies.",
     "invalidExpressions": "Des propriétés sont invalides ; corrigez-les avant d'enregistrer :\n{{detail}}",
     "propError": "{{prop}} : {{message}}",
-    "relationField": "Le champ « {{field}} » fait partie de la relation « {{relation}} » : il ne peut pas être renommé, supprimé, ni changer de type, de taille ou d'index tant que la relation existe. Supprimez d'abord la relation."
+    "relationField": "Le champ « {{field}} » fait partie de la relation « {{relation}} » : il ne peut pas être renommé, supprimé, ni changer de type, de taille ou d'index tant que la relation existe. Supprimez d'abord la relation.",
+    "foreignKeyField": "Le champ « {{field}} » est utilisé par une clé étrangère de la table « {{table}} », définie hors de BaseCraft : il ne peut pas être renommé, supprimé, ni changer de type, de taille ou d'index.",
+    "viewBroken": "La vue ou le déclencheur « {{name}} », défini hors de BaseCraft, ne serait plus valide après ce changement (ou ne l'est déjà plus) : la structure n'est pas modifiée.",
+    "danglingKey": "La table « {{name}} » a une clé étrangère vers une table de ce nom supprimée hors de BaseCraft : choisissez un autre nom."
   },
   "fieldType": {
     "autoNumber": "NuméroAuto",
@@ -525,7 +532,8 @@
       "otherChar": "Indiquez un seul caractère de séparation.",
       "specName": "Le nom doit compter de 1 à 64 caractères, sans espace au début ni à la fin.",
       "emptyFile": "Le fichier est vide.",
-      "pendingRow": "Enregistrez ou annulez la saisie en cours dans la table {{table}} avant d'y ajouter des enregistrements."
+      "pendingRow": "Enregistrez ou annulez la saisie en cours dans la table {{table}} avant d'y ajouter des enregistrements.",
+      "danglingKey": "La table « {{table}} » a une clé étrangère vers une table nommée « {{name}} », supprimée hors de BaseCraft : choisissez un autre nom."
     },
     "fieldPrefix": "Champ",
     "errorSuffix": "_ErreursImportation",

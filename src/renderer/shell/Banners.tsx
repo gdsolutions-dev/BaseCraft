@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LockInfo, ReconcileReport, SessionState } from '../../shared/api';
 
-type Kind = 'readonly' | 'risk' | 'reconcile' | 'relationsRemoved' | 'relationsDowngraded' | 'migrated';
+type Kind = 'readonly' | 'risk' | 'reconcile' | 'relationsRemoved' | 'relationsDowngraded' | 'relationsUpdated' | 'migrated';
 
 /** Same rule as the main process (session.ts): an unreadable lock is reported as this placeholder. */
 const isPlaceholder = (i: LockInfo) => i.pid === 0 && i.sessionId === '?';
@@ -28,10 +28,11 @@ export function reconcileBanners(r: ReconcileReport | undefined): { kind: Kind; 
   if (!r) return [];
   const out: { kind: Kind; key: string; params: Record<string, string | number> }[] = [];
   const count = r.addedTables.length + r.removedTables.length + r.addedFields.length + r.removedFields.length
-    + r.removedRelations.length + r.downgradedRelations.length;
+    + r.removedRelations.length + r.downgradedRelations.length + r.updatedRelations.length;
   if (count > 0) out.push({ kind: 'reconcile', key: 'banner.reconcile', params: { count } });
   if (r.removedRelations.length) out.push({ kind: 'relationsRemoved', key: 'banner.relationsRemoved', params: { names: r.removedRelations.join(', ') } });
   if (r.downgradedRelations.length) out.push({ kind: 'relationsDowngraded', key: 'banner.relationsDowngraded', params: { names: r.downgradedRelations.join(', ') } });
+  if (r.updatedRelations.length) out.push({ kind: 'relationsUpdated', key: 'banner.relationsUpdated', params: { names: r.updatedRelations.join(', ') } });
   return out;
 }
 

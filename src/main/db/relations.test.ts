@@ -8,7 +8,9 @@ import { clients, f, t } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
 import { createBaseFile, openBaseFile } from './file-format';
 import { alterTable, isExternal, type FieldMapping } from './alter';
-import { createTable, dropTable, listTables, quoteIdent, reconcile, renameTable, tableDesign } from './schema';
+import {
+  cascadeChildren, createTable, DanglingKeyError, dropTable, listTables, quoteIdent, reconcile, renameTable, tableDesign, ViewBrokenError,
+} from './schema';
 import { previewText, runImport, type ImportTexts } from '../import/text-import';
 import en from '../../shared/i18n/en.json';
 import { countRows } from './rows';
@@ -88,7 +90,7 @@ describe('relations (brief)', () => {
   it('external tables cannot take part in a relation', () => {
     db.exec('CREATE TABLE "Ext" ("Client" INTEGER)');
     reconcile(db);
-    expect(saveRelation(db, { ...rel, childTable: 'Ext' }, null, fr)).toEqual({ ok: false, reason: 'external' });
+    expect(saveRelation(db, { ...rel, childTable: 'Ext' }, null, fr)).toEqual({ ok: false, reason: 'external', table: 'Ext' });
   });
 
   it('a foreign key added by another tool makes the table external: a rebuild would lose it', async () => {
@@ -97,7 +99,7 @@ describe('relations (brief)', () => {
     const d = tableDesign(db, 'Notes');
     raw(`UPDATE bc_fields SET props = json_remove(props, '$.external') WHERE table_name = 'Notes'`); // even with adopted fields
     expect(await alterTable(db, 'Notes', tableDesign(db, 'Notes'), identity(d), opts)).toEqual({ ok: false, reason: 'external' });
-    expect(saveRelation(db, { ...rel, childTable: 'Notes' }, null, fr)).toEqual({ ok: false, reason: 'external' });
+    expect(saveRelation(db, { ...rel, childTable: 'Notes' }, null, fr)).toEqual({ ok: false, reason: 'external', table: 'Notes' });
   });
 
   it('write errors', async () => {
@@ -158,7 +160,7 @@ describe('relations (brief)', () => {
     expect(dropTable(db, 'Commandes')).toEqual({ ok: false, reason: 'hasRelations' });
     const renamed = { ...commandes, fields: commandes.fields.map((x) => (x.name === 'Client' ? { ...x, name: 'Cli' } : x)) };
     const mapping = commandes.fields.map((x) => ({ name: x.name === 'Client' ? 'Cli' : x.name, sourceName: x.name }));
-    expect(await alterTable(db, 'Commandes', renamed, mapping, opts)).toEqual({ ok: false, reason: 'relationField', field: 'Client', relation: 'ClientsCommandes' });
+    expect(await alterTable(db, 'Commandes', renamed, mapping, opts)).toEqual({ ok: false, reason: 'relationField', field: 'Client', relation: 'ClientsCommandes', table: 'Clients' });
     const retyped = { ...commandes, fields: commandes.fields.map((x) => (x.name === 'Client' ? f('Client', 'number', { numberSize: 'integer' }) : x)) };
     expect(await alterTable(db, 'Commandes', retyped, identity(commandes), opts)).toMatchObject({ reason: 'relationField' });
     const removed = { ...commandes, fields: commandes.fields.filter((x) => x.name !== 'Client') };
@@ -174,7 +176,7 @@ describe('relations (brief)', () => {
     expect(saveRelation(db, { ...rel, parentFields: ['Email'], childTable: 'Contacts', childFields: ['Email'] }, null, fr)).toMatchObject({ ok: true });
     const cl = tableDesign(db, 'Clients');
     const loose = { ...cl, fields: cl.fields.map((x) => (x.name === 'Email' ? { ...x, props: { ...x.props, indexed: 'yesDuplicates' as const } } : x)) };
-    expect(await alterTable(db, 'Clients', loose, identity(cl), opts)).toEqual({ ok: false, reason: 'relationField', field: 'Email', relation: 'ClientsContacts' });
+    expect(await alterTable(db, 'Clients', loose, identity(cl), opts)).toEqual({ ok: false, reason: 'relationField', field: 'Email', relation: 'ClientsContacts', table: 'Contacts' });
   });
 
   it('rebuilding a parent with cascade-delete children keeps the children (foreign keys off during the rebuild)', async () => {
@@ -292,7 +294,7 @@ describe('relations (fix round 1)', () => {
     saveRelation(db, rel, null, fr);
     createTable(db, t('Factures', [f('Client', 'number', { numberSize: 'longInteger' })]));
     addTrigger();
-    expect(saveRelation(db, { ...rel, name: 'ClientsCommandes', childTable: 'Factures' }, 'ClientsCommandes', fr)).toEqual({ ok: false, reason: 'external' });
+    expect(saveRelation(db, { ...rel, name: 'ClientsCommandes', childTable: 'Factures' }, 'ClientsCommandes', fr)).toEqual({ ok: false, reason: 'external', table: 'Commandes' });
     expect(hasTrigger()).toBe(true);
     expect(listRelations(db)[0]).toMatchObject({ childTable: 'Commandes' });
   });
@@ -319,7 +321,7 @@ describe('relations (fix round 1)', () => {
     createTable(db, t('Lignes', [f('Client', 'number', { numberSize: 'longInteger' }), f('Note', 'shortText')]));
     raw(`INSERT INTO "Lignes" VALUES (1, NULL)`);
     raw(`UPDATE bc_fields SET props = json_set(props, '$.required', json('true')) WHERE table_name = 'Lignes' AND field_name = 'Note'`);
-    expect(saveRelation(db, { ...rel, childTable: 'Lignes' }, null, fr)).toEqual({ ok: false, reason: 'external' });
+    expect(saveRelation(db, { ...rel, childTable: 'Lignes' }, null, fr)).toEqual({ ok: false, reason: 'external', table: 'Lignes' });
     expect(listRelations(db)).toEqual([]);
     expect(countRows(db, 'Lignes')).toBe(1);
   });
@@ -341,13 +343,12 @@ describe('relations (fix round 1)', () => {
     expect(listRelations(db)).toEqual([]);
   });
 
-  it('M7: reconcile drops the row when the foreign key no longer matches it (the table becomes external by its key)', async () => {
+  it('M7 (A2-R14): a child key column renamed by another tool is followed: SQLite moved the key, the relation follows it', async () => {
     saveRelation(db, rel, null, fr);
     db.exec('ALTER TABLE "Commandes" RENAME COLUMN "Client" TO "Cli"'); // SQLite rewrites the key to "Cli"
-    reconcile(db);
-    expect(listRelations(db)).toEqual([]);
-    const cm = tableDesign(db, 'Commandes');
-    expect(await alterTable(db, 'Commandes', cm, identity(cm), opts)).toEqual({ ok: false, reason: 'external' });
+    expect(reconcile(db)).toMatchObject({ removedRelations: [], downgradedRelations: [], updatedRelations: ['ClientsCommandes'] });
+    expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', childFields: ['Cli'] }]);
+    expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'hasRelations' }); // still a relation: delete it first
   });
 
   it('M7 (A2-R13): a parent dropped by another tool drops the relation row, reported; nothing sticky is stored', async () => {
@@ -375,17 +376,18 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
   };
 
   describe('dropTable refuses a table that any real foreign key references', () => {
-    it('a key left behind by a relation reconcile dropped (cascade): the children survive', () => {
+    it('a key left behind by a parent dropped and recreated by another tool (cascade): the children survive', () => {
       saveRelation(db, { ...rel, cascadeDelete: true }, null, fr);
-      db.exec('ALTER TABLE "Commandes" RENAME COLUMN "Client" TO "Cli"');
+      db.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Clients"; PRAGMA foreign_keys=ON');
       expect(reconcile(db).removedRelations).toEqual(['ClientsCommandes']);
-      expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'hasRelations' });
+      db.exec('CREATE TABLE "Clients" ("N°" INTEGER PRIMARY KEY); INSERT INTO "Clients" VALUES (1), (2)'); // the other tool again
+      expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'referenced', table: 'Commandes' });
       expect(countRows(db, 'Commandes')).toBe(2);
     });
     for (const action of ['CASCADE', 'SET NULL']) {
       it(`another tool's key ON DELETE ${action} (name in another case): nothing deleted or nulled`, () => {
         db.exec(`CREATE TABLE "Kids" ("c" INTEGER REFERENCES "clients" ("N°") ON DELETE ${action}); INSERT INTO "Kids" VALUES (1), (2)`);
-        expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'hasRelations' });
+        expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'referenced', table: 'Kids' });
         expect(db.prepare('SELECT "c" FROM "Kids"').all()).toEqual([{ c: 1 }, { c: 2 }]);
       });
     }
@@ -555,14 +557,193 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
     expect(db.prepare(`SELECT 1 FROM sqlite_master WHERE name = 'audit'`).get()).toBeDefined();
   });
 
-  it('a rebuild that SQLite refuses (a view of another tool on the table) is a typed refusal, never a raw error', async () => {
+  it('a view of another tool on the table does not block its rebuild; a rebuild that would break it is refused, typed', async () => {
     saveRelation(db, rel, null, fr);
-    db.exec('CREATE VIEW "V" AS SELECT "Client" FROM "Commandes"');
-    expect(deleteRelation(db, 'ClientsCommandes', fr)).toEqual({ ok: false, reason: 'external', table: 'Commandes' });
+    db.exec('CREATE VIEW "V" AS SELECT "Client", "Montant" FROM "Commandes"');
+    expect(deleteRelation(db, 'ClientsCommandes', fr)).toEqual({ ok: true });
     const cm = tableDesign(db, 'Commandes');
     expect(await alterTable(db, 'Commandes', { ...cm, fields: [...cm.fields, f('X', 'shortText')] }, [...identity(cm), { name: 'X', sourceName: null }], opts))
-      .toEqual({ ok: false, reason: 'external' });
+      .toEqual({ ok: true });
+    expect(db.prepare('SELECT count(*) AS n FROM "V"').get()).toEqual({ n: 2 });
+    const c2 = tableDesign(db, 'Commandes');
+    const noMontant = c2.fields.filter((x) => x.name !== 'Montant');
+    expect(await alterTable(db, 'Commandes', { ...c2, fields: noMontant }, identity({ fields: noMontant }), { ...opts, allowDataLoss: true }))
+      .toEqual({ ok: false, reason: 'viewBroken', view: 'V' });
+    expect(sqlOf('Commandes')).toMatch(/"Montant"/);
     expect((db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys).toBe(1);
     expect(db.isTransaction).toBe(false);
+  });
+});
+
+describe('relations (fix round 3, A2-R14: the real foreign keys decide)', () => {
+  const texts: ImportTexts = {
+    fieldPrefix: 'Champ', idName: 'N°', errorSuffix: '_Erreurs', errorFields: { error: 'Erreur', field: 'Champ', line: 'Ligne' }, messages: en.fieldError, log: en.importText.log,
+  };
+  const csvFile = (name: string, data: string) => { const p = path.join(dir, name); fs.writeFileSync(p, data); return p; };
+  const n = (table: string) => countRows(db, table);
+
+  describe('tables whose names differ only in non-ASCII case (another tool made the twin)', () => {
+    beforeEach(() => {
+      createTable(db, t('Été', [f('N°', 'autoNumber'), f('Nom', 'shortText', { caption: 'Le nom' })]));
+      raw(`INSERT INTO "Été" ("Nom") VALUES ('mine')`);
+      db.exec(`CREATE TABLE "été" ("x" TEXT); INSERT INTO "été" VALUES ('keep')`);
+    });
+    it('drop and rename act on the exact table', () => {
+      expect(dropTable(db, 'été')).toEqual({ ok: true });
+      expect(listTables(db).map((x) => x.name)).toContain('Été');
+      expect(n('Été')).toBe(1);
+      db.exec(`CREATE TABLE "été" ("x" TEXT); INSERT INTO "été" VALUES ('keep')`);
+      renameTable(db, 'été', 'Autre');
+      expect(listTables(db).map((x) => x.name)).toEqual(expect.arrayContaining(['Autre', 'Été']));
+      expect(tableDesign(db, 'Été').fields.map((x) => x.name)).toEqual(['N°', 'Nom']);
+    });
+    it('the design, a datasheet delete and an import append use the exact table', async () => {
+      expect(tableDesign(db, 'été').fields.map((x) => x.name)).toEqual(['x']);
+      expect(tableDesign(db, 'Été').fields[1]!.props.caption).toBe('Le nom');
+      expect(deleteRows(db, tableDesign(db, 'été').name, [1])).toEqual({ ok: true, count: 1 });
+      expect([n('été'), n('Été')]).toEqual([0, 1]);
+      const p = csvFile('t.csv', 'x\nnew\n');
+      expect(await runImport(db, p, { spec: previewText(p, null, fr, 'Champ').spec, target: { kind: 'append', table: 'été', mapping: ['x'] } }, fr, texts))
+        .toMatchObject({ ok: true, imported: 1 });
+      expect([n('été'), n('Été')]).toEqual([1, 1]);
+    });
+    it('reconcile never maps the twin onto the managed table metadata', () => {
+      const r = reconcile(db);
+      expect(r).toMatchObject({ addedTables: ['été'], removedTables: [], removedFields: [] });
+      expect(r.addedFields).toEqual([]);
+      const d = tableDesign(db, 'Été');
+      expect(d.fields[1]!.props.caption).toBe('Le nom');
+      expect(isExternal(db, d)).toBe(false);
+      expect(isExternal(db, tableDesign(db, 'été'))).toBe(true);
+      expect(reconcile(db)).toMatchObject({ addedTables: [], removedTables: [], addedFields: [], removedFields: [] });
+    });
+    it("altering the managed table keeps its metadata and leaves the twin's alone", async () => {
+      reconcile(db);
+      const d = tableDesign(db, 'Été');
+      expect(await alterTable(db, 'Été', { ...d, fields: [...d.fields, f('Ville', 'shortText')] }, [...identity(d), { name: 'Ville', sourceName: null }], opts))
+        .toEqual({ ok: true });
+      expect(tableDesign(db, 'Été').fields[1]!.props.caption).toBe('Le nom');
+      expect(tableDesign(db, 'été').fields).toEqual([{ name: 'x', props: expect.objectContaining({ external: true }) }]);
+      expect(db.prepare(`SELECT count(*) AS n FROM bc_tables WHERE name = 'été'`).get()).toEqual({ n: 1 });
+      expect(reconcile(db)).toMatchObject({ addedTables: [], removedTables: [], addedFields: [], removedFields: [] });
+    });
+    it("dropping the managed table is refused when its twin's key references it (no cascade into the twin)", () => {
+      db.exec(`CREATE TABLE "éTÉ" ("ref" INTEGER REFERENCES "Été" ("N°") ON DELETE CASCADE); INSERT INTO "éTÉ" VALUES (1)`);
+      expect(dropTable(db, 'Été')).toEqual({ ok: false, reason: 'referenced', table: 'éTÉ' });
+      expect(n('éTÉ')).toBe(1);
+    });
+  });
+
+  describe('reconcile syncs enforced relations from the real keys', () => {
+    it('a parent renamed by another tool: the relation follows it, the child stays managed', () => {
+      saveRelation(db, { ...rel, cascadeDelete: true }, null, fr);
+      db.exec('ALTER TABLE "Clients" RENAME TO "Kunden"');
+      expect(reconcile(db)).toMatchObject({ removedRelations: [], updatedRelations: ['ClientsCommandes'] });
+      expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', parentTable: 'Kunden', cascadeDelete: true }]);
+      expect(isExternal(db, tableDesign(db, 'Commandes'))).toBe(false);
+      expect(cascadeChildren(db, 'Kunden')).toEqual(['Commandes']);
+    });
+    it('a child renamed by another tool: the relation follows it', () => {
+      saveRelation(db, rel, null, fr);
+      db.exec('ALTER TABLE "Commandes" RENAME TO "Orders"');
+      expect(reconcile(db)).toMatchObject({ removedRelations: [], updatedRelations: ['ClientsCommandes'] });
+      expect(listRelations(db)[0]).toMatchObject({ parentTable: 'Clients', childTable: 'Orders', enforce: true });
+    });
+    it('changed ON DELETE / ON UPDATE actions are copied into the relation', () => {
+      saveRelation(db, rel, null, fr);
+      db.exec('PRAGMA foreign_keys=OFF');
+      db.exec(sqlOf('Commandes').replace(/^CREATE TABLE [^(]+\(/, 'CREATE TABLE "tmp_other" (').replace(/\)\)$/, ') ON UPDATE CASCADE ON DELETE CASCADE)'));
+      db.exec('INSERT INTO "tmp_other" SELECT * FROM "Commandes"; DROP TABLE "Commandes"; ALTER TABLE "tmp_other" RENAME TO "Commandes"');
+      db.exec('PRAGMA foreign_keys=ON');
+      expect(reconcile(db)).toMatchObject({ updatedRelations: ['ClientsCommandes'] });
+      expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', cascadeDelete: true, cascadeUpdate: true }]);
+      expect(isExternal(db, tableDesign(db, 'Commandes'))).toBe(false); // the generated key is that one again
+      expect(reconcile(db).updatedRelations).toEqual([]);
+    });
+  });
+
+  it('the cascade warning comes from the real keys', () => {
+    expect(cascadeChildren(db, 'Clients')).toEqual([]);
+    saveRelation(db, rel, null, fr);
+    expect(cascadeChildren(db, 'Clients')).toEqual([]);
+    db.exec(`CREATE TABLE "Notes" ("c" INTEGER REFERENCES "clients" ("N°") ON DELETE CASCADE)`);
+    expect(cascadeChildren(db, 'Clients')).toEqual(['Notes']);
+  });
+
+  describe("another tool's key on a managed table: typed refusals, never raw errors", () => {
+    beforeEach(() => {
+      db.exec(`CREATE TABLE "Kids" ("e" TEXT REFERENCES "Clients" ("Email")); INSERT INTO "Kids" VALUES ('ana@x')`);
+    });
+    it('alterTable: the referenced field cannot be dropped, retyped, renamed or lose its uniqueness', async () => {
+      const cl = tableDesign(db, 'Clients');
+      const refused = { ok: false, reason: 'relationField', field: 'Email', relation: '', table: 'Kids' };
+      const loose = cl.fields.map((x) => (x.name === 'Email' ? { ...x, props: { ...x.props, indexed: 'no' as const } } : x));
+      expect(await alterTable(db, 'Clients', { ...cl, fields: loose }, identity(cl), opts)).toEqual(refused);
+      const noEmail = cl.fields.filter((x) => x.name !== 'Email');
+      expect(await alterTable(db, 'Clients', { ...cl, fields: noEmail }, identity({ fields: noEmail }), { ...opts, allowDataLoss: true })).toEqual(refused);
+      const retyped = cl.fields.map((x) => (x.name === 'Email' ? f('Email', 'number', { indexed: 'yesNoDuplicates' }) : x));
+      expect(await alterTable(db, 'Clients', { ...cl, fields: retyped }, identity(cl), { ...opts, allowDataLoss: true })).toEqual(refused);
+      const renamed = cl.fields.map((x) => (x.name === 'Email' ? { ...x, name: 'Mail' } : x));
+      expect(await alterTable(db, 'Clients', { ...cl, fields: renamed }, cl.fields.map((x) => ({ name: x.name === 'Email' ? 'Mail' : x.name, sourceName: x.name })), opts))
+        .toEqual(refused);
+      expect(await alterTable(db, 'Clients', { ...cl, fields: [...cl.fields, f('Ville', 'shortText')] }, [...identity(cl), { name: 'Ville', sourceName: null }], opts))
+        .toEqual({ ok: true });
+    });
+    it('write layer: noParent and related come from the real keys', async () => {
+      expect(deleteRows(db, 'Clients', [1])).toEqual({ ok: false, reason: 'related', table: 'Kids' });
+      expect(await insertRow(db, tableDesign(db, 'Kids'), { e: 'zz@x' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'e', code: 'noParent', table: 'Clients' }] });
+      expect(await updateRow(db, tableDesign(db, 'Clients'), 1, { Email: 'new@x' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'Email', code: 'related', table: 'Kids' }] });
+    });
+    it('dropTable names the referencing table, without speaking of relationships', () => {
+      expect(dropTable(db, 'Clients')).toEqual({ ok: false, reason: 'referenced', table: 'Kids' });
+    });
+  });
+
+  it('a broken view elsewhere blocks no rebuild, and a rename that SQLite refuses for it is typed', async () => {
+    createTable(db, t('Tmp', [f('a', 'shortText')]));
+    db.exec('CREATE VIEW "VV" AS SELECT "a" FROM "Tmp"');
+    expect(dropTable(db, 'Tmp')).toEqual({ ok: true }); // VV is now broken
+    const cm = tableDesign(db, 'Commandes');
+    expect(await alterTable(db, 'Commandes', { ...cm, fields: [...cm.fields, f('X', 'shortText')] }, [...identity(cm), { name: 'X', sourceName: null }], opts))
+      .toEqual({ ok: true });
+    expect(saveRelation(db, rel, null, fr)).toMatchObject({ ok: true });
+    expect(() => renameTable(db, 'Clients', 'Personnes')).toThrow(ViewBrokenError);
+    try { renameTable(db, 'Clients', 'Personnes'); } catch (e) { expect((e as ViewBrokenError).view).toBe('VV'); }
+    const cl = tableDesign(db, 'Clients');
+    expect(await alterTable(db, 'Clients', { ...cl, name: 'Personnes' }, identity(cl), opts)).toEqual({ ok: false, reason: 'viewBroken', view: 'VV' });
+    expect(listTables(db).map((x) => x.name)).toContain('Clients');
+  });
+
+  it("renaming an external table keeps another tool's change to a bcx_ index", () => {
+    db.exec(`DROP INDEX "bcx_Clients.Email"; CREATE UNIQUE INDEX "bcx_Clients.Email" ON "Clients" ("Email" COLLATE NOCASE) WHERE "Email" <> ''`);
+    expect(isExternal(db, tableDesign(db, 'Clients'))).toBe(true);
+    renameTable(db, 'Clients', 'Contacts');
+    const sql = (db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Contacts'`).all() as { sql: string }[]).map((x) => x.sql);
+    expect(sql).toHaveLength(1);
+    expect(sql[0]).toMatch(/COLLATE NOCASE\) WHERE/);
+  });
+
+  describe('a name a dangling key references (its parent was dropped by another tool) is refused, naming the referencing table', () => {
+    beforeEach(() => {
+      db.exec('CREATE TABLE "Ghost" ("id" INTEGER PRIMARY KEY); CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id") ON DELETE CASCADE)');
+      db.exec('INSERT INTO "Ghost" VALUES (1); INSERT INTO "Orph" VALUES (1), (1)');
+      db.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Ghost"; PRAGMA foreign_keys=ON');
+    });
+    const refusal = (fn: () => unknown) => {
+      try { fn(); } catch (e) { return e instanceof DanglingKeyError ? e.table : e; }
+      return 'accepted';
+    };
+    it('createTable, renameTable, alterTable rename and a text import into a new table', async () => {
+      expect(refusal(() => createTable(db, t('Ghost', [f('id', 'autoNumber')])))).toBe('Orph');
+      expect(refusal(() => createTable(db, t('ghost', [f('id', 'autoNumber')])))).toBe('Orph');
+      expect(refusal(() => renameTable(db, 'Clients', 'Ghost'))).toBe('Orph');
+      const cl = tableDesign(db, 'Clients');
+      expect(await alterTable(db, 'Clients', { ...cl, name: 'Ghost' }, identity(cl), opts)).toEqual({ ok: false, reason: 'danglingKey', table: 'Orph' });
+      const p = csvFile('g.csv', 'v\n1\n');
+      expect(await runImport(db, p, { spec: previewText(p, null, fr, 'Champ').spec, target: { kind: 'new', table: 'Ghost', primaryKey: { kind: 'auto' } } }, fr, texts))
+        .toEqual({ ok: false, reason: 'danglingKey', table: 'Orph' });
+      expect(n('Orph')).toBe(2);
+      expect(listTables(db).map((x) => x.name)).not.toContain('Ghost');
+    });
   });
 });

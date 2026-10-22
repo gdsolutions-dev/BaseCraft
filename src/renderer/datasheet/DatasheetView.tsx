@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { useTranslation } from 'react-i18next';
 import type { FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { toDisplay } from '../../shared/expr/localize';
-import { MASK_TYPES, sameName, type FieldDef, type FieldType, type TableDesign } from '../../shared/field-types';
+import { MASK_TYPES, type FieldDef, type FieldType, type TableDesign } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { api } from '../bridge';
 import type { DocViewProps } from '../shell/DocumentTabs';
@@ -303,8 +303,8 @@ export function DatasheetView({ tab, readOnly, dispatch }: DocViewProps) {
     if (p && !dropsPending && !(await commitRow())) return;
     const existing = targets.filter((i) => i < rows.current.count);
     if (existing.length) {
-      let cascade = false; // a relation with integrity and cascade delete: the question says the related records go too
-      try { cascade = (await api.relations.list()).some((x) => x.enforce && x.cascadeDelete && sameName(x.parentTable, doc.name)); } catch { /* asked without */ }
+      let cascade = false; // a real key with ON DELETE CASCADE (A2-R14): the question says the related records go too
+      try { cascade = (await api.relations.cascadeChildren(doc.name)).length > 0; } catch { /* asked without */ }
       const r = await modal.confirm({ titleKey: 'datasheet.deleteTitle', messageKey: cascade ? 'datasheet.deleteCascade' : 'datasheet.delete', params: { count: existing.length }, buttons: ['yes', 'no'], defaultButton: 'no' });
       if (r !== 'yes') return;
     }

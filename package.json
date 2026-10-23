@@ -4,6 +4,7 @@
   "private": true,
   "description": "Desktop database application in the spirit of Microsoft Access",
   "author": "SARL IN SET <info@in-set.com>",
+  "homepage": "https://gdsolutions-dev.github.io/BaseCraft/",
   "main": "out/main/index.js",
   "build": {
     "appId": "dev.gdsolutions.basecraft",

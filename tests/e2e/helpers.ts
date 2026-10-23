@@ -91,7 +91,7 @@ export function formGrid(page: Page, frame: Locator, widths: number[]) {
     /** Types in the selected cell (the first key opens Glide's editor) or in its open editor (its text replaced); Enter commits it. */
     async type(text: string) {
       if (await editor.count()) {
-        await page.keyboard.press('Control+A');
+        await page.keyboard.press('ControlOrMeta+A');
         await page.keyboard.type(text);
       } else {
         await page.keyboard.press(text[0]!);

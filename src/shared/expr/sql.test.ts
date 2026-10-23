@@ -206,12 +206,12 @@ describe('compileSql', () => {
     const { sql, params } = compileSql(e, src.ctx, { onError: 'throw' });
     expect(() => db.prepare(`SELECT "id" FROM "T" WHERE ${sql}`).all(...params)).toThrow(expect.objectContaining({ code: 'typeMismatch' }));
   });
-  it('SQLite limits: In lists and nesting over 900 are rejected with a typed error', () => {
+  it('SQLite limits: In lists over 900 and nesting over 450 are rejected with a typed error', () => {
     const list = (k: number) => parseCanonical(`[i] In (${Array.from({ length: k }, (_, j) => j).join(', ')})`);
     const sum = (k: number) => parseCanonical(`[i]${' + 1'.repeat(k)} > 0`);
     expect(viaSql(list(900))).toEqual([1, 2, 4, 6, 7, 9, 10]);
-    expect(viaSql(sum(890))).toEqual([1, 2, 4, 5, 6, 7, 9, 10]);
-    for (const e of [list(901), sum(900)]) expect(() => compileSql(e, src.ctx)).toThrow(expect.objectContaining({ name: 'ExprSyntaxError', code: 'tooComplex' }));
+    expect(viaSql(sum(440))).toEqual([1, 2, 4, 5, 6, 7, 9, 10]);
+    for (const e of [list(901), sum(450)]) expect(() => compileSql(e, src.ctx)).toThrow(expect.objectContaining({ name: 'ExprSyntaxError', code: 'tooComplex' }));
   });
   it('the schema never needs bc_* functions', () => {
     const p = path.join(dir, 'test.basecraft');
@@ -309,10 +309,10 @@ describe('compileValue (A3)', () => {
       [plus(chain(1, scalar(500)), one), 'tooComplex'], // a direct subquery counts twice
       [plus(chain(890), scalar(440)), 'tooComplex'], // the deeper sibling counts, not only the path to the subquery
       [plus(one, exists(600)), 'tooComplex'],
-      [plus(chain(200, scalar(200)), one), 'ok'],
-      [plus(chain(100, exists(200)), one), 'ok'],
-      [plus(scalar(5), scalar(150)), 'ok'],
-      [{ k: 'sub', mode: 'scalar', q: select(plus(one, scalar(100))) }, 'ok'], // nested two levels
+      [plus(chain(100, scalar(100)), one), 'ok'],
+      [plus(chain(50, exists(100)), one), 'ok'],
+      [plus(scalar(5), scalar(75)), 'ok'],
+      [{ k: 'sub', mode: 'scalar', q: select(plus(one, scalar(50))) }, 'ok'], // nested two levels
       ...[1, 100, 300, 450, 600, 800, 890].flatMap((a) => [1, 100, 300, 450, 600, 850].map((b): [Expr, undefined] => [chain(b, scalar(a)), undefined])),
       ...[1, 50, 150, 250].map((a): [Expr, undefined] => [{ k: 'sub', mode: 'scalar', q: select(chain(a, scalar(a))) }, undefined]),
     ];

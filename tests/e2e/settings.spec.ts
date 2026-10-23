@@ -13,10 +13,13 @@ test('language and theme apply live and persist', async () => {
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBeUndefined();
     await page.getByTestId('opt-theme').selectOption('dark');
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+    // the native popups (<select> lists, scroll bars) follow the app's theme, not the system's
+    await expect.poll(() => app.evaluate(({ nativeTheme }) => nativeTheme.themeSource)).toBe('dark');
     await page.getByTestId('opt-lang').selectOption('en');
     await expect(page.getByTestId('opt-theme').locator('option[value="dark"]')).toHaveText('Dark');
     await page.getByTestId('opt-theme').selectOption('system');
     expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBeUndefined();
+    await expect.poll(() => app.evaluate(({ nativeTheme }) => nativeTheme.themeSource)).toBe('system');
     await page.getByTestId('opt-theme').selectOption('light');
     const f = join(userDataDir, 'settings.json');
     expect(existsSync(f)).toBe(true);

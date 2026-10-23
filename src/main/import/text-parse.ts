@@ -50,7 +50,7 @@ export type Rec = string[] & { line: number; unclosed?: true };
 export const QUOTED_MAX_CHARS = 1 << 20;
 export const QUOTED_MAX_LINES = 1000;
 /** Ligne et marque hors des champs énumérables : un enregistrement reste un simple tableau de textes (IPC, comparaisons). */
-const tag = (fields: string[], line: number, unclosed = false): Rec => {
+export const tag = (fields: string[], line: number, unclosed = false): Rec => {
   Object.defineProperty(fields, 'line', { value: line });
   if (unclosed) Object.defineProperty(fields, 'unclosed', { value: true });
   return fields as Rec;

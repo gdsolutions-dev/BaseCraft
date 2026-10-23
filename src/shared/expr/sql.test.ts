@@ -7,10 +7,11 @@ import { ExprRuntimeError, type Expr } from './ast';
 import { evaluate, fromStored, truthy, type EvalEnv } from './evaluate';
 import { fail, infoOf } from './library';
 import { parseCanonical } from './parser';
-import { compileSql, type SqlCompileCtx } from './sql';
+import { compileSql, compileValue, type SqlCompileCtx, type SqlRef } from './sql';
 import { createBaseFile, openBaseFile } from '../../main/db/file-format';
 import { createTable, reconcile, tableDesign } from '../../main/db/schema';
-import { quoteIdent, sameName, type TableDesign } from '../field-types';
+import { defaultProps, quoteIdent, sameName, type TableDesign } from '../field-types';
+import type { SelectQuery } from '../query/ast';
 import { f, t } from '../test-fixtures';
 
 const LOCALE = 'fr-FR';
@@ -144,6 +145,9 @@ const CASES = ['[txt] = "dupont"', '[txt] Like "D*"', '[txt] & "x" = "Dupontx"',
   // Empty, texte numérique, erreurs de ligne
   'Nz([n]) = 0', 'Nz([txt]) = ""', '[txt] * 2 > 0', '[txt]', '[n]', '1 / [n] > 1', '[n] In (0, 1 / [n])', '[d] = "31/10/2026 06:00:00"',
   '[b] = -1', '[b] = 1', '([txt] Is Null) & "" = "True"', '[n] & "" = "2,5"', 'True', 'Null',
+  // IIf evaluates only the chosen branch (Access); a Null condition takes the false one; the condition's error is IIf's
+  'IIf([n] = 0, 0, 1 / [n]) > 0.5', 'IIf([i] > 2, 1 / 0, 1) = 1', 'IIf([i] > 2, 1 / 0, 1) Is Null', 'IIf(Null, 1 / 0, 1) = 1', 'IIf([txt] * 1 > 1, 1, 2) = 2',
+  'IIf([n] > 1, IIf([i] > 2, 1 / 0, [i]), 1 / [n]) > 0',
 ];
 const EXT_CASES = ['[n] > 5', '[n] < 5', '[n] = 1', '[n] + 0 > 5', '[n] In (1, 10)', '[n] Is Not Null', 'Not [n] Is Null', '[n] Is Null Or [n] > 5',
   '[r] > 0', '[s] Is Null', '[s] Is Not Null', '[s] & "" = ""', '[s] Like "*"', '[id] > 100', '[n] = [id]', '[id] Is Not Null'];
@@ -152,6 +156,11 @@ describe('compileSql: cross-check with the evaluator', () => {
   it.each(CASES)('%s', async (s) => { await check(parseCanonical(s)); });
 
   it.each(EXT_CASES)('adopted table without CHECK: %s', async (s) => { await check(parseCanonical(s), ext); });
+
+  it('IIf: 1/0 in the branch not taken gives no error; a Null condition takes the false branch', async () => {
+    expect(await check(parseCanonical('IIf([n] = 0, 0, 1 / [n]) >= 0'))).not.toContain('divByZero');
+    expect(await check(parseCanonical('IIf([i] > 2, 1 / 0, 1) = 1'))).toEqual([true, true, true, 'divByZero', true, true, 'divByZero', true, 'divByZero', 'divByZero']);
+  });
 
   it('adopted table: text, BLOB and 2^60 rows behave like the evaluator', async () => {
     expect(await check(parseCanonical('[n] > 5'), ext)).toEqual([false, true, 'typeMismatch', false, null, 'typeMismatch', true]);
@@ -213,6 +222,105 @@ describe('compileSql', () => {
       expect(() => plain.prepare('SELECT bc_truth(1)').get()).toThrow();
     } finally {
       plain.close();
+    }
+  });
+});
+
+describe('compileValue (A3)', () => {
+  const Q = { qualified: true };
+  const oneSelect: SelectQuery = { k: 'select', distinct: false, items: [{ e: { k: 'num', v: '1' } }], from: [], groupBy: [], orderBy: [] };
+
+  it('compileValue with a ref resolver', () => {
+    const ref = (r: { name: string; table?: string }) => r.table === 'C' ? { sql: '"c"."Nom"', params: [], type: 'shortText' as const } : null;
+    const f = compileValue(parseCanonical('[C].[Nom] & "!"', Q), { fields: [], locale: 'fr-FR', ref });
+    expect(f.sql).toContain('"c"."Nom"'); expect(f.params).toContain('!');
+  });
+
+  it('a ref is resolved first by ctx.ref, then by ctx.fields; its value runs in SQLite', () => {
+    const ref = (r: { name: string; table?: string }): SqlRef | null =>
+      r.table === 'c' ? { sql: `"c".${quoteIdent(r.name)} || ?`, params: ['?'], type: 'shortText' } : r.name === 'raw' ? { sql: '?', params: [2.5], type: null } : null;
+    const ctx: SqlCompileCtx = { ...src.ctx, ref };
+    const f = compileValue(parseCanonical('[c].[txt] & [raw] & [i]', Q), ctx);
+    expect(db.prepare(`SELECT ${f.sql} AS v FROM "T" AS "c" WHERE "id" = 1`).get(...f.params)).toEqual({ v: 'Dupont?2,51' });
+    expect(() => compileValue(parseCanonical('[x].[txt]', Q), ctx)).toThrow(expect.objectContaining({ code: 'unknownField' })); // never by name alone
+    const w = compileSql(parseCanonical('[c].[txt] = "dupont?"', Q), ctx); // compileSql = bc_truth(compileValue)
+    expect(db.prepare(`SELECT "id" FROM "T" AS "c" WHERE ${w.sql}`).all(...w.params)).toEqual([{ id: 1 }, { id: 2 }]);
+  });
+
+  it('subqueries are delegated to ctx.sub', () => {
+    const sub = (_q: SelectQuery, mode: 'scalar' | 'exists' | 'in') => ({ sql: `(<${mode}> ?)`, params: [mode] });
+    const ctx: SqlCompileCtx = { ...src.ctx, sub };
+    expect(compileValue({ k: 'sub', mode: 'scalar', q: oneSelect }, ctx)).toEqual({ sql: '(<scalar> ?)', params: ['scalar'] });
+    expect(compileValue({ k: 'sub', mode: 'exists', q: oneSelect }, ctx)).toEqual({ sql: 'bc_val(?, (<exists> ?))', params: ['yesNo', 'exists'] });
+    expect(compileValue({ k: 'inSub', e: { k: 'id', name: 'i' }, q: oneSelect, not: true }, ctx))
+      .toEqual({ sql: 'bc_insub(?, ?, bc_val(?, "i"), (<in> ?))', params: [LOCALE, 1, 'number', 'in'] });
+    expect(() => compileValue({ k: 'sub', mode: 'scalar', q: oneSelect }, src.ctx)).toThrow(expect.objectContaining({ code: 'badArgument' }));
+  });
+
+  it('aggregates compile only in an aggregate context', () => {
+    const a = { name: 'a', type: 'number' as const };
+    expect(() => compileValue(parseCanonical('Sum([a])'), { fields: [a], locale: 'fr-FR' })).toThrow(expect.objectContaining({ code: 'aggregateContext' }));
+    expect(compileValue(parseCanonical('Count(*)'), { fields: [], locale: 'fr-FR', aggregate: true }).sql).toBe('count(*)');
+    expect(compileValue(parseCanonical('StDev([a])'), { fields: [a], locale: 'fr-FR', aggregate: true }).sql).toMatch(/^bc_agg_StDev\(/);
+  });
+
+  it('an aggregate passes its argument type as JSON; aggregates never nest', () => {
+    const a = { name: 'a', type: 'currency' as const };
+    const argType = (e: Expr) => (e.k === 'id' ? { type: 'currency' as const, props: defaultProps('currency') } : { type: null });
+    const ctx: SqlCompileCtx = { fields: [a], locale: LOCALE, aggregate: true, argType };
+    expect(compileValue(parseCanonical('Sum([a]) + Avg(1)'), ctx)).toEqual({
+      sql: 'bc_op(?, ?, bc_agg_Sum(?, ?, bc_val(?, "a")), bc_agg_Avg(?, ?, ?))',
+      params: [LOCALE, '+', LOCALE, JSON.stringify(argType({ k: 'id', name: 'a' })), 'currency', LOCALE, '{"type":null}', 1],
+    });
+    expect(compileValue(parseCanonical('Max([a])'), { ...ctx, argType: undefined }).params).toEqual([LOCALE, null, 'currency']);
+    for (const s of ['Sum(Count(*))', 'Max(1 + Min([a]))']) expect(() => compileValue(parseCanonical(s), ctx), s).toThrow(expect.objectContaining({ code: 'aggregateContext' }));
+    expect(compileSql(parseCanonical('Count(*) > 1'), { ...ctx }).sql).toContain('count(*)'); // HAVING
+  });
+
+  it('SQLite adds expression heights up across subqueries: tooComplex, never its raw "Expression tree is too large"', () => {
+    const one: Expr = { k: 'num', v: '1' };
+    const plus = (l: Expr, r: Expr): Expr => ({ k: 'bin', op: '+', l, r });
+    const chain = (k: number, first: Expr = one): Expr => Array.from({ length: k - 1 }).reduce<Expr>((l) => plus(l, one), first);
+    const select = (e: Expr): SelectQuery => ({ ...oneSelect, items: [{ e }] });
+    // Subqueries compiled as Task 4 will (max stands in for bc_one), and as plain SQL: a direct subquery counts twice in SQLite.
+    const shapes: Record<string, (s: string) => string> = {
+      direct: (s) => `(SELECT ${s} FROM "T")`,
+      derived: (s) => `(SELECT max(c0) FROM (SELECT ${s} AS c0 FROM "T"))`,
+    };
+    const outcome = (e: Expr, shape: (s: string) => string): 'ok' | 'tooComplex' => {
+      const ctx: SqlCompileCtx = { ...src.ctx, sub: (q, mode) => {
+        const item = q.items[0] as { e: Expr };
+        if (mode === 'exists') { const w = compileSql(item.e, ctx); return { sql: `EXISTS (SELECT 1 FROM "T" WHERE ${w.sql})`, params: w.params }; }
+        const v = compileValue(item.e, ctx);
+        return { sql: shape(v.sql), params: v.params };
+      } };
+      let f;
+      try { f = compileSql(e, ctx); } catch (x) {
+        expect(x).toMatchObject({ name: 'ExprSyntaxError', code: 'tooComplex' });
+        return 'tooComplex';
+      }
+      db.prepare(`SELECT "id" FROM "T" WHERE ${f.sql}`); // never "Expression tree is too large"
+      return 'ok';
+    };
+    const scalar = (k: number): Expr => ({ k: 'sub', mode: 'scalar', q: select(chain(k)) });
+    const exists = (k: number): Expr => ({ k: 'sub', mode: 'exists', q: select({ k: 'bin', op: '>', l: chain(k), r: one }) });
+    const cases: [Expr, 'ok' | 'tooComplex' | undefined][] = [
+      [plus(chain(850, scalar(850)), one), 'tooComplex'], // the reviewer's (SELECT 1 + … FROM [T]) + 1 + … > 0
+      [plus(chain(1, scalar(500)), one), 'tooComplex'], // a direct subquery counts twice
+      [plus(chain(890), scalar(440)), 'tooComplex'], // the deeper sibling counts, not only the path to the subquery
+      [plus(one, exists(600)), 'tooComplex'],
+      [plus(chain(200, scalar(200)), one), 'ok'],
+      [plus(chain(100, exists(200)), one), 'ok'],
+      [plus(scalar(5), scalar(150)), 'ok'],
+      [{ k: 'sub', mode: 'scalar', q: select(plus(one, scalar(100))) }, 'ok'], // nested two levels
+      ...[1, 100, 300, 450, 600, 800, 890].flatMap((a) => [1, 100, 300, 450, 600, 850].map((b): [Expr, undefined] => [chain(b, scalar(a)), undefined])),
+      ...[1, 50, 150, 250].map((a): [Expr, undefined] => [{ k: 'sub', mode: 'scalar', q: select(chain(a, scalar(a))) }, undefined]),
+    ];
+    for (const [shapeName, shape] of Object.entries(shapes)) {
+      for (const [e, want] of cases) {
+        const got = outcome({ k: 'bin', op: '>', l: e, r: { k: 'num', v: '0' } }, shape);
+        if (want) expect(got, shapeName).toBe(want);
+      }
     }
   });
 });

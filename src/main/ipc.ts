@@ -1,26 +1,34 @@
 // Gestionnaires ipcMain de l'API window.basecraft : émetteur vérifié, arguments vérifiés, une session à la fois.
-import { app, ipcMain, type BrowserWindow } from 'electron';
-import { CH, type OpResult, type RelationResult, type SaveTableResult, type SessionState } from '../shared/api';
+import { app, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
+import { CH, type AppInfo, type LicenseEntry, type OpResult, type RelationResult, type SaveTableResult, type SessionState } from '../shared/api';
+import { MAX_EXCEL_ROWS } from '../shared/exchange';
+import { sheetName } from '../shared/export-format';
 import { resolveUiLanguage } from '../shared/i18n';
 import en from '../shared/i18n/en.json';
 import fr from '../shared/i18n/fr.json';
-import { checkBaseFile, createBaseFile, FILE_EXTENSION } from './db/file-format';
-import { systemProbe, type RiskProbe } from './db/location-risk';
-import { pickImportPath, pickOpenPath, pickSavePath } from './dialogs';
+import { FILE_EXTENSION } from './db/file-format';
+import { keepAlive, releaseIfOurs } from './db/lock';
+import { DbHost, type AsyncSession } from './db-host/client';
+import type { HostEvent } from './db-host/protocol';
+import { pickExcelPath, pickExportPath, pickImportPath, pickOpenPath, pickPdfPath, pickSavePath } from './dialogs';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, bcError, cells, importPath, importPlan, importSpec, importSpecOrNull, pageRequest, relation, relationsLayout, saveRequest, str, strOrNull,
-  uint, uints,
+  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, uint, uints, description, queryRef, queryParams, runActionOptions,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
-import { ReadOnlyError, Session } from './session';
+import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { addRecentFile, loadSettings, saveSettings, type AppSettings } from './settings';
 
 let mainWindow: () => BrowserWindow | null = () => null;
 let dir = '';
 let settings: AppSettings;
-let session: Session | null = null;
-let probe: RiskProbe | undefined;
+/** The open base: its data process (db-host). The main process never opens SQLite itself. */
+let host: DbHost | null = null;
+let closing: Promise<void> = Promise.resolve();
 export const closeVeto = new CloseVeto();
 
 const region = () => process.env.BASECRAFT_REGION ?? app.getSystemLocale();
@@ -35,74 +43,208 @@ let importing = false;
 /** Files the user chose in the main-side open dialog: the only ones the import may read (never a path made up by the renderer). */
 const chosenImports = new Set<string>();
 
+const HOMEPAGE = 'https://github.com/gdsolutions-dev/BaseCraft';
+function appInfo(): AppInfo {
+  return {
+    version: app.getVersion(),
+    electron: process.versions.electron, chromium: process.versions.chrome, node: process.versions.node, sqlite: process.versions.sqlite ?? '',
+    platform: process.platform, arch: process.arch,
+    copyright: '© 2026 GD Solutions', licence: 'GNU AGPL v3',
+    links: { homepage: HOMEPAGE, issues: `${HOMEPAGE}/issues`, licence: `${HOMEPAGE}/blob/main/LICENSE` },
+  };
+}
+
 function broadcast(s: SessionState | null): void {
   const w = mainWindow();
   if (w && !w.isDestroyed()) w.webContents.send(CH.baseStateChanged, s);
 }
 
-export function currentSession(): Session | null { return session; }
+/** One opening, start or restart of a base at a time (two quick opens of the same file must not race for its lock). Every
+ *  IPC handler waits for them too. ponytail: an open that hangs (a data process that never answers) blocks every handler;
+ *  add a timeout on DbHost.start if that is ever seen. */
+let baseOps: Promise<unknown> = Promise.resolve();
+function serial<T>(fn: () => Promise<T>): Promise<T> {
+  const r = baseOps.then(fn);
+  baseOps = r.catch(() => {});
+  return r;
+}
+/** Settles once no opening or restart (Stop) is in progress: quitting waits for it, so the new process's lock is released. */
+export const whenIdle = (): Promise<void> => baseOps.then(() => {});
 
-export function closeBase(): void {
-  if (!session) return;
-  const s = session;
+/** Closes the base after the calls already queued (3 s at most), then removes its lock if a killed process left it. */
+export function closeBase(): Promise<void> {
+  const h = host;
+  if (!h) return closing;
+  host = null;
+  const before = closing;
+  closing = h.close().catch(console.error).finally(() => releaseIfOurs(h.opened.path, h.opened.sessionId)).then(() => before);
+  broadcast(null);
+  return closing;
+}
+
+/** Windows shutdown or logoff: the process may end before an asynchronous close. The data process is killed (SQLite rolls
+ *  an unfinished write back at the next open) and the lock is removed at once. */
+export function abandonBase(): void {
+  const h = host;
+  if (!h) return;
+  host = null;
+  void h.kill();
+  releaseIfOurs(h.opened.path, h.opened.sessionId);
+}
+
+/** The data process ended on its own: the base is closed, and the window says so once (the calls it had pending reject
+ *  bc:hostCrashed, which the renderer's error dialog leaves to this notice). */
+function hostCrashed(h: DbHost): void {
+  if (host !== h) return;
+  host = null;
+  releaseIfOurs(h.opened.path, h.opened.sessionId);
+  broadcast(null);
+  const w = mainWindow();
+  if (w && !w.isDestroyed()) w.webContents.send(CH.baseHostCrashed);
+}
+
+async function startHost(path: string, create: boolean, sessionId: string): Promise<DbHost> {
+  let me: DbHost | null = null;
+  const onEvent = (e: HostEvent) => {
+    if (host !== me) return;
+    const w = mainWindow();
+    if (e.event === 'stateChanged') broadcast(e.state);
+    else if (w && !w.isDestroyed()) w.webContents.send(CH.importProgress, { done: e.done, total: e.total });
+  };
   try {
-    s.close();
-  } finally {
-    session = null;
-    broadcast(null);
+    const { host: h } = await DbHost.start({ path, create, appVersion: app.getVersion(), region: region(), sessionId }, onEvent, () => { if (me) hostCrashed(me); });
+    me = h;
+    return h;
+  } catch (e) {
+    releaseIfOurs(path, sessionId); // a process that ended during the open may leave its lock
+    throw e;
   }
 }
+
+/** The same file (its real path), case-insensitive on Windows and macOS: Save As never writes over the open base. */
+function sameFile(a: string, b: string): boolean {
+  const real = (p: string) => { try { return realpathSync.native(p); } catch { return resolve(p); } }; // a new file has no real path yet
+  const [x, y] = [real(a), real(b)];
+  return process.platform === 'win32' || process.platform === 'darwin' ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+const samePath = (a: string, b: string) => (process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b));
 
 /**
  * Checks (open) or creates (create) the target first, so a bad target leaves the current base open; then closes the
- * current base (one base per window, as in Access) and opens the new one. File errors reject as `bc:<code>`.
+ * current base (one base per window, as in Access). The same file is closed first (its lock). File errors reject as
+ * `bc:<code>` (the data process applies bcError).
  */
-export function openBase(path: string, create = false): SessionState {
-  try {
-    if (create) createBaseFile(path, app.getVersion());
-    else checkBaseFile(path);
-  } catch (e) {
-    throw bcError(e);
-  }
-  closeBase();
-  const deps = { appVersion: app.getVersion(), region: region(), probe: (probe ??= systemProbe()), onStateChanged: broadcast };
-  try {
-    session = Session.open(path, deps);
-  } catch (e) {
-    throw bcError(e);
-  }
-  try {
-    settings = addRecentFile(settings, path, process.platform);
-    saveSettings(dir, settings);
-  } catch (e) {
-    console.error(e); // recent files are a convenience: never fail an open that succeeded
-  }
-  broadcast(session.state);
-  return session.state;
+let opening = 0; // opens in flight: host is assigned only after the data process started
+export function openBase(path: string, create = false): Promise<SessionState> {
+  opening++;
+  return serial(async () => {
+    if (host && samePath(host.opened.path, path)) await closeBase();
+    await closing; // a base still closing releases its lock first
+    const h = await startHost(path, create, randomUUID());
+    await closeBase();
+    host = h;
+    try {
+      settings = addRecentFile(settings, path, process.platform);
+      saveSettings(dir, settings);
+    } catch (e) {
+      console.error(e); // recent files are a convenience: never fail an open that succeeded
+    }
+    broadcast(h.state);
+    return h.state;
+  }).finally(() => { opening--; });
 }
 
-function need(): Session {
-  if (!session) throw new Error('bc:noBase');
-  return session;
+/**
+ * Heartbeat (every HEARTBEAT_MS, and when the machine wakes up). The main process beats the lock itself, so a long query
+ * that keeps the data process busy does not let another workstation take the base over; the session's own check (a lost
+ * lock switches to read-only) waits in its queue.
+ */
+let tickPending = false; // one queued tick at most: a long query does not pile them up
+/** A base is open (or being opened) in this window. */
+export const hasBase = (): boolean => host !== null || opening > 0;
+
+export function heartbeat(): void {
+  const h = host;
+  if (!h) return;
+  if (!h.state.readOnly) keepAlive(h.opened.path, h.opened.sessionId);
+  if (tickPending) return;
+  tickPending = true;
+  h.session.tick().catch(console.error).finally(() => { tickPending = false; });
 }
-const tableOp = async (fn: () => OpResult | SaveTableResult | RelationResult | Promise<SaveTableResult>): Promise<OpResult | SaveTableResult | RelationResult> => {
-  try { return await fn(); } catch (e) { if (e instanceof ReadOnlyError) return { ok: false, reason: 'readOnly' }; throw e; }
+
+/** The calls Stop may end: reads of a query or table, and action queries (one transaction, rolled back). Never a row write,
+ *  an import or a design change. */
+const STOPPABLE = new Set(['describeSource', 'pageSource', 'actionCount', 'runAction', 'page', 'count', 'lookup']);
+
+/**
+ * Stop (Ctrl+Break, « Arrêter »): ends the oldest pending query call. A row write executing before it finishes first (a
+ * committed write never answers bc:cancelled, so saving it again cannot duplicate it). Then the data process is killed
+ * (that call and the calls queued behind it, never started, reject bc:cancelled; SQLite rolls an interrupted action query
+ * back) and the base reopens under the same opening (its lock is adopted).
+ * DbHost keeps one call in flight, so the kill can only end the targeted call; nothing behind it has reached the data process.
+ * ponytail: a runAction that commits just as Stop lands is reported bc:cancelled although it was written (running it again
+ * would repeat it); closing that gap needs a cooperative interrupt (sqlite3_interrupt), which node:sqlite does not expose.
+ * ponytail: a tracked page waiting behind an import or a design save shows « Exécution… », but Stop waits for that write
+ * to finish (it is never stopped); stopping imports would need their own cancellation.
+ */
+async function cancelCall(): Promise<void> {
+  const h = host;
+  const id = h?.pendingCall(STOPPABLE) ?? null;
+  if (!h || id === null || !(await h.whenExecuting(id))) return;
+  return serial(async () => {
+    if (host !== h || !h.isExecuting(id)) return; // it ended meanwhile
+    await h.kill();
+    try {
+      const n = await startHost(h.opened.path, false, h.opened.sessionId);
+      if (host !== h) { await n.close(); return; } // closed meanwhile
+      host = n;
+      broadcast(n.state);
+    } catch (e) {
+      if (host === h) host = null;
+      releaseIfOurs(h.opened.path, h.opened.sessionId);
+      broadcast(null);
+      throw e;
+    }
+  });
+}
+
+function need(): AsyncSession {
+  if (!host) throw new Error('bc:noBase');
+  return host.session;
+}
+// The data process recreates its errors with their name.
+const isReadOnly = (e: unknown) => e instanceof Error && e.name === 'ReadOnlyError';
+const tableOp = async (fn: () => Promise<OpResult | SaveTableResult | RelationResult>): Promise<OpResult | SaveTableResult | RelationResult> => {
+  try { return await fn(); } catch (e) { if (isReadOnly(e)) return { ok: false, reason: 'readOnly' }; throw e; }
 };
-const rowWrite = async <T>(fn: () => T | Promise<T>): Promise<T> => {
-  try { return await fn(); } catch (e) { throw e instanceof ReadOnlyError ? new Error('bc:readOnly') : e; }
+const rowWrite = async <T>(fn: () => Promise<T>): Promise<T> => {
+  try { return await fn(); } catch (e) { throw isReadOnly(e) ? new Error('bc:readOnly') : e; }
 };
 
-/** One import at a time; progress goes to the window between blocks of records. */
-async function runImport(path: string, plan: ReturnType<typeof importPlan>): Promise<unknown> {
+/** One import at a time; progress (the data process's importProgress events) goes to the window between blocks of records. */
+async function runImport(run: () => Promise<unknown>): Promise<unknown> {
   if (importing) throw new Error('bc:invalidArgument');
   importing = true;
   try {
-    const tick = async (done: number, total: number) => {
-      const w = mainWindow();
-      if (w && !w.isDestroyed()) w.webContents.send(CH.importProgress, { done, total });
-      await new Promise((r) => setImmediate(r));
-    };
-    return await rowWrite(() => need().importRun(path, plan, importTexts(), tick));
+    return await rowWrite(run);
+  } finally {
+    importing = false;
+  }
+}
+
+/** One export at a time, and not during an import (they share the progress event). The data process writes the file at the
+ *  path chosen in the save dialog; nothing is written into the base. */
+async function runExport(src: ReturnType<typeof exportSource>, spec: ReturnType<typeof exportSpec> | null, defaultName: string): Promise<unknown> {
+  if (importing) throw new Error('bc:invalidArgument');
+  importing = true;
+  try {
+    // Excel (no spec): too many rows is told before the dialog
+    if (!spec && (await need().exportRowCount(src)) > MAX_EXCEL_ROWS) return { ok: false, reason: 'tooManyRows', limit: MAX_EXCEL_ROWS };
+    const { yes, no, textFilter, excelFilter } = catalog().exchange;
+    const path = await pickExportPath(defaultName, spec ? 'text' : 'excel', spec ? textFilter : excelFilter);
+    if (path === null) return { ok: false, reason: 'cancelled' };
+    if (!spec) return await need().exportExcel(src, path, sheetName(defaultName));
+    return await need().exportText(src, spec, path, { yes, no });
   } finally {
     importing = false;
   }
@@ -112,11 +254,14 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   mainWindow = getMainWindow;
   dir = app.getPath('userData');
   settings = loadSettings(dir);
+  // The native popups (<select> lists, menus, scroll bars) follow the app's theme, not Windows'.
+  nativeTheme.themeSource = settings.theme;
   const handle = (ch: string, fn: (...args: unknown[]) => unknown) =>
     ipcMain.handle(ch, (e, ...args) => {
       const w = mainWindow();
       if (!w || e.sender !== w.webContents) throw new Error('Unauthorized IPC sender');
-      return fn(...args);
+      // after an opening or a restart (Stop) in progress: the command-line base, a call issued just after Stop
+      return baseOps.then(() => fn(...args));
     });
   const update = (patch: Partial<AppSettings>) => { settings = { ...settings, ...patch }; saveSettings(dir, settings); };
 
@@ -128,6 +273,25 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.setTheme, (t) => {
     if (!['system', 'light', 'dark'].includes(t as string)) throw new Error('Invalid theme');
     update({ theme: t as AppSettings['theme'] });
+    nativeTheme.themeSource = settings.theme;
+  });
+  handle(CH.appInfo, (): AppInfo => appInfo());
+  // Packaged: resources/licenses.json (extraResources); unpackaged: out/licenses.json (npm run licenses).
+  handle(CH.appLicenses, (): LicenseEntry[] => {
+    try { return JSON.parse(readFileSync(app.isPackaged ? join(process.resourcesPath, 'licenses.json') : join(app.getAppPath(), 'out/licenses.json'), 'utf8')); } catch { return []; }
+  });
+  // Home > Clipboard outside the Navigation Pane: the sender's focused element handles it (same sender check as handle()).
+  ipcMain.handle(CH.edit, (e, cmd) => {
+    const w = mainWindow();
+    if (!w || e.sender !== w.webContents) throw new Error('Unauthorized IPC sender');
+    if (cmd !== 'cut' && cmd !== 'copy' && cmd !== 'paste') throw new TypeError('bc:invalidArgument');
+    e.sender[cmd as 'cut' | 'copy' | 'paste']();
+  });
+  // The renderer never chooses the URL: only the links About shows may be opened, in the system browser.
+  handle(CH.openExternal, (url) => {
+    const links = appInfo().links;
+    if (typeof url !== 'string' || !Object.values(links).includes(url)) throw new TypeError('bc:invalidArgument');
+    return shell.openExternal(url);
   });
 
   // The renderer's documents agreed (pending rows saved or discarded): close without asking again. Deferred so that the
@@ -144,30 +308,50 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     return path === null ? null : openBase(path);
   });
   handle(CH.baseClose, () => closeBase());
-  handle(CH.baseState, () => session?.state ?? null);
-  handle(CH.baseTakeOverLock, () => {
-    const s = need(); // bc:noBase as is
-    try { return s.takeOverLock(); } catch (e) { throw bcError(e); } // reopening in write mode, unlinking the lock
+  handle(CH.baseState, () => host?.state ?? null);
+  // File › Save As (A6): a checked copy (VACUUM INTO), which then becomes the open base. Reads only: allowed read-only.
+  handle(CH.baseSaveAs, async () => {
+    need();
+    const current = host!.opened.path;
+    const p = await pickSavePath(catalog().dialog.copyName.replace('{{name}}', basename(current, FILE_EXTENSION)) + FILE_EXTENSION);
+    if (p === null) return null;
+    if (sameFile(p, current)) throw new Error('bc:sameFile');
+    await whenIdle();
+    await need().saveCopy(p);
+    return openBase(p);
   });
+  // Compact and Repair (A6): the renderer has closed every document; a read-only session rejects (ReadOnlyError).
+  handle(CH.baseCompact, async () => {
+    await whenIdle();
+    try {
+      return await rowWrite(() => need().compact());
+    } catch (e) {
+      if (e instanceof Error && e.name === 'BaseLostError') await closeBase(); // no connection left: the base is closed
+      throw e;
+    }
+  });
+  handle(CH.baseTakeOverLock, () => need().takeOverLock()); // reopening in write mode, unlinking the lock (bcError in the data process)
 
   handle(CH.tablesList, () => need().listTables());
-  handle(CH.tablesDesign, (n) => need().tableDesign(str(n)));
+  handle(CH.tablesDesign, (n) => need().tableDesign(lookupName(n)));
   handle(CH.tablesSave, (r) => tableOp(() => need().saveTable(saveRequest(r))));
-  handle(CH.tablesRename, (a, b) => tableOp(() => need().renameTable(str(a), str(b))));
-  handle(CH.tablesDrop, (n) => tableOp(() => need().dropTable(str(n))));
+  handle(CH.tablesRename, (a, b) => tableOp(() => need().renameTable(lookupName(a), nameArg(b))));
+  handle(CH.tablesDrop, (n) => tableOp(() => need().dropTable(lookupName(n))));
+  handle(CH.tablesTestRules, (n) => need().testRules(lookupName(n)));
 
-  handle(CH.rowsCount, (t) => need().count(str(t)));
-  handle(CH.rowsPage, (t, r) => need().page(str(t), pageRequest(r)));
-  handle(CH.rowsInsert, (t, v) => rowWrite(() => need().insert(str(t), cells(v))));
-  handle(CH.rowsUpdate, (t, id, c) => rowWrite(() => need().update(str(t), uint(id), cells(c))));
-  handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(str(t), uints(ids))));
+  handle(CH.rowsCount, (t, f) => need().count(lookupName(t), fieldFilters(f)));
+  handle(CH.rowsPage, (t, r) => need().page(lookupName(t), pageRequest(r)));
+  handle(CH.rowsInsert, (t, v) => rowWrite(() => need().insert(lookupName(t), cells(v))));
+  handle(CH.rowsUpdate, (t, id, c) => rowWrite(() => need().update(lookupName(t), uint(id), cells(c))));
+  handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), uints(ids))));
+  handle(CH.rowsLookup, (t, fd) => need().lookup(lookupName(t), lookupName(fd)));
 
   handle(CH.relationsList, () => need().listRelations());
-  handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), strOrNull(o))));
-  handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(str(n))));
+  handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), o === null ? null : lookupName(o))));
+  handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(lookupName(n))));
   handle(CH.relationsLayout, () => need().relationsLayout());
   handle(CH.relationsSaveLayout, (l) => rowWrite(() => need().saveRelationsLayout(relationsLayout(l))));
-  handle(CH.relationsCascadeChildren, (t) => need().cascadeChildren(str(t)));
+  handle(CH.relationsCascadeChildren, (t) => need().cascadeChildren(lookupName(t)));
 
   handle(CH.importPick, async () => {
     const p = await pickImportPath({ text: catalog().importText.filterText, all: catalog().importText.filterAll });
@@ -175,8 +359,55 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     return p;
   });
   handle(CH.importPreview, (p, s) => need().importPreview(importPath(p, chosenImports), importSpecOrNull(s), catalog().importText.fieldPrefix));
-  handle(CH.importRun, (p, plan) => runImport(importPath(p, chosenImports), importPlan(plan)));
+  handle(CH.importRun, (p, plan) => { const path = importPath(p, chosenImports); const pl = importPlan(plan); return runImport(() => need().importRun(path, pl, importTexts())); });
+  handle(CH.importExcelPick, async () => {
+    const p = await pickExcelPath(catalog().exchange.excelFilter);
+    if (p !== null) chosenImports.add(p);
+    return p;
+  });
+  handle(CH.importExcelPreview, (p, sheet, header) => need().importExcelPreview(importPath(p, chosenImports), sheetOrNull(sheet), boolOrNull(header), catalog().importText.fieldPrefix));
+  handle(CH.importExcelRun, (p, sheet, header, plan) => {
+    const path = importPath(p, chosenImports); const sh = sheetOrNull(sheet); const hh = boolOrNull(header); const pl = importPlan(plan);
+    if (sh === null || hh === null) throw new Error('bc:invalidArgument');
+    return runImport(() => need().importExcelRun(path, sh, hh, pl, importTexts()));
+  });
   handle(CH.importSpecs, () => need().importSpecs());
-  handle(CH.importSaveSpec, (n, s) => rowWrite(() => need().saveImportSpec(str(n), importSpec(s))));
-  handle(CH.importDeleteSpec, (n) => rowWrite(() => need().deleteImportSpec(str(n))));
+  handle(CH.importSaveSpec, (n, s) => rowWrite(() => need().saveImportSpec(nameArg(n), importSpec(s))));
+  handle(CH.importDeleteSpec, (n) => rowWrite(() => need().deleteImportSpec(lookupName(n))));
+
+  handle(CH.tablesCopy, (a, b, m) => {
+    if (m !== undefined && m !== 'structure' && m !== 'data') throw new TypeError('bc:invalidArgument');
+    return tableOp(() => need().copyTable(lookupName(a), nameArg(b), m));
+  });
+  handle(CH.tablesAppend, (a, b) => rowWrite(() => need().appendTable(lookupName(a), lookupName(b))));
+  handle(CH.objectsList, (k) => need().listObjects(objectKindOrAll(k)));
+  handle(CH.objectsGet, (k, n) => need().getObject(objectKind(k), lookupName(n)));
+  handle(CH.objectsSave, (k, n, d, o) => tableOp(() => need().saveObject(objectKind(k), nameArg(n), definition(d), o === null ? null : lookupName(o))));
+  handle(CH.objectsRename, (k, a, b) => tableOp(() => need().renameObject(objectKind(k), lookupName(a), nameArg(b))));
+  handle(CH.objectsDelete, (k, n) => tableOp(() => need().deleteObject(objectKind(k), lookupName(n))));
+  handle(CH.objectsCopy, (k, n, to) => tableOp(() => need().copyObject(objectKind(k), lookupName(n), nameArg(to))));
+  handle(CH.objectsSetDescription, (k, n, d) => tableOp(() => need().setDescription(k === 'table' ? k : objectKind(k), lookupName(n), description(d))));
+  handle(CH.sourcesDescribe, (r) => need().describeSource(sourceRef(r)));
+  handle(CH.sourcesPage, (r, q) => need().pageSource(sourceRef(r), sourcePageRequest(q)));
+  handle(CH.queriesActionCount, (r, p) => need().actionCount(queryRef(r), queryParams(p)));
+  handle(CH.queriesRunAction, (r, p, o) => need().runAction(queryRef(r), queryParams(p), runActionOptions(o)));
+  handle(CH.queriesCancel, () => cancelCall());
+
+  // Reports: nothing is written into the base (allowed read-only); the PDF goes only to the path chosen in the dialog (4.8).
+  handle(CH.reportsExportPdf, async (r) => {
+    const req = printRequest(r);
+    const path = await pickPdfPath(pdfFileName(req.name), catalog().report.pdfFilter);
+    if (path === null) return 'canceled';
+    const pdf = await renderToPdf(req);
+    try {
+      await replaceFile(path, pdf); // a failure leaves the PDF already there untouched
+    } catch (e) {
+      console.error(e);
+      throw new Error('bc:writeFailed');
+    }
+    return 'saved';
+  });
+  handle(CH.reportsPrint, (r) => printDocument(printRequest(r)));
+  handle(CH.exchangeExportText, (s, spec, name) => runExport(exportSource(s), exportSpec(spec), lookupName(name)));
+  handle(CH.exchangeExportExcel, (s, name) => runExport(exportSource(s), null, lookupName(name)));
 }

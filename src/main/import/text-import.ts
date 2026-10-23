@@ -9,11 +9,14 @@ import {
   type ImportEncoding, type ImportPlan, type ImportResult, type ImportSpec, type ResolvedEncoding, type TextPreview,
 } from '../../shared/import-text';
 import type { LocaleInfo } from '../../shared/locale-format';
-import { createTable, DanglingKeyError, DesignValidationError, listTables, NameExistsError, tableDesign } from '../db/schema';
+import { listObjects } from '../db/objects';
+import {
+  createTable, DanglingKeyError, danglingNames, DesignValidationError, foreignKeys, listTables, NameExistsError, quoteIdent, sqliteSameName, tableDesign,
+} from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
 import { insertRow } from '../db/write-layer';
 import { detectHeader, inferFields, SAMPLE } from './infer';
-import { detectFormat, proposeBreaks, readRecords, sniffEncoding, splitRecords } from './text-parse';
+import { detectFormat, proposeBreaks, readRecords, sniffEncoding, splitRecords, type Rec } from './text-parse';
 
 const PREVIEW_ROWS = 50;
 const NOT_A_NUMBER = '#'; // refused by coerce as invalidNumber
@@ -59,6 +62,15 @@ function sampleText(path: string, encoding: ResolvedEncoding): { text: string; f
   }
 }
 
+/** Où l'import lit ses enregistrements : un fichier texte, une feuille Excel. `progress` : avancement (done / total) ; `size` : total
+ *  quand la source le connaît d'avance (sinon 0, la source le donne par `progress`). */
+export interface ImportSource { records(progress?: (done: number, total: number) => void): Iterable<Rec>; size: number }
+
+export function textSource(path: string, spec: ImportSpec): ImportSource {
+  const encoding = resolveEncoding(path, spec.encoding);
+  return { size: 0, records: (progress) => readRecords(path, { spec, encoding }, progress) };
+}
+
 /** Aperçu : sans spécification, tout est détecté (encodage, format, séparateur, en-tête, coupures, types). */
 export function previewText(path: string, given: ImportSpec | null, region: LocaleInfo, prefix: string): TextPreview {
   let spec = given ?? defaultSpec(region);
@@ -87,8 +99,10 @@ export function previewText(path: string, given: ImportSpec | null, region: Loca
  *  field's rule filled in ({{rule}}, as stored). */
 function messageOf(e: { field: string; code: string; message?: unknown; table?: string }, texts: ImportTexts, design: TableDesign): string {
   if (typeof e.message === 'string' && e.message !== '') return e.message;
-  const rule = design.fields.find((x) => x.name === e.field)?.props.validationRule ?? '';
-  return ((texts.messages as Record<string, string>)[e.code] ?? e.code).replace('{{rule}}', rule).replace('{{table}}', e.table ?? '');
+  const record = e.field === '' && (e.code === 'validation' || e.code === 'expressionError'); // the table's rule (fieldError.tableRule…)
+  const rule = (record ? design.validationRule : design.fields.find((x) => x.name === e.field)?.props.validationRule) ?? '';
+  const key = record ? (e.code === 'validation' ? 'tableRule' : 'tableRuleError') : e.code;
+  return ((texts.messages as Record<string, string>)[key] ?? e.code).replace('{{rule}}', rule).replace('{{table}}', e.table ?? '');
 }
 
 class ImportFailure extends Error {
@@ -141,12 +155,12 @@ function prepare(db: DatabaseSync, plan: ImportPlan, idName: string): { design: 
  * `<Table>_ErreursImportation`, créée seulement s'il y en a. `tick` : rend la main entre deux blocs (progression).
  */
 export async function runImport(
-  db: DatabaseSync, path: string, plan: ImportPlan, region: LocaleInfo, texts: ImportTexts,
+  db: DatabaseSync, from: string | ImportSource, plan: ImportPlan, region: LocaleInfo, texts: ImportTexts,
   tick: (done: number, total: number) => Promise<void> = async () => {},
 ): Promise<ImportResult> {
   if (db.isTransaction) throw new Error('bc:invalidArgument'); // never inside another write
   const { spec } = plan;
-  const encoding = resolveEncoding(path, spec.encoding);
+  const source = typeof from === 'string' ? textSource(from, spec) : from; // a path: a text file read with the plan's spec
   const info = specLocale(spec, region);
   try {
     return await inTransactionAsync(db, async () => {
@@ -155,9 +169,15 @@ export async function runImport(
       let errorDesign: TableDesign | null = null;
       let imported = 0;
       let errors = 0;
+      // Lines of the rows written into a table with foreign keys: a DEFERRABLE key is only checked at the end (below).
+      const keyed = foreignKeys(db).some((k) => k.child === design.name);
+      const lines = new Map<number, number>();
       const logError = async (field: string, line: number, message: string) => {
         if (!errorDesign) {
-          const name = suffixedName(design.name, texts.errorSuffix, listTables(db).map((x) => x.name));
+          // Tables and queries share one namespace; a name a dangling key targets is taken too: the error table would become
+          // that key's parent.
+          const taken = [...[...listTables(db), ...listObjects(db, 'query')].map((x) => x.name), ...danglingNames(db)];
+          const name = suffixedName(design.name, texts.errorSuffix, taken);
           const { error, field: champ, line: ligne } = texts.errorFields;
           errorDesign = {
             name, fields: [
@@ -169,14 +189,15 @@ export async function runImport(
           createTable(db, errorDesign);
         }
         const [e, c, l] = errorDesign.fields.map((x) => x.name);
-        const r = await insertRow(db, errorDesign, { [e]: message, [c]: field, [l]: line }, region); // await: insertRow becomes async (A2)
+        // Cut to the column's 255 characters: a long rule quoted in the message must not abort the import.
+        const r = await insertRow(db, errorDesign, { [e]: [...message].slice(0, 255).join(''), [c]: field, [l]: line }, region); // await: insertRow becomes async (A2)
         if (!r.ok) throw new Error('error log refused');
         errors++;
       };
-      let pending = { done: 0, total: 0 };
+      let pending = { done: 0, total: source.size };
       let first = true;
       let last = Date.now();
-      for (const rec of readRecords(path, { spec, encoding }, (done, total) => { pending = { done, total }; })) {
+      for (const rec of source.records((done, total) => { pending = { done, total }; })) {
         const { line } = rec;
         if (first && (first = false, spec.hasHeader)) continue;
         if (rec.unclosed) await logError('', line, texts.log.unclosed); // read with the qualifier as text, imported if it converts
@@ -194,9 +215,26 @@ export async function runImport(
         // ponytail: insertRow ligne à ligne (savepoint + relecture) ≈ 35 000 lignes/s ; un insertRows groupé dans la couche
         // d'écriture si les gros fichiers deviennent courants.
         const r = await insertRow(db, design, values, info);
-        if (r.ok) { imported++; for (const f of truncated) await logError(f, line, texts.log.truncated); }
+        if (r.ok) {
+          imported++;
+          if (keyed) lines.set(r.rowid, line);
+          for (const f of truncated) await logError(f, line, texts.log.truncated);
+        }
         else for (const e of r.errors) await logError(e.field, line, messageOf(e, texts, design));
         if (Date.now() - last > 50) { await tick(pending.done, pending.total); last = Date.now(); }
+      }
+      // A row whose DEFERRABLE INITIALLY DEFERRED key has no parent passed its insert: logged like any noParent, then taken out
+      // (older orphans of the table are not this import's business).
+      const check = keyed ? db.prepare(`PRAGMA foreign_key_check(${quoteIdent(design.name)})`).all() as { rowid: number; parent: string; fkid: number }[] : [];
+      for (const v of check) {
+        const line = lines.get(v.rowid);
+        if (line === undefined) continue;
+        lines.delete(v.rowid);
+        const col = (db.prepare('SELECT "from" AS c FROM pragma_foreign_key_list(?) WHERE id = ? ORDER BY seq').get(design.name, v.fkid) as { c: string }).c;
+        const field = design.fields.find((fd) => sqliteSameName(fd.name, col))?.name ?? col;
+        db.prepare(`DELETE FROM ${quoteIdent(design.name)} WHERE rowid = ?`).run(v.rowid);
+        imported--;
+        await logError(field, line, messageOf({ field, code: 'noParent', table: v.parent }, texts, design));
       }
       await tick(pending.total, pending.total);
       const done: ImportResult = { ok: true, table: design.name, imported, errors };

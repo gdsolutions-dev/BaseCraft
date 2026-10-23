@@ -14,7 +14,8 @@ export function inTransaction<T>(db: DatabaseSync, fn: () => T): T {
 }
 
 /** inTransaction pour un travail qui rend la main (import long, avec progression) : le savepoint reste ouvert entre deux
- *  étapes. L'appelant garantit qu'aucune autre écriture ne s'intercale (assistant modal). */
+ *  étapes. Aucune autre écriture ne s'intercale : le processus de données exécute
+ *  les appels de la session un à un (db-host/host.ts). */
 export async function inTransactionAsync<T>(db: DatabaseSync, fn: () => Promise<T>): Promise<T> {
   db.exec('SAVEPOINT bcx_w');
   try {

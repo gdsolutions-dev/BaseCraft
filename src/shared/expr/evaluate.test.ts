@@ -100,6 +100,34 @@ describe('Like', () => {
     expect(likeMatch('ab', 'a*?*b')).toBe(false);
     await fails('"abc" Like "[a"', 'badArgument');
   });
+
+  it('text produced by & + Replace is at most 1 048 576 characters, a longer one is an overflow (never out of memory)', async () => {
+    const memo = env({ Notes: str('n'.repeat(100000)) });
+    expect(await ev('Len([Notes] & "x")', memo)).toBe(100001); // appending to a stored Long Text
+    expect(await ev('Len([Notes] + "x")', memo)).toBe(100001);
+    expect(await ev('Len(Replace([Notes], "n", "nn"))', memo)).toBe(200000);
+    const big = env({ A: str('a'.repeat(1048575)) });
+    expect(await ev('Len([A] & "b")', big)).toBe(1048576);
+    await fails('[A] & "bc"', 'overflow', big);
+    await fails('[A] + "bc"', 'overflow', big);
+    // runaway nested Replace: stopped as it grows, the 131-million-character string is never built
+    const t0 = performance.now();
+    await fails('Len(Replace(String(65535, "a"), "a", String(2000, "b")))', 'overflow');
+    await fails('Len(Replace(Replace(String(65535, "a"), "a", String(16, "b")), "b", String(2000, "c")))', 'overflow');
+    expect(performance.now() - t0).toBeLessThan(2000);
+    await fails('Space(65536)', 'overflow'); // Space and String keep VBA's 65535
+    expect(await ev('Len(Left([A], 3))', env({ A: str('x'.repeat(100000)) }))).toBe(3);
+  });
+  it('Like stops with an overflow past its step budget instead of freezing; the budget grows with the texts', () => {
+    const t0 = performance.now();
+    expect(() => likeMatch('a'.repeat(32000), '*' + 'a'.repeat(16000) + 'b')).toThrow(expect.objectContaining({ code: 'overflow' }));
+    expect(performance.now() - t0).toBeLessThan(1000);
+    const lit = 'a'.repeat(79) + 'b';
+    expect(likeMatch('x'.repeat(65455) + lit, '*' + lit)).toBe(true); // ~65535 characters, * then an 80-character literal
+    // a 200 000-character Long Text with many partial matches: ~6 million steps, within 64 × its length
+    const memo = ('a'.repeat(60) + 'c').repeat(3280) + lit;
+    expect(likeMatch(memo, '*' + lit)).toBe(true);
+  });
 });
 
 describe('Empty (Nz sans valeur de remplacement, A2-R7)', () => {
@@ -142,8 +170,8 @@ describe('Between, In, Is Null, fields, subject', () => {
 });
 
 describe('library', () => {
-  it('has exactly the catalog functions', () => {
-    expect(Object.keys(LIBRARY).sort()).toEqual(FUNCTIONS.map((x) => x.name).sort());
+  it('has exactly the catalog functions, aggregates aside (evaluated over a group by A3 and A5)', () => {
+    expect(Object.keys(LIBRARY).sort()).toEqual(FUNCTIONS.filter((x) => x.category !== 'aggregate').map((x) => x.name).sort());
   });
 
   it('functions are callable directly (pure on args and env)', async () => {
@@ -159,6 +187,8 @@ describe('library', () => {
   // [expression, résultat] : un cas normal, un cas Null et un cas limite par fonction.
   it.each([
     ['IIf(1 > 0, "a", "b")', 'a'], ['IIf(0, 1, Null)', null],
+    // only the chosen branch is evaluated, as in Access queries and controls (VBA's IIf evaluates both): no error from the other
+    ['IIf(True, 1, 1 / 0)', 1], ['IIf(False, 1 / 0, 2)', 2], ['IIf(Null, 1 / 0, 2)', 2],
     ['Nz(5, 0)', 5], ['Nz(Null)', '<empty>'], ['Nz("", "x")', ''],
     ['IsNull(1)', false], ['IsNull(Null)', true], ['IsNull("")', false],
     ['IsNumeric("12,5")', true], ['IsNumeric(Null)', false], ['IsNumeric("abc")', false], ['IsNumeric("")', false], ['IsNumeric(True)', true],
@@ -235,7 +265,7 @@ describe('library', () => {
   });
 
   it.each([
-    ['IIf(True, 1, 1 / 0)', 'divByZero' /* IIf évalue ses trois arguments */], ['Round(1, 2000000000)', 'badArgument'], ['Round(1, 23)', 'badArgument'],
+    ['IIf(1 / 0, 1, 2)', 'divByZero' /* the condition's error is IIf's */], ['IIf(True, 1 / 0, 2)', 'divByZero'], ['Round(1, 2000000000)', 'badArgument'], ['Round(1, 23)', 'badArgument'],
     ['Space(2000000000)', 'overflow'], ['Space(65536)', 'overflow'], ['String(2000000000, "x")', 'overflow'],
     ['3000000000 Mod 7', 'overflow'], ['3000000000 \\ 2', 'overflow'], ['7 Mod 3000000000', 'overflow'], ['"abc" Like "[z-a]"', 'badArgument'], ['Left("ab", -1)', 'badArgument'], ['Mid("abc", 0)', 'badArgument'],
     ['Mid("abc", 1, -1)', 'badArgument'], ['Space(-1)', 'badArgument'], ['String(2, "")', 'badArgument'], ['Sqr(-1)', 'badArgument'],

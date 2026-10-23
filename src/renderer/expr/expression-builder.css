@@ -1,0 +1,16 @@
+/* Générateur d'expressions, dans la boîte modale (élargie) */
+.modal:has(.xb) { width: min(760px, 100%); }
+.xb-field { display: flex; flex-direction: column; gap: 6px; }
+.xb textarea, .xb-list select {
+  border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); color: inherit; font: inherit; outline: 0;
+}
+.xb textarea { min-height: 64px; padding: 6px var(--bc-space-2); resize: vertical; }
+.xb textarea:focus, .xb-list select:focus { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.xb textarea[aria-invalid="true"] { border-color: var(--bc-danger); }
+.xb .modal-error { display: block; margin-top: 4px; }
+.xb-lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--bc-space-2); margin-top: var(--bc-space-3); }
+.xb-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--bc-text-muted); }
+.xb-list select { height: 168px; padding: 2px 0; font-size: 12px; }
+.xb-desc { min-height: 3em; margin: var(--bc-space-2) 0 var(--bc-space-3); font-size: 12px; color: var(--bc-text-muted); overflow-wrap: anywhere; }
+.xb-desc code { color: var(--bc-text); }
+@media (max-width: 560px) { .xb-lists { grid-template-columns: 1fr; } .xb-list select { height: 96px; } }

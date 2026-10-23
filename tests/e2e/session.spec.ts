@@ -6,7 +6,9 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { clients } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, seedSlow } from './helpers';
+
+const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 
 test('a base given on the command line opens writable and its lock is released on exit', async () => {
   const base = await seedBase('session', async (db) => {
@@ -51,4 +53,33 @@ test('create through the save hook, write and read rows, recent files; a bad ope
     await app.close();
   }
   expect(existsSync(`${created}.lock`)).toBe(false);
+});
+
+test('the data process ends unexpectedly during a query: one notice, the base is closed, its lock removed, and it opens again', async () => {
+  const base = seedSlow('crash');
+  const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    expect(await page.evaluate(() => (window as any).basecraft.base.state())).toMatchObject({ readOnly: false });
+    await page.getByTestId('nav-item-query-QLente').dblclick();
+    await expect(page.getByTestId('query-cancel')).toBeVisible(); // a call is pending when the process dies
+    process.kill(JSON.parse(readFileSync(`${base}.lock`, 'utf8')).pid); // the lock names the data process
+    await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.hostCrashed);
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId('modal')).toHaveCount(1); // the pending call's own rejection shows nothing
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).basecraft.base.state())).toBeNull();
+    expect(existsSync(`${base}.lock`)).toBe(false);
+    await expect(page.evaluate(() => (window as any).basecraft.rows.count('Clients'))).rejects.toThrow(/bc:noBase/);
+    expect(await page.evaluate((p) => (window as any).basecraft.base.open(p), base)).toMatchObject({ readOnly: false });
+    // no call pending: the same single notice, in the window (never a native box)
+    await expect(page.getByTestId('nav-item-Clients')).toBeVisible();
+    await page.waitForTimeout(300);
+    process.kill(JSON.parse(readFileSync(`${base}.lock`, 'utf8')).pid);
+    await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.hostCrashed);
+    await page.getByTestId('modal-btn-ok').click();
+    expect(await page.evaluate(() => (window as any).basecraft.base.state())).toBeNull();
+  } finally {
+    await app.close();
+  }
 });

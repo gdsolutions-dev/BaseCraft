@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { clients, f, t } from '../../shared/test-fixtures';
-import { designReducer, emptyDesign, fromDesign, savedModel, toSaveRequest, withDefaultPrimaryKey } from './design-model';
+import { designOf, designReducer, emptyDesign, fromDesign, longFieldNames, savedModel, toSaveRequest, withDefaultPrimaryKey } from './design-model';
 
 describe('design model', () => {
   it('rename keeps sourceName; new rows have none', () => {
@@ -9,7 +9,37 @@ describe('design model', () => {
     expect(toSaveRequest(m, 'Clients', false).mapping).toContainEqual({ name: 'Nom complet', sourceName: 'Nom' });
     expect(toSaveRequest(m, 'Clients', false).mapping).toContainEqual({ name: 'Note', sourceName: null });
   });
-  it('blank trailing rows are ignored on save', () => expect(toSaveRequest(designReducer(fromDesign(clients), { type: 'addRow' }), 'Clients', false).design.fields).toHaveLength(clients.fields.length));
+  it('table properties: set (dirty), cleared (absent), the rule follows renamed fields, a swap stays a swap', () => {
+    let m = designReducer(fromDesign(clients), { type: 'setTableProp', name: 'validationRule', value: '[Nom] <> [Email]' });
+    expect(m.dirty).toBe(true);
+    m = designReducer(m, { type: 'setTableProp', name: 'validationText', value: 'Non' });
+    m = designReducer(m, { type: 'setName', index: 1, name: 'Email' });
+    m = designReducer(m, { type: 'setName', index: 5, name: 'Nom' });
+    const req = toSaveRequest(m, 'Clients', false);
+    expect(req.design).toMatchObject({ validationRule: '[Nom] <> [Email]', validationText: 'Non' }); // source names: alterTable renames
+    expect(savedModel(m, req).validationRule).toBe('[Email] <> [Nom]'); // the model as stored, once
+    m = designReducer(m, { type: 'setTableProp', name: 'validationText', value: '' });
+    expect(toSaveRequest(m, 'Clients', false).design).not.toHaveProperty('validationText');
+    m = designReducer(m, { type: 'setInvalid', index: -1, key: 'validationRule', code: 'unexpectedEnd' });
+    expect(designReducer(m, { type: 'deleteRows', indices: [0] }).invalid).toEqual({ 'table:validationRule': 'unexpectedEnd' });
+  });
+  it('indexes: setName renames inside them, deleteRows drops the field and an index left empty; sent with source names', () => {
+    const ix = (name: string, ...fields: string[]) => ({ name, fields: fields.map((n) => ({ name: n, desc: false })), unique: false });
+    let m = fromDesign({ ...clients, indexes: [ix('NE', 'Nom', 'Email'), ix('A', 'Âge')] });
+    m = designReducer(m, { type: 'setName', index: 1, name: 'Email' });
+    m = designReducer(m, { type: 'setName', index: 5, name: 'Nom' }); // a swap
+    const named = (x: typeof m) => designOf(x, 'Clients').indexes;
+    expect(named(m)).toEqual([ix('NE', 'Email', 'Nom'), ix('A', 'Âge')]);
+    const req = toSaveRequest(m, 'Clients', false);
+    expect(req.design.indexes).toEqual([ix('NE', 'Nom', 'Email'), ix('A', 'Âge')]); // source names: alterTable renames
+    expect(named(savedModel(m, req))).toEqual(named(m)); // the model as stored, once
+    m = designReducer(m, { type: 'deleteRows', indices: [2] });
+    expect(named(m)).toEqual([ix('NE', 'Email', 'Nom')]);
+    const next = { ...clients, fields: m.rows.map((r) => ({ name: r.name, props: { ...r.props, indexed: 'yesDuplicates' as const } })), indexes: [] };
+    m = designReducer(m, { type: 'setIndexes', design: next });
+    expect([m.dirty, m.indexes, m.rows.every((r) => r.props.indexed === 'yesDuplicates')]).toEqual([true, undefined, true]);
+  });
+  it('blank trailing rows are ignored on save',() => expect(toSaveRequest(designReducer(fromDesign(clients), { type: 'addRow' }), 'Clients', false).design.fields).toHaveLength(clients.fields.length));
   it('a nameless row that was touched is kept, so the save reports it', () => {
     const m = designReducer(designReducer(emptyDesign(), { type: 'addRow' }), { type: 'setProp', index: 0, key: 'description', value: 'x' });
     expect(toSaveRequest(m, 'T', false).design.fields).toEqual([{ name: '', props: expect.objectContaining({ description: 'x' }) }]);
@@ -43,6 +73,27 @@ describe('design model', () => {
     expect(designReducer(m, { type: 'setType', index: 1, fieldType: 'yesNo' }).invalid).toEqual({ // other rows kept
       [`${key}:validationRule`]: 'unexpectedEnd', [`${key}:defaultValue`]: 'unexpectedEnd', [`${m.rows[2].key}:inputMask`]: 'maskNoInput',
     });
+  });
+  it('an unreadable Lookup tab entry leaves when its row is hidden (Text Box, List Box) or its type takes no lookup', () => {
+    const lookup = { kind: 'values' as const, values: ['a'], limitToList: false };
+    let m = fromDesign(t('T', [f('A', 'shortText', { lookup }), f('B', 'shortText', { lookup })]));
+    const [a, b] = [m.rows[0].key, m.rows[1].key];
+    for (const key of ['boundColumn', 'columnWidths', 'listRows', 'listWidth']) {
+      m = designReducer(m, { type: 'setInvalid', index: 0, key, code: 'badCount' });
+      m = designReducer(m, { type: 'setInvalid', index: 1, key, code: 'badCount' });
+    }
+    m = designReducer(m, { type: 'setInvalid', index: 0, key: 'validationRule', code: 'unexpectedEnd' });
+    const all = m.invalid;
+    // List Box: no List Rows nor List Width
+    expect(designReducer(m, { type: 'setProp', index: 0, key: 'lookup', value: { ...lookup, displayControl: 'listBox' } }).invalid).toEqual(
+      Object.fromEntries(Object.entries(all).filter(([k]) => k !== `${a}:listRows` && k !== `${a}:listWidth`)));
+    // Text Box: no lookup row at all; other properties and rows kept
+    expect(designReducer(m, { type: 'setProp', index: 0, key: 'lookup', value: undefined }).invalid).toEqual(
+      Object.fromEntries(Object.entries(all).filter(([k]) => !k.startsWith(`${a}:`) || k === `${a}:validationRule`)));
+    // a type with a lookup keeps them; a type without one drops them
+    expect(designReducer(m, { type: 'setType', index: 1, fieldType: 'number' }).invalid).toEqual(all);
+    expect(designReducer(m, { type: 'setType', index: 1, fieldType: 'dateTime' }).invalid).toEqual(
+      Object.fromEntries(Object.entries(all).filter(([k]) => !k.startsWith(`${b}:`))));
   });
   it('default primary key gets a unique name at the top', () => {
     const m = withDefaultPrimaryKey(fromDesign(t('T', [f('N°', 'shortText')])), 'N°');
@@ -111,5 +162,35 @@ describe('design model', () => {
     expect(after.dirty).toBe(false);
     expect(toSaveRequest(after, 'Clients', false).mapping.every((x) => x.sourceName === x.name)).toBe(true);
     expect(savedModel({ ...emptyDesign(), selected: 3 }, toSaveRequest(emptyDesign(), 'N', false))).toMatchObject({ originalName: 'N', selected: 0 });
+  });
+});
+
+describe('table description from the Properties dialog', () => {
+  it('replaces the loaded one without dirtying the design; the next save writes it', () => {
+    const m = designReducer(fromDesign({ ...clients, description: 'Ancienne' }), { type: 'setDescription', description: 'Nouvelle' });
+    expect(m).toMatchObject({ description: 'Nouvelle', dirty: false });
+    expect(toSaveRequest(m, 'Clients', false).design.description).toBe('Nouvelle');
+    const edited = designReducer(designReducer(m, { type: 'addRow' }), { type: 'setDescription', description: '' });
+    expect(edited.dirty).toBe(true); // the user's own edits stay pending
+    expect(toSaveRequest(edited, 'Clients', false).design.description).toBeUndefined();
+  });
+  it('a load answered after a Properties save keeps the newer description the tab carries', () => {
+    expect(fromDesign({ ...clients, description: 'Ancienne' }, 'Nouvelle').description).toBe('Nouvelle');
+    expect(fromDesign({ ...clients, description: 'Ancienne' }, '').description).toBe(''); // cleared from Properties
+    expect(fromDesign({ ...clients, description: 'Ancienne' }).description).toBe('Ancienne');
+  });
+});
+
+describe('field names over 64 characters', () => {
+  it('a new or renamed field name over 64 code points (after NFC) is flagged; a kept long name is not', () => {
+    const long = 'L'.repeat(100);
+    let m = fromDesign(t('Ext', [f(long, 'longText'), f('Court', 'longText')]));
+    expect(longFieldNames(m)).toEqual([]);
+    m = designReducer(m, { type: 'setName', index: 1, name: 'x'.repeat(65) });
+    m = designReducer(m, { type: 'addRow' });
+    m = designReducer(m, { type: 'setName', index: 2, name: 'e\u0301'.repeat(64) }); // 64 once composed
+    expect(longFieldNames(m).map((r) => r.name)).toEqual(['x'.repeat(65)]);
+    m = designReducer(m, { type: 'setName', index: 0, name: long + 'x' });
+    expect(longFieldNames(m)).toHaveLength(2);
   });
 });

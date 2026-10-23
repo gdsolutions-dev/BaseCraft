@@ -113,11 +113,32 @@ export function parseDateTime(text: string, info: LocaleInfo): string | null {
   return t ? out(y, mo, d, t) : null;
 }
 
+// Intl formatters cost ~70 µs to build and are pure: one per locale and options (a few dozen at most in practice).
+const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
+function cached<F extends Intl.NumberFormat | Intl.DateTimeFormat>(kind: string, locale: string, o: object, make: () => F): F {
+  const key = `${kind}|${locale}|${JSON.stringify(o)}`;
+  let f = formatters.get(key) as F | undefined;
+  if (!f) formatters.set(key, (f = make()));
+  return f;
+}
+export const numberFormat = (locale: string, o: Intl.NumberFormatOptions = {}): Intl.NumberFormat =>
+  cached('n', locale, o, () => new Intl.NumberFormat(locale, o));
+export const dateTimeFormat = (locale: string, o: Intl.DateTimeFormatOptions = {}): Intl.DateTimeFormat =>
+  cached('d', locale, o, () => new Intl.DateTimeFormat(locale, o));
+
 /** `n` may be a canonical decimal string (Décimal fields): Intl formats it exactly, without going through a double. */
 export function formatNumber(n: number | string, locale: string, decimals?: number): string {
-  return new Intl.NumberFormat(locale, decimals === undefined
+  return numberFormat(locale, decimals === undefined
     ? { maximumFractionDigits: 20 }
     : { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(n as Intl.StringNumericLiteral);
+}
+
+/** An ISO 8601 instant (bc_objects created / modified) as a stored date-time in local time, for formatDateTime. */
+export function isoToStored(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${String(d.getFullYear()).padStart(4, '0')}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 export function formatDateTime(stored: string, locale: string): string {
@@ -128,7 +149,7 @@ export function formatDateTime(stored: string, locale: string): string {
   date.setUTCFullYear(y);
   const dateOpts: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' };
   const dateOnly = h === 0 && mi === 0 && s === 0;
-  return new Intl.DateTimeFormat(locale, dateOnly ? dateOpts
+  return dateTimeFormat(locale, dateOnly ? dateOpts
     : { ...dateOpts, hour: 'numeric', minute: '2-digit', second: '2-digit' }).formatToParts(date)
     .map((p) => (p.type === 'year' ? p.value.padStart(4, '0') : p.value)).join(''); // year 150 shown as 0150: read back as is
 }
@@ -144,6 +165,6 @@ export function formatCurrency(n: number, locale: string, decimals?: number): st
   const currency = CURRENCY_BY_REGION[loc.region ?? loc.maximize().region ?? ''];
   const digits = decimals === undefined ? {} : { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
   return currency
-    ? new Intl.NumberFormat(locale, { style: 'currency', currency, ...digits }).format(n)
+    ? numberFormat(locale, { style: 'currency', currency, ...digits }).format(n)
     : formatNumber(n, locale, decimals ?? 2);
 }

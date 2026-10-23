@@ -7,6 +7,7 @@ import { BaseFileError, createBaseFile, openBaseFile } from './db/file-format';
 import type { LockInfo } from './db/lock';
 import type { RiskProbe } from './db/location-risk';
 import { ReadOnlyError, Session, type SessionDeps } from './session';
+import { reconcile } from './db/schema';
 import { clients } from '../shared/test-fixtures';
 import { defaultSpec } from '../shared/import-text';
 import { localeInfo } from '../shared/locale-format';
@@ -114,6 +115,19 @@ describe('session (brief)', () => {
     expect(await s.saveTable({ originalName: 'Clients', design: renamed, mapping, allowDataLoss: false })).toEqual({ ok: true });
     expect(s.page('Clients', { offset: 0, limit: 10 }).rows[0].values[1]).toBe('Dupont');
   });
+
+  it('testRules: the fields whose rule stored rows break, with their count (Test Validation Rules)', async () => {
+    const s = create();
+    await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    for (const [Nom, Âge] of [['Dupont', 30], ['Martin', 17], ['Zola', 12]] as const) await s.insert('Clients', { Nom, Âge });
+    expect(await s.testRules('Clients')).toEqual([]);
+    const rule = (name: string, validationRule: string) => (x: (typeof clients.fields)[number]) =>
+      (x.name === name ? { ...x, props: { ...x.props, validationRule } } : x);
+    const ruled = { ...clients, fields: clients.fields.map(rule('Nom', 'Like "D*"')).map(rule('Âge', '>= 18')) };
+    const mapping = clients.fields.map((x) => ({ name: x.name, sourceName: x.name }));
+    expect(await s.saveTable({ originalName: 'Clients', design: ruled, mapping, allowDataLoss: false, acceptExistingViolations: true })).toEqual({ ok: true });
+    expect(await s.testRules('clients')).toEqual([{ field: 'Nom', rows: 2 }, { field: 'Âge', rows: 2 }]);
+  });
 });
 
 describe('session (lock lifecycle and data access)', () => {
@@ -196,7 +210,7 @@ describe('session (lock lifecycle and data access)', () => {
     await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
     const raw = rawDb(s);
     raw.exec('CREATE TABLE "Kids" ("c" INTEGER REFERENCES "Clients" ("N°") ON DELETE CASCADE)');
-    expect(s.cascadeChildren('clients')).toEqual(['Kids']);
+    expect(s.cascadeChildren('clients')).toEqual([{ table: 'Kids', effect: 'deleted' }]);
     expect(s.dropTable('Clients')).toEqual({ ok: false, reason: 'referenced', table: 'Kids' });
     raw.exec('CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id"))');
     expect(await s.saveTable({ originalName: null, design: { ...clients, name: 'Ghost' }, mapping: [], allowDataLoss: false }))
@@ -304,5 +318,207 @@ describe('session (lock lifecycle and data access)', () => {
       expect(() => a.close()).not.toThrow();
       expect(existsSync(`${p}.lock`)).toBe(false);
     });
+  });
+});
+
+describe('session (objects and record sources)', () => {
+  const def = { formatVersion: '1.0' };
+
+  it('objects: CRUD in write mode, refused in read-only mode', () => {
+    const a = create();
+    expect(a.saveObject('form', 'F', def, null)).toEqual({ ok: true });
+    expect(a.copyObject('form', 'F', 'G')).toEqual({ ok: true });
+    expect(a.renameObject('form', 'G', 'H')).toEqual({ ok: true });
+    expect(a.listObjects().map((o) => o.name)).toEqual(['F', 'H']);
+    expect(a.getObject('form', 'f')).toEqual({ name: 'F', definition: def });
+    expect(() => a.getObject('report', 'F')).toThrow('bc:notFound');
+    const b = open({ sessionId: 'b' });
+    expect(b.listObjects('form')).toHaveLength(2); // reads are allowed
+    expect(() => b.saveObject('form', 'X', def, null)).toThrow(ReadOnlyError);
+    expect(() => b.renameObject('form', 'F', 'X')).toThrow(ReadOnlyError);
+    expect(() => b.deleteObject('form', 'F')).toThrow(ReadOnlyError);
+    expect(() => b.copyObject('form', 'F', 'X')).toThrow(ReadOnlyError);
+    expect(a.deleteObject('form', 'H')).toEqual({ ok: true });
+  });
+
+  it('Properties dialog: a description set on a table (bc_tables, other keys kept) or an object (modified date moves); read-only refused', async () => {
+    const a = create();
+    await a.saveTable({ originalName: null, design: { ...clients, extra: { futur: 1 } }, mapping: [], allowDataLoss: false });
+    expect(a.setDescription('table', 'clients', 'Nos clients')).toEqual({ ok: true });
+    expect(a.listTables()).toEqual([{ name: 'Clients', description: 'Nos clients' }]);
+    expect(a.tableDesign('Clients')).toMatchObject({ description: 'Nos clients', extra: { futur: 1 } });
+    expect(a.setDescription('table', 'Clients', '')).toEqual({ ok: true }); // empty: removed
+    expect(a.listTables()).toEqual([{ name: 'Clients' }]);
+    expect(a.setDescription('table', 'Absente', 'x')).toEqual({ ok: false, reason: 'notFound' });
+    expect(a.saveObject('form', 'F', { formatVersion: '1.0' }, null)).toEqual({ ok: true });
+    const before = a.listObjects('form')[0]!;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(a.setDescription('form', 'f', 'Saisie')).toEqual({ ok: true });
+    const after = a.listObjects('form')[0]!;
+    expect(after).toMatchObject({ name: 'F', description: 'Saisie', created: before.created });
+    expect(after.modified > before.modified).toBe(true);
+    expect(a.setDescription('report', 'F', 'x')).toEqual({ ok: false, reason: 'notFound' });
+    const b = open({ sessionId: 'b' });
+    expect(() => b.setDescription('form', 'F', 'y')).toThrow(ReadOnlyError);
+    expect(() => b.setDescription('table', 'Clients', 'y')).toThrow(ReadOnlyError);
+  });
+
+  it('a table source: describe, sorted pages with rowids and total; query and sql served by A3', async () => {
+    const s = create();
+    await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    for (const [Nom, Âge] of [['b', 30], ['a', 30], ['c', 20]] as const) await s.insert('Clients', { Nom, Âge });
+    const info = s.describeSource({ kind: 'table', name: 'clients' });
+    expect(info).toMatchObject({ updatable: true, keyTable: 'Clients', parameters: [] });
+    expect(info.fields.map((x) => x.name)).toEqual(clients.fields.map((x) => x.name));
+    expect(info.fields[1]).toMatchObject({ name: 'Nom', type: 'shortText', props: { size: 50 }, origin: { table: 'Clients', field: 'Nom' } });
+    const nom = info.fields.findIndex((x) => x.name === 'Nom');
+    const page = s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 2, sort: [{ field: 'âge', dir: 'desc' }, { field: 'Nom', dir: 'asc' }] });
+    expect(page.total).toBe(3);
+    expect(page.rows.map((r) => r[nom])).toEqual(['a', 'b']);
+    expect(page.rowids).toEqual([2, 1]);
+    expect(() => s.describeSource({ kind: 'query', name: 'Q' })).toThrow(/^bc:notFound$/);
+    expect(() => s.describeSource({ kind: 'table', name: 'Absente' })).toThrow(/^bc:notFound$/);
+    expect(() => s.pageSource({ kind: 'table', name: 'Absente' }, { offset: 0, limit: 1 })).toThrow(/^bc:notFound$/);
+    // contract 1.2: a missing field is bc:notFound in sources; rows.page keeps bc:invalidArgument
+    expect(() => s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 1, sort: [{ field: 'Inconnu', dir: 'asc' }] })).toThrow(/^bc:notFound$/);
+    expect(() => s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 0, sort: [{ field: 'Nom', dir: 'asc' }, { field: 'Inconnu', dir: 'asc' }] })).toThrow(/^bc:notFound$/);
+    expect(() => s.page('Clients', { offset: 0, limit: 1, sort: { field: 'Inconnu', dir: 'asc' } })).toThrow(/^bc:invalidArgument$/);
+    expect(s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 0 })).toEqual({ rows: [], rowids: [], total: 3 });
+    expect(s.pageSource({ kind: 'sql', sql: 'SELECT Nom FROM Clients ORDER BY Nom' }, { offset: 0, limit: 1 })).toEqual({ rows: [['a']], rowids: [2], total: 3 });
+  });
+
+  it('sorted table pages follow every write (the sorted-order snapshot is per write sequence)', async () => {
+    const s = create();
+    await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    for (const Nom of ['d', 'b', 'f']) await s.insert('Clients', { Nom });
+    const ref = { kind: 'table', name: 'Clients' } as const;
+    const nom = clients.fields.findIndex((x) => x.name === 'Nom');
+    const names = () => s.pageSource(ref, { offset: 0, limit: 10, sort: [{ field: 'Nom', dir: 'asc' }] }).rows.map((r) => r[nom]);
+    const pageNames = () => s.page('Clients', { offset: 0, limit: 10, sort: { field: 'Nom', dir: 'desc' } }).rows.map((r) => r.values[nom]);
+    expect(names()).toEqual(['b', 'd', 'f']);
+    expect(pageNames()).toEqual(['f', 'd', 'b']);
+    await s.insert('Clients', { Nom: 'c' });
+    expect(names()).toEqual(['b', 'c', 'd', 'f']);
+    expect(pageNames()).toEqual(['f', 'd', 'c', 'b']);
+    s.delete('Clients', [1]);
+    expect(names()).toEqual(['b', 'c', 'f']);
+    expect(pageNames()).toEqual(['f', 'c', 'b']);
+    expect(s.pageSource(ref, { offset: 1, limit: 1, sort: [{ field: 'Nom', dir: 'asc' }] })).toMatchObject({ rowids: [4], total: 3 });
+  });
+
+  it('a table source filtered as rows.page filters: total counts the kept rows; bad criteria bc:invalidArgument, unknown field bc:notFound', async () => {
+    const s = create();
+    await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    for (const [Nom, Âge] of [['b', 30], ['a', 40], ['c', 20], ['d', 50]] as const) await s.insert('Clients', { Nom, Âge });
+    const ref = { kind: 'table', name: 'Clients' } as const;
+    const nom = s.describeSource(ref).fields.findIndex((x) => x.name === 'Nom');
+    const filter = [{ field: 'Âge', criteria: '>= 30' }];
+    const page = s.pageSource(ref, { offset: 1, limit: 10, sort: [{ field: 'Nom', dir: 'desc' }], filter });
+    expect(page.total).toBe(3);
+    expect(page.rows.map((r) => r[nom])).toEqual(['b', 'a']);
+    expect(page.rowids).toEqual([1, 2]);
+    expect(s.pageSource(ref, { offset: 0, limit: 0, filter })).toEqual({ rows: [], rowids: [], total: 3 });
+    expect(s.pageSource(ref, { offset: 0, limit: 0, filter: [...filter, { field: 'nom', criteria: '"a"' }] }).total).toBe(1);
+    expect(s.count('Clients', filter)).toBe(3); // same compiler as rows.count
+    expect(() => s.pageSource(ref, { offset: 0, limit: 1, filter: [{ field: 'Âge', criteria: '> 1 +' }] })).toThrow(/^bc:invalidArgument$/);
+    expect(() => s.pageSource(ref, { offset: 0, limit: 0, filter: [{ field: 'Nom', criteria: '= [Inconnu]' }] })).toThrow(/^bc:invalidArgument$/);
+    expect(() => s.pageSource(ref, { offset: 0, limit: 1, filter: [{ field: 'Inconnu', criteria: '1' }] })).toThrow(/^bc:notFound$/);
+    expect(() => s.page('Clients', { offset: 0, limit: 1, filter: [{ field: 'Âge', criteria: '> 1 +' }] })).toThrow(/bc:invalidFilter/); // rows keep their code
+  });
+});
+
+describe('session (copy a table)', () => {
+  it('copies the structure and the data, AutoNumber values kept; a taken or invalid name is refused; read-only refused', async () => {
+    const a = create();
+    await a.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false });
+    for (const Nom of ['Dupont', 'Martin']) await a.insert('Clients', { Nom, Email: `${Nom}@x.fr` });
+    await a.delete('Clients', [1]);
+    expect(a.copyTable('clients', 'Copie de Clients')).toEqual({ ok: true });
+    expect(a.tableDesign('Copie de Clients').fields).toEqual(a.tableDesign('Clients').fields);
+    expect(a.pageSource({ kind: 'table', name: 'Copie de Clients' }, { offset: 0, limit: 10 })).toMatchObject({ total: 1, rowids: [2] });
+    expect((await a.insert('Copie de Clients', { Nom: 'Durand', Email: 'Martin@x.fr' })).ok).toBe(false); // unique index copied too
+    a.saveObject('query', 'Q', { formatVersion: '1.0', sql: 'SELECT * FROM Clients' }, null);
+    expect(a.copyTable('Clients', 'q')).toEqual({ ok: false, reason: 'nameExists' });
+    expect(a.copyTable('Clients', 'COPIE DE CLIENTS')).toEqual({ ok: false, reason: 'nameExists' });
+    expect(a.copyTable('Clients', 'a.b')).toEqual({ ok: false, reason: 'nameInvalid' });
+    expect(a.copyTable('Absente', 'X')).toEqual({ ok: false, reason: 'notFound' });
+    const b = open({ sessionId: 'b' });
+    expect(() => b.copyTable('Clients', 'Autre')).toThrow(ReadOnlyError);
+  });
+});
+
+describe('session (description of a table another tool created)', () => {
+  it('no bc_tables row: Properties adds one with the description only; the design stays external and reconcile sees nothing new', () => {
+    const a = create();
+    rawDb(a).exec("CREATE TABLE Ext (n INTEGER, t TEXT); CREATE TABLE Témoin (n INTEGER, t TEXT); INSERT INTO Ext VALUES (1, 'x')");
+    const before = a.tableDesign('Ext');
+    expect(rawDb(a).prepare("SELECT count(*) AS n FROM bc_tables WHERE name = 'Ext'").get()).toEqual({ n: 0 });
+    expect(a.setDescription('table', 'ext', 'Externe')).toEqual({ ok: true });
+    expect(rawDb(a).prepare("SELECT name, props FROM bc_tables WHERE name = 'Ext'").get()).toEqual({ name: 'Ext', props: '{"description":"Externe"}' });
+    expect(a.tableDesign('Ext')).toEqual({ ...before, description: 'Externe' }); // fields still inferred and external, no extra
+    expect(a.listTables().find((x) => x.name === 'Ext')).toEqual({ name: 'Ext', description: 'Externe' });
+    // the next reconcile (at the next opening) reports it as the new table it is, like its twin without a description
+    expect(reconcile(rawDb(a))).toMatchObject({ addedTables: ['Ext', 'Témoin'], addedFields: [] });
+    expect(a.tableDesign('Ext')).toEqual({ ...before, description: 'Externe' }); // the description kept, the fields as inferred
+    expect(reconcile(rawDb(a))).toMatchObject({ addedTables: [], addedFields: [] }); // then nothing new
+    expect(a.pageSource({ kind: 'table', name: 'Ext' }, { offset: 0, limit: 5 })).toMatchObject({ total: 1, rows: [[1, 'x']] });
+    expect(a.setDescription('table', 'Ext', null)).toEqual({ ok: true });
+    expect(a.tableDesign('Ext')).toEqual(before);
+  });
+});
+
+describe('session (copy a table: typed results)', () => {
+  it('a copy is a managed table: no external flags; data kept', () => {
+    const a = create();
+    rawDb(a).exec("CREATE TABLE Ext (n INTEGER, t TEXT); INSERT INTO Ext VALUES (1, 'x'), (2, 'y')");
+    expect(a.tableDesign('Ext').fields.every((x) => x.props.external === true)).toBe(true);
+    expect(a.copyTable('Ext', 'Ext2')).toEqual({ ok: true });
+    expect(a.tableDesign('Ext2').fields.some((x) => x.props.external)).toBe(false);
+    expect(a.pageSource({ kind: 'table', name: 'Ext2' }, { offset: 0, limit: 10 })).toMatchObject({ total: 2, rows: [[1, 'x'], [2, 'y']] });
+  });
+
+  it('a table BaseCraft cannot address by rowid, or data the copy refuses: bc:unsupportedTable, nothing created', () => {
+    const a = create();
+    rawDb(a).exec("CREATE TABLE W (k TEXT PRIMARY KEY) WITHOUT ROWID; CREATE TABLE Mix (n INTEGER); INSERT INTO Mix VALUES (1), ('abc')");
+    expect(() => a.copyTable('W', 'W2')).toThrow(/^bc:unsupportedTable$/);
+    expect(() => a.copyTable('Mix', 'Mix2')).toThrow(/^bc:unsupportedTable$/);
+    expect(a.listTables().map((x) => x.name)).toEqual(['Mix', 'W']);
+  });
+
+  it('the new name is checked on its own first', () => {
+    const a = create();
+    rawDb(a).exec("CREATE TABLE Ext (n INTEGER)");
+    expect(a.copyTable('Ext', 'bc_x')).toEqual({ ok: false, reason: 'nameInvalid' });
+    expect(a.copyTable('Ext', ' x')).toEqual({ ok: false, reason: 'nameInvalid' });
+  });
+});
+
+describe('session (C8: long names created by an external tool stay readable)', () => {
+  it('a 100-character table is read through sources.page; BaseCraft never creates one over 64', async () => {
+    const a = create();
+    const long = 'T'.repeat(100);
+    rawDb(a).exec(`CREATE TABLE "${long}" (n INTEGER); INSERT INTO "${long}" VALUES (7)`);
+    expect(a.pageSource({ kind: 'table', name: long }, { offset: 0, limit: 10 })).toMatchObject({ total: 1, rows: [[7]] });
+    expect(await a.saveTable({ originalName: null, design: { ...clients, name: 'C'.repeat(65) }, mapping: [], allowDataLoss: false }))
+      .toMatchObject({ ok: false, reason: 'design', errors: [{ code: 'nameInvalid' }] });
+  });
+});
+
+describe('session (copy a table: only constraint failures are unsupportedTable)', () => {
+  it('any other SQLite error passes through unchanged', () => {
+    const a = create();
+    rawDb(a).exec('CREATE TABLE Src (n INTEGER); INSERT INTO Src VALUES (1)');
+    const db = rawDb(a);
+    const prepare = db.prepare.bind(db);
+    db.prepare = ((sql: string) => {
+      if (sql.startsWith('INSERT INTO "Dst"')) throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 });
+      return prepare(sql);
+    }) as typeof db.prepare;
+    try {
+      expect(() => a.copyTable('Src', 'Dst')).toThrow(/^disk I\/O error$/);
+    } finally {
+      db.prepare = prepare;
+    }
+    expect(a.listTables().map((x) => x.name)).toEqual(['Src']); // rolled back
   });
 });

@@ -12,7 +12,8 @@
       "system": "System theme",
       "light": "Light",
       "dark": "Dark"
-    }
+    },
+    "showList": "Show list"
   },
   "ribbon": {
     "label": "Ribbon",
@@ -21,15 +22,75 @@
       "home": "Home",
       "create": "Create",
       "design": "Table Design",
-      "externalData": "External Data"
+      "externalData": "External Data",
+      "databaseTools": "Database Tools",
+      "help": "Help",
+      "tableFields": "Table Fields",
+      "table": "Table",
+      "relationshipDesign": "Relationship Design",
+      "queryDesign": "Query Design",
+      "formDesign": "Form Design",
+      "reportDesign": "Report Design",
+      "arrange": "Arrange",
+      "format": "Format",
+      "pageSetup": "Page Setup",
+      "printPreview": "Print Preview",
+      "macroDesign": "Macro Design"
     },
     "group": {
       "view": "Views",
       "records": "Records",
-      "sort": "Sort",
+      "sort": "Sort & Filter",
       "tables": "Tables",
       "tools": "Tools",
-      "import": "Import"
+      "import": "Import & Link",
+      "clipboard": "Clipboard",
+      "find": "Find",
+      "textFormatting": "Text Formatting",
+      "zoom": "Zoom",
+      "queries": "Queries",
+      "forms": "Forms",
+      "reports": "Reports",
+      "macrosCode": "Macros & Code",
+      "export": "Export",
+      "macro": "Macro",
+      "relationships": "Relationships",
+      "analyze": "Analyze",
+      "moveData": "Move Data",
+      "help": "Help",
+      "showHide": "Show/Hide",
+      "tableEvents": "Field, Record & Table Events",
+      "addDelete": "Add & Delete",
+      "properties": "Properties",
+      "formatting": "Formatting",
+      "fieldValidation": "Field Validation",
+      "beforeEvents": "Before Events",
+      "afterEvents": "After Events",
+      "namedMacros": "Named Macros",
+      "results": "Results",
+      "queryType": "Query Type",
+      "querySetup": "Query Setup",
+      "themes": "Themes",
+      "controls": "Controls",
+      "headerFooter": "Header / Footer",
+      "groupingTotals": "Grouping & Totals",
+      "layoutTable": "Table",
+      "rowsColumns": "Rows & Columns",
+      "mergeSplit": "Merge / Split",
+      "move": "Move",
+      "position": "Position",
+      "sizingOrdering": "Sizing & Ordering",
+      "selection": "Selection",
+      "font": "Font",
+      "number": "Number",
+      "background": "Background",
+      "controlFormatting": "Control Formatting",
+      "pageSize": "Page Size",
+      "pageLayout": "Page Layout",
+      "print": "Print",
+      "data": "Data",
+      "closePreview": "Close Preview",
+      "expandCollapse": "Expand/Collapse"
     },
     "cmd": {
       "viewDatasheet": "Datasheet View",
@@ -44,7 +105,268 @@
       "primaryKey": "Primary Key",
       "insertRows": "Insert Rows",
       "deleteRows": "Delete Rows",
-      "importText": "Text File"
+      "importText": "Text File",
+      "refresh": "Refresh",
+      "paste": "Paste",
+      "cut": "Cut",
+      "copy": "Copy",
+      "formatPainter": "Format Painter",
+      "showClipboard": "Clipboard",
+      "filter": "Filter",
+      "filterSelection": "Selection",
+      "filterAdvanced": "Advanced",
+      "filterToggle": "Toggle Filter",
+      "recordsTotals": "Totals",
+      "spelling": "Spelling",
+      "moreRecords": "More",
+      "find": "Find",
+      "replace": "Replace",
+      "goTo": "Go To",
+      "selectMenu": "Select",
+      "textFont": "Font",
+      "textFontSize": "Font Size",
+      "bullets": "Bullets",
+      "numbering": "Numbering",
+      "indentIncrease": "Increase Indent",
+      "indentDecrease": "Decrease Indent",
+      "textDirection": "Left-to-Right",
+      "textBold": "Bold",
+      "textItalic": "Italic",
+      "textUnderline": "Underline",
+      "textFontColor": "Font Color",
+      "textHighlight": "Text Highlight Color",
+      "textBackColor": "Background Color",
+      "textAlignLeft": "Align Left",
+      "textAlignCenter": "Center",
+      "textAlignRight": "Align Right",
+      "datasheetGridlines": "Gridlines",
+      "alternateRowColor": "Alternate Row Color",
+      "datasheetFormatting": "Datasheet Formatting",
+      "zoom": "Zoom",
+      "createTable": "Table",
+      "queryWizard": "Query Wizard",
+      "createQueryDesign": "Query Design",
+      "createSqlQuery": "SQL Query",
+      "createForm": "Form",
+      "createFormDesign": "Form Design",
+      "createBlankForm": "Blank Form",
+      "formWizard": "Form Wizard",
+      "navigationForm": "Navigation",
+      "moreForms": "More Forms",
+      "createReport": "Report",
+      "createReportDesign": "Report Design",
+      "createBlankReport": "Blank Report",
+      "reportWizard": "Report Wizard",
+      "labels": "Labels",
+      "createMacro": "Macro",
+      "createModule": "Module",
+      "pythonEditor": "Python Editor",
+      "importExcel": "Excel",
+      "importXml": "XML File",
+      "importAccess": "Access",
+      "importSqlServer": "SQL Server",
+      "importPostgreSql": "PostgreSQL",
+      "importOdbc": "ODBC Database",
+      "savedImports": "Saved Imports",
+      "linkedTableManager": "Linked Table Manager",
+      "savedExports": "Saved Exports",
+      "exportExcel": "Excel",
+      "exportText": "Text File",
+      "exportPdf": "PDF",
+      "exportAccess": "Access",
+      "exportXml": "XML File",
+      "exportMore": "More",
+      "compactRepair": "Compact and Repair Database",
+      "runMacro": "Run Macro",
+      "relationships": "Relationships",
+      "objectDependencies": "Object Dependencies",
+      "databaseDocumenter": "Database Documenter",
+      "analyzePerformance": "Analyze Performance",
+      "analyzeTable": "Analyze Table",
+      "moveToServer": "To a Server",
+      "splitDatabase": "Split Database",
+      "help": "Help",
+      "contactSupport": "Contact Support",
+      "feedback": "Feedback",
+      "showTraining": "Show Training",
+      "whatsNew": "What's New",
+      "builder": "Builder",
+      "testValidationRules": "Test Validation Rules",
+      "modifyLookups": "Modify Lookups",
+      "propertySheet": "Property Sheet",
+      "indexes": "Indexes",
+      "createDataMacros": "Create Data Macros",
+      "renameDeleteMacro": "Rename/Delete Macro",
+      "addShortText": "Short Text",
+      "addNumber": "Number",
+      "addCurrency": "Currency",
+      "addDateTime": "Date & Time",
+      "addYesNo": "Yes/No",
+      "moreFields": "More Fields",
+      "deleteField": "Delete",
+      "nameCaption": "Name & Caption",
+      "defaultValue": "Default Value",
+      "fieldSize": "Field Size",
+      "modifyExpression": "Modify Expression",
+      "dataType": "Data Type",
+      "format": "Format",
+      "currencyFormat": "Apply Currency Format",
+      "percentFormat": "Apply Percent Format",
+      "commaFormat": "Apply Comma Format",
+      "increaseDecimals": "Increase Decimals",
+      "decreaseDecimals": "Decrease Decimals",
+      "required": "Required",
+      "unique": "Unique",
+      "indexed": "Indexed",
+      "validation": "Validation",
+      "tableProperties": "Table Properties",
+      "beforeChange": "Before Change",
+      "beforeDelete": "Before Delete",
+      "afterInsert": "After Insert",
+      "afterUpdate": "After Update",
+      "afterDelete": "After Delete",
+      "namedMacro": "Named Macro",
+      "editRelationships": "Edit Relationships",
+      "clearLayout": "Clear Layout",
+      "relationshipReport": "Relationship Report",
+      "addTables": "Add Tables",
+      "hideTable": "Hide Table",
+      "directRelationships": "Direct Relationships",
+      "allRelationships": "All Relationships",
+      "closeRelationships": "Close",
+      "viewSql": "SQL View",
+      "runQuery": "Run",
+      "selectQuery": "Select",
+      "makeTableQuery": "Make Table",
+      "appendQuery": "Append",
+      "updateQuery": "Update",
+      "crosstabQuery": "Crosstab",
+      "deleteQuery": "Delete",
+      "unionQuery": "Union",
+      "passThroughQuery": "Pass-Through",
+      "insertColumns": "Insert Columns",
+      "deleteColumns": "Delete Columns",
+      "returnValues": "Return",
+      "queryTotals": "Totals",
+      "parameters": "Parameters",
+      "tableNames": "Table Names",
+      "themes": "Themes",
+      "themeColors": "Colors",
+      "themeFonts": "Fonts",
+      "select": "Select",
+      "textBox": "Text Box",
+      "label": "Label",
+      "button": "Button",
+      "tabControl": "Tab Control",
+      "hyperlink": "Hyperlink",
+      "navigationControl": "Navigation Control",
+      "optionGroup": "Option Group",
+      "insertPageBreak": "Insert Page Break",
+      "comboBox": "Combo Box",
+      "line": "Line",
+      "toggleButton": "Toggle Button",
+      "listBox": "List Box",
+      "rectangle": "Rectangle",
+      "checkBox": "Check Box",
+      "unboundObjectFrame": "Unbound Object Frame",
+      "attachment": "Attachment",
+      "optionButton": "Option Button",
+      "subform": "Subform/Subreport",
+      "boundObjectFrame": "Bound Object Frame",
+      "image": "Image",
+      "webBrowser": "Web Browser Control",
+      "chart": "Chart",
+      "insertImage": "Insert Image",
+      "insertModernChart": "Insert Modern Chart",
+      "logo": "Logo",
+      "title": "Title",
+      "dateTime": "Date and Time",
+      "addExistingFields": "Add Existing Fields",
+      "tabOrder": "Tab Order",
+      "chartSettings": "Chart Settings",
+      "subformInNewWindow": "Subform in New Window",
+      "viewCode": "View Code",
+      "groupSort": "Group & Sort",
+      "reportTotals": "Totals",
+      "hideDetails": "Hide Details",
+      "pageNumbers": "Page Numbers",
+      "subreportInNewWindow": "Subreport in New Window",
+      "layoutGridlines": "Gridlines",
+      "stacked": "Stacked",
+      "tabular": "Tabular",
+      "removeLayout": "Remove Layout",
+      "insertAbove": "Insert Above",
+      "insertBelow": "Insert Below",
+      "insertLeft": "Insert Left",
+      "insertRight": "Insert Right",
+      "selectLayout": "Select Layout",
+      "selectColumn": "Select Column",
+      "selectRow": "Select Row",
+      "merge": "Merge",
+      "splitVertically": "Split Vertically",
+      "splitHorizontally": "Split Horizontally",
+      "moveUp": "Move Up",
+      "moveDown": "Move Down",
+      "controlMargins": "Control Margins",
+      "controlPadding": "Control Padding",
+      "anchoring": "Anchoring",
+      "sizeSpace": "Size/Space",
+      "align": "Align",
+      "bringToFront": "Bring to Front",
+      "sendToBack": "Send to Back",
+      "objectList": "Object",
+      "selectAll": "Select All",
+      "font": "Font",
+      "fontSize": "Font Size",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "fontColor": "Font Color",
+      "backColor": "Background Color",
+      "alignLeft": "Align Left",
+      "alignCenter": "Center",
+      "alignRight": "Align Right",
+      "backgroundImage": "Background Image",
+      "conditionalFormatting": "Conditional Formatting",
+      "shapeFill": "Shape Fill",
+      "shapeOutline": "Shape Outline",
+      "pageSize": "Size",
+      "margins": "Margins",
+      "showMargins": "Show Margins",
+      "printDataOnly": "Print Data Only",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "columns": "Columns",
+      "pageSetupDialog": "Page Setup",
+      "print": "Print",
+      "previewZoom": "Zoom",
+      "onePage": "One Page",
+      "twoPages": "Two Pages",
+      "morePages": "More Pages",
+      "closePreview": "Close Print Preview",
+      "macroRun": "Run",
+      "singleStep": "Single Step",
+      "expandActions": "Expand Actions",
+      "collapseActions": "Collapse Actions",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All",
+      "actionCatalog": "Action Catalog",
+      "showAllActions": "Show All Actions",
+      "viewForm": "Form View",
+      "viewPrintPreview": "Print Preview"
+    },
+    "scrollLeft": "Scroll the ribbon left",
+    "scrollRight": "Scroll the ribbon right",
+    "planned": {
+      "A3": "Planned for batch A3 — Queries",
+      "A4": "Planned for batch A4 — Forms",
+      "A5": "Planned for batch A5 — Reports",
+      "A6": "Planned for batch A6 — Exchange and delivery",
+      "B": "Planned for stage B — Macros and Runtime",
+      "C": "Planned for stage C — Working together",
+      "D": "Planned for stage D — Python",
+      "E": "Planned for stage E — Access import",
+      "later": "Planned for later"
     }
   },
   "backstage": {
@@ -52,11 +374,14 @@
     "menu": "File",
     "new": "New",
     "open": "Open",
+    "saveAs": "Save As",
+    "compact": "Compact and Repair",
     "close": "Close",
     "options": "Options",
     "recent": "Recent",
     "noRecent": "No recent files. Create a database or open one.",
-    "optionsTitle": "Options"
+    "optionsTitle": "Options",
+    "about": "About"
   },
   "nav": {
     "title": "Navigation pane",
@@ -66,28 +391,77 @@
     "show": "Show navigation pane (F11)",
     "tables": "Tables",
     "noMatch": "No matching objects.",
-    "openHint": "Double-click a table in the navigation pane to open it.",
+    "openHint": "Double-click an object in the navigation pane to open it.",
     "menu": {
-      "open": "Open",
-      "design": "Design View",
-      "rename": "Rename",
-      "delete": "Delete"
+      "open": "&Open",
+      "design": "&Design View",
+      "rename": "Rena&me",
+      "delete": "De&lete",
+      "copy": "&Copy…",
+      "import": "&Import",
+      "importText": "&Text File",
+      "exportText": "&Text File",
+      "exportExcel": "&Excel",
+      "importExcel": "&Excel",
+      "export": "E&xport",
+      "hide": "&Hide in this Group",
+      "cut": "Cu&t",
+      "paste": "&Paste",
+      "tableProperties": "Table Prop&erties",
+      "objectProperties": "Object Prop&erties",
+      "properties": "P&roperties",
+      "layout": "La&yout View",
+      "sqlView": "S&QL View",
+      "exportPdf": "&PDF",
+      "print": "Pr&int…",
+      "printPreview": "Print Pre&view"
     },
     "renameTitle": "Rename table",
     "renameLabel": "New name",
     "deleteTitle": "Delete table",
-    "deleteMessage": "Delete the table “{{name}}” and all its data? This cannot be undone."
+    "deleteMessage": "Delete the table “{{name}}” and all its data? This cannot be undone.",
+    "queries": "Queries",
+    "forms": "Forms",
+    "reports": "Reports",
+    "renameObjectTitle": "Rename object",
+    "deleteObjectTitle": "Delete object",
+    "deleteObjectMessage": "Delete “{{name}}”? This cannot be undone.",
+    "paste": {
+      "title": "Paste",
+      "titleMove": "Paste (move)",
+      "nameLabel": "Name",
+      "targetLabel": "Name of the table to append to",
+      "copyOf": "Copy Of {{name}}",
+      "exists": "An object with this name already exists.",
+      "appendTarget": "Enter the name of another existing table.",
+      "appended": "{{appended}} records appended, {{refused}} refused.",
+      "mode": { "structure": "Structure only", "data": "Structure and data", "append": "Append data to existing table" }
+    },
+    "copyTitle": "Copy object",
+    "copyLabel": "Name of the copy",
+    "copyDefault": "Copy of {{name}}"
   },
   "tabs": {
-    "close": "Close “{{name}}”",
-    "unsaved": "(unsaved changes)"
+    "close": "Close “{{name}}” ({{kind}})",
+    "unsaved": "(unsaved changes)",
+    "kind": {
+      "table": "Table",
+      "query": "Query",
+      "form": "Form",
+      "report": "Report",
+      "relations": "Relationships"
+    },
+    "closeWindow": "Close “{{name}}”"
   },
   "status": {
     "ready": "Ready",
     "views": "Views",
     "mode": {
       "datasheet": "Datasheet View",
-      "design": "Design View"
+      "design": "Design View",
+      "run": "Run View",
+      "form": "Form View",
+      "sql": "SQL View"
     }
   },
   "banner": {
@@ -106,10 +480,11 @@
     "dismiss": "Dismiss this message",
     "relationsRemoved": "Relationships deleted because one of their tables or fields no longer exists: {{names}}.",
     "relationsDowngraded": "Relationships whose foreign key was removed or changed outside BaseCraft, kept without referential integrity: {{names}}.",
-    "relationsUpdated": "Relationships updated from their foreign key, changed outside BaseCraft (table, field or cascade rule): {{names}}."
+    "relationsUpdated": "Relationships updated after a change made outside BaseCraft (table, field or cascade rule): {{names}}."
   },
   "dialog": {
     "newBaseName": "Database1",
+    "copyName": "{{name}} copy",
     "errorTitle": "BaseCraft",
     "button": {
       "ok": "OK",
@@ -123,7 +498,7 @@
       "needsMigration": "This database must be upgraded, which is impossible while it is read-only.",
       "cannotOpen": "This file cannot be opened.",
       "exists": "A file with this name already exists.",
-      "invalidArgument": "This file cannot be opened. Choose a .basecraft file.",
+      "invalidArgument": "The request is not valid.",
       "readOnly": "The database is open read-only.",
       "needsRecovery": "This database must be recovered before it can be used.",
       "unsupportedTable": "This table is not supported by BaseCraft.",
@@ -131,17 +506,61 @@
       "unknown": "An unexpected error occurred: {{detail}}",
       "fileTooLarge": "The file is larger than 2 GB: it cannot be imported.",
       "importInterrupted": "The import was interrupted (the database was closed or became read-only). Nothing was imported.",
-      "fieldTooLong": "The file has a field or line longer than one million characters: it cannot be imported."
+      "fieldTooLong": "The file has a field or line longer than one million characters: it cannot be imported.",
+      "notImplemented": "This feature is not available in this version yet.",
+      "notFound": "This object no longer exists.",
+      "corruptObject": "This object's definition cannot be read.",
+      "invalidQuery": "This query is not valid. {{reason}}",
+      "queryBind": "This query cannot run: {{detail}}",
+      "notSelectQuery": "This is not a select query: it cannot be used as a record source.",
+      "missingParameter": "The value of the parameter \"{{detail}}\" is missing.",
+      "invalidParameter": "The value entered for the parameter \"{{detail}}\" is not valid.",
+      "cancelled": "The operation was cancelled.",
+      "hostCrashed": "The database engine stopped unexpectedly. Try the operation again.",
+      "sameFile": "The copy cannot replace the open database. Choose another name or folder.",
+      "copyCorrupt": "The copy of the database failed the integrity check: it was deleted. The original file was not changed.",
+      "copyFailed": "Copying the database failed; the original file was not changed. ({{detail}})",
+      "targetInUse": "This file is open by another user or another BaseCraft window: it cannot be replaced. Choose another name.",
+      "reopenFailed": "The database was compacted but could not be reopened; it was closed. Open it again (a backup was made before compacting). ({{detail}})",
+      "invalidQuery_subqueryRows": "A subquery returns more than one record where a single value is expected.",
+      "invalidQuery_tooComplex": "This query is too complex (too many tables, columns or nesting levels).",
+      "invalidQuery_storedQuery": "The query \"{{detail}}\" cannot be read: its SQL is not valid.",
+      "queryBind_unknownSource": "The table or query \"{{detail}}\" does not exist: it may have been renamed or deleted.",
+      "queryBind_ambiguousField": "The name \"{{detail}}\" can refer to more than one field or source: name the table, for example [Table].[Field].",
+      "queryBind_circular": "These queries call each other in a loop: {{detail}}.",
+      "queryBind_tooDeep": "Too many nested queries (16 at most), from \"{{detail}}\".",
+      "queryBind_notGrouped": "The expression {{detail}} is neither part of an aggregate function nor of the grouping (GROUP BY).",
+      "queryBind_aggregateInWhere": "An aggregate function is not allowed in WHERE, ON, GROUP BY or an action query: {{detail}}.",
+      "queryBind_nestedAggregate": "An aggregate function cannot contain another one: {{detail}}.",
+      "queryBind_unionArity": "The queries of a union must have the same number of columns.",
+      "queryBind_updateTarget": "The target \"{{detail}}\" must be a field or a table, from a single table of the query.",
+      "queryBind_unknownTarget": "The destination \"{{detail}}\" does not exist or is not a valid name.",
+      "queryBind_duplicateOutput": "The column \"{{detail}}\" appears twice in the result: rename it with AS.",
+      "queryBind_insertArity": "The number of values to append does not match the number of destination fields.",
+      "queryBind_subqueryArity": "This subquery must return a single column: {{detail}}.",
+      "fontMissing": "An embedded font could not be loaded: the report was neither printed nor exported.",
+      "printFailed": "Printing failed.",
+      "writeFailed": "The file could not be saved to this location.",
+      "invalidFilter": "This filter criteria cannot be applied: it is invalid or names an unknown field.",
+      "tooManyFilters": "A filter applies to at most 20 fields.",
+      "unsupportedValue": "Cannot filter on this value: it is binary data, stored by another tool.",
+      "notFound_unknownSource": "The table or query '{{detail}}' does not exist: it may have been renamed or deleted.",
+      "invalidQuery_noField": "The query must have at least one destination field.",
+      "invalidQuery_unlinkedTables": "The tables of an Update or Delete query must all be joined.",
+      "invalidQuery_updateTarget": "“{{detail}}” cannot be updated: the Update To row applies to a field of a table.",
+      "invalidQuery_noTarget": "Specify the name of the query's destination table.",
+      "invalidQuery_deleteFrom": "Specify the table containing the records you want to delete: its “*” field with “From” in the Delete row."
     },
     "op": {
       "nameExists": "An object with this name already exists.",
       "nameInvalid": "This name is not valid.",
       "readOnly": "The database is open read-only.",
+      "notFound": "This object no longer exists.",
       "hasRelations": "This table is part of relationships: delete its relationships first.",
-      "external": "The table “{{name}}” was changed outside BaseCraft; its design cannot be changed here.",
-      "referenced": "The table “{{name}}” has a foreign key to this table, defined outside BaseCraft: it cannot be deleted here.",
-      "danglingKey": "The table “{{name}}” has a foreign key to a table of this name that was deleted outside BaseCraft: choose another name.",
-      "viewBroken": "The view or trigger “{{name}}”, defined outside BaseCraft, is no longer valid: SQLite refuses to rename the table until it is fixed or deleted."
+      "external": "The table “{{table}}” was changed outside BaseCraft; its design cannot be changed here.",
+      "referenced": "The table “{{name}}” cannot be deleted here: the table “{{table}}” has a foreign key to it, defined outside BaseCraft.",
+      "danglingKey": "The table “{{table}}” has a foreign key to a table named “{{newName}}” that was deleted outside BaseCraft: choose another name.",
+      "viewBroken": "The view or trigger “{{view}}”, defined outside BaseCraft, is no longer valid: SQLite refuses to rename the table until it is fixed or deleted."
     }
   },
   "designer": {
@@ -185,10 +604,81 @@
     "validationExisting": "{{count}} rows do not satisfy the rule. Save anyway? The rule will apply to future entries.",
     "invalidExpressions": "Some properties are invalid; fix them before saving:\n{{detail}}",
     "propError": "{{prop}}: {{message}}",
+    "splitter": "Resize the grid and the field properties",
+    "lookup": "Lookup",
     "relationField": "The field “{{field}}” is part of the relationship “{{relation}}”: it cannot be renamed, deleted, or change its type, size or index while the relationship exists. Delete the relationship first.",
     "foreignKeyField": "The field “{{field}}” is used by a foreign key of the table “{{table}}”, defined outside BaseCraft: it cannot be renamed, deleted, or change its type, size or index.",
     "viewBroken": "The view or trigger “{{name}}”, defined outside BaseCraft, would no longer be valid after this change (or already is not): the design is not changed.",
-    "danglingKey": "The table “{{name}}” has a foreign key to a table of this name that was deleted outside BaseCraft: choose another name."
+    "danglingKey": "The table “{{table}}” has a foreign key to a table named “{{newName}}” that was deleted outside BaseCraft: choose another name.",
+    "testRulesPassed": "All data passed the validation rules.",
+    "testRulesFailed": "Some data does not satisfy the validation rules:\n{{list}}",
+    "testRulesField_one": "“{{field}}”: {{count}} record",
+    "testRulesField_other": "“{{field}}”: {{count}} records",
+    "testRulesTable_one": "Table validation rule: {{count}} record",
+    "testRulesTable_other": "Table validation rule: {{count}} records",
+    "tableErrors": "Table properties: {{message}}",
+    "tableProperties": "Table Properties",
+    "tableDescription": "Description",
+    "section": {
+      "formHeader": "Form Header",
+      "detail": "Detail",
+      "formFooter": "Form Footer",
+      "reportHeader": "Report Header",
+      "pageHeader": "Page Header",
+      "groupHeader": "Group Header",
+      "groupFooter": "Group Footer",
+      "pageFooter": "Page Footer",
+      "reportFooter": "Report Footer"
+    },
+    "canvas": "Design surface",
+    "toolbox": "Toolbox",
+    "arrange": {
+      "alignLeft": "Left",
+      "alignRight": "Right",
+      "alignTop": "Top",
+      "alignBottom": "Bottom",
+      "alignToGrid": "To Grid",
+      "sizeToWidest": "To Widest",
+      "sizeToNarrowest": "To Narrowest",
+      "sizeToTallest": "To Tallest",
+      "sizeToShortest": "To Shortest",
+      "sizeToGrid": "To Grid",
+      "spaceHorizontalEqual": "Equal Horizontal",
+      "spaceHorizontalIncrease": "Increase Horizontal",
+      "spaceHorizontalDecrease": "Decrease Horizontal",
+      "spaceVerticalEqual": "Equal Vertical",
+      "spaceVerticalIncrease": "Increase Vertical",
+      "spaceVerticalDecrease": "Decrease Vertical",
+      "bringToFront": "Bring to Front",
+      "sendToBack": "Send to Back",
+      "toggleSnap": "Snap to Grid",
+      "sizeSpaceMenu": "Size and spacing",
+      "alignMenu": "Align"
+    },
+    "fieldList": "Field List",
+    "ctlPrefix": {
+      "label": "Label",
+      "textBox": "Text",
+      "checkBox": "Check",
+      "optionGroup": "Frame",
+      "optionButton": "Option",
+      "comboBox": "Combo",
+      "listBox": "List",
+      "commandButton": "Command",
+      "subform": "Child",
+      "image": "Image",
+      "line": "Line",
+      "rectangle": "Box",
+      "pageBreak": "PageBreak",
+      "tabControl": "TabCtl"
+    },
+    "format": {
+      "objectList": "Object",
+      "font": "Font",
+      "fontSize": "Font size",
+      "colors": "Colors",
+      "format": "Format"
+    }
   },
   "fieldType": {
     "autoNumber": "AutoNumber",
@@ -228,7 +718,44 @@
     "defaultValue": "Default Value",
     "validationRule": "Validation Rule",
     "validationText": "Validation Text",
-    "inputMask": "Input Mask"
+    "inputMask": "Input Mask",
+    "displayControl": "Display Control",
+    "displayControls": {
+      "textBox": "Text Box",
+      "checkBox": "Check Box",
+      "listBox": "List Box",
+      "comboBox": "Combo Box"
+    },
+    "rowSourceType": "Row Source Type",
+    "rowSourceTypes": {
+      "table": "Table/Query",
+      "values": "Value List",
+      "fieldList": "Field List"
+    },
+    "rowSource": "Row Source",
+    "queryBuilder": "Query Builder",
+    "boundColumn": "Bound Column",
+    "columnCount": "Column Count",
+    "columnHeads": "Column Heads",
+    "columnWidths": "Column Widths",
+    "listRows": "List Rows",
+    "listWidth": "List Width",
+    "limitToList": "Limit To List",
+    "allowMultipleValues": "Allow Multiple Values",
+    "allowValueListEdits": "Allow Value List Edits",
+    "listItemsEditForm": "List Items Edit Form",
+    "showOnlyRowSourceValues": "Show Only Row Source Values",
+    "tableNotFound": "Table not found",
+    "plannedLater": "Planned for later",
+    "plannedForms": "Planned for batch A4 — Forms",
+    "editList": {
+      "action": "Edit List Items…",
+      "title": "Edit List Items",
+      "items": "Type each item on a separate line",
+      "default": "Default Value",
+      "defaultLost": "“{{value}}” is no longer in the list: the default value will be removed.",
+      "shortcut": "Edit List Items (F2)"
+    }
   },
   "format": {
     "generalNumber": "General Number",
@@ -261,7 +788,10 @@
     "decimalPrecision": "The precision of a Decimal is a whole number from 1 to 28, and its scale a whole number from 0 to the precision.",
     "reservedFieldName": "The field names rowid, oid and _rowid_ are reserved.",
     "invalidExpression": "the {{prop}} expression is invalid or refers to another field.",
-    "invalidMask": "the input mask is invalid."
+    "invalidMask": "the input mask is invalid.",
+    "nameTooLong": "A name has at most 64 characters.",
+    "validationTextSize": "the validation text has at most 255 characters.",
+    "invalidIndex": "An index of the table is invalid: open the Indexes dialog to fix it."
   },
   "fieldError": {
     "invalidNumber": "This is not a valid number.",
@@ -275,16 +805,24 @@
     "validation": "The value does not satisfy this field's validation rule: {{rule}}",
     "expressionError": "The default value or validation rule of this field could not be computed.",
     "noParent": "No matching record exists in the related table “{{table}}”.",
-    "notInList": "This value is not in the list.",
+    "notInList": "The text you entered isn't an item in the list. Select an item from the list, or enter text that matches one of the listed items.",
     "mask": "The entry does not match this field's input mask: fill each required position with an accepted character.",
-    "related": "This record has related records in the table “{{table}}”: its key cannot be changed."
+    "related": "This record has related records in the table “{{table}}”: its key cannot be changed.",
+    "related_unnamed": "This record has related records: its key cannot be changed.",
+    "tableRuleError": "The validation rule of the table “{{table}}” could not be computed.",
+    "tableRule": "One or more values are prohibited by the validation rule “{{rule}}” set for “{{table}}”.",
+    "tableRule_short": "One or more values are prohibited by the validation rule set for “{{table}}”."
   },
   "datasheet": {
+    "goTo": { "first": "First", "previous": "Previous", "next": "Next", "last": "Last", "new": "New" },
+    "select": { "record": "Select", "all": "Select All" },
     "grid": "Datasheet of “{{name}}”",
     "newRecord": "(New)",
     "pending": "Record being edited",
     "fieldError": "“{{field}}”: {{message}}",
+    "fieldError_record": "{{message}}",
     "unsupported": "This table is not supported by BaseCraft: its data cannot be shown.",
+    "findCapped": "Find and copy cover the first 100,000 records.",
     "pasteOneRow": "Pasting is limited to one row at a time.",
     "discardTitle": "Cannot save the record",
     "discard": "The record being edited in “{{name}}” cannot be saved. Discard the changes?",
@@ -303,11 +841,34 @@
       "current": "Current record number",
       "of": "of",
       "position": "Record {{current}} of {{count}}",
-      "positionNew": "New record"
+      "positionNew": "New record",
+      "filter": {
+        "none": "No Filter",
+        "on": "Filtered",
+        "off": "Unfiltered",
+        "toggle": "Turn the filter on or off"
+      }
     },
     "related": "Cannot delete: related records exist in the table “{{table}}”. Nothing was deleted.",
+    "related_unnamed": "Cannot delete: related records exist. Nothing was deleted.",
     "deleteCascade_one": "You are about to delete 1 record and its related records. This cannot be undone. Continue?",
-    "deleteCascade": "You are about to delete {{count}} records and their related records. This cannot be undone. Continue?"
+    "deleteCascade": "You are about to delete {{count}} records and their related records. This cannot be undone. Continue?",
+    "deleteModifies_one": "You are about to delete 1 record. Related records will lose their link to it. This cannot be undone. Continue?",
+    "deleteModifies": "You are about to delete {{count}} records. Related records will lose their link to them. This cannot be undone. Continue?",
+    "deleteCascadeModifies_one": "You are about to delete 1 record and its related records; other related records will lose their link to it. This cannot be undone. Continue?",
+    "deleteCascadeModifies": "You are about to delete {{count}} records and their related records; other related records will lose their link to them. This cannot be undone. Continue?",
+    "filter": {
+      "menu": "Filter",
+      "equals": "Equals \"{{value}}\"",
+      "notEquals": "Does Not Equal \"{{value}}\"",
+      "contains": "Contains \"{{value}}\"",
+      "notContains": "Does Not Contain \"{{value}}\"",
+      "isNull": "Is Blank",
+      "isNotNull": "Is Not Blank",
+      "clear": "Clear All Filters",
+      "fieldTitle": "Filter",
+      "fieldLabel": "Criteria for \"{{field}}\" (empty: no filter on this field):"
+    }
   },
   "expr": {
     "cat": {
@@ -315,7 +876,8 @@
       "number": "Number",
       "date": "Date and time",
       "logic": "Logic",
-      "conversion": "Conversion"
+      "conversion": "Conversion",
+      "aggregate": "Aggregate"
     },
     "error": {
       "unexpectedToken": "Unexpected item in the expression.",
@@ -330,7 +892,18 @@
       "maskUnclosedQuote": "The mask is missing a closing quotation mark.",
       "maskTrailingBackslash": "The mask ends with a backslash (\\) and no character after it.",
       "maskNoInput": "The mask has no entry position (0, 9, #, L, ?, A, a, & or C).",
-      "maskBadSection": "Invalid mask sections: the second is 0 or 1, the third a single character."
+      "maskBadSection": "Invalid mask sections: the second is 0 or 1, the third a single character.",
+      "aggregateContext": "An aggregate function (Sum, Count…) is only allowed in a totals query or a report group.",
+      "subqueryNotAllowed": "Subqueries (SELECT …) are not allowed here.",
+      "forbiddenStatement": "Statement not allowed: only Select, Append, Update, Delete and Make-Table queries are accepted.",
+      "reservedName": "This name is reserved (bc_, bcx_ or sqlite_): the query cannot use it.",
+      "multipleStatements": "Only one SQL statement is allowed: remove the text after the semicolon.",
+      "notSupportedYet": "This kind of query (Crosstab, pass-through) is not available yet.",
+      "badParameterType": "Unknown parameter type.",
+      "badCount": "Enter a whole number from 1 to 255.",
+      "badWidths": "Enter widths in cm separated by “;” (55.88 cm at most).",
+      "badListWidth": "Enter “Auto” or a width in cm (55.88 cm at most).",
+      "unknownField": "This field doesn't exist or can't be used here."
     },
     "fn": {
       "IIf": "Returns the second value if the condition is true, the third one otherwise.",
@@ -381,13 +954,228 @@
       "DateDiff": "Computes the number of intervals between two dates.",
       "DatePart": "Returns a part of a date (year, quarter, week...).",
       "DateSerial": "Builds a date from a year, a month and a day.",
-      "TimeSerial": "Builds a time from hours, minutes and seconds."
+      "TimeSerial": "Builds a time from hours, minutes and seconds.",
+      "Sum": "Returns the sum of the values in the group.",
+      "Avg": "Returns the average of the values in the group.",
+      "Count": "Returns the number of non-Null values in the group; Count(*) counts the records.",
+      "Min": "Returns the smallest value in the group.",
+      "Max": "Returns the largest value in the group.",
+      "First": "Returns the value of the first record in the group.",
+      "Last": "Returns the value of the last record in the group.",
+      "StDev": "Returns the standard deviation of the values in the group (sample).",
+      "StDevP": "Returns the standard deviation of the values in the group (population).",
+      "Var": "Returns the variance of the values in the group (sample).",
+      "VarP": "Returns the variance of the values in the group (population)."
+    },
+    "args": {
+      "IIf": [
+        "expr",
+        "truepart",
+        "falsepart"
+      ],
+      "Nz": [
+        "variant",
+        "valueifnull"
+      ],
+      "IsNull": [
+        "expr"
+      ],
+      "IsNumeric": [
+        "expr"
+      ],
+      "IsDate": [
+        "expr"
+      ],
+      "Len": [
+        "string"
+      ],
+      "Left": [
+        "string",
+        "length"
+      ],
+      "Right": [
+        "string",
+        "length"
+      ],
+      "Mid": [
+        "string",
+        "start",
+        "length"
+      ],
+      "Trim": [
+        "string"
+      ],
+      "LTrim": [
+        "string"
+      ],
+      "RTrim": [
+        "string"
+      ],
+      "UCase": [
+        "string"
+      ],
+      "LCase": [
+        "string"
+      ],
+      "InStr": [
+        "start",
+        "string1",
+        "string2"
+      ],
+      "Replace": [
+        "expression",
+        "find",
+        "replace"
+      ],
+      "Space": [
+        "number"
+      ],
+      "String": [
+        "number",
+        "character"
+      ],
+      "StrComp": [
+        "string1",
+        "string2",
+        "compare"
+      ],
+      "Format": [
+        "expr",
+        "format"
+      ],
+      "Round": [
+        "number",
+        "numdecimalplaces"
+      ],
+      "Int": [
+        "number"
+      ],
+      "Fix": [
+        "number"
+      ],
+      "Abs": [
+        "number"
+      ],
+      "Sgn": [
+        "number"
+      ],
+      "Sqr": [
+        "number"
+      ],
+      "Val": [
+        "string"
+      ],
+      "CStr": [
+        "expr"
+      ],
+      "CInt": [
+        "expr"
+      ],
+      "CLng": [
+        "expr"
+      ],
+      "CDbl": [
+        "expr"
+      ],
+      "CCur": [
+        "expr"
+      ],
+      "CDate": [
+        "expr"
+      ],
+      "CBool": [
+        "expr"
+      ],
+      "Date": [],
+      "Time": [],
+      "Now": [],
+      "Year": [
+        "date"
+      ],
+      "Month": [
+        "date"
+      ],
+      "Day": [
+        "date"
+      ],
+      "Hour": [
+        "time"
+      ],
+      "Minute": [
+        "time"
+      ],
+      "Second": [
+        "time"
+      ],
+      "Weekday": [
+        "date",
+        "firstdayofweek"
+      ],
+      "DateAdd": [
+        "interval",
+        "number",
+        "date"
+      ],
+      "DateDiff": [
+        "interval",
+        "date1",
+        "date2"
+      ],
+      "DatePart": [
+        "interval",
+        "date"
+      ],
+      "DateSerial": [
+        "year",
+        "month",
+        "day"
+      ],
+      "TimeSerial": [
+        "hour",
+        "minute",
+        "second"
+      ],
+      "Sum": [
+        "expr"
+      ],
+      "Avg": [
+        "expr"
+      ],
+      "Count": [
+        "expr"
+      ],
+      "Min": [
+        "expr"
+      ],
+      "Max": [
+        "expr"
+      ],
+      "First": [
+        "expr"
+      ],
+      "Last": [
+        "expr"
+      ],
+      "StDev": [
+        "expr"
+      ],
+      "StDevP": [
+        "expr"
+      ],
+      "Var": [
+        "expr"
+      ],
+      "VarP": [
+        "expr"
+      ]
     }
   },
   "importText": {
+    "titleExcel": "Import Excel Workbook",
     "title": "Import Text File",
     "stepOf": "Step {{n}} of {{total}}",
     "step": {
+      "sheet": "Worksheet to import",
       "source": "Data source and destination",
       "format": "Data format",
       "delimited": "Field delimiter",
@@ -397,6 +1185,7 @@
       "finish": "Finish import"
     },
     "source": {
+      "introExcel": "Specify the Excel workbook (.xlsx, .xlsm) to import, then how and where to store its data in the current database.",
       "intro": "Specify the text file to import, then how and where to store its data in the current database.",
       "file": "File name",
       "browse": "Browse…",
@@ -413,6 +1202,11 @@
       "nameDelimited": "delimited",
       "nameFixed": "fixed width",
       "encoding": "Encoding read: {{encoding}}"
+    },
+    "sheet": {
+      "intro": "Choose the worksheet to import. The preview shows its first rows.",
+      "list": "Worksheets in the workbook",
+      "hasHeader": "First row contains column headings"
     },
     "preview": "Preview of file {{file}}",
     "previewGrid": "Data preview",
@@ -522,6 +1316,8 @@
       "thousandsSep": "Thousands separator"
     },
     "error": {
+      "excelUnsupported": "This file is not a readable Excel workbook (.xlsx or .xlsm).",
+      "fileTooLarge": "This workbook is larger than 100 MB.",
       "noFile": "Specify the file to import.",
       "fileNotFound": "The file cannot be found or read.",
       "noTable": "Choose the table that receives the records.",
@@ -529,6 +1325,7 @@
       "mappingDuplicate": "Two columns go into the same field.",
       "pkField": "Choose the primary key field among the imported fields.",
       "tableExists": "A table named \"{{name}}\" already exists.",
+      "queryExists": "A query named \"{{name}}\" already exists.",
       "otherChar": "Specify a single delimiter character.",
       "specName": "The name must have 1 to 64 characters, without leading or trailing spaces.",
       "emptyFile": "The file is empty.",
@@ -548,5 +1345,701 @@
       "unclosed": "Unclosed text qualifier: the row was read with the qualifier as text",
       "truncated": "Field truncation"
     }
+  },
+  "doc": {
+    "unavailable": "Not available in this version"
+  },
+  "prop": {
+    "Caption": "Caption",
+    "DefaultView": "Default View",
+    "NavigationButtons": "Navigation Buttons",
+    "Width": "Width",
+    "Visible": "Visible",
+    "Format": "Format",
+    "DecimalPlaces": "Decimal Places",
+    "ColumnCount": "Column Count",
+    "ColumnWidths": "Column Widths",
+    "BackStyle": "Back Style",
+    "BackColor": "Back Color",
+    "BorderStyle": "Border Style",
+    "BorderWidth": "Border Width",
+    "BorderColor": "Border Color",
+    "ForeColor": "Fore Color",
+    "FontName": "Font Name",
+    "FontSize": "Font Size",
+    "FontWeight": "Font Weight",
+    "FontItalic": "Font Italic",
+    "FontUnderline": "Font Underline",
+    "TextAlign": "Text Align",
+    "CanGrow": "Can Grow",
+    "CanShrink": "Can Shrink",
+    "KeepTogether": "Keep Together",
+    "RepeatSection": "Repeat Section",
+    "ForceNewPage": "Force New Page",
+    "RecordSource": "Record Source",
+    "AllowAdditions": "Allow Additions",
+    "AllowEdits": "Allow Edits",
+    "AllowDeletions": "Allow Deletions",
+    "ControlSource": "Control Source",
+    "RowSourceType": "Row Source Type",
+    "RowSource": "Row Source",
+    "BoundColumn": "Bound Column",
+    "LimitToList": "Limit To List",
+    "DefaultValue": "Default Value",
+    "ValidationRule": "Validation Rule",
+    "ValidationText": "Validation Text",
+    "Enabled": "Enabled",
+    "Locked": "Locked",
+    "OptionValue": "Option Value",
+    "SourceObject": "Source Object",
+    "LinkMasterFields": "Link Master Fields",
+    "LinkChildFields": "Link Child Fields",
+    "GridX": "Grid X",
+    "GridY": "Grid Y",
+    "RecordSelectors": "Record Selectors",
+    "Left": "Left",
+    "Top": "Top",
+    "Height": "Height",
+    "Picture": "Picture",
+    "SizeMode": "Size Mode",
+    "LineSlant": "Line Slant",
+    "Pages": "Pages",
+    "Name": "Name",
+    "TabStop": "Tab Stop",
+    "TabIndex": "Tab Index",
+    "ControlTipText": "Control Tip Text",
+    "StatusBarText": "Status Bar Text",
+    "OnOpen": "On Open",
+    "OnLoad": "On Load",
+    "OnCurrent": "On Current",
+    "OnClose": "On Close",
+    "BeforeInsert": "Before Insert",
+    "AfterInsert": "After Insert",
+    "BeforeUpdate": "Before Update",
+    "AfterUpdate": "After Update",
+    "OnDelete": "On Delete",
+    "OnClick": "On Click",
+    "OnDblClick": "On Dbl Click",
+    "OnEnter": "On Enter",
+    "OnExit": "On Exit",
+    "OnGotFocus": "On Got Focus",
+    "OnLostFocus": "On Lost Focus",
+    "OnChange": "On Change",
+    "ColumnHeads": "Column Heads"
+  },
+  "propValue": {
+    "DefaultView": {
+      "single": "Single Form",
+      "continuous": "Continuous Forms",
+      "datasheet": "Datasheet"
+    },
+    "DecimalPlaces": {
+      "auto": "Auto"
+    },
+    "BackStyle": {
+      "normal": "Normal",
+      "transparent": "Transparent"
+    },
+    "BorderStyle": {
+      "transparent": "Transparent",
+      "solid": "Solid",
+      "dashed": "Dashes",
+      "dotted": "Dots"
+    },
+    "FontWeight": {
+      "normal": "Normal",
+      "bold": "Bold"
+    },
+    "TextAlign": {
+      "general": "General",
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
+    "ForceNewPage": {
+      "none": "None",
+      "before": "Before Section",
+      "after": "After Section",
+      "beforeAndAfter": "Before & After"
+    },
+    "RowSourceType": {
+      "tableQuery": "Table/Query",
+      "valueList": "Value List"
+    },
+    "SizeMode": {
+      "clip": "Clip",
+      "stretch": "Stretch",
+      "zoom": "Zoom"
+    }
+  },
+  "color": {
+    "background": "Background",
+    "surface": "Surface",
+    "surface2": "Surface 2",
+    "text": "Text",
+    "textMuted": "Secondary text",
+    "border": "Border",
+    "accent": "Accent",
+    "accentContrast": "Text on accent",
+    "danger": "Danger",
+    "warning": "Warning"
+  },
+  "sourcePicker": {
+    "label": "Tables and queries",
+    "empty": "The database has no tables or queries."
+  },
+  "report": {
+    "pickSourceTitle": "New report: choose the source",
+    "preview": "Preview of report {{name}}",
+    "progress": "Formatting…",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "nav": {
+      "first": "First page",
+      "prev": "Previous page",
+      "page": "Current page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "issues": "Warnings ({{count}})",
+    "issue": {
+      "unknownField": "The field \"{{detail}}\" does not exist in the record source.",
+      "invalidExpression": "The expression \"{{detail}}\" is not valid.",
+      "groupingInvalid": "Grouping on \"{{detail}}\" is not valid.",
+      "widthExceedsPage": "The report is wider than the page's printable area.",
+      "glyphMissing": "The character \"{{detail}}\" is missing from the font.",
+      "fontNotPortable": "The font \"{{detail}}\" is not embedded: text is measured and printed in Liberation Sans.",
+      "unsupportedControl": "This kind of control is not printed.",
+      "aggregateNotAllowed": "A total is not allowed in this section.",
+      "sizeClamped": "A size exceeds 55.88 cm, Access's limit: it is reduced to that limit.",
+      "groupingMalformed": "A grouping level is empty or malformed: it groups nothing.",
+      "sectionIgnored": "The section \"{{section}}\" is ignored: it is a duplicate, or no grouping level asks for it."
+    },
+    "error": "#Error",
+    "name": "#Name?",
+    "invalidDefinition": "This report's definition is not valid:",
+    "pdfSaved": "The PDF file was saved.",
+    "pdfFilter": "PDF files",
+    "pageSetup": {
+      "title": "Page Setup",
+      "orientation": "Orientation",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "margins": "Margins (cm)",
+      "top": "Top",
+      "bottom": "Bottom",
+      "left": "Left",
+      "right": "Right",
+      "invalid": "Each margin must be between 0 and 10 cm."
+    },
+    "sectionGroup": {
+      "header": "Group Header: {{expr}}",
+      "footer": "Group Footer: {{expr}}"
+    },
+    "headerFooter": "Report Header/Footer",
+    "pageHeaderFooter": "Page Header/Footer",
+    "newName": "Report{{n}}",
+    "saveAsTitle": "Save As",
+    "nameLabel": "Report Name",
+    "saveFirstTitle": "Save report",
+    "saveFirst": "Do you want to save changes to the design of report '{{name}}'?",
+    "confirmRemoveSections": "Deleting these sections will also delete all the controls in them. Do you want to delete them anyway?",
+    "margins": {
+      "normal": "Normal",
+      "wide": "Wide",
+      "narrow": "Narrow",
+      "custom": "Custom Margins…"
+    },
+    "pageSize": {
+      "a4": "A4 (21 × 29.7 cm)"
+    },
+    "perView": "{{count}} pages",
+    "sourceError": "The record source '{{name}}' cannot be read: {{message}}",
+    "unbound": "Unbound",
+    "grouping": {
+      "title": "Group, Sort, and Total",
+      "close": "Close the Group, Sort, and Total pane",
+      "groupOn": "Group on",
+      "sortBy": "Sort by",
+      "expression": "Field or expression",
+      "order": "Order",
+      "asc": "ascending",
+      "desc": "descending",
+      "header": "Header",
+      "withHeader": "with a header section",
+      "withoutHeader": "without a header section",
+      "footer": "Footer",
+      "withFooter": "with a footer section",
+      "withoutFooter": "without a footer section",
+      "keepTogether": "Keep together",
+      "keep": {
+        "no": "do not keep group together on one page",
+        "wholeGroup": "keep whole group together on one page",
+        "withFirstDetail": "keep header and first record together on one page"
+      },
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "delete": "Delete",
+      "addGroup": "Add a group",
+      "addSort": "Add a sort",
+      "pickField": "Select field",
+      "noFields": "Choose the report's record source first.",
+      "orderBy": {
+        "text": {
+          "asc": "with A on top",
+          "desc": "with Z on top"
+        },
+        "number": {
+          "asc": "from smallest to largest",
+          "desc": "from largest to smallest"
+        },
+        "date": {
+          "asc": "from oldest to newest",
+          "desc": "from newest to oldest"
+        }
+      }
+    },
+    "totals": {
+      "Sum": "Sum",
+      "Avg": "Average",
+      "CountRecords": "Count Records",
+      "Count": "Count Values",
+      "Max": "Max",
+      "Min": "Min",
+      "StDev": "Standard Deviation",
+      "Var": "Variance"
+    },
+    "pageNumbers": {
+      "title": "Page Numbers",
+      "format": "Format",
+      "pageN": "Page N",
+      "pageNofM": "Page N of M",
+      "position": "Position",
+      "top": "Top of Page [Header]",
+      "bottom": "Bottom of Page [Footer]",
+      "align": "Alignment:",
+      "left": "Left",
+      "center": "Center",
+      "right": "Right",
+      "firstPage": "Show Number on First Page"
+    },
+    "tooManyPages": "This report exceeds 10,000 pages: layout stops. Filter its record source or fix its definition.",
+    "tooLarge": "This report is too large to print or export in one go. Filter its record source to make it smaller.",
+    "preparing": "Preparing the report"
+  },
+  "about": {
+    "title": "About BaseCraft",
+    "version": "Version {{version}}",
+    "tagline": "Desktop database application in the spirit of Microsoft Access.",
+    "licence": "Free software under the {{licence}} licence.",
+    "components": "Components",
+    "electron": "Electron",
+    "chromium": "Chromium",
+    "node": "Node.js",
+    "sqlite": "SQLite",
+    "platform": "System",
+    "homepage": "Project website",
+    "issues": "Report a problem",
+    "viewLicence": "Read the licence",
+    "thirdParty": "Third-party licences"
+  },
+  "relations": {
+    "title": "Relationships",
+    "canvas": "Relationships layout",
+    "table": "Table “{{name}}”",
+    "key": "(primary key)",
+    "line": "Relationship between “{{parent}}” ({{parentFields}}) and “{{child}}” ({{childFields}})",
+    "line_enforced": "Relationship between “{{parent}}” ({{parentFields}}) and “{{child}}” ({{childFields}}), with referential integrity",
+    "list": "Relationships list",
+    "none": "No relationships.",
+    "editOne": "Edit the relationship “{{name}}”",
+    "deleteOne": "Delete the relationship “{{name}}”",
+    "deleteTitle": "Delete Relationship",
+    "deleteMessage": "Are you sure you want to permanently delete the selected relationship from your database?",
+    "clearTitle": "Clear Layout",
+    "clearMessage": "Are you sure you want to clear the layout of the Relationships window? The relationships are not deleted.",
+    "add": {
+      "title": "Add Tables",
+      "none": "Every table is already shown.",
+      "ok": "Add",
+      "close": "Close"
+    },
+    "dialog": {
+      "title": "Edit Relationships",
+      "parent": "Table/Query",
+      "child": "Related Table/Query",
+      "fieldOf": "Field {{n}} of “{{table}}”",
+      "enforce": "Enforce Referential Integrity",
+      "cascadeUpdate": "Cascade Update Related Fields",
+      "cascadeDelete": "Cascade Delete Related Records",
+      "join": "Join Type",
+      "join1": "Only include rows where the joined fields from both tables are equal.",
+      "join2": "Include ALL records from “{{parent}}” and only those records from “{{child}}” where the joined fields are equal.",
+      "join3": "Include ALL records from “{{child}}” and only those records from “{{parent}}” where the joined fields are equal.",
+      "create": "Create",
+      "incomplete": "Choose a field on each side, or clear this row."
+    },
+    "error": {
+      "fieldsMismatch": "Choose as many fields in each table, each field once.",
+      "typesMismatch": "The related fields do not have the same data type or size.",
+      "parentNotUnique": "No unique index found for the referenced field of the primary table.",
+      "readOnly": "The database is open read-only.",
+      "nameExists": "A relationship already has this name.",
+      "nameInvalid": "This relationship name is not valid.",
+      "sameTable": "A relationship joins two different tables.",
+      "external": "The table “{{table}}” was changed outside BaseCraft; its relationships cannot be changed here.",
+      "violations_one": "Referential integrity cannot be enforced: 1 record of “{{child}}” has no matching record in “{{parent}}”.",
+      "violations_other": "Referential integrity cannot be enforced: {{count}} records of “{{child}}” have no matching record in “{{parent}}”.",
+      "duplicate": "The relationship “{{relation}}” already joins these fields of these tables."
+    }
+  },
+  "builder": {
+    "title": "Expression Builder",
+    "expression": "Enter an expression:",
+    "elements": "Expression Elements",
+    "categories": "Expression Categories",
+    "values": "Expression Values",
+    "all": "<All>",
+    "el": {
+      "functions": "Functions",
+      "fields": "Fields",
+      "operators": "Operators",
+      "constants": "Constants"
+    },
+    "op": {
+      "arithmetic": "Arithmetic",
+      "comparison": "Comparison",
+      "logical": "Logical",
+      "string": "String"
+    }
+  },
+  "objectProperties": {
+    "title": "Properties",
+    "type": "Type",
+    "name": "Name",
+    "description": "Description",
+    "created": "Created",
+    "modified": "Modified"
+  },
+  "sheet": {
+    "title": "Property Sheet",
+    "selection": "Selection",
+    "selectionType": "Selection type: {{type}}",
+    "multiple": "Multiple selection",
+    "section": "Section",
+    "kind": {
+      "label": "Label",
+      "textBox": "Text Box",
+      "checkBox": "Check Box",
+      "optionGroup": "Option Group",
+      "optionButton": "Option Button",
+      "comboBox": "Combo Box",
+      "listBox": "List Box",
+      "commandButton": "Command Button",
+      "subform": "Subform/Subreport",
+      "image": "Image",
+      "line": "Line",
+      "rectangle": "Rectangle",
+      "pageBreak": "Page Break",
+      "tabControl": "Tab Control"
+    },
+    "tab": {
+      "format": "Format",
+      "data": "Data",
+      "event": "Event",
+      "other": "Other",
+      "all": "All"
+    },
+    "mixed": "The selected items have different values",
+    "eventsLater": "Available with macros (stage B)",
+    "yes": "Yes",
+    "no": "No",
+    "colors": "Colors",
+    "customColor": "Custom color…",
+    "pickPicture": "Choose…",
+    "fontNotPortable": "Not a portable font: on another computer, the text may look different.",
+    "error": {
+      "nameInvalid": "Invalid name: 1 to 64 characters, without a period (.), exclamation point (!), grave accent (`) or brackets ([ ]), and not starting with a space.",
+      "nameExists": "Another control already has this name.",
+      "outOfRange": "Unreadable or out-of-range value.",
+      "invalidColor": "Invalid color.",
+      "unknownField": "This field is not in the source.",
+      "unknownSource": "No table or query has this name.",
+      "pictureTooLarge": "Picture too large (1 MB at most).",
+      "notInteger": "Enter a whole number."
+    },
+    "close": "Close the Property Sheet (F4)",
+    "lost": "The value of “{{name}}” was not saved:",
+    "removePicture": "Remove"
+  },
+  "form": {
+    "newName": "Form{{n}}",
+    "saveAsTitle": "Save As",
+    "nameLabel": "Form Name",
+    "dropped_one": "{{count}} unreadable control was ignored; it will be gone once saved.",
+    "dropped": "{{count}} unreadable controls were ignored; they will be gone once saved.",
+    "badSource": "This form's record source is unreadable: it was removed.",
+    "headerFooter": "Form Header/Footer",
+    "tabPage": "Page{{n}}",
+    "unbound": "Unbound",
+    "saveFirstTitle": "Save Form",
+    "saveFirst": "Do you want to save the changes to the form “{{name}}”?",
+    "mustSaveFirst": "You must save the form “{{name}}” first. Save it now?",
+    "sourceError": "Record source “{{name}}”: {{message}}",
+    "tabOrder": {
+      "up": "Move Up",
+      "down": "Move Down",
+      "auto": "Auto Order",
+      "hint": "Alt+Up and Alt+Down move the selected control.",
+      "empty": "No controls"
+    },
+    "headerFooterConfirm": "Delete the form header and footer? The controls they contain will be deleted.",
+    "calc": {
+      "error": "#Error",
+      "name": "#Name?"
+    },
+    "dirty": "Record changed, not saved yet",
+    "message": "Form messages",
+    "controlValidation": "The value does not satisfy the validation rule of this control.",
+    "invalidDefinition": "This form's definition cannot be read: the form cannot be opened.",
+    "closeDiscard": "The current record in “{{name}}” cannot be saved. Close anyway? The entry will be lost.",
+    "list": {
+      "truncated": "List limited to the first {{count}} rows.",
+      "sourceError": "The list's row source cannot be read: {{message}}"
+    },
+    "subform": {
+      "missing": "The subform “{{name}}” cannot be found or read.",
+      "badLink": "This subform's master and child fields do not match the forms' fields.",
+      "recursive": "The subform “{{name}}” contains this form (or goes beyond seven levels): it is not shown.",
+      "linked": "Linked fields proposed: {{master}} (master) and {{child}} (child).",
+      "noMaster": "Save the main form's record first: this subform cannot add a record without it."
+    },
+    "autoFormSource": "Form: choose a table or query",
+    "readOnlySource": "This Recordset is not updatable.",
+    "typeAheadDropped": "The characters typed while the record changed were dropped."
+  },
+  "query": {
+    "param": {
+      "title": "Enter Parameter Value",
+      "label": "{{name}}"
+    },
+    "readOnly": "This Recordset is not updatable.",
+    "delete": {
+      "usedBy": "The query '{{name}}' is used by: {{list}}. Delete it anyway? These objects will no longer work."
+    },
+    "newName": "Query{{n}}",
+    "nameLabel": "Query name",
+    "saveFirstTitle": "Save query",
+    "mustSaveFirst": "You must save the query “{{name}}” first. Save it now?",
+    "saveFirst": "The design of the query “{{name}}” has changed. Save it first?",
+    "invalidCells": "Some cells of the grid are invalid; fix them before saving:\n{{detail}}",
+    "cellError": "{{row}} column {{col}}: {{message}}",
+    "tablePane": "Tables of the query",
+    "grid": "Query design grid",
+    "splitter": "Resize the tables and the grid",
+    "box": "Table or query {{name}}",
+    "removeTable": "Remove table",
+    "key": "primary key",
+    "allFields": "All fields of {{name}}",
+    "join": "Join between {{l}}.{{lField}} and {{r}}.{{rField}}",
+    "column": "Column {{n}}",
+    "cell": "{{row}} column {{n}}",
+    "row": {
+      "field": "Field:",
+      "table": "Table:",
+      "total": "Total:",
+      "sort": "Sort:",
+      "show": "Show:",
+      "criteria": "Criteria:",
+      "or": "or:",
+      "appendTo": "Append To:",
+      "updateTo": "Update To:",
+      "deleteRole": "Delete:"
+    },
+    "total": {
+      "groupBy": "Group By",
+      "sum": "Sum",
+      "avg": "Avg",
+      "min": "Min",
+      "max": "Max",
+      "count": "Count",
+      "stDev": "StDev",
+      "var": "Var",
+      "first": "First",
+      "last": "Last",
+      "expression": "Expression",
+      "where": "Where"
+    },
+    "sort": {
+      "none": "(not sorted)",
+      "asc": "Ascending",
+      "desc": "Descending"
+    },
+    "deleteRole": {
+      "from": "From",
+      "where": "Where"
+    },
+    "showTable": {
+      "title": "Show Table",
+      "tables": "Tables",
+      "queries": "Queries",
+      "both": "Both",
+      "add": "Add",
+      "close": "Close",
+      "none": "No objects."
+    },
+    "joinDialog": {
+      "title": "Join Properties",
+      "leftTable": "Left Table Name",
+      "rightTable": "Right Table Name",
+      "leftColumn": "Left Column Name",
+      "rightColumn": "Right Column Name",
+      "inner": "1: Only include rows where the joined fields from both tables are equal.",
+      "left": "2: Include ALL records from “{{l}}” and only those records from “{{r}}” where the joined fields are equal.",
+      "right": "3: Include ALL records from “{{r}}” and only those records from “{{l}}” where the joined fields are equal.",
+      "kind": "Join type"
+    },
+    "target": {
+      "makeTableTitle": "Make Table",
+      "appendTitle": "Append",
+      "label": "Table name"
+    },
+    "sqlOnly": "This query can only be shown in SQL view.",
+    "rowSourceTitle": "Query Builder: Row Source",
+    "error": {
+      "unexpectedToken": "Syntax error in SQL statement.",
+      "unexpectedEnd": "The SQL statement is incomplete."
+    },
+    "params": {
+      "title": "Query Parameters",
+      "name": "Parameter",
+      "type": "Data Type",
+      "emptyName": "Each parameter needs a name.",
+      "duplicate": "The parameter \"{{name}}\" is declared twice."
+    },
+    "props": {
+      "title": "Property Sheet: Query",
+      "all": "All",
+      "top": "Top Values",
+      "badTop": "Enter \"All\", a positive whole number or a percentage from 1 to 100 (for example 25 or 5%).",
+      "outputAll": "Output All Fields",
+      "distinct": "Unique Values"
+    },
+    "action": {
+      "title": "Action query",
+      "confirm_makeTable_one": "You are about to paste {{count}} row into a new table. You can't undo this. Continue?",
+      "confirm_makeTable_other": "You are about to paste {{count}} rows into a new table. You can't undo this. Continue?",
+      "confirm_append_one": "You are about to append {{count}} row. You can't undo this. Continue?",
+      "confirm_append_other": "You are about to append {{count}} rows. You can't undo this. Continue?",
+      "confirm_update_one": "You are about to update {{count}} row. You can't undo this. Continue?",
+      "confirm_update_other": "You are about to update {{count}} rows. You can't undo this. Continue?",
+      "confirm_delete_one": "You are about to delete {{count}} row. You can't undo this. Continue?",
+      "confirm_delete_other": "You are about to delete {{count}} rows. You can't undo this. Continue?",
+      "validation": "the value breaks this field's validation rule",
+      "replace": "The existing table \"{{table}}\" will be deleted before the query runs. Continue?",
+      "nameExists": "\"{{table}}\" is the name of a query: a make-table query never replaces it. Choose another table name.",
+      "related": "Related records exist in the table \"{{table}}\": the query cannot run and nothing was changed.",
+      "related_unnamed": "Related records exist in another table: the query cannot run and nothing was changed.",
+      "badColumnName": "The column \"{{column}}\" cannot become a field name of the new table: give it an alias (for example \"{{column}} AS FieldName\"); nothing was changed.",
+      "records_one": "{{count}} record not changed",
+      "records_other": "{{count}} records not changed",
+      "relatedRow": "related records exist in the table \"{{table}}\"",
+      "relatedRow_unnamed": "related records exist in another table",
+      "partial": "The query can't change all the records: {{conversion}} due to a type conversion failure; {{key}} due to key violations, {{lock}} due to lock violations and {{validation}} due to validation rule violations, out of {{total}}. First error: {{message}}. Run the query anyway?",
+      "fields_one": "{{count}} field set to Null",
+      "fields_other": "{{count}} fields set to Null",
+      "inUse": "The database engine could not lock table \"{{table}}\" because it is already in use by another person or process. Save or undo the record being edited in it, or save its design, then run the query again."
+    },
+    "run": {
+      "running": "Running…",
+      "stop": "Stop"
+    }
+  },
+  "exchange": {
+    "yes": "True",
+    "no": "False",
+    "excelFilter": "Excel workbooks",
+    "textFilter": "Text files",
+    "actionQuery": "“{{name}}” is an action query: it has no data to export.",
+    "noSource": "This report has no record source: there is nothing to export.",
+    "selectObject": "Select a table or a query in the Navigation Pane first.",
+    "summary": "{{text}}",
+    "done_one": "{{count}} record exported.",
+    "done_other": "{{count}} records exported.",
+    "warnUnmappable_one": "{{count}} character missing from the chosen encoding was replaced by “?”.",
+    "warnUnmappable_other": "{{count}} characters missing from the chosen encoding were replaced by “?”.",
+    "warnAmbiguous_one": "{{count}} value contains the delimiter or a line break without a text qualifier: the file may be read back wrongly.",
+    "warnAmbiguous_other": "{{count}} values contain the delimiter or a line break without a text qualifier: the file may be read back wrongly.",
+    "truncated_one": "{{count}} text was longer than 32,767 characters (the limit of an Excel cell) and was cut.",
+    "truncated_other": "{{count}} texts were longer than 32,767 characters (the limit of an Excel cell) and were cut.",
+    "tooManyRows": "Excel holds at most {{limit}} data rows; this source has more. Export it to a text file, or filter it first.",
+    "text": {
+      "title": "Export – Text File",
+      "delimiter": "Field delimiter",
+      "comma": "Comma",
+      "semicolon": "Semicolon",
+      "tab": "Tab",
+      "pipe": "Vertical bar",
+      "qualifier": "Text qualifier",
+      "qualifierNone": "(none)",
+      "header": "First row contains field names",
+      "encoding": "Encoding",
+      "utf-8-bom": "UTF-8 with BOM (Excel)",
+      "utf-8": "UTF-8",
+      "windows-1252": "Windows-1252 (ANSI)"
+    }
+  },
+  "indexes": {
+    "title": "Indexes",
+    "indexName": "Index Name",
+    "fieldName": "Field Name",
+    "sortOrder": "Sort Order",
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "primary": "Primary",
+    "unique": "Unique",
+    "addIndex": "Add Index",
+    "removeIndex": "Delete Index",
+    "addField": "Add Field",
+    "removeField": "Remove Field",
+    "duplicateName": "Two indexes have the same name.",
+    "emptyName": "Each index needs a name.",
+    "invalidName": "An index name has at most 64 characters, does not start with a space and contains neither . ! ` [ ] nor control characters.",
+    "noField": "Each index needs at least one field.",
+    "unknownField": "An index uses a field that is not in the table.",
+    "fieldTwice": "A field appears twice in the same index.",
+    "tooManyFields": "An index has at most 10 fields.",
+    "tooManyIndexes": "A table has at most 32 indexes.",
+    "twoPrimary": "Only one index can be the primary key."
+  },
+  "tableFields": {
+    "newField": "Field",
+    "newTable": "Table",
+    "designOpen": "Table \"{{name}}\" is open in Design view. Close or save it before changing its fields here.",
+    "confirmDeleteTitle": "Delete field",
+    "confirmDelete": "Permanently delete the field \"{{name}}\" and all its data?",
+    "moreFields": "More Fields",
+    "nameCaptionTitle": "Enter Field Properties",
+    "name": "Name",
+    "caption": "Caption",
+    "description": "Description",
+    "nameTaken": "Another field already has this name.",
+    "defaultValueLabel": "Default Value of \"{{field}}\"",
+    "fieldSizeTitle": "Field Size",
+    "fieldSizeLabel": "Field Size (1 to 255)",
+    "fieldSizeInvalid": "Enter a whole number from 1 to 255.",
+    "formatNone": "(none)",
+    "validationTextTitle": "Validation Message",
+    "fieldValidationTextLabel": "Message shown when a value of \"{{field}}\" is refused",
+    "recordValidationTextLabel": "Message shown when a record is refused",
+    "fieldValidationRuleLabel": "Validation Rule of \"{{field}}\"",
+    "recordValidationRuleLabel": "Record Validation Rule",
+    "validation": { "fieldRule": "Field Validation Rule", "fieldText": "Field Validation Message", "recordRule": "Record Validation Rule", "recordText": "Record Validation Message" }
+  },
+  "compact": {
+    "title": "Compact and Repair",
+    "done": "Database compacted: {{before}} → {{after}}. Backup: {{backup}}",
+    "repaired": "Database compacted: {{before}} → {{after}}. Backup: {{backup}}\n{{count}} problem(s) found by the integrity check were repaired:\n{{problems}}",
+    "corrupt": "The database is damaged and could not be repaired. The original file was not changed.\nProblems found:\n{{problems}}\nBackup: {{backup}}",
+    "more": "… and {{count}} more"
   }
 }

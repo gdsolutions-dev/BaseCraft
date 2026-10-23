@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TableSummary } from '../../shared/api';
-import { sameName, type TableDesign } from '../../shared/field-types';
+import { EXCEL_SPEC, type ExcelPreview } from '../../shared/exchange';
+import type { TableDesign } from '../../shared/field-types';
 import { IMPORT_TYPES, type ImportField, type ImportProgress, type ImportResult, type ImportSpec, type PrimaryKeyChoice, type TextPreview } from '../../shared/import-text';
 import { api } from '../bridge';
 import { bcErrorCode, trapFocus, useErrorDialog } from '../shell/Modal';
@@ -12,19 +13,21 @@ import { AdvancedDialog } from './AdvancedDialog';
 import { FixedRuler } from './FixedRuler';
 import { PreviewGrid } from './PreviewGrid';
 import {
-  defaultTableName, fieldsError, fileName, keyError, mapByName, mappingError, stepsFor, structuralChange, type Step,
+  defaultTableName, destinationNameError, fieldsError, fileName, keyError, mapByName, mappingError, stepsFor, structuralChange, type Step,
 } from './wizard-model';
 import './import-text.css';
 
 type Done = Extract<ImportResult, { ok: true }>;
 /** pendingRow(table): a datasheet of that table has a row being edited (the import is then refused). */
-interface Props { tables: TableSummary[]; pendingRow(table: string): boolean; onClose(): void; onImported(r: Done): void }
+/** queries: their names are taken too (tables and queries share one namespace). */
+/** appendTo: "Append to this table" preselected on that table (Navigation Pane › Import › Text File). */
+interface Props { source?: 'text' | 'excel'; tables: TableSummary[]; queries: string[]; pendingRow(table: string): boolean; onClose(): void; onImported(r: Done): void; appendTo?: string }
 
 const DELIMS: [string, string][] = [['\t', 'tab'], [';', 'semicolon'], [',', 'comma'], [' ', 'space']];
 const INDEXED = ['no', 'yesDuplicates', 'yesNoDuplicates'] as const;
 const ENCODING_LABEL: Record<string, string> = { 'utf-8': 'UTF-8', 'windows-1252': 'Windows-1252', 'utf-16le': 'UTF-16 LE' };
 
-export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Props) {
+export function ImportTextWizard({ source = 'text', tables, queries, pendingRow, onClose, onImported, appendTo }: Props) {
   const { t } = useTranslation();
   const showError = useErrorDialog();
   const ref = useRef<HTMLDivElement>(null);
@@ -34,8 +37,8 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
   const [loaded, setLoaded] = useState<string | null>(null);
   const [pv, setPv] = useState<TextPreview | null>(null);
   const [spec, setSpec] = useState<ImportSpec | null>(null);
-  const [mode, setMode] = useState<'new' | 'append'>('new');
-  const [appendTable, setAppendTable] = useState(tables[0]?.name ?? '');
+  const [mode, setMode] = useState<'new' | 'append'>(appendTo !== undefined ? 'append' : 'new');
+  const [appendTable, setAppendTable] = useState(appendTo ?? tables[0]?.name ?? '');
   const [appendDesign, setAppendDesign] = useState<TableDesign | null>(null);
   const [mapping, setMapping] = useState<(string | null)[]>([]);
   const [pk, setPk] = useState<PrimaryKeyChoice>({ kind: 'auto' });
@@ -48,7 +51,9 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
   const [result, setResult] = useState<Done | null>(null);
   const [advanced, setAdvanced] = useState(false);
 
-  const steps = stepsFor(spec?.format ?? 'delimited', mode);
+  const excel = source === 'excel';
+  const [xl, setXl] = useState<ExcelPreview | null>(null);
+  const steps = stepsFor(excel ? 'excel' : spec?.format ?? 'delimited', mode);
   const index = steps.indexOf(step);
   const running = progress !== null;
 
@@ -77,6 +82,27 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
       if (n === seq.current) setBusy(false);
     }
   };
+  /** An Excel preview as the wizard's text preview: the Fields, Key and Finish steps are shared with the text import. */
+  const adoptSheet = (x: ExcelPreview) => {
+    const s: ImportSpec = { ...EXCEL_SPEC, hasHeader: x.hasHeader, fields: x.fields };
+    setXl(x); setSpec(s); setCol(0);
+    setPv({ encoding: 'utf-8', spec: s, inferred: x.fields, lines: [], header: x.header, rows: x.rows, columns: x.columns, assumedDecimal: false });
+    setTable(defaultTableName(x.sheet, [...tables.map((y) => y.name), ...queries], t('designer.newTableName', { n: 1 })));
+    if (appendDesign) setMapping(mapByName(x.fields.map((f) => f.name), appendDesign));
+  };
+  const reparseExcel = async (sheet: string | null, hasHeader: boolean | null) => {
+    if (!loaded) return;
+    const n = ++seq.current;
+    setBusy(true);
+    try {
+      const x = await api.importExcel.preview(loaded, sheet, hasHeader);
+      if (n === seq.current) adoptSheet(x);
+    } catch (e) {
+      void showError(e);
+    } finally {
+      if (n === seq.current) setBusy(false);
+    }
+  };
   const change = (patch: Partial<ImportSpec>) => {
     if (!spec) return;
     const next = { ...spec, ...patch };
@@ -92,12 +118,25 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
     const p = path.trim();
     if (!p) { setError(t('importText.error.noFile')); return false; }
     let fields = spec?.fields ?? [];
-    if (p !== loaded) {
+    if (p !== loaded && excel) {
+      try {
+        const x = await api.importExcel.preview(p, null, null);
+        setLoaded(p);
+        adoptSheet(x);
+        fields = x.fields;
+      } catch (e) {
+        const code = bcErrorCode(e);
+        if (code === 'invalidArgument') setError(t('importText.error.fileNotFound'));
+        else if (code === 'excelUnsupported' || code === 'fileTooLarge') setError(t(`importText.error.${code}`));
+        else void showError(e);
+        return false;
+      }
+    } else if (p !== loaded) {
       try {
         const r = await api.importText.preview(p, null);
         setPv(r); setSpec(r.spec); setLoaded(p); setCol(0);
         fields = r.spec.fields;
-        setTable(defaultTableName(p, tables.map((x) => x.name), t('designer.newTableName', { n: 1 })));
+        setTable(defaultTableName(p, [...tables.map((x) => x.name), ...queries], t('designer.newTableName', { n: 1 })));
       } catch (e) {
         const code = bcErrorCode(e);
         if (code === 'invalidArgument') setError(t('importText.error.fileNotFound'));
@@ -131,7 +170,8 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
     if (s === 'finish' && mode === 'new') {
       const k = nameErrorKey(table);
       if (k) return t(k);
-      if (tables.some((x) => sameName(x.name, table))) return t('importText.error.tableExists', { name: table });
+      const clash = destinationNameError(table, tables.map((x) => x.name), queries);
+      if (clash) return t(clash.key, clash.params);
     }
     return null;
   };
@@ -159,9 +199,9 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
     setProgress({ done: 0, total: 1 });
     const off = api.importText.onProgress(setProgress);
     try {
-      const r = await api.importText.run(loaded, plan);
+      const r = excel ? await api.importExcel.run(loaded, xl!.sheet, spec.hasHeader, plan) : await api.importText.run(loaded, plan);
       if (r.ok) { setResult(r); onImported(r); }
-      else if (r.reason === 'nameExists') { setStep('finish'); setError(t('importText.error.tableExists', { name: table })); }
+      else if (r.reason === 'nameExists') { setStep('finish'); setError(t('dialog.op.nameExists')); } // taken meanwhile: table or query
       else if (r.reason === 'danglingKey') { setStep('finish'); setError(t('importText.error.danglingKey', { name: table, table: r.table })); }
       else { setStep('fields'); setError(r.errors.map((x) => t(`designError.${x.code}`, { field: x.field ?? '' })).join('\n')); }
     } catch (e) {
@@ -174,7 +214,7 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
 
   const browse = async () => {
     try {
-      const p = await api.importText.pickFile();
+      const p = await (excel ? api.importExcel.pickFile() : api.importText.pickFile());
       if (p) { setPath(p); setError(null); }
     } catch (e) { void showError(e); }
   };
@@ -202,7 +242,7 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
       case 'source':
         return (
           <>
-            <p className="iw-intro">{t('importText.source.intro')}</p>
+            <p className="iw-intro">{t(excel ? 'importText.source.introExcel' : 'importText.source.intro')}</p>
             <label className="iw-row iw-row-file">
               <span>{t('importText.source.file')}</span>
               {/* read-only: the main process only reads a file chosen in its own open dialog */}
@@ -221,6 +261,27 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
               </div>
               {radio('dest', 'import-dest-link', false, () => {}, <>{t('importText.source.link')} <em className="muted">({t('importText.source.linkNote')})</em></>, true)}
             </fieldset>
+          </>
+        );
+      case 'sheet':
+        return (
+          <>
+            <p className="iw-intro">{t('importText.sheet.intro')}</p>
+            <div className="iw-options">
+              <fieldset className="iw-box">
+                <legend>{t('importText.sheet.list')}</legend>
+                <div className="iw-inline iw-wrap">
+                  {xl!.sheets.map((s) => radio('sheet', `import-sheet-${s}`, s === xl!.sheet, () => void reparseExcel(s, null), s))}
+                </div>
+              </fieldset>
+              <div className="iw-side">
+                <label className="iw-check">
+                  <input type="checkbox" data-testid="import-has-header" checked={xl!.hasHeader} onChange={(e) => void reparseExcel(xl!.sheet, e.target.checked)} />
+                  {t('importText.sheet.hasHeader')}
+                </label>
+              </div>
+            </div>
+            <PreviewGrid headings={headings} rows={pv!.rows} />
           </>
         );
       case 'format':
@@ -380,7 +441,7 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
       <div ref={ref} className="modal card iw" role="dialog" aria-modal="true" aria-labelledby="iw-title" aria-describedby="iw-step"
         data-testid="import-wizard" onKeyDown={onKeyDown}>
         <header className="iw-head">
-          <h2 id="iw-title" className="modal-title">{t('importText.title')}</h2>
+          <h2 id="iw-title" className="modal-title">{t(excel ? 'importText.titleExcel' : 'importText.title')}</h2>
           <div id="iw-step" className="iw-step" data-testid="import-step" data-step={result ? 'done' : step}>
             {!result && <span className="muted">{t('importText.stepOf', { n: index + 1, total: steps.length })} · </span>}{title}
           </div>
@@ -401,7 +462,7 @@ export function ImportTextWizard({ tables, pendingRow, onClose, onImported }: Pr
             <button className="btn btn-primary" data-testid="import-btn-close" onClick={onClose}>{t('importText.button.close')}</button>
           ) : (
             <>
-              <button className="btn" data-testid="import-btn-advanced" disabled={!spec || running} onClick={() => setAdvanced(true)}>{t('importText.button.advanced')}</button>
+              <button className="btn" data-testid="import-btn-advanced" disabled={!spec || running || excel} onClick={() => setAdvanced(true)}>{t('importText.button.advanced')}</button>
               <span className="iw-spacer" />
               <button className="btn" data-testid="import-btn-cancel" disabled={running} onClick={onClose}>{t('importText.button.cancel')}</button>
               <button className="btn" data-testid="import-btn-back" disabled={index === 0 || running || busy} onClick={back}>{t('importText.button.back')}</button>

@@ -7,12 +7,14 @@ import type { Relation } from '../../shared/api';
 import { clients, f, t } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
 import { createBaseFile, openBaseFile } from './file-format';
-import { alterTable, isExternal, type FieldMapping } from './alter';
+import { alterTable, isExternal, rebuildSame, withForeignKeysOff, type FieldMapping } from './alter';
 import {
   cascadeChildren, createTable, DanglingKeyError, dropTable, listTables, quoteIdent, reconcile, renameTable, tableDesign, ViewBrokenError,
 } from './schema';
 import { previewText, runImport, type ImportTexts } from '../import/text-import';
 import en from '../../shared/i18n/en.json';
+import frTexts from '../../shared/i18n/fr.json';
+import type { FieldDef } from '../../shared/field-types';
 import { countRows } from './rows';
 import { deleteRows, insertRow, updateRow } from './write-layer';
 import { deleteRelation, listRelations, relationsLayout, relationsOf, saveRelation, saveRelationsLayout } from './relations';
@@ -35,6 +37,18 @@ const sqlOf = (name: string): string => (db.prepare('SELECT sql FROM sqlite_mast
 const identity = (d: { fields: { name: string }[] }): FieldMapping[] => d.fields.map((x) => ({ name: x.name, sourceName: x.name }));
 const opts = { allowDataLoss: false, info: fr };
 const raw = (sql: string, ...args: (string | number | null)[]) => db.prepare(sql).run(...args);
+
+const file = () => path.join(dir, 'test.basecraft');
+/** A real close and reopen, then the reconcile of an open in write mode. */
+const reopen = () => { db.close(); db = openBaseFile(file(), 'write', '0.0.0').db; return reconcile(db); };
+const externalTables = () => listTables(db).map((x) => x.name).filter((n) => isExternal(db, tableDesign(db, n)));
+/** Another tool rebuilds `table` from its own CREATE TABLE (rows copied, foreign keys off). */
+const rebuildWith = (table: string, edit: (sql: string) => string) => {
+  db.exec('PRAGMA foreign_keys=OFF');
+  db.exec(edit(sqlOf(table)).replace(/^CREATE TABLE [^(]+\(/, 'CREATE TABLE "tmp_other" ('));
+  db.exec(`INSERT INTO "tmp_other" SELECT * FROM ${quoteIdent(table)}; DROP TABLE ${quoteIdent(table)}; ALTER TABLE "tmp_other" RENAME TO ${quoteIdent(table)}`);
+  db.exec('PRAGMA foreign_keys=ON');
+};
 
 beforeEach(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bcrel-'));
@@ -81,16 +95,26 @@ describe('relations (brief)', () => {
 
   it('names: default with a numeric suffix, explicit duplicates refused (Unicode case ignored)', () => {
     expect(saveRelation(db, { ...rel, enforce: false }, null, fr)).toMatchObject({ ok: true, relation: { name: 'ClientsCommandes' } });
-    expect(saveRelation(db, { ...rel, enforce: false }, null, fr)).toMatchObject({ ok: true, relation: { name: 'ClientsCommandes1' } });
-    expect(saveRelation(db, { ...rel, enforce: false, name: 'Été' }, null, fr)).toMatchObject({ ok: true });
-    expect(saveRelation(db, { ...rel, enforce: false, name: 'été' }, null, fr)).toEqual({ ok: false, reason: 'nameExists' });
-    expect(saveRelation(db, { ...rel, enforce: false, name: 'clientscommandes' }, null, fr)).toEqual({ ok: false, reason: 'nameExists' });
+    expect(saveRelation(db, { ...rel, enforce: false, childFields: ['N°'] }, null, fr)).toMatchObject({ ok: true, relation: { name: 'ClientsCommandes1' } });
+    expect(saveRelation(db, { ...rel, enforce: false, name: 'Été', parentFields: ['Solde'], childFields: ['Montant'] }, null, fr)).toMatchObject({ ok: true });
+    const other = { ...rel, enforce: false, parentFields: ['N°', 'Solde'], childFields: ['Client', 'Montant'] }; // no duplicate of those
+    expect(saveRelation(db, { ...other, name: 'été' }, null, fr)).toEqual({ ok: false, reason: 'nameExists' });
+    expect(saveRelation(db, { ...other, name: 'clientscommandes' }, null, fr)).toEqual({ ok: false, reason: 'nameExists' });
   });
 
   it('external tables cannot take part in a relation', () => {
     db.exec('CREATE TABLE "Ext" ("Client" INTEGER)');
     reconcile(db);
     expect(saveRelation(db, { ...rel, childTable: 'Ext' }, null, fr)).toEqual({ ok: false, reason: 'external', table: 'Ext' });
+  });
+
+  it('a field-less metadata row whose name differs from the live table by non-ASCII case is adopted, not left behind', () => {
+    db.exec('CREATE TABLE "Été" ("x" TEXT)');
+    raw(`INSERT INTO bc_tables (name, props) VALUES ('ÉTÉ', '{"description":"kept"}')`); // NOCASE folds ASCII only
+    expect(reconcile(db)).toMatchObject({ addedTables: ['Été'], removedTables: [] });
+    expect(db.prepare('SELECT name FROM bc_tables WHERE name IN (?, ?)').all('ÉTÉ', 'Été')).toHaveLength(1);
+    expect(tableDesign(db, 'Été').description).toBe('kept');
+    expect(reopen()).toMatchObject({ addedTables: [], removedTables: [] });
   });
 
   it('a foreign key added by another tool makes the table external: a rebuild would lose it', async () => {
@@ -251,6 +275,42 @@ describe('relations (brief)', () => {
     expect(JSON.parse((db.prepare(`SELECT value FROM bc_meta WHERE key = 'options'`).get() as { value: string }).value).other).toBe(1);
   });
 
+  it('a renamed table keeps its place in the layout (case-only rename too); other entries are left alone', () => {
+    saveRelationsLayout(db, { tables: { Clients: { x: 10, y: 20 }, Commandes: { x: 300, y: 40 } } });
+    renameTable(db, 'Clients', 'Contacts');
+    expect(relationsLayout(db)).toEqual({ tables: { Contacts: { x: 10, y: 20 }, Commandes: { x: 300, y: 40 } } });
+    renameTable(db, 'Contacts', 'contacts');
+    expect(relationsLayout(db).tables).toEqual({ contacts: { x: 10, y: 20 }, Commandes: { x: 300, y: 40 } });
+  });
+
+  it('a table named like an Object.prototype member keeps its place through save, reopen and rename', () => {
+    for (const n of ['__proto__', 'constructor', 'prototype']) createTable(db, t(n, [f('A', 'shortText')]));
+    const tables = JSON.parse('{"__proto__":{"x":1,"y":2},"constructor":{"x":3,"y":4},"prototype":{"x":5,"y":6}}');
+    saveRelationsLayout(db, { tables });
+    reopen();
+    const read = relationsLayout(db).tables;
+    expect(Object.keys(read)).toEqual(['__proto__', 'constructor', 'prototype']);
+    expect(Object.getOwnPropertyDescriptor(read, '__proto__')?.value).toEqual({ x: 1, y: 2 });
+    renameTable(db, 'Clients', '__proto__x');
+    renameTable(db, '__proto__', 'Proto');
+    renameTable(db, 'constructor', '__proto__');
+    const after = relationsLayout(db).tables;
+    expect(Object.keys(after)).toEqual(['Proto', '__proto__', 'prototype']);
+    expect(Object.getOwnPropertyDescriptor(after, '__proto__')?.value).toEqual({ x: 3, y: 4 });
+  });
+
+  it('a dropped table leaves the layout; a table taking a name never inherits a stale box', () => {
+    createTable(db, t('Autre', [f('A', 'shortText')]));
+    saveRelationsLayout(db, { tables: { Clients: { x: 10, y: 20 }, Autre: { x: 300, y: 40 } } });
+    expect(dropTable(db, 'Autre')).toEqual({ ok: true });
+    expect(relationsLayout(db).tables).toEqual({ Clients: { x: 10, y: 20 } });
+    // stale entries left by an older version or by a table another tool dropped
+    saveRelationsLayout(db, { tables: { Clients: { x: 10, y: 20 }, Ancien: { x: 1, y: 1 }, Nouveau: { x: 2, y: 2 } } });
+    renameTable(db, 'Commandes', 'Ancien'); // Commandes had no box: the stale one under the new name goes
+    createTable(db, t('Nouveau', [f('A', 'shortText')]));
+    expect(relationsLayout(db).tables).toEqual({ Clients: { x: 10, y: 20 } });
+  });
+
   it('quoted, accented names', async () => {
     createTable(db, t('Prix "TTC" été', [f('Code été', 'shortText', { primaryKey: true })]));
     createTable(db, t('Lignes', [f('Réf "x"', 'shortText')]));
@@ -328,11 +388,11 @@ describe('relations (fix round 1)', () => {
 
   it('M5: relation names follow the object-name rules', () => {
     for (const name of ['a.b', 'bc_x', ' x', 'x'.repeat(65), 'a[b]']) expect(saveRelation(db, { ...rel, name }, null, fr)).toEqual({ ok: false, reason: 'nameInvalid' });
-    const long = (c: string) => t(c.repeat(60), [f('K', 'number', { numberSize: 'longInteger' })]);
+    const long = (c: string) => t(c.repeat(60), [f('K', 'number', { numberSize: 'longInteger' }), f('K2', 'number', { numberSize: 'longInteger' })]);
     createTable(db, long('a'));
     const l = { ...rel, childTable: 'a'.repeat(60), childFields: ['K'], enforce: false };
     expect(saveRelation(db, l, null, fr)).toMatchObject({ ok: true, relation: { name: ('Clients' + 'a'.repeat(60)).slice(0, 64) } });
-    const second = saveRelation(db, l, null, fr);
+    const second = saveRelation(db, { ...l, childFields: ['K2'] }, null, fr);
     expect(second.ok && second.relation.name).toBe(('Clients' + 'a'.repeat(60)).slice(0, 63) + '1');
   });
 
@@ -364,16 +424,6 @@ describe('relations (fix round 1)', () => {
 });
 
 describe('relations (fix round 2, A2-R13: the SQLite schema is the source of truth)', () => {
-  const file = () => path.join(dir, 'test.basecraft');
-  const reopen = () => { db.close(); db = openBaseFile(file(), 'write', '0.0.0').db; return reconcile(db); };
-  const externalTables = () => listTables(db).map((x) => x.name).filter((n) => isExternal(db, tableDesign(db, n)));
-  /** Another tool rebuilds `table` from its own CREATE TABLE (rows copied, foreign keys off). */
-  const rebuildWith = (table: string, edit: (sql: string) => string) => {
-    db.exec('PRAGMA foreign_keys=OFF');
-    db.exec(edit(sqlOf(table)).replace(/^CREATE TABLE [^(]+\(/, 'CREATE TABLE "tmp_other" ('));
-    db.exec(`INSERT INTO "tmp_other" SELECT * FROM ${quoteIdent(table)}; DROP TABLE ${quoteIdent(table)}; ALTER TABLE "tmp_other" RENAME TO ${quoteIdent(table)}`);
-    db.exec('PRAGMA foreign_keys=ON');
-  };
 
   describe('dropTable refuses a table that any real foreign key references', () => {
     it('a key left behind by a parent dropped and recreated by another tool (cascade): the children survive', () => {
@@ -413,7 +463,9 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
     createTable(db, t('Contacts', [f('Email', 'shortText')]));
     expect(saveRelation(db, { ...rel, parentFields: ['Email'], childTable: 'Contacts', childFields: ['Email'], cascadeUpdate: true }, null, fr).ok).toBe(true);
     check('relations');
-    expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: [] });
+    const before = stored();
+    expect(reopen()).toEqual(EMPTY);
+    expect(stored()).toEqual(before);
     check('reopen');
     for (const [a, b] of [['Clients', 'Été'], ['Été', 'été'], ['Commandes', 'commandes'], ['commandes', 'Prix "TTC"']]) {
       renameTable(db, a!, b!);
@@ -451,9 +503,9 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
     expect(deleteRelation(db, 'Achats', fr)).toEqual({ ok: true });
     expect(deleteRelation(db, 'ClientsContacts', fr)).toEqual({ ok: true });
     check('relation delete');
-    expect(reopen()).toMatchObject({ addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [] });
+    expect(reopen()).toEqual(EMPTY);
     check('reopen 2');
-    // A base written by A1 (format 1.0), migrated on open.
+    // A base written by A1 (format 1.0: neither bc_relations nor bc_objects), migrated on open.
     db.close();
     const old = path.join(dir, 'old.basecraft');
     createBaseFile(old, '0.1.0');
@@ -462,13 +514,18 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
     createTable(w, commandes);
     w.close();
     const r10 = new DatabaseSync(old);
-    r10.exec("DROP TABLE bc_relations; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
+    r10.exec("DROP TABLE bc_relations; DROP TABLE bc_objects; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
     r10.close();
     db = openBaseFile(old, 'write', '0.2.0').db;
-    reconcile(db);
+    expect(reconcile(db)).toEqual(EMPTY);
     check('migrated 1.0');
     expect(saveRelation(db, rel, null, fr).ok).toBe(true);
     check('relation on migrated base');
+    const migrated = stored();
+    db.close();
+    db = openBaseFile(old, 'write', '0.2.0').db;
+    expect(reconcile(db)).toEqual(EMPTY);
+    expect(stored()).toEqual(migrated);
   });
 
   describe('a change another tool made to a managed table makes it external: no rebuild loses it', () => {
@@ -575,11 +632,16 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
   });
 });
 
+/** The report of a reconcile that found nothing changed outside BaseCraft. */
+const EMPTY = { addedTables: [], removedTables: [], addedFields: [], removedFields: [], removedRelations: [], downgradedRelations: [], updatedRelations: [] };
+const stored = () => db.prepare('SELECT name, props FROM bc_relations ORDER BY name').all();
+
+const texts: ImportTexts = {
+  fieldPrefix: 'Champ', idName: 'N°', errorSuffix: '_Erreurs', errorFields: { error: 'Erreur', field: 'Champ', line: 'Ligne' }, messages: en.fieldError, log: en.importText.log,
+};
+const csvFile = (name: string, data: string) => { const p = path.join(dir, name); fs.writeFileSync(p, data); return p; };
+
 describe('relations (fix round 3, A2-R14: the real foreign keys decide)', () => {
-  const texts: ImportTexts = {
-    fieldPrefix: 'Champ', idName: 'N°', errorSuffix: '_Erreurs', errorFields: { error: 'Erreur', field: 'Champ', line: 'Ligne' }, messages: en.fieldError, log: en.importText.log,
-  };
-  const csvFile = (name: string, data: string) => { const p = path.join(dir, name); fs.writeFileSync(p, data); return p; };
   const n = (table: string) => countRows(db, table);
 
   describe('tables whose names differ only in non-ASCII case (another tool made the twin)', () => {
@@ -641,7 +703,7 @@ describe('relations (fix round 3, A2-R14: the real foreign keys decide)', () => 
       expect(reconcile(db)).toMatchObject({ removedRelations: [], updatedRelations: ['ClientsCommandes'] });
       expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', parentTable: 'Kunden', cascadeDelete: true }]);
       expect(isExternal(db, tableDesign(db, 'Commandes'))).toBe(false);
-      expect(cascadeChildren(db, 'Kunden')).toEqual(['Commandes']);
+      expect(cascadeChildren(db, 'Kunden')).toEqual([{ table: 'Commandes', effect: 'deleted' }]);
     });
     it('a child renamed by another tool: the relation follows it', () => {
       saveRelation(db, rel, null, fr);
@@ -667,7 +729,7 @@ describe('relations (fix round 3, A2-R14: the real foreign keys decide)', () => 
     saveRelation(db, rel, null, fr);
     expect(cascadeChildren(db, 'Clients')).toEqual([]);
     db.exec(`CREATE TABLE "Notes" ("c" INTEGER REFERENCES "clients" ("N°") ON DELETE CASCADE)`);
-    expect(cascadeChildren(db, 'Clients')).toEqual(['Notes']);
+    expect(cascadeChildren(db, 'Clients')).toEqual([{ table: 'Notes', effect: 'deleted' }]);
   });
 
   describe("another tool's key on a managed table: typed refusals, never raw errors", () => {
@@ -745,5 +807,310 @@ describe('relations (fix round 3, A2-R14: the real foreign keys decide)', () => 
       expect(n('Orph')).toBe(2);
       expect(listTables(db).map((x) => x.name)).not.toContain('Ghost');
     });
+  });
+});
+
+describe('relations (fix round 4, A2-R15: one real key per relation, exact match first)', () => {
+  const fournisseurs = t('Fournisseurs', [f('N°', 'autoNumber'), f('Nom', 'shortText')]);
+  const byFournisseur: Relation = { ...rel, parentTable: 'Fournisseurs' };
+  beforeEach(async () => {
+    createTable(db, fournisseurs);
+    for (const nom of ['F1', 'F2']) expect((await insertRow(db, fournisseurs, { Nom: nom }, fr, now)).ok).toBe(true);
+  });
+
+  it('guard: on a base only BaseCraft touched, a reopen reports nothing and leaves bc_relations byte-identical', () => {
+    expect(saveRelation(db, rel, null, fr)).toMatchObject({ ok: true, relation: { name: 'ClientsCommandes' } });
+    expect(saveRelation(db, { ...byFournisseur, cascadeDelete: true }, null, fr)).toMatchObject({ ok: true, relation: { name: 'FournisseursCommandes' } });
+    createTable(db, t('Contacts', [f('Email', 'shortText')]));
+    expect(saveRelation(db, { ...rel, parentFields: ['Email'], childTable: 'Contacts', childFields: ['Email'], cascadeUpdate: true }, null, fr).ok).toBe(true);
+    expect(saveRelation(db, { ...rel, name: 'Libre', childFields: ['N°'], enforce: false }, null, fr).ok).toBe(true);
+    const before = stored();
+    expect(reopen()).toEqual(EMPTY);
+    expect(stored()).toEqual(before);
+    expect(externalTables()).toEqual([]);
+    expect(reopen()).toEqual(EMPTY);
+    expect(stored()).toEqual(before);
+  });
+
+  it('two relations on one child column with different parents keep their own key through a reopen', () => {
+    saveRelation(db, rel, null, fr);
+    saveRelation(db, { ...byFournisseur, cascadeDelete: true }, null, fr);
+    expect(reopen()).toEqual(EMPTY);
+    expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes' }, { ...byFournisseur, name: 'FournisseursCommandes', cascadeDelete: true }]);
+    expect(externalTables()).toEqual([]);
+    expect(deleteRelation(db, 'ClientsCommandes', fr)).toEqual({ ok: true });
+    expect(sqlOf('Commandes')).not.toMatch(/REFERENCES "Clients"/);
+    expect(sqlOf('Commandes')).toMatch(/REFERENCES "Fournisseurs" \("N°"\) ON DELETE CASCADE/);
+    expect(reopen()).toEqual(EMPTY);
+    expect(deleteRelation(db, 'FournisseursCommandes', fr)).toEqual({ ok: true });
+    expect(sqlOf('Commandes')).not.toMatch(/FOREIGN KEY/);
+  });
+
+  for (const dup of ['Aaa', 'Zzz']) {
+    it(`legacy duplicate relations (saved before duplicates were refused) keep their own key and flags (${dup})`, () => {
+      saveRelation(db, rel, null, fr);
+      const { name: _n, ...props } = { ...rel, cascadeDelete: true };
+      raw('INSERT INTO bc_relations (name, props) VALUES (?, ?)', dup, JSON.stringify(props));
+      expect(withForeignKeysOff(db, () => rebuildSame(db, 'Commandes', fr), () => ['Commandes'])).toEqual({ ok: true });
+      expect(sqlOf('Commandes').match(/FOREIGN KEY/g)).toHaveLength(2);
+      const before = stored();
+      expect(reopen()).toEqual(EMPTY);
+      expect(stored()).toEqual(before);
+      expect(externalTables()).toEqual([]);
+    });
+  }
+
+  it('sibling children of one parent: another tool renames one child, only its relation follows', () => {
+    createTable(db, t('Factures', [f('Client', 'number', { numberSize: 'longInteger' })]));
+    saveRelation(db, rel, null, fr);
+    saveRelation(db, { ...rel, childTable: 'Factures', cascadeDelete: true }, null, fr);
+    db.exec('ALTER TABLE "Commandes" RENAME TO "Orders"');
+    expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: [], updatedRelations: ['ClientsCommandes'] });
+    expect(listRelations(db)).toEqual([
+      { ...rel, name: 'ClientsCommandes', childTable: 'Orders' },
+      { ...rel, name: 'ClientsFactures', childTable: 'Factures', cascadeDelete: true },
+    ]);
+    expect(isExternal(db, tableDesign(db, 'Factures'))).toBe(false);
+    expect(deleteRelation(db, 'ClientsFactures', fr)).toEqual({ ok: true });
+  });
+
+  it("a child renamed by another tool is followed even beside another tool's key to the same parent (only the new table fits)", () => {
+    db.exec('CREATE TABLE "Notes" ("c" INTEGER REFERENCES "Clients" ("N°"))');
+    reconcile(db);
+    saveRelation(db, rel, null, fr);
+    db.exec('ALTER TABLE "Commandes" RENAME TO "Orders"');
+    expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: [], updatedRelations: ['ClientsCommandes'] });
+    expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', childTable: 'Orders' }]);
+  });
+
+  it('a key replaced by another tool: the relation loses its integrity, the other key and its cascade are kept', async () => {
+    const cm = tableDesign(db, 'Commandes');
+    const more = { ...cm, fields: [...cm.fields, f('Livraison', 'number', { numberSize: 'longInteger' })] };
+    expect(await alterTable(db, 'Commandes', more, [...identity(cm), { name: 'Livraison', sourceName: null }], opts)).toEqual({ ok: true });
+    saveRelation(db, { ...rel, name: 'Facturation' }, null, fr);
+    rebuildWith('Commandes', (s) => s.replace(/FOREIGN KEY .*\)$/, 'FOREIGN KEY ("Livraison") REFERENCES "Clients" ON DELETE CASCADE)'));
+    expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: ['Facturation'], updatedRelations: [] });
+    expect(listRelations(db)).toEqual([{ ...rel, name: 'Facturation', enforce: false }]);
+    expect(deleteRelation(db, 'Facturation', fr)).toEqual({ ok: true });
+    expect(sqlOf('Commandes')).toMatch(/FOREIGN KEY \("Livraison"\) REFERENCES "Clients" ON DELETE CASCADE/);
+    expect(cascadeChildren(db, 'Clients')).toEqual([{ table: 'Commandes', effect: 'deleted' }]);
+  });
+
+  it('a key retargeted to another parent while the old parent still exists: downgraded, never rebound', () => {
+    createTable(db, t('Autres', [f('K', 'autoNumber')]));
+    saveRelation(db, rel, null, fr);
+    rebuildWith('Commandes', (s) => s.replace('REFERENCES "Clients" ("N°")', 'REFERENCES "Autres" ("K")'));
+    expect(sqlOf('Commandes')).toMatch(/REFERENCES "Autres"/);
+    expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: ['ClientsCommandes'], updatedRelations: [] });
+    expect(listRelations(db)).toEqual([{ ...rel, name: 'ClientsCommandes', enforce: false }]);
+  });
+
+  it('relations without integrity: a change by another tool is reported; a case-only table rename is followed', () => {
+    saveRelation(db, { ...rel, enforce: false }, null, fr);
+    db.exec('ALTER TABLE "Commandes" RENAME COLUMN "Client" TO "client"');
+    expect(reopen()).toMatchObject({ updatedRelations: ['ClientsCommandes'] });
+    expect(listRelations(db)[0]).toMatchObject({ childFields: ['client'], enforce: false });
+    db.exec('ALTER TABLE "Clients" RENAME TO "tmp_x"; ALTER TABLE "tmp_x" RENAME TO "clients"');
+    expect(reopen()).toMatchObject({ removedRelations: [], updatedRelations: ['ClientsCommandes'] });
+    expect(listRelations(db)[0]).toMatchObject({ parentTable: 'clients' });
+  });
+
+  it("a twin of a table another tool dropped never takes that table's relation", () => {
+    createTable(db, t('Été', [f('N°', 'autoNumber')]));
+    db.exec('CREATE TABLE "été" ("N°" INTEGER)');
+    reconcile(db);
+    expect(saveRelation(db, { ...rel, name: 'RP', parentTable: 'Été', enforce: false }, null, fr)).toMatchObject({ ok: true });
+    db.exec('DROP TABLE "Été"');
+    expect(reopen()).toMatchObject({ removedTables: ['Été'], removedRelations: ['RP'] });
+    expect(listRelations(db)).toEqual([]);
+    expect(dropTable(db, 'été')).toEqual({ ok: true });
+  });
+
+  it('a duplicate relation (same tables and fields) is refused, as in Access', () => {
+    expect(saveRelation(db, rel, null, fr)).toMatchObject({ ok: true });
+    const dup = { ok: false, reason: 'duplicate', relation: 'ClientsCommandes' };
+    expect(saveRelation(db, { ...rel, name: 'Bis', cascadeDelete: true }, null, fr)).toEqual(dup);
+    expect(saveRelation(db, { ...rel, enforce: false, parentTable: 'clients', childFields: ['client'] }, null, fr)).toEqual(dup);
+    expect(saveRelation(db, { ...rel, name: 'ClientsCommandes', cascadeDelete: true }, 'ClientsCommandes', fr)).toMatchObject({ ok: true }); // itself
+    expect(saveRelation(db, byFournisseur, null, fr)).toMatchObject({ ok: true }); // another parent
+    expect(saveRelation(db, { ...rel, name: 'FournisseursCommandes' }, 'FournisseursCommandes', fr)).toEqual(dup);
+    expect(listRelations(db)).toHaveLength(2);
+  });
+
+  it('saveRelation compares twins exactly: a relation cannot slip onto the twin of another tool', () => {
+    createTable(db, t('Été', [f('Client', 'number', { numberSize: 'longInteger' })]));
+    db.exec('CREATE TABLE "été" ("Client" INTEGER); INSERT INTO "été" VALUES (99)');
+    reconcile(db);
+    expect(saveRelation(db, { ...rel, name: 'RT', childTable: 'Été' }, null, fr)).toMatchObject({ ok: true });
+    expect(saveRelation(db, { ...rel, name: 'RT', childTable: 'été' }, 'RT', fr)).toEqual({ ok: false, reason: 'external', table: 'été' });
+    expect(sqlOf('Été')).toMatch(/FOREIGN KEY/);
+    expect(saveRelation(db, { ...rel, parentTable: 'Été', parentFields: ['Client'], childTable: 'été', enforce: false }, null, fr))
+      .toEqual({ ok: false, reason: 'external', table: 'été' }); // two tables, not sameTable
+  });
+
+  it("relationField names a relation only by a full match: another tool's key on the same child field is no relation", async () => {
+    saveRelation(db, rel, null, fr);
+    rebuildWith('Commandes', (s) => s.replace(/\)$/, ', FOREIGN KEY ("Client") REFERENCES "Clients" ("Email"))'));
+    const cl = tableDesign(db, 'Clients');
+    const loose = cl.fields.map((x) => (x.name === 'Email' ? { ...x, props: { ...x.props, indexed: 'no' as const } } : x));
+    expect(await alterTable(db, 'Clients', { ...cl, fields: loose }, identity(cl), opts))
+      .toEqual({ ok: false, reason: 'relationField', field: 'Email', relation: '', table: 'Commandes' });
+  });
+
+  it('updateRow: a refusal on the parent side is related on the parent key, never noParent on an untouched child column', async () => {
+    db.exec(`CREATE TABLE "P" ("id" INTEGER PRIMARY KEY); CREATE TABLE "C" ("ref" TEXT PRIMARY KEY, "pid" INTEGER REFERENCES "P" ("id"));
+      CREATE TABLE "L" ("r" TEXT REFERENCES "C" ("ref"))`);
+    db.exec(`INSERT INTO "P" VALUES (1); INSERT INTO "C" VALUES ('a', 1); INSERT INTO "L" VALUES ('a')`);
+    db.exec('PRAGMA foreign_keys=OFF; DELETE FROM "P"; PRAGMA foreign_keys=ON'); // an orphan another tool wrote
+    reconcile(db);
+    expect(await updateRow(db, tableDesign(db, 'C'), 1, { ref: 'b' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'ref', code: 'related', table: 'L' }] });
+    expect(await updateRow(db, tableDesign(db, 'C'), 1, { pid: '7' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'pid', code: 'noParent', table: 'P' }] });
+  });
+
+  it('cascadeChildren: CASCADE deletes, SET NULL and SET DEFAULT modify; SET NULL into a NOT NULL column is a typed refusal', () => {
+    db.exec(`CREATE TABLE "Notes" ("c" INTEGER REFERENCES "Clients" ("N°") ON DELETE CASCADE);
+      CREATE TABLE "Kids" ("c" INTEGER REFERENCES "clients" ("N°") ON DELETE SET NULL);
+      CREATE TABLE "Pets" ("c" INTEGER DEFAULT 0 REFERENCES "Clients" ("N°") ON DELETE SET DEFAULT)`);
+    expect(cascadeChildren(db, 'Clients')).toEqual([
+      { table: 'Kids', effect: 'modified' }, { table: 'Notes', effect: 'deleted' }, { table: 'Pets', effect: 'modified' },
+    ]);
+    db.exec(`CREATE TABLE "Strict" ("c" INTEGER NOT NULL REFERENCES "Clients" ("N°") ON DELETE SET NULL); INSERT INTO "Strict" VALUES (1)`);
+    expect(deleteRows(db, 'Clients', [1])).toEqual({ ok: false, reason: 'related', table: 'Strict' });
+    expect(countRows(db, 'Clients')).toBe(2);
+  });
+
+  it("the import's error table skips a name a dangling key targets", async () => {
+    db.exec('CREATE TABLE "Ghost_Erreurs" ("id" INTEGER PRIMARY KEY); CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost_Erreurs" ("id"))');
+    db.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Ghost_Erreurs"; PRAGMA foreign_keys=ON');
+    createTable(db, t('Ghost', [f('n', 'number', { numberSize: 'longInteger' })]));
+    const p = csvFile('g.csv', 'n\nabc\n');
+    expect(await runImport(db, p, { spec: previewText(p, null, fr, 'Champ').spec, target: { kind: 'append', table: 'Ghost', mapping: ['n'] } }, fr, texts))
+      .toMatchObject({ ok: true, errors: 1 });
+    expect(listTables(db).map((x) => x.name)).toContain('Ghost_Erreurs1');
+  });
+});
+
+describe('relations (fix round 5)', () => {
+  const long = (name: string, more: Partial<FieldDef['props']> = {}) => f(name, 'number', { numberSize: 'longInteger', ...more });
+
+  describe('a refusal names the table the failing chain reaches, never an unrelated sibling', () => {
+    it('delete: a cascade stopped by a grandchild names the grandchild', () => {
+      createTable(db, t('Adresses', [long('Client'), f('Mail', 'shortText')]));
+      createTable(db, t('Lignes', [long('Commande')]));
+      raw('INSERT INTO "Adresses" ("Client") VALUES (2)');
+      raw('INSERT INTO "Lignes" VALUES (1)'); // order 1 is client 1's
+      expect(saveRelation(db, { ...rel, childTable: 'Adresses' }, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...rel, cascadeDelete: true }, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...rel, parentTable: 'Commandes', childTable: 'Lignes', childFields: ['Commande'] }, null, fr).ok).toBe(true);
+      expect(deleteRows(db, 'Clients', [1])).toEqual({ ok: false, reason: 'related', table: 'Lignes' });
+      expect(deleteRows(db, 'Clients', [2])).toEqual({ ok: false, reason: 'related', table: 'Adresses' });
+      expect(countRows(db, 'Commandes')).toBe(2);
+    });
+    it('update: a cascade update stopped by a grandchild names the grandchild', async () => {
+      createTable(db, t('Adresses', [f('Mail', 'shortText')]));
+      createTable(db, t('Contacts', [f('Email', 'shortText', { indexed: 'yesNoDuplicates' })]));
+      createTable(db, t('Notes', [f('Mail', 'shortText')]));
+      raw(`INSERT INTO "Contacts" VALUES ('ana@x')`);
+      raw(`INSERT INTO "Notes" VALUES ('ana@x')`);
+      const byEmail = { ...rel, parentFields: ['Email'] };
+      expect(saveRelation(db, { ...byEmail, childTable: 'Adresses', childFields: ['Mail'] }, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...byEmail, childTable: 'Contacts', childFields: ['Email'], cascadeUpdate: true }, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...rel, parentTable: 'Contacts', parentFields: ['Email'], childTable: 'Notes', childFields: ['Mail'] }, null, fr).ok).toBe(true);
+      expect(await updateRow(db, tableDesign(db, 'Clients'), 1, { Email: 'zed@x' }, fr, now))
+        .toEqual({ ok: false, errors: [{ field: 'Email', code: 'related', table: 'Notes' }] });
+    });
+    it('a chain that cannot be resolved names no table', () => {
+      db.exec(`CREATE TABLE "Log" ("c" INTEGER REFERENCES "Clients" ("N°"));
+        CREATE TRIGGER "audit" AFTER DELETE ON "Clients" BEGIN INSERT INTO "Log" VALUES (OLD."N°"); END`);
+      expect(deleteRows(db, 'Clients', [1])).toEqual({ ok: false, reason: 'related' });
+      expect(countRows(db, 'Clients')).toBe(2);
+    });
+  });
+
+  describe('pass 2 follows a rename by the stored field names, actions copied only when they match', () => {
+    beforeEach(() => {
+      createTable(db, t('Teams', [f('ID', 'autoNumber'), long('Code', { indexed: 'yesNoDuplicates' })]));
+      createTable(db, t('Matches', [f('N°', 'autoNumber'), long('HomeTeam'), long('AwayTeam')]));
+    });
+    const home: Relation = { ...rel, name: 'Home', parentTable: 'Teams', parentFields: ['ID'], childTable: 'Matches', childFields: ['HomeTeam'] };
+    const away: Relation = { ...home, name: 'Away', childFields: ['AwayTeam'] };
+    it('a child renamed by another tool, two keys to one parent, same actions: both follow', () => {
+      expect(saveRelation(db, home, null, fr).ok).toBe(true);
+      expect(saveRelation(db, away, null, fr).ok).toBe(true);
+      db.exec('ALTER TABLE "Matches" RENAME TO "Games"');
+      expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: [], updatedRelations: ['Away', 'Home'] });
+      expect(listRelations(db)).toEqual([{ ...away, childTable: 'Games' }, { ...home, childTable: 'Games' }]);
+    });
+    it('a parent renamed by another tool, one child column to two parent keys: both follow, the child stays managed', () => {
+      expect(saveRelation(db, home, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...home, name: 'ByCode', parentFields: ['Code'] }, null, fr).ok).toBe(true);
+      db.exec('ALTER TABLE "Teams" RENAME TO "Clubs"');
+      expect(reopen()).toMatchObject({ removedRelations: [], downgradedRelations: [], updatedRelations: ['ByCode', 'Home'] });
+      expect(listRelations(db)).toEqual([{ ...home, name: 'ByCode', parentTable: 'Clubs', parentFields: ['Code'] }, { ...home, parentTable: 'Clubs' }]);
+      expect(isExternal(db, tableDesign(db, 'Matches'))).toBe(false);
+    });
+    it('a rename plus swapped actions is not rebound', () => {
+      expect(saveRelation(db, home, null, fr).ok).toBe(true);
+      expect(saveRelation(db, { ...away, cascadeDelete: true }, null, fr).ok).toBe(true);
+      rebuildWith('Matches', (s) => s.replace(' ON DELETE CASCADE', '')
+        .replace('FOREIGN KEY ("HomeTeam") REFERENCES "Teams" ("ID")', 'FOREIGN KEY ("HomeTeam") REFERENCES "Teams" ("ID") ON DELETE CASCADE'));
+      db.exec('ALTER TABLE "Matches" RENAME TO "Games"');
+      expect(sqlOf('Games')).toMatch(/"HomeTeam"\) REFERENCES "Teams" \("ID"\) ON DELETE CASCADE/);
+      expect(reopen()).toMatchObject({ removedRelations: ['Away', 'Home'], updatedRelations: [] });
+      expect(listRelations(db)).toEqual([]);
+    });
+  });
+
+  describe('no raw FOREIGN KEY or NOT NULL error left', () => {
+    it('insert: an AutoNumber child key without parent is noParent', async () => {
+      createTable(db, t('Fiches', [long('Client', { indexed: 'yesNoDuplicates' })]));
+      raw('INSERT INTO "Fiches" VALUES (1), (2)');
+      expect(saveRelation(db, { ...rel, parentTable: 'Fiches', parentFields: ['Client'], childTable: 'Clients', childFields: ['N°'] }, null, fr).ok).toBe(true);
+      expect(await insertRow(db, tableDesign(db, 'Clients'), { Nom: 'Cy' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'N°', code: 'noParent', table: 'Fiches' }] });
+      raw('INSERT INTO "Fiches" VALUES (3)');
+      expect((await insertRow(db, tableDesign(db, 'Clients'), { Nom: 'Cy' }, fr, now)).ok).toBe(true);
+    });
+    it('update: ON UPDATE SET NULL into a NOT NULL column is related; a SET NULL reached through a cascade too', async () => {
+      db.exec(`CREATE TABLE "Kids" ("e" TEXT NOT NULL REFERENCES "Clients" ("Email") ON UPDATE SET NULL); INSERT INTO "Kids" VALUES ('ana@x')`);
+      expect(await updateRow(db, tableDesign(db, 'Clients'), 1, { Email: 'new@x' }, fr, now))
+        .toEqual({ ok: false, errors: [{ field: 'Email', code: 'related', table: 'Kids' }] });
+      db.exec(`CREATE TABLE "Notes" ("id" INTEGER PRIMARY KEY, "c" INTEGER REFERENCES "Clients" ("N°") ON DELETE CASCADE);
+        CREATE TABLE "G" ("n" INTEGER NOT NULL REFERENCES "Notes" ("id") ON DELETE SET NULL);
+        INSERT INTO "Notes" VALUES (10, 1); INSERT INTO "G" VALUES (10)`);
+      expect(deleteRows(db, 'Clients', [1])).toEqual({ ok: false, reason: 'related', table: 'G' });
+    });
+    it('update: noParent goes on the column of a multi-column key the user changed', async () => {
+      createTable(db, t('P', [long('a', { primaryKey: true }), long('b', { primaryKey: true })]));
+      createTable(db, t('C', [long('x'), long('y')]));
+      raw('INSERT INTO "P" VALUES (1, 1)');
+      raw('INSERT INTO "C" VALUES (1, 1)');
+      expect(saveRelation(db, { ...rel, parentTable: 'P', parentFields: ['a', 'b'], childTable: 'C', childFields: ['x', 'y'] }, null, fr).ok).toBe(true);
+      expect(await updateRow(db, tableDesign(db, 'C'), 1, { y: '9' }, fr, now)).toEqual({ ok: false, errors: [{ field: 'y', code: 'noParent', table: 'P' }] });
+    });
+    it('a text import appended to a child with a DEFERRABLE key logs the orphan line and keeps the others', async () => {
+      db.exec('CREATE TABLE "Kids" ("id" INTEGER PRIMARY KEY, "e" TEXT REFERENCES "Clients" ("Email") DEFERRABLE INITIALLY DEFERRED)');
+      reconcile(db);
+      const p = csvFile('k.csv', 'e\nbob@x\nzz@x\nana@x\n');
+      expect(await runImport(db, p, { spec: previewText(p, null, fr, 'Champ').spec, target: { kind: 'append', table: 'Kids', mapping: ['e'] } }, fr, texts))
+        .toMatchObject({ ok: true, imported: 2, errors: 1, errorTable: 'Kids_Erreurs' });
+      expect(db.prepare('SELECT "e" FROM "Kids" ORDER BY "id"').all()).toEqual([{ e: 'bob@x' }, { e: 'ana@x' }]);
+      expect(db.prepare('SELECT "Champ", "Ligne" FROM "Kids_Erreurs"').all()).toEqual([{ Champ: 'e', Ligne: 3 }]);
+    });
+  });
+
+  it('saveRelation refuses the swapped duplicate (the same fields, parent and child exchanged)', () => {
+    createTable(db, t('Fiches', [long('Client', { indexed: 'yesNoDuplicates' })]));
+    raw('INSERT INTO "Fiches" VALUES (1), (2)');
+    expect(saveRelation(db, { ...rel, childTable: 'Fiches' }, null, fr).ok).toBe(true);
+    expect(saveRelation(db, { ...rel, parentTable: 'Fiches', parentFields: ['Client'], childTable: 'Clients', childFields: ['N°'] }, null, fr))
+      .toEqual({ ok: false, reason: 'duplicate', relation: 'ClientsFiches' });
+  });
+
+  it('a self-referencing SET NULL key: the warning does not speak of other tables', () => {
+    db.exec('CREATE TABLE "Emp" ("id" INTEGER PRIMARY KEY, "boss" INTEGER REFERENCES "Emp" ("id") ON DELETE SET NULL)');
+    expect(cascadeChildren(db, 'Emp')).toEqual([{ table: 'Emp', effect: 'modified' }]);
+    for (const s of [en.datasheet.deleteModifies, en.datasheet.deleteModifies_one, frTexts.datasheet.deleteModifies, frTexts.datasheet.deleteModifies_one]) {
+      expect(s).not.toMatch(/other tables|autres tables/);
+    }
   });
 });

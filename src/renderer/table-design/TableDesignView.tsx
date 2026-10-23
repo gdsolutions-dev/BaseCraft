@@ -2,7 +2,6 @@
 import { ChevronRight, KeyRound } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SaveTableResult } from '../../shared/api';
 import type { DisplayContext } from '../../shared/expr/localize';
 import type { FieldType } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
@@ -10,13 +9,23 @@ import { api } from '../bridge';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { useErrorDialog, useModal } from '../shell/Modal';
 import { nameErrorKey } from '../shell/NavPane';
+import { Splitter } from '../shell/Splitter';
+import { SPLIT_DEFAULT, loadRatio, pxToRatio, ratioToPx, saveRatio } from '../shell/splitter-model';
 import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
-import { designReducer, emptyDesign, fromDesign, savedModel, toSaveRequest, withDefaultPrimaryKey, type DesignAction, type DesignModel } from './design-model';
+import { TABLE_KEY, designOf, designReducer, emptyDesign, fromDesign, savedModel, toSaveRequest, withDefaultPrimaryKey, type DesignAction, type DesignModel, fieldNameTooLong, longFieldNames } from './design-model';
 import { FIELD_TYPES, FieldPropertiesPanel } from './FieldPropertiesPanel';
+import { TablePropertiesPanel } from './TablePropertiesPanel';
+import { runSave } from './save-table';
+import { editIndexes } from './IndexesDialog';
 import './table-design.css';
 
+type Expression = 'prop-defaultValue' | 'prop-validationRule' | 'table-prop-validationRule'; // the test id of an expression field
 type ViewAction = DesignAction | { type: 'load'; model: DesignModel };
 const viewReducer = (m: DesignModel, a: ViewAction): DesignModel => (a.type === 'load' ? a.model : designReducer(m, a));
+const SPLIT_KEY = 'basecraft.design.splitRatio'; // grid height / available height, per user
+const BAR = 6; // splitter thickness (px)
+const GRID_MIN = 34 + 3 * 30; // header + 3 rows
+const PROPS_MIN = 128; // heading + tab bar + 2 rows
 const CELL = /^design-row-(\d+)-(key|name|type|desc)$/;
 
 export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
@@ -28,9 +37,24 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
   const anchor = useRef(0);
   const root = useRef<HTMLDivElement>(null);
   const focusNext = useRef<string | null>(null);
+  const [ratio, setRatio] = useState(() => loadRatio(SPLIT_KEY));
+  const [avail, setAvail] = useState(0); // height shared by the two panes, kept up to date on window resize
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const measure = () => setAvail(Math.max(0, el.clientHeight - BAR));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const gridPx = ratioToPx(ratio, avail, GRID_MIN, PROPS_MIN);
+  const setGridPx = (px: number) => { const r = pxToRatio(px, avail); setRatio(r); saveRatio(SPLIT_KEY, r); };
+  const lastExpression = useRef<Expression>('prop-validationRule'); // the Builder command's target (its field's test id)
   const loaded = useRef<{ name: string; token: number } | null>(null);
   const busy = useRef(false); // synchronous twin of `saving` (a key repeat must not start a second save)
   const [saving, setSaving] = useState(false); // the whole save flow: grid, properties and commands are locked
+  const [sheet, setSheet] = useState(false); // the table's Property Sheet, on the right
   const [region, setRegion] = useState<string | null>(null); // expressions are shown with the region's separators
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
@@ -51,14 +75,15 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     }
     let current = true;
     api.tables.design(tab.name).then(
-      (d) => { if (current) { set({ type: 'load', model: fromDesign(d) }); setPicked([]); } },
+      (d) => { if (current) { set({ type: 'load', model: fromDesign(d, live.current.tab.description) }); setPicked([]); } },
       (e) => { if (current) void showError(e); },
     );
     return () => { current = false; };
   }, [tab.name, tab.isNew, tab.reloadToken, showError]);
 
+  useEffect(() => { if (tab.description !== undefined) set({ type: 'setDescription', description: tab.description }); }, [tab.description]);
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: model.dirty }); }, [model.dirty, tab.id, dispatch]);
-  useEffect(() => () => dispatch({ type: 'setDirty', id: tab.id, dirty: false }), [tab.id, dispatch]); // edits leave with the view
+  useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]); // edits leave with the view
 
   useEffect(() => {
     if (!focusNext.current || saving) return;
@@ -71,33 +96,6 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     return (p.length ? p : [m.selected]).filter((i) => i < m.rows.length);
   };
   const message = (messageKey: string, params?: object) => modal.confirm({ titleKey: 'dialog.errorTitle', messageKey, params, buttons: ['ok'] });
-
-  /** Explains a failed save; true when the caller should try again (with allowDataLoss after a lossy answer). */
-  const explain = async (r: Exclude<SaveTableResult, { ok: true }>): Promise<boolean> => {
-    switch (r.reason) {
-      case 'lossy':
-        return (await modal.confirm({ titleKey: 'designer.lossyTitle', messageKey: 'designer.lossy', params: { count: r.lossyRows }, buttons: ['yes', 'no'], defaultButton: 'no' })) === 'yes';
-      case 'design': {
-        const text = (e: (typeof r.errors)[number]) => t(`designError.${e.code}`, e.prop ? { prop: t(`fieldProp.${e.prop}`) } : {});
-        const lines = r.errors.map((e) => (e.field === undefined ? text(e)
-          : t('designer.fieldError', { field: e.field || t('designer.unnamedField'), message: text(e) })));
-        await message('designer.designErrors', { detail: [...new Set(lines)].join('\n') });
-        return false;
-      }
-      case 'required': await message('designer.required', { count: r.rows, field: r.field }); return false;
-      case 'duplicate': await message('designer.duplicate', { field: r.field }); return false;
-      case 'external': await message('designer.external'); return false;
-      case 'relationField':
-        await message(r.relation ? 'designer.relationField' : 'designer.foreignKeyField', { field: r.field, relation: r.relation, table: r.table });
-        return false;
-      case 'viewBroken': await message('designer.viewBroken', { name: r.view }); return false;
-      case 'danglingKey': await message('designer.danglingKey', { name: r.table }); return false;
-      case 'validationExisting':
-        return (await modal.confirm({ titleKey: 'designer.validationExistingTitle', messageKey: 'designer.validationExisting', params: { count: r.rows }, buttons: ['yes', 'no'], defaultButton: 'no' })) === 'yes';
-      case 'readOnly': await message('dialog.op.readOnly'); return false;
-      case 'nameExists': return true; // handled by the caller
-    }
-  };
 
   const askName = (initial: string) => modal.prompt({
     titleKey: 'designer.saveAsTitle', labelKey: 'designer.tableNameLabel', initial,
@@ -117,6 +115,7 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     const sep = k.lastIndexOf(':');
     const r = m.rows.find((x) => x.key === k.slice(0, sep));
     const message = t('designer.propError', { prop: t(`fieldProp.${k.slice(sep + 1)}`), message: t(`expr.error.${code}`) });
+    if (k.startsWith(`${TABLE_KEY}:`)) return t('designer.tableErrors', { message }); // the Property Sheet's
     return t('designer.fieldError', { field: r?.name || t('designer.unnamedField'), message });
   });
 
@@ -135,6 +134,12 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
         await message('designer.invalidExpressions', { detail: invalidLines(m).join('\n') });
         return false;
       }
+      const long = longFieldNames(m);
+      if (long.length) {
+        const lines = long.map((r) => t('designer.fieldError', { field: r.name, message: t('designError.nameTooLong') }));
+        await message('designer.designErrors', { detail: lines.join('\n') });
+        return false;
+      }
       const isNew = m.originalName === null;
       let name = m.originalName ?? (await askName(doc.name));
       if (name === null) return false;
@@ -144,23 +149,10 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
         if (r === 'cancel') return false;
         if (r === 'yes') { m = withDefaultPrimaryKey(m, t('designer.defaultIdName')); set({ type: 'load', model: m }); }
       }
-      let allowDataLoss = false;
-      let acceptExistingViolations = false;
-      let req;
-      for (;;) {
-        req = { ...toSaveRequest(m, name, allowDataLoss), ...(acceptExistingViolations ? { acceptExistingViolations } : {}) };
-        const r = await api.tables.save(req);
-        if (r.ok) break;
-        if (r.reason === 'nameExists') {
-          await message('dialog.op.nameExists');
-          name = await askName(name);
-          if (name === null) return false;
-          continue;
-        }
-        if (!(await explain(r))) return false;
-        if (r.reason === 'validationExisting') acceptExistingViolations = true;
-        else allowDataLoss = true;
-      }
+      const done = await runSave(modal, (n, f) => ({ ...toSaveRequest(m, n, f.allowDataLoss), ...(f.acceptExistingViolations ? { acceptExistingViolations: true } : {}) }), name, askName);
+      if (!done) return false;
+      const { req } = done;
+      name = done.name;
       // Saved: the model maps each field to itself at once, so a second save, or a failed reload below, can never
       // send the old mapping (a rename would fail, a swap would swap the data back).
       set({ type: 'load', model: savedModel(m, req) });
@@ -218,15 +210,52 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     return r === 'no' || (r === 'yes' && (await save()));
   };
 
-  const cmds = useRef({ save, primaryKey, insertRows, deleteRows, leave });
-  cmds.current = { save, primaryKey, insertRows, deleteRows, leave };
+  /** Builder (ribbon): the « … » of the expression property last focused (Validation Rule before any). */
+  const builder = () => root.current?.querySelector<HTMLButtonElement>(`[data-testid="${lastExpression.current}-build"]`)?.click();
+
+  /** Test Validation Rules: the stored rows against each field's rule; as in Access, the table is saved first. */
+  const testRules = async () => {
+    await flush();
+    const { model: m, tab: doc } = live.current;
+    if (m.dirty || m.originalName === null) {
+      const r = await modal.confirm({ titleKey: 'designer.saveFirstTitle', messageKey: 'designer.mustSaveFirst', params: { name: doc.name }, buttons: ['yes', 'no'] });
+      if (r !== 'yes' || !(await save())) return;
+    }
+    const name = live.current.model.originalName;
+    if (name === null) return;
+    try {
+      const failed = await api.tables.testRules(name);
+      const list = failed.map((x) => (x.field === '' ? t('designer.testRulesTable', { count: x.rows }) // the table's rule
+        : t('designer.testRulesField', { field: x.field, count: x.rows }))).join('\n');
+      await modal.confirm({
+        titleKey: 'ribbon.cmd.testValidationRules', messageKey: failed.length ? 'designer.testRulesFailed' : 'designer.testRulesPassed', params: { list }, buttons: ['ok'],
+      });
+    } catch (e) {
+      await showError(e);
+    }
+  };
+
+  /** Indexes (ribbon): the dialog edits the open design, saved with the table as in Access; read-only base: shown only. */
+  const indexes = async () => {
+    await flush();
+    const { model: m, readOnly: ro, tab: doc } = live.current;
+    const next = await editIndexes(modal, designOf(m, doc.name), ro);
+    if (next && live.current.model === m) set({ type: 'setIndexes', design: next }); // edited meanwhile: the rows may no longer match
+  };
+
+  const cmds = useRef({ save, primaryKey, insertRows, deleteRows, leave, builder, testRules, indexes });
+  cmds.current = { save, primaryKey, insertRows, deleteRows, leave, builder, testRules, indexes };
   useEffect(() => {
     // The ribbon already refuses these in a read-only base; the handlers refuse them too, and during a save.
-    const writable = (id: 'save' | 'primaryKey' | 'insertRows' | 'deleteRows') => async () => {
+    const writable = (id: 'save' | 'primaryKey' | 'insertRows' | 'deleteRows' | 'builder') => async () => {
       if (!live.current.readOnly && live.current.ready && !busy.current) await cmds.current[id]();
     };
     const offCommands = registerCommands(tab.id, {
       save: writable('save'), primaryKey: writable('primaryKey'), insertRows: writable('insertRows'), deleteRows: writable('deleteRows'),
+      builder: writable('builder'),
+      testValidationRules: async () => { if (live.current.ready && !busy.current) await cmds.current.testRules(); },
+      indexes: async () => { if (live.current.ready && !busy.current) await cmds.current.indexes(); },
+      propertySheet: () => setSheet((v) => !v), // also F4 (App.tsx); shown in a read-only base, its fields disabled
     });
     const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
     return () => { offCommands(); offGuard(); };
@@ -275,8 +304,10 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
   const locked = readOnly || saving;
   const current = model.rows[model.selected];
   return (
-    <div className="designer" ref={root} aria-busy={saving}>
-      <div className="dgrid-wrap">
+    <div className="tdesign" ref={root} aria-busy={saving}
+      onFocus={(e) => { const m = /^prop-(defaultValue|validationRule)$|^table-prop-validationRule$/.exec(e.target.dataset.testid ?? ''); if (m) lastExpression.current = m[0] as Expression; }}>
+      <div className="designer">
+      <div className="dgrid-wrap" data-testid="design-grid-pane" style={avail > 0 ? { flex: 'none', height: gridPx } : undefined}>
         <table className="dgrid" aria-label={t('designer.grid')}>
           <colgroup><col className="c-sel" /><col className="c-name" /><col className="c-type" /><col /></colgroup>
           <thead>
@@ -302,7 +333,11 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
                   </td>
                   <td>
                     <input data-testid={`design-row-${i}-name`} aria-label={t('designer.cellName', { n })} disabled={locked} spellCheck={false}
+                      aria-invalid={!!r && fieldNameTooLong(r)} aria-describedby={r && fieldNameTooLong(r) ? `design-row-${i}-name-error` : undefined}
                       value={r?.name ?? ''} onChange={(e) => edit(i, { type: 'setName', index: i, name: e.target.value })} />
+                    {r && fieldNameTooLong(r) && (
+                      <span id={`design-row-${i}-name-error`} className="field-error" role="alert" data-testid={`design-row-${i}-name-error`}>{t('designError.nameTooLong')}</span>
+                    )}
                   </td>
                   <td>
                     <select data-testid={`design-row-${i}-type`} aria-label={t('designer.cellType', { n })} disabled={locked}
@@ -321,10 +356,15 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
           </tbody>
         </table>
       </div>
-      <FieldPropertiesPanel props={current?.props ?? null} disabled={locked} ctx={ctx} rowKey={current?.key ?? ''}
+      <Splitter testId="design-splitter" label={t('designer.splitter')} total={avail} value={gridPx} min={GRID_MIN} max={avail - PROPS_MIN}
+        onChange={setGridPx} onReset={() => { setRatio(SPLIT_DEFAULT); saveRatio(SPLIT_KEY, SPLIT_DEFAULT); }} />
+      <FieldPropertiesPanel props={current?.props ?? null} disabled={locked} ctx={ctx} rowKey={current?.key ?? ''} fieldName={current?.name ?? ''}
         invalid={Object.fromEntries(Object.entries(model.invalid).filter(([k]) => k.startsWith(`${current?.key}:`)).map(([k, c]) => [k.slice(k.lastIndexOf(':') + 1), c]))}
         onProp={(key, value) => set({ type: 'setProp', index: model.selected, key, value })}
         onInvalid={(key, code) => set({ type: 'setInvalid', index: model.selected, key, code })} />
+      </div>
+      {sheet && ctx && <TablePropertiesPanel model={model} disabled={locked} dispatch={set}
+        ctx={{ ...ctx, fields: model.rows.map((r) => r.name).filter(Boolean), criteria: false }} />}
     </div>
   );
 }

@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, openBaseFile } from './file-format';
-import { createTable } from './schema';
+import { createTable, dropTable, renameTable } from './schema';
 import { tableDesign } from './schema';
-import { deleteRows, insertRow, updateRow } from './write-layer';
+import { copyRows, deleteRows, insertRow, updateRow } from './write-layer';
 import { countRows } from './rows';
 import { f, t, clients } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
@@ -136,5 +136,146 @@ describe('write layer: input mask (A2-R10)', () => {
   it('programmatic writes (import) ignore the mask, as in Access', async () => {
     expect(await insertRow(db, d, { Tel: '0612', Code: 'nope' }, fr, now)).toMatchObject({ ok: true, values: ['0612', 'nope', null, null, 0] });
     expect((await updateRow(db, d, 1, { Code: 'x' }, fr, now)).ok).toBe(true);
+  });
+});
+
+describe('copyRows', () => {
+  it('copies a WITHOUT ROWID table too (no rowid to order by: primary key order)', () => {
+    db.exec('CREATE TABLE W (k TEXT PRIMARY KEY, v INTEGER) WITHOUT ROWID');
+    db.exec("INSERT INTO W VALUES ('b', 2), ('a', 1)");
+    db.exec('CREATE TABLE W2 (k TEXT, v INTEGER)');
+    expect(copyRows(db, tableDesign(db, 'W'), 'W2')).toBe(2);
+    expect(db.prepare('SELECT k, v FROM W2 ORDER BY rowid').all()).toEqual([{ k: 'a', v: 1 }, { k: 'b', v: 2 }]);
+  });
+});
+
+describe('write layer: Limit To List (Lookup fields)', () => {
+  const now = () => new Date(2026, 9, 22);
+  const on = { enforceMask: true }; // datasheet and form entry (A2-R10): masks and lists
+  const d = t('Commandes', [
+    f('Client', 'number', { lookup: { kind: 'table', table: 'Clients', boundField: 'N°', displayFields: ['Nom'], limitToList: true } }),
+    f('Statut', 'shortText', { lookup: { kind: 'values', values: ['Ouverte', 'Fermée'], limitToList: true } }),
+    f('Note', 'shortText', { lookup: { kind: 'values', values: ['a'], limitToList: false } }),
+    f('Qté', 'number', { lookup: { kind: 'values', values: ['1', '2'], limitToList: true } }),
+    f('Le', 'dateTime', { lookup: { kind: 'values', values: ['01/01/2026'], limitToList: true } }), // no lookup on dates (Access)
+  ]);
+  beforeEach(async () => {
+    createTable(db, d);
+    expect((await insertRow(db, clients, { Nom: 'Dupont' }, fr)).ok).toBe(true);
+  });
+
+  it('a value absent from a value list or from the source table gives notInList, field by field', async () => {
+    expect(await insertRow(db, d, { Client: '2', Statut: 'Autre', Qté: '3' }, fr, now, on)).toEqual({
+      ok: false, errors: [{ field: 'Client', code: 'notInList' }, { field: 'Statut', code: 'notInList' }, { field: 'Qté', code: 'notInList' }],
+    });
+    expect(countRows(db, 'Commandes')).toBe(0);
+  });
+
+  it('values of the list pass, compared as stored; empty passes (Required decides); a list without Limit To List takes anything', async () => {
+    expect(await insertRow(db, d, { Client: '1', Statut: 'Fermée', Qté: '02', Note: 'zzz', Le: '02/02/2026' }, fr, now, on))
+      .toMatchObject({ ok: true, values: [1, 'Fermée', 'zzz', 2, '2026-02-02 00:00:00'] });
+    expect((await insertRow(db, d, { Client: '', Statut: null }, fr, now, on)).ok).toBe(true);
+  });
+
+  it('a default value is not checked against the list: only what the user enters is (Access checks the combo box)', async () => {
+    const e = t('Tickets', [f('Statut', 'shortText', { defaultValue: '"Brouillon"', lookup: { kind: 'values', values: ['Ouverte'], limitToList: true } })]);
+    createTable(db, e);
+    expect(await insertRow(db, e, {}, fr, now, on)).toMatchObject({ ok: true, values: ['Brouillon'] });
+  });
+
+  it('an update is checked too', async () => {
+    await insertRow(db, d, { Statut: 'Ouverte' }, fr, now, on);
+    expect(await updateRow(db, d, 1, { Statut: 'Autre' }, fr, now, on)).toEqual({ ok: false, errors: [{ field: 'Statut', code: 'notInList' }] });
+    expect(await updateRow(db, d, 1, { Client: 1 }, fr, now, on)).toMatchObject({ ok: true });
+  });
+
+  it('a Number value list means the same in every region (items stored canonical)', async () => {
+    const e = t('Stock', [f('Qté', 'number', { numberSize: 'double', lookup: { kind: 'values', values: ['1.5', '2.5'], limitToList: true } })]);
+    createTable(db, e);
+    const en = localeInfo('en-US'), de = localeInfo('de-DE'); // de: '.' groups digits
+    expect(await insertRow(db, e, { Qté: '2,5' }, fr, now, on)).toMatchObject({ ok: true, values: [2.5] });
+    expect(await insertRow(db, e, { Qté: '2.5' }, en, now, on)).toMatchObject({ ok: true, values: [2.5] });
+    expect(await insertRow(db, e, { Qté: '2,5' }, de, now, on)).toMatchObject({ ok: true, values: [2.5] });
+    expect(await insertRow(db, e, { Qté: '25' }, de, now, on)).toEqual({ ok: false, errors: [{ field: 'Qté', code: 'notInList' }] });
+  });
+
+  it('programmatic writes (import) are not checked, as in Access', async () => {
+    expect((await insertRow(db, d, { Client: '9', Statut: 'Autre' }, fr, now)).ok).toBe(true);
+  });
+
+  it('Access columns: the bound column is checked (a value list read in rows, its heads left out); a Field List; SQL text (A3)', async () => {
+    const pays = t('Pays', [f('Code', 'shortText', { primaryKey: true }), f('Nom', 'shortText')]);
+    createTable(db, pays);
+    await insertRow(db, pays, { Code: 'FR', Nom: 'France' }, fr);
+    const e = t('Envois', [
+      f('Statut', 'number', { lookup: { kind: 'values', values: ['Nom', 'N°', 'Ouverte', '1', 'Fermée', '2'], columnCount: 2, boundColumn: 2, columnHeads: true, limitToList: true } }),
+      f('Pays', 'shortText', { lookup: { kind: 'table', table: 'Pays', boundColumn: 2, columnCount: 2, limitToList: true } }),
+      f('Champ', 'shortText', { lookup: { kind: 'fieldList', table: 'Pays', limitToList: true } }),
+      f('Sql', 'shortText', { lookup: { kind: 'table', table: 'SELECT Code FROM Pays', limitToList: true } }),
+    ]);
+    createTable(db, e);
+    expect(await insertRow(db, e, { Statut: '2', Pays: 'France', Champ: 'Nom', Sql: 'FR' }, fr, now, on)).toMatchObject({ ok: true });
+    expect(await insertRow(db, e, { Statut: 'N°', Pays: 'FR', Champ: 'Ville' }, fr, now, on)).toEqual({
+      ok: false, errors: [{ field: 'Statut', code: 'invalidNumber' }],
+    });
+    expect(await insertRow(db, e, { Statut: '3', Pays: 'FR', Champ: 'Ville', Sql: 'zz' }, fr, now, on)).toEqual({
+      ok: false, errors: [{ field: 'Statut', code: 'notInList' }, { field: 'Pays', code: 'notInList' }, { field: 'Champ', code: 'notInList' }, { field: 'Sql', code: 'notInList' }],
+    });
+  });
+
+  it('a source table or bound field that is gone checks nothing', async () => {
+    const pays = t('Pays', [f('Code', 'shortText', { primaryKey: true }), f('Nom', 'shortText')]);
+    createTable(db, pays);
+    const e = t('Envois', [f('Pays', 'shortText', { lookup: { kind: 'table', table: 'Pays', boundField: 'Code', displayFields: ['Nom'], limitToList: true } })]);
+    createTable(db, e);
+    expect(await insertRow(db, e, { Pays: 'FR' }, fr, now, on)).toEqual({ ok: false, errors: [{ field: 'Pays', code: 'notInList' }] });
+    renameTable(db, 'Pays', 'Countries');
+    expect((await insertRow(db, e, { Pays: 'FR' }, fr, now, on)).ok).toBe(true);
+    expect(dropTable(db, 'Countries')).toEqual({ ok: true });
+    expect((await insertRow(db, e, { Pays: 'DE' }, fr, now, on)).ok).toBe(true);
+  });
+});
+
+describe('write layer: allowAutoNumber (A3 Append queries)', () => {
+  it('an integer AutoNumber value is kept; Null or absent numbers it; without the option it is refused', async () => {
+    expect(await insertRow(db, clients, { 'N°': 7, Nom: 'a' }, fr, undefined, { allowAutoNumber: true })).toMatchObject({ ok: true, rowid: 7 });
+    expect(await insertRow(db, clients, { 'N°': null, Nom: 'b' }, fr, undefined, { allowAutoNumber: true })).toMatchObject({ ok: true, rowid: 8 });
+    expect(await insertRow(db, clients, { 'N°': 7, Nom: 'c' }, fr, undefined, { allowAutoNumber: true })).toEqual({ ok: false, errors: [{ field: 'N°', code: 'duplicate' }] });
+    expect(await insertRow(db, clients, { 'N°': 9, Nom: 'e' }, fr)).toEqual({ ok: false, errors: [{ field: 'N°', code: 'readOnly' }] });
+  });
+});
+
+describe('write layer: nullOnConversion (A3 action queries run anyway)', () => {
+  const d = t('Conv', [f('Code', 'number', { primaryKey: true }), f('N', 'number'), f('Le', 'dateTime'), f('Req', 'number', { required: true }),
+    f('NN', 'number', { validationRule: 'Is Not Null' })]);
+  const on = { nullOnConversion: true };
+  beforeEach(() => createTable(db, d));
+
+  it('a value the field cannot store becomes Null, reported; the record is kept', async () => {
+    expect(await insertRow(db, d, { Code: 1, N: 'abc', Le: 'pas une date', Req: 1, NN: 2 }, fr, undefined, on))
+      .toEqual({ ok: true, rowid: 1, values: [1, null, null, 1, 2], nulled: [{ field: 'N', code: 'invalidNumber' }, { field: 'Le', code: 'invalidDate' }] });
+    expect(await updateRow(db, d, 1, { N: '99999999999' }, fr, undefined, on)).toMatchObject({ ok: true, nulled: [{ field: 'N', code: 'outOfRange' }] });
+  });
+  it('a Required field, a primary key (not AutoNumber) or an Is Not Null rule refuses the Null', async () => {
+    expect(await insertRow(db, d, { Code: 2, Req: 'abc', NN: 1 }, fr, undefined, on)).toEqual({ ok: false, errors: [{ field: 'Req', code: 'required' }] });
+    expect(await insertRow(db, d, { Code: 'abc', Req: 1, NN: 1 }, fr, undefined, on)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
+    expect(await insertRow(db, d, { Code: null, Req: 1, NN: 1 }, fr, undefined, on)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
+    expect(await insertRow(db, d, { Code: 3, Req: 1, NN: 'abc' }, fr, undefined, on)).toMatchObject({ ok: false, errors: [{ field: 'NN', code: 'validation' }] });
+  });
+  it('without the option a conversion error still refuses the row', async () => {
+    expect(await insertRow(db, d, { Code: 4, Req: 1, NN: 1, N: 'abc' }, fr)).toEqual({ ok: false, errors: [{ field: 'N', code: 'invalidNumber' }] });
+  });
+});
+
+describe('write layer: primary keys of adopted tables', () => {
+  it('an absent key of a table made elsewhere is left to SQLite (its DEFAULT); a BaseCraft key never takes a Null', async () => {
+    db.exec(`CREATE TABLE "Ext" ("id" TEXT PRIMARY KEY DEFAULT 'k1', "v" TEXT)`);
+    const ext = tableDesign(db, 'Ext');
+    expect(ext.fields[0]!.props).toMatchObject({ primaryKey: true, external: true });
+    expect(await insertRow(db, ext, { v: 'a' }, fr)).toMatchObject({ ok: true, values: ['k1', 'a'] });
+    const own = t('Own', [f('Code', 'shortText', { primaryKey: true }), f('v', 'shortText')]);
+    createTable(db, own);
+    expect(await insertRow(db, own, { v: 'a' }, fr)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
+    expect(await insertRow(db, own, { Code: null, v: 'a' }, fr)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
   });
 });

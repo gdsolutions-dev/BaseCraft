@@ -1,6 +1,6 @@
 // Conversion d'une saisie (ou d'une valeur convertie lors d'une modification de table) vers la valeur stockée.
 // Module pur. Arrondis et intervalles passent par des chaînes décimales, jamais par de l'arithmétique flottante.
-import type { FieldDef, NumberSize } from './field-types'
+import type { FieldDef, FieldType, NumberSize } from './field-types'
 import { parseDateTime, parseDecimal, roundDecimalString, type LocaleInfo } from './locale-format'
 
 export type SqlValue = string | number | null
@@ -9,10 +9,12 @@ export type FieldErrorCode = 'invalidNumber' | 'outOfRange' | 'invalidDate' | 't
   | 'validation' | 'expressionError' | 'noParent' | 'notInList' | 'mask' | 'related'
 export type CoerceResult = { ok: true; value: SqlValue } | { ok: false; error: FieldErrorCode }
 
-const RANGES: Partial<Record<NumberSize, [number, number]>> = {
+export const RANGES: Partial<Record<NumberSize, [number, number]>> = {
   byte: [0, 255], integer: [-32768, 32767], longInteger: [-2147483648, 2147483647]
 }
 const SINGLE_MAX = 3.4028235e38
+/** ±922 337 203 685 477.5807 (Access Currency), in 1/10 000. */
+const CURRENCY_MAX_UNITS = 9223372036854775807n
 /** Jetons Oui/Non acceptés (saisie, import, inférence des types d'un fichier), casse ignorée. */
 export const YES_TOKENS = ['true', 'vrai', 'oui', 'yes', '1', '-1']
 export const NO_TOKENS = ['false', 'faux', 'non', 'no', '0']
@@ -73,7 +75,10 @@ export function coerce(field: FieldDef, input: CellInput, info: LocaleInfo): Coe
     }
     case 'currency': {
       const d = typeof input === 'boolean' ? null : toDecimal(input as string | number, info)
-      return d === null ? fail('invalidNumber') : ok(Number(roundDecimalString(d, 4)))
+      if (d === null) return fail('invalidNumber')
+      const r = roundDecimalString(d, 4)
+      const units = BigInt(r.replace('.', '')) // Access Currency: a 64-bit count of 1/10 000
+      return units > CURRENCY_MAX_UNITS || units < -CURRENCY_MAX_UNITS - 1n ? fail('outOfRange') : ok(Number(r))
     }
     case 'number': {
       const d = typeof input === 'boolean' ? null : toDecimal(input as string | number, info)
@@ -94,4 +99,17 @@ export function coerce(field: FieldDef, input: CellInput, info: LocaleInfo): Coe
       return n < lo || n > hi ? fail('outOfRange') : ok(n)
     }
   }
+}
+
+/** Value list items (Lookup) are stored as typed, except a Number's: in canonical form ('.' decimal, no grouping), so the
+ *  list means the same in every region. As typed when it does not convert. */
+const CANON: LocaleInfo = { locale: 'en-US', decimalSep: '.', groupSep: '', dateOrder: 'YMD', dateSep: '-' }
+export const listItemStored = (type: FieldType, text: string, info: LocaleInfo): string => (type === 'number' && toDecimal(text, info)) || text
+/** A stored item as shown and typed in the region. */
+export const listItemText = (type: FieldType, item: string, info: LocaleInfo): string =>
+  type === 'number' && toDecimal(item, CANON) !== null ? item.replace('.', info.decimalSep) : item
+/** A stored item's value, as the field stores it (whatever the region); as typed when it does not convert. */
+export function listItemValue(field: FieldDef, item: string): SqlValue {
+  const r = coerce(field, item, CANON)
+  return r.ok ? r.value : item
 }

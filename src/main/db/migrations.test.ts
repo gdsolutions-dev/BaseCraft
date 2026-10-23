@@ -26,22 +26,48 @@ function make10(file: string): void {
   createTable(w.db, clients);
   w.db.close();
   const raw = new DatabaseSync(file);
-  raw.exec("DROP TABLE bc_relations; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
+  raw.exec("DROP TABLE bc_objects; DROP TABLE bc_relations; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
   raw.close();
 }
 
-describe('format 1.1', () => {
-  it('current format is 1.1 and MIGRATIONS ends there', () => {
-    expect(CURRENT_FORMAT).toEqual({ major: 1, minor: 1 });
-    expect(MIGRATIONS.map((m) => [m.toMajor, m.toMinor])).toEqual([[1, 1]]);
+/** A real 1.1 file as A2 wrote it: bc_relations, no bc_objects, with a table and a row in it. */
+function make11(file: string): void {
+  createBaseFile(file, '0.1.0');
+  const w = openBaseFile(file, 'write', '0.1.0');
+  createTable(w.db, clients);
+  w.db.exec(`INSERT INTO Clients ("Nom") VALUES ('Dupont')`);
+  w.db.close();
+  const raw = new DatabaseSync(file);
+  raw.exec("DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'");
+  raw.close();
+}
+
+describe('format 1.2', () => {
+  it('current format is 1.2 and MIGRATIONS ends there', () => {
+    expect(CURRENT_FORMAT).toEqual({ major: 1, minor: 2 });
+    expect(MIGRATIONS.map((m) => [m.toMajor, m.toMinor])).toEqual([[1, 1], [1, 2]]);
   });
 
-  it('new base is 1.1 with bc_relations', () => {
+  it('new base is 1.2 with bc_relations and bc_objects', () => {
     createBaseFile(p, '0.2.0');
     const b = openBaseFile(p, 'write', '0.2.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 1 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 2 });
     expect(b.migrated).toBe(false);
     expect(tableExists(b.db, 'bc_relations')).toBe(true);
+    expect(tableExists(b.db, 'bc_objects')).toBe(true);
+    b.db.close();
+  });
+
+  it('migrates a 1.1 base to 1.2 with a backup, keeping its tables and rows', () => {
+    make11(p);
+    const original = fs.readFileSync(p);
+    const b = openBaseFile(p, 'write', '0.2.0');
+    expect(b.migrated).toBe(true);
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 2 });
+    expect(tableExists(b.db, 'bc_objects')).toBe(true);
+    expect(fs.readFileSync(b.backupPath!)).toEqual(original);
+    expect(b.db.prepare('SELECT "Nom" FROM Clients').all()).toEqual([{ Nom: 'Dupont' }]);
+    expect(tableDesign(b.db, 'Clients').fields).toHaveLength(clients.fields.length);
     b.db.close();
   });
 
@@ -50,8 +76,9 @@ describe('format 1.1', () => {
     const original = fs.readFileSync(p);
     const b = openBaseFile(p, 'write', '0.2.0');
     expect(b.migrated).toBe(true);
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 1 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 2 });
     expect(tableExists(b.db, 'bc_relations')).toBe(true);
+    expect(tableExists(b.db, 'bc_objects')).toBe(true);
     expect(existsBackup(b.backupPath)).toBe(true);
     expect(fs.readFileSync(b.backupPath!)).toEqual(original);
     expect(tableDesign(b.db, 'Clients').fields).toHaveLength(clients.fields.length);

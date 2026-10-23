@@ -10,13 +10,13 @@ import { createTable, reconcile } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
+import { assertUnder, STRICT } from './thresholds';
 
 const ROWS = 100_000;
-const STRICT = process.env.BASECRAFT_BENCH_STRICT === '1';
 const design = t('Mesures', [f('N°', 'autoNumber'), f('Libellé', 'shortText', { size: 50 }), f('Quantité', 'number'), f('Date', 'dateTime'), f('Prix', 'currency')]);
 
 let dir: string, file: string, db: DatabaseSync;
-const times: Record<string, number[]> = { page: [], count: [], open: [] };
+const times: Record<string, number[]> = { page: [], cold: [], count: [], open: [] };
 const timed = <T>(k: string, fn: () => T): T => { const t0 = performance.now(); const r = fn(); times[k].push(performance.now() - t0); return r; };
 const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 
@@ -38,25 +38,33 @@ beforeAll(async () => {
 afterAll(() => {
   db.close();
   rmSync(dir, { recursive: true, force: true });
-  const ms = { page: median(times.page), count: median(times.count), open: median(times.open) };
-  console.log(`BENCH ${ROWS} lignes (médianes, ms) : page triée ${ms.page.toFixed(1)}, comptage ${ms.count.toFixed(1)}, ouverture+réconciliation ${ms.open.toFixed(1)}`);
+  const ms = { page: median(times.page), cold: median(times.cold), count: median(times.count), open: median(times.open) };
+  console.log(`BENCH ${ROWS} lignes (médianes, ms) : page triée ${ms.page.toFixed(1)} (instantané présent), première page triée ${ms.cold.toFixed(1)} (instantané construit), comptage ${ms.count.toFixed(1)}, ouverture+réconciliation ${ms.open.toFixed(1)}`);
   const perf = join(__dirname, '../../test-results/perf-a1.json');
   const startup = existsSync(perf) ? (JSON.parse(readFileSync(perf, 'utf8')) as { startupMs: number }).startupMs : undefined;
   console.log(`BENCH démarrage (perf-a1.json) : ${startup ?? 'absent'} ms`);
-  if (!STRICT) return;
-  const over = [
-    ms.page >= 50 && `page triée ${ms.page.toFixed(1)} ms >= 50`,
-    ms.count >= 20 && `comptage ${ms.count.toFixed(1)} ms >= 20`,
-    ms.open >= 300 && `ouverture ${ms.open.toFixed(1)} ms >= 300`,
-    startup === undefined ? 'perf-a1.json absent (lancer npm run e2e avant)' : startup >= 3000 && `démarrage ${startup} ms >= 3000`,
-  ].filter(Boolean);
-  if (over.length > 0) throw new Error(`seuils dépassés : ${over.join(' ; ')}`);
+  const failures: string[] = []; // every threshold checked: one failure does not hide the others
+  const check = (label: string, median: number, limit: number) => { try { assertUnder(label, median, limit); } catch (e) { failures.push((e as Error).message); } };
+  check('page triée', ms.page, 50);
+  check('première page triée', ms.cold, 1500);
+  check('comptage', ms.count, 20);
+  check('ouverture', ms.open, 300);
+  if (startup === undefined && STRICT) failures.push('perf-a1.json absent (lancer npm run e2e avant)');
+  if (startup !== undefined) check('démarrage', startup, 3000);
+  if (failures.length) throw new Error(failures.join('; '));
 });
 
 const run = { iterations: 15, warmupIterations: 2, time: 0, warmupTime: 0 };
 describe('100 000 lignes', () => {
-  test('page 50 000 x 200 triée sur le texte', async ({ bench }) => {
-    await bench('page', () => { timed('page', () => readRows(db, design, { offset: 50_000, limit: 200, sort: { field: 'Libellé', dir: 'asc' } })); }).run(run);
+  // As the data process pages (Session.pageSource): with its write sequence, a text sort is served by a sorted-order snapshot.
+  const page = (seq: number) => readRows(db, design, { offset: 50_000, limit: 200, sort: { field: 'Libellé', dir: 'asc' } }, 'fr-FR', undefined, seq);
+  test('page 50 000 x 200 triée sur le texte (instantané présent)', async ({ bench }) => {
+    page(0); // one warm-up request builds the snapshot
+    await bench('page', () => { timed('page', () => page(0)); }).run({ ...run, warmupIterations: 0 });
+  });
+  let seq = 0;
+  test('première page triée sur le texte (instantané construit)', async ({ bench }) => {
+    await bench('première page', () => { timed('cold', () => page(++seq)); }).run({ ...run, iterations: 5, warmupIterations: 0 }); // a new write sequence each time
   });
   test('comptage', async ({ bench }) => {
     await bench('comptage', () => { timed('count', () => countRows(db, 'Mesures')); }).run(run);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coerce } from './coerce'
+import { coerce, listItemStored, listItemText, listItemValue } from './coerce'
 import { localeInfo } from './locale-format'
 import { f } from './test-fixtures'
 
@@ -14,6 +14,11 @@ describe('coerce', () => {
     [f('Q', 'number', { numberSize: 'integer' }), '2,5', { ok: true, value: 2 }],
     [f('Q', 'number', { numberSize: 'integer' }), '3,5', { ok: true, value: 4 }],
     [f('Q', 'number', { numberSize: 'byte' }), '256', { ok: false, error: 'outOfRange' }],
+    [f('S', 'currency'), '922337203685477,5807', { ok: true, value: 922337203685477.5807 }],
+    [f('S', 'currency'), '-922337203685477,5808', { ok: true, value: -922337203685477.5808 }],
+    [f('S', 'currency'), '922337203685477,5808', { ok: false, error: 'outOfRange' }],
+    [f('S', 'currency'), '-922337203685477,5809', { ok: false, error: 'outOfRange' }],
+    [f('S', 'currency'), 1e16, { ok: false, error: 'outOfRange' }],
     [f('Q', 'number', { numberSize: 'integer' }), 'abc', { ok: false, error: 'invalidNumber' }],
     [f('Q', 'number', { numberSize: 'double' }), 12.5, { ok: true, value: 12.5 }],
     [f('S', 'currency'), '1 234,56785', { ok: true, value: 1234.5678 }],
@@ -63,5 +68,24 @@ describe('coerce', () => {
     expect(coerce(f('T', 'hyperlink'), 1e21, en)).toEqual({ ok: true, value: '1000000000000000000000' })
     expect(coerce(f('T', 'shortText'), -1e-7, fr)).toEqual({ ok: true, value: '-0,0000001' })
     expect(coerce(f('T', 'shortText', { size: 3 }), 12.5, de)).toEqual({ ok: false, error: 'tooLong' })
+  })
+})
+
+describe('value list items (Lookup): a Number\'s stored in canonical form, so the list means the same in every region', () => {
+  const en = localeInfo('en-US')
+  const qte = f('Q', 'number', { numberSize: 'double' })
+  it('typed in the region, stored canonical; as typed when it does not convert, or for another type', () => {
+    expect(['1,5', '1 234', 'abc'].map((x) => listItemStored('number', x, fr))).toEqual(['1.5', '1234', 'abc'])
+    expect(['1.5', '1,234'].map((x) => listItemStored('number', x, en))).toEqual(['1.5', '1234'])
+    expect(listItemStored('shortText', '1,5', fr)).toBe('1,5')
+  })
+  it('shown in the region', () => {
+    expect(['1.5', 'abc'].map((x) => listItemText('number', x, fr))).toEqual(['1,5', 'abc'])
+    expect(listItemText('number', '1.5', en)).toBe('1.5')
+    expect(listItemText('shortText', '1.5', fr)).toBe('1.5')
+  })
+  it('read as stored whatever the region', () => {
+    expect(['1.5', '2', 'abc'].map((x) => listItemValue(qte, x))).toEqual([1.5, 2, 'abc'])
+    expect(listItemValue(f('O', 'yesNo'), 'Oui')).toBe(1)
   })
 })

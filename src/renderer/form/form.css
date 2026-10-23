@@ -1,0 +1,105 @@
+/* Formulaire en mode Création (maquette, écran 2) : bandeaux, aperçu des contrôles, boîte Ordre de tabulation */
+.form-design { flex: 1; min-height: 0; display: flex; flex-direction: column; height: 100%; }
+.form-design > .dz { flex: 1; height: auto; min-height: 0; }
+.fz-banner { flex: none; padding: 6px var(--bc-space-3); border-bottom: 1px solid var(--bc-border); background: color-mix(in srgb, var(--bc-warning) 12%, var(--bc-surface));
+  font-size: 12px; }
+
+/* aperçu d'un contrôle : il remplit le cadre du concepteur */
+.fz { box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; font-size: 12.5px; }
+.fz-text { display: flex; align-items: center; gap: 4px; padding: 0 4px; white-space: nowrap; }
+.fz-clip { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fz-text > .fz-clip { flex: 1 1 auto; }
+.fz-combo svg { flex: none; color: var(--bc-text-muted); }
+.fz-list { padding: 2px 4px; }
+.fz-check { border: 1.5px solid var(--bc-border); border-radius: 3px; background: var(--bc-surface); width: min(100%, 16px); height: min(100%, 16px); }
+.fz-radio { border-radius: 50%; }
+.fz-group { margin: 0; padding: 0 6px; min-inline-size: 0; }
+.fz-group legend { padding: 0 4px; font-size: 12px; }
+.fz-button { justify-content: center; border-radius: var(--bc-radius); font-weight: 500; }
+.fz-subform { display: grid; place-items: center; border-style: dashed !important; color: var(--bc-text-muted); }
+.fz-image { display: grid; place-items: center; color: var(--bc-text-muted); }
+.fz-image img { width: 100%; height: 100%; }
+.fz-line { display: block; overflow: visible; }
+.fz-pagebreak { border-top: 2px dashed var(--bc-text-muted); width: 100%; height: 0; }
+.fz-tabs { display: flex; flex-direction: column; }
+.fz-tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--bc-border); }
+.fz-tabstrip span { padding: 2px 8px; font-size: 12px; border: 1px solid var(--bc-border); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--bc-surface-2); }
+.fz-tabstrip span.is-on { background: var(--bc-surface); }
+
+/* Ordre de tabulation */
+.taborder { display: flex; flex-direction: column; gap: var(--bc-space-2); min-width: 360px; }
+.taborder-lists { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bc-space-2); }
+.taborder-section h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--bc-text-muted); }
+.taborder-section ul { list-style: none; margin: 0; padding: 2px 0; height: 160px; overflow: auto; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); }
+.taborder-section ul:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+.taborder-section li { padding: 2px 8px; font-size: 12px; cursor: default; }
+.taborder-section li[aria-selected="true"] { background: var(--accent-soft); color: var(--bc-accent); }
+.taborder-hint { margin: 0; font-size: 12px; }
+.taborder-actions { display: flex; gap: var(--bc-space-2); }
+
+/* Mode Formulaire : en-tête et pied fixes, Détail défilant, sélecteur d'enregistrement, contrôles à leur place */
+.frun { flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column; background: var(--bc-bg); }
+.frun-fixed { flex: none; overflow: hidden; }
+.frun-body { flex: 1; min-height: 0; overflow: auto; }
+.frun-detail { display: flex; align-items: flex-start; }
+.frun-selector { flex: none; width: 18px; display: flex; align-items: flex-start; justify-content: center; padding-top: 4px; box-sizing: border-box;
+  background: var(--bc-surface-2); border-right: 1px solid var(--bc-border); color: var(--bc-text-muted); }
+.frun-fixed .frun-section { margin-left: 18px; }
+.frun-section { position: relative; flex: none; overflow: hidden; }
+.frun-section input, .frun-section textarea, .frun-section button { font: inherit; margin: 0; }
+.frun-text { padding: 0 4px; outline-offset: -1px; }
+textarea.frun-text { padding: 2px 4px; resize: none; }
+.frun-text[readonly] { cursor: default; }
+.frun-text:focus-visible, .frun-radio:focus-visible, .frun-check:focus-visible, .frun-button:focus-visible { outline: 2px solid var(--bc-accent); }
+.frun-text[aria-invalid="true"] { outline: 2px solid var(--bc-danger); }
+.frun-label { display: flex; align-items: center; padding: 0 2px; white-space: nowrap; overflow: hidden; }
+.frun-check { margin: 0; accent-color: var(--bc-accent); }
+.frun-group { overflow: visible; }
+.frun-legend { position: absolute; top: -0.7em; left: 8px; padding: 0 4px; background: inherit; font-size: 12px; line-height: 1.4; }
+.frun-radio { position: absolute; box-sizing: border-box; width: 16px !important; height: 16px !important; border: 1.5px solid var(--bc-text-muted);
+  border-radius: 50%; background: var(--bc-surface); cursor: default; }
+.frun-radio.frun-square { border-radius: 3px; }
+.frun-radio[aria-checked="true"] { border-color: var(--bc-accent); box-shadow: inset 0 0 0 3px var(--bc-surface); background: var(--bc-accent); }
+.frun-button { border: 1px solid var(--bc-border); border-radius: var(--bc-radius); cursor: default; font-weight: 500; }
+.frun-image { display: block; }
+.frun-line { overflow: visible; }
+.frun-tabs { display: flex; flex-direction: column; }
+.frun-tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--bc-border); }
+.frun-tabstrip button { padding: 2px 10px; font-size: 12px; border: 1px solid var(--bc-border); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--bc-surface-2); color: var(--bc-text); }
+.frun-tabstrip button[aria-selected="true"] { background: var(--bc-surface); }
+.frun-tabs > [role="tabpanel"] { flex: 1; border: 1px solid var(--bc-border); border-top: 0; }
+.frun-subform { display: flex; flex-direction: column; overflow: hidden; outline-offset: -2px; }
+.frun-subform-error { margin: auto; padding: 8px; color: var(--bc-text-muted); font-size: 12px; text-align: center; }
+.frun-error { position: absolute; z-index: 10000; padding: 2px 6px; border-radius: 4px; font-size: 12px; max-width: 360px; width: max-content;
+  background: color-mix(in srgb, var(--bc-danger) 12%, var(--bc-surface)); color: var(--bc-danger); border: 1px solid var(--bc-danger); }
+.frun-message { flex: none; padding: 4px var(--bc-space-3); border-top: 1px solid var(--bc-border); font-size: 12px; color: var(--bc-danger);
+  background: color-mix(in srgb, var(--bc-danger) 10%, var(--bc-surface)); }
+/* Zone de liste déroulante et zone de liste : colonnes visibles à leurs largeurs (twips), sans en-têtes */
+.frun-combo { display: flex; align-items: stretch; overflow: hidden; }
+.frun-combo > .frun-text { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; text-align: inherit; }
+.frun-combo:focus-within { outline: 2px solid var(--bc-accent); outline-offset: -1px; }
+.frun-combo:has(> [aria-invalid="true"]) { outline: 2px solid var(--bc-danger); }
+.frun-combo > .frun-text:focus-visible { outline: none; }
+.frun-combo-toggle { flex: none; width: 20px; display: grid; place-items: center; border: 0; border-left: 1px solid var(--bc-border); background: var(--bc-surface-2); color: var(--bc-text-muted); }
+.frun-combo-toggle:hover:not(:disabled) { color: var(--bc-text); }
+.frun-combo-list > ul { margin: 0; padding: 0; list-style: none; }
+.frun-list-row { display: flex; align-items: center; white-space: nowrap; cursor: default; }
+.frun-list-col { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+.frun-list-heads { font-weight: 600; border-bottom: 1px solid var(--bc-border); }
+.frun-combo-list > .frun-list-heads { padding: 4px 8px; }
+.frun-listbox > .frun-list-heads { padding: 1px 4px; flex: none; }
+.frun-list-note { padding: 4px 8px; font-size: 11px; color: var(--bc-text-muted); border-top: 1px solid var(--bc-border); white-space: nowrap; }
+.frun-listbox { display: flex; flex-direction: column; overflow: hidden; }
+.frun-listbox-rows { flex: 1; min-height: 0; overflow: auto; outline-offset: -2px; }
+.frun-listbox-rows:focus-visible { outline: 2px solid var(--bc-accent); }
+.frun-listbox-rows[aria-invalid="true"] { outline: 2px solid var(--bc-danger); }
+.frun-listbox .frun-list-row { padding: 1px 4px; }
+.frun-listbox .frun-list-row.is-selected { background: var(--bc-accent); color: var(--bc-accent-contrast); }
+@media (forced-colors: active) { .frun-listbox .frun-list-row.is-selected { forced-color-adjust: none; background: Highlight; color: HighlightText; } }
+.frun-note { position: absolute; z-index: 9999; padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap;
+  background: color-mix(in srgb, var(--bc-warning) 12%, var(--bc-surface)); color: var(--bc-text); border: 1px solid var(--bc-warning); }
+/* Continuous Forms: the rows placed in absolute (only the visible ones are in the DOM) */
+.frun-rows { position: relative; }
+.frun-row { position: absolute; left: 0; }
+/* the form's Datasheet view: the table datasheet's grid and error bar */
+.frun-sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; }

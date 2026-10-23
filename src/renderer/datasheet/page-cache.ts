@@ -4,11 +4,16 @@ import type { RowPage } from '../../shared/api';
 
 type Row = RowPage['rows'][number];
 
+// ponytail: Find and copy (Select All) read their rows here, in the renderer, and pages are never evicted: past this many
+// rows they stop (the first ones of the current order). Upgrade path: a server-side search (and copy) in the data process.
+export const MAX_LOADED_ROWS = 100_000;
+
 export class PageCache {
   private pages = new Map<number, Row[]>();
   private stale = new Map<number, Row[]>(); // shown while a page is (re)loaded
   private loading = new Map<number, number>(); // page → request number; a failed page stays here until invalidate
   private reread = new Set<number>(); // written while loading: the reply may predate the write
+  private settled = new Map<number, Promise<void>>(); // page → resolves when its load ended (loaded, failed or dropped)
   private requests = 0;
   private loaded: (() => void)[] = [];
   private failed: ((e: unknown) => void)[] = [];
@@ -49,19 +54,39 @@ export class PageCache {
     this.reread.clear();
   }
 
+  /** Resolves once the pages of rows first..last are loaded (a failed or dropped load ends the wait, the rows stay absent).
+   *  Pages are read four at a time, never all at once; a page already loading is waited for, not read again. Rows from
+   *  MAX_LOADED_ROWS on are not read: resolves true when the range reached them. */
+  async ensure(first: number, last: number, aborted: () => boolean = () => false): Promise<boolean> {
+    const capped = last >= MAX_LOADED_ROWS;
+    last = Math.min(last, MAX_LOADED_ROWS - 1);
+    const todo: number[] = [];
+    for (let p = Math.floor(first / this.pageSize); p <= Math.floor(last / this.pageSize); p++) if (!this.pages.has(p)) todo.push(p);
+    for (let i = 0; i < todo.length && !aborted(); i += 4) {
+      await Promise.all(todo.slice(i, i + 4).map((p) => {
+        if (!this.loading.has(p)) this.load(p);
+        return this.settled.get(p);
+      }));
+    }
+    return capped;
+  }
+
   private load(p: number): void {
     const id = ++this.requests;
     this.loading.set(p, id);
+    let done!: () => void;
+    this.settled.set(p, new Promise<void>((r) => { done = r; }));
     this.fetch(p * this.pageSize, this.pageSize).then(
       (r) => {
-        if (this.loading.get(p) !== id) return;
+        if (this.loading.get(p) !== id) { done(); return; }
         this.loading.delete(p);
-        if (this.reread.delete(p)) { this.load(p); return; }
+        if (this.reread.delete(p)) { done(); this.load(p); return; }
         this.pages.set(p, r.rows);
         this.stale.delete(p);
         this.loaded.forEach((cb) => cb());
+        done();
       },
-      (e) => { if (this.loading.get(p) === id) this.failed.forEach((cb) => cb(e)); },
+      (e) => { if (this.loading.get(p) === id) this.failed.forEach((cb) => cb(e)); done(); },
     );
   }
 }

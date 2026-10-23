@@ -19,6 +19,14 @@ export const EMPTY: Value = { t: 'empty' };
 
 export const fail = (code: ExprRuntimeErrorCode): never => { throw new ExprRuntimeError(code); };
 
+/** Space and String repeat at most 65535 times (VBA). */
+export const MAX_TEXT = 65535;
+/** Longest text & + Replace may build (UTF-16 units): past it, an overflow, never out of memory. High enough to append to
+ *  a stored Long Text (an import reads fields up to 1 MiB); stored values themselves are never capped. */
+export const MAX_BUILT_TEXT = 1 << 20;
+/** str() for text that grows (& + Replace). */
+export const built = (v: string): { t: 'str'; v: string } => (v.length > MAX_BUILT_TEXT ? fail('overflow') : str(v));
+
 /** Point décimal, sans séparateur de milliers. */
 const POINT: LocaleInfo = { locale: 'en-US', decimalSep: '.', groupSep: '', dateOrder: 'MDY', dateSep: '/' };
 const infos = new Map<string, LocaleInfo>();
@@ -94,7 +102,7 @@ export function toLong(x: number): number {
 const long = (v: V, info: LocaleInfo): number => toLong(toNum(v, info));
 const nonNeg = (n: number): number => (n < 0 ? fail('badArgument') : n);
 /** Nombre de répétitions de Space et String (limite des chaînes de VBA courantes). */
-const count = (n: number): number => (n > 65535 ? fail('overflow') : nonNeg(n));
+const count = (n: number): number => (n > MAX_TEXT ? fail('overflow') : nonNeg(n));
 
 // ---- Texte ----
 
@@ -119,6 +127,10 @@ function tokenMatch(t: Exclude<LikeToken, '*'>, c: string): boolean {
   });
   return hit !== t.negate;
 }
+
+/** Step budget of one Like (5 million steps, about 50 ms, or 64 per character of the texts if more): a pathological
+ *  pattern on a long text is an overflow, not a frozen process. */
+const likeSteps = (value: string, pattern: string): number => Math.max(5e6, 64 * (value.length + pattern.length));
 
 /** Like d'Access sur la chaîne entière : * ? # [liste] [!liste] [a-z] ; [*] [?] [#] [[] sont littéraux.
  *  Casse ignorée, accents conservés (comme compareText), textes normalisés en NFC. */
@@ -152,8 +164,10 @@ export function likeMatch(value: string, pattern: string): boolean {
   }
   // Glob classique : chaque jeton consomme un caractère ; seule la dernière étoile sert de point de reprise -> O(n·m) au pire.
   const v = [...value.normalize('NFC')];
-  let ti = 0, vi = 0, star = -1, mark = 0;
+  let ti = 0, vi = 0, star = -1, mark = 0, steps = 0;
+  const budget = likeSteps(value, pattern);
   while (vi < v.length) {
+    if (++steps > budget) fail('overflow');
     const t = toks[ti];
     if (t === '*') { star = ti++; mark = vi; }
     else if (t !== undefined && tokenMatch(t, v[vi])) { ti++; vi++; }
@@ -323,7 +337,8 @@ export const LIBRARY: Record<string, LibFn> = {
   }),
   Replace: strict(([a, b, c], i) => {
     const [s, find, by] = [nfc(toText(a, i)), nfc(toText(b, i)), toText(c, i)];
-    return str(find === '' ? s : s.replace(textRe(find, 'g'), () => by));
+    let len = s.length; // checked as it grows: the whole result may not fit in memory
+    return built(find === '' ? s : s.replace(textRe(find, 'g'), (m) => ((len += by.length - m.length) > MAX_BUILT_TEXT ? fail('overflow') : by)));
   }),
   Space: strict(([n], i) => str(' '.repeat(count(long(n, i))))),
   String: strict(([n, c], i) => {

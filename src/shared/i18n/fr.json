@@ -12,7 +12,8 @@
       "system": "Thème du système",
       "light": "Clair",
       "dark": "Sombre"
-    }
+    },
+    "showList": "Afficher la liste"
   },
   "ribbon": {
     "label": "Ruban",
@@ -20,16 +21,76 @@
     "tab": {
       "home": "Accueil",
       "create": "Créer",
-      "design": "Création de table",
-      "externalData": "Données externes"
+      "design": "Création de tableau",
+      "externalData": "Données externes",
+      "databaseTools": "Outils de base de données",
+      "help": "Aide",
+      "tableFields": "Table Champs",
+      "table": "Table",
+      "relationshipDesign": "Création de relation",
+      "queryDesign": "Création de requête",
+      "formDesign": "Création de formulaire",
+      "reportDesign": "Création d'état",
+      "arrange": "Organiser",
+      "format": "Format",
+      "pageSetup": "Mise en page",
+      "printPreview": "Aperçu avant impression",
+      "macroDesign": "Création de macro"
     },
     "group": {
-      "view": "Affichage",
+      "view": "Affichages",
       "records": "Enregistrements",
-      "sort": "Trier",
+      "sort": "Trier et filtrer",
       "tables": "Tables",
       "tools": "Outils",
-      "import": "Importer"
+      "import": "Importer et lier",
+      "clipboard": "Presse-papiers",
+      "find": "Rechercher",
+      "textFormatting": "Mise en forme du texte",
+      "zoom": "Zoom",
+      "queries": "Requêtes",
+      "forms": "Formulaires",
+      "reports": "États",
+      "macrosCode": "Macros et code",
+      "export": "Exporter",
+      "macro": "Macro",
+      "relationships": "Relations",
+      "analyze": "Analyser",
+      "moveData": "Déplacer les données",
+      "help": "Aide",
+      "showHide": "Afficher/Masquer",
+      "tableEvents": "Champ, enregistrement et événements de table",
+      "addDelete": "Ajouter et supprimer",
+      "properties": "Propriétés",
+      "formatting": "Mise en forme",
+      "fieldValidation": "Validation de champ",
+      "beforeEvents": "Avant les événements",
+      "afterEvents": "Après les événements",
+      "namedMacros": "Macros nommées",
+      "results": "Résultats",
+      "queryType": "Type de requête",
+      "querySetup": "Paramètres de requête",
+      "themes": "Thèmes",
+      "controls": "Contrôles",
+      "headerFooter": "En-tête/pied de page",
+      "groupingTotals": "Regroupement et totaux",
+      "layoutTable": "Table",
+      "rowsColumns": "Lignes et colonnes",
+      "mergeSplit": "Fusionner/fractionner",
+      "move": "Déplacer",
+      "position": "Position",
+      "sizingOrdering": "Redimensionnement et classement",
+      "selection": "Sélection",
+      "font": "Police",
+      "number": "Nombre",
+      "background": "Arrière-plan",
+      "controlFormatting": "Contrôler la mise en forme",
+      "pageSize": "Taille de la page",
+      "pageLayout": "Mise en page",
+      "print": "Imprimer",
+      "data": "Données",
+      "closePreview": "Fermer l'aperçu",
+      "expandCollapse": "Développer/Réduire"
     },
     "cmd": {
       "viewDatasheet": "Feuille de données",
@@ -44,7 +105,268 @@
       "primaryKey": "Clé primaire",
       "insertRows": "Insérer des lignes",
       "deleteRows": "Supprimer des lignes",
-      "importText": "Fichier texte"
+      "importText": "Fichier texte",
+      "refresh": "Actualiser",
+      "paste": "Coller",
+      "cut": "Couper",
+      "copy": "Copier",
+      "formatPainter": "Reproduire la mise en forme",
+      "showClipboard": "Presse-papiers",
+      "filter": "Filtrer",
+      "filterSelection": "Sélection",
+      "filterAdvanced": "Options avancées",
+      "filterToggle": "Activer/désactiver le filtre",
+      "recordsTotals": "Totaux",
+      "spelling": "Orthographe",
+      "moreRecords": "Plus",
+      "find": "Rechercher",
+      "replace": "Remplacer",
+      "goTo": "Atteindre",
+      "selectMenu": "Sélectionner",
+      "textFont": "Police",
+      "textFontSize": "Taille de police",
+      "bullets": "Puces",
+      "numbering": "Numérotation",
+      "indentIncrease": "Augmenter le retrait",
+      "indentDecrease": "Diminuer le retrait",
+      "textDirection": "De gauche à droite",
+      "textBold": "Gras",
+      "textItalic": "Italique",
+      "textUnderline": "Souligner",
+      "textFontColor": "Couleur de police",
+      "textHighlight": "Couleur de surlignage du texte",
+      "textBackColor": "Couleur d'arrière-plan",
+      "textAlignLeft": "Aligner à gauche",
+      "textAlignCenter": "Centrer",
+      "textAlignRight": "Aligner à droite",
+      "datasheetGridlines": "Quadrillage",
+      "alternateRowColor": "Autre couleur de ligne",
+      "datasheetFormatting": "Mise en forme de la feuille de données",
+      "zoom": "Zoom",
+      "createTable": "Table",
+      "queryWizard": "Assistant Requête",
+      "createQueryDesign": "Création de requête",
+      "createSqlQuery": "Requête SQL",
+      "createForm": "Formulaire",
+      "createFormDesign": "Création de formulaire",
+      "createBlankForm": "Formulaire vierge",
+      "formWizard": "Assistant Formulaire",
+      "navigationForm": "Navigation",
+      "moreForms": "Plus de formulaires",
+      "createReport": "État",
+      "createReportDesign": "Création d'état",
+      "createBlankReport": "État vide",
+      "reportWizard": "Assistant État",
+      "labels": "Étiquettes",
+      "createMacro": "Macro",
+      "createModule": "Module",
+      "pythonEditor": "Éditeur Python",
+      "importExcel": "Excel",
+      "importXml": "Fichier XML",
+      "importAccess": "Access",
+      "importSqlServer": "SQL Server",
+      "importPostgreSql": "PostgreSQL",
+      "importOdbc": "Base de données ODBC",
+      "savedImports": "Importations enregistrées",
+      "linkedTableManager": "Gestionnaire de tables liées",
+      "savedExports": "Exportations enregistrées",
+      "exportExcel": "Excel",
+      "exportText": "Fichier texte",
+      "exportPdf": "PDF",
+      "exportAccess": "Access",
+      "exportXml": "Fichier XML",
+      "exportMore": "Plus",
+      "compactRepair": "Compacter et réparer une base de données",
+      "runMacro": "Exécuter une macro",
+      "relationships": "Relations",
+      "objectDependencies": "Dépendances d'objet",
+      "databaseDocumenter": "Documentation de base de données",
+      "analyzePerformance": "Analyse des performances",
+      "analyzeTable": "Analyser la table",
+      "moveToServer": "Vers un serveur",
+      "splitDatabase": "Fractionner la base de données",
+      "help": "Aide",
+      "contactSupport": "Contacter le support",
+      "feedback": "Commentaires",
+      "showTraining": "Afficher la formation",
+      "whatsNew": "Nouveautés",
+      "builder": "Générateur",
+      "testValidationRules": "Tester les règles de validation",
+      "modifyLookups": "Modifier les recherches",
+      "propertySheet": "Feuille de propriétés",
+      "indexes": "Index",
+      "createDataMacros": "Créer des macros de données",
+      "renameDeleteMacro": "Renommer/supprimer une macro",
+      "addShortText": "Texte court",
+      "addNumber": "Nombre",
+      "addCurrency": "Monétaire",
+      "addDateTime": "Date et heure",
+      "addYesNo": "Oui/Non",
+      "moreFields": "Plus de champs",
+      "deleteField": "Supprimer",
+      "nameCaption": "Nom et légende",
+      "defaultValue": "Valeur par défaut",
+      "fieldSize": "Taille du champ",
+      "modifyExpression": "Modifier l'expression",
+      "dataType": "Type de données",
+      "format": "Format",
+      "currencyFormat": "Appliquer le format monétaire",
+      "percentFormat": "Appliquer le format pourcentage",
+      "commaFormat": "Appliquer le format des nombres avec virgule",
+      "increaseDecimals": "Augmenter le nombre de décimales",
+      "decreaseDecimals": "Diminuer le nombre de décimales",
+      "required": "Obligatoire",
+      "unique": "Unique",
+      "indexed": "Indexé",
+      "validation": "Validation",
+      "tableProperties": "Propriétés de la table",
+      "beforeChange": "Avant modification",
+      "beforeDelete": "Avant suppression",
+      "afterInsert": "Après insertion",
+      "afterUpdate": "Après MAJ",
+      "afterDelete": "Après suppression",
+      "namedMacro": "Macro nommée",
+      "editRelationships": "Modifier des relations",
+      "clearLayout": "Effacer la disposition",
+      "relationshipReport": "Rapport de relations",
+      "addTables": "Ajouter des tables",
+      "hideTable": "Masquer la table",
+      "directRelationships": "Relations directes",
+      "allRelationships": "Toutes les relations",
+      "closeRelationships": "Fermer",
+      "viewSql": "Mode SQL",
+      "runQuery": "Exécuter",
+      "selectQuery": "Sélection",
+      "makeTableQuery": "Création de table",
+      "appendQuery": "Ajout",
+      "updateQuery": "Mise à jour",
+      "crosstabQuery": "Analyse croisée",
+      "deleteQuery": "Suppression",
+      "unionQuery": "Union",
+      "passThroughQuery": "SQL direct",
+      "insertColumns": "Insérer des colonnes",
+      "deleteColumns": "Supprimer des colonnes",
+      "returnValues": "Renvoyer",
+      "queryTotals": "Totaux",
+      "parameters": "Paramètres",
+      "tableNames": "Noms des tables",
+      "themes": "Thèmes",
+      "themeColors": "Couleurs",
+      "themeFonts": "Polices",
+      "select": "Sélectionner",
+      "textBox": "Zone de texte",
+      "label": "Étiquette",
+      "button": "Bouton",
+      "tabControl": "Contrôle Onglet",
+      "hyperlink": "Lien",
+      "navigationControl": "Contrôle de navigation",
+      "optionGroup": "Groupe d'options",
+      "insertPageBreak": "Insérer un saut de page",
+      "comboBox": "Zone de liste déroulante",
+      "line": "Trait",
+      "toggleButton": "Bouton bascule",
+      "listBox": "Zone de liste",
+      "rectangle": "Rectangle",
+      "checkBox": "Case à cocher",
+      "unboundObjectFrame": "Cadre d'objet indépendant",
+      "attachment": "Pièce jointe",
+      "optionButton": "Case d'option",
+      "subform": "Sous-formulaire/Sous-état",
+      "boundObjectFrame": "Cadre d'objet dépendant",
+      "image": "Image",
+      "webBrowser": "Contrôle de navigateur web",
+      "chart": "Graphique",
+      "insertImage": "Insérer une image",
+      "insertModernChart": "Insérer un graphique moderne",
+      "logo": "Logo",
+      "title": "Titre",
+      "dateTime": "Date et heure",
+      "addExistingFields": "Ajouter des champs existants",
+      "tabOrder": "Ordre de tabulation",
+      "chartSettings": "Paramètres du graphique",
+      "subformInNewWindow": "Sous-formulaire dans une nouvelle fenêtre",
+      "viewCode": "Visualiser le code",
+      "groupSort": "Regrouper et trier",
+      "reportTotals": "Totaux",
+      "hideDetails": "Masquer les détails",
+      "pageNumbers": "Numéros de page",
+      "subreportInNewWindow": "Sous-état dans une nouvelle fenêtre",
+      "layoutGridlines": "Quadrillage",
+      "stacked": "Empilé",
+      "tabular": "Tabulaire",
+      "removeLayout": "Supprimer la disposition",
+      "insertAbove": "Insérer au-dessus",
+      "insertBelow": "Insérer en dessous",
+      "insertLeft": "Insérer à gauche",
+      "insertRight": "Insérer à droite",
+      "selectLayout": "Sélectionner une disposition",
+      "selectColumn": "Sélectionner une colonne",
+      "selectRow": "Sélectionner une ligne",
+      "merge": "Fusionner",
+      "splitVertically": "Fractionner verticalement",
+      "splitHorizontally": "Fractionner horizontalement",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "controlMargins": "Marges du contrôle",
+      "controlPadding": "Remplissage du contrôle",
+      "anchoring": "Ancrage",
+      "sizeSpace": "Taille/Espace",
+      "align": "Aligner",
+      "bringToFront": "Premier plan",
+      "sendToBack": "Arrière-plan",
+      "objectList": "Objet",
+      "selectAll": "Sélectionner tout",
+      "font": "Police",
+      "fontSize": "Taille de police",
+      "bold": "Gras",
+      "italic": "Italique",
+      "underline": "Souligner",
+      "fontColor": "Couleur de police",
+      "backColor": "Couleur d'arrière-plan",
+      "alignLeft": "Aligner à gauche",
+      "alignCenter": "Centrer",
+      "alignRight": "Aligner à droite",
+      "backgroundImage": "Image d'arrière-plan",
+      "conditionalFormatting": "Mise en forme conditionnelle",
+      "shapeFill": "Remplissage",
+      "shapeOutline": "Contour",
+      "pageSize": "Taille",
+      "margins": "Marges",
+      "showMargins": "Afficher les marges",
+      "printDataOnly": "Données seulement",
+      "portrait": "Portrait",
+      "landscape": "Paysage",
+      "columns": "Colonnes",
+      "pageSetupDialog": "Mise en page",
+      "print": "Imprimer",
+      "previewZoom": "Zoom",
+      "onePage": "Une page",
+      "twoPages": "Deux pages",
+      "morePages": "Plusieurs pages",
+      "closePreview": "Fermer l'aperçu avant impression",
+      "macroRun": "Exécuter",
+      "singleStep": "Pas-à-pas",
+      "expandActions": "Développer les actions",
+      "collapseActions": "Réduire les actions",
+      "expandAll": "Développer tout",
+      "collapseAll": "Réduire tout",
+      "actionCatalog": "Catalogue d'actions",
+      "showAllActions": "Afficher toutes les actions",
+      "viewForm": "Mode Formulaire",
+      "viewPrintPreview": "Aperçu avant impression"
+    },
+    "scrollLeft": "Faire défiler le ruban vers la gauche",
+    "scrollRight": "Faire défiler le ruban vers la droite",
+    "planned": {
+      "A3": "Prévu dans le lot A3 — Requêtes",
+      "A4": "Prévu dans le lot A4 — Formulaires",
+      "A5": "Prévu dans le lot A5 — États",
+      "A6": "Prévu dans le lot A6 — Échanges et livraison",
+      "B": "Prévu à l'étape B — Macros et Runtime",
+      "C": "Prévu à l'étape C — Travail à plusieurs",
+      "D": "Prévu à l'étape D — Python",
+      "E": "Prévu à l'étape E — Import Access",
+      "later": "Prévu plus tard"
     }
   },
   "backstage": {
@@ -52,11 +374,14 @@
     "menu": "Fichier",
     "new": "Nouveau",
     "open": "Ouvrir",
+    "saveAs": "Enregistrer sous",
+    "compact": "Compacter et réparer",
     "close": "Fermer",
     "options": "Options",
     "recent": "Récents",
     "noRecent": "Aucun fichier récent. Créez une base ou ouvrez-en une.",
-    "optionsTitle": "Options"
+    "optionsTitle": "Options",
+    "about": "À propos"
   },
   "nav": {
     "title": "Volet de navigation",
@@ -66,28 +391,77 @@
     "show": "Afficher le volet de navigation (F11)",
     "tables": "Tables",
     "noMatch": "Aucun objet ne correspond.",
-    "openHint": "Double-cliquez sur une table du volet de navigation pour l'ouvrir.",
+    "openHint": "Double-cliquez sur un objet du volet de navigation pour l'ouvrir.",
     "menu": {
-      "open": "Ouvrir",
-      "design": "Mode Création",
-      "rename": "Renommer",
-      "delete": "Supprimer"
+      "open": "&Ouvrir",
+      "design": "Mo&de création",
+      "rename": "&Renommer",
+      "delete": "&Supprimer",
+      "copy": "&Copier",
+      "import": "&Importer",
+      "importText": "&Fichier texte",
+      "exportText": "&Fichier texte",
+      "exportExcel": "&Excel",
+      "importExcel": "&Excel",
+      "export": "E&xporter",
+      "hide": "&Masquer dans ce groupe",
+      "cut": "Co&uper",
+      "paste": "Co&ller",
+      "tableProperties": "&Propriétés de la table",
+      "objectProperties": "&Propriétés de l'objet",
+      "properties": "&Afficher les propriétés",
+      "layout": "Mode &Page",
+      "sqlView": "Mode S&QL",
+      "exportPdf": "&PDF",
+      "print": "&Imprimer…",
+      "printPreview": "Aperçu a&vant impression"
     },
     "renameTitle": "Renommer la table",
     "renameLabel": "Nouveau nom",
     "deleteTitle": "Supprimer la table",
-    "deleteMessage": "Supprimer la table « {{name}} » et toutes ses données ? Cette opération est irréversible."
+    "deleteMessage": "Supprimer la table « {{name}} » et toutes ses données ? Cette opération est irréversible.",
+    "queries": "Requêtes",
+    "forms": "Formulaires",
+    "reports": "États",
+    "renameObjectTitle": "Renommer l'objet",
+    "deleteObjectTitle": "Supprimer l'objet",
+    "deleteObjectMessage": "Supprimer « {{name}} » ? Cette opération est irréversible.",
+    "paste": {
+      "title": "Coller",
+      "titleMove": "Coller (déplacer)",
+      "nameLabel": "Nom",
+      "targetLabel": "Nom de la table à laquelle ajouter",
+      "copyOf": "Copie de {{name}}",
+      "exists": "Un objet porte déjà ce nom.",
+      "appendTarget": "Saisissez le nom d'une autre table existante.",
+      "appended": "{{appended}} enregistrements ajoutés, {{refused}} refusés.",
+      "mode": { "structure": "Structure seulement", "data": "Structure et données", "append": "Ajouter les données à une table existante" }
+    },
+    "copyTitle": "Copier l'objet",
+    "copyLabel": "Nom de la copie",
+    "copyDefault": "Copie de {{name}}"
   },
   "tabs": {
-    "close": "Fermer « {{name}} »",
-    "unsaved": "(modifications non enregistrées)"
+    "close": "Fermer « {{name}} » ({{kind}})",
+    "unsaved": "(modifications non enregistrées)",
+    "kind": {
+      "table": "Table",
+      "query": "Requête",
+      "form": "Formulaire",
+      "report": "État",
+      "relations": "Relations"
+    },
+    "closeWindow": "Fermer « {{name}} »"
   },
   "status": {
     "ready": "Prêt",
     "views": "Modes d'affichage",
     "mode": {
       "datasheet": "Mode Feuille de données",
-      "design": "Mode Création"
+      "design": "Mode Création",
+      "run": "Mode Exécution",
+      "form": "Mode Formulaire",
+      "sql": "Mode SQL"
     }
   },
   "banner": {
@@ -106,10 +480,11 @@
     "dismiss": "Masquer ce message",
     "relationsRemoved": "Relations supprimées, car une de leurs tables ou un de leurs champs n'existe plus : {{names}}.",
     "relationsDowngraded": "Relations dont la clé étrangère a été retirée ou modifiée hors de BaseCraft, conservées sans intégrité référentielle : {{names}}.",
-    "relationsUpdated": "Relations mises à jour d'après leur clé étrangère, modifiée hors de BaseCraft (table, champ ou règle de cascade) : {{names}}."
+    "relationsUpdated": "Relations mises à jour après une modification faite hors de BaseCraft (table, champ ou règle de cascade) : {{names}}."
   },
   "dialog": {
     "newBaseName": "Base de données1",
+    "copyName": "{{name}} copie",
     "errorTitle": "BaseCraft",
     "button": {
       "ok": "OK",
@@ -123,7 +498,7 @@
       "needsMigration": "Cette base doit être mise à jour, ce qui est impossible tant qu'elle est en lecture seule.",
       "cannotOpen": "Impossible d'ouvrir ce fichier.",
       "exists": "Un fichier portant ce nom existe déjà.",
-      "invalidArgument": "Ce fichier ne peut pas être ouvert. Choisissez un fichier .basecraft.",
+      "invalidArgument": "La demande n'est pas valide.",
       "readOnly": "La base est ouverte en lecture seule.",
       "needsRecovery": "Cette base doit être récupérée avant d'être utilisée.",
       "unsupportedTable": "Cette table n'est pas prise en charge par BaseCraft.",
@@ -131,17 +506,61 @@
       "unknown": "Une erreur inattendue s'est produite : {{detail}}",
       "fileTooLarge": "Le fichier dépasse 2 Go : il ne peut pas être importé.",
       "importInterrupted": "L'importation a été interrompue (base fermée ou passée en lecture seule). Rien n'a été importé.",
-      "fieldTooLong": "Le fichier contient un champ ou une ligne de plus d'un million de caractères : il ne peut pas être importé."
+      "fieldTooLong": "Le fichier contient un champ ou une ligne de plus d'un million de caractères : il ne peut pas être importé.",
+      "notImplemented": "Cette fonction n'est pas encore disponible dans cette version.",
+      "notFound": "Cet objet n'existe plus.",
+      "corruptObject": "La définition de cet objet est illisible.",
+      "invalidQuery": "Cette requête n'est pas valide. {{reason}}",
+      "queryBind": "Cette requête ne peut pas être exécutée : {{detail}}",
+      "notSelectQuery": "Ce n'est pas une requête Sélection : elle ne peut pas servir de source d'enregistrements.",
+      "missingParameter": "Il manque la valeur du paramètre « {{detail}} ».",
+      "invalidParameter": "La valeur saisie pour le paramètre « {{detail}} » n'est pas valide.",
+      "cancelled": "L'opération a été annulée.",
+      "hostCrashed": "Le moteur de base de données s'est arrêté de façon inattendue. Recommencez l'opération.",
+      "sameFile": "La copie ne peut pas remplacer la base ouverte. Choisissez un autre nom ou un autre dossier.",
+      "copyCorrupt": "La copie de la base n'a pas passé le contrôle d'intégrité : elle a été supprimée. Le fichier d'origine n'a pas été modifié.",
+      "copyFailed": "La copie de la base a échoué ; le fichier d'origine n'a pas été modifié. ({{detail}})",
+      "targetInUse": "Ce fichier est ouvert par un autre utilisateur ou une autre instance de BaseCraft : il ne peut pas être remplacé. Choisissez un autre nom.",
+      "reopenFailed": "La base a été compactée mais n'a pas pu être rouverte ; elle a été fermée. Rouvrez-la (une sauvegarde a été faite avant le compactage). ({{detail}})",
+      "invalidQuery_subqueryRows": "Une sous-requête renvoie plus d'un enregistrement alors qu'une seule valeur est attendue.",
+      "invalidQuery_tooComplex": "Cette requête est trop complexe (trop de tables, de colonnes ou d'imbrications).",
+      "invalidQuery_storedQuery": "La requête « {{detail}} » est illisible : son SQL n'est pas valide.",
+      "queryBind_unknownSource": "La table ou la requête « {{detail}} » n'existe pas : elle a peut-être été renommée ou supprimée.",
+      "queryBind_ambiguousField": "Le nom « {{detail}} » peut désigner plusieurs champs ou sources : précisez la table, par exemple [Table].[Champ].",
+      "queryBind_circular": "Ces requêtes s'appellent en boucle : {{detail}}.",
+      "queryBind_tooDeep": "Trop de requêtes sont imbriquées (16 au plus), à partir de « {{detail}} ».",
+      "queryBind_notGrouped": "L'expression {{detail}} ne fait partie ni d'une fonction d'agrégat ni du regroupement (GROUP BY).",
+      "queryBind_aggregateInWhere": "Une fonction d'agrégat n'est pas permise dans WHERE, ON, GROUP BY ni dans une requête action : {{detail}}.",
+      "queryBind_nestedAggregate": "Une fonction d'agrégat ne peut pas en contenir une autre : {{detail}}.",
+      "queryBind_unionArity": "Les requêtes d'une union doivent avoir le même nombre de colonnes.",
+      "queryBind_updateTarget": "La cible « {{detail}} » doit être un champ ou une table, et une seule table de la requête.",
+      "queryBind_unknownTarget": "La destination « {{detail}} » n'existe pas ou n'est pas un nom valide.",
+      "queryBind_duplicateOutput": "La colonne « {{detail}} » figure deux fois dans le résultat : renommez-la avec AS.",
+      "queryBind_insertArity": "Le nombre de valeurs à ajouter ne correspond pas au nombre de champs de destination.",
+      "queryBind_subqueryArity": "Cette sous-requête doit renvoyer une seule colonne : {{detail}}.",
+      "fontMissing": "Une police intégrée n'a pas pu être chargée : l'état n'a été ni imprimé ni exporté.",
+      "printFailed": "L'impression a échoué.",
+      "writeFailed": "Impossible d'enregistrer le fichier à cet emplacement.",
+      "invalidFilter": "Ce critère de filtre ne peut pas être appliqué : il est invalide ou nomme un champ inconnu.",
+      "tooManyFilters": "Un filtre porte au plus sur 20 champs.",
+      "unsupportedValue": "Impossible de filtrer sur cette valeur : c'est une donnée binaire, enregistrée par un autre outil.",
+      "notFound_unknownSource": "La table ou la requête « {{detail}} » n'existe pas : elle a peut-être été renommée ou supprimée.",
+      "invalidQuery_noField": "La requête doit comporter au moins un champ de destination.",
+      "invalidQuery_unlinkedTables": "Les tables d'une requête Mise à jour ou Suppression doivent toutes être jointes.",
+      "invalidQuery_updateTarget": "« {{detail}} » ne peut pas être mis à jour : la ligne Mise à jour s'applique au champ d'une table.",
+      "invalidQuery_noTarget": "Indiquez le nom de la table de destination de la requête.",
+      "invalidQuery_deleteFrom": "Indiquez la table contenant les enregistrements à supprimer : son champ « * » avec « De » dans la ligne Supprimer."
     },
     "op": {
       "nameExists": "Un objet porte déjà ce nom.",
       "nameInvalid": "Ce nom n'est pas valide.",
       "readOnly": "La base est ouverte en lecture seule.",
+      "notFound": "Cet objet n'existe plus.",
       "hasRelations": "Cette table participe à des relations : supprimez d'abord ses relations.",
-      "external": "La table « {{name}} » a été modifiée hors de BaseCraft ; sa structure ne peut pas être changée ici.",
-      "referenced": "La table « {{name}} » a une clé étrangère vers cette table, définie hors de BaseCraft : elle ne peut pas être supprimée ici.",
-      "danglingKey": "La table « {{name}} » a une clé étrangère vers une table de ce nom supprimée hors de BaseCraft : choisissez un autre nom.",
-      "viewBroken": "La vue ou le déclencheur « {{name}} », défini hors de BaseCraft, n'est plus valide : SQLite refuse de renommer la table tant qu'il n'est pas corrigé ou supprimé."
+      "external": "La table « {{table}} » a été modifiée hors de BaseCraft ; sa structure ne peut pas être changée ici.",
+      "referenced": "La table « {{name}} » ne peut pas être supprimée ici : la table « {{table}} » a une clé étrangère vers elle, définie hors de BaseCraft.",
+      "danglingKey": "La table « {{table}} » a une clé étrangère vers une table nommée « {{newName}} », supprimée hors de BaseCraft : choisissez un autre nom.",
+      "viewBroken": "La vue ou le déclencheur « {{view}} », défini hors de BaseCraft, n'est plus valide : SQLite refuse de renommer la table tant qu'il n'est pas corrigé ou supprimé."
     }
   },
   "designer": {
@@ -185,10 +604,81 @@
     "validationExisting": "{{count}} lignes ne respectent pas la règle. Enregistrer quand même ? La règle s'appliquera aux prochaines saisies.",
     "invalidExpressions": "Des propriétés sont invalides ; corrigez-les avant d'enregistrer :\n{{detail}}",
     "propError": "{{prop}} : {{message}}",
+    "splitter": "Redimensionner la grille et les propriétés du champ",
+    "lookup": "Liste de choix",
     "relationField": "Le champ « {{field}} » fait partie de la relation « {{relation}} » : il ne peut pas être renommé, supprimé, ni changer de type, de taille ou d'index tant que la relation existe. Supprimez d'abord la relation.",
     "foreignKeyField": "Le champ « {{field}} » est utilisé par une clé étrangère de la table « {{table}} », définie hors de BaseCraft : il ne peut pas être renommé, supprimé, ni changer de type, de taille ou d'index.",
     "viewBroken": "La vue ou le déclencheur « {{name}} », défini hors de BaseCraft, ne serait plus valide après ce changement (ou ne l'est déjà plus) : la structure n'est pas modifiée.",
-    "danglingKey": "La table « {{name}} » a une clé étrangère vers une table de ce nom supprimée hors de BaseCraft : choisissez un autre nom."
+    "danglingKey": "La table « {{table}} » a une clé étrangère vers une table nommée « {{newName}} », supprimée hors de BaseCraft : choisissez un autre nom.",
+    "testRulesPassed": "Toutes les données respectent les règles de validation.",
+    "testRulesFailed": "Des données ne respectent pas les règles de validation :\n{{list}}",
+    "testRulesField_one": "« {{field}} » : {{count}} enregistrement",
+    "testRulesField_other": "« {{field}} » : {{count}} enregistrements",
+    "testRulesTable_one": "Règle de validation de la table : {{count}} enregistrement",
+    "testRulesTable_other": "Règle de validation de la table : {{count}} enregistrements",
+    "tableErrors": "Propriétés de la table : {{message}}",
+    "tableProperties": "Propriétés de la table",
+    "tableDescription": "Description",
+    "section": {
+      "formHeader": "En-tête de formulaire",
+      "detail": "Détail",
+      "formFooter": "Pied de formulaire",
+      "reportHeader": "En-tête d'état",
+      "pageHeader": "En-tête de page",
+      "groupHeader": "En-tête de groupe",
+      "groupFooter": "Pied de groupe",
+      "pageFooter": "Pied de page",
+      "reportFooter": "Pied d'état"
+    },
+    "canvas": "Surface de création",
+    "toolbox": "Boîte à outils",
+    "arrange": {
+      "alignLeft": "À gauche",
+      "alignRight": "À droite",
+      "alignTop": "En haut",
+      "alignBottom": "En bas",
+      "alignToGrid": "Sur la grille",
+      "sizeToWidest": "Au plus large",
+      "sizeToNarrowest": "Au plus étroit",
+      "sizeToTallest": "Au plus grand",
+      "sizeToShortest": "Au plus petit",
+      "sizeToGrid": "Ajuster à la grille",
+      "spaceHorizontalEqual": "Égaliser horizontalement",
+      "spaceHorizontalIncrease": "Augmenter l'espacement horizontal",
+      "spaceHorizontalDecrease": "Réduire l'espacement horizontal",
+      "spaceVerticalEqual": "Égaliser verticalement",
+      "spaceVerticalIncrease": "Augmenter l'espacement vertical",
+      "spaceVerticalDecrease": "Réduire l'espacement vertical",
+      "bringToFront": "Premier plan",
+      "sendToBack": "Arrière-plan",
+      "toggleSnap": "Aimanter à la grille",
+      "sizeSpaceMenu": "Taille et espacement",
+      "alignMenu": "Aligner"
+    },
+    "fieldList": "Liste des champs",
+    "ctlPrefix": {
+      "label": "Étiquette",
+      "textBox": "Texte",
+      "checkBox": "Case",
+      "optionGroup": "Cadre",
+      "optionButton": "Option",
+      "comboBox": "Modifiable",
+      "listBox": "Liste",
+      "commandButton": "Commande",
+      "subform": "Enfant",
+      "image": "Image",
+      "line": "Trait",
+      "rectangle": "Rectangle",
+      "pageBreak": "SautPage",
+      "tabControl": "OngletCtl"
+    },
+    "format": {
+      "objectList": "Objet",
+      "font": "Police",
+      "fontSize": "Taille de police",
+      "colors": "Couleurs",
+      "format": "Format"
+    }
   },
   "fieldType": {
     "autoNumber": "NuméroAuto",
@@ -228,7 +718,44 @@
     "defaultValue": "Valeur par défaut",
     "validationRule": "Valide si",
     "validationText": "Message si erreur",
-    "inputMask": "Masque de saisie"
+    "inputMask": "Masque de saisie",
+    "displayControl": "Contrôle de l'affichage",
+    "displayControls": {
+      "textBox": "Zone de texte",
+      "checkBox": "Case à cocher",
+      "listBox": "Zone de liste",
+      "comboBox": "Zone de liste déroulante"
+    },
+    "rowSourceType": "Origine source",
+    "rowSourceTypes": {
+      "table": "Table/Requête",
+      "values": "Liste valeurs",
+      "fieldList": "Liste des champs"
+    },
+    "rowSource": "Contenu",
+    "queryBuilder": "Générateur de requête",
+    "boundColumn": "Colonne liée",
+    "columnCount": "Nbre colonnes",
+    "columnHeads": "En-têtes colonnes",
+    "columnWidths": "Largeurs colonnes",
+    "listRows": "Lignes affichées",
+    "listWidth": "Largeur liste",
+    "limitToList": "Limiter à liste",
+    "allowMultipleValues": "Autoriser plusieurs valeurs",
+    "allowValueListEdits": "Autoriser les modifications de la liste de valeurs",
+    "listItemsEditForm": "Formulaire Modifier les éléments de la liste",
+    "showOnlyRowSourceValues": "Afficher uniquement les valeurs de la source",
+    "tableNotFound": "Table introuvable",
+    "plannedLater": "Prévu plus tard",
+    "plannedForms": "Prévu dans le lot A4 — Formulaires",
+    "editList": {
+      "action": "Modifier les éléments de la liste…",
+      "title": "Modifier les éléments de la liste",
+      "items": "Tapez chaque élément sur une ligne distincte",
+      "default": "Valeur par défaut",
+      "defaultLost": "« {{value}} » n'est plus dans la liste : la valeur par défaut sera supprimée.",
+      "shortcut": "Modifier les éléments de la liste (F2)"
+    }
   },
   "format": {
     "generalNumber": "Nombre standard",
@@ -261,7 +788,10 @@
     "decimalPrecision": "La précision d'un Décimal est un entier de 1 à 28, et l'échelle un entier de 0 à la précision.",
     "reservedFieldName": "Les noms de champ rowid, oid et _rowid_ sont réservés.",
     "invalidExpression": "l'expression « {{prop}} » est invalide ou fait référence à un autre champ.",
-    "invalidMask": "le masque de saisie est invalide."
+    "invalidMask": "le masque de saisie est invalide.",
+    "nameTooLong": "Un nom compte au plus 64 caractères.",
+    "validationTextSize": "le message si erreur compte au plus 255 caractères.",
+    "invalidIndex": "Un index de la table n'est pas valide : ouvrez la boîte de dialogue Index pour le corriger."
   },
   "fieldError": {
     "invalidNumber": "Ce n'est pas un nombre valide.",
@@ -275,16 +805,24 @@
     "validation": "La valeur ne respecte pas la règle de validation de ce champ : {{rule}}",
     "expressionError": "La valeur par défaut ou la règle de validation de ce champ n'a pas pu être calculée.",
     "noParent": "Aucun enregistrement correspondant n'existe dans la table liée « {{table}} ».",
-    "notInList": "Cette valeur ne fait pas partie de la liste.",
+    "notInList": "Le texte entré ne fait pas partie de la liste. Sélectionnez un élément dans la liste ou entrez un texte correspondant à l'un des éléments de la liste.",
     "mask": "La saisie ne respecte pas le masque de saisie de ce champ : remplissez chaque emplacement obligatoire avec un caractère accepté.",
-    "related": "Cet enregistrement a des enregistrements liés dans la table « {{table}} » : sa clé ne peut pas être modifiée."
+    "related": "Cet enregistrement a des enregistrements liés dans la table « {{table}} » : sa clé ne peut pas être modifiée.",
+    "related_unnamed": "Cet enregistrement a des enregistrements liés : sa clé ne peut pas être modifiée.",
+    "tableRuleError": "La règle de validation de la table « {{table}} » n'a pas pu être calculée.",
+    "tableRule": "Une ou plusieurs valeurs sont interdites par la règle de validation « {{rule}} » définie pour « {{table}} ».",
+    "tableRule_short": "Une ou plusieurs valeurs sont interdites par la règle de validation définie pour « {{table}} »."
   },
   "datasheet": {
+    "goTo": { "first": "Premier", "previous": "Précédent", "next": "Suivant", "last": "Dernier", "new": "Nouveau" },
+    "select": { "record": "Sélectionner", "all": "Sélectionner tout" },
     "grid": "Feuille de données de « {{name}} »",
     "newRecord": "(Nouveau)",
     "pending": "Enregistrement en cours de modification",
     "fieldError": "« {{field}} » : {{message}}",
+    "fieldError_record": "{{message}}",
     "unsupported": "Cette table n'est pas prise en charge par BaseCraft : ses données ne peuvent pas être affichées.",
+    "findCapped": "La recherche et la copie portent sur les 100 000 premiers enregistrements.",
     "pasteOneRow": "Le collage est limité à une seule ligne à la fois.",
     "discardTitle": "Enregistrement impossible",
     "discard": "L'enregistrement en cours dans « {{name}} » ne peut pas être enregistré. Abandonner les modifications ?",
@@ -303,11 +841,34 @@
       "current": "Numéro de l'enregistrement en cours",
       "of": "sur",
       "position": "Enregistrement {{current}} sur {{count}}",
-      "positionNew": "Nouvel enregistrement"
+      "positionNew": "Nouvel enregistrement",
+      "filter": {
+        "none": "Aucun filtre",
+        "on": "Filtré",
+        "off": "Non filtré",
+        "toggle": "Activer ou désactiver le filtre"
+      }
     },
     "related": "Suppression impossible : des enregistrements liés existent dans la table « {{table}} ». Rien n'a été supprimé.",
+    "related_unnamed": "Suppression impossible : des enregistrements liés existent. Rien n'a été supprimé.",
     "deleteCascade_one": "Vous allez supprimer 1 enregistrement et les enregistrements liés. Cette suppression est définitive. Continuer ?",
-    "deleteCascade": "Vous allez supprimer {{count}} enregistrements et les enregistrements liés. Cette suppression est définitive. Continuer ?"
+    "deleteCascade": "Vous allez supprimer {{count}} enregistrements et les enregistrements liés. Cette suppression est définitive. Continuer ?",
+    "deleteModifies_one": "Vous allez supprimer 1 enregistrement. Les enregistrements liés perdront leur lien avec lui. Cette suppression est définitive. Continuer ?",
+    "deleteModifies": "Vous allez supprimer {{count}} enregistrements. Les enregistrements liés perdront leur lien avec eux. Cette suppression est définitive. Continuer ?",
+    "deleteCascadeModifies_one": "Vous allez supprimer 1 enregistrement et les enregistrements liés ; d'autres enregistrements liés perdront leur lien avec lui. Cette suppression est définitive. Continuer ?",
+    "deleteCascadeModifies": "Vous allez supprimer {{count}} enregistrements et les enregistrements liés ; d'autres enregistrements liés perdront leur lien avec eux. Cette suppression est définitive. Continuer ?",
+    "filter": {
+      "menu": "Filtre",
+      "equals": "Égal à \"{{value}}\"",
+      "notEquals": "Différent de \"{{value}}\"",
+      "contains": "Contient \"{{value}}\"",
+      "notContains": "Ne contient pas \"{{value}}\"",
+      "isNull": "Est vide",
+      "isNotNull": "N'est pas vide",
+      "clear": "Effacer tous les filtres",
+      "fieldTitle": "Filtrer",
+      "fieldLabel": "Critère pour « {{field}} » (vide : aucun filtre sur ce champ) :"
+    }
   },
   "expr": {
     "cat": {
@@ -315,7 +876,8 @@
       "number": "Nombre",
       "date": "Date et heure",
       "logic": "Logique",
-      "conversion": "Conversion"
+      "conversion": "Conversion",
+      "aggregate": "Agrégat"
     },
     "error": {
       "unexpectedToken": "Élément inattendu dans l'expression.",
@@ -330,7 +892,18 @@
       "maskUnclosedQuote": "Il manque un guillemet fermant dans le masque.",
       "maskTrailingBackslash": "Le masque se termine par une barre oblique inverse (\\) sans caractère après.",
       "maskNoInput": "Le masque ne contient aucun emplacement de saisie (0, 9, #, L, ?, A, a, & ou C).",
-      "maskBadSection": "Sections du masque invalides : la deuxième vaut 0 ou 1, la troisième est un seul caractère."
+      "maskBadSection": "Sections du masque invalides : la deuxième vaut 0 ou 1, la troisième est un seul caractère.",
+      "aggregateContext": "Une fonction d'agrégat (Somme, Compte…) n'est permise que dans une requête Regroupement ou un groupe d'état.",
+      "subqueryNotAllowed": "Les sous-requêtes (SELECT …) ne sont pas permises ici.",
+      "forbiddenStatement": "Instruction interdite : seules les requêtes Sélection, Ajout, Mise à jour, Suppression et Création de table sont acceptées.",
+      "reservedName": "Ce nom est réservé (bc_, bcx_ ou sqlite_) : la requête ne peut pas l'utiliser.",
+      "multipleStatements": "Une seule instruction SQL est permise : retirez le texte après le point-virgule.",
+      "notSupportedYet": "Ce type de requête (Analyse croisée, SQL direct) n'est pas encore disponible.",
+      "badParameterType": "Type de paramètre inconnu.",
+      "badCount": "Entrez un nombre entier de 1 à 255.",
+      "badWidths": "Entrez des largeurs en cm séparées par « ; » (55,88 cm au plus).",
+      "badListWidth": "Entrez « Auto » ou une largeur en cm (55,88 cm au plus).",
+      "unknownField": "Ce champ n'existe pas ou ne peut pas être utilisé ici."
     },
     "fn": {
       "IIf": "Renvoie la deuxième valeur si la condition est vraie, la troisième sinon.",
@@ -381,13 +954,228 @@
       "DateDiff": "Calcule le nombre d'intervalles entre deux dates.",
       "DatePart": "Renvoie une partie d'une date (année, trimestre, semaine...).",
       "DateSerial": "Construit une date à partir de l'année, du mois et du jour.",
-      "TimeSerial": "Construit une heure à partir des heures, minutes et secondes."
+      "TimeSerial": "Construit une heure à partir des heures, minutes et secondes.",
+      "Sum": "Renvoie la somme des valeurs du groupe.",
+      "Avg": "Renvoie la moyenne des valeurs du groupe.",
+      "Count": "Renvoie le nombre de valeurs non Null du groupe ; Compte(*) compte les enregistrements.",
+      "Min": "Renvoie la plus petite valeur du groupe.",
+      "Max": "Renvoie la plus grande valeur du groupe.",
+      "First": "Renvoie la valeur du premier enregistrement du groupe.",
+      "Last": "Renvoie la valeur du dernier enregistrement du groupe.",
+      "StDev": "Renvoie l'écart type des valeurs du groupe (échantillon).",
+      "StDevP": "Renvoie l'écart type des valeurs du groupe (population).",
+      "Var": "Renvoie la variance des valeurs du groupe (échantillon).",
+      "VarP": "Renvoie la variance des valeurs du groupe (population)."
+    },
+    "args": {
+      "IIf": [
+        "expr",
+        "vrai",
+        "faux"
+      ],
+      "Nz": [
+        "valeur",
+        "siNull"
+      ],
+      "IsNull": [
+        "expr"
+      ],
+      "IsNumeric": [
+        "expr"
+      ],
+      "IsDate": [
+        "expr"
+      ],
+      "Len": [
+        "texte"
+      ],
+      "Left": [
+        "texte",
+        "longueur"
+      ],
+      "Right": [
+        "texte",
+        "longueur"
+      ],
+      "Mid": [
+        "texte",
+        "début",
+        "longueur"
+      ],
+      "Trim": [
+        "texte"
+      ],
+      "LTrim": [
+        "texte"
+      ],
+      "RTrim": [
+        "texte"
+      ],
+      "UCase": [
+        "texte"
+      ],
+      "LCase": [
+        "texte"
+      ],
+      "InStr": [
+        "début",
+        "texte",
+        "cherché"
+      ],
+      "Replace": [
+        "texte",
+        "cherché",
+        "remplacement"
+      ],
+      "Space": [
+        "nombre"
+      ],
+      "String": [
+        "nombre",
+        "caractère"
+      ],
+      "StrComp": [
+        "texte1",
+        "texte2",
+        "comparaison"
+      ],
+      "Format": [
+        "expr",
+        "format"
+      ],
+      "Round": [
+        "nombre",
+        "décimales"
+      ],
+      "Int": [
+        "nombre"
+      ],
+      "Fix": [
+        "nombre"
+      ],
+      "Abs": [
+        "nombre"
+      ],
+      "Sgn": [
+        "nombre"
+      ],
+      "Sqr": [
+        "nombre"
+      ],
+      "Val": [
+        "texte"
+      ],
+      "CStr": [
+        "expr"
+      ],
+      "CInt": [
+        "expr"
+      ],
+      "CLng": [
+        "expr"
+      ],
+      "CDbl": [
+        "expr"
+      ],
+      "CCur": [
+        "expr"
+      ],
+      "CDate": [
+        "expr"
+      ],
+      "CBool": [
+        "expr"
+      ],
+      "Date": [],
+      "Time": [],
+      "Now": [],
+      "Year": [
+        "date"
+      ],
+      "Month": [
+        "date"
+      ],
+      "Day": [
+        "date"
+      ],
+      "Hour": [
+        "heure"
+      ],
+      "Minute": [
+        "heure"
+      ],
+      "Second": [
+        "heure"
+      ],
+      "Weekday": [
+        "date",
+        "premierJour"
+      ],
+      "DateAdd": [
+        "intervalle",
+        "nombre",
+        "date"
+      ],
+      "DateDiff": [
+        "intervalle",
+        "date1",
+        "date2"
+      ],
+      "DatePart": [
+        "intervalle",
+        "date"
+      ],
+      "DateSerial": [
+        "année",
+        "mois",
+        "jour"
+      ],
+      "TimeSerial": [
+        "heure",
+        "minute",
+        "seconde"
+      ],
+      "Sum": [
+        "expr"
+      ],
+      "Avg": [
+        "expr"
+      ],
+      "Count": [
+        "expr"
+      ],
+      "Min": [
+        "expr"
+      ],
+      "Max": [
+        "expr"
+      ],
+      "First": [
+        "expr"
+      ],
+      "Last": [
+        "expr"
+      ],
+      "StDev": [
+        "expr"
+      ],
+      "StDevP": [
+        "expr"
+      ],
+      "Var": [
+        "expr"
+      ],
+      "VarP": [
+        "expr"
+      ]
     }
   },
   "importText": {
+    "titleExcel": "Importer un classeur Excel",
     "title": "Importer un fichier texte",
     "stepOf": "Étape {{n}} sur {{total}}",
     "step": {
+      "sheet": "Feuille à importer",
       "source": "Source et destination des données",
       "format": "Format des données",
       "delimited": "Séparateur de champs",
@@ -397,6 +1185,7 @@
       "finish": "Fin de l'importation"
     },
     "source": {
+      "introExcel": "Indiquez le classeur Excel (.xlsx, .xlsm) à importer, puis comment et où stocker ses données dans la base courante.",
       "intro": "Indiquez le fichier texte à importer, puis comment et où stocker ses données dans la base active.",
       "file": "Nom du fichier",
       "browse": "Parcourir…",
@@ -413,6 +1202,11 @@
       "nameDelimited": "délimité",
       "nameFixed": "à longueur fixe",
       "encoding": "Encodage lu : {{encoding}}"
+    },
+    "sheet": {
+      "intro": "Choisissez la feuille à importer. L'aperçu montre ses premières lignes.",
+      "list": "Feuilles du classeur",
+      "hasHeader": "La première ligne contient les en-têtes de colonnes"
     },
     "preview": "Aperçu du fichier {{file}}",
     "previewGrid": "Aperçu des données",
@@ -522,6 +1316,8 @@
       "thousandsSep": "Séparateur des milliers"
     },
     "error": {
+      "excelUnsupported": "Ce fichier n'est pas un classeur Excel lisible (.xlsx ou .xlsm).",
+      "fileTooLarge": "Ce classeur dépasse 100 Mo.",
       "noFile": "Indiquez le fichier à importer.",
       "fileNotFound": "Le fichier est introuvable ou illisible.",
       "noTable": "Choisissez la table qui reçoit les enregistrements.",
@@ -529,6 +1325,7 @@
       "mappingDuplicate": "Deux colonnes vont dans le même champ.",
       "pkField": "Choisissez le champ de clé primaire parmi les champs importés.",
       "tableExists": "Une table nommée « {{name}} » existe déjà.",
+      "queryExists": "Une requête nommée « {{name}} » existe déjà.",
       "otherChar": "Indiquez un seul caractère de séparation.",
       "specName": "Le nom doit compter de 1 à 64 caractères, sans espace au début ni à la fin.",
       "emptyFile": "Le fichier est vide.",
@@ -548,5 +1345,701 @@
       "unclosed": "Délimiteur de texte non fermé : la ligne a été lue en traitant le délimiteur comme du texte",
       "truncated": "Troncature du champ"
     }
+  },
+  "doc": {
+    "unavailable": "Non disponible dans cette version"
+  },
+  "prop": {
+    "Caption": "Légende",
+    "DefaultView": "Affichage par défaut",
+    "NavigationButtons": "Boutons de déplacement",
+    "Width": "Largeur",
+    "Visible": "Visible",
+    "Format": "Format",
+    "DecimalPlaces": "Décimales",
+    "ColumnCount": "Nbre colonnes",
+    "ColumnWidths": "Largeurs colonnes",
+    "BackStyle": "Style fond",
+    "BackColor": "Couleur fond",
+    "BorderStyle": "Style bordure",
+    "BorderWidth": "Épaisseur bordure",
+    "BorderColor": "Couleur bordure",
+    "ForeColor": "Couleur texte",
+    "FontName": "Nom police",
+    "FontSize": "Taille police",
+    "FontWeight": "Épaisseur police",
+    "FontItalic": "Italique",
+    "FontUnderline": "Souligné",
+    "TextAlign": "Aligner le texte",
+    "CanGrow": "Peut augmenter",
+    "CanShrink": "Peut réduire",
+    "KeepTogether": "Garder ensemble",
+    "RepeatSection": "Répéter la section",
+    "ForceNewPage": "Saut de page",
+    "RecordSource": "Source",
+    "AllowAdditions": "Ajout autorisé",
+    "AllowEdits": "Modif autorisée",
+    "AllowDeletions": "Suppression autorisée",
+    "ControlSource": "Source contrôle",
+    "RowSourceType": "Origine source",
+    "RowSource": "Contenu",
+    "BoundColumn": "Colonne liée",
+    "LimitToList": "Limiter à liste",
+    "DefaultValue": "Valeur par défaut",
+    "ValidationRule": "Valide si",
+    "ValidationText": "Message si erreur",
+    "Enabled": "Activé",
+    "Locked": "Verrouillé",
+    "OptionValue": "Valeur d'option",
+    "SourceObject": "Objet source",
+    "LinkMasterFields": "Champs pères",
+    "LinkChildFields": "Champs fils",
+    "GridX": "Grille X",
+    "GridY": "Grille Y",
+    "RecordSelectors": "Afficher sélecteur",
+    "Left": "Gauche",
+    "Top": "Haut",
+    "Height": "Hauteur",
+    "Picture": "Image",
+    "SizeMode": "Mode d'affichage",
+    "LineSlant": "Pente de ligne",
+    "Pages": "Pages",
+    "Name": "Nom",
+    "TabStop": "Arrêt tabulation",
+    "TabIndex": "Index tabulation",
+    "ControlTipText": "Texte d'info-bulle",
+    "StatusBarText": "Texte barre état",
+    "OnOpen": "Sur ouverture",
+    "OnLoad": "Sur chargement",
+    "OnCurrent": "Sur activation",
+    "OnClose": "Sur fermeture",
+    "BeforeInsert": "Avant insertion",
+    "AfterInsert": "Après insertion",
+    "BeforeUpdate": "Avant MAJ",
+    "AfterUpdate": "Après MAJ",
+    "OnDelete": "Sur suppression",
+    "OnClick": "Sur clic",
+    "OnDblClick": "Sur double clic",
+    "OnEnter": "Sur entrée",
+    "OnExit": "Sur sortie",
+    "OnGotFocus": "Sur réception focus",
+    "OnLostFocus": "Sur perte focus",
+    "OnChange": "Sur changement",
+    "ColumnHeads": "En-têtes colonnes"
+  },
+  "propValue": {
+    "DefaultView": {
+      "single": "Formulaire unique",
+      "continuous": "Formulaires continus",
+      "datasheet": "Feuille de données"
+    },
+    "DecimalPlaces": {
+      "auto": "Auto"
+    },
+    "BackStyle": {
+      "normal": "Normal",
+      "transparent": "Transparent"
+    },
+    "BorderStyle": {
+      "transparent": "Transparent",
+      "solid": "Plein",
+      "dashed": "Tirets",
+      "dotted": "Points"
+    },
+    "FontWeight": {
+      "normal": "Normal",
+      "bold": "Gras"
+    },
+    "TextAlign": {
+      "general": "Standard",
+      "left": "Gauche",
+      "center": "Centré",
+      "right": "Droite"
+    },
+    "ForceNewPage": {
+      "none": "Aucun",
+      "before": "Avant section",
+      "after": "Après section",
+      "beforeAndAfter": "Avant et après"
+    },
+    "RowSourceType": {
+      "tableQuery": "Table/Requête",
+      "valueList": "Liste valeurs"
+    },
+    "SizeMode": {
+      "clip": "Rogner",
+      "stretch": "Étirer",
+      "zoom": "Zoom"
+    }
+  },
+  "color": {
+    "background": "Arrière-plan",
+    "surface": "Surface",
+    "surface2": "Surface 2",
+    "text": "Texte",
+    "textMuted": "Texte secondaire",
+    "border": "Bordure",
+    "accent": "Accent",
+    "accentContrast": "Texte sur accent",
+    "danger": "Danger",
+    "warning": "Avertissement"
+  },
+  "sourcePicker": {
+    "label": "Tables et requêtes",
+    "empty": "La base ne contient aucune table ni requête."
+  },
+  "report": {
+    "pickSourceTitle": "Nouvel état : choisir la source",
+    "preview": "Aperçu de l'état {{name}}",
+    "progress": "Mise en forme…",
+    "pageOf": "Page {{page}} sur {{pages}}",
+    "nav": {
+      "first": "Première page",
+      "prev": "Page précédente",
+      "page": "Page actuelle",
+      "next": "Page suivante",
+      "last": "Dernière page"
+    },
+    "issues": "Avertissements ({{count}})",
+    "issue": {
+      "unknownField": "Le champ « {{detail}} » n'existe pas dans la source.",
+      "invalidExpression": "L'expression « {{detail}} » n'est pas valide.",
+      "groupingInvalid": "Le regroupement sur « {{detail}} » n'est pas valide.",
+      "widthExceedsPage": "L'état est plus large que la zone imprimable de la page.",
+      "glyphMissing": "Le caractère « {{detail}} » n'existe pas dans la police.",
+      "fontNotPortable": "La police « {{detail}} » n'est pas intégrée : le texte est mesuré et imprimé avec Liberation Sans.",
+      "unsupportedControl": "Ce type de contrôle n'est pas imprimé.",
+      "aggregateNotAllowed": "Un total n'est pas permis dans cette section.",
+      "sizeClamped": "Une dimension dépasse 55,88 cm, la limite d'Access : elle est ramenée à cette limite.",
+      "groupingMalformed": "Un niveau de regroupement est vide ou mal formé : il ne regroupe rien.",
+      "sectionIgnored": "La section « {{section}} » est ignorée : elle est en double, ou aucun niveau de regroupement ne la demande."
+    },
+    "error": "#Erreur",
+    "name": "#Nom?",
+    "invalidDefinition": "La définition de cet état n'est pas valide :",
+    "pdfSaved": "Le fichier PDF a été enregistré.",
+    "pdfFilter": "Fichiers PDF",
+    "pageSetup": {
+      "title": "Mise en page",
+      "orientation": "Orientation",
+      "portrait": "Portrait",
+      "landscape": "Paysage",
+      "margins": "Marges (cm)",
+      "top": "Haut",
+      "bottom": "Bas",
+      "left": "Gauche",
+      "right": "Droite",
+      "invalid": "Chaque marge doit être comprise entre 0 et 10 cm."
+    },
+    "sectionGroup": {
+      "header": "En-tête de groupe : {{expr}}",
+      "footer": "Pied de groupe : {{expr}}"
+    },
+    "headerFooter": "En-tête/pied d'état",
+    "pageHeaderFooter": "En-tête/pied de page",
+    "newName": "État{{n}}",
+    "saveAsTitle": "Enregistrer sous",
+    "nameLabel": "Nom de l'état",
+    "saveFirstTitle": "Enregistrer l'état",
+    "saveFirst": "Enregistrer les modifications apportées à la structure de l'état « {{name}} » ?",
+    "confirmRemoveSections": "Supprimer ces sections supprime aussi tous les contrôles qu’elles contiennent. Supprimer quand même ?",
+    "margins": {
+      "normal": "Normales",
+      "wide": "Larges",
+      "narrow": "Étroites",
+      "custom": "Marges personnalisées…"
+    },
+    "pageSize": {
+      "a4": "A4 (21 × 29,7 cm)"
+    },
+    "perView": "{{count}} pages",
+    "sourceError": "La source « {{name}} » ne peut pas être lue : {{message}}",
+    "unbound": "Indépendant",
+    "grouping": {
+      "title": "Regrouper, trier et total",
+      "close": "Fermer le volet Regrouper, trier et total",
+      "groupOn": "Regrouper sur",
+      "sortBy": "Trier par",
+      "expression": "Champ ou expression",
+      "order": "Ordre",
+      "asc": "croissant",
+      "desc": "décroissant",
+      "header": "En-tête",
+      "withHeader": "avec une section d'en-tête",
+      "withoutHeader": "sans section d'en-tête",
+      "footer": "Pied",
+      "withFooter": "avec une section de pied de page",
+      "withoutFooter": "sans section de pied de page",
+      "keepTogether": "Conserver ensemble",
+      "keep": {
+        "no": "ne pas conserver le groupe ensemble sur une page",
+        "wholeGroup": "conserver le groupe entier ensemble sur une page",
+        "withFirstDetail": "conserver l'en-tête et le premier enregistrement ensemble sur une page"
+      },
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "delete": "Supprimer",
+      "addGroup": "Ajouter un groupe",
+      "addSort": "Ajouter un tri",
+      "pickField": "Choisir un champ",
+      "noFields": "Choisissez d'abord la source de l'état.",
+      "orderBy": {
+        "text": {
+          "asc": "avec A en haut",
+          "desc": "avec Z en haut"
+        },
+        "number": {
+          "asc": "du plus petit au plus grand",
+          "desc": "du plus grand au plus petit"
+        },
+        "date": {
+          "asc": "du plus ancien au plus récent",
+          "desc": "du plus récent au plus ancien"
+        }
+      }
+    },
+    "totals": {
+      "Sum": "Somme",
+      "Avg": "Moyenne",
+      "CountRecords": "Compter les enregistrements",
+      "Count": "Compter les valeurs",
+      "Max": "Maximum",
+      "Min": "Minimum",
+      "StDev": "Écart type",
+      "Var": "Variance"
+    },
+    "pageNumbers": {
+      "title": "Numéros de page",
+      "format": "Format",
+      "pageN": "Page N",
+      "pageNofM": "Page N sur M",
+      "position": "Position",
+      "top": "Haut de page [En-tête]",
+      "bottom": "Bas de page [Pied de page]",
+      "align": "Alignement :",
+      "left": "Gauche",
+      "center": "Centre",
+      "right": "Droite",
+      "firstPage": "Afficher le numéro sur la première page"
+    },
+    "tooManyPages": "Cet état dépasse 10 000 pages : la mise en page s'arrête. Filtrez sa source ou corrigez sa définition.",
+    "tooLarge": "Cet état est trop volumineux pour être imprimé ou exporté en une fois. Filtrez sa source pour le réduire.",
+    "preparing": "Préparation de l'état"
+  },
+  "about": {
+    "title": "À propos de BaseCraft",
+    "version": "Version {{version}}",
+    "tagline": "Base de données bureautique, dans l'esprit de Microsoft Access.",
+    "licence": "Logiciel libre sous licence {{licence}}.",
+    "components": "Composants",
+    "electron": "Electron",
+    "chromium": "Chromium",
+    "node": "Node.js",
+    "sqlite": "SQLite",
+    "platform": "Système",
+    "homepage": "Site du projet",
+    "issues": "Signaler un problème",
+    "viewLicence": "Lire la licence",
+    "thirdParty": "Licences des composants tiers"
+  },
+  "relations": {
+    "title": "Relations",
+    "canvas": "Disposition des relations",
+    "table": "Table « {{name}} »",
+    "key": "(clé primaire)",
+    "line": "Relation entre « {{parent}} » ({{parentFields}}) et « {{child}} » ({{childFields}})",
+    "line_enforced": "Relation entre « {{parent}} » ({{parentFields}}) et « {{child}} » ({{childFields}}), avec intégrité référentielle",
+    "list": "Liste des relations",
+    "none": "Aucune relation.",
+    "editOne": "Modifier la relation « {{name}} »",
+    "deleteOne": "Supprimer la relation « {{name}} »",
+    "deleteTitle": "Supprimer la relation",
+    "deleteMessage": "Voulez-vous vraiment supprimer définitivement la relation sélectionnée de votre base de données ?",
+    "clearTitle": "Effacer la disposition",
+    "clearMessage": "Voulez-vous vraiment effacer la disposition de la fenêtre Relations ? Les relations ne sont pas supprimées.",
+    "add": {
+      "title": "Ajouter des tables",
+      "none": "Toutes les tables sont déjà affichées.",
+      "ok": "Ajouter",
+      "close": "Fermer"
+    },
+    "dialog": {
+      "title": "Modifier des relations",
+      "parent": "Table/Requête",
+      "child": "Table/Requête liée",
+      "fieldOf": "Champ {{n}} de « {{table}} »",
+      "enforce": "Appliquer l'intégrité référentielle",
+      "cascadeUpdate": "Mettre à jour en cascade",
+      "cascadeDelete": "Effacer en cascade",
+      "join": "Type de jointure",
+      "join1": "Inclure seulement les lignes des deux tables pour lesquelles les champs joints sont égaux.",
+      "join2": "Inclure TOUS les enregistrements de « {{parent}} » et seulement ceux de « {{child}} » pour lesquels les champs joints sont égaux.",
+      "join3": "Inclure TOUS les enregistrements de « {{child}} » et seulement ceux de « {{parent}} » pour lesquels les champs joints sont égaux.",
+      "create": "Créer",
+      "incomplete": "Choisissez un champ de chaque côté, ou videz cette ligne."
+    },
+    "error": {
+      "fieldsMismatch": "Choisissez autant de champs dans chaque table, chaque champ une seule fois.",
+      "typesMismatch": "Les champs reliés n'ont pas le même type de données ou la même taille.",
+      "parentNotUnique": "Aucun index unique n'a été trouvé pour le champ référencé de la table principale.",
+      "readOnly": "La base est ouverte en lecture seule.",
+      "nameExists": "Une relation porte déjà ce nom.",
+      "nameInvalid": "Ce nom de relation n'est pas valide.",
+      "sameTable": "Une relation relie deux tables différentes.",
+      "external": "La table « {{table}} » a été modifiée hors de BaseCraft ; ses relations ne peuvent pas être changées ici.",
+      "violations_one": "L'intégrité référentielle ne peut pas être appliquée : 1 enregistrement de « {{child}} » n'a pas de correspondant dans « {{parent}} ».",
+      "violations_other": "L'intégrité référentielle ne peut pas être appliquée : {{count}} enregistrements de « {{child}} » n'ont pas de correspondant dans « {{parent}} ».",
+      "duplicate": "La relation « {{relation}} » relie déjà ces champs de ces tables."
+    }
+  },
+  "builder": {
+    "title": "Générateur d'expression",
+    "expression": "Entrez une expression :",
+    "elements": "Éléments d'expression",
+    "categories": "Catégories d'expressions",
+    "values": "Valeurs d'expressions",
+    "all": "<Tous>",
+    "el": {
+      "functions": "Fonctions",
+      "fields": "Champs",
+      "operators": "Opérateurs",
+      "constants": "Constantes"
+    },
+    "op": {
+      "arithmetic": "Arithmétique",
+      "comparison": "Comparaison",
+      "logical": "Logique",
+      "string": "Chaîne"
+    }
+  },
+  "objectProperties": {
+    "title": "Propriétés",
+    "type": "Type",
+    "name": "Nom",
+    "description": "Description",
+    "created": "Créé le",
+    "modified": "Modifié le"
+  },
+  "sheet": {
+    "title": "Feuille de propriétés",
+    "selection": "Sélection",
+    "selectionType": "Type de sélection : {{type}}",
+    "multiple": "Sélection multiple",
+    "section": "Section",
+    "kind": {
+      "label": "Étiquette",
+      "textBox": "Zone de texte",
+      "checkBox": "Case à cocher",
+      "optionGroup": "Groupe d'options",
+      "optionButton": "Case d'option",
+      "comboBox": "Zone de liste déroulante",
+      "listBox": "Zone de liste",
+      "commandButton": "Bouton de commande",
+      "subform": "Sous-formulaire/Sous-état",
+      "image": "Image",
+      "line": "Trait",
+      "rectangle": "Rectangle",
+      "pageBreak": "Saut de page",
+      "tabControl": "Contrôle Onglet"
+    },
+    "tab": {
+      "format": "Format",
+      "data": "Données",
+      "event": "Événement",
+      "other": "Autres",
+      "all": "Toutes"
+    },
+    "mixed": "Les éléments sélectionnés ont des valeurs différentes",
+    "eventsLater": "Disponible avec les macros (étape B)",
+    "yes": "Oui",
+    "no": "Non",
+    "colors": "Couleurs",
+    "customColor": "Couleur personnalisée…",
+    "pickPicture": "Choisir…",
+    "fontNotPortable": "Police non portable : sur un autre ordinateur, le texte peut s'afficher autrement.",
+    "error": {
+      "nameInvalid": "Nom non valide : de 1 à 64 caractères, sans point (.), point d'exclamation (!), accent grave (`) ni crochets ([ ]), et sans espace au début.",
+      "nameExists": "Un autre contrôle porte déjà ce nom.",
+      "outOfRange": "Valeur illisible ou hors limites.",
+      "invalidColor": "Couleur non valide.",
+      "unknownField": "Ce champ n'existe pas dans la source.",
+      "unknownSource": "Aucune table ni requête ne porte ce nom.",
+      "pictureTooLarge": "Image trop volumineuse (1 Mo au plus).",
+      "notInteger": "Entrez un nombre entier."
+    },
+    "close": "Fermer la feuille de propriétés (F4)",
+    "lost": "La valeur de « {{name}} » n'a pas été enregistrée :",
+    "removePicture": "Supprimer"
+  },
+  "form": {
+    "newName": "Formulaire{{n}}",
+    "saveAsTitle": "Enregistrer sous",
+    "nameLabel": "Nom du formulaire",
+    "dropped_one": "{{count}} contrôle illisible a été ignoré ; il disparaîtra à l'enregistrement.",
+    "dropped": "{{count}} contrôles illisibles ont été ignorés ; ils disparaîtront à l'enregistrement.",
+    "badSource": "La source d'enregistrements de ce formulaire est illisible : elle a été retirée.",
+    "headerFooter": "En-tête/pied de formulaire",
+    "tabPage": "Page{{n}}",
+    "unbound": "Indépendant",
+    "saveFirstTitle": "Enregistrer le formulaire",
+    "saveFirst": "Enregistrer les modifications apportées au formulaire « {{name}} » ?",
+    "mustSaveFirst": "Vous devez d'abord enregistrer le formulaire « {{name}} ». L'enregistrer maintenant ?",
+    "sourceError": "Source d'enregistrements « {{name}} » : {{message}}",
+    "tabOrder": {
+      "up": "Monter",
+      "down": "Descendre",
+      "auto": "Ordre automatique",
+      "hint": "Alt+Haut et Alt+Bas déplacent le contrôle choisi.",
+      "empty": "Aucun contrôle"
+    },
+    "headerFooterConfirm": "Supprimer l'en-tête et le pied de formulaire ? Les contrôles qu'ils contiennent seront supprimés.",
+    "calc": {
+      "error": "#Erreur",
+      "name": "#Nom?"
+    },
+    "dirty": "Enregistrement modifié, non encore enregistré",
+    "message": "Messages du formulaire",
+    "controlValidation": "La valeur ne respecte pas la règle de validation de ce contrôle.",
+    "invalidDefinition": "La définition de ce formulaire est illisible : il ne peut pas être ouvert.",
+    "closeDiscard": "L'enregistrement en cours dans « {{name}} » ne peut pas être enregistré. Fermer quand même ? La saisie sera perdue.",
+    "list": {
+      "truncated": "Liste limitée aux {{count}} premières lignes.",
+      "sourceError": "Le contenu de la liste ne peut pas être lu : {{message}}"
+    },
+    "subform": {
+      "missing": "Le sous-formulaire « {{name}} » est introuvable ou illisible.",
+      "badLink": "Les champs pères et fils de ce sous-formulaire ne correspondent pas aux champs des formulaires.",
+      "recursive": "Le sous-formulaire « {{name}} » contient ce formulaire (ou dépasse sept niveaux) : il n'est pas affiché.",
+      "linked": "Champs liés proposés : {{master}} (père) et {{child}} (fils).",
+      "noMaster": "Enregistrez d'abord l'enregistrement du formulaire principal : ce sous-formulaire ne peut rien ajouter sans lui."
+    },
+    "autoFormSource": "Formulaire : choisir une table ou une requête",
+    "readOnlySource": "Ce jeu d'enregistrements n'est pas modifiable.",
+    "typeAheadDropped": "Les caractères tapés pendant le changement d'enregistrement ont été ignorés."
+  },
+  "query": {
+    "param": {
+      "title": "Entrer une valeur de paramètre",
+      "label": "{{name}}"
+    },
+    "readOnly": "Ce jeu d'enregistrements n'est pas modifiable.",
+    "delete": {
+      "usedBy": "La requête « {{name}} » est utilisée par : {{list}}. La supprimer quand même ? Ces objets ne fonctionneront plus."
+    },
+    "newName": "Requête{{n}}",
+    "nameLabel": "Nom de la requête",
+    "saveFirstTitle": "Enregistrer la requête",
+    "mustSaveFirst": "Vous devez d'abord enregistrer la requête « {{name}} ». L'enregistrer maintenant ?",
+    "saveFirst": "La structure de la requête « {{name}} » a été modifiée. L'enregistrer d'abord ?",
+    "invalidCells": "Des cellules de la grille sont invalides ; corrigez-les avant d'enregistrer :\n{{detail}}",
+    "cellError": "{{row}} colonne {{col}} : {{message}}",
+    "tablePane": "Tables de la requête",
+    "grid": "Grille de création de la requête",
+    "splitter": "Redimensionner les tables et la grille",
+    "box": "Table ou requête {{name}}",
+    "removeTable": "Retirer la table",
+    "key": "clé primaire",
+    "allFields": "Tous les champs de {{name}}",
+    "join": "Jointure entre {{l}}.{{lField}} et {{r}}.{{rField}}",
+    "column": "Colonne {{n}}",
+    "cell": "{{row}} colonne {{n}}",
+    "row": {
+      "field": "Champ :",
+      "table": "Table :",
+      "total": "Opération :",
+      "sort": "Tri :",
+      "show": "Afficher :",
+      "criteria": "Critères :",
+      "or": "Ou :",
+      "appendTo": "Ajouter à :",
+      "updateTo": "Mise à jour :",
+      "deleteRole": "Supprimer :"
+    },
+    "total": {
+      "groupBy": "Regroupement",
+      "sum": "Somme",
+      "avg": "Moyenne",
+      "min": "Min",
+      "max": "Max",
+      "count": "Compte",
+      "stDev": "EcartType",
+      "var": "Var",
+      "first": "Premier",
+      "last": "Dernier",
+      "expression": "Expression",
+      "where": "Où"
+    },
+    "sort": {
+      "none": "(non trié)",
+      "asc": "Croissant",
+      "desc": "Décroissant"
+    },
+    "deleteRole": {
+      "from": "De",
+      "where": "Où"
+    },
+    "showTable": {
+      "title": "Afficher la table",
+      "tables": "Tables",
+      "queries": "Requêtes",
+      "both": "Les deux",
+      "add": "Ajouter",
+      "close": "Fermer",
+      "none": "Aucun objet."
+    },
+    "joinDialog": {
+      "title": "Propriétés de la jointure",
+      "leftTable": "Table de gauche",
+      "rightTable": "Table de droite",
+      "leftColumn": "Colonne de gauche",
+      "rightColumn": "Colonne de droite",
+      "inner": "1 : Inclure seulement les lignes des deux tables pour lesquelles les champs joints sont égaux.",
+      "left": "2 : Inclure TOUS les enregistrements de « {{l}} » et seulement ceux de « {{r}} » pour lesquels les champs joints sont égaux.",
+      "right": "3 : Inclure TOUS les enregistrements de « {{r}} » et seulement ceux de « {{l}} » pour lesquels les champs joints sont égaux.",
+      "kind": "Type de jointure"
+    },
+    "target": {
+      "makeTableTitle": "Créer une table",
+      "appendTitle": "Ajout",
+      "label": "Nom de la table"
+    },
+    "sqlOnly": "Cette requête ne peut être affichée qu'en mode SQL.",
+    "rowSourceTitle": "Générateur de requête : Contenu",
+    "error": {
+      "unexpectedToken": "Erreur de syntaxe dans l'instruction SQL.",
+      "unexpectedEnd": "L'instruction SQL est incomplète."
+    },
+    "params": {
+      "title": "Paramètres de la requête",
+      "name": "Paramètre",
+      "type": "Type de données",
+      "emptyName": "Chaque paramètre doit avoir un nom.",
+      "duplicate": "Le paramètre « {{name}} » est déclaré deux fois."
+    },
+    "props": {
+      "title": "Feuille de propriétés : requête",
+      "all": "Tout",
+      "top": "Valeurs supérieures",
+      "badTop": "Entrez « Tout », un nombre entier positif ou un pourcentage de 1 à 100 (par exemple 25 ou 5 %).",
+      "outputAll": "Afficher tous les champs",
+      "distinct": "Valeurs distinctes"
+    },
+    "action": {
+      "title": "Requête action",
+      "confirm_makeTable_one": "Vous allez coller {{count}} ligne dans une nouvelle table. Cette opération ne pourra pas être annulée. Continuer ?",
+      "confirm_makeTable_other": "Vous allez coller {{count}} lignes dans une nouvelle table. Cette opération ne pourra pas être annulée. Continuer ?",
+      "confirm_append_one": "Vous allez ajouter {{count}} ligne. Cet ajout ne pourra pas être annulé. Continuer ?",
+      "confirm_append_other": "Vous allez ajouter {{count}} lignes. Cet ajout ne pourra pas être annulé. Continuer ?",
+      "confirm_update_one": "Vous allez mettre à jour {{count}} ligne. Cette modification ne pourra pas être annulée. Continuer ?",
+      "confirm_update_other": "Vous allez mettre à jour {{count}} lignes. Cette modification ne pourra pas être annulée. Continuer ?",
+      "confirm_delete_one": "Vous allez supprimer {{count}} ligne. Cette suppression ne pourra pas être annulée. Continuer ?",
+      "confirm_delete_other": "Vous allez supprimer {{count}} lignes. Cette suppression ne pourra pas être annulée. Continuer ?",
+      "validation": "la valeur ne respecte pas la règle de validation de ce champ",
+      "replace": "La table « {{table}} » existante va être supprimée avant l'exécution de la requête. Continuer ?",
+      "nameExists": "« {{table}} » est le nom d'une requête : une requête Création de table ne la remplace pas. Choisissez un autre nom de table.",
+      "related": "Des enregistrements liés existent dans la table « {{table}} » : la requête ne peut pas être exécutée et rien n'a été modifié.",
+      "related_unnamed": "Des enregistrements liés existent dans une autre table : la requête ne peut pas être exécutée et rien n'a été modifié.",
+      "badColumnName": "La colonne « {{column}} » ne peut pas devenir un nom de champ de la nouvelle table : donnez-lui un alias (par exemple « {{column}} AS NomDuChamp ») ; rien n'a été modifié.",
+      "records_one": "{{count}} enregistrement non modifié",
+      "records_other": "{{count}} enregistrements non modifiés",
+      "relatedRow": "des enregistrements liés existent dans la table « {{table}} »",
+      "relatedRow_unnamed": "des enregistrements liés existent dans une autre table",
+      "partial": "La requête ne peut pas modifier tous les enregistrements : {{conversion}} à la suite d'un échec de conversion de type ; {{key}} à la suite de violations de clé, {{lock}} à la suite de violations de verrouillage et {{validation}} à la suite de violations de règles de validation, sur {{total}}. Première erreur : {{message}}. Exécuter quand même la requête ?",
+      "fields_one": "{{count}} champ mis à Null",
+      "fields_other": "{{count}} champs mis à Null",
+      "inUse": "Le moteur de base de données n'a pas pu verrouiller la table « {{table}} » car elle est déjà utilisée par une autre personne ou un autre processus. Enregistrez ou annulez l'enregistrement en cours de modification, ou enregistrez sa structure, puis exécutez à nouveau la requête."
+    },
+    "run": {
+      "running": "Exécution…",
+      "stop": "Arrêter"
+    }
+  },
+  "exchange": {
+    "yes": "Vrai",
+    "no": "Faux",
+    "excelFilter": "Classeurs Excel",
+    "textFilter": "Fichiers texte",
+    "actionQuery": "« {{name}} » est une requête action : elle n'a pas de données à exporter.",
+    "noSource": "Cet état n'a pas de source de données : il n'y a rien à exporter.",
+    "selectObject": "Sélectionnez d'abord une table ou une requête dans le volet de navigation.",
+    "summary": "{{text}}",
+    "done_one": "{{count}} enregistrement exporté.",
+    "done_other": "{{count}} enregistrements exportés.",
+    "warnUnmappable_one": "{{count}} caractère absent de l'encodage choisi a été remplacé par « ? ».",
+    "warnUnmappable_other": "{{count}} caractères absents de l'encodage choisi ont été remplacés par « ? ».",
+    "warnAmbiguous_one": "{{count}} valeur contient le séparateur ou un saut de ligne sans délimiteur de texte : le fichier risque d'être mal relu.",
+    "warnAmbiguous_other": "{{count}} valeurs contiennent le séparateur ou un saut de ligne sans délimiteur de texte : le fichier risque d'être mal relu.",
+    "truncated_one": "{{count}} texte dépassait 32 767 caractères (limite d'une cellule Excel) et a été coupé.",
+    "truncated_other": "{{count}} textes dépassaient 32 767 caractères (limite d'une cellule Excel) et ont été coupés.",
+    "tooManyRows": "Excel ne peut contenir que {{limit}} lignes de données ; cette source en a davantage. Exportez-la en fichier texte, ou filtrez-la d'abord.",
+    "text": {
+      "title": "Exporter – Fichier texte",
+      "delimiter": "Séparateur de champs",
+      "comma": "Virgule",
+      "semicolon": "Point-virgule",
+      "tab": "Tabulation",
+      "pipe": "Barre verticale",
+      "qualifier": "Délimiteur de texte",
+      "qualifierNone": "(aucun)",
+      "header": "La première ligne contient les noms de champs",
+      "encoding": "Encodage",
+      "utf-8-bom": "UTF-8 avec BOM (Excel)",
+      "utf-8": "UTF-8",
+      "windows-1252": "Windows-1252 (ANSI)"
+    }
+  },
+  "indexes": {
+    "title": "Index",
+    "indexName": "Nom de l'index",
+    "fieldName": "Nom du champ",
+    "sortOrder": "Ordre de tri",
+    "ascending": "Croissant",
+    "descending": "Décroissant",
+    "primary": "Primaire",
+    "unique": "Unique",
+    "addIndex": "Ajouter un index",
+    "removeIndex": "Supprimer l'index",
+    "addField": "Ajouter un champ",
+    "removeField": "Retirer le champ",
+    "duplicateName": "Deux index portent le même nom.",
+    "emptyName": "Chaque index doit avoir un nom.",
+    "invalidName": "Un nom d'index compte au plus 64 caractères, ne commence pas par une espace et ne contient ni . ! ` [ ] ni caractère de contrôle.",
+    "noField": "Chaque index doit comporter au moins un champ.",
+    "unknownField": "Un index utilise un champ absent de la table.",
+    "fieldTwice": "Un champ figure deux fois dans le même index.",
+    "tooManyFields": "Un index compte au plus 10 champs.",
+    "tooManyIndexes": "Une table compte au plus 32 index.",
+    "twoPrimary": "Un seul index peut être la clé primaire."
+  },
+  "tableFields": {
+    "newField": "Champ",
+    "newTable": "Table",
+    "designOpen": "La table « {{name}} » est ouverte en mode Création. Fermez-la ou enregistrez-la avant de modifier ses champs ici.",
+    "confirmDeleteTitle": "Supprimer le champ",
+    "confirmDelete": "Supprimer définitivement le champ « {{name}} » et toutes ses données ?",
+    "moreFields": "Plus de champs",
+    "nameCaptionTitle": "Entrer le nom et la légende du champ",
+    "name": "Nom",
+    "caption": "Légende",
+    "description": "Description",
+    "nameTaken": "Un autre champ porte déjà ce nom.",
+    "defaultValueLabel": "Valeur par défaut de « {{field}} »",
+    "fieldSizeTitle": "Taille du champ",
+    "fieldSizeLabel": "Taille du champ (1 à 255)",
+    "fieldSizeInvalid": "Entrez un nombre entier de 1 à 255.",
+    "formatNone": "(aucun)",
+    "validationTextTitle": "Message de validation",
+    "fieldValidationTextLabel": "Message affiché quand une valeur de « {{field}} » est refusée",
+    "recordValidationTextLabel": "Message affiché quand un enregistrement est refusé",
+    "fieldValidationRuleLabel": "Règle de validation de « {{field}} »",
+    "recordValidationRuleLabel": "Règle de validation de l'enregistrement",
+    "validation": { "fieldRule": "Règle de validation du champ", "fieldText": "Message de validation du champ", "recordRule": "Règle de validation de l'enregistrement", "recordText": "Message de validation de l'enregistrement" }
+  },
+  "compact": {
+    "title": "Compacter et réparer",
+    "done": "Base compactée : {{before}} → {{after}}. Sauvegarde : {{backup}}",
+    "repaired": "Base compactée : {{before}} → {{after}}. Sauvegarde : {{backup}}\n{{count}} problème(s) détecté(s) par le contrôle d'intégrité ont été réparés :\n{{problems}}",
+    "corrupt": "La base est endommagée et n'a pas pu être réparée. Le fichier d'origine n'a pas été modifié.\nProblèmes détectés :\n{{problems}}\nSauvegarde : {{backup}}",
+    "more": "… et {{count}} autre(s)"
   }
 }

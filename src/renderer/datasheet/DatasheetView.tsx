@@ -365,6 +365,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
 
   /** Every selection change made by the user: leaving the pending row saves it (a failure brings the selection back). */
   const select = (sel: GridSelection) => {
+    // A column picked while a Table Fields reload runs is the one it selects again (by name: the new structure may move it)
+    if (reloading.current.waiters.length) {
+      const c = sel.current?.cell[0] ?? sel.columns.first();
+      const f = c === undefined ? undefined : live.current.shape?.design.fields[c];
+      if (f) reloading.current.select = f.name;
+    }
     const { count, adding } = rows.current;
     const next = rowOf(sel);
     const p = buffer.pending;

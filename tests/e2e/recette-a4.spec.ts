@@ -158,7 +158,7 @@ test('recette A4: master/detail entry Clients → Commandes', async () => {
     await expect(vis(page, 'modal')).toContainText(fill(fr.datasheet.fieldError, { field: 'Ville', message: fr.fieldError.notInList }));
     await vis(page, 'modal-btn-ok').click();
     await expect(ctl('Ville')).toBeFocused();
-    await page.keyboard.press('Control+A');
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Nantes');
     await page.keyboard.press('Enter');
     await expect(ctl('Ville')).toHaveValue('Nantes');

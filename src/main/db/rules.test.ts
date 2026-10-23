@@ -104,3 +104,11 @@ describe('rules', () => {
     expect((await insertRow(db, dd, { P: '2,5' }, fr, now)).ok).toBe(false);
   });
 });
+
+describe('rules: an aggregate stored by an external tool never crashes a write', () => {
+  it('rule → expressionError, default → DefaultValueError', async () => {
+    const d = t('T', [f('N', 'autoNumber'), f('Prix', 'currency', { validationRule: 'Sum([Prix]) > 0', defaultValue: 'Count(*)' })]);
+    expect(await checkRules(d, { Prix: 5 }, ['Prix'], now, fr)).toEqual([{ field: 'Prix', code: 'expressionError' }]);
+    await expect(applyDefaults(d, {}, fr, now)).rejects.toMatchObject({ name: 'DefaultValueError', field: 'Prix' });
+  });
+});

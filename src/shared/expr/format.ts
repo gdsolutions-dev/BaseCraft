@@ -5,7 +5,7 @@ import type { Value } from './ast';
 import { fromSerial, infoOf } from './library';
 import type { FieldType } from '../field-types';
 import { numberToText } from '../coerce';
-import { formatCurrency, formatDateTime } from '../locale-format';
+import { dateTimeFormat, formatCurrency, formatDateTime, numberFormat } from '../locale-format';
 
 export type NamedFormat = 'generalNumber' | 'currency' | 'euro' | 'fixed' | 'standard' | 'percent' | 'scientific'
   | 'generalDate' | 'longDate' | 'mediumDate' | 'shortDate' | 'longTime' | 'mediumTime' | 'shortTime' | 'yesNo' | 'trueFalse' | 'onOff';
@@ -71,7 +71,7 @@ function customNumber(n: number, sec: Tok[], locale: string, minus: boolean): st
   const [intPart, decPart = ''] = run.split('.');
   const minInt = (intPart.match(/0/g) ?? []).length;
   const pct = sec.some((t) => isCh(t, /%/));
-  const parts = new Intl.NumberFormat(locale, {
+  const parts = numberFormat(locale, {
     useGrouping: /[0#],[0#]/.test(intPart), minimumIntegerDigits: Math.max(1, minInt),
     minimumFractionDigits: (decPart.match(/0/g) ?? []).length, maximumFractionDigits: decPart.replace(/[^0#]/g, '').length,
   }).formatToParts(Math.abs(pct ? n * 100 : n));
@@ -84,7 +84,7 @@ function customNumber(n: number, sec: Tok[], locale: string, minus: boolean): st
 function namedNumber(n: number, f: NamedFormat, ctx: FormatCtx): string {
   const dp = typeof ctx.decimalPlaces === 'number' ? ctx.decimalPlaces : 2;
   const nf = (o: Intl.NumberFormatOptions): string =>
-    new Intl.NumberFormat(ctx.locale, { minimumFractionDigits: dp, maximumFractionDigits: dp, ...o }).format(n);
+    numberFormat(ctx.locale, { minimumFractionDigits: dp, maximumFractionDigits: dp, ...o }).format(n);
   switch (f) {
     case 'generalNumber': return numberToText(n, infoOf(ctx.locale));
     case 'fixed': return nf({ useGrouping: false });
@@ -106,7 +106,7 @@ function dateParts(serial: number) {
   const [y, mo, d, h, mi, s] = fromSerial(serial).split(/[- :]/).map(Number);
   const at = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
   at.setUTCFullYear(y);
-  return { y, mo, d, h, mi, s, intl: (locale: string, o: Intl.DateTimeFormatOptions): string => new Intl.DateTimeFormat(locale, { ...o, timeZone: 'UTC' }).format(at) };
+  return { y, mo, d, h, mi, s, intl: (locale: string, o: Intl.DateTimeFormatOptions): string => dateTimeFormat(locale, { ...o, timeZone: 'UTC' }).format(at) };
 }
 const two = (n: number): string => String(n).padStart(2, '0');
 

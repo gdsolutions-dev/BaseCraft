@@ -3,12 +3,21 @@
 import { ExprSyntaxError } from './ast';
 import type { LocaleInfo } from '../locale-format';
 import { parseDateTime } from '../locale-format';
+import type { SelectQuery } from '../query/ast';
 import { FUNCTIONS, KEYWORDS, type KeywordName } from './catalog';
 import { tokenize, type LexConfig } from './lexer';
-import { parseCanonical, parseTokens, serialize, sameTree, serializeCriteria, serializeWith, type Dialect } from './parser';
+import {
+  CANONICAL_DIALECT, hasAggregate, parseCanonical, parseTokens, sameTree, serializeCriteria, serializeWith, type Dialect, type ParseOptions,
+} from './parser';
 
 export interface DisplayContext { lang: 'fr' | 'en'; region: LocaleInfo }
-export interface LocalizeOptions { criteria?: boolean }
+/** `printSub`: canonical SQL of a subquery, kept as is inside the display form (needed with `subquery`).
+ *  `aggregates` false: an aggregate (Sum, Count(*)…) is refused at entry with aggregateContext, the whole text as its span:
+ *  a field or table rule, a default value, a filter has no group to evaluate it in (A3 and A5 leave it out). */
+export type LocalizeOptions = Pick<ParseOptions, 'criteria' | 'qualified' | 'subquery'> & {
+  printSub?: (q: SelectQuery) => string;
+  aggregates?: boolean;
+};
 
 export function listSeparator(region: LocaleInfo): ',' | ';' {
   return region.decimalSep === ',' ? ';' : ',';
@@ -26,7 +35,7 @@ function names(lang: 'fr' | 'en'): { kw: [string, string][]; fn: [string, string
   };
 }
 
-function lexConfig(ctx: DisplayContext): LexConfig {
+export function lexConfig(ctx: DisplayContext): LexConfig {
   const n = names(ctx.lang);
   return {
     keywords: new Map(n.kw.map(([canon, shown]) => [fold(shown), canon])),
@@ -57,16 +66,28 @@ function dialect(ctx: DisplayContext): Dialect {
   };
 }
 
-/** Texte saisi -> forme canonique stockée (`ExprSyntaxError` dont les positions renvoient au texte saisi). */
-export function toCanonical(display: string, ctx: DisplayContext, opts: LocalizeOptions = {}): string {
-  const e = parseTokens(tokenize(display, lexConfig(ctx)), opts);
-  return opts.criteria ? serializeCriteria(e) : serialize(e);
+/** Without `printSub`, a subquery read through `subquery` cannot be printed: a typed error on the whole text. */
+function withPrinter(opts: LocalizeOptions, text: string): LocalizeOptions & { printSub: (q: SelectQuery) => string } {
+  return {
+    ...opts,
+    printSub: opts.printSub ?? (() => { throw new ExprSyntaxError('subqueryNotAllowed', { start: 0, end: text.length }); }),
+  };
 }
 
-/** Forme canonique stockée -> texte affiché. Un critère s'affiche sans son sujet implicite. */
+/** Texte saisi -> forme canonique stockée (`ExprSyntaxError` dont les positions renvoient au texte saisi). */
+export function toCanonical(display: string, ctx: DisplayContext, opts: LocalizeOptions = {}): string {
+  const o = withPrinter(opts, display);
+  const e = parseTokens(tokenize(display, lexConfig(ctx)), o);
+  if (o.aggregates === false && hasAggregate(e)) throw new ExprSyntaxError('aggregateContext', { start: 0, end: display.length });
+  return o.criteria ? serializeCriteria(e, o) : serializeWith(e, { ...CANONICAL_DIALECT, sub: o.printSub });
+}
+
+/** Forme canonique stockée -> texte affiché. Un critère s'affiche sans son sujet implicite ; une sous-requête reste en SQL
+ *  canonique (`printSub`). */
 export function toDisplay(canonical: string, ctx: DisplayContext, opts: LocalizeOptions = {}): string {
+  opts = withPrinter(opts, canonical);
   const e = parseCanonical(canonical, opts);
-  const out = serializeWith(e, dialect(ctx), opts.criteria);
+  const out = serializeWith(e, { ...dialect(ctx), sub: opts.printSub }, opts.criteria);
   // Garde-fou : le texte affiché doit se relire en la même expression.
   if (opts.criteria && !sameTree(parseTokens(tokenize(out, lexConfig(ctx)), opts), e)) throw new ExprSyntaxError('unexpectedToken', { start: 0, end: out.length });
   return out;

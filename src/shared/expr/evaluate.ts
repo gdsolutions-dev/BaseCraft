@@ -1,7 +1,8 @@
 // Évaluateur asynchrone des expressions (sémantique d'Access). Module pur.
 import type { BinOp, Expr, Value } from './ast';
+import { AGGREGATES } from './catalog';
 import {
-  bool, compareText, date, fail, fromSerial, infoOf, LIBRARY, likeMatch, num, str, toDate, toLong, toNum, toSerial, toText, truthy,
+  bool, built, compareText, date, fail, fromSerial, infoOf, LIBRARY, likeMatch, num, str, toDate, toLong, toNum, toSerial, toText, truthy,
 } from './library';
 import type { CellInput, SqlValue } from '../coerce';
 import { sameName, type FieldDef } from '../field-types';
@@ -10,7 +11,8 @@ import { parseCanonical } from './parser';
 
 export { truthy } from './library';
 
-export interface EvalEnv { field(name: string): Value; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en' }
+/** `field(name, table)`: `table` is set for a qualified reference `[T].[F]` (A3). */
+export interface EvalEnv { field(name: string, table?: string): Value; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en' }
 
 /** `field` d'un environnement sur un objet : nom résolu comme Access (casse ignorée), champ inconnu -> unknownField. */
 export function recordFields(values: Record<string, Value>): (name: string) => Value {
@@ -43,7 +45,7 @@ const TESTS: Partial<Record<BinOp, (c: number) => boolean>> = {
 };
 
 export function binary(op: BinOp, l: Value, r: Value, info: LocaleInfo): Value {
-  if (op === '&') return str((l === null ? '' : toText(l, info)) + (r === null ? '' : toText(r, info)));
+  if (op === '&') return built((l === null ? '' : toText(l, info)) + (r === null ? '' : toText(r, info)));
   if (op === 'And' || op === 'Or' || op === 'Xor') {
     const [a, b] = [truthy(l, info), truthy(r, info)];
     if (op === 'Xor') return a === null || b === null ? null : bool(a !== b);
@@ -54,7 +56,7 @@ export function binary(op: BinOp, l: Value, r: Value, info: LocaleInfo): Value {
   if (test) { const c = compare(l, r, info); return c === null ? null : bool(test(c)); }
 
   if (l === null || r === null) return null;
-  if (op === '+' && l.t === 'str' && r.t === 'str') return str(l.v + r.v);
+  if (op === '+' && l.t === 'str' && r.t === 'str') return built(l.v + r.v);
   const [x, y] = [toNum(l, info), toNum(r, info)];
   const dates = (l.t === 'date' ? 1 : 0) + (r.t === 'date' ? 1 : 0);
   switch (op) {
@@ -99,7 +101,7 @@ export async function evaluate(e: Expr, env: EvalEnv): Promise<Value> {
     case 'date': return date(toSerial(e.v));
     case 'bool': return bool(e.v);
     case 'null': return null;
-    case 'id': return env.field(e.name);
+    case 'id': return env.field(e.name, e.table);
     case 'subject': return env.subject === undefined ? fail('unknownField') : env.subject;
     case 'un': return unary(e.op, await ev(e.e), info);
     case 'bin': return binary(e.op, await ev(e.l), await ev(e.r), info);
@@ -116,9 +118,14 @@ export async function evaluate(e: Expr, env: EvalEnv): Promise<Value> {
       return tri(r === null ? null : r !== e.not);
     }
     case 'isnull': return bool((await ev(e.e) === null) !== e.not);
+    case 'star': return fail('aggregateContext');
+    case 'sub': case 'inSub': return fail('badArgument'); // only SQL runs a subquery (A3)
     case 'call': {
+      if (AGGREGATES.has(e.name)) fail('aggregateContext'); // A3 and A5 evaluate them over a group's rows
+      // IIf: only the chosen branch, as Access queries and controls (VBA's IIf evaluates both); a Null condition is false
+      if (e.name === 'IIf' && e.args.length === 3) return truthy(await ev(e.args[0]!), infoOf(env.locale)) === true ? ev(e.args[1]!) : ev(e.args[2]!);
       const args: Value[] = [];
-      for (const a of e.args) args.push(await ev(a)); // tous les arguments, IIf compris, comme Access
+      for (const a of e.args) args.push(await ev(a));
       const fn = LIBRARY[e.name] ?? fail('badArgument');
       return fn(args, env);
     }

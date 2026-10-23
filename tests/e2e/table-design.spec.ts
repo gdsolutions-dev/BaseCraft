@@ -1,5 +1,5 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTable } from '../../src/main/db/schema';
@@ -272,3 +272,143 @@ test('changing mode from the navigation pane or the status bar requires saving a
     await app.close();
   }
 });
+
+// The Format list is the app's own (a <datalist> opened a black Windows list in the light theme): it follows the app's
+// theme whatever the system's; a named format is stored by id, a custom one as typed.
+// Two frames: any scroll event a click or a key set off has been handled.
+const frames = (page: Page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+for (const [theme, os] of [['light', 'dark'], ['dark', 'light']] as const) {
+  test(`Format list in the ${theme} theme (system ${os}): mouse, keyboard, free text`, async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), 'basecraft-'));
+    writeFileSync(join(userDataDir, 'settings.json'), JSON.stringify({ theme }));
+    const { app, page } = await launchApp({ userDataDir, env: savePath() });
+    try {
+      await page.emulateMedia({ colorScheme: os });
+      expect(await app.evaluate(({ nativeTheme }) => nativeTheme.themeSource)).toBe(theme);
+      await newBase(page);
+      await page.getByTestId('design-row-0-name').fill('Solde');
+      await page.getByTestId('design-row-0-type').selectOption('currency');
+      const input = page.getByTestId('prop-format');
+      const list = page.getByTestId('prop-format-list');
+      const stored = async () => {
+        await expect(page.getByTestId('doc-tab-Comptes')).not.toContainText('•');
+        const d = await page.evaluate(() => (window as any).basecraft.tables.design('Comptes'));
+        return d.fields[0].props.format;
+      };
+
+      // mouse
+      await page.getByTestId('prop-format-toggle').click();
+      await expect(list).toBeVisible();
+      await expect(input).toHaveAttribute('aria-expanded', 'true');
+      await expect(list).toHaveAttribute('aria-label', fr.fieldProp.format);
+      const [bg, surface] = await list.evaluate((el) => {
+        const probe = document.body.appendChild(document.createElement('div'));
+        probe.style.background = 'var(--bc-surface)';
+        const s = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return [getComputedStyle(el).backgroundColor, s];
+      });
+      expect(surface).toBe(theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(26, 29, 35)');
+      expect(bg).toBe(surface);
+      await page.getByTestId('prop-format-option-currency').hover();
+      // Windows high contrast: the active option is still told apart from the others
+      await page.emulateMedia({ forcedColors: 'active' });
+      expect(await page.getByTestId('prop-format-option-currency').evaluate((el) => getComputedStyle(el).backgroundColor))
+        .not.toBe(await list.evaluate((el) => getComputedStyle(el).backgroundColor));
+      await page.emulateMedia({ forcedColors: 'none' });
+      await page.getByTestId('prop-format-option-fixed').click();
+      await expect(list).toHaveCount(0);
+      await expect(input).toHaveValue(fr.format.fixed);
+      await expect(input).toBeFocused();
+      await page.keyboard.press('Control+s');
+      await page.getByTestId('modal-input').fill('Comptes');
+      await page.getByTestId('modal-btn-ok').click();
+      await page.getByTestId('modal-btn-no').click();
+      expect(await stored()).toBe('fixed');
+
+      // Format half scrolled out of the property panel, focus elsewhere: the toggle opens the list without scrolling the
+      // panel; a scroll that leaves the field in sight moves the list with it; one that hides the field closes the list,
+      // as a native one would (else it floats away from its hidden field)
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 600));
+      const plist = page.locator('.plist');
+      await expect.poll(() => plist.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+      await page.getByTestId('design-row-0-name').focus();
+      await plist.evaluate((el) => {
+        const row = el.querySelector('[data-testid="prop-format"]')!.closest('.prow')!.getBoundingClientRect();
+        el.scrollTop += row.top - el.getBoundingClientRect().top + row.height / 2;
+      });
+      const scrollTop = await plist.evaluate((el) => el.scrollTop);
+      const toggle = (await page.getByTestId('prop-format-toggle').boundingBox())!;
+      const panelTop = (await plist.boundingBox())!.y;
+      expect(toggle.y).toBeLessThan(panelTop);
+      await page.mouse.click(toggle.x + toggle.width / 2, (panelTop + toggle.y + toggle.height) / 2);
+      await frames(page);
+      await expect(list).toBeVisible();
+      expect(await plist.evaluate((el) => el.scrollTop)).toBe(scrollTop);
+      const listY = (await list.boundingBox())!.y;
+      await plist.evaluate((el) => el.scrollBy(0, -5));
+      await frames(page);
+      await expect(list).toBeVisible();
+      expect(Math.abs((await list.boundingBox())!.y - listY - 5)).toBeLessThan(1);
+      await plist.evaluate((el) => el.scrollBy(0, 100));
+      await expect(list).toHaveCount(0);
+      await plist.evaluate((el) => el.scrollTo(0, 0));
+
+      // a custom format longer than the field: its text scrolling sideways leaves the list open
+      await input.fill('0.00 "€" ' + 'x'.repeat(80));
+      await input.press('ArrowDown');
+      await expect(list).toBeVisible();
+      await input.press('Home');
+      await frames(page);
+      await expect(list).toBeVisible();
+      await input.press('Escape');
+
+      // free text: no list, stored as typed
+      await input.fill('0.00 "€"');
+      await expect(list).toHaveCount(0);
+      await page.keyboard.press('Control+s');
+      expect(await stored()).toBe('0.00 "€"');
+
+      // keyboard: Alt+Down opens without moving, Down moves, Escape closes, Enter picks; typing filters
+      await input.fill('');
+      await input.press('Alt+ArrowDown');
+      await expect(list).toBeVisible();
+      await expect(input).not.toHaveAttribute('aria-activedescendant');
+      await input.press('Escape');
+      await expect(list).toHaveCount(0);
+      await input.press('ArrowDown');
+      for (let i = 0; i < 3; i++) await input.press('ArrowDown');
+      await expect(input).toHaveAttribute('aria-activedescendant', /fixed$/);
+      await input.press('Enter');
+      await expect(list).toHaveCount(0);
+      await expect(input).toHaveValue(fr.format.fixed);
+      await page.keyboard.press('Control+s');
+      expect(await stored()).toBe('fixed');
+      // aria-selected follows the active option (APG); the stored value is marked apart, not by colour alone
+      await input.press('ArrowDown');
+      await input.press('ArrowDown');
+      const fixed = page.getByTestId('prop-format-option-fixed');
+      await expect(fixed).toHaveClass(/is-current/);
+      await expect(fixed).toHaveAttribute('aria-selected', 'false');
+      expect(await fixed.evaluate((el) => getComputedStyle(el).fontWeight)).toBe('600');
+      await expect(list.locator('[aria-selected="true"]')).toHaveCount(1);
+      await expect(list.locator('[aria-selected="true"]')).toHaveAttribute('id', (await input.getAttribute('aria-activedescendant'))!);
+      await input.press('Alt+ArrowUp');
+      await expect(list).toHaveCount(0);
+      await expect(input).toHaveValue(fr.format.fixed);
+      await input.fill('');
+      await input.pressSequentially('fi');
+      await expect(list.getByRole('option')).toHaveText([fr.format.fixed, fr.format.scientific]);
+      await input.press('ArrowDown');
+      await input.press('ArrowDown');
+      await input.press('Enter');
+      await expect(input).toHaveValue(fr.format.scientific);
+      await input.press('Tab');
+      await expect(input).not.toBeFocused();
+      await page.keyboard.press('Control+s');
+      expect(await stored()).toBe('scientific');
+    } finally {
+      await app.close();
+    }
+  });
+}

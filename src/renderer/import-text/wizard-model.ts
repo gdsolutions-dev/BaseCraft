@@ -2,11 +2,12 @@
 import { isValidObjectName, sameName, type TableDesign } from '../../shared/field-types';
 import { sanitizeTableName, uniqueName, type ImportSpec, type PrimaryKeyChoice } from '../../shared/import-text';
 
-export type Step = 'source' | 'format' | 'delimited' | 'fixed' | 'fields' | 'key' | 'finish';
+export type Step = 'source' | 'sheet' | 'format' | 'delimited' | 'fixed' | 'fields' | 'key' | 'finish';
 
 /** Étapes de l'assistant : la clé primaire ne concerne qu'une nouvelle table. */
-export function stepsFor(format: ImportSpec['format'], mode: 'new' | 'append'): Step[] {
-  return ['source', 'format', format === 'fixed' ? 'fixed' : 'delimited', 'fields', ...(mode === 'new' ? ['key' as const] : []), 'finish'];
+export function stepsFor(format: ImportSpec['format'] | 'excel', mode: 'new' | 'append'): Step[] {
+  const tail: Step[] = ['fields', ...(mode === 'new' ? ['key' as const] : []), 'finish'];
+  return format === 'excel' ? ['source', 'sheet', ...tail] : ['source', 'format', format === 'fixed' ? 'fixed' : 'delimited', ...tail];
 }
 
 /** Options qui changent le découpage : les champs sont alors déduits de nouveau. */
@@ -35,6 +36,13 @@ export function defaultTableName(path: string, tables: readonly string[], fallba
   return uniqueName(sanitizeTableName(base, fallback), tables);
 }
 
+/** A new table's name clashes with a table, or with a query (one namespace): i18n key and parameters, or null. */
+export function destinationNameError(name: string, tables: readonly string[], queries: readonly string[]): { key: string; params: { name: string } } | null {
+  if (tables.some((x) => sameName(x, name))) return { key: 'importText.error.tableExists', params: { name } };
+  if (queries.some((x) => sameName(x, name))) return { key: 'importText.error.queryExists', params: { name } };
+  return null;
+}
+
 /** Ajout à une table : chaque colonne va au champ de même nom (casse ignorée), s'il est modifiable et libre. */
 export function mapByName(names: readonly string[], design: TableDesign): (string | null)[] {
   const used = new Set<string>();
@@ -48,8 +56,9 @@ export function mapByName(names: readonly string[], design: TableDesign): (strin
 
 // ---------- Vérifications (clés i18n) ----------
 /** A datasheet of `table` has a row being edited: an append would show it on the wrong row once the rows are re-read. */
-export function hasPendingRow(tabs: readonly { name: string; mode: string; dirty: boolean; isNew?: boolean }[], table: string): boolean {
-  return tabs.some((x) => !x.isNew && x.mode === 'datasheet' && x.dirty && sameName(x.name, table));
+export function hasPendingRow(tabs: readonly { kind: string; name: string; mode: string; dirty: boolean; isNew?: boolean }[], table: string): boolean {
+  // a table's datasheet only (a form's Datasheet view is also a datasheet mode, M10); exact: a twin is another table
+  return tabs.some((x) => x.kind === 'table' && !x.isNew && x.mode === 'datasheet' && x.dirty && x.name === table);
 }
 
 /** Noms des champs importés : valides et distincts ; au moins un champ. */

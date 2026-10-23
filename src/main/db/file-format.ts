@@ -1,14 +1,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { BC_RELATIONS_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
-import { SQL_FUNCTIONS } from '../../shared/expr/sql';
+import { DatabaseSync, type AggregateOptions } from 'node:sqlite';
+import { BC_OBJECTS_DDL, BC_RELATIONS_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
+import { fold, SQL_AGGREGATES, SQL_FUNCTIONS } from '../../shared/expr/sql';
 import { inTransaction } from './tx';
 
 export const FILE_EXTENSION = '.basecraft';
 export const APPLICATION_ID = 0x42435246; // 'BCRF'
-export const CURRENT_FORMAT = { major: 1, minor: 1 };
+export const CURRENT_FORMAT = { major: 1, minor: 2 };
 
 export interface BaseMeta {
   formatMajor: number;
@@ -40,12 +40,16 @@ export interface OpenedBase {
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1');
 
 export function registerFunctions(db: DatabaseSync): void {
-  db.function('bc_fold', { deterministic: true }, (x) =>
-    x === null || x === undefined ? null : String(x).normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('und'),
-  );
+  db.function('bc_fold', { deterministic: true }, (x) => (x === null || x === undefined ? null : fold(String(x))));
   // Fonctions des expressions compilées par sql.ts : seulement dans les requêtes générées, jamais dans le schéma.
   for (const [name, { deterministic, fn }] of Object.entries(SQL_FUNCTIONS)) db.function(name, { deterministic, varargs: true, useBigIntArguments: true }, fn);
+  for (const [name, a] of Object.entries(SQL_AGGREGATES)) {
+    db.aggregate(name, { ...a, varargs: true, useBigIntArguments: true } as unknown as AggregateOptions);
+  }
 }
+
+/** Every function registerFunctions adds (the SQL authorizer allows only these, plus count, rank and row_number). */
+export const REGISTERED_FUNCTIONS: ReadonlySet<string> = new Set(['bc_fold', ...Object.keys(SQL_FUNCTIONS), ...Object.keys(SQL_AGGREGATES)]);
 
 export function createBaseFile(filePath: string, appVersion: string): void {
   if (fs.existsSync(filePath)) throw new BaseFileError('exists');
@@ -57,7 +61,8 @@ export function createBaseFile(filePath: string, appVersion: string): void {
 CREATE TABLE bc_tables (name TEXT PRIMARY KEY COLLATE NOCASE, props TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE bc_fields (table_name TEXT NOT NULL COLLATE NOCASE, field_name TEXT NOT NULL COLLATE NOCASE,
   position INTEGER NOT NULL, props TEXT NOT NULL, PRIMARY KEY (table_name, field_name));
-${BC_RELATIONS_DDL};`);
+${BC_RELATIONS_DDL};
+${BC_OBJECTS_DDL};`);
     const ins = db.prepare('INSERT INTO bc_meta (key, value) VALUES (?, ?)');
     ins.run('format_major', String(CURRENT_FORMAT.major));
     ins.run('format_minor', String(CURRENT_FORMAT.minor));
@@ -143,6 +148,22 @@ function stamp(d: Date): string {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
+/** Copies the base to `<name>.backup-YYYYMMDD-HHMMSS[-n].basecraft` beside it (never overwriting a file) and returns that path.
+ *  Before a format migration and before Compact and Repair (spec 6). */
+export function backupCopy(filePath: string, now: Date = new Date()): string {
+  const base = path.join(path.dirname(filePath), `${path.basename(filePath, FILE_EXTENSION)}.backup-${stamp(now)}`);
+  // A migration retried within the same second (the first one failed) gets its own name; a backup is never overwritten.
+  for (let n = 0; ; n++) {
+    const backupPath = `${base}${n ? `-${n}` : ''}${FILE_EXTENSION}`;
+    try {
+      fs.copyFileSync(filePath, backupPath, fs.constants.COPYFILE_EXCL);
+      return backupPath;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST' || n >= 99) throw e;
+    }
+  }
+}
+
 export function openBaseFile(
   filePath: string,
   mode: 'write' | 'readOnly',
@@ -203,12 +224,7 @@ export function openBaseFile(
   const needsMigration = older && pending.length > 0;
   if (needsMigration && mode === 'readOnly') throw new BaseFileError('needsMigration');
 
-  let backupPath: string | undefined;
-  if (needsMigration) {
-    const base = path.basename(filePath, FILE_EXTENSION);
-    backupPath = path.join(path.dirname(filePath), `${base}.backup-${stamp(now())}${FILE_EXTENSION}`);
-    fs.copyFileSync(filePath, backupPath, fs.constants.COPYFILE_EXCL);
-  }
+  const backupPath = needsMigration ? backupCopy(filePath, now()) : undefined;
 
   // 4. reopen in requested mode
   let db: DatabaseSync;

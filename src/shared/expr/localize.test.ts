@@ -30,6 +30,14 @@ describe('display <-> canonical', () => {
     expect(() => toCanonical('#31/02/2026#', FR)).toThrow(expect.objectContaining({ code: 'badDate' }));
   });
 
+  it('aggregates: refused at entry where no group exists (aggregates: false), kept otherwise', () => {
+    for (const s of ['Somme([Qté])', '> Compte(*)', '1 + Max([a])', 'VraiFaux(Moyenne([a]) > 1; 1; 2)']) {
+      expect(() => toCanonical(s, FR, { criteria: true, aggregates: false }), s).toThrow(expect.objectContaining({ code: 'aggregateContext', span: { start: 0, end: s.length } }));
+    }
+    expect(toCanonical('Somme([Qté])', FR)).toBe('Sum([Qté])'); // A3, A5: a group context
+    expect(toCanonical('> 1', FR, { criteria: true, aggregates: false })).toBe('> 1');
+  });
+
   it('keywords and criteria', () => {
     expect(toCanonical('Entre 1 Et 5', FR, { criteria: true })).toBe('Between 1 And 5');
     expect(toCanonical('Pas Comme "A*" Ou Est Null', FR, { criteria: true })).toBe('Not Like "A*" Or Is Null');
@@ -112,6 +120,18 @@ describe('display <-> canonical', () => {
     expect(listSeparator(localeInfo('en-US'))).toBe(',');
   });
 
+  it('fr display of aggregates and qualified refs', () => {
+    const Q = { qualified: true };
+    expect(toCanonical('Somme([Commandes].[Montant]) > 1,5', FR, Q)).toBe('Sum([Commandes].[Montant]) > 1.5');
+    expect(toCanonical('somme([Montant]) / compte(*)', FR, Q)).toBe('Sum([Montant]) / Count(*)');
+    expect(toDisplay('Sum([Commandes].[Montant]) > 1.5', FR, Q)).toBe('Somme([Commandes].[Montant]) > 1,5');
+    expect(toDisplay('StDev([Montant]) + VarP([Montant])', FR)).toBe('EcartType([Montant]) + VarP([Montant])');
+    expect(toCanonical('EcartTypeP([a]) - Var([a])', FR)).toBe('StDevP([a]) - Var([a])');
+    expect(toCanonical("Commandes.Montant > 1 Et [Nom] = 'l''été'", FR, { ...Q, criteria: true })).toBe('[Commandes].[Montant] > 1 And [Nom] = "l\'été"');
+    expect(toDisplay('[Commandes].[Montant] Or 2.5', EN_FR, { ...Q, criteria: true })).toBe('[Commandes].[Montant] Or 2,5');
+    expect(() => toCanonical('[Commandes].[Montant]', FR)).toThrow(expect.objectContaining({ code: 'unexpectedToken' }));
+  });
+
   it('de-DE region', () => {
     const de: DisplayContext = { lang: 'en', region: localeInfo('de-DE') };
     expect(toDisplay('IIf(a > 1.5, #2026-10-21#, 2)', de)).toBe('IIf([a] > 1,5; #21.10.2026#; 2)');
@@ -124,7 +144,8 @@ describe('catalog', () => {
     for (const c of [fr, en]) {
       for (const f of FUNCTIONS) expect(get(c, `expr.fn.${f.name}`), f.name).toEqual(expect.any(String));
       for (const cat of new Set(FUNCTIONS.map((f) => f.category))) expect(get(c, `expr.cat.${cat}`), cat).toEqual(expect.any(String));
-      const codes: ExprErrorCode[] = ['unexpectedToken', 'unexpectedEnd', 'unclosedString', 'unclosedBracket', 'badDate', 'badNumber', 'unknownFunction', 'arity'];
+      const codes: ExprErrorCode[] = ['unexpectedToken', 'unexpectedEnd', 'unclosedString', 'unclosedBracket', 'badDate', 'badNumber', 'unknownFunction', 'arity',
+        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType'];
       for (const k of codes) expect(get(c, `expr.error.${k}`), k).toEqual(expect.any(String));
     }
   });
@@ -204,5 +225,17 @@ describe('criteria guard', () => {
   it('Format accepts one or two arguments', () => {
     expect(toCanonical('Format([a])', EN)).toBe('Format([a])');
     expect(toCanonical('Format([a]; "0,00")', FR)).toBe('Format([a], "0,00")');
+  });
+});
+
+describe('the deepest accepted tree', () => {
+  it('serialize, toDisplay and evaluate never overflow the stack', async () => {
+    const { evaluate } = await import('./evaluate');
+    const src = '('.repeat(150) + Array(2000).fill('1').join(' + ') + ')'.repeat(150);
+    const e = parseCanonical(src);
+    const text = serialize(e);
+    expect(text.length).toBeGreaterThan(7000);
+    expect(toDisplay(text, { lang: 'fr', region: localeInfo('fr-FR') })).toContain('1 + 1');
+    expect(await evaluate(e, { field: () => null, now: () => new Date(), locale: 'en-US' })).toEqual({ t: 'num', v: 2000 });
   });
 });

@@ -1,0 +1,56 @@
+import { expect, it } from 'vitest';
+import { defaultProps } from '../../shared/field-types';
+import { localeInfo } from '../../shared/locale-format';
+import { i18n } from '../i18n';
+import type { ModalApi, PromptOptions } from '../shell/Modal';
+import { promptParameters } from './prompt-parameters';
+
+const fr = localeInfo('fr-FR');
+/** Answers the prompts in turn; records each label's name and the last validate. */
+function fakeModal(answers: (string | null)[]) {
+  const m = {
+    labels: [] as string[],
+    lastValidate: undefined as PromptOptions['validate'],
+    prompt: async (o: PromptOptions) => {
+      expect(o).toMatchObject({ titleKey: 'query.param.title', labelKey: 'query.param.label' });
+      m.labels.push((o.labelParams as { name: string }).name);
+      m.lastValidate = o.validate;
+      return answers.shift() ?? null;
+    },
+    confirm: async () => 'ok' as const,
+    custom: async () => null,
+  };
+  return m as typeof m & ModalApi;
+}
+
+it('asks each parameter in order and returns raw text', async () => {
+  const m = fakeModal(['05/10/2026', '1,5']);
+  expect(await promptParameters(m, [{ name: 'Du', type: 'dateTime' }, { name: 'Mini', type: 'currency' }], fr)).toEqual({ Du: '05/10/2026', Mini: '1,5' });
+  expect(m.labels).toEqual(['Du', 'Mini']); // read from labelParams.name
+});
+
+it('validates with the type and props', async () => {
+  const m = fakeModal(['31/02/2026']);
+  await promptParameters(m, [{ name: 'Du', type: 'dateTime' }], fr);
+  expect(m.lastValidate!('31/02/2026')).toBe(i18n.t('fieldError.invalidDate'));
+  expect(m.lastValidate!('xyz')).toBe(i18n.t('fieldError.invalidDate'));
+  expect(m.lastValidate!('05/10/2026')).toBeNull();
+  const b = fakeModal(['300']);
+  await promptParameters(b, [{ name: 'N', type: 'number', props: { ...defaultProps('number'), numberSize: 'byte', required: false } }], fr);
+  expect(b.lastValidate!('300')).toBe(i18n.t('fieldError.outOfRange'));
+  expect(b.lastValidate!('')).toBeNull(); // an empty value is Null, as in Access
+});
+
+it('a parameter named like an i18n key keeps its name', async () => {
+  const m = fakeModal(['x']);
+  await promptParameters(m, [{ name: 'nav.tables', type: null }], fr);
+  expect(m.labels).toEqual(['nav.tables']);
+});
+
+it('cancel returns null', async () => expect(await promptParameters(fakeModal([null]), [{ name: 'Du', type: null }], fr)).toBeNull());
+
+it('cancel on a later prompt returns null and asks no more', async () => {
+  const m = fakeModal(['a', null, 'c']);
+  expect(await promptParameters(m, [{ name: 'A', type: null }, { name: 'B', type: null }, { name: 'C', type: null }], fr)).toBeNull();
+  expect(m.labels).toEqual(['A', 'B']);
+});

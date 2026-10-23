@@ -70,7 +70,8 @@ describe('schema', () => {
       const cur = JSON.parse((db.prepare('SELECT props FROM bc_fields').get() as { props: string }).props) as Record<string, unknown>;
       db.prepare('UPDATE bc_fields SET props = ?').run(JSON.stringify({ ...cur, ...patch }));
     };
-    for (const bad of [42, { kind: 'values' }, { kind: 'values', values: [1], limitToList: true }, { kind: 'table', table: 'B', boundField: 'Id', displayFields: [], limitToList: 1 }, { kind: 'x' }]) {
+    for (const bad of [42, { kind: 'values' }, { kind: 'values', values: [1], limitToList: true }, { kind: 'table', table: 'B', boundField: 'Id', displayFields: [], limitToList: 1 }, { kind: 'x' },
+      { kind: 'fieldList', limitToList: false }]) {
       setProps({ lookup: bad, defaultValue: 5, validationRule: 'ok' });
       const p = tableDesign(db, 'T').fields[0]!.props;
       expect(p.lookup).toBeUndefined();
@@ -90,6 +91,26 @@ describe('schema', () => {
     expect(() => createTable(db, t('T', [f('A', 'number', extra)]))).toThrow(/invalid field properties: A/);
     expect(listTables(db)).toEqual([]);
     expect(db.prepare('SELECT count(*) AS n FROM bc_fields').get()).toEqual({ n: 0 });
+  });
+
+  it('the Access lookup properties round-trip, unknown lookup keys and SQL text kept; an empty Row Source is allowed', () => {
+    const full = { kind: 'values' as const, values: ['1', 'Ouverte'], limitToList: true, displayControl: 'listBox' as const, boundColumn: 1, columnCount: 2,
+      columnHeads: true, columnWidths: [0, 1440], listRows: 8, listWidth: 2835, allowValueListEdits: true, later: { x: 1 } };
+    const sql = { kind: 'table' as const, table: 'SELECT Nom FROM Clients ORDER BY Nom;', limitToList: false };
+    createTable(db, t('T', [f('A', 'shortText', { lookup: full }), f('B', 'shortText', { lookup: sql }),
+      f('C', 'shortText', { lookup: { kind: 'fieldList', table: 'Clients', limitToList: false } }),
+      f('D', 'shortText', { lookup: { kind: 'table', table: '', limitToList: false } })]));
+    expect(tableDesign(db, 'T').fields.map((x) => x.props.lookup)).toEqual([full, sql, { kind: 'fieldList', table: 'Clients', limitToList: false },
+      { kind: 'table', table: '', limitToList: false }]);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['displayControl', { displayControl: 'textBox' }], ['boundColumn', { boundColumn: 0 }], ['columnCount', { columnCount: 256 }],
+    ['columnHeads', { columnHeads: 'yes' }], ['columnWidths', { columnWidths: [-1] }], ['columnWidths beyond 22 in', { columnWidths: [31681] }],
+    ['listRows', { listRows: 1.5 }], ['listWidth', { listWidth: '2cm' }], ['allowValueListEdits', { allowValueListEdits: 1 }],
+  ])('an invalid lookup property (%s) is refused', (_n, extra) => {
+    expect(() => createTable(db, t('T', [f('A', 'shortText', { lookup: { kind: 'values', values: [], limitToList: false, ...extra } as never })])))
+      .toThrow(/invalid field properties: A/);
   });
 
   it('an empty values lookup is allowed', () => {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatCurrency,
+  dateTimeFormat,
   formatDateTime,
+  isoToStored,
   localeInfo,
+  numberFormat,
   parseDateTime,
   parseDecimal,
   parseNumber,
@@ -60,5 +63,24 @@ describe('locale-format', () => {
     expect(formatDateTime('2026-10-21 14:05:00', 'en-US')).toMatch(/^10\/21\/2026,? 2:05:00[\s ]PM$/);
     expect(formatCurrency(12.5, 'fr-FR')).toBe('12,50 €');
     expect(formatCurrency(12.5, 'en-US')).toBe('$12.50');
+  });
+});
+
+describe('Intl formatters, built once per locale and options (reports format tens of thousands of values)', () => {
+  it('the same formatter for the same locale and options, another for other ones', () => {
+    expect(numberFormat('fr-FR', { minimumFractionDigits: 2 })).toBe(numberFormat('fr-FR', { minimumFractionDigits: 2 }));
+    expect(numberFormat('fr-FR', { minimumFractionDigits: 2 })).not.toBe(numberFormat('en-US', { minimumFractionDigits: 2 }));
+    expect(dateTimeFormat('fr-FR', { month: 'long', timeZone: 'UTC' })).toBe(dateTimeFormat('fr-FR', { month: 'long', timeZone: 'UTC' }));
+    expect(dateTimeFormat('fr-FR', { month: 'long', timeZone: 'UTC' })).not.toBe(dateTimeFormat('fr-FR', { month: 'short', timeZone: 'UTC' }));
+    expect(numberFormat('fr-FR', { minimumFractionDigits: 2 }).format(1.5)).toBe('1,50');
+  });
+});
+
+describe('isoToStored', () => {
+  it('an ISO 8601 instant (bc_objects dates) as a local stored date-time, shown by formatDateTime in the region', () => {
+    const iso = new Date(2026, 9, 21, 14, 5, 9).toISOString();
+    expect(isoToStored(iso)).toBe('2026-10-21 14:05:09');
+    expect(formatDateTime(isoToStored(iso), 'fr-FR')).toBe('21/10/2026 14:05:09');
+    expect(isoToStored('not a date')).toBe('not a date');
   });
 });

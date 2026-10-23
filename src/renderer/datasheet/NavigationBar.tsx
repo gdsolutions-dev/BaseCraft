@@ -1,5 +1,6 @@
-// Barre de navigation des enregistrements (bas de la feuille) : premier, précédent, numéro, suivant, dernier, nouveau.
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, type LucideIcon } from 'lucide-react';
+// Barre de navigation des enregistrements (bas de la feuille) : premier, précédent, numéro, suivant, dernier, nouveau, état
+// du filtre (Filtré / Non filtré / Aucun filtre ; un clic l'active ou le désactive, comme dans Access).
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Funnel, FunnelX, Plus, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,11 +9,16 @@ interface Props {
   current: number | null;
   count: number;
   canAdd: boolean;
+  /** none: no criteria; on: applied; off: criteria kept, not applied. */
+  filter: 'none' | 'on' | 'off';
   onGo(row: number): void;
   onNew(): void;
+  onToggleFilter(): void;
+  /** Why records cannot be added or changed (a query that is not updatable). */
+  note?: string;
 }
 
-export function NavigationBar({ current, count, canAdd, onGo, onNew }: Props) {
+export function NavigationBar({ current, count, canAdd, filter, onGo, onNew, onToggleFilter, note }: Props) {
   const { t } = useTranslation();
   const shown = current === null ? '' : String(current + 1);
   const [draft, setDraft] = useState(shown);
@@ -49,6 +55,12 @@ export function NavigationBar({ current, count, canAdd, onGo, onNew }: Props) {
       <button className="iconbtn" aria-label={t('datasheet.nav.new')} title={t('datasheet.nav.new')} data-testid="nav-new" disabled={!canAdd} onClick={onNew}>
         <Plus className="ic" aria-hidden />
       </button>
+      <button className={`recnav-filter${filter === 'on' ? ' is-on' : ''}`} data-testid="nav-filtered" aria-pressed={filter === 'on'}
+        disabled={filter === 'none'} title={t('datasheet.nav.filter.toggle')} onClick={onToggleFilter}>
+        {filter === 'none' ? <FunnelX className="ic ic-sm" aria-hidden /> : <Funnel className="ic ic-sm" aria-hidden />}
+        {t(`datasheet.nav.filter.${filter}`)}
+      </button>
+      {note && <span className="recnav-note muted" data-testid="nav-readonly">{note}</span>}
       <span className="sr-only" role="status">
         {current === null ? '' : current >= count ? t('datasheet.nav.positionNew') : t('datasheet.nav.position', { current: current + 1, count })}
       </span>

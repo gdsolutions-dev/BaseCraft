@@ -1,0 +1,19 @@
+/* Aperçu avant impression : gris neutre autour des pages, pages blanches (comme le papier) quel que soit le thème. */
+.rp { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.rp-viewport { flex: 1; min-height: 0; overflow: auto; display: flex; background: #8a8d91; outline: 0; }
+.rp-viewport:focus-visible { box-shadow: inset 0 0 0 2px var(--bc-accent); }
+.rp-spread { margin: auto; padding: 16px; display: grid; gap: 16px; }
+.rp-sheet { flex: none; overflow: hidden; box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); background: #ffffff; }
+.rp-message { margin: auto; padding: var(--bc-space-3) var(--bc-space-4); max-width: 60ch; border-radius: var(--bc-radius);
+  background: var(--bc-surface); color: var(--bc-text); }
+.rp-error { color: var(--bc-danger); }
+.rp-error ul { margin: var(--bc-space-2) 0 0; color: var(--bc-text-muted); font-family: ui-monospace, monospace; font-size: 12px; }
+.rp-issues { flex: none; padding: var(--bc-space-1) var(--bc-space-3); border-bottom: 1px solid var(--bc-border); color: var(--bc-warning); }
+.rp-issues summary { cursor: pointer; }
+.rp-issues ul { margin: var(--bc-space-1) 0; padding-left: 20px; max-height: 8em; overflow: auto; color: var(--bc-text); }
+.rp-nav { flex: none; }
+.rp-setup { border: 0; padding: 0; }
+.rp-setup legend { padding: 0; margin-bottom: 6px; }
+.rp-setup > label { display: inline-flex; align-items: center; gap: 6px; margin-right: var(--bc-space-4); }
+.rp-margins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bc-space-2); }
+.rp-margins label { display: flex; flex-direction: column; gap: 4px; }

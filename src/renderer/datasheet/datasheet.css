@@ -6,6 +6,20 @@
 .ds-mask-input {
   width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums;
 }
+.ds-lookup { display: flex; flex-direction: column; gap: 4px; min-width: 220px; --ds-lookup-row: 24px; }
+.ds-lookup-scroll { overflow-x: auto; }
+.ds-lookup-list { margin: 0; padding: 0; list-style: none; overflow-y: auto; font-size: 12px; } /* max-height: List Rows rows */
+.ds-lookup .ds-lookup-row { display: flex; align-items: center; box-sizing: border-box; height: var(--ds-lookup-row); padding: 0 8px; }
+.ds-lookup-col { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+.ds-lookup-scroll > .ds-lookup-heads, .ds-lookup-scroll > .ds-lookup-list { width: max-content; min-width: 100%; } /* scroll together sideways */
+.ds-lookup-heads { border-bottom: 1px solid var(--bc-border); font-size: 12px; font-weight: 600; }
+.ds-lookup-edit { align-self: flex-start; }
+.edit-list textarea, .edit-list select {
+  padding: 4px var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); color: inherit; font: inherit; outline: 0;
+}
+.edit-list textarea { resize: vertical; min-width: 320px; }
+.edit-list select { height: 32px; }
+.edit-list textarea:focus, .edit-list select:focus { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ds-error {
   flex: none; display: flex; align-items: center; gap: var(--bc-space-2); padding: 6px var(--bc-space-3);
   border-top: 1px solid var(--bc-border); color: var(--bc-danger); font-size: 12px;
@@ -16,6 +30,13 @@
 }
 .recnav .iconbtn { width: 26px; height: 26px; }
 .recnav .lbl { margin-right: 6px; }
+.recnav-filter {
+  display: flex; align-items: center; gap: 4px; height: 26px; margin-left: var(--bc-space-2); padding: 0 8px; border-radius: var(--bc-radius);
+  color: inherit;
+}
+.recnav-filter:hover:not(:disabled) { background: var(--hover); }
+.recnav-filter.is-on { background: var(--bc-accent); color: var(--bc-accent-contrast); }
+.recnav-note { margin-left: 10px; }
 .recpos {
   height: 26px; display: flex; align-items: center; gap: 4px; margin: 0 2px; padding: 0 10px 0 4px; border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius); color: var(--bc-text); font-variant-numeric: tabular-nums;

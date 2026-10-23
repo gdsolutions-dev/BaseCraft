@@ -108,7 +108,8 @@ test('recette A1', async () => {
     await expect(cellEditor(page)).toBeFocused();
     await closeEditor(page, 'Tab');
     await typeIntoCell(page, 'Paris');
-    await closeEditor(page, 'Enter');
+    await page.keyboard.press('Enter');
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('datasheet-error')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('datasheet-error')).toHaveCount(0);

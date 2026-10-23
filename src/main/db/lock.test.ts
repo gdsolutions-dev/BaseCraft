@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs, { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { acquireLock, lockPathFor, peekLock, takeOverStaleLock, type HeldLock, type LockInfo, type LockResult } from './lock';
+import { acquireLock, keepAlive, lockPathFor, peekLock, releaseIfOurs, takeOverStaleLock, type HeldLock, type LockInfo, type LockResult } from './lock';
 
 type HeldByOther = Extract<LockResult, { status: 'heldByOther' }>;
 
@@ -96,5 +96,40 @@ describe('lock', () => {
     const v = peekLock(p, { now })!;
     expect(v.stale).toBe(true);
     expect(takeOverStaleLock(p, v.info, 's2', { now }).status).toBe('acquired');
+  });
+  it('acquire adopts our own lock (a restarted data process), rewriting the heartbeat', () => {
+    acquireLock(p, 'S1', { now }); t = 31_000;
+    const l = held(acquireLock(p, 'S1', { now }));
+    expect(Date.parse(JSON.parse(readFileSync(lockPathFor(p), 'utf8')).heartbeatAt)).toBe(31_000);
+    expect(acquireLock(p, 'S2', { now })).toMatchObject({ status: 'heldByOther', stale: false });
+    expect(l.heartbeat()).toBe('ok');
+  });
+  it('adoption rewrites the lock in place, padded to its old length (never truncated then written)', () => {
+    const lp = lockPathFor(p);
+    writeFileSync(lp, JSON.stringify({ user: 'u'.repeat(80), host: 'h'.repeat(80), pid: 123456789012, sessionId: 'S1', heartbeatAt: new Date(0).toISOString() }));
+    const before = readFileSync(lp).length;
+    const writes: string[] = [];
+    const writeInPlace = (path: string, data: string) => { writes.push(data); writeFileSync(path, data, { flag: 'r+' }); };
+    held(acquireLock(p, 'S1', { now, writeInPlace }));
+    expect(writes).toHaveLength(1);
+    expect(readFileSync(lp).length).toBe(before); // shorter: padded with spaces
+    expect(JSON.parse(readFileSync(lp, 'utf8'))).toMatchObject({ sessionId: 'S1', pid: process.pid });
+    expect(keepAlive(p, 'S1', { now })).toBe('ok');
+    expect(JSON.parse(readFileSync(lp, 'utf8')).sessionId).toBe('S1');
+  });
+  it('keepAlive beats only our lock', () => {
+    acquireLock(p, 'S1', { now }); t = 20_000;
+    expect(keepAlive(p, 'S1', { now })).toBe('ok');
+    expect(keepAlive(p, 'S2', { now })).toBe('lost');
+    t = 40_000;
+    expect(acquireLock(p, 'S2', { now })).toMatchObject({ status: 'heldByOther', stale: false, info: { sessionId: 'S1', pid: process.pid } });
+    fs.unlinkSync(lockPathFor(p));
+    expect(keepAlive(p, 'S1', { now })).toBe('lost');
+  });
+  it('releaseIfOurs removes only our lock', () => {
+    acquireLock(p, 'S1', { now });
+    releaseIfOurs(p, 'S2'); expect(existsSync(lockPathFor(p))).toBe(true);
+    releaseIfOurs(p, 'S1'); expect(existsSync(lockPathFor(p))).toBe(false);
+    releaseIfOurs(p, 'S1');
   });
 });

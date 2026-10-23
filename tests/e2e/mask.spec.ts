@@ -71,7 +71,9 @@ test('input mask: designer, masked editor, refused entry, case and accents', asy
     await expect(editor(page)).toBeFocused();
     await page.keyboard.type('0612');
     await expect(editor(page)).toHaveValue('06 12 __ __ __');
-    await closeEditor(page, 'Enter');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('modal')).toContainText(fr.fieldError.mask);
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('datasheet-error')).toContainText(fr.fieldError.mask);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('datasheet-error')).toHaveCount(0);

@@ -47,7 +47,8 @@ type External = { ok: false; reason: 'external'; table: string };
  * that rebuilds nothing (a relation without integrity) works on any table.
  */
 function withChildren<T extends RelationResult | OpResult>(db: DatabaseSync, children: string[], info: LocaleInfo, change: () => T): T | External {
-  const tables = children.filter((t, i) => children.findIndex((x) => sameName(x, t)) === i);
+  // Live names, exact first: "été" made by another tool is not "Été" (A2-R14).
+  const tables = [...new Set(children.map((t) => tableDesign(db, t).name))];
   // Worked out before the change: isExternal compares the table with the clauses of the relations as they are now.
   const external = tables.map((t) => isExternal(db, tableDesign(db, t)));
   const rebuilt: string[] = [];
@@ -70,9 +71,10 @@ function withChildren<T extends RelationResult | OpResult>(db: DatabaseSync, chi
 export function saveRelation(db: DatabaseSync, rel: Relation, originalName: string | null, info: LocaleInfo): RelationResult {
   const n = rel.parentFields.length;
   if (n < 1 || n > 10 || rel.childFields.length !== n) return { ok: false, reason: 'fieldsMismatch' };
-  if (sameName(rel.parentTable, rel.childTable)) return { ok: false, reason: 'sameTable' }; // A2: no self-relation
+  // Tables resolve exact first (A2-R14): twins ("Été" of BaseCraft, "été" of another tool) are two tables.
   const parent = tableDesign(db, rel.parentTable);
   const child = tableDesign(db, rel.childTable);
+  if (parent.name === child.name) return { ok: false, reason: 'sameTable' }; // A2: no self-relation
   const resolve = (d: TableDesign, names: string[]) => names.map((x) => d.fields.find((fd) => sameName(fd.name, x)));
   const pf = resolve(parent, rel.parentFields);
   const cf = resolve(child, rel.childFields);
@@ -80,11 +82,20 @@ export function saveRelation(db: DatabaseSync, rel: Relation, originalName: stri
   const all = listRelations(db);
   const original = originalName === null ? undefined : all.find((r) => sameName(r.name, originalName));
   if (originalName !== null && !original) throw new Error(`unknown relation: ${originalName}`);
+  const parentFields = pf.map((x) => x!.name);
+  const childFields = cf.map((x) => x!.name);
+  // Access refuses a second relation between the same fields (pairs in any order, names compared as sameName does). A2-R15.
+  const low = (x: string) => x.toLocaleLowerCase('und');
+  const pairs = (r: { parentFields: string[]; childFields: string[] }) => r.parentFields.map((x, i) => `${low(x)}\0${low(r.childFields[i]!)}`).sort().join('\n');
+  // The same fields with parent and child exchanged too: with integrity on both, the two keys would form a cycle.
+  const mine = pairs({ parentFields, childFields });
+  const twin = all.find((r) => r !== original && ((r.parentTable === parent.name && r.childTable === child.name && pairs(r) === mine)
+    || (r.parentTable === child.name && r.childTable === parent.name && pairs({ parentFields: r.childFields, childFields: r.parentFields }) === mine)));
+  if (twin) return { ok: false, reason: 'duplicate', relation: twin.name };
   // An external table cannot join a relation. One already in it stays editable: withChildren refuses only a rebuild, and
   // a key to an external parent is only added when the relation has integrity.
-  if ((rel.enforce || !original || !sameName(original.parentTable, parent.name)) && isExternal(db, parent)) return { ok: false, reason: 'external', table: parent.name };
-  if ((!original || !sameName(original.childTable, child.name)) && isExternal(db, child)) return { ok: false, reason: 'external', table: child.name };
-  const parentFields = pf.map((x) => x!.name);
+  if ((rel.enforce || !original || original.parentTable !== parent.name) && isExternal(db, parent)) return { ok: false, reason: 'external', table: parent.name };
+  if ((!original || original.childTable !== child.name) && isExternal(db, child)) return { ok: false, reason: 'external', table: child.name };
   if (rel.enforce && !uniqueKey(parent, parentFields)) return { ok: false, reason: 'parentNotUnique' };
   if (pf.some((x, i) => keyType(x!) !== keyType(cf[i]!))) return { ok: false, reason: 'typesMismatch' };
 
@@ -100,7 +111,7 @@ export function saveRelation(db: DatabaseSync, rel: Relation, originalName: stri
   else if (taken(name)) return { ok: false, reason: 'nameExists' };
 
   const relation: Relation = {
-    name, parentTable: parent.name, parentFields, childTable: child.name, childFields: cf.map((x) => x!.name),
+    name, parentTable: parent.name, parentFields, childTable: child.name, childFields,
     enforce: rel.enforce, cascadeUpdate: rel.cascadeUpdate, cascadeDelete: rel.cascadeDelete, joinType: rel.joinType,
   };
   if (relation.enforce) {
@@ -128,13 +139,14 @@ export function deleteRelation(db: DatabaseSync, name: string, info: LocaleInfo)
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** Positions of the Relations window (bc_meta options.relationsLayout); untrusted file content, invalid entries dropped. */
+/** Positions of the Relations window (bc_meta options.relationsLayout); untrusted file content, invalid entries dropped.
+ *  Keyed by table name without a prototype: a table may be named "__proto__" (JSON.parse gives it as an own key). */
 export function relationsLayout(db: DatabaseSync): RelationsLayout {
   const raw = readOptions(db).relationsLayout;
-  const tables: RelationsLayout['tables'] = {};
+  const tables: RelationsLayout['tables'] = Object.create(null);
   if (isObj(raw) && isObj(raw.tables)) {
     for (const [k, v] of Object.entries(raw.tables)) {
-      if (k !== '__proto__' && isObj(v) && Number.isFinite(v.x) && Number.isFinite(v.y)) tables[k] = { x: v.x as number, y: v.y as number };
+      if (isObj(v) && Number.isFinite(v.x) && Number.isFinite(v.y)) tables[k] = { x: v.x as number, y: v.y as number };
     }
   }
   return { tables };

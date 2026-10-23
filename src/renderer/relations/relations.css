@@ -1,0 +1,61 @@
+/* Fenêtre Relations : boîtes de tables et lignes dans le style de la grille QBE de la maquette. Les tailles des boîtes suivent
+   relations-layout.ts (titre 34 px, lignes de champ 24 px, marge 4 px). */
+.rel-view { flex: 1; min-height: 0; display: flex; }
+.rel-canvas {
+  --rel-dot: color-mix(in srgb, var(--bc-text-muted) 28%, transparent);
+  position: relative; flex: 1; min-width: 0; overflow: auto; background-color: var(--bc-surface-2);
+  background-image: radial-gradient(circle, var(--rel-dot) 1px, transparent 1.3px); background-size: 16px 16px;
+}
+.rel-extent { position: absolute; left: 0; top: 0; pointer-events: none; }
+.rel-lines { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.rline { pointer-events: auto; cursor: pointer; outline: none; }
+.rline path { fill: none; stroke: var(--bc-text-muted); stroke-width: 1.5; }
+.rline path.rline-hit { stroke: transparent; stroke-width: 12; }
+.rline text { fill: var(--bc-text-muted); font: 600 12px var(--bc-font); }
+.rline.is-selected path:not(.rline-hit), .rline:focus-visible path:not(.rline-hit) { stroke: var(--bc-accent); stroke-width: 2.5; }
+.rline.is-selected text, .rline:focus-visible text { fill: var(--bc-accent); }
+
+.rel-box { position: absolute; z-index: 1; display: flex; flex-direction: column; overflow: hidden; outline: none; }
+.rel-box.is-selected, .rel-box:focus-visible { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rel-box-head {
+  flex: none; display: flex; align-items: center; gap: var(--bc-space-2); height: 34px; padding: 0 10px;
+  border-bottom: 1px solid var(--bc-border); font-weight: 600; white-space: nowrap; cursor: grab; user-select: none; touch-action: none;
+}
+.rel-box-head > span { overflow: hidden; text-overflow: ellipsis; }
+.rel-box-head > .ic { flex: none; color: var(--bc-accent); }
+.rel-box-fields { flex: 1; min-height: 0; overflow: auto; padding: 4px; }
+.rel-field {
+  display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12.5px;
+  white-space: nowrap; user-select: none; touch-action: none;
+}
+.rel-field:hover { background: var(--hover); }
+.rel-canvas:not(.is-readonly) .rel-field { cursor: copy; }
+.rel-key { flex: none; color: var(--bc-warning); }
+.rel-key-gap { flex: none; width: 14px; }
+.rel-field-name { overflow: hidden; text-overflow: ellipsis; }
+
+.rel-list { flex: none; width: 260px; overflow: auto; padding: var(--bc-space-3); border-left: 1px solid var(--bc-border); }
+.rel-list h3 { margin: 0 0 var(--bc-space-2); font-size: 12px; font-weight: 600; color: var(--bc-text-muted); }
+.rel-list ul { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rel-list li { display: flex; align-items: center; gap: 2px; padding: 2px 0 2px 6px; border-radius: var(--bc-radius); font-size: 12.5px; }
+.rel-list li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.rel-list li.is-selected { background: var(--accent-soft); }
+
+/* Modifier des relations, Ajouter des tables */
+.modal.rel-dialog { width: min(580px, 100%); }
+.rel-dialog-tables, .rel-dialog-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bc-space-2); }
+.rel-dialog-table { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--bc-text-muted); }
+.rel-dialog select { width: 100%; min-width: 0; color: var(--bc-text); }
+.rel-dialog-pairs { display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow: auto; margin: var(--bc-space-2) 0 var(--bc-space-3); }
+.rel-dialog-check { display: flex; align-items: center; gap: var(--bc-space-2); min-height: 26px; }
+.rel-dialog-check:has(input:disabled) { color: var(--bc-text-muted); }
+.rel-dialog-cascades { padding-left: 22px; }
+.rel-dialog-join {
+  display: flex; flex-direction: column; gap: 6px; margin: var(--bc-space-3) 0; padding: var(--bc-space-2) var(--bc-space-3);
+  border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
+}
+.rel-dialog-join legend { padding: 0 4px; font-size: 12px; color: var(--bc-text-muted); }
+.rel-dialog-join label { display: flex; align-items: flex-start; gap: var(--bc-space-2); font-size: 12.5px; }
+.rel-dialog-join input { margin-top: 2px; }
+.rel-dialog .modal-error { display: block; margin: 0 0 var(--bc-space-3); }
+.rel-add-list { display: flex; flex-direction: column; max-height: 320px; overflow: auto; margin-bottom: var(--bc-space-4); }

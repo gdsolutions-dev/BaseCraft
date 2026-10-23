@@ -1,5 +1,5 @@
 import type { RowPage } from '../../shared/api';
-import { PageCache } from './page-cache';
+import { MAX_LOADED_ROWS, PageCache } from './page-cache';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const rows = (offset: number, n: number, tag = '') =>
@@ -22,6 +22,39 @@ describe('PageCache', () => {
     expect(fetch).toHaveBeenCalledWith(10, 10);
     expect(loaded).toHaveBeenCalledTimes(1);
     expect(c.get(12)).toEqual({ rowid: 13, values: ['12'] });
+  });
+
+  it('ensure loads the pages of a range, four at a time, without reading a page twice', async () => {
+    let running = 0, peak = 0;
+    const fetch = vi.fn(async (o: number, n: number) => { peak = Math.max(peak, ++running); await flush(); running--; return rows(o, n); });
+    const c = new PageCache(fetch, 10);
+    c.get(0); // page 0 already in flight
+    await c.ensure(0, 119);
+    expect(fetch).toHaveBeenCalledTimes(12);
+    expect(peak).toBeLessThanOrEqual(5); // four of ensure + the page read by get
+    expect(c.get(115)).toEqual({ rowid: 116, values: ['115'] });
+    await c.ensure(0, 119);
+    expect(fetch).toHaveBeenCalledTimes(12);
+  });
+
+  it('ensure (Find, Select All) loads at most MAX_LOADED_ROWS rows and tells when it stopped there', async () => {
+    expect(MAX_LOADED_ROWS).toBe(100_000);
+    let end = 0;
+    const fetch = vi.fn(async (o: number, n: number) => { end = Math.max(end, o + n); return { rows: [] }; });
+    const c = new PageCache(fetch, 1000);
+    expect(await c.ensure(0, 99_999)).toBe(false);
+    expect(await c.ensure(0, 249_999)).toBe(true);
+    expect(end).toBe(MAX_LOADED_ROWS);
+    expect(fetch).toHaveBeenCalledTimes(100);
+    expect(await c.ensure(150_000, 160_000)).toBe(true); // wholly beyond: nothing read
+    expect(fetch).toHaveBeenCalledTimes(100);
+  });
+
+  it('ensure ends when a page fails', async () => {
+    const c = new PageCache(() => Promise.reject(new Error('x')), 10);
+    c.onError(() => {});
+    await c.ensure(0, 25);
+    expect(c.get(5)).toBeUndefined();
   });
 
   it('keeps showing the previous rows while it reloads', async () => {

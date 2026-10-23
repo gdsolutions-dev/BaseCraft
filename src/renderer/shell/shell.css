@@ -49,11 +49,22 @@ button:disabled { opacity: .45; }
 .rtab-file:hover { color: var(--bc-accent-contrast); filter: brightness(1.08); }
 .rtab-sep { align-self: center; width: 1px; height: 16px; margin: 0 6px; background: var(--bc-border); }
 .rtab-ctx, .rtab-ctx:hover, .rtab-ctx.is-active { color: var(--bc-accent); }
+.rbody-wrap { position: relative; }
+/* Groups that do not fit scroll sideways; the arrows (.rscroll) stand in for the scrollbar. */
 .rbody {
-  height: 96px; display: flex; overflow: hidden; padding: 6px var(--bc-space-1) var(--bc-space-1);
+  height: 96px; display: flex; overflow: auto hidden; scrollbar-width: none; padding: 6px var(--bc-space-1) var(--bc-space-1);
+  scroll-padding-inline: 24px; /* a focused command scrolls clear of the 22 px arrows (Ribbon.tsx, onFocus) */
   background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--radius-card); box-shadow: var(--shadow);
 }
-.rgroup { position: relative; display: flex; flex-direction: column; padding: 0 var(--bc-space-2); }
+.rbody::-webkit-scrollbar { display: none; }
+.rscroll {
+  position: absolute; top: 1px; bottom: 1px; z-index: 1; width: 22px; display: grid; place-items: center;
+  background: var(--bc-surface); color: var(--bc-text-muted);
+}
+.rscroll:hover { background: color-mix(in srgb, var(--bc-text) 6%, var(--bc-surface)); color: var(--bc-text); }
+.rscroll-l { left: 1px; border-right: 1px solid var(--bc-border); border-radius: var(--radius-card) 0 0 var(--radius-card); }
+.rscroll-r { right: 1px; border-left: 1px solid var(--bc-border); border-radius: 0 var(--radius-card) var(--radius-card) 0; }
+.rgroup { position: relative; flex: none; display: flex; flex-direction: column; padding: 0 var(--bc-space-2); }
 .rgroup + .rgroup::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 6px; width: 1px; background: var(--grid-line); }
 .ritems { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
 .rlabel { font-size: 11px; line-height: 16px; color: var(--bc-text-muted); text-align: center; white-space: nowrap; }
@@ -61,12 +72,23 @@ button:disabled { opacity: .45; }
   display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; max-width: 92px; height: 66px;
   padding: 6px 6px 4px; border-radius: var(--bc-radius); font-size: 12px; line-height: 1.2; text-align: center;
 }
+.rbtn-wide { max-width: 140px; text-wrap: balance; }
 .rstack { display: flex; flex-direction: column; }
 .rbtn-sm { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-radius: var(--bc-radius); font-size: 12px; white-space: nowrap; }
-.rbtn-sm .ic { color: var(--bc-text-muted); }
-.rbtn-lg:hover:not(:disabled), .rbtn-sm:hover:not(:disabled) { background: var(--hover); }
+.rgrid { display: grid; grid-template-rows: repeat(3, 22px); gap: 0 2px; }
+.rbtn-xs { width: 24px; height: 22px; display: grid; place-items: center; border-radius: var(--bc-radius); }
+.rbtn-sm .ic, .rbtn-xs .ic { color: var(--bc-text-muted); }
+.rbtn-lg:hover:not(:disabled, .is-planned), .rbtn-sm:hover:not(:disabled, .is-planned), .rbtn-xs:hover:not(:disabled, .is-planned) { background: var(--hover); }
 .rbtn-lg.is-on, .rbtn-sm.is-on { background: var(--accent-soft); color: var(--bc-accent); }
 .rbtn-sm.is-on .ic { color: var(--bc-accent); }
+/* A placeholder (C11) looks disabled but stays focusable; its tooltip names the batch that delivers it. Its content is dimmed
+   less than a disabled command (.45: the ribbon is mostly placeholders) and not its focus ring. */
+.is-planned > * { opacity: .6; }
+.rtip {
+  position: fixed; z-index: 50; max-width: 280px; padding: 5px 8px; border-radius: var(--bc-radius); pointer-events: none;
+  background: var(--bc-text); color: var(--bc-surface); font-size: 12px; line-height: 1.35; box-shadow: var(--shadow-pop);
+}
+.rtip b { display: block; font-weight: 600; }
 
 /* Bandeaux */
 .banners { flex: none; display: flex; flex-direction: column; gap: var(--bc-space-1); padding: var(--bc-space-2) var(--bc-space-2) 0; }
@@ -118,10 +140,26 @@ button:disabled { opacity: .45; }
 .nav-rail span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 500; white-space: nowrap; }
 
 /* Menu contextuel */
-.ctxmenu { position: fixed; z-index: 40; min-width: 180px; padding: 4px; box-shadow: var(--shadow-pop); }
+.ctxmenu { position: fixed; z-index: 40; min-width: 180px; max-height: calc(100vh - 8px); overflow-y: auto; padding: 4px; box-shadow: var(--shadow-pop); }
 .ctxmenu button { display: flex; align-items: center; width: 100%; height: 28px; padding: 0 var(--bc-space-2); border-radius: 4px; text-align: left; }
 .ctxmenu button:hover:not(:disabled), .ctxmenu button:focus-visible { background: var(--hover); outline: none; }
 .ctxmenu-sep { height: 1px; margin: 4px 2px; background: var(--bc-border); }
+.ctxmenu button { gap: var(--bc-space-2); }
+.ctxmenu button[aria-disabled="true"] > * { opacity: .6; }
+.ctxmenu-chev { margin-left: auto; }
+
+/* Liste modifiable (ComboBox) : sa liste suit le thème de l'application, contrairement à celle d'un <datalist>. */
+.cbx { flex: 1; min-width: 0; display: flex; align-items: center; }
+.cbx-toggle { width: 24px; height: 26px; display: grid; place-items: center; flex: none; border-radius: 4px; color: var(--bc-text-muted); }
+.cbx-toggle:hover:not(:disabled) { background: var(--hover); color: var(--bc-text); }
+.cbx-list { /* above the dialogs (50, 51): it lives only while its field has the focus */
+  position: fixed; z-index: 60; margin: 0; padding: 4px; list-style: none; overflow: auto; font-size: 12px;
+  background: var(--bc-surface); color: var(--bc-text); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); box-shadow: var(--shadow-pop);
+}
+.cbx-opt { padding: 4px 8px; border-radius: 4px; white-space: nowrap; cursor: default; }
+.cbx-opt.is-current { color: var(--bc-accent); font-weight: 600; } /* the stored value: weight too, not colour alone */
+.cbx-opt.is-active { background: var(--bc-accent); color: var(--bc-accent-contrast); }
+@media (forced-colors: active) { .cbx-opt.is-active { forced-color-adjust: none; background: Highlight; color: HighlightText; } }
 
 /* Zone de documents */
 .docs { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -170,6 +208,19 @@ button:disabled { opacity: .45; }
 .bs-recent-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bs-recent-text .muted { font-size: 12px; }
 .bs-recent-name { font-weight: 500; }
+.bs-about h2 { margin: var(--bc-space-5) 0 var(--bc-space-2); font-size: 14px; font-weight: 650; }
+.bs-about p { margin: 0 0 var(--bc-space-2); }
+.bs-about-product { display: flex; align-items: center; gap: var(--bc-space-2); font-size: 18px; font-weight: 650; }
+.bs-about-product .ic { color: var(--bc-accent); }
+.bs-about-version { font-weight: 400; color: var(--bc-text-muted); }
+.bs-about-versions { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--bc-space-4); margin: 0; }
+.bs-about-versions div { display: contents; }
+.bs-about-versions dt { color: var(--bc-text-muted); }
+.bs-about-versions dd { margin: 0; font-variant-numeric: tabular-nums; }
+.bs-about-links { display: flex; flex-wrap: wrap; gap: var(--bc-space-2); margin-top: var(--bc-space-5); }
+.bs-about > .btn { margin-top: var(--bc-space-3); }
+.bs-about-licenses { margin: var(--bc-space-3) 0 0; padding: 0; list-style: none; max-height: 260px; overflow: auto; font-size: 12px; }
+.bs-about-links .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bs-options { display: flex; flex-direction: column; gap: var(--bc-space-4); }
 .bs-options label { display: flex; flex-direction: column; gap: 6px; max-width: 320px; font-weight: 500; }
 select {
@@ -190,8 +241,27 @@ select:focus-visible { outline: none; border-color: var(--bc-accent); box-shadow
 .modal-error { color: var(--bc-danger); font-size: 12px; }
 .modal-buttons { display: flex; justify-content: flex-end; gap: var(--bc-space-2); }
 
-/* Fenêtres étroites (900 px) : petites commandes du ruban sans libellé */
+/* Fenêtres étroites (900 px) : petites commandes du ruban sans libellé, onglets resserrés */
 @media (max-width: 1100px) {
   .rbtn-sm span { display: none; }
   .rbtn-sm { width: 26px; justify-content: center; padding: 0; }
+  .rtab { padding: 0 6px; }
+  .rtab.is-active::after { left: 6px; right: 6px; }
+  .rtab-file { margin-right: 2px; }
+  .rtab-sep { margin: 0 2px; }
+}
+
+/* Splitter (horizontal bar between two stacked panes) */
+.splitter { flex: none; height: 6px; cursor: row-resize; touch-action: none; background: var(--bc-border); transition: background-color 120ms; }
+.splitter:hover { background: color-mix(in srgb, var(--bc-accent) 45%, var(--bc-border)); }
+.splitter:is(.is-dragging, :active) { background: var(--bc-accent); }
+.splitter:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -2px; border-radius: 0; }
+.status-flash { color: var(--bc-text); animation: status-flash 0.6s ease-out 2; }
+.status-flash:empty { animation: none; }
+@keyframes status-flash { from { background: color-mix(in srgb, var(--bc-warning) 35%, transparent); } to { background: transparent; } }
+
+/* RunningNotice: a query call that lasts, with Stop; above modals (Stop stays reachable), not blocking the documents */
+.running-notice {
+  position: fixed; z-index: 55; bottom: 36px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--bc-space-3);
+  padding: var(--bc-space-2) var(--bc-space-3); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); box-shadow: var(--shadow-pop);
 }

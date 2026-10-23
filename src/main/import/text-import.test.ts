@@ -12,6 +12,7 @@ import { defaultProps } from '../../shared/field-types';
 import { saveRelation } from '../db/relations';
 import { deleteSpec, loadSpecs, saveSpec } from './specs';
 import { previewText, runImport, type ImportTexts } from './text-import';
+import { saveObject } from '../db/objects';
 
 const fr = localeInfo('fr-FR');
 const texts: ImportTexts = {
@@ -125,6 +126,14 @@ describe('import', () => {
     expect(all('Ventes')[3]).toMatchObject({ 'N°': 4, 'Quantité vendue': null });
   });
 
+  it('the error table name avoids query names too (one namespace)', async () => {
+    saveObject(db, 'query', 'ventes_erreursimportation', { formatVersion: '1.0' }, null);
+    const p = file('e.csv', CSV + '2024-02-30,Moulin,abc,10.00,Bretagne\n');
+    const plan = planFor(p);
+    plan.spec.fields[2].type = 'longInteger';
+    expect(await runImport(db, p, plan, fr, texts)).toMatchObject({ ok: true, errorTable: 'Ventes_ErreursImportation1' });
+  });
+
   it('refuses rows that do not convert and logs them in the error table', async () => {
     const p = file('e.csv', CSV + '2024-02-30,Moulin,abc,10.00,Bretagne\n');
     const plan = planFor(p);
@@ -233,6 +242,15 @@ describe('field rules (A2)', () => {
     qte({});
     await append();
     expect(all('Stock_ErreursImportation')).toEqual([{ Erreur: en.fieldError.validation.replace('{{rule}}', '>0'), Champ: 'Qte', Ligne: 3 }]);
+  });
+  it('a message over 255 characters (long rule quoted) is logged truncated: the import completes', async () => {
+    const rule = '>0' + ' And <>1000'.repeat(30);
+    qte({ validationRule: rule });
+    expect(await append()).toMatchObject({ imported: 2, errors: 1 });
+    const [row] = all('Stock_ErreursImportation') as { Erreur: string }[];
+    const full = en.fieldError.validation.replace('{{rule}}', rule);
+    expect(full.length).toBeGreaterThan(255);
+    expect(row.Erreur).toBe(full.slice(0, 255));
   });
   it('an input mask never refuses an imported value, as in Access (A2-R10)', async () => {
     createTable(db, { name: 'Tel', fields: [{ name: 'Num', props: { ...defaultProps('shortText'), inputMask: '00\\ 00\\ 00\\ 00\\ 00;0;_' } }] });

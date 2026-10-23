@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, numberToText, toDecimal, type CellInput, type SqlValue } from '../../shared/coerce';
-import { sameName, validateDesign, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { renamedIndexes, renamedRule, sameName, validateDesign, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { parseDecimal, type LocaleInfo } from '../../shared/locale-format';
 import {
-  brokenObject, createTableStatements, DanglingKeyError, foreignKeyClauses, foreignKeys, isExternal, listTables, metadataNames, NameExistsError, purgeMetadata,
-  quoteIdent, refColumns, relationsOf, renameTable, sqliteSameName, tableDesign, usableProps, ViewBrokenError, writeTableMetadata,
+  brokenObject, createTableStatements, DanglingKeyError, foreignKeyClauses, foreignKeys, isExternal, isQueryName, listTables, metadataNames, NameExistsError,
+  purgeMetadata, quoteIdent, refColumns, relationsOf, renameTable, sameColumns, sqliteSameName, tableDesign, usableProps, ViewBrokenError, writeTableMetadata,
 } from './schema';
 import type { AlterResult, FieldMapping, Relation } from '../../shared/api';
 import { countViolations } from './rules';
@@ -34,7 +34,9 @@ function relationField(db: DatabaseSync, old: TableDesign, design: TableDesign, 
   }
   for (const k of foreignKeys(db).filter((x) => x.child !== old.name && sqliteSameName(x.parent, old.name))) {
     const fields = refColumns(db, k, old.name).map((c) => old.fields.find((x) => sameName(x.name, c))?.name ?? c);
-    const rel = relations.find((r) => r.enforce && sqliteSameName(r.childTable, k.child) && r.childFields.every((x, i) => sameName(x, k.from[i] ?? '')));
+    // Its relation only by a full match (A2-R15): another relation on the same child field has another parent.
+    const rel = relations.find((r) => r.enforce && r.childTable === k.child && r.parentTable === old.name
+      && sameColumns(r.childFields, k.from) && sameColumns(r.parentFields, fields));
     uses.push({ fields, unique: true, relation: rel?.name ?? '', table: k.child });
   }
   for (const u of uses) {
@@ -121,10 +123,19 @@ const refusedBySqlite = (e: unknown): boolean => e instanceof Error && /constrai
  * unusable props, open transaction) and NameExistsError when `design.name` is taken by another table.
  */
 export async function alterTable(db: DatabaseSync, oldName: string, design: TableDesign, mapping: FieldMapping[], opts: AlterOptions): Promise<AlterResult> {
+  design = { ...design, name: design.name.normalize('NFC') }; // names are stored in NFC
+  // The table's rule names fields by their source names: renamed fields are followed here, for every caller of saveTable.
+  if (design.validationRule) design.validationRule = renamedRule(design.validationRule, mapping);
+  const old = tableDesign(db, oldName);
+  // So do the indexes; a deleted field leaves them, as in Access, and an index left without a field goes.
+  if (design.indexes) {
+    const deleted = (n: string) => old.fields.some((x) => sameName(x.name, n)) && !mapping.some((m) => sameName(m.sourceName ?? m.name, n)); // a new field may take its name
+    const kept = design.indexes.map((ix) => ({ ...ix, fields: ix.fields.filter((x) => !deleted(x.name)) })).filter((ix) => ix.fields.length);
+    design.indexes = renamedIndexes(kept, mapping);
+  }
   const errors = validateDesign(design);
   if (errors.length > 0) return { ok: false, reason: 'design', errors };
   for (const fd of design.fields) if (!usableProps(fd.props)) throw new Error(`invalid field properties: ${fd.name}`);
-  const old = tableDesign(db, oldName);
   if (mapping.length !== design.fields.length) throw new Error('mapping: one entry per design field expected');
   const sources = design.fields.map((fd) => {
     const m = mapping.filter((x) => x.name === fd.name);
@@ -137,8 +148,10 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
   if (new Set(used).size !== used.length) throw new Error('mapping: a source field is used twice');
   // A1 only rebuilds tables it fully manages: the rebuild would drop or change what it does not know (R17).
   if (isExternal(db, old)) return { ok: false, reason: 'external' };
-  // Only a new name can clash (a twin another tool made, "été" beside "Été", does not stop altering "Été").
+  // Only a new name can clash (a twin another tool made, "été" beside "Été", does not stop altering "Été"). A query clash only
+  // matters for a rename: a table that an older version let share a query's name can still be saved.
   if (design.name !== old.name && listTables(db).some((x) => x.name !== old.name && sameName(x.name, design.name))) throw new NameExistsError(design.name);
+  if (!sameName(old.name, design.name) && isQueryName(db, design.name)) throw new NameExistsError(design.name);
   if (db.isTransaction) throw new Error('alterTable cannot run inside a transaction');
   const relations = relationsOf(db, old.name);
   const guarded = relationField(db, old, design, sources, relations);
@@ -286,13 +299,18 @@ function replaceTable(db: DatabaseSync, old: TableDesign, design: TableDesign, s
   return { ok: true };
 }
 
-/** A rule added or changed by this alteration, broken by rows of the rebuilt table: validationExisting. */
+/** A rule (a field's, or the table's) added or changed by this alteration, broken by rows of the rebuilt table: validationExisting. */
 async function existingViolations(db: DatabaseSync, old: TableDesign, design: TableDesign, sources: (string | null)[], info: LocaleInfo): Promise<AlterResult> {
   for (const [i, fd] of design.fields.entries()) {
     const before = old.fields.find((x) => x.name === sources[i])?.props.validationRule;
     if (!fd.props.validationRule || fd.props.validationRule === before) continue;
     const rows = await countViolations(db, design, fd.name, info);
     if (rows > 0) return { ok: false, reason: 'validationExisting', field: fd.name, rows };
+  }
+  const before = old.validationRule && renamedRule(old.validationRule, design.fields.map((fd, i) => ({ name: fd.name, sourceName: sources[i] ?? null })));
+  if (design.validationRule && design.validationRule !== before) { // the table's rule (field ''), unless only its fields were renamed
+    const rows = await countViolations(db, design, '', info);
+    if (rows > 0) return { ok: false, reason: 'validationExisting', field: '', rows };
   }
   return { ok: true };
 }

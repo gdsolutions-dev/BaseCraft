@@ -14,6 +14,10 @@ const api: BasecraftApi = {
     getSettings: () => ipcRenderer.invoke(CH.getSettings),
     setLocale: (l) => ipcRenderer.invoke(CH.setLocale, l),
     setTheme: (t) => ipcRenderer.invoke(CH.setTheme, t),
+    info: () => ipcRenderer.invoke(CH.appInfo),
+    licenses: () => ipcRenderer.invoke(CH.appLicenses),
+    openExternal: (url) => ipcRenderer.invoke(CH.openExternal, url),
+    edit: (cmd) => ipcRenderer.invoke(CH.edit, cmd),
     onCloseRequested: (cb) => {
       onClose = cb;
       return () => { if (onClose === cb) onClose = null; };
@@ -31,20 +35,31 @@ const api: BasecraftApi = {
       ipcRenderer.on(CH.baseStateChanged, listener);
       return () => { ipcRenderer.removeListener(CH.baseStateChanged, listener); };
     },
+    onHostCrashed: (cb) => {
+      const listener = () => cb();
+      ipcRenderer.on(CH.baseHostCrashed, listener);
+      return () => { ipcRenderer.removeListener(CH.baseHostCrashed, listener); };
+    },
+    saveAs: () => ipcRenderer.invoke(CH.baseSaveAs),
+    compact: () => ipcRenderer.invoke(CH.baseCompact),
   },
   tables: {
     list: () => ipcRenderer.invoke(CH.tablesList),
     design: (name) => ipcRenderer.invoke(CH.tablesDesign, name),
+    testRules: (name) => ipcRenderer.invoke(CH.tablesTestRules, name),
     save: (req) => ipcRenderer.invoke(CH.tablesSave, req),
     rename: (oldName, newName) => ipcRenderer.invoke(CH.tablesRename, oldName, newName),
     drop: (name) => ipcRenderer.invoke(CH.tablesDrop, name),
+    copy: (name, newName, mode) => ipcRenderer.invoke(CH.tablesCopy, name, newName, mode),
+    append: (from, to) => ipcRenderer.invoke(CH.tablesAppend, from, to),
   },
   rows: {
-    count: (table) => ipcRenderer.invoke(CH.rowsCount, table),
+    count: (table, filter) => ipcRenderer.invoke(CH.rowsCount, table, filter),
     page: (table, req) => ipcRenderer.invoke(CH.rowsPage, table, req),
     insert: (table, values) => ipcRenderer.invoke(CH.rowsInsert, table, values),
     update: (table, rowid, changes) => ipcRenderer.invoke(CH.rowsUpdate, table, rowid, changes),
     delete: (table, rowids) => ipcRenderer.invoke(CH.rowsDelete, table, rowids),
+    lookup: (table, field) => ipcRenderer.invoke(CH.rowsLookup, table, field),
   },
   relations: {
     list: () => ipcRenderer.invoke(CH.relationsList),
@@ -66,6 +81,42 @@ const api: BasecraftApi = {
     specs: () => ipcRenderer.invoke(CH.importSpecs),
     saveSpec: (name, spec) => ipcRenderer.invoke(CH.importSaveSpec, name, spec),
     deleteSpec: (name) => ipcRenderer.invoke(CH.importDeleteSpec, name),
+  },
+  importExcel: {
+    pickFile: () => ipcRenderer.invoke(CH.importExcelPick),
+    preview: (path, sheet, hasHeader) => ipcRenderer.invoke(CH.importExcelPreview, path, sheet, hasHeader),
+    run: (path, sheet, hasHeader, plan) => ipcRenderer.invoke(CH.importExcelRun, path, sheet, hasHeader, plan),
+  },
+  objects: {
+    list: (kind) => ipcRenderer.invoke(CH.objectsList, kind),
+    get: (kind, name) => ipcRenderer.invoke(CH.objectsGet, kind, name),
+    save: (kind, name, definition, originalName) => ipcRenderer.invoke(CH.objectsSave, kind, name, definition, originalName),
+    rename: (kind, oldName, newName) => ipcRenderer.invoke(CH.objectsRename, kind, oldName, newName),
+    delete: (kind, name) => ipcRenderer.invoke(CH.objectsDelete, kind, name),
+    copy: (kind, name, newName) => ipcRenderer.invoke(CH.objectsCopy, kind, name, newName),
+    setDescription: (kind, name, description) => ipcRenderer.invoke(CH.objectsSetDescription, kind, name, description),
+  },
+  sources: {
+    describe: (ref) => ipcRenderer.invoke(CH.sourcesDescribe, ref),
+    page: (ref, req) => ipcRenderer.invoke(CH.sourcesPage, ref, req),
+  },
+  queries: {
+    actionCount: (ref, params) => ipcRenderer.invoke(CH.queriesActionCount, ref, params),
+    runAction: (ref, params, opts) => ipcRenderer.invoke(CH.queriesRunAction, ref, params, opts),
+    cancel: () => ipcRenderer.invoke(CH.queriesCancel),
+  },
+  reports: {
+    exportPdf: (r) => ipcRenderer.invoke(CH.reportsExportPdf, r),
+    print: (r) => ipcRenderer.invoke(CH.reportsPrint, r),
+  },
+  exchange: {
+    exportText: (src, spec, defaultName) => ipcRenderer.invoke(CH.exchangeExportText, src, spec, defaultName),
+    exportExcel: (src, defaultName) => ipcRenderer.invoke(CH.exchangeExportExcel, src, defaultName),
+    onProgress: (cb) => {
+      const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
+      ipcRenderer.on(CH.importProgress, listener);
+      return () => { ipcRenderer.removeListener(CH.importProgress, listener); };
+    },
   },
 };
 

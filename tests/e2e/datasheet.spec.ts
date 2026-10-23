@@ -61,9 +61,14 @@ async function closeEditor(page: Page, key: 'Enter' | 'Tab') {
   await expect(cellEditor(page)).toHaveCount(0);
   await expect(page.getByTestId('datasheet')).not.toHaveAttribute('aria-busy', 'true'); // a row left is being saved
 }
+/** Clicks a row selector, and waits until Glide has selected the row and taken the focus: Glide focuses the grid in the
+ *  next animation frame, and a key pressed before that goes to the element focused before (a ribbon button). */
 async function clickSelector(page: Page, row: number) {
   const b = await canvas(page);
   await page.mouse.click(b.x + MARKER / 2, b.y + HEADER + row * ROW + ROW / 2);
+  const tr = page.getByTestId('datasheet').locator(`tr[aria-rowindex="${row + 2}"]`);
+  await expect(tr).toHaveAttribute('aria-selected', 'true');
+  await expect(tr.locator('td[role=gridcell]:focus')).toHaveCount(1);
 }
 /** Glide's accessible copy of a cell (col counted without the row selectors). */
 const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-cell-${col + 1}-${row}`);
@@ -100,11 +105,14 @@ test('enter, validate, cancel, sort, delete', async () => {
     expect((await page.evaluate(() => (window as any).basecraft.rows.page('Clients', { offset: 0, limit: 10 }))).rows.map((r: any) => r.values[1]))
       .toEqual(['Dupont', 'Martin']);
 
-    // a new record without its required Nom: the row stays, the error is shown under the grid; Escape cancels the row
+    // a new record without its required Nom: the row stays, the error is shown in a box and under the grid; Escape cancels the row
     await newRecordAt(page, 2);
     await closeEditor(page, 'Tab');
     await typeIntoCell(page, '5');
-    await closeEditor(page, 'Enter');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('modal')).toContainText(`« Nom » : ${fr.fieldError.required}`);
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(cell(page, 1, 2)).toBeFocused();
     await expect(page.getByTestId('datasheet-error')).toHaveText(`« Nom » : ${fr.fieldError.required}`);
     await expect(page.getByTestId('doc-tab-Clients')).toContainText('•');
     await page.keyboard.press('Escape');
@@ -171,6 +179,8 @@ test('closing the window with an invalid pending row asks; No keeps the window, 
     await closeEditor(page, 'Tab');
     await typeIntoCell(page, '7'); // Âge only: Nom is required
     await closeWindow(app);
+    await expect(page.getByTestId('modal')).toContainText(`« Nom » : ${fr.fieldError.required}`); // the save tried first
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('modal')).toContainText(fr.datasheet.discard.replace('{{name}}', 'Clients'));
     await page.getByTestId('modal-btn-no').click();
     await expect(page.getByTestId('modal')).toHaveCount(0);
@@ -180,6 +190,7 @@ test('closing the window with an invalid pending row asks; No keeps the window, 
 
     const closed = app.waitForEvent('close');
     await closeWindow(app);
+    await page.getByTestId('modal-btn-ok').click();
     await page.getByTestId('modal-btn-yes').click();
     await closed;
   } finally {
@@ -322,7 +333,8 @@ test('renaming the table keeps an invalid pending row and its error', async () =
     await newRecordAt(page, 0);
     await closeEditor(page, 'Tab');
     await typeIntoCell(page, '7');
-    await closeEditor(page, 'Enter'); // Nom is required: the row stays pending
+    await page.keyboard.press('Enter'); // Nom is required: the row stays pending
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('datasheet-error')).toBeVisible();
     await page.getByTestId('nav-item-Clients').click({ button: 'right' });
     await page.getByTestId('nav-menu-rename').click();
@@ -416,4 +428,53 @@ test('a hung renderer does not keep the window open: a second close after 5 s cl
     await app.close().catch(() => undefined);
   }
   expect(existsSync(`${base}.lock`)).toBe(false);
+});
+
+test("another tool's keys: the delete question warns of SET NULL, refusals name both tables, a dangling name is asked again", async () => {
+  const base = await seedBase('autres-cles', async (db) => {
+    createTable(db, clients);
+    await insertRow(db, clients, { Nom: 'Dupont' }, localeInfo('fr-FR'));
+    db.exec(`CREATE TABLE "Kids" ("c" INTEGER REFERENCES "Clients" ("N°") ON DELETE SET NULL); INSERT INTO "Kids" VALUES (1)`);
+    db.exec(`CREATE TABLE "Ghost" ("id" INTEGER PRIMARY KEY); CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id"))`);
+    db.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Ghost"; PRAGMA foreign_keys=ON');
+  });
+  const { app, page } = await launchApp({ args: [base], env: FR });
+  const fill = (s: string, p: Record<string, string>) => Object.entries(p).reduce((x, [k, v]) => x.replace(`{{${k}}}`, v), s);
+  try {
+    await page.getByTestId('nav-item-Clients').click({ button: 'right' });
+    await page.getByTestId('nav-menu-delete').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText(fill(fr.dialog.op.referenced, { name: 'Clients', table: 'Kids' }));
+    await page.getByTestId('modal-btn-ok').click();
+    await page.getByTestId('nav-item-Clients').click({ button: 'right' });
+    await page.getByTestId('nav-menu-rename').click();
+    await page.getByTestId('modal-input').fill('Ghost');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toContainText(fill(fr.dialog.op.danglingKey, { table: 'Orph', newName: 'Ghost' }));
+    await page.getByTestId('modal-btn-ok').click();
+
+    await openSheet(page);
+    await clickNom(page, 0);
+    await page.getByTestId('ribbon-tab-home').click();
+    await page.getByTestId('cmd-deleteRecord').click();
+    await expect(page.getByTestId('modal')).toContainText(fr.datasheet.deleteModifies_one);
+    await page.getByTestId('modal-btn-no').click();
+
+    // A new table saved under the name: refused with both names, then the name is asked again (as for a name taken).
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createTableDesign').click();
+    await page.getByTestId('design-row-0-name').fill('Nom');
+    await page.keyboard.press('Control+s');
+    await page.getByTestId('modal-input').fill('Ghost');
+    await page.getByTestId('modal-btn-ok').click();
+    await page.getByTestId('modal-btn-no').click(); // no primary key
+    await expect(page.getByTestId('modal')).toContainText(fill(fr.designer.danglingKey, { table: 'Orph', newName: 'Ghost' }));
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal-input')).toHaveValue('Ghost');
+    await page.getByTestId('modal-input').fill('Spectre');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-Spectre')).toBeVisible();
+  } finally {
+    await app.close();
+  }
 });

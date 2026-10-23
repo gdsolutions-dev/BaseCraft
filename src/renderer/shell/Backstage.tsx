@@ -1,20 +1,65 @@
-// Coulisse (onglet Fichier) : Nouveau, Ouvrir, Récents, Fermer, Options.
-import { ArrowLeft, Database, FilePlus2, FolderClosed, FolderOpen, Settings2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+// Coulisse (onglet Fichier) : Nouveau, Ouvrir, Enregistrer sous, Compacter et réparer, Récents, Fermer, Options.
+import { ArrowLeft, Database, ExternalLink, FilePlus2, FolderClosed, FolderOpen, Info, Save, Settings2, Wrench } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AppSettings, BasecraftApi } from '../../shared/api';
+import type { AppInfo, AppSettings, BasecraftApi, LicenseEntry } from '../../shared/api';
 import { api } from '../bridge';
 import { applyTheme } from '../i18n';
 import { trapFocus } from './Modal';
 
 export type Settings = Awaited<ReturnType<BasecraftApi['app']['getSettings']>>;
-export type BackstageView = 'home' | 'options';
+export type BackstageView = 'home' | 'options' | 'about';
+
+/** File › About: product, version, copyright, licence, and the versions of what BaseCraft is built on. */
+function About() {
+  const { t } = useTranslation();
+  const [info, setInfo] = useState<AppInfo | null>(null);
+  const [licenses, setLicenses] = useState<LicenseEntry[] | null>(null);
+  useEffect(() => { void api.app.info().then(setInfo); }, []);
+  if (!info) return null;
+  const link = (testid: string, label: string, url: string) => (
+    <button type="button" className="btn" data-testid={testid} onClick={() => void api.app.openExternal(url)}>
+      <ExternalLink className="ic" aria-hidden />{label}
+    </button>
+  );
+  const rows: [string, string][] = [
+    ['electron', info.electron], ['chromium', info.chromium], ['node', info.node], ['sqlite', info.sqlite], ['platform', `${info.platform} ${info.arch}`],
+  ];
+  return (
+    <section className="bs-panel bs-about" data-testid="about">
+      <h1>{t('about.title')}</h1>
+      <p className="bs-about-product"><Database className="ic" aria-hidden /><span>{t('app.title')}</span>
+        <span className="bs-about-version" data-testid="about-version">{t('about.version', { version: info.version })}</span></p>
+      <p className="muted">{t('about.tagline')}</p>
+      <p>{info.copyright}</p>
+      <p>{t('about.licence', { licence: info.licence })}</p>
+      <h2>{t('about.components')}</h2>
+      <dl className="bs-about-versions">
+        {rows.map(([k, v]) => <div key={k}><dt>{t(`about.${k}`)}</dt><dd data-testid={`about-${k}`}>{v}</dd></div>)}
+      </dl>
+      <div className="bs-about-links">
+        {link('about-homepage', t('about.homepage'), info.links.homepage)}
+        {link('about-issues', t('about.issues'), info.links.issues)}
+        {link('about-licence', t('about.viewLicence'), info.links.licence)}
+      </div>
+      <button type="button" className="btn" data-testid="bs-about-licenses" onClick={() => (licenses ? setLicenses(null) : void api.app.licenses().then(setLicenses))}>
+        {t('about.thirdParty')}
+      </button>
+      {licenses && (
+        <ul className="bs-about-licenses" data-testid="bs-about-licenses-list">
+          {licenses.map((l) => <li key={`${l.name}@${l.version}`}>{l.name} {l.version} <span className="muted">{l.license}</span></li>)}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 interface Props {
   view: BackstageView; onView(v: BackstageView): void;
   onBack: (() => void) | null; // null: no base open, the backstage cannot be left
   hasBase: boolean; settings: Settings | null; onSettingsChanged(): void;
   onNew(): void; onOpen(path?: string): void; onCloseBase(): void;
+  readOnly: boolean; onSaveAs(): void; onCompact(): void; // A6
 }
 
 const splitPath = (p: string) => {
@@ -46,12 +91,15 @@ export function Backstage(p: Props) {
         <div className="bs-brand"><Database className="ic" aria-hidden />{t('app.title')}</div>
         {item('bs-new', FilePlus2, t('backstage.new'), p.onNew)}
         {item('bs-open', FolderOpen, t('backstage.open'), () => p.onOpen())}
+        {item('bs-save-as', Save, t('backstage.saveAs'), p.onSaveAs, { disabled: !p.hasBase })}
+        {item('bs-compact', Wrench, t('backstage.compact'), p.onCompact, { disabled: !p.hasBase || p.readOnly })}
         {item('bs-close', FolderClosed, t('backstage.close'), p.onCloseBase, { disabled: !p.hasBase })}
         <div className="bs-sep" />
         {item('bs-options', Settings2, t('backstage.options'), () => p.onView(p.view === 'options' ? 'home' : 'options'), { active: p.view === 'options' })}
+        {item('bs-about', Info, t('backstage.about'), () => p.onView(p.view === 'about' ? 'home' : 'about'), { active: p.view === 'about' })}
       </aside>
       <main className="bs-content">
-        {p.view === 'home' ? (
+        {p.view === 'about' ? <About /> : p.view === 'home' ? (
           <section className="bs-panel">
             <h1>{t('backstage.recent')}</h1>
             {p.settings?.recentFiles.length ? (

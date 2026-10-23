@@ -1,7 +1,7 @@
 /* Mode Création : grille des champs (style de la feuille de données de la maquette) et feuille de propriétés
    (style de la feuille de propriétés du concepteur de formulaires). */
 .designer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.dgrid-wrap { flex: 1; min-height: 120px; overflow: auto; }
+.dgrid-wrap { flex: 1; min-height: 0; overflow: auto; }
 .dgrid { width: 100%; min-width: 560px; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
 .dgrid .c-sel { width: 32px; }
 .dgrid .c-name { width: 30%; }
@@ -26,7 +26,7 @@
 .dgrid tr.is-current td.gutter { box-shadow: inset 3px 0 0 var(--bc-accent); color: var(--bc-accent); }
 .dgrid tr.is-picked td { background: var(--accent-soft); }
 
-.fprops { flex: none; height: 236px; display: flex; flex-direction: column; border-top: 1px solid var(--bc-border); }
+.fprops { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .fprops-head { padding: var(--bc-space-2) var(--bc-space-3) 2px; font-weight: 600; }
 .fprops .ptabs { display: flex; padding: 0 6px; border-bottom: 1px solid var(--bc-border); }
 .fprops .ptab { position: relative; padding: 8px 10px; font-size: 12px; color: var(--bc-text-muted); white-space: nowrap; }
@@ -47,3 +47,27 @@
 .pval :disabled { color: var(--bc-text-muted); }
 .pval:has(.pval-error) { flex-wrap: wrap; }
 .pval-error { flex-basis: 100%; padding: 2px 0 4px; color: var(--bc-danger); font-size: 12px; }
+.pval:has(.pval-note) { flex-wrap: wrap; }
+.pval-note { flex-basis: 100%; padding: 2px 0 4px; color: var(--bc-text-muted); font-size: 12px; }
+.pbuild { flex: none; display: inline-flex; }
+.pbuild .iconbtn { width: 24px; height: 24px; }
+.pchecks { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 4px 0; }
+.pchecks label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A field name the designer refuses (C8): the message sits under the name. */
+.field-error { display: block; color: var(--bc-danger); font-size: 12px; }
+
+/* The table's Property Sheet (F4), on the right of the grid and the field properties. */
+.tdesign { flex: 1; min-height: 0; display: flex; }
+.tdesign > .designer { min-width: 0; }
+.tprops { flex: none; width: 320px; display: flex; flex-direction: column; border-left: 1px solid var(--bc-border); }
+.tprops .plist { flex: 1; overflow: auto; }
+
+/* Indexes dialog: one row per index field, the index's own cells on its first row. */
+.indexes-dialog { max-height: 60vh; overflow: auto; }
+.idx-grid { border-collapse: collapse; margin-bottom: var(--bc-space-2); }
+.idx-grid th { text-align: left; font-weight: 600; padding: 2px var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
+.idx-grid td { padding: 2px; }
+.idx-grid tr.idx-first td { border-top: 1px solid var(--bc-border); }
+.idx-grid input:not([type="checkbox"]), .idx-grid select { height: 30px; box-sizing: border-box; }
+.idx-field { display: flex; gap: 2px; }

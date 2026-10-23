@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ExprSyntaxError } from './ast';
-import { fieldRefs, parseCanonical, serialize } from './parser';
+import { localeInfo } from '../locale-format';
+import type { SelectQuery } from '../query/ast';
+import { createAccumulator } from './aggregate';
+import { ExprSyntaxError, type Expr } from './ast';
+import { AGGREGATES, FUNCTIONS } from './catalog';
+import { evaluate } from './evaluate';
+import { num, str } from './library';
+import { toCanonical, toDisplay } from './localize';
+import { CANONICAL_LEX, tokenize, type Token } from './lexer';
+import {
+  CANONICAL_DIALECT, fieldRefs, hasAggregate, parseCanonical, parseExprAt, serialize, serializeWith, type ParseOptions,
+} from './parser';
 
 describe('canonical parser', () => {
   it.each([
@@ -155,6 +165,8 @@ describe('canonical parser', () => {
     ['a & (b & c)', '[a] & ([b] & [c])'], ['a \\ (b * c)', '[a] \\ [b] * [c]'], ['(a \\ b) * c', '([a] \\ [b]) * [c]'],
     ['a * (b \\ c)', '[a] * ([b] \\ [c])'], ['(a Xor b) Or c', '([a] Xor [b]) Or [c]'], ['a Xor (b Or c)', '[a] Xor [b] Or [c]'],
     ['(x Is Null) And y', '[x] Is Null And [y]'], ['(x Is Null) = True', '[x] Is Null = True'],
+    // a double negation is never printed `--` (a comment opener in SQL); a stored `--a` is still read
+    ['--a', '- -[a]'], ['-(-a)', '- -[a]'], ['- - -1', '- - -1'], ['2 ^ - -3', '2 ^ - -3'], ['1 - -a', '1 - -[a]'],
   ])('parenthesization %s', (src, out) => {
     expect(serialize(parseCanonical(src))).toBe(out);
     expect(parseCanonical(out)).toEqual(parseCanonical(src)); // the tree is preserved, not just the text
@@ -190,5 +202,193 @@ describe('canonical parser', () => {
   it('the function table is injectable', () => {
     expect(parseCanonical('Foo(1)', { functions: { Foo: { min: 1, max: 1 } } })).toEqual({ k: 'call', name: 'Foo', args: [{ k: 'num', v: '1' }] });
     expect(() => parseCanonical('Foo(1, 2)', { functions: { Foo: { min: 1, max: 1 } } })).toThrow(expect.objectContaining({ code: 'arity' }));
+  });
+});
+
+describe('nesting limits', () => {
+  it('deep nesting is a typed tooComplex error, never a stack overflow', () => {
+    const nested = (k: number) => '('.repeat(k) + '1' + ')'.repeat(k);
+    expect(() => parseCanonical(nested(150))).not.toThrow();
+    for (const src of [nested(300), nested(5000), '-'.repeat(5000) + '1', 'Not '.repeat(3000) + 'True', 'Abs('.repeat(400) + '1' + ')'.repeat(400)]) {
+      expect(() => parseCanonical(src)).toThrow(expect.objectContaining({ name: 'ExprSyntaxError', code: 'tooComplex' }));
+    }
+    expect(() => parseCanonical(nested(300), { criteria: true })).toThrow(expect.objectContaining({ code: 'tooComplex' }));
+  });
+});
+
+describe('operand limit', () => {
+  it('a left-associative chain of more than 2000 operands is tooComplex', () => {
+    const chain = (k: number, op = ' + ') => Array(k).fill('1').join(op);
+    expect(() => parseCanonical(chain(2000))).not.toThrow();
+    for (const [k, op] of [[2001, ' + '], [5000, ' & '], [3000, ' And '], [2500, ' < '], [2001, ' ^ '], [20000, ' ^ ']] as const) {
+      expect(() => parseCanonical(chain(k, op)), op).toThrow(expect.objectContaining({ name: 'ExprSyntaxError', code: 'tooComplex' }));
+    }
+  });
+});
+
+// ---- A3 Task 1: query expressions ----------------------------------------------------------------------------
+
+const Q = { qualified: true };
+const oneSelect: SelectQuery = { k: 'select', distinct: false, items: [{ e: { k: 'num', v: '1' } }], from: [], groupBy: [], orderBy: [] };
+const env = () => ({ field: () => null, now: () => new Date(), locale: 'fr-FR' });
+
+/** Minimal `SELECT e FROM [T]` reader for the subquery hook (the real one is Task 2's sql-parser). */
+function subquery(toks: Token[], pos: number): { q: SelectQuery; end: number } {
+  const { e, end } = parseExprAt(toks, pos + 1, SUBQ);
+  const [from, t] = [toks[end]!, toks[end + 1]!];
+  if (from.v.toLowerCase() !== 'from' || t.t !== 'id') throw new Error('stub: SELECT e FROM [T] only');
+  return { q: { ...oneSelect, items: [{ e }], from: [{ k: 'source', name: t.v }] }, end: end + 2 };
+}
+const SUBQ: ParseOptions = { qualified: true, stopWords: new Set(['from']), subquery };
+const printSub = (q: SelectQuery): string =>
+  `SELECT ${serializeWith((q.items[0] as { e: Expr }).e, SUB_DIALECT)} FROM [${(q.from[0] as { name: string }).name}]`;
+const SUB_DIALECT = { ...CANONICAL_DIALECT, sub: printSub };
+
+describe('query expressions', () => {
+  it.each([
+    ['[Clients].[Nom] & "x"', '[Clients].[Nom] & "x"'], ['Clients.Nom = 1', '[Clients].[Nom] = 1'], ["'l''été'", '"l\'été"'],
+    ['Sum([Commandes].[Montant]) / Count(*)', 'Sum([Commandes].[Montant]) / Count(*)'], ['StDev([Montant])', 'StDev([Montant])'],
+    ['[T].F + T.[G]', '[T].[F] + [T].[G]'], [`'a' & "b" & 'c'''`, `"a" & "b" & "c'"`],
+  ])('query expr %s', (src, out) => expect(serialize(parseCanonical(src, Q))).toBe(out));
+
+  it('qualified refs: tree, and T.* is not a reference', () => {
+    expect(parseCanonical('[T].[F]', Q)).toEqual({ k: 'id', name: 'F', table: 'T' });
+    expect(parseCanonical('[F]', Q)).toEqual({ k: 'id', name: 'F' }); // no table key: sameTree with A2 trees
+    expect(() => parseCanonical('T.*', Q)).toThrow(expect.objectContaining({ code: 'unexpectedToken' }));
+    expect(() => parseCanonical('[T].[]', Q)).toThrow(expect.objectContaining({ code: 'unexpectedToken' }));
+    expect(parseExprAt(tokenize('T.* FROM'), 0, Q)).toMatchObject({ e: { k: 'id', name: 'T' }, end: 1 }); // sql-parser reads T.*
+  });
+
+  it('qualified refs and subqueries are opt-in', () => {
+    expect(() => parseCanonical('[T].[F]')).toThrow(expect.objectContaining({ code: 'unexpectedToken' }));
+    expect(() => parseCanonical('[a] In (SELECT [b] FROM [T])', Q)).toThrow(expect.objectContaining({ code: 'subqueryNotAllowed' }));
+    for (const s of ['(select 1 FROM [T])', 'Exists (SELECT 1 FROM [T])', '[a] Not In (SELECT 1 FROM [T])']) {
+      let err: ExprSyntaxError | undefined;
+      try { parseCanonical(s, { criteria: true }); } catch (e) { err = e as ExprSyntaxError; }
+      expect(err, s).toMatchObject({ code: 'subqueryNotAllowed', span: { start: s.search(/select/i), end: s.search(/select/i) + 6 } });
+    }
+  });
+
+  it('parseExprAt stops at a stop word', () => {
+    const toks = tokenize('[a] + 1 AS [x] FROM [T]');
+    expect(parseExprAt(toks, 0, { stopWords: new Set(['as', 'from']) })).toMatchObject({ e: { k: 'bin', op: '+' }, end: 3 });
+    expect(parseExprAt(toks, 4, {})).toEqual({ e: { k: 'id', name: 'x' }, end: 5 });
+    // a stop word is never read as a field; a function call of the same name still is one
+    expect(() => parseExprAt(tokenize('[a] + FROM'), 0, { stopWords: new Set(['from']) }))
+      .toThrow(expect.objectContaining({ code: 'unexpectedToken', span: { start: 6, end: 10 } }));
+    expect(parseExprAt(tokenize('Left([a], 1) LEFT JOIN'), 0, { stopWords: new Set(['left']) })).toMatchObject({ e: { k: 'call', name: 'Left' }, end: 6 });
+    expect(parseExprAt(tokenize('[From] + 1'), 0, { stopWords: new Set(['from']) }).end).toBe(3); // bracketed: a field
+  });
+
+  it('subqueries: scalar, Exists and [Not] In, printed through Dialect.sub', () => {
+    const s = (src: string, o: ParseOptions = SUBQ) => serializeWith(parseCanonical(src, o), SUB_DIALECT);
+    expect(parseCanonical('[a] In (SELECT [b] FROM [T])', SUBQ))
+      .toEqual({ k: 'inSub', e: { k: 'id', name: 'a' }, not: false, q: { ...oneSelect, items: [{ e: { k: 'id', name: 'b' } }], from: [{ k: 'source', name: 'T' }] } });
+    expect(parseCanonical('exists(select 1 from T)', SUBQ)).toMatchObject({ k: 'sub', mode: 'exists' });
+    expect(s('[a] not in (select [T].[b] from T) And Not Exists (SELECT 1 FROM [U])')).toBe('[a] Not In (SELECT [T].[b] FROM [T]) And Not Exists (SELECT 1 FROM [U])');
+    expect(s('(SELECT Max([b]) FROM [T]) + 1 > [c]')).toBe('(SELECT Max([b]) FROM [T]) + 1 > [c]');
+    expect(s('[a] = (SELECT (SELECT 1 FROM [V]) FROM [U])')).toBe('[a] = (SELECT (SELECT 1 FROM [V]) FROM [U])');
+    expect(s('[a] In (1, 2) Or [b] In (SELECT 1 FROM [T])')).toBe('[a] In (1, 2) Or [b] In (SELECT 1 FROM [T])');
+    expect(() => serialize(parseCanonical('Exists (SELECT 1 FROM [T])', SUBQ))).toThrow(); // no printer given
+    expect(hasAggregate(parseCanonical('[a] In (SELECT Sum([b]) FROM [T])', SUBQ))).toBe(false); // the subquery's own aggregate
+    expect(fieldRefs(parseCanonical('[a] In (SELECT [b] FROM [T])', SUBQ))).toEqual(['a']);
+  });
+
+  it('criteria mode: In (SELECT …) and a lone scalar subquery apply to the subject', () => {
+    const c = (src: string) => serializeWith(parseCanonical(src, { ...SUBQ, criteria: true }), SUB_DIALECT);
+    expect(c('In (SELECT [b] FROM [T])')).toBe('<subject> In (SELECT [b] FROM [T])');
+    expect(c('Not In (SELECT [b] FROM [T]) Or Is Null')).toBe('<subject> Not In (SELECT [b] FROM [T]) Or <subject> Is Null');
+    expect(c('(SELECT Max([b]) FROM [T])')).toBe('<subject> = (SELECT Max([b]) FROM [T])');
+    expect(c('> (SELECT Avg([b]) FROM [T])')).toBe('<subject> > (SELECT Avg([b]) FROM [T])');
+    expect(c('Exists (SELECT 1 FROM [T])')).toBe('Exists (SELECT 1 FROM [T])'); // a condition: no subject
+  });
+
+  it('display form: a subquery stays canonical SQL', () => {
+    const FR = { lang: 'fr' as const, region: localeInfo('fr-FR') };
+    const o = { ...SUBQ, printSub };
+    const canon = '[Prix] > (SELECT Max(IIf([b] > 1.5, [b], 0)) FROM [T]) Or Exists (SELECT "a;b" FROM [U]) And [c] = 2.5';
+    const shown = '[Prix] > (SELECT Max(IIf([b] > 1.5, [b], 0)) FROM [T]) Ou Exists (SELECT "a;b" FROM [U]) Et [c] = 2,5';
+    expect(toDisplay(canon, FR, o)).toBe(shown);
+    expect(toCanonical(shown, FR, o)).toBe(canon);
+    const crit = { ...o, criteria: true };
+    expect(toDisplay('Not In (SELECT [T].[b] FROM [T]) Or > 1.5', FR, crit)).toBe('Pas Dans (SELECT [T].[b] FROM [T]) Ou > 1,5');
+    expect(toCanonical('pas dans (SELECT [T].[b] FROM [T]) ou > 1,5', FR, crit)).toBe('Not In (SELECT [T].[b] FROM [T]) Or > 1.5');
+  });
+
+  it('evaluator: aggregates keep aggregateContext, subqueries give badArgument', async () => {
+    await expect(evaluate(parseCanonical('StDev([a])'), env())).rejects.toMatchObject({ code: 'aggregateContext' });
+    await expect(evaluate({ k: 'sub', mode: 'scalar', q: oneSelect }, env())).rejects.toMatchObject({ code: 'badArgument' });
+    await expect(evaluate({ k: 'inSub', e: { k: 'num', v: '1' }, q: oneSelect, not: false }, env())).rejects.toMatchObject({ code: 'badArgument' });
+    const field = (name: string, table?: string) => str(`${table ?? '-'}.${name}`);
+    expect(await evaluate(parseCanonical('[T].[F] & F', Q), { ...env(), field })).toEqual(str('T.F-.F'));
+  });
+
+  it('catalog: return types; StDev/Var appended after the foundation aggregates', () => {
+    for (const f of FUNCTIONS) expect(f.ret, f.name).toBeDefined();
+    expect([...AGGREGATES]).toEqual(['Sum', 'Avg', 'Count', 'Min', 'Max', 'First', 'Last', 'StDev', 'StDevP', 'Var', 'VarP']);
+    const ret = (n: string) => FUNCTIONS.find((f) => f.name === n)?.ret;
+    expect([ret('Left'), ret('Len'), ret('CCur'), ret('DateAdd'), ret('IsNull'), ret('Nz'), ret('Sum'), ret('IIf'), ret('VarP')])
+      .toEqual(['shortText', 'number', 'currency', 'dateTime', 'yesNo', 'arg0', 'arg0', 'arg1', 'number']);
+  });
+
+  it('limits are shared with the subqueries: tooComplex, never a stack overflow', () => {
+    const [P, C] = [(k: number) => '('.repeat(k), (k: number) => ')'.repeat(k)];
+    const chain = (k: number) => Array(k).fill('1').join(' + ');
+    const tooComplex = expect.objectContaining({ name: 'ExprSyntaxError', code: 'tooComplex' });
+    for (const src of [
+      `${P(198)}(SELECT ${P(198)}1${C(198)} FROM [T])${C(198)}`,
+      `${P(198)}(SELECT ${P(198)}(SELECT 1 FROM [T])${C(198)} FROM [T])${C(198)}`,
+      `(SELECT ${chain(1999)} FROM [T]) + ${chain(1999)}`,
+      `${chain(1999)} + (SELECT ${chain(1999)} FROM [T])`,
+    ]) expect(() => parseCanonical(src, SUBQ), src.slice(0, 40)).toThrow(tooComplex);
+    expect(() => parseCanonical(chain(2000))).not.toThrow(); // the failed parse left no budget behind
+    // nesting is a depth (sibling subqueries do not add up); operands count over the whole tree
+    const ok = `${P(90)}(SELECT ${P(90)}1${C(90)} FROM [T])${C(90)} + (SELECT ${P(100)}1${C(100)} FROM [T]) + (SELECT ${chain(900)} FROM [T]) + ${chain(900)}`;
+    const e = parseCanonical(ok, SUBQ);
+    const FR = { lang: 'fr' as const, region: localeInfo('fr-FR') };
+    expect(() => serializeWith(e, SUB_DIALECT)).not.toThrow();
+    expect(() => toDisplay(ok, FR, { ...SUBQ, printSub })).not.toThrow();
+  });
+
+  it('the shared accumulator covers the appended names', () => {
+    const acc = createAccumulator('StDev', 'number'); for (const v of [2, 4, 4, 4, 5, 5, 7, 9]) acc.add(num(v));
+    expect((acc.result() as { v: number }).v).toBeCloseTo(Math.sqrt(32 / 7), 12);
+  });
+});
+
+// ---- A3 Task 2: Task 1 review minors (lexer subquery switch, ASCII rule, typed error without printSub) -----------
+
+describe('display lexing of subqueries', () => {
+  const FR = { lang: 'fr' as const, region: localeInfo('fr-FR') };
+  const o = { ...SUBQ, printSub };
+
+  it('a function-call parenthesis is never a subquery: display lexing goes on', () => {
+    expect(toCanonical('Gauche(select; 2) & Somme(Select)', FR)).toBe('Left([select], 2) & Sum([Select])');
+    expect(toCanonical('Gauche(select; 2)', FR, o)).toBe('Left([select], 2)');
+  });
+
+  it('Exists (SELECT …) does open a subquery: canonical inside, display after', () => {
+    expect(toCanonical('Pas Exists (SELECT 1.5 FROM [T]) Ou [c] = 1,5', FR, o)).toBe('Not Exists (SELECT 1.5 FROM [T]) Or [c] = 1.5');
+    expect(toDisplay('Not Exists (SELECT 1.5 FROM [T]) Or [c] = 1.5', FR, o)).toBe('Pas Exists (SELECT 1.5 FROM [T]) Ou [c] = 1,5');
+  });
+
+  it('SELECT is recognised by one ASCII-only rule in the lexer and the parser (ſ is not s)', () => {
+    expect(toCanonical('[a] * (ſelect + 1,5)', FR)).toBe('[a] * ([ſelect] + 1.5)');
+    expect(toCanonical('[a] Dans (SeLeCt [b] FROM [T]) Ou [c] = 1,5', FR, o)).toBe('[a] In (SELECT [b] FROM [T]) Or [c] = 1.5');
+    expect(parseCanonical('(ſelect)', SUBQ)).toEqual({ k: 'id', name: 'ſelect' });
+  });
+
+  it('nested parentheses inside a subquery are counted: canonical up to its own closing parenthesis', () => {
+    expect(toCanonical('(SELECT IIf((1 > 0), 1.5, 2) FROM [T]) + 2,5', FR, o)).toBe('(SELECT IIf(1 > 0, 1.5, 2) FROM [T]) + 2.5');
+    const toks = tokenize('(SELECT IIf((1 > 0), 1.5, 2) FROM [T]) + 2,5', { ...CANONICAL_LEX, decimalSep: ',', listSep: ';' });
+    expect(toks.filter((t) => t.t === 'num').map((t) => t.v)).toEqual(['1', '0', '1.5', '2', '2.5']);
+  });
+
+  it('a subquery without printSub is a typed ExprSyntaxError, never a plain Error', () => {
+    const typed = expect.objectContaining({ name: 'ExprSyntaxError', code: 'subqueryNotAllowed' });
+    expect(() => toCanonical('[a] Dans (SELECT [b] FROM [T])', FR, SUBQ)).toThrow(typed);
+    expect(() => toCanonical('Dans (SELECT [b] FROM [T])', FR, { ...SUBQ, criteria: true })).toThrow(typed);
+    expect(() => toDisplay('[a] In (SELECT [b] FROM [T])', FR, SUBQ)).toThrow(typed);
+    expect(() => toDisplay('In (SELECT [b] FROM [T])', FR, { ...SUBQ, criteria: true })).toThrow(typed);
   });
 });

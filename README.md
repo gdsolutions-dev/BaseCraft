@@ -1,5 +1,7 @@
 # BaseCraft
 
+[![CI](https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml/badge.svg)](https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml)
+
 **A desktop database application in the spirit of Microsoft Access — for Windows, macOS and Linux.**
 
 BaseCraft brings back the Access way of building small data applications — tables, queries, forms, reports, macros and code — with a modern interface, and without being tied to Windows. Everything a database contains lives in **a single file**, which is a plain SQLite database that any SQLite tool can still open.

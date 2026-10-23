@@ -13,6 +13,23 @@ async function openOptions(page: Page) {
   await page.getByTestId('bs-options').click();
 }
 
+test('File › About shows the version of package.json and the component versions', async () => {
+  const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8')) as { version: string };
+  const { app, page } = await launchApp();
+  try {
+    await page.getByTestId('bs-about').click();
+    await expect(page.getByTestId('about')).toBeVisible();
+    await expect(page.getByTestId('about-version')).toHaveText(fr.about.version.replace('{{version}}', pkg.version));
+    await expect(page.getByTestId('about-electron')).toHaveText(/^\d+\.\d+\.\d+/);
+    await expect(page.getByTestId('about')).toContainText('SQLite');
+    await expect(page.getByTestId('about-issues')).toBeEnabled();
+    await page.getByTestId('bs-about').click(); // toggles back to the home panel
+    await expect(page.getByTestId('about')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test('create base, switch language and theme, persisted', async () => {
   const tmpBase = join(mkdtempSync(join(tmpdir(), 'basecraft-shell-')), 'Coquille.basecraft');
   const { app, page, userDataDir } = await launchApp({ env: { BASECRAFT_E2E_SAVE_PATH: tmpBase } });

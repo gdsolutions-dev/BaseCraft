@@ -61,7 +61,7 @@ describe('file-format', () => {
   it('creates and opens a BaseCraft file', () => {
     createBaseFile(p, '0.1.0');
     const b = openBaseFile(p, 'write', '0.1.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 1, appVersion: '0.1.0', options: {} });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 2, appVersion: '0.1.0', options: {} });
     expect(b.meta.dbUuid).toMatch(/^[0-9a-f-]{36}$/);
     expect(b.db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID });
     expect(b.db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'delete' });
@@ -152,6 +152,15 @@ describe('file-format', () => {
     expect(b.meta.formatMajor).toBe(2);
     b.db.close();
     expect(metaValue(p, 'format_major')).toBe('2');
+  });
+  it('a migration retried within the same second gets its own backup name', () => {
+    createBaseFile(p, '0.1.0');
+    const now = () => new Date('2026-10-21T10:00:00');
+    fs.writeFileSync(path.join(dir, 'test.backup-20261021-100000.basecraft'), 'previous attempt');
+    const b = openBaseFile(p, 'write', '0.1.0', { current: cur, migrations: m, now });
+    expect(b.backupPath).toMatch(/test\.backup-20261021-100000-1\.basecraft$/);
+    expect(fs.readFileSync(path.join(dir, 'test.backup-20261021-100000.basecraft'), 'utf8')).toBe('previous attempt');
+    b.db.close();
   });
   it('failing migration rolls back and keeps the backup', () => {
     createBaseFile(p, '0.1.0');

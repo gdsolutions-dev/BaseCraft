@@ -1,10 +1,24 @@
 // Catalogue des fonctions et des mots-clés : nom canonique (anglais) <-> nom français. Module pur.
 import type { FunctionTable } from './ast';
+import type { FieldType } from '../field-types';
 
-export type FnCategory = 'text' | 'number' | 'date' | 'logic' | 'conversion';
-export interface FnInfo { name: string; fr: string; min: number; max: number; category: FnCategory }
+export type FnCategory = 'text' | 'number' | 'date' | 'logic' | 'conversion' | 'aggregate';
+/** `ret` : type du résultat (bindQuery, A3) ; 'arg0' / 'arg1' = type du premier / deuxième argument. */
+export interface FnInfo { name: string; fr: string; min: number; max: number; category: FnCategory; ret: FieldType | 'arg0' | 'arg1' }
 
-const f = (category: FnCategory, name: string, fr: string, min: number, max = min): FnInfo => ({ name, fr, min, max, category });
+const RET = new Map(Object.entries({
+  shortText: 'Left Right Mid Trim LTrim RTrim UCase LCase Replace Space String Format CStr',
+  number: 'Len InStr StrComp Round Int Fix Abs Sgn Sqr Val CInt CLng CDbl Year Month Day Hour Minute Second Weekday DateDiff '
+    + 'DatePart Count StDev StDevP Var VarP',
+  currency: 'CCur',
+  dateTime: 'Date Time Now DateAdd DateSerial TimeSerial CDate',
+  yesNo: 'IsNull IsNumeric IsDate CBool',
+  arg0: 'Nz Sum Avg Min Max First Last',
+  arg1: 'IIf',
+}).flatMap(([ret, names]) => names.split(' ').map((n) => [n, ret as FnInfo['ret']])));
+
+const f = (category: FnCategory, name: string, fr: string, min: number, max = min): FnInfo =>
+  ({ name, fr, min, max, category, ret: RET.get(name)! });
 
 export const FUNCTIONS: FnInfo[] = [
   f('logic', 'IIf', 'VraiFaux', 3), f('logic', 'Nz', 'Nz', 1, 2), f('logic', 'IsNull', 'EstNull', 1),
@@ -24,7 +38,15 @@ export const FUNCTIONS: FnInfo[] = [
   f('date', 'Minute', 'Minute', 1), f('date', 'Second', 'Seconde', 1), f('date', 'Weekday', 'JourSem', 1, 2),
   f('date', 'DateAdd', 'AjDate', 3), f('date', 'DateDiff', 'DiffDate', 3), f('date', 'DatePart', 'PartDate', 2),
   f('date', 'DateSerial', 'SérieDate', 3), f('date', 'TimeSerial', 'SérieHeure', 3),
+  // Agrégats : évalués par A3 (SQL d'une requête Regroupement) et A5 (groupes d'un état), refusés ailleurs (aggregateContext).
+  f('aggregate', 'Sum', 'Somme', 1), f('aggregate', 'Avg', 'Moyenne', 1), f('aggregate', 'Count', 'Compte', 1),
+  f('aggregate', 'Min', 'Min', 1), f('aggregate', 'Max', 'Max', 1), f('aggregate', 'First', 'Premier', 1), f('aggregate', 'Last', 'Dernier', 1),
+  f('aggregate', 'StDev', 'EcartType', 1), f('aggregate', 'StDevP', 'EcartTypeP', 1),
+  f('aggregate', 'Var', 'Var', 1), f('aggregate', 'VarP', 'VarP', 1),
 ];
+
+/** Noms canoniques des fonctions d'agrégat. */
+export const AGGREGATES: ReadonlySet<string> = new Set(FUNCTIONS.filter((x) => x.category === 'aggregate').map((x) => x.name));
 
 /** Nom canonique -> arité, pour `parseCanonical`. */
 export const FUNCTION_TABLE: FunctionTable = Object.fromEntries(FUNCTIONS.map((x) => [x.name, { min: x.min, max: x.max }]));

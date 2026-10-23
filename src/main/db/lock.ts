@@ -49,35 +49,58 @@ function readLock(lockPath: string, deps: LockDeps = {}): { raw: string; info: L
   return { raw, info, readable, readError };
 }
 
-function create(basePath: string, sessionId: string, deps: LockDeps): LockResult | 'exists' {
-  const now = deps.now ?? Date.now;
-  const writeExclusive = deps.writeExclusive ?? defaultWriteExclusive;
+function newInfo(sessionId: string, deps: LockDeps): LockInfo {
+  return { user: os.userInfo().username, host: os.hostname(), pid: process.pid, sessionId, heartbeatAt: new Date((deps.now ?? Date.now)()).toISOString() };
+}
+
+function held(basePath: string, info: LockInfo, deps: LockDeps): HeldLock {
   const lockPath = lockPathFor(basePath);
-  const info: LockInfo = { user: os.userInfo().username, host: os.hostname(), pid: process.pid, sessionId, heartbeatAt: new Date(now()).toISOString() };
-  try { writeExclusive(lockPath, JSON.stringify(info)); } catch (e) {
+  const now = deps.now ?? Date.now;
+  const lock: HeldLock = {
+    info,
+    heartbeat() {
+      const cur = readLock(lockPath, deps);
+      if (!cur || cur.info.sessionId !== info.sessionId) return 'lost';
+      const next = { ...lock.info, heartbeatAt: new Date(now()).toISOString() };
+      try { (deps.writeInPlace ?? defaultWriteInPlace)(lockPath, JSON.stringify(next)); } catch { return 'lost'; }
+      lock.info = next;
+      return 'ok';
+    },
+    release() { releaseIfOurs(basePath, info.sessionId, deps); },
+  };
+  return lock;
+}
+
+function create(basePath: string, sessionId: string, deps: LockDeps): LockResult | 'exists' {
+  const lockPath = lockPathFor(basePath);
+  const info = newInfo(sessionId, deps);
+  try { (deps.writeExclusive ?? defaultWriteExclusive)(lockPath, JSON.stringify(info)); } catch (e) {
     const code = errCode(e);
     if (code === 'EEXIST') return 'exists';
     if (code && CANNOT_LOCK.has(code)) return { status: 'cannotLock', reason: code };
     throw e;
   }
-  const lock: HeldLock = {
-    info,
-    heartbeat() {
-      const cur = readLock(lockPath, deps);
-      if (!cur || cur.info.sessionId !== sessionId) return 'lost';
-      const next = { ...info, heartbeatAt: new Date(now()).toISOString() };
-      try { (deps.writeInPlace ?? defaultWriteInPlace)(lockPath, JSON.stringify(next)); } catch { return 'lost'; }
-      lock.info = next;
-      return 'ok';
-    },
-    release() {
-      try {
-        const cur = readLock(lockPath, deps);
-        if (cur && cur.info.sessionId === sessionId) fs.unlinkSync(lockPath);
-      } catch { /* already gone or inaccessible: nothing to release */ }
-    },
-  };
-  return { status: 'acquired', lock };
+  return { status: 'acquired', lock: held(basePath, info, deps) };
+}
+
+/** Main process heartbeat while the data process is busy: rewrites the heartbeat of the lock only if it is still ours. */
+export function keepAlive(basePath: string, sessionId: string, deps: LockDeps = {}): 'ok' | 'lost' {
+  const lockPath = lockPathFor(basePath);
+  const cur = readLock(lockPath, deps);
+  if (!cur || !cur.readable || cur.info.sessionId !== sessionId) return 'lost';
+  // same fields, same length (fixed-length ISO date): an in-place write leaves no tail
+  const next = { ...cur.info, heartbeatAt: new Date((deps.now ?? Date.now)()).toISOString() };
+  try { (deps.writeInPlace ?? defaultWriteInPlace)(lockPath, JSON.stringify(next)); } catch { return 'lost'; }
+  return 'ok';
+}
+
+/** Removes the lock if it carries our session id (after a close, a crash or a kill of the data process). */
+export function releaseIfOurs(basePath: string, sessionId: string, deps: LockDeps = {}): void {
+  const lockPath = lockPathFor(basePath);
+  try {
+    const cur = readLock(lockPath, deps);
+    if (cur && cur.info.sessionId === sessionId) fs.unlinkSync(lockPath);
+  } catch { /* already gone or inaccessible: nothing to release */ }
 }
 
 /** Current holder as seen from outside (null when there is no lock file); the info object is valid for takeOverStaleLock. */
@@ -94,6 +117,19 @@ export function acquireLock(basePath: string, sessionId: string, deps: LockDeps 
     const r = create(basePath, sessionId, deps);
     if (r !== 'exists') return r;
     const other = peekLock(basePath, deps);
+    // our own session id: the data process restarted (Stop) under the same opening. Adopted, with a fresh heartbeat,
+    // rewritten in place like a heartbeat (never emptied, even for an instant); a shorter pid is padded with spaces.
+    if (other && other.info.sessionId === sessionId) {
+      const info = newInfo(sessionId, deps);
+      const text = JSON.stringify(info);
+      const pad = Math.max(0, Buffer.byteLength(rawOf.get(other.info) ?? '') - Buffer.byteLength(text));
+      try { (deps.writeInPlace ?? defaultWriteInPlace)(lockPathFor(basePath), text + ' '.repeat(pad)); } catch (e) {
+        const code = errCode(e);
+        if (code && CANNOT_LOCK.has(code)) return { status: 'cannotLock', reason: code };
+        throw e;
+      }
+      return { status: 'acquired', lock: held(basePath, info, deps) };
+    }
     if (other) return other;
     // lock vanished between EEXIST and read: retry
   }

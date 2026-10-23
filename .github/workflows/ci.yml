@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Install xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y xvfb
+      # e2e writes test-results/perf-a1.json, which the strict bench reads: keep this order.
+      - name: e2e (Linux, under xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run e2e
+      - name: e2e
+        if: runner.os != 'Linux'
+        run: npm run e2e
+      - name: Benches
+        run: npm run bench
+        env:
+          BASECRAFT_BENCH_STRICT: 1
+          BASECRAFT_BENCH_FACTOR: 2
+      # Test builds: the dist:* scripts run the strict licence check, which blocks while an exception is pending.
+      - run: node scripts/licenses.mjs --allow-pending
+      - run: npx electron-vite build
+      - name: Installers (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --x64 --publish never
+      - name: Installers (macOS)
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac --arm64 --publish never
+      # ponytail: .deb needs author.email (decision gate, Task 13); once set, drop "AppImage tar.gz" to build all targets.
+      - name: Installers (Linux)
+        if: runner.os == 'Linux'
+        run: npx electron-builder --linux AppImage tar.gz --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: diagnostics-${{ runner.os }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

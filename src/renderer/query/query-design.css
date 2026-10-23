@@ -1,0 +1,62 @@
+/* Grille de création des requêtes (maquette, écran « Grille QBE ») : le volet des tables en haut (boîtes et lignes de la
+   fenêtre Relations), la grille en bas, séparés par une barre. */
+.qd { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.qd .qbe-pane { flex: 1; min-height: 120px; }
+.qbe-field[draggable="true"] { cursor: grab; }
+.qbe-field:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -2px; }
+.qbe-remove { margin-left: auto; width: 24px; height: 24px; flex: none; }
+.qbe-arrowhead { fill: var(--bc-text-muted); }
+.rline.is-selected .qbe-arrowhead, .rline:focus-visible .qbe-arrowhead { fill: var(--bc-accent); }
+
+.qbe-grid { flex: none; min-height: 0; overflow: auto; background: var(--bc-surface); }
+.qd .qbe-grid { flex: 1; }
+.qg { border-collapse: separate; border-spacing: 0; }
+.qg th, .qg td { height: 26px; padding: 0; border-right: 1px solid var(--grid-line); border-bottom: 1px solid var(--grid-line); white-space: nowrap; font-size: 12.5px; }
+.qg th {
+  position: sticky; left: 0; z-index: 1; width: 104px; min-width: 104px; padding: 0 var(--bc-space-3); text-align: left; font-weight: 500;
+  font-size: 12px; color: var(--bc-text-muted); background: var(--bc-surface-2); border-right-color: var(--bc-border);
+}
+.qg td { width: 200px; min-width: 200px; max-width: 200px; vertical-align: top; }
+.qg td.on { background: var(--accent-faint); }
+.qg td.c { text-align: center; vertical-align: middle; }
+.qg tr.colsel td, .qg tr.colsel th { height: 10px; padding: 0; background: var(--bc-surface-2); }
+.qg tr.colsel td:hover { background: var(--hover); }
+.qg tr.colsel td.is-on { background: var(--bc-accent); }
+.qg tr.colsel button { display: block; width: 100%; height: 10px; border-radius: 0; cursor: pointer; }
+.qg input:not([type="checkbox"]), .qg select {
+  display: block; width: 100%; height: 25px; padding: 0 var(--bc-space-2); border: 0; border-radius: 0; background: transparent; outline: 0; color: var(--bc-text);
+}
+.qg :is(input, select):focus { box-shadow: inset 0 0 0 2px var(--bc-accent); }
+.qg :is(input, select):disabled { color: var(--bc-text); opacity: 1; }
+.qg input[aria-invalid="true"] { box-shadow: inset 0 0 0 2px var(--bc-danger); }
+.qcell { display: flex; flex-wrap: wrap; align-items: center; }
+.qcell > input { flex: 1; min-width: 0; }
+.qcell > .iconbtn { flex: none; width: 22px; height: 22px; margin-right: 2px; visibility: hidden; }
+.qg td:is(:hover, :focus-within) .qcell > .iconbtn { visibility: visible; }
+.qcell > .pval-error { flex-basis: 100%; padding: 2px var(--bc-space-2); white-space: normal; font-size: 11.5px; }
+
+.qd-sql { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--bc-space-2); padding: var(--bc-space-3); }
+.qd-sql-text { flex: 1; min-height: 0; resize: none; padding: var(--bc-space-3); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
+  background: var(--bc-surface); color: var(--bc-text); font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace; tab-size: 4; }
+.qd-sql-text:focus { outline: 2px solid var(--bc-accent); outline-offset: -1px; }
+.qd-sql > p { margin: 0; }
+
+/* Paramètres de la requête, feuille de propriétés */
+.qp-grid { border-collapse: collapse; width: 100%; margin-bottom: var(--bc-space-2); }
+.qp-grid th { text-align: left; font-weight: 600; padding: 2px var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
+.qp-grid td { padding: 2px; }
+.qp-grid input, .qp-grid select { width: 100%; height: 30px; box-sizing: border-box; }
+.query-params { max-height: 60vh; overflow: auto; }
+.qp-check { display: flex; align-items: center; gap: var(--bc-space-2); margin: var(--bc-space-2) 0; }
+
+/* Afficher la table */
+.qd-tabs { display: flex; gap: 2px; margin-bottom: var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
+.qd-tab { padding: 6px 12px; border-radius: var(--bc-radius) var(--bc-radius) 0 0; color: var(--bc-text-muted); }
+.qd-tab.is-active { color: var(--bc-accent); box-shadow: inset 0 -2px 0 var(--bc-accent); }
+
+/* Générateur de requête du Contenu (liste de choix) : la grille dans une boîte */
+.modal.qd-dialog { width: min(1100px, calc(100vw - 48px)); }
+.qd-dialog .qd { height: min(620px, calc(100vh - 200px)); }
+.qd-dialog .qbe-pane { flex: 1; }
+.qd-dialog .qbe-grid { flex: none; max-height: 55%; border-top: 1px solid var(--bc-border); }
+.qd-dialog .modal-buttons { margin-top: var(--bc-space-3); }

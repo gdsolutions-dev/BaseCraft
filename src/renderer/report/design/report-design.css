@@ -1,0 +1,29 @@
+/* État en mode Création : la vue (bandeaux au-dessus du concepteur, avertissements dessous) et l'aperçu des contrôles. */
+.rd { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.rd-banner { flex: none; padding: var(--bc-space-1) var(--bc-space-3); border-bottom: 1px solid var(--bc-border); color: var(--bc-warning); }
+
+.rz { position: absolute; inset: 0; box-sizing: border-box; overflow: hidden; pointer-events: none; }
+.rz-text { display: flex; align-items: flex-start; gap: 2px; padding: 0 2px; line-height: 1.15; white-space: nowrap; }
+.rz-text > svg { flex: none; margin-left: auto; align-self: center; }
+.rz-clip { overflow: hidden; text-overflow: ellipsis; }
+.rz-check { inset: auto; left: 0; top: 0; width: 12px; height: 12px; border: 1px solid var(--bc-border); }
+.rz-radio { border-radius: 50%; }
+.rz-image { display: grid; place-items: center; color: var(--bc-text-muted); }
+.rz-image img { width: 100%; height: 100%; }
+.rz-line { overflow: visible; }
+.rz-pagebreak { inset: auto; left: 0; top: 0; width: 24px; height: 0; border-top: 3px dotted var(--bc-text); }
+.rz-other { border: 1px dashed var(--bc-text-muted); }
+
+/* Regrouper, trier et total : sous la surface de création, comme dans Access. */
+.rd-grouping { flex: none; max-height: 40%; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--bc-border); background: var(--bc-surface); font-size: 12px; }
+.rd-grouping-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 6px 2px var(--bc-space-3); font-weight: 600; }
+.rd-grouping-rows { overflow: auto; min-height: 0; }
+.rd-grow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--bc-space-2); padding: 4px var(--bc-space-3); border-top: 1px solid var(--grid-line); }
+.rd-grow select, .rd-gexpr input, .rd-dialog-field select { height: 26px; padding: 0 4px; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); color: var(--bc-text); }
+.rd-gkind { min-width: 90px; font-weight: 500; }
+.rd-gexpr { position: relative; width: 200px; }
+.rd-gexpr .cbx { display: flex; }
+.rd-gexpr input { flex: 1; min-width: 0; width: 100%; box-sizing: border-box; }
+.rd-gerror { color: var(--bc-danger); }
+.rd-gactions { display: inline-flex; margin-left: auto; }
+.rd-grouping-add { display: flex; gap: var(--bc-space-2); padding: 6px var(--bc-space-3); border-top: 1px solid var(--grid-line); }

@@ -42,8 +42,10 @@ test('C6: a table\'s context menu — Access order, access keys, placeholders, k
     await expect(page.getByTestId('nav-menu')).toHaveCount(0);
     await expect(item).toBeFocused();
 
-    // Shift+F10 opens it on the selected item, focused on Open; Enter runs it
-    await page.keyboard.press('Shift+F10');
+    // Shift+F10 opens it on the selected item, focused on Open; Enter runs it. macOS has no such key (Chromium sends no
+    // contextmenu for it): its keyboard route (VoiceOver's VO+Shift+M) sends the event itself
+    if (process.platform === 'darwin') await item.dispatchEvent('contextmenu');
+    else await page.keyboard.press('Shift+F10');
     await expect(page.getByTestId('nav-menu-open')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('doc-tab-Clients')).toBeVisible();

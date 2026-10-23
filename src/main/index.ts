@@ -32,7 +32,7 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600, title: 'BaseCraft',
     // Shown off screen without activation rather than hidden: a hidden window gets no animation frames, which the grid needs.
-    ...(e2eHidden ? { show: false, x: -32000, y: -32000, skipTaskbar: true, focusable: false } : {}),
+    ...(e2eHidden ? { show: false, x: -32000, y: -32000, skipTaskbar: true, focusable: false, enableLargerThanScreen: true } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
@@ -40,7 +40,13 @@ function createWindow(): void {
     },
   });
   mainWindow = win;
-  if (e2eHidden) win.once('ready-to-show', () => win.showInactive());
+  // A small screen (CI runners: 1024×768) shrinks a new window to fit it (Windows on creation, macOS when shown): the e2e
+  // layouts assume the full size, which the off-screen window takes again (macOS: enableLargerThanScreen).
+  const fullSize = () => { const [w, h] = win.getSize(); if (w < 1280 || h < 800) win.setSize(1280, 800); };
+  if (e2eHidden) {
+    fullSize();
+    win.once('ready-to-show', () => { win.showInactive(); fullSize(); });
+  }
   // The renderer may veto: a pending row is saved first, an invalid one or a modified design asks (R24). It closes the
   // window through CH.closeAllowed. A renderer that cannot answer (crashed, reported unresponsive, or silent for
   // HUNG_MS after a request, then closed again) does not keep the window open (R26).

@@ -121,6 +121,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const rows = useRef({ count: 0, adding: false });
   const busyRef = useRef(false);
   const committing = useRef<Promise<boolean> | null>(null);
+  // A click on the new record's row: Glide appends a row, then opens its editor once the row is there; the click's mouse-up opens
+  // one before that, which the second replaces, losing what was typed in it (a slow save of the row left). Only the second opens.
+  const appendClick = useRef(false);
   const commitRowRef = useRef<() => Promise<boolean>>(() => Promise.resolve(true)); // commitRow / selectedField, defined further down
   const selectedFieldRef = useRef<() => { col: number; field: FieldDef } | undefined>(() => undefined);
   const alive = useRef(true); // a page that fails after the tab closed shows nothing
@@ -203,6 +206,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // backstage (a close or open asked from it), which keeps the focus.
     if (!document.querySelector('[aria-modal="true"]')) editor.current?.focus();
     await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.fieldError', params: errorParams(err), buttons: ['ok'] });
+    // Glide moves the focus onto the newly selected cell later, and only while the grid has it: the box had it, so it came back to
+    // the cell focused before. Glide's accessible copy of the cell in error takes it (the row selectors are its column 0).
+    if (!document.querySelector('[aria-modal="true"]')) document.getElementById(`glide-cell-${col + 1}-${rowIndex}`)?.focus({ preventScroll: true });
   };
 
   /** Saves the pending row; true when nothing is left pending. One save at a time: a second call shares the first. */
@@ -420,6 +426,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   const onRowAppended = async (): Promise<undefined> => {
+    appendClick.current = true; // a keyboard append has no mouse-up: the next pointer press clears it
     const shown = rows.current.count + (rows.current.adding ? 1 : 0);
     if (live.current.ro || !(await commitRow())) return undefined; // a row in error keeps the focus
     // A row saved out of the filter: the grid has no more rows than before, and Glide, which waits for more, would never
@@ -776,11 +783,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const { count, adding } = rows.current;
   return (
     <div className="datasheet">
-      <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet">
+      <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
+        onPointerDownCapture={() => { appendClick.current = false; }}>
         <DataEditor ref={editor} theme={palette.theme} columns={columns} rows={count + (adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
           gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited}
-          onRowAppended={ro ? undefined : onRowAppended} trailingRowOptions={ro ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
+          onRowAppended={ro ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
           onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false }} showSearch={searching} onSearchClose={() => setSearching(false)}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={ROW_HEIGHT} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
           onColumnResize={onColumnResize}

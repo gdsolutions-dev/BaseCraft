@@ -90,7 +90,7 @@ test('combo box on a table, AutoExpand, Limit To List bound and unbound, list bo
     await expect(dirty).toHaveCount(0);
 
     // AutoExpand: « mar » completes « Martin » (the rest selected); Enter chooses it; the next record saves N° 2
-    await page.keyboard.press('Control+A');
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('mar');
     await expect(ctl('Client')).toHaveValue('Martin');
     expect(await ctl('Client').evaluate((e: HTMLInputElement) => [e.selectionStart, e.selectionEnd])).toEqual([3, 6]);
@@ -107,7 +107,7 @@ test('combo box on a table, AutoExpand, Limit To List bound and unbound, list bo
 
     // a text typed that is a hidden bound N° stays as typed, and is not in the list (Access compares the shown texts)
     await ctl('Client').click();
-    await page.keyboard.press('Control+A');
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('2');
     await expect(ctl('Client')).toHaveValue('2');
     await page.keyboard.press('Tab');
@@ -122,7 +122,7 @@ test('combo box on a table, AutoExpand, Limit To List bound and unbound, list bo
     // Limit To List on a bound combo: a text in no row is refused on leaving (its box, the message under it, the focus back),
     // and the record cannot be saved until it is fixed or undone
     await ctl('Statut').click();
-    await page.keyboard.press('Control+A');
+    await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('Autre');
     await page.keyboard.press('Tab');
     const notInList = fill(fr.datasheet.fieldError, { field: 'Statut', message: fr.fieldError.notInList });

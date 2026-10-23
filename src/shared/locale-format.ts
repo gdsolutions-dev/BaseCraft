@@ -9,6 +9,15 @@ export interface LocaleInfo {
   dateSep: string;
 }
 
+/** The system locale as a tag Intl accepts: Linux gives POSIX forms (`en-US@posix` under LANG=C, `de-DE@euro`) that it rejects. */
+export function regionTag(tag: string): string {
+  try {
+    return Intl.getCanonicalLocales(tag.split('@')[0])[0] ?? 'en-US';
+  } catch {
+    return 'en-US';
+  }
+}
+
 export function localeInfo(locale: string): LocaleInfo {
   const num = new Intl.NumberFormat(locale).formatToParts(123456.7);
   const decimalSep = num.find((p) => p.type === 'decimal')?.value ?? '.';

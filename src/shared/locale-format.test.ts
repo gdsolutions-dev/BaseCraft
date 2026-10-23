@@ -9,12 +9,16 @@ import {
   parseDateTime,
   parseDecimal,
   parseNumber,
+  regionTag,
   roundDecimalString
 } from './locale-format';
 
 const fr = localeInfo('fr-FR'), en = localeInfo('en-US'), de = localeInfo('de-DE');
 
 describe('locale-format', () => {
+  it('a system locale Intl rejects becomes a usable tag', () => {
+    expect(['fr-FR', 'en-US@posix', 'de-DE@euro', 'C', ''].map(regionTag)).toEqual(['fr-FR', 'en-US', 'de-DE', 'en-US', 'en-US']);
+  });
   it('separators and date order', () => {
     expect([fr.decimalSep, fr.dateOrder, en.decimalSep, en.dateOrder]).toEqual([',', 'DMY', '.', 'MDY']);
   });

@@ -9,6 +9,7 @@ import { sheetName } from '../shared/export-format';
 import { resolveUiLanguage } from '../shared/i18n';
 import en from '../shared/i18n/en.json';
 import fr from '../shared/i18n/fr.json';
+import { regionTag } from '../shared/locale-format';
 import { FILE_EXTENSION } from './db/file-format';
 import { keepAlive, releaseIfOurs } from './db/lock';
 import { DbHost, type AsyncSession } from './db-host/client';
@@ -31,7 +32,7 @@ let host: DbHost | null = null;
 let closing: Promise<void> = Promise.resolve();
 export const closeVeto = new CloseVeto();
 
-const region = () => process.env.BASECRAFT_REGION ?? app.getSystemLocale();
+const region = () => regionTag(process.env.BASECRAFT_REGION ?? app.getSystemLocale());
 const uiLanguage = () => resolveUiLanguage(settings.locale, region());
 const catalog = () => (uiLanguage() === 'fr' ? fr : en);
 /** What an import writes into the base, in the interface language (as Access does). */

@@ -11,6 +11,9 @@ const clients = t('Clients', [f('N°', 'autoNumber'), f('Nom', 'shortText'), f('
 const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80, TEXT = 170;
 const design = (page: Page) => page.evaluate(() => (window as any).basecraft.tables.design('Clients'));
 const names = async (page: Page): Promise<string[]> => (await design(page)).fields.map((x: { name: string }) => x.name);
+/** The datasheet's column titles (Glide's accessible copy of the canvas): once they show a change, its reload is done and the
+ *  column it selects again is selected, so a click that follows is not undone by it. */
+const headers = (page: Page) => page.getByTestId('datasheet').locator('th[role=columnheader]');
 /** Selects the cell of column `col` (0 = N°) in the first row. */
 async function pick(page: Page, col: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
@@ -38,6 +41,7 @@ test('Table Fields: add, rename with caption, default value, field size, delete;
     await page.getByTestId('cmd-addDateTime').click();
     await expect.poll(() => names(page)).toEqual(['N°', 'Nom', 'Champ1', 'Ville']);
     expect((await design(page)).fields[2].props.type).toBe('dateTime');
+    await expect(headers(page)).toHaveText(['N°', 'Nom', 'Champ1', 'Ville']);
 
     // rename with a caption
     await pick(page, 2);
@@ -47,6 +51,7 @@ test('Table Fields: add, rename with caption, default value, field size, delete;
     await page.getByTestId('name-caption-ok').click();
     await expect.poll(() => names(page)).toEqual(['N°', 'Nom', 'Naissance', 'Ville']);
     expect((await design(page)).fields[2].props.caption).toBe('Date de naissance');
+    await expect(headers(page)).toHaveText(['N°', 'Nom', 'Date de naissance', 'Ville']);
 
     // More Fields: AutoNumber is not offered (the table has one), Double is
     await pick(page, 3);
@@ -56,6 +61,7 @@ test('Table Fields: add, rename with caption, default value, field size, delete;
     await page.getByTestId('more-fields-double').click();
     await expect.poll(() => names(page)).toEqual(['N°', 'Nom', 'Naissance', 'Ville', 'Champ1']);
     expect((await design(page)).fields[4].props.numberSize).toBe('double');
+    await expect(headers(page)).toHaveText(['N°', 'Nom', 'Date de naissance', 'Ville', 'Champ1']);
 
     // Default Value through the Expression Builder (Ville)
     await pick(page, 3);

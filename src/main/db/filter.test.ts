@@ -81,12 +81,12 @@ describe('filters (extra)', () => {
     expect(() => compileFilter(clients, [{ field: 'Ville', criteria: '= [Pays]' }], FR)).toThrow(/bc:invalidFilter/);
     expect(() => compileFilter(clients, [{ field: 'Ville', criteria: `In (${Array(901).fill('1').join(',')})` }], FR)).toThrow(/bc:invalidFilter/);
   });
-  it('a criterion the parser accepts but that SQLite could not run (expression depth over 900) is refused as invalid', () => {
+  it('a criterion the parser accepts but that SQLite could not run (expression depth over 450) is refused as invalid', () => {
     const deep = `> ${Array(950).fill('1').join(' + ')}`; // 950 operands: under the parser's 2000, a tree 949 levels deep
     expect(() => parseCanonical(deep, { criteria: true })).not.toThrow();
     expect(() => compileFilter(T, [{ field: 'n', criteria: deep }], FR)).toThrow(/^bc:invalidFilter n: tooComplex/);
     expect(() => countRows(db, 'T', [{ field: 'n', criteria: deep }], FR)).toThrow(/^bc:invalidFilter/);
-    const shallow = `> ${Array(800).fill('1').join(' + ')}`; // within the limit: SQLite runs it
+    const shallow = `> ${Array(400).fill('1').join(' + ')}`; // within the limit: SQLite runs it
     expect(countRows(db, 'T', [{ field: 'n', criteria: shallow }], FR)).toBe(0);
   });
   it('a row error excludes the row (never fails the page)', () => {

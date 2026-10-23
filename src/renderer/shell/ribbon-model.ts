@@ -573,7 +573,7 @@ export const RIBBON: RibbonTab[] = [
         { id: 'deleteRecord', icon: Trash2, labelKey: 'ribbon.cmd.deleteRecord', size: 'sm', enabled: recordsWritable },
         plan('later', 'recordsTotals', Sigma), plan('later', 'spelling', SpellCheck), plan('later', 'moreRecords', Ellipsis)),
       // A6 Task 8: the table and query datasheets register Find, Go To and Select (Replace: later)
-      group('find', { id: 'find', icon: Search, labelKey: 'ribbon.cmd.find', size: 'lg', enabled: records }, plan('A6', 'replace', Replace),
+      group('find', { id: 'find', icon: Search, labelKey: 'ribbon.cmd.find', size: 'lg', enabled: records }, plan('later', 'replace', Replace),
         { id: 'goTo', icon: ArrowRightToLine, labelKey: 'ribbon.cmd.goTo', size: 'sm', enabled: records, popup: true },
         { id: 'selectMenu', icon: MousePointer2, labelKey: 'ribbon.cmd.selectMenu', size: 'sm', enabled: records, popup: true }),
       group('textFormatting',

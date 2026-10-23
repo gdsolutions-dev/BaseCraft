@@ -10,7 +10,7 @@ const ALLOWED = new Set([constants.SQLITE_SELECT, constants.SQLITE_READ, constan
 /** SQLite names functions case-insensitively. */
 const FUNCTIONS = new Set(['count', 'rank', 'row_number', ...[...REGISTERED_FUNCTIONS].map((n) => n.toLowerCase())]);
 /** SQLite's own limits (compound terms, tables in a join, expression height, columns, variables, lengths). */
-const LIMIT = /too many|too large|too big|too complex|at most \d+|stack overflow/i;
+const LIMIT = /too many|too large|too big|too complex|at most \d+|stack overflow|recursion limit/i;
 
 /** A SQLite failure as a typed error: a limit is `bc:invalidQuery|tooComplex|`, never SQLite's raw message (the original
  *  error is kept as `cause`). Other errors are returned as they are. Also for errors raised while a statement runs. */

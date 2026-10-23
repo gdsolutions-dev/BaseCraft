@@ -104,7 +104,11 @@ describe('session (brief)', () => {
     }
   });
 
-  it('reports network risk',() => expect(create({ probe: { ...probe, windowsDriveType: () => 4 } }).state.locationRisk).toBe('network'));
+  // the base lives under the OS temp folder: a drive letter on Windows, a POSIX path elsewhere (checked against the mounts)
+  const network: RiskProbe = process.platform === 'win32'
+    ? { ...probe, windowsDriveType: () => 4 }
+    : { platform: 'linux', env: {}, homedir: '/home/x', mounts: '//nas/p / cifs rw 0 0' };
+  it('reports network risk',() => expect(create({ probe: network }).state.locationRisk).toBe('network'));
 
   it('saveTable creates then alters with mapping', async () => {
     const s = create();

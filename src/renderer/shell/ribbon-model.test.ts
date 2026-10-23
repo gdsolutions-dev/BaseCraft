@@ -221,6 +221,10 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   const modes = [null, 'design', 'datasheet', 'run'] as const;
   const contexts = kinds.flatMap((kind) => modes.map((mode) => ctx({ kind, mode })));
 
+  it('A6 leaves no A6 placeholder', () => {
+    expect(commands.filter((c) => c.planned === 'A6').map((c) => c.id)).toEqual([]);
+  });
+
   it('every tab, group and command has a French and an English label; every batch has its tooltip', () => {
     const keys = [
       ...RIBBON.map((t) => t.labelKey), ...RIBBON.flatMap((t) => t.groups.map((g) => g.labelKey)), ...commands.map((c) => c.labelKey),
@@ -586,7 +590,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       expect(c.enabled(ctx({ kind: 'table', mode: 'datasheet', readOnly: true })), id).toBe(true);
       expect(c.enabled(ctx({ kind: 'report', mode: 'design' })), id).toBe(false);
     }
-    expect(home.find((x) => x.id === 'replace')!.planned).toBe('A6');
+    expect(home.find((x) => x.id === 'replace')!.planned).toBe('later');
   });
 
   it('Table Design Property Sheet is active (A6), read-only base included, as in Query Design', () => {

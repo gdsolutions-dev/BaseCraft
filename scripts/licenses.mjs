@@ -9,10 +9,7 @@ const root = process.cwd();
 const EXCEPTIONS = {
   '@fontsource-variable/inter@5.3.0': 'SIL OFL-1.1 font, shipped with its licence in src/renderer/public/fonts/LICENSES',
   'caniuse-lite@1.0.30001818': 'CC-BY-4.0 data used by browserslist at build time only (via Babel/Linaria), never bundled or shipped',
-  'chainsaw@0.1.0': 'MIT/X11 is the MIT licence (X11 variant)',
   'pako@1.0.11': '(MIT AND Zlib): both permissive',
-  // pending: no decision yet, so release builds stop (exit 1) until the owner decides; CI test builds pass --allow-pending.
-  'buffers@0.1.1': { pending: true, reason: 'no licence field, file or wording in the published package (upstream substack/node-buffers); bundled in db-host via exceljs > unzipper > binary. Owner decision needed' },
 };
 
 const tree = JSON.parse(execSync('npm ls --omit=dev --all --json', { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }));

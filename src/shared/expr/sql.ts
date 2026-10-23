@@ -254,9 +254,10 @@ export const SQL_AGGREGATES: Record<string, AggregateUdf> = {
   },
 };
 
-/** Marge sous les limites de SQLite : 1000 arguments par appel, profondeur d'expression 1000. */
+/** Marge sous les limites de SQLite : 1000 arguments par appel ; la pile de son analyseur (SQLite 3.53, Electron 44) est
+ *  pleine vers 2 500 entrées et chaque niveau `bc_op(?, ?, …` en prend 5 (496 niveaux). */
 const MAX_ARGS = 900;
-const MAX_DEPTH = 900;
+const MAX_DEPTH = 450;
 /** Levels a subquery adds around its expressions that compileValue does not see: the SELECT node and Task 4's wrappers
  *  (EXISTS, bc_truth, bc_out, bc_one / bc_list). */
 const SUB_LEVELS = 3;

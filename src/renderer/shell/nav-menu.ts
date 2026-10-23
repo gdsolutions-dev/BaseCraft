@@ -64,6 +64,12 @@ function merged(list: NavMenuItem[]): NavMenuItem[] {
   return [...byId.values()].sort((a, b) => a.order - b.order);
 }
 
+/** Every kind's effective items (placeholders replaced), submenus flattened: what the menus can show. */
+export function allNavItems(): NavMenuItem[] {
+  const flat = (l: NavMenuItem[]): NavMenuItem[] => l.flatMap((x) => [x, ...flat(x.submenu ?? [])]);
+  return [...registry.keys()].flatMap((k) => flat(merged(ordered(k))));
+}
+
 /** Runs item `id` of the menu of `c` as a click would (Ctrl+X/C/V on the pane): only when it is shown and enabled. */
 export function runNavItem(c: NavMenuContext, id: string): boolean {
   const x = merged(ordered(c.kind)).find((i) => i.id === id);

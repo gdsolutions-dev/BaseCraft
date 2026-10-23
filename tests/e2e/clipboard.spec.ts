@@ -100,9 +100,9 @@ test('Ctrl+C / Ctrl+V on the pane, and Home > Copy / Paste (pane item, or the fo
     // elsewhere they are the focused text field's own: the pane's search box
     const search = page.getByTestId('nav-search');
     await search.fill('abc');
-    await search.press('Control+a');
+    await search.press('ControlOrMeta+a'); // Select All: Ctrl+A on macOS goes to the line start
     await page.getByTestId('cmd-copy').click();
-    await search.press('End');
+    await search.press('ArrowRight'); // to the end: End on macOS scrolls without moving the caret
     await page.getByTestId('cmd-paste').click();
     await expect(search).toHaveValue('abcabc');
   } finally {

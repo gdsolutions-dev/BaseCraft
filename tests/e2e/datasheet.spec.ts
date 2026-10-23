@@ -292,6 +292,10 @@ test('a value typed and entered with no delay is saved (scanner, text expander)'
     await typeIntoCell(page, 'Martin');
     await page.keyboard.press('Enter'); // in the same tick as the last key
     await expect.poll(async () => (await rowsOf(page))[0].values[1]).toBe('Martin');
+    // on a slow machine too: the new record's editor opens once, when its row is there (not first on the click's mouse-up, then
+    // again, losing or misplacing the keys typed in between)
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
     await newRecordAt(page, 1);
     await page.keyboard.type('Durand');
     await page.keyboard.press('Enter');

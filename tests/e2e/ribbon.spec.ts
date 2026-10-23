@@ -67,9 +67,9 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
     await page.getByTestId('cmd-textBold').hover();
     await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.textBold}${fr.ribbon.planned.later}`); // no label shown: the tooltip names it
     await page.getByTestId('cmd-replace').hover();
-    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.replace}${fr.ribbon.planned.A6}`);
+    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.replace}${fr.ribbon.planned.later}`);
     await expect(page.getByTestId('cmd-replace')).toHaveAccessibleName(fr.ribbon.cmd.replace);
-    await expect(page.getByTestId('cmd-replace')).toHaveAccessibleDescription(fr.ribbon.planned.A6); // the name is not read twice
+    await expect(page.getByTestId('cmd-replace')).toHaveAccessibleDescription(fr.ribbon.planned.later); // the name is not read twice
     await expect(page.getByTestId('cmd-textBold')).toHaveAccessibleName(fr.ribbon.cmd.textBold);
     await expect(page.getByTestId('cmd-sortAsc')).toBeDisabled(); // no document: an implemented command, disabled as before
     await expect(page.getByTestId('cmd-sortAsc')).not.toHaveAttribute('data-planned');

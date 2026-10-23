@@ -48,6 +48,7 @@ async function refused(page: Page, text: string, [col, row]: [number, number], c
   await expect(box).toContainText(text);
   await expect(box.getByRole('button')).toHaveCount(1);
   await expect(page.getByTestId('modal-btn-ok')).toBeFocused();
+  await page.waitForTimeout(300); // read as a person would: the grid's deferred focus (Glide) has run behind the box
   await close();
   await expect(page.getByTestId('modal')).toHaveCount(0); // one box per attempt, never a second one queued
   await expect(cell(page, col, row)).toBeFocused();

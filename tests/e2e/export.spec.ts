@@ -64,6 +64,7 @@ test('Navigation Pane: Export › Text File of a table and of a parameter query'
     await page.getByTestId('nav-item-query-QDepuis').click({ button: 'right' });
     await page.getByTestId('nav-menu-export').click();
     await page.getByTestId('nav-menu-export-text').click();
+    await expect(page.getByTestId('modal')).toBeVisible(); // the parameter box: Escape before it opens would close nothing
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('modal')).toHaveCount(0);
   } finally {

@@ -6,7 +6,7 @@
 
 BaseCraft brings back the Access way of building small data applications — tables, queries, forms, reports, macros and code — with a modern interface, and without being tied to Windows. Everything a database contains lives in **a single file**, which is a plain SQLite database that any SQLite tool can still open.
 
-> **Status: early development.** Nothing is released yet. The table layer works; queries, forms and reports are next. Expect breaking changes.
+> **Status: early development.** Stage A (tables, relationships, queries, forms, reports, import and export) is complete in preview 0.2.0. Expect breaking changes before 1.0.
 
 Website: https://gdsolutions-dev.github.io/BaseCraft/
 
@@ -32,18 +32,23 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - Create and open `.basecraft` files, with versioned format and migrations
 - Write lock with heartbeat; a second machine opens the file read-only
 - Detection of network shares and synced folders (OneDrive, Dropbox…)
-- Table Design view: field types, keys, indexes, lossless table changes
-- Datasheet: entry, sorting, deletion, per-row save
-- Field properties: Format, Default Value, Validation Rule and Validation Text, Input Mask
+- Tables: Design view (field types, keys, multi-field indexes, table validation rule, lossless changes), Table Fields tab from the Datasheet
+- Datasheet: entry, sorting, filters, Find, deletion, per-row save
+- Field properties: Format, Default Value, Validation Rule and Validation Text, Input Mask, Lookup fields
+- Relationships window with referential integrity and cascades; Expression Builder
 - Expression engine with Access semantics (parser, evaluator, SQLite generator)
-- Text file import wizard (delimited and fixed width, encoding and type detection, saved specifications)
+- Queries: QBE grid and SQL view, Select, Group By, Parameter and action queries
+- Forms: Design view, Property Sheet, controls, Single Form, Continuous Forms, Datasheet, master/detail subforms, AutoForm
+- Reports: band designer, grouping and totals, Print Preview, PDF export and printing, AutoReport
+- Import: text files (delimited and fixed width) and Excel; export: text files and Excel; Cut, Copy and Paste of objects
+- Save As, Compact and Repair; `.basecraft` file association
 - Ribbon, navigation pane, tabs, light and dark themes
 
 ## Roadmap
 
 | Stage | Content |
 |---|---|
-| **A — Replace Excel** | Tables ✅, relations and expressions (in progress), queries (QBE + SQL), forms, reports with PDF export, CSV/Excel import and export, installers |
+| **A — Replace Excel** ✅ | Tables, relations and expressions, queries (QBE + SQL), forms, reports with PDF export, CSV/Excel import and export, installers |
 | **B — Automate and distribute** | Events, macros, AutoExec, BaseCraft Runtime (run a database without design access) |
 | **C — Work together** | Linked tables on PostgreSQL, SQL Server, SQLite and Access; optimistic locking; migration wizard |
 | **D — Python** | Python code (Pyodide) in place of VBA, with BaseCraft objects |
@@ -53,10 +58,11 @@ Not planned: VBA compatibility, concurrent design by several people, a web or mo
 
 ## Download
 
-Preview builds for Windows and Linux (x64) are on the [Releases page](https://github.com/gdsolutions-dev/BaseCraft/releases). They are early previews: do not use them for important data yet.
+Preview builds for Windows, macOS and Linux are on the [Releases page](https://github.com/gdsolutions-dev/BaseCraft/releases). They are early previews: keep backups of important data.
 
 - **Windows:** `BaseCraft-x.y.z-win-x64.exe` (installer) or `.zip` (portable). The builds are signed by SARL IN SET. As the certificate is new, Windows SmartScreen may still warn you for a while: choose *More info*, then *Run anyway*.
-- **Linux:** `BaseCraft-x.y.z-linux-x86_64.AppImage` (make it executable, then run it) or `.tar.gz`.
+- **macOS (Apple silicon):** `BaseCraft-x.y.z-mac-arm64.dmg` or `.zip`. The builds are not notarized yet: after copying BaseCraft to Applications, run `xattr -dr com.apple.quarantine /Applications/BaseCraft.app` once, or macOS reports the app as damaged.
+- **Linux:** `BaseCraft-x.y.z-linux-amd64.deb` (`sudo apt install ./BaseCraft-x.y.z-linux-amd64.deb`), `BaseCraft-x.y.z-linux-x86_64.AppImage` (make it executable, then run it) or `.tar.gz`.
 
 ## Build from source
 
@@ -69,7 +75,8 @@ npm test           # unit tests (Vitest)
 npm run typecheck  # TypeScript checks
 npm run e2e        # end-to-end tests (Playwright + Electron)
 npm run dist:win   # Windows installer and zip, in dist/ (run on Windows)
-npm run dist:linux # Linux AppImage and tar.gz, in dist/ (run on Linux)
+npm run dist:linux # Linux .deb, AppImage and tar.gz, in dist/ (run on Linux)
+npm run dist:mac   # macOS dmg and zip (arm64), in dist/ (run on macOS)
 ```
 
 Stack: Electron, React, TypeScript, Vite, Glide Data Grid, SQLite.

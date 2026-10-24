@@ -34,6 +34,9 @@ const OPS = ['<=', '>=', '<>', '<', '>', '=', '+', '-', '*', '/', '\\', '^', '&'
 const PAREN_WORD = /\(\s*([\p{L}_][\p{L}\p{M}\p{Nd}_]*)/uy;
 const ISO_DATE = /^(\d{4}-\d{2}-\d{2})(?: (\d{2}:\d{2}:\d{2}))?$/;
 const EN = localeInfo('en-US');
+const TIME = String.raw`\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?`;
+/** Access SQL's US literals: m/d/yyyy, an optional time (10:30 PM), or a time alone. */
+const US_LITERAL = new RegExp(String.raw`^(?:\d{1,2}/\d{1,2}/\d{4}(?: ${TIME})?|${TIME})$`);
 
 export const CANONICAL_LEX: LexConfig = {
   keywords: new Map(
@@ -45,7 +48,9 @@ export const CANONICAL_LEX: LexConfig = {
   listSep: ',',
   parseDate: (text) => {
     const m = ISO_DATE.exec(text);
-    return m && parseDateTime(m[1] + (m[2] ? ` ${m[2]}` : ''), EN);
+    // also Access SQL's own literals, US order (#1/5/2026#) or time alone (#10:30#); printed back in ISO
+    return m ? parseDateTime(m[1] + (m[2] ? ` ${m[2]}` : ''), EN)
+      : US_LITERAL.test(text) ? parseDateTime(text, EN) : null;
   },
 };
 

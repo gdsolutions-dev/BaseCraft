@@ -59,6 +59,9 @@ const MORE = [
   ['select a from t order by a asc, b desc;', 'SELECT [a]\nFROM [t]\nORDER BY [a], [b] DESC;'],
   ['INSERT INTO Commandes (Client, Montant) VALUES (99, 1.5)', 'INSERT INTO [Commandes] ([Client], [Montant])\nVALUES (99, 1.5);'],
   ['INSERT INTO Archive SELECT * FROM Commandes WHERE Le < #2026-01-01#', 'INSERT INTO [Archive]\nSELECT *\nFROM [Commandes]\nWHERE [Le] < #2026-01-01#;'],
+  ['SELECT * FROM T WHERE d >= #1/5/2026# AND d < #12/31/2026 10:30:00#', 'SELECT *\nFROM [T]\nWHERE [d] >= #2026-01-05# And [d] < #2026-12-31 10:30:00#;'], // Access's US literals, printed in ISO
+  ['SELECT * FROM T WHERE h >= #10:30#', 'SELECT *\nFROM [T]\nWHERE [h] >= #1899-12-30 10:30:00#;'], // time alone: day 0, as in Access
+  ['SELECT * FROM T WHERE h >= #10:30 PM# AND d < #1/5/2026 12:15 am#', 'SELECT *\nFROM [T]\nWHERE [h] >= #1899-12-30 22:30:00# And [d] < #2026-01-05 00:15:00#;'],
   ['DELETE * FROM Clients WHERE Ville = "Paris"', 'DELETE *\nFROM [Clients]\nWHERE [Ville] = "Paris";'],
   ['DELETE FROM Clients', 'DELETE *\nFROM [Clients];'],
   ['UPDATE Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client SET Clients.Nom = "x", Montant = Montant + 1',

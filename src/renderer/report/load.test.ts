@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_PRINT_HTML_CHARS, type RecordSourceRef, type SourceInfo, type SourcePage, type SourcePageRequest } from '../../shared/api';
 import type { LayoutEnv } from '../../shared/report/types';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../shared/report/fixtures/factures';
-import { docParameters, layoutSavedReport, loadDocData, loadReportData, printRequestFor, zoomFor } from './load';
+import { DATA_PAGE, docParameters, layoutSavedReport, loadDocData, loadReportData, printRequestFor, zoomFor } from './load';
 
 const FIELDS = [{ name: 'N', type: 'number' as const, props: { type: 'number' as const } }] as unknown as SourceInfo['fields'];
 
@@ -25,25 +25,25 @@ function fakeSources(total: number, onPage?: (n: number) => void) {
 
 describe('loadReportData', () => {
   it('loads all pages', async () => {
-    const api = fakeSources(1203);
+    const api = fakeSources(2 * DATA_PAGE + 203);
     const d = await loadReportData(api, { kind: 'table', name: 'T' });
-    expect(d.rows).toHaveLength(1203);
-    expect(d.rows[1202]).toEqual([1202]);
+    expect(d.rows).toHaveLength(2 * DATA_PAGE + 203);
+    expect(d.rows[2 * DATA_PAGE + 202]).toEqual([2 * DATA_PAGE + 202]);
     expect(d.fields).toBe(FIELDS);
-    expect(api.calls.map((c) => c.offset)).toEqual([0, 500, 1000]);
-    expect(api.calls.every((c) => c.limit === 500)).toBe(true);
+    expect(api.calls.map((c) => c.offset)).toEqual([0, DATA_PAGE, 2 * DATA_PAGE]);
+    expect(api.calls.every((c) => c.limit === DATA_PAGE)).toBe(true);
   });
 
   it('passes the parameters and stops on an empty source', async () => {
     const api = fakeSources(0);
     const d = await loadReportData(api, { kind: 'table', name: 'T' }, { P: 1 });
     expect(d.rows).toEqual([]);
-    expect(api.calls).toEqual([{ offset: 0, limit: 500, params: { P: 1 } }]);
+    expect(api.calls).toEqual([{ offset: 0, limit: DATA_PAGE, params: { P: 1 } }]);
   });
 
   it('stops when aborted', async () => {
     const ac = new AbortController();
-    const api = fakeSources(1203, () => ac.abort());
+    const api = fakeSources(2 * DATA_PAGE + 203, () => ac.abort());
     const e = await loadReportData(api, { kind: 'table', name: 'T' }, undefined, ac.signal).catch((x: unknown) => x);
     expect((e as Error).name).toBe('AbortError');
     expect(api.calls).toHaveLength(1);
@@ -112,9 +112,9 @@ describe('report parameters (C3, promptParameters)', () => {
     expect(api.calls).toEqual([]);
   });
   it('the values reach every sources.page call', async () => {
-    const api = withParams(1203);
+    const api = withParams(2 * DATA_PAGE + 203);
     await loadDocData(api, doc, { 'Client voulu': 'Martin' });
-    expect(api.calls.map((c) => [c.offset, c.params])).toEqual([0, 500, 1000].map((o) => [o, { 'Client voulu': 'Martin' }]));
+    expect(api.calls.map((c) => [c.offset, c.params])).toEqual([0, DATA_PAGE, 2 * DATA_PAGE].map((o) => [o, { 'Client voulu': 'Martin' }]));
   });
 });
 

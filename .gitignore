@@ -5,3 +5,4 @@ test-results/
 playwright-report/
 .claude/
 docs/analyse-access/raw/
+docs/analyse-access/captures/

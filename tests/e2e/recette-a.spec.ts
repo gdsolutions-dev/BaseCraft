@@ -40,12 +40,11 @@ async function setProp(page: Page, name: string, value: string) {
   await vis(page, `prop-${name}`).fill(value);
   await vis(page, `prop-${name}`).press('Enter');
 }
-/** Create › Form on `source`, picked in the source list. */
+/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list). */
 async function autoForm(page: Page, source: string) {
+  await vis(page, `nav-item-${source}`).click();
   await vis(page, 'ribbon-tab-create').click();
   await vis(page, 'cmd-createForm').click();
-  await vis(page, 'source-picker-list').selectOption(`table:${source}`);
-  await vis(page, 'source-picker-ok').click();
   await expect(vis(page, `doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
 }
 /** Create › Query Design, the tables added through Show Table, which opens by itself. */
@@ -242,9 +241,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     await saveQuery(page, 'Factures');
     await page.getByTestId('nav-item-query-Factures').click();
     await page.getByTestId('ribbon-tab-create').click();
-    await page.getByTestId('cmd-createReport').click();
-    await page.getByTestId('source-picker-list').selectOption('query:Factures');
-    await page.getByTestId('source-picker-ok').click();
+    await page.getByTestId('cmd-createReport').click();   // on the Navigation Pane's selection, as Access: no source list
     await expect(page.getByTestId('doc-tab-report-Factures')).toHaveAttribute('aria-selected', 'true');
     const cur = page.locator('.doc:not([hidden])');
     await expect(cur.getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);

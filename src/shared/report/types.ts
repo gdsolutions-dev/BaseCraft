@@ -25,7 +25,9 @@ export interface LaidOutPage { number: number; bands: LaidOutBand[] }
 export interface LaidOutReport { width: number; height: number; pages: LaidOutPage[]; issues: ReportIssue[] }
 export interface ReportData { fields: SourceField[]; rows: SqlValue[][] }
 export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; now(): Date; errorText: { error: string; name: string };
-  hooks?: LayoutHooks; signal?: AbortSignal; tick?(): Promise<void> }
+  hooks?: LayoutHooks; signal?: AbortSignal; tick?(): Promise<void>;
+  /** The pages laid out so far (one array, growing), after each page of a pass whose count is known; a third pass starts a new array. */
+  onPage?(pages: LaidOutPage[]): void }
 export interface SectionEvent { section: SectionKind; groupLevel?: number; formatCount: number; page: number;
   values: Record<string, Value>;          // valeur de chaque contrôle lié, modifiable
   visible: Record<string, boolean>;       // modifiable

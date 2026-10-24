@@ -227,6 +227,7 @@ select {
   height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
   background: var(--bc-surface); font-weight: 400;
 }
+select:where([size]) { height: auto; padding: 2px 0; } /* a list box: its `size` rows, not the drop-down's 32 px */
 select:focus-visible { outline: none; border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* Boîtes de dialogue */

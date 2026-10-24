@@ -21,12 +21,12 @@ interface Span { level: number; first: number; last: number; firstDetail: number
 interface Page { number: number; bands: LaidOutBand[]; y: number; phTop: number | null /* null: not yet reserved (page 1) */; body: boolean;
   first: number | null; last: number | null /* rows of its first and last Detail */ }
 
-/** Awaits `env.tick` every 200 calls, then throws an AbortError once `env.signal` is aborted. */
+/** Awaits `env.tick` after 50 ms of work (a timer costs up to 15 ms on Windows: every 200 calls made 200,000 rows wait
+ *  minutes); throws an AbortError once `env.signal` is aborted. */
 function heartbeat(env: LayoutEnv): () => Promise<void> {
-  let n = 0;
+  let last = Date.now();
   return async () => {
-    if (n++ % 200 !== 0) return;
-    await env.tick?.();
+    if (Date.now() - last >= 50) { await env.tick?.(); last = Date.now(); }
     if (env.signal?.aborted) throw Object.assign(new Error('Report layout aborted'), { name: 'AbortError' });
   };
 }
@@ -139,6 +139,11 @@ function lineSafe(items: LaidOutItem[], from: number, cut: number): number {
   return cut;
 }
 
+/** A section whose band has the same height, cut points and page breaks whatever the row: no Can Grow or Can Shrink, and
+ *  room for one line of text at most in each text control (two lines would make a cut point between them). */
+const fixedShape = (s: SectionSpec) => !s.canGrow && !s.canShrink && s.controls.every((c) => !c.canGrow && !c.canShrink
+  && (!['label', 'textBox', 'comboBox'].includes(c.kind) || c.height - 2 * (c.border?.width ?? 0) < 2 * lineHeight(c.font)));
+
 const issueKey = (i: ReportIssue) => JSON.stringify([i.code, i.control, i.detail]);
 const uses = (s: SectionSpec | undefined, k: 'usesPage' | 'usesPages') => !!s?.controls.some((c) => c.source.kind === 'expr' && c.source[k]);
 
@@ -146,7 +151,8 @@ const uses = (s: SectionSpec | undefined, k: 'usesPage' | 'usesPages') => !!s?.c
  * Lays the report out on pages, in twips from the page's top left corner. One pass, or two when a control reads [Pages]
  * (pass 1 counts the pages, pass 2 prints "of N"; a third, the last, when widening text changed the count). Every band
  * goes through `formatBand` (which calls `onFormat`), every placed band part through `onPrint`; `env.tick` is awaited
- * every 200 bands and `env.signal` stops the layout with an AbortError.
+ * after 50 ms of work and `env.signal` stops the layout with an AbortError. `env.onPage` sees the pages of a pass whose
+ * count is known as they close (Print Preview shows page 1 long before the last).
  */
 export async function layoutReport(spec: ReportSpec, data: ReportData, env: LayoutEnv): Promise<LaidOutReport> {
   const { order, keys } = await sortAndGroup(spec, data, env);
@@ -157,14 +163,24 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
   const phH = reserved(spec.pageHeader), pfH = reserved(spec.pageFooter);
   const usable = g.printableHeight - phH - pfH, limit = g.bodyTop + g.printableHeight - pfH;
 
-  const pass = async (total: number | null): Promise<{ pages: LaidOutPage[]; issues: Map<string, ReportIssue> }> => {
+  const all = [spec.reportHeader, spec.pageHeader, ...spec.groupHeaders, spec.detail, ...spec.groupFooters, spec.pageFooter, spec.reportFooter];
+  const readsPages = all.some((s) => uses(s, 'usesPages'));
+  /** `shown`: a pass whose page count is known (the only one, or one after the count): its pages go to `env.onPage`. */
+  const pass = async (total: number | null, shown: boolean): Promise<{ pages: LaidOutPage[]; issues: Map<string, ReportIssue> }> => {
     const beat = heartbeat(env), issues = new Map<string, ReportIssue>(), times = new Map<Job, number>();
     const pages: LaidOutPage[] = [], active: (Span | undefined)[] = [];   // per level: the group whose header is placed and footer not yet
     const fresh = (number: number): Page => ({ number, bands: [], y: g.bodyTop, phTop: null, body: false, first: null, last: null });
     let pg = fresh(1), after = false;
+    // the pass that only counts the pages (its pages are never shown): a band of a fixed shape is formatted once per section
+    // (pass 2 lays out again if the count were wrong); never with event hooks, which may change anything
+    const counting = total === null && readsPages && !env.hooks, once = new Map<SectionSpec, FormattedBand | null>();
 
     const format = async (job: Job): Promise<FormattedBand | null> => {
       await beat();
+      if (counting && fixedShape(job.s)) {
+        if (!once.has(job.s)) once.set(job.s, await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: null, formatCount: 1 }, env));
+        return once.get(job.s)!;
+      }
       const formatCount = (times.get(job) ?? 0) + 1;
       times.set(job, formatCount);
       const f = await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: total, formatCount }, env);
@@ -199,6 +215,7 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
         if (f) pg.bands.push(await band(f, job, top, 0, h));
       }
       pages.push({ number: pg.number, bands: pg.bands.sort((a, b) => a.top - b.top) });
+      if (shown) env.onPage?.(pages);
     };
     /** Closes the page and opens the next: Page Header, then the open groups' Repeat Section headers, outermost first. */
     const newPage = async () => {
@@ -280,12 +297,11 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
     return { pages, issues };
   };
 
-  let r = await pass(null);
-  const all = [spec.reportHeader, spec.pageHeader, ...spec.groupHeaders, spec.detail, ...spec.groupFooters, spec.pageFooter, spec.reportFooter];
-  if (all.some((s) => uses(s, 'usesPages'))) {
+  let r = await pass(null, !readsPages);
+  if (readsPages) {
     const first = r.pages.length;
-    r = await pass(first);
-    if (r.pages.length !== first) r = await pass(r.pages.length);   // only widening text changes the count: this pass is the last
+    r = await pass(first, true);
+    if (r.pages.length !== first) r = await pass(r.pages.length, true);   // only widening text changes the count: this pass is the last
   }
   const issues = new Map(spec.issues.map((i) => [issueKey(i), i]));
   for (const [k, i] of r.issues) if (!issues.has(k)) issues.set(k, i);

@@ -23,6 +23,19 @@ export function initialSource(options: readonly NamedSource[], preselect: Record
   return hinted >= 0 ? hinted : options.length ? 0 : -1;
 }
 
+/**
+ * Create › Form and Report, as Access: the navigation pane's table or query, else the record source of its form or report
+ * (`definition`, read by the caller), titled with that object's name. Null when there is none: the source picker asks.
+ */
+export function selectedSource(sel: { kind: string; name: string } | null, definition?: unknown): { ref: RecordSourceRef; name: string } | null {
+  if (sel?.kind === 'table' || sel?.kind === 'query') return { ref: { kind: sel.kind, name: sel.name }, name: sel.name };
+  if (sel?.kind !== 'form' && sel?.kind !== 'report') return null;
+  const ref = (definition as { recordSource?: unknown } | null | undefined)?.recordSource as Partial<RecordSourceRef> | null | undefined;
+  if (ref?.kind === 'sql' && typeof ref.sql === 'string') return { ref: { kind: 'sql', sql: ref.sql }, name: sel.name };
+  if ((ref?.kind === 'table' || ref?.kind === 'query') && typeof ref.name === 'string') return { ref: { kind: ref.kind, name: ref.name }, name: ref.name };
+  return null;
+}
+
 /** The shell's hint: the active document when it is a saved table or query, else the navigation pane selection if it is one. */
 export function sourceHint(active: { kind: string; name: string; isNew?: boolean } | null, navSelection: { kind: string; name: string } | null): NamedSource | null {
   const asSource = (x: { kind: string; name: string } | null): NamedSource | null =>

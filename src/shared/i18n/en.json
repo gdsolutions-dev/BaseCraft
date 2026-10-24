@@ -1493,6 +1493,7 @@
     "preview": "Preview of report {{name}}",
     "progress": "Formatting…",
     "pageOf": "Page {{page}} of {{pages}}",
+    "pageFormatting": "Page {{page}} (formatting…)",
     "nav": {
       "first": "First page",
       "prev": "Previous page",

@@ -36,13 +36,11 @@ const master = (page: Page) => {
     button: (k: string) => nav.getByRole('button', { name: fr.datasheet.nav[k] }) };
 };
 
-/** Create › Form on `source`, picked in the source list (the Navigation Pane's selection is preselected). */
+/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list). */
 async function autoForm(page: Page, source: string) {
   await vis(page, `nav-item-${source}`).click();
   await vis(page, 'ribbon-tab-create').click();
   await vis(page, 'cmd-createForm').click();
-  await expect(vis(page, 'source-picker-list')).toHaveValue(`table:${source}`);
-  await vis(page, 'source-picker-ok').click();
   await expect(vis(page, `doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
   await expect(vis(page, `nav-item-form-${source}`)).toBeVisible();
 }

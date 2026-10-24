@@ -7,21 +7,22 @@ import { readReport } from '../../shared/report/model';
 import { renderDocumentHtml } from '../../shared/report/render';
 import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData } from '../../shared/report/types';
 
-const PAGE = 500;
+/** Rows per sources.page call: main's cap (MAX_PAGE_ROWS); 500 at a time made 200,000 rows 400 round trips (7 s). */
+export const DATA_PAGE = 10_000;
 
 const aborted = () => Object.assign(new Error('Report loading aborted'), { name: 'AbortError' });
 
-/** Every row of the source, read 500 at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted. */
+/** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted. */
 export async function loadReportData(api: Pick<BasecraftApi, 'sources'>, ref: RecordSourceRef, params?: Record<string, CellInput>,
   signal?: AbortSignal): Promise<ReportData> {
   const { fields } = await api.sources.describe(ref);
   const rows: ReportData['rows'] = [];
-  for (let offset = 0; ; offset += PAGE) {
+  for (let offset = 0; ; offset += DATA_PAGE) {
     if (signal?.aborted) throw aborted();
-    const p = await api.sources.page(ref, { offset, limit: PAGE, ...(params ? { params } : {}) });
+    const p = await api.sources.page(ref, { offset, limit: DATA_PAGE, ...(params ? { params } : {}) });
     if (signal?.aborted) throw aborted();
     rows.push(...p.rows);
-    if (!p.rows.length || offset + PAGE >= p.total) return { fields, rows };
+    if (!p.rows.length || offset + DATA_PAGE >= p.total) return { fields, rows };
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialSource, refKey, sourceHint, sourceOptions } from './source-picker-model';
+import { initialSource, refKey, selectedSource, sourceHint, sourceOptions } from './source-picker-model';
 
 const options = sourceOptions(['Clients', 'Été'], ['Commandes du mois']);
 
@@ -26,5 +26,15 @@ describe('source picker model', () => {
     expect(sourceHint({ kind: 'form', name: 'F' }, { kind: 'table', name: 'T' })).toEqual({ kind: 'table', name: 'T' });
     expect(sourceHint({ kind: 'table', name: 'Table1', isNew: true }, { kind: 'report', name: 'R' })).toBeNull();
     expect(sourceHint(null, null)).toBeNull();
+  });
+
+  it('Create › Form and Report: the selected table or query, else the source of the selected form or report', () => {
+    expect(selectedSource({ kind: 'query', name: 'Q' })).toEqual({ ref: { kind: 'query', name: 'Q' }, name: 'Q' });
+    expect(selectedSource({ kind: 'report', name: 'R' }, { recordSource: { kind: 'table', name: 'T' } })).toEqual({ ref: { kind: 'table', name: 'T' }, name: 'T' });
+    expect(selectedSource({ kind: 'form', name: 'F' }, { recordSource: { kind: 'sql', sql: 'SELECT 1' } })).toEqual({ ref: { kind: 'sql', sql: 'SELECT 1' }, name: 'F' });
+    expect(selectedSource({ kind: 'form', name: 'F' }, { recordSource: null })).toBeNull();   // unbound: the picker asks
+    expect(selectedSource({ kind: 'form', name: 'F' }, { recordSource: { kind: 'table' } })).toBeNull();
+    expect(selectedSource({ kind: 'macro', name: 'M' })).toBeNull();
+    expect(selectedSource(null)).toBeNull();
   });
 });

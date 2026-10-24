@@ -181,7 +181,18 @@ export function quoteIdent(name: string): string {
 
 /** Same object name for Access: case ignored, accents kept; compared in NFC (a decomposed é is the same é). */
 export function sameName(a: string, b: string): boolean {
-  return a.normalize('NFC').toLocaleLowerCase('und') === b.normalize('NFC').toLocaleLowerCase('und')
+  return a === b || foldName(a) === foldName(b)
+}
+
+// The fold costs ~1 µs (ICU) and a report compares the same few names millions of times (fields, fonts): cached.
+const folded = new Map<string, string>()
+function foldName(s: string): string {
+  let f = folded.get(s)
+  if (f === undefined) {
+    if (folded.size >= 10000) folded.clear()   // ponytail: plain reset, never grows past 10,000 names
+    folded.set(s, f = s.normalize('NFC').toLocaleLowerCase('und'))
+  }
+  return f
 }
 
 /** A field's expression is readable, and refers to no field (default value) or only to its own field (rule), as in Access. */

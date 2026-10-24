@@ -36,7 +36,7 @@ import {
 } from './shell/ribbon-model';
 import { StatusBar } from './shell/StatusBar';
 import { pickSource, setSourceHint } from './shell/SourcePicker';
-import { sourceHint } from './shell/source-picker-model';
+import { selectedSource, sourceHint } from './shell/source-picker-model';
 import { appReducer, initialAppState, isDoc, reopenMode, type AppAction, type DocTab } from './state/app-state';
 import './shell/shell.css';
 
@@ -152,6 +152,16 @@ function Shell() {
     return firstFreeName([...s.tabs, ...objs.filter((x) => x.kind === 'report')].map((x) => x.name), (n) => t('report.newName', { n }));
   }, [t]);
 
+  // Create › Form and Report, as Access: the Navigation Pane's selection (a form's or report's own source), else the picker
+  const sourceToCreate = async (titleKey: string) => {
+    const sel = live.current.navSelection;
+    const def = sel?.kind === 'form' || sel?.kind === 'report' ? (await api.objects.get(sel.kind, sel.name)).definition : undefined;
+    const picked = selectedSource(sel, def);
+    if (picked) return picked;
+    const ref = await pickSource(modal, { titleKey });
+    return ref && ref.kind !== 'sql' ? { ref, name: ref.name } : null;   // the picker gives a table or a query
+  };
+
   // External Data › Export without a datasheet to export: the Navigation Pane's table or query
   const exportSelected = async (format: 'text' | 'excel') => {
     const sel = live.current.navSelection;
@@ -217,14 +227,14 @@ function Shell() {
     },
     // Access opens it in Layout view (later): a new unbound form in Design view, the Field List shown
     createBlankForm: () => newForm(true),
-    // Create › Form (AutoForm): a columnar form of the chosen table or query, saved under its name (made unique), opened in Form view
+    // Create › Form (AutoForm): a columnar form of the selected (else chosen) source, saved under its name (made unique), opened in Form view
     createForm: async () => {
-      const ref = await pickSource(modal, { titleKey: 'form.autoFormSource' });
-      if (!ref || ref.kind === 'sql') return;   // the picker gives a table or a query
-      const info = await api.sources.describe(ref);   // a rejection (a query that cannot be read) is shown; no form
+      const src = await sourceToCreate('form.autoFormSource');
+      if (!src) return;
+      const info = await api.sources.describe(src.ref);   // a rejection (a query that cannot be read) is shown; no form
       const { state: s, objects: objs } = live.current;
-      const name = uniqueFormName(formNames(objs, s.tabs), ref.name);
-      const r = await api.objects.save('form', name, autoForm(ref, ref.name, info, formLabels(t)), null);
+      const name = uniqueFormName(formNames(objs, s.tabs), src.name);
+      const r = await api.objects.save('form', name, autoForm(src.ref, src.name, info, formLabels(t)), null);
       if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }
       dispatch({ type: 'objectSaved', kind: 'form', name });
       dispatch({ type: 'open', kind: 'form', name, mode: 'run' });
@@ -237,11 +247,11 @@ function Shell() {
       const tab = live.current.state.tabs.find((x) => x.id === live.current.state.activeId);
       if (tab?.kind === 'query') openSqlView(dispatch, tab.name);
     },
-    // AutoReport (A5): a tabular report on the chosen table or query, saved under a free name and opened in Print Preview.
+    // AutoReport (A5): a tabular report on the selected (else chosen) source, saved under a free name and opened in Print Preview.
     createReport: async () => {
-      const src = await pickSource(modal, { titleKey: 'report.pickSourceTitle' });
-      if (!src || src.kind === 'sql') return;
-      const doc = instantReport(src, await api.sources.describe(src), { lang: i18n.language === 'en' ? 'en' : 'fr' });
+      const src = await sourceToCreate('report.pickSourceTitle');
+      if (!src) return;
+      const doc = instantReport({ ...src.ref, name: src.name }, await api.sources.describe(src.ref), { lang: i18n.language === 'en' ? 'en' : 'fr' });
       const name = uniqueReportName((await api.objects.list('report')).map((o) => o.name), src.name);
       const r = await api.objects.save('report', name, doc, null);
       if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }

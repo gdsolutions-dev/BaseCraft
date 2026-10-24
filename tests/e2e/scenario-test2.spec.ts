@@ -136,6 +136,18 @@ test('scenario 2: large CSV import, analytical queries, export to Excel', async 
     lap('queries');
     // every line is in exactly one region
     expect(results.QRevenueByRegion!.reduce((a, r) => a + Number(r[1]!.replace(/,/g, '')), 0)).toBe(ROWS);
+
+    // 4. AutoReport over the whole table: Print Preview of its 200,000 lines
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createReport').click();
+    await page.getByTestId('source-picker-list').selectOption('table:Sales');
+    await page.getByTestId('source-picker-ok').click();
+    // page 1 shows while the rest is laid out ("Page 1 (formatting…)"), then the count once it is done
+    await expect(doc(page).getByTestId('report-pages')).toBeVisible({ timeout: 300_000 });
+    lap('report first page');
+    await page.screenshot({ path: join(OUT, 'report-first-page.png') });
+    await expect(doc(page).getByTestId('preview-page-of')).toHaveText(/^Page 1 of \d/, { timeout: 300_000 });
+    lap('report laid out');
   } finally {
     writeFileSync(join(OUT, 'timings.json'), JSON.stringify(timings, null, 2));
     writeFileSync(join(OUT, 'results.json'), JSON.stringify(results, null, 2));

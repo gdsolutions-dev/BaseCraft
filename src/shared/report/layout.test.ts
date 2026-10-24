@@ -1,6 +1,6 @@
 // Pagination d'un état : tri et groupes, suite des bandes, placement (Garder ensemble, Répéter la section, Saut de page,
 // coupe), en-tête et pied de page, deux passes, réactivité et déterminisme.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from './fixtures/factures';
 import { layoutReport, MAX_PAGES, sortAndGroup } from './layout';
 import { readReport, type GroupLevel } from './model';
@@ -275,14 +275,40 @@ describe('layoutReport: passes', () => {
 });
 
 describe('layoutReport: responsiveness and scale', () => {
-  it('ticks every 200 bands and stops when aborted during a tick', async () => {
+  /** Runs `f` with Date.now (the heartbeat's clock) moved on by `step` ms at each read. */
+  const clocked = async <T>(step: number, f: () => Promise<T>): Promise<T> => {
+    let now = 0;
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => (now += step));
+    try { return await f(); } finally { spy.mockRestore(); }
+  };
+  it('yields after 50 ms of work, and stops when aborted during a yield', async () => {
     let ticks = 0;
-    await run(withoutPagesFooter(FACTURES_REPORT), FACTURES_ROWS, frEnv({ tick: async () => { ticks++; } }));
-    expect(ticks).toBe(2);   // ligne 0 du tri, bande 0 (moins de 200 de chaque)
+    await clocked(0, () => run(withoutPagesFooter(FACTURES_REPORT), FACTURES_ROWS, frEnv({ tick: async () => { ticks++; } })));
+    expect(ticks).toBe(0);   // moins de 50 ms : jamais
+    await clocked(10, () => run(withoutPagesFooter(FACTURES_REPORT), FACTURES_ROWS, frEnv({ tick: async () => { ticks++; } })));
+    expect(ticks).toBeGreaterThan(10);
     const c = new AbortController(); ticks = 0;
-    const big = Array.from({ length: 1000 }, (_, i) => FACTURES_ROWS[i % 75]!);
-    await expect(run(FACTURES_REPORT, big, frEnv({ signal: c.signal, tick: async () => { if (++ticks === 7) c.abort(); } }))).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(clocked(60, () => run(FACTURES_REPORT, FACTURES_ROWS, frEnv({ signal: c.signal, tick: async () => { if (++ticks === 7) c.abort(); } }))))
+      .rejects.toMatchObject({ name: 'AbortError' });
     expect(ticks).toBe(7);
+  });
+  it('hands over the pages of the pass whose count is known as they close: the only pass, or the one after [Pages] is counted', async () => {
+    const seen: number[] = [];
+    const r = await run(withoutPagesFooter(FACTURES_REPORT), FACTURES_ROWS, frEnv({ onPage: (p) => { seen.push(p.length); } }));
+    expect(seen).toEqual(r.pages.map((_, i) => i + 1));
+    seen.length = 0;
+    const r2 = await run(FACTURES_REPORT, FACTURES_ROWS, frEnv({ onPage: (p) => { seen.push(p.length); } }));
+    expect(seen).toEqual(r2.pages.map((_, i) => i + 1));   // la passe qui compte les pages n'en montre aucune
+  });
+  it('the pass that counts the pages formats a band of fixed shape once, and gives the same pages', async () => {
+    let calls = 0;
+    const d = withControl(FACTURES_REPORT, 'detail', tb('Quand', '=Now()'));   // now() : une fois par mise en forme du détail
+    const env = frEnv({ now: () => { calls++; return new Date(0); } });
+    const counted = await run(d, FACTURES_ROWS, env), withPages = calls;
+    calls = 0;
+    const single = await run(withoutPagesFooter(d), FACTURES_ROWS, env);
+    expect(withPages - calls).toBeLessThan(10);   // sans le raccourci : 75 de plus, une par ligne
+    expect(counted.pages.map(seq)).toEqual(single.pages.map(seq));
   });
   it('a 10,000-row report formats in linear time: each total once per scope, across passes and repeated headers', async () => {
     // Count(Now()) appelle now() une fois par ligne de sa portée : le compteur dit combien de lignes les totaux ont lues
@@ -304,13 +330,13 @@ describe('layoutReport: responsiveness and scale', () => {
   it('a band cut over many pages yields, and is aborted there', async () => {
     let ticks = 0;
     const d = withMemo(noPageSections(FACTURES_REPORT), 7000), one = FACTURES_ROWS.slice(0, 1);
-    const r = await run(d, one, frEnv({ tick: async () => { ticks++; } }));
-    // 3 ticks hors coupe (le tri, puis le début de chaque passe) ; la coupe bat deux fois par page : un tick de plus toutes les 100 pages
+    // 60 ms à chaque lecture de l'horloge : chaque battement cède ; la coupe bat au moins une fois par page
+    const r = await clocked(60, () => run(d, one, frEnv({ tick: async () => { ticks++; } })));
     expect(r.pages.length).toBeGreaterThan(150);
-    expect(ticks).toBeGreaterThanOrEqual(3 + Math.floor(r.pages.length / 100));
+    expect(ticks).toBeGreaterThanOrEqual(r.pages.length);
     const c = new AbortController(), stop = ticks - 1;
     ticks = 0;
-    await expect(run(d, one, frEnv({ signal: c.signal, tick: async () => { if (++ticks === stop) c.abort(); } }))).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(clocked(60, () => run(d, one, frEnv({ signal: c.signal, tick: async () => { if (++ticks === stop) c.abort(); } })))).rejects.toMatchObject({ name: 'AbortError' });
   }, 60000);
   it(`stops past ${MAX_PAGES} pages with tooManyPages`, async () => {
     const d = edit(noPageSections(FACTURES_REPORT), (c) => { sectionOf(c, 'detail').height = MAX_TWIPS; });   // plus de deux pages par ligne

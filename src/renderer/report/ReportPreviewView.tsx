@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { cssFamily, resolveFont } from '../../shared/fonts';
 import { layoutReport } from '../../shared/report/layout';
-import { readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
+import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
 import { renderPageHtml, reportCss } from '../../shared/report/render';
-import type { LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
+import type { LaidOutPage, LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
@@ -46,7 +46,8 @@ export function ReportIssues({ issues }: { issues: ReportIssue[] }) {
   );
 }
 
-type Phase = { k: 'loading' } | { k: 'error'; message: string; list?: string[] } | { k: 'ready'; report: LaidOutReport };
+/** `partial`: the pages laid out so far, shown while the layout goes on (no print, no export, no page count yet). */
+type Phase = { k: 'loading' } | { k: 'error'; message: string; list?: string[] } | { k: 'ready'; report: LaidOutReport; partial?: true };
 type Step = 'object' | 'data' | 'layout';
 const PX_PER_TWIP = 1 / 15; // 96 px per inch, 1440 twips per inch
 const GAP = 16; // px between two pages and around them
@@ -181,7 +182,14 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       }
       const env = await layoutEnv();
       if (!live()) return;
-      const report = await layoutReport(readReport(d, data.current.fields), data.current, { ...env, signal: ac.signal });
+      const spec = readReport(d, data.current.fields), { width, height } = pageGeometry(spec.page);
+      let shownAt = 0;
+      const onPage = (pages: LaidOutPage[]) => {   // page 1 at once, then at most twice a second
+        if (pages.length > 1 && Date.now() - shownAt < 500) return;
+        shownAt = Date.now();
+        setPhase({ k: 'ready', report: { width, height, pages: pages.slice(), issues: [] }, partial: true });
+      };
+      const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, onPage: (p) => live() && onPage(p) });
       if (!live()) return;
       setFirst((f) => Math.max(0, Math.min(f, report.pages.length - 1)));
       setPhase({ k: 'ready', report });
@@ -246,7 +254,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     return () => ctl.current?.abort();
   }, [tab.name, tab.reloadToken]);
 
-  const ready = phase.k === 'ready';
+  const ready = phase.k === 'ready' && !phase.partial;
   useEffect(() => registerCommands(tab.id, {
     refresh: () => cmds.current.run('data'), // Shift+F9 (C5): the data again, then the layout
     onePage: () => setPerView(1),
@@ -279,25 +287,30 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   }, []);
 
   const report = phase.k === 'ready' ? phase.report : null;
-  const css = useMemo(() => (report ? reportCss(report, 'fonts/') : ''), [report]);
+  const count = report?.pages.length ?? 0;
+  const step = perView;
+  const shown = useMemo(() => (report ? report.pages.slice(first, first + step) : []), [report, first, step]);
+  // the pages drawn only: thousands of pages, shown as they are laid out, are never all scanned at each update
+  const drawn = useMemo(() => (report ? { ...report, pages: shown } : null), [report, shown]);
+  const css = useMemo(() => (drawn ? reportCss(drawn, 'fonts/') : ''), [drawn]);
+  const fontList = useMemo(() => (drawn ? [...faces(drawn)].join('|') : null), [drawn]);
 
   // The pages stay hidden until their embedded fonts are loaded: never a frame drawn in a fallback font.
   useEffect(() => {
-    if (!report) return;
+    if (fontList === null) return;
+    const list = fontList ? fontList.split('|') : [];
+    if (!list.every((f) => document.fonts.check(f))) setFontsReady(false);   // a page turned to a face not yet loaded
     let gone = false;
-    void Promise.all([...faces(report)].map((f) => document.fonts.load(f).catch(() => [])))
+    void Promise.all(list.map((f) => document.fonts.load(f).catch(() => [])))
       .then(() => document.fonts.ready)
       .then(() => { if (!gone) setFontsReady(true); });
     return () => { gone = true; };
-  }, [report]);
+  }, [fontList]);
 
   useEffect(() => { if (active && report && fontsReady) viewport.current?.focus({ preventScroll: true }); }, [active, report, fontsReady]);
 
-  const count = report?.pages.length ?? 0;
-  const step = perView;
   const cols = perView <= 2 ? perView : perView / 2; // Access: 4, 8 and 12 pages on two rows
   const go = (i: number) => { const to = Math.max(0, Math.min(i, count - 1)); setFirst(to); setDraft(null); };
-  const shown = report ? report.pages.slice(first, first + step) : [];
   const pw = (report?.width ?? 0) * PX_PER_TWIP, ph = (report?.height ?? 0) * PX_PER_TWIP;
   const across = Math.min(shown.length, cols), down = Math.ceil(shown.length / cols) || 1;
   const z = zoomFor(zoom, { w: across * pw + (across - 1) * GAP, h: down * ph + (down - 1) * GAP }, { w: size.w - 2 * GAP, h: size.h - 2 * GAP });
@@ -351,7 +364,8 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         </span>
         {navBtn('next', ChevronRight, first + step, first + step >= count)}
         {navBtn('last', ChevronLast, count - 1, first >= count - 1)}
-        <span data-testid="preview-page-of">{report ? t('report.pageOf', { page: first + 1, pages: count }) : ''}</span>
+        <span data-testid="preview-page-of">{!report ? '' : phase.k === 'ready' && phase.partial ? t('report.pageFormatting', { page: first + 1 })
+          : t('report.pageOf', { page: first + 1, pages: count })}</span>
       </div>
       {(menu === 'margins' || menu === 'pageSize') && doc.current && (
         <PageSetupMenu menu={menu} page={readReport(doc.current, []).page} onClose={() => setMenu(null)}

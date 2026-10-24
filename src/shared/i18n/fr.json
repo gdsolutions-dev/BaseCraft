@@ -1493,6 +1493,7 @@
     "preview": "Aperçu de l'état {{name}}",
     "progress": "Mise en forme…",
     "pageOf": "Page {{page}} sur {{pages}}",
+    "pageFormatting": "Page {{page}} (mise en forme…)",
     "nav": {
       "first": "Première page",
       "prev": "Page précédente",

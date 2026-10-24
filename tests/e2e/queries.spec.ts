@@ -313,6 +313,7 @@ test('a datasheet row saved behind a slow query: Ctrl+Break stops the query, the
     await expect(doc(page).getByTestId('datasheet')).toHaveAttribute('aria-busy', 'true');
     await page.keyboard.press('Control+Pause');
     await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.cancelled); // once: the query, the row's save, a refresh
+    await page.waitForTimeout(300); // read by a person: longer than Glide's delay before it moves the focus to the selected cell
     await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('modal')).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as Win).basecraft.rows.count('Clients'))).toBe(4); // never written

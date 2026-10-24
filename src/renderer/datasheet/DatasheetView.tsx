@@ -206,9 +206,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // backstage (a close or open asked from it), which keeps the focus.
     if (!document.querySelector('[aria-modal="true"]')) editor.current?.focus();
     await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.fieldError', params: errorParams(err), buttons: ['ok'] });
-    // Glide moves the focus onto the newly selected cell later, and only while the grid has it: the box had it, so it came back to
-    // the cell focused before. Glide's accessible copy of the cell in error takes it (the row selectors are its column 0).
-    if (!document.querySelector('[aria-modal="true"]')) document.getElementById(`glide-cell-${col + 1}-${rowIndex}`)?.focus({ preventScroll: true });
+    focusCell(col, rowIndex);
+  };
+  /** After a box: Glide moves the focus onto the newly selected cell later, and only while the grid has it; the box had it, so it
+   *  came back to the cell focused before. Glide's accessible copy of the cell takes it (the row selectors are its column 0). */
+  const focusCell = (col: number, row: number) => {
+    if (!document.querySelector('[aria-modal="true"]')) document.getElementById(`glide-cell-${col + 1}-${row}`)?.focus({ preventScroll: true });
   };
 
   /** Saves the pending row; true when nothing is left pending. One save at a time: a second call shares the first. */
@@ -250,6 +253,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         return true;
       } catch (e) {
         await writeError(e);
+        const at = live.current.selection.current?.cell; // the row stays to be saved, selected (Access)
+        if (at) focusCell(at[0], at[1]);
         return false;
       } finally {
         busyRef.current = false;

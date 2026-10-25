@@ -12,7 +12,11 @@ import { parseCanonical } from './parser';
 export { truthy } from './library';
 
 /** `field(name, table)`: `table` is set for a qualified reference `[T].[F]` (A3). */
-export interface EvalEnv { field(name: string, table?: string): Value; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en' }
+/** `member(path)`: a member reference `[TempVars]![x]`… (absent, or throws: unknownField). */
+export interface EvalEnv {
+  field(name: string, table?: string): Value; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en';
+  member?(path: string[]): Value | Promise<Value>;
+}
 
 /** `field` d'un environnement sur un objet : nom résolu comme Access (casse ignorée), champ inconnu -> unknownField. */
 export function recordFields(values: Record<string, Value>): (name: string) => Value {
@@ -103,6 +107,7 @@ export async function evaluate(e: Expr, env: EvalEnv): Promise<Value> {
     case 'null': return null;
     case 'id': return env.field(e.name, e.table);
     case 'subject': return env.subject === undefined ? fail('unknownField') : env.subject;
+    case 'member': return env.member ? env.member(e.path) : fail('unknownField');
     case 'un': return unary(e.op, await ev(e.e), info);
     case 'bin': return binary(e.op, await ev(e.l), await ev(e.r), info);
     case 'like': return like(await ev(e.e), await ev(e.pattern), e.not, info);

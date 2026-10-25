@@ -9,11 +9,13 @@ import { isSelectBody, type Query } from '../../shared/query/ast';
 import { parseSql } from '../../shared/query/sql-parser';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
-import type { ModalApi } from '../shell/Modal';
+import { contentBlocked } from '../shell/Banners';
+import { bcErrorCode, type ModalApi, type ModalButton } from '../shell/Modal';
 import type { AppDispatch } from '../shell/nav-menu';
 import type { DocTab } from '../state/app-state';
 import { promptParameters } from './prompt-parameters';
 
+export type ActionOutcome = 'done' | 'cancelled' | 'blocked' | 'failed';
 export type ActionKind = 'makeTable' | 'append' | 'update' | 'delete';
 
 const parse = (sql: string): Query | null => { try { return parseSql(sql); } catch { return null; } };
@@ -76,18 +78,23 @@ const parameterError = (e: unknown) => {
  * (`query.action.confirm_<kind>`, default No) unless a table it writes, itself or by cascade, is in use (`query.action.inUse`), then runAction; `rowErrors` asks `query.action.partial`, Access's sentence
  * with the refused rows counted by cause (Yes: the valid rows are written), `tableExists` asks `query.action.replace` (Yes: replaced). Any other refusal or error is shown. After a
  * run, the open table and query datasheets read their rows again (`dispatch`), a Make-Table's table its design, and the
- * Navigation Pane its lists.
+ * Navigation Pane its lists. While the base's active content is not enabled, actionCount refuses (`bc:contentDisabled`): `query.action.contentDisabled`
+ * is shown at once, before any parameter, count or question. `warnings: false` (SetWarnings Off) answers the count, partial-failure and replace questions Yes
+ * unseen; refusals and errors are still shown.
+ * Resolves how it ended (its message already shown): 'done', 'cancelled' (a question answered No, a parameter cancelled),
+ * 'blocked' (content not enabled), 'failed' (refused or an error). A macro's action fails unless 'done'.
  */
-export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; region: LocaleInfo; showError(e: unknown): Promise<void>; dispatch?: AppDispatch }): Promise<void> {
+export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; region: LocaleInfo; showError(e: unknown): Promise<void>; dispatch?: AppDispatch; warnings?: boolean }): Promise<ActionOutcome> {
   const { modal } = deps;
-  const ask = (messageKey: string, params: object) => modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['yes', 'no'], defaultButton: 'no' });
+  const ask = (messageKey: string, params: object): Promise<ModalButton> => deps.warnings === false ? Promise.resolve('yes')
+    : modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['yes', 'no'], defaultButton: 'no' });
   const message = (messageKey: string, params: object = {}) => modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['ok'] });
   try {
     const sql = ref.kind === 'sql' ? ref.sql : ((await api.objects.get('query', ref.name)).definition as { sql: string }).sql;
     const q = parse(sql);
     const kind = q && kindOf(q);
     if (!q || !kind) throw new Error('bc:notSelectQuery'); // a select query that cannot run: a saved query it reads became an action query
-    if ((await api.base.state())?.readOnly) return void (await message('dialog.op.readOnly')); // before any parameter or count
+    if ((await api.base.state())?.readOnly) { await message('dialog.op.readOnly'); return 'failed'; } // before any parameter or count
     const values: Record<string, CellInput> = {};
     let count: number;
     let table: string;
@@ -107,14 +114,14 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
         const param = decl ? { name, type: decl.type, props: { ...defaultProps(decl.type), ...(decl.numberSize && { numberSize: decl.numberSize }), required: false } }
           : { name, type: null };
         const got = await promptParameters(modal, [param], deps.region);
-        if (got === null) return;
+        if (got === null) return 'cancelled';
         Object.assign(values, got);
       }
     }
     for (const t of await writtenTables(table, kind)) {
-      if (await inUse(t, kind === 'makeTable')) return void (await message('query.action.inUse', { table: t }));
+      if (await inUse(t, kind === 'makeTable')) { await message('query.action.inUse', { table: t }); return 'failed'; }
     }
-    if ((await ask(`query.action.confirm_${kind}`, { count })) !== 'yes') return;
+    if ((await ask(`query.action.confirm_${kind}`, { count })) !== 'yes') return 'cancelled';
     // Make-Table: the table it may replace, as spelled now (a replace may change its spelling: `totaux` -> `Totaux`)
     const into = q.body.k === 'select' ? q.body.into : undefined;
     const before = into === undefined ? undefined : (await api.tables.list()).find((t) => sameName(t.name, into))?.name;
@@ -135,19 +142,19 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
         // Access's sentence: the fields set to Null (type conversion), then the records refused by cause
         const params = { total: r.total, message: text, conversion: i18n.t('query.action.fields', { count: conversion }), key: records(key), lock: records(lock),
           validation: records(validation) };
-        if ((await ask('query.action.partial', params)) !== 'yes') return;
+        if ((await ask('query.action.partial', params)) !== 'yes') return 'cancelled';
         opts.skipFailures = true;
       } else if (r.reason === 'tableExists') {
-        if ((await ask('query.action.replace', { table: r.table })) !== 'yes') return;
+        if ((await ask('query.action.replace', { table: r.table })) !== 'yes') return 'cancelled';
         opts.replaceTable = true;
       } else if (r.reason === 'badColumnName') {
         await message('query.action.badColumnName', { column: r.column });
-        return;
+        return 'failed';
       } else {
         const table = 'table' in r ? r.table : '';
         await message(r.reason === 'related' || r.reason === 'nameExists' ? `query.action.${r.reason}` : `dialog.op.${r.reason}`,
           { table, context: r.reason === 'related' && !table ? 'unnamed' : undefined });
-        return;
+        return 'failed';
       }
     }
     const dispatch = deps.dispatch;
@@ -162,7 +169,14 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
       for (const t of tables) void dispatch({ type: 'tableDataChanged', name: t.name });
       void dispatch({ type: 'queryDataChanged' });
     }
+    return 'done';
   } catch (e) {
+    if (bcErrorCode(e) === 'contentDisabled') { // also when it changed between the count and the run
+      contentBlocked();   // the message points at the security bar: a dismissed one comes back
+      await message('query.action.contentDisabled');
+      return 'blocked';
+    }
     await deps.showError(e);
+    return 'failed';
   }
 }

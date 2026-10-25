@@ -12,14 +12,15 @@ export const DATA_PAGE = 10_000;
 
 const aborted = () => Object.assign(new Error('Report loading aborted'), { name: 'AbortError' });
 
-/** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted. */
+/** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted.
+ *  `where`: the opening's Where Condition (OpenReport, R8): only the rows it keeps. */
 export async function loadReportData(api: Pick<BasecraftApi, 'sources'>, ref: RecordSourceRef, params?: Record<string, CellInput>,
-  signal?: AbortSignal): Promise<ReportData> {
+  signal?: AbortSignal, where?: string): Promise<ReportData> {
   const { fields } = await api.sources.describe(ref);
   const rows: ReportData['rows'] = [];
   for (let offset = 0; ; offset += DATA_PAGE) {
     if (signal?.aborted) throw aborted();
-    const p = await api.sources.page(ref, { offset, limit: DATA_PAGE, ...(params ? { params } : {}) });
+    const p = await api.sources.page(ref, { offset, limit: DATA_PAGE, ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
     if (signal?.aborted) throw aborted();
     rows.push(...p.rows);
     if (!p.rows.length || offset + DATA_PAGE >= p.total) return { fields, rows };
@@ -50,20 +51,22 @@ export async function docParameters(api: Pick<BasecraftApi, 'sources'>, doc: Des
   return values;
 }
 
-/** Step 3: every row of the record source (none without one), with the parameter values (docParameters) on every page read. */
-export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: DesignDoc, params?: Record<string, CellInput>, signal?: AbortSignal): Promise<ReportData> {
+/** Step 3: every row of the record source (none without one), with the parameter values (docParameters) and the Where
+ *  Condition on every page read. */
+export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: DesignDoc, params?: Record<string, CellInput>, signal?: AbortSignal,
+  where?: string): Promise<ReportData> {
   if (!doc.recordSource) return { fields: [], rows: [] };
-  return loadReportData(api, doc.recordSource, params, signal);
+  return loadReportData(api, doc.recordSource, params, signal, where);
 }
 
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). */
 export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'>, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
-  ready?: () => void): Promise<LaidOutReport> {
+  ready?: () => void, where?: string): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
   const params = await docParameters(api, doc, ask);
   ready?.();
-  const data = await loadDocData(api, doc, params, signal);
+  const data = await loadDocData(api, doc, params, signal, where);
   return layoutReport(readReport(doc, data.fields), data, { ...env, signal });
 }
 

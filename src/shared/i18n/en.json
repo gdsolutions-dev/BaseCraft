@@ -38,6 +38,7 @@
       "macroDesign": "Macro Design"
     },
     "group": {
+      "builderClose": "Close",
       "view": "Views",
       "records": "Records",
       "sort": "Sort & Filter",
@@ -93,6 +94,8 @@
       "expandCollapse": "Expand/Collapse"
     },
     "cmd": {
+      "builderSaveAs": "Save As",
+      "builderClose": "Close",
       "viewDatasheet": "Datasheet View",
       "viewDesign": "Design View",
       "newRecord": "New",
@@ -362,7 +365,11 @@
       "A4": "Planned for batch A4 — Forms",
       "A5": "Planned for batch A5 — Reports",
       "A6": "Planned for batch A6 — Exchange and delivery",
-      "B": "Planned for stage B — Macros and Runtime",
+      "B1": "Planned for batch B1 — Macros and security",
+      "B2": "Planned for batch B2 — Events",
+      "B3": "Planned for batch B3 — Application startup",
+      "B4": "Planned for batch B4 — Joins and crosstab",
+      "B5": "Planned for batch B5 — Runtime",
       "C": "Planned for stage C — Working together",
       "D": "Planned for stage D — Python",
       "E": "Planned for stage E — Access import",
@@ -394,6 +401,7 @@
     "openHint": "Double-click an object in the navigation pane to open it.",
     "menu": {
       "open": "&Open",
+      "run": "&Run",
       "design": "&Design View",
       "rename": "Rena&me",
       "delete": "De&lete",
@@ -423,6 +431,7 @@
     "queries": "Queries",
     "forms": "Forms",
     "reports": "Reports",
+    "macros": "Macros",
     "renameObjectTitle": "Rename object",
     "deleteObjectTitle": "Delete object",
     "deleteObjectMessage": "Delete “{{name}}”? This cannot be undone.",
@@ -449,7 +458,8 @@
       "query": "Query",
       "form": "Form",
       "report": "Report",
-      "relations": "Relationships"
+      "relations": "Relationships",
+      "macro": "Macro"
     },
     "closeWindow": "Close “{{name}}”"
   },
@@ -473,6 +483,8 @@
     "lockLost": "The write lock was lost: editing is disabled.",
     "fileReadOnly": "Read-only: the file cannot be modified.",
     "takeOver": "Take over",
+    "contentDisabled": "Security warning: some active content of this database (macros, action queries) has been disabled.",
+    "enableContent": "Enable Content",
     "riskNetwork": "This database is on a network share. A disconnection during a write can damage it.",
     "riskSynced": "This database is in a synced folder. Syncing during a write can damage it.",
     "reconcile": "Structure changes made outside BaseCraft and taken into account: {{count}}.",
@@ -513,6 +525,7 @@
       "invalidQuery": "This query is not valid. {{reason}}",
       "queryBind": "This query cannot run: {{detail}}",
       "notSelectQuery": "This is not a select query: it cannot be used as a record source.",
+      "contentDisabled": "This operation is blocked: the database's content is not enabled. Click \"Enable Content\" in the security bar.",
       "missingParameter": "The value of the parameter \"{{detail}}\" is missing.",
       "invalidParameter": "The value entered for the parameter \"{{detail}}\" is not valid.",
       "cancelled": "The operation was cancelled.",
@@ -895,6 +908,8 @@
       "maskBadSection": "Invalid mask sections: the second is 0 or 1, the third a single character.",
       "aggregateContext": "An aggregate function (Sum, Count…) is only allowed in a totals query or a report group.",
       "subqueryNotAllowed": "Subqueries (SELECT …) are not allowed here.",
+      "memberNotAllowed": "References such as [TempVars]! or [Forms]! are not allowed here.",
+      "badMember": "Invalid reference: [TempVars]![Name], [LocalVars]![Name], [MacroError]![Name], [Forms]![Form]![Control] or [Reports]![Report]![Control].",
       "forbiddenStatement": "Statement not allowed: only Select, Append, Update, Delete and Make-Table queries are accepted.",
       "reservedName": "This name is reserved (bc_, bcx_ or sqlite_): the query cannot use it.",
       "multipleStatements": "Only one SQL statement is allowed: remove the text after the semicolon.",
@@ -1905,7 +1920,8 @@
       "label": "Table name"
     },
     "sqlOnly": "This query can only be shown in SQL view.",
-    "rowSourceTitle": "Query Builder: Row Source",
+    "builderOnTable": "You invoked the Query Builder on a table.\n\nDo you want to create a query based on the table?",
+    "builderSave": "Do you want to save the changes made to the SQL statement and update the property?",
     "error": {
       "unexpectedToken": "Syntax error in SQL statement.",
       "unexpectedEnd": "The SQL statement is incomplete."
@@ -1948,7 +1964,8 @@
       "partial": "The query can't change all the records: {{conversion}} due to a type conversion failure; {{key}} due to key violations, {{lock}} due to lock violations and {{validation}} due to validation rule violations, out of {{total}}. First error: {{message}}. Run the query anyway?",
       "fields_one": "{{count}} field set to Null",
       "fields_other": "{{count}} fields set to Null",
-      "inUse": "The database engine could not lock table \"{{table}}\" because it is already in use by another person or process. Save or undo the record being edited in it, or save its design, then run the query again."
+      "inUse": "The database engine could not lock table \"{{table}}\" because it is already in use by another person or process. Save or undo the record being edited in it, or save its design, then run the query again.",
+      "contentDisabled": "This action query is blocked: the database's content is not enabled. Click \"Enable Content\" in the security bar."
     },
     "run": {
       "running": "Running…",
@@ -2042,5 +2059,146 @@
     "repaired": "Database compacted: {{before}} → {{after}}. Backup: {{backup}}\n{{count}} problem(s) found by the integrity check were repaired:\n{{problems}}",
     "corrupt": "The database is damaged and could not be repaired. The original file was not changed.\nProblems found:\n{{problems}}\nBackup: {{backup}}",
     "more": "… and {{count}} more"
+  },
+  "macro": {
+    "newName": "Macro{{n}}",
+    "action": {
+      "Beep": "Beep",
+      "ClearMacroError": "ClearMacroError",
+      "CloseDatabase": "CloseDatabase",
+      "CloseWindow": "CloseWindow",
+      "MessageBox": "MessageBox",
+      "OnError": "OnError",
+      "OpenForm": "OpenForm",
+      "OpenQuery": "OpenQuery",
+      "OpenReport": "OpenReport",
+      "OpenTable": "OpenTable",
+      "Quit": "Quit",
+      "RemoveAllTempVars": "RemoveAllTempVars",
+      "RemoveTempVar": "RemoveTempVar",
+      "RunMacro": "RunMacro",
+      "RunSQL": "RunSQL",
+      "SetLocalVar": "SetLocalVar",
+      "SetTempVar": "SetTempVar",
+      "SetWarnings": "SetWarnings",
+      "StopAllMacros": "StopAllMacros",
+      "StopMacro": "StopMacro"
+    },
+    "arg": {
+      "FormName": "Form Name",
+      "View": "View",
+      "WhereCondition": "Where Condition",
+      "DataMode": "Data Mode",
+      "Message": "Message",
+      "Beep": "Beep",
+      "Type": "Type",
+      "Title": "Title",
+      "Name": "Name",
+      "Expression": "Expression",
+      "MacroName": "Macro Name",
+      "RepeatCount": "Repeat Count",
+      "RepeatExpression": "Repeat Expression",
+      "SQLStatement": "SQL Statement",
+      "WarningsOn": "Warnings On",
+      "ObjectType": "Object Type",
+      "ObjectName": "Object Name",
+      "GoTo": "Go To",
+      "QueryName": "Query Name",
+      "ReportName": "Report Name",
+      "TableName": "Table Name"
+    },
+    "argValue": {
+      "View": { "form": "Form", "datasheet": "Datasheet", "design": "Design", "preview": "Preview", "print": "Print" },
+      "DataMode": { "empty": "(Default)", "add": "Add", "edit": "Edit", "readOnly": "Read Only" },
+      "ObjectType": { "empty": "(Active window)", "table": "Table", "query": "Query", "form": "Form", "report": "Report", "macro": "Macro" },
+      "Beep": { "yes": "Yes", "no": "No" },
+      "Type": { "none": "None", "critical": "Critical", "warning": "Warning", "question": "Question", "information": "Information" },
+      "GoTo": { "next": "Next", "macroName": "Macro Name", "fail": "Fail" },
+      "WarningsOn": { "yes": "Yes", "no": "No" }
+    },
+    "category": {
+      "ui": "User Interface Commands",
+      "macro": "Macro Commands",
+      "system": "System Commands",
+      "filter": "Filter/Query/Search",
+      "window": "Window Management",
+      "objects": "Database Objects"
+    },
+    "block": {
+      "comment": "Comment",
+      "group": "Group",
+      "if": "If",
+      "elseIf": "Else If",
+      "else": "Else",
+      "submacro": "Submacro"
+    },
+    "failed": {
+      "title": "Action Failed",
+      "macro": "Macro Name",
+      "action": "Action Name",
+      "args": "Arguments",
+      "number": "Error Number",
+      "stop": "Stop All Macros"
+    },
+    "error": {
+      "unknownAction": "The action \"{{action}}\" does not exist in this version of BaseCraft.",
+      "notFound": "BaseCraft can't find the object \"{{name}}\".",
+      "blocked": "The action {{action}} is blocked: the content of this database is not enabled. Click \"Enable Content\" in the security bar.",
+      "actionFailed": "The action {{action}} failed: {{detail}}",
+      "expression": "An expression of the action {{action}} can't be evaluated: {{detail}}",
+      "missingArgument": "The argument \"{{detail}}\" of the action {{action}} is required.",
+      "tooDeep": "Too many nested macros: RunMacro is limited to 20 levels.",
+      "tooManySteps": "The macro was stopped: it ran more than 100,000 actions.",
+      "badDefinition": "The definition of the macro \"{{name}}\" is not valid ({{detail}}).",
+      "runSqlSelect": "RunSQL expects an action query (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "actionCancelled": "The action {{action}} was cancelled.",
+      "actionNotRun": "The action {{action}} was not carried out."
+    },
+    "msgbox": {
+      "title": "{{title}}",
+      "defaultTitle": "BaseCraft"
+    },
+    "run": {
+      "title": "Run Macro",
+      "name": "Macro Name:"
+    },
+    "unknownAction": "Unknown action: {{name}}",
+    "nameLabel": "Macro Name",
+    "newSubmacro": "Sub{{n}}",
+    "saveFirstTitle": "Save Macro",
+    "saveFirst": "Do you want to save changes to the macro '{{name}}'?",
+    "issues": "The macro cannot be saved:\n{{list}}",
+    "issue": {
+      "shape": "{{path}}: invalid definition",
+      "tooMany": "{{path}}: too many items (10,000 at most)",
+      "tooDeep": "{{path}}: too many nested blocks (32 at most)",
+      "submacroPlace": "{{path}}: a submacro cannot be inside a block",
+      "submacroOrder": "{{path}}: submacros come after the macro's actions",
+      "duplicateName": "{{path}}: another submacro has this name",
+      "badName": "{{path}}: this submacro name is not valid",
+      "emptyCondition": "{{path}}: the condition is empty",
+      "badExpression": "{{path}}: the expression is not valid"
+    },
+    "addAction": "Add New Action",
+    "addElseIf": "Add Else If",
+    "addElse": "Add Else",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "moveUp": "Move Up",
+    "moveDown": "Move Down",
+    "remove": "Delete",
+    "saveBeforeRun": "The macro must be saved before it is run. Save it now?",
+    "step": {
+      "title": "Macro Single Step",
+      "condition": "Condition",
+      "none": "None",
+      "step": "Step",
+      "continue": "Continue"
+    },
+    "catalog": {
+      "title": "Action Catalog",
+      "search": "Search",
+      "flow": "Program Flow"
+    }
   }
 }

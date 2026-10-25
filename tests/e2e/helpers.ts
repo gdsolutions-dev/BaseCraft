@@ -1,5 +1,5 @@
 import { _electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -12,10 +12,17 @@ import { createTable } from '../../src/main/db/schema';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../src/shared/report/fixtures/factures';
 
 export async function launchApp(
-  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string } = {},
+  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean } = {},
 ): Promise<{ app: ElectronApplication; page: Page; userDataDir: string }> {
   const userDataDir = opts.userDataDir ?? mkdtempSync(join(tmpdir(), 'basecraft-'));
-  const env = { ...process.env, BASECRAFT_E2E: '1', BASECRAFT_USER_DATA: userDataDir, ...opts.env } as Record<string, string>;
+  // Bases seeded in the temporary folder are trusted (their active content is enabled), unless `untrusted`: nothing is then.
+  const trust: Record<string, string> = {};
+  if (!opts.untrusted) {
+    trust.BASECRAFT_E2E_TRUST_CONFIG = join(userDataDir, 'e2e-trusted-folders.json');
+    writeFileSync(trust.BASECRAFT_E2E_TRUST_CONFIG, JSON.stringify({ trustedFolders: [{ path: realpathSync.native(tmpdir()), subfolders: true }] }));
+  }
+  const env = { ...process.env, BASECRAFT_E2E: '1', BASECRAFT_USER_DATA: userDataDir, ...trust, ...opts.env } as Record<string, string>;
+  if (opts.untrusted) delete env.BASECRAFT_E2E_TRUST_CONFIG;
   delete env.ELECTRON_RUN_AS_NODE; // sinon Electron démarre comme Node simple
   const app = await _electron.launch({
     args: ['.', ...(opts.args ?? [])],

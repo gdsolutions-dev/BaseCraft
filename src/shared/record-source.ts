@@ -11,7 +11,8 @@ export type RecordSourceRef = { kind: 'table'; name: string } | { kind: 'query';
 export interface SourceField { name: string; type: FieldType; props: FieldProps; origin?: { table: string; field: string } }
 export interface SourceInfo { fields: SourceField[]; updatable: boolean; keyTable?: string;
   parameters: { name: string; type: FieldType | null; props?: FieldProps }[] }
-export interface SourcePageRequest { offset: number; limit: number; sort?: SortSpec[]; filter?: FieldFilter[]; params?: Record<string, CellInput> }
+export interface SourcePageRequest { offset: number; limit: number; sort?: SortSpec[]; filter?: FieldFilter[]; params?: Record<string, CellInput>;
+  where?: string /* an opening's Where Condition: canonical expression over the source's output columns, no member; ANDed with filter */ }
 export interface SourcePage { rows: SqlValue[][]; rowids: (number | null)[]; total: number }
 
 /**

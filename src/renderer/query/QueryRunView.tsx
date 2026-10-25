@@ -17,14 +17,15 @@ import { runActionFlow } from './run-action';
  * (bc:notSelectQuery) runs through runActionFlow, then the tab closes (a select query whose source became an action query:
  * runActionFlow shows bc:notSelectQuery). A save of the query's design
  * (reloadToken) starts over: the parameters may have changed. A first count that lasts shows the shell's « Exécution… »
- * with Stop (RunningNotice): it then rejects bc:cancelled, shown, and the tab closes.
+ * with Stop (RunningNotice): it then rejects bc:cancelled, shown, and the tab closes. `sql`: the Query Builder's design, run
+ * as it stands (its tab's close goes back to the design).
  */
-export function QueryRunView(p: DocViewProps) {
+export function QueryRunView(p: DocViewProps & { sql?: string }) {
   const modal = useModal();
   const showError = useErrorDialog();
   const [params, setParams] = useState<{ values: Record<string, CellInput>; token: number } | null>(null);
   const started = useRef<number | null>(null);
-  const source = { kind: 'query', name: p.tab.name } as const; // the live name: a rename keeps the tab
+  const source = p.sql !== undefined ? { kind: 'sql' as const, sql: p.sql } : { kind: 'query' as const, name: p.tab.name }; // the live name: a rename keeps the tab
 
   // Again when the query's design is saved (reloadToken): its parameters may have changed, so they are asked again.
   useEffect(() => {

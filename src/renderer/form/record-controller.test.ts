@@ -260,6 +260,19 @@ describe('FormRecords', () => {
   it('a row with a null rowid from a query is read-only', async () => {
     const r = await opened({ ref: { kind: 'sql', sql: 'SELECT Nom FROM Clients' }, rowids: [null, null, null] });
     expect(r.snapshot.editable).toBe(false); });
+  it('where is sent with every page; readOnly data mode', async () => {
+    const r = await opened({ where: '[Ville] = "Lyon"' });
+    await r.setSort([{ field: 'Nom', dir: 'asc' }]); await r.setFilter([{ field: 'Nom', criteria: '"x"' }]);
+    expect(api.pages.length).toBeGreaterThan(2); expect(api.pages.every((p) => p.where === '[Ville] = "Lyon"')).toBe(true);
+    const ro = await opened({ dataMode: 'readOnly' });
+    expect(ro.snapshot).toMatchObject({ editable: false, canAdd: false, canDelete: false });
+    expect((await opened({ dataMode: 'edit' })).snapshot.editable).toBe(true);
+  });
+  it('add data mode opens on the new record', async () => {
+    expect((await opened({ dataMode: 'add' })).snapshot).toMatchObject({ isNew: true, index: 3, total: 3 });
+    expect((await opened({ dataMode: 'add', allowAdditions: false })).snapshot).toMatchObject({ isNew: false, index: 2 });
+    expect((await opened({ dataMode: 'add', rows: [] })).snapshot).toMatchObject({ isNew: true, index: 0 }); // last: it empties the fake's rows
+  });
   it('params go with every page', async () => { const r = await opened({ params: { 'Saisir le client :': '2' } }); await r.setSort([{ field: 'Nom', dir: 'asc' }]);
     expect(api.pages.length).toBeGreaterThan(1); expect(api.pages.every((p) => p.params?.['Saisir le client :'] === '2')).toBe(true); });
   it('requery with new params saves first, then reads from index 0', async () => { const r = await opened({ params: { p: '1' } }); await r.goTo(1); r.edit('Nom', 'x'); api.pages.length = 0;

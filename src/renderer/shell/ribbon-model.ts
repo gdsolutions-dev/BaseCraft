@@ -284,11 +284,16 @@ export type CommandId =
   | 'viewForm'
   | 'viewPrintPreview'
   | 'saveAs'
+  | 'builderSaveAs'
+  | 'builderClose'
 
 export type CommandHandlers = Partial<Record<CommandId, () => void | Promise<void>>>;
 
 /** Scope of the shell's own handlers, used when the active document does not provide the command. */
 export const SHELL_SCOPE = '';
+/** Scope of a modal tab's own handlers (the Query Builder), and prefix of its views' scopes: in front of it, they stand in for
+ *  the shell's, which would act on the document behind. */
+export const MODAL_SCOPE = 'modal:';
 const registry = new Map<string, CommandHandlers>();
 const listeners = new Set<() => void>();
 let activeTab: string | null = null;
@@ -297,7 +302,8 @@ let version = 0;
 let reportError: (e: unknown) => void = (e) => console.error(e);
 
 const changed = () => { version++; listeners.forEach((l) => l()); };
-const handler = (id: CommandId) => (activeTab !== null ? registry.get(activeTab)?.[id] : undefined) ?? registry.get(SHELL_SCOPE)?.[id];
+const handler = (id: CommandId) => (activeTab !== null ? registry.get(activeTab)?.[id] : undefined)
+  ?? registry.get(activeTab?.startsWith(MODAL_SCOPE) ? MODAL_SCOPE : SHELL_SCOPE)?.[id];
 
 /** Registers a document's (or the shell's) handlers; returns the unregistration, which ignores a newer registration. */
 export function registerCommands(tabId: string, handlers: CommandHandlers): () => void {
@@ -364,8 +370,9 @@ export function registerCommandStates(tabId: string, s: Partial<Record<CommandId
 export const commandState = (id: CommandId): CommandState | undefined => (activeTab !== null ? states.get(activeTab)?.[id] : undefined);
 
 // ---------- Ruban ----------
-/** isNew: the active document is not saved yet. kind: the active document's kind (null: none; a macro opens in stage B). */
-export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null }
+/** isNew: the active document is not saved yet. kind: the active document's kind (null: none).
+ *  builder: the Query Builder's modal tab is in front (its query is the active document). */
+export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean }
 
 /**
  * Ruling C11: every Access command has its entry from now on. One not delivered yet carries `planned`, the batch or stage that
@@ -381,7 +388,20 @@ export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocM
  * merge, Data Definition query, a report's Tab Order. Access's two web browser controls (legacy and Edge) are one control
  * here, and the Python editor stands where Access has Visual Basic. Split buttons and galleries are one button each.
  */
-export type PlannedIn = 'A3' | 'A4' | 'A5' | 'A6' | 'B' | 'C' | 'D' | 'E' | 'later';
+export type PlannedIn =
+  | 'A3'
+  | 'A4'
+  | 'A5'
+  | 'A6'
+  | 'B1'
+  | 'B2'
+  | 'B3'
+  | 'B4'
+  | 'B5'
+  | 'C'
+  | 'D'
+  | 'E'
+  | 'later';
 
 /** lg: icon above its label; sm: icon and label, stacked by three; xs: icon only, in a grid of three rows (label as tooltip). */
 export interface RibbonCommand {
@@ -391,7 +411,7 @@ export interface RibbonCommand {
   planned?: PlannedIn;
   popup?: true | 'dialog';   // opens a menu, or a dialog (a field, colour choices) (aria-haspopup; aria-expanded while it is open, see setOpenPopup)
 }
-export interface RibbonGroup { id: string; labelKey: string; commands: RibbonCommand[] }
+export interface RibbonGroup { id: string; labelKey: string; commands: RibbonCommand[]; visible?(ctx: RibbonContext): boolean }
 export type RibbonTabId =
   | 'home'
   | 'create'
@@ -416,7 +436,9 @@ export interface RibbonTab {
   id: RibbonTabId; labelKey: string; contextual?: boolean; passive?: boolean; visible?(ctx: RibbonContext): boolean; groups: RibbonGroup[];
 }
 
-export const visibleTabs = (ctx: RibbonContext): RibbonTab[] => RIBBON.filter((t) => !t.visible || t.visible(ctx));
+/** In front of the Query Builder, only Home and the builder's contextual tabs (Access: the document behind waits). */
+export const visibleTabs = (ctx: RibbonContext): RibbonTab[] =>
+  RIBBON.filter((t) => (!t.visible || t.visible(ctx)) && (!ctx.builder || t.id === 'home' || !!t.contextual));
 
 /** C10, on a change of context (object kind or mode): entering it selects its first contextual tab; leaving it restores the tab
  *  selected before (`before`), else Home. `before` keeps the tab chosen outside the contextual tabs that took over. */
@@ -451,8 +473,8 @@ const group = (id: string, ...commands: RibbonCommand[]): RibbonGroup => ({ id, 
 const resized = (c: RibbonCommand, size: RibbonCommand['size']): RibbonCommand => ({ ...c, size });
 
 const viewDatasheet: RibbonCommand = {
-  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && !c.isNew,
-  visible: (c) => c.kind !== 'report', // a report has no datasheet (Access)
+  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && !c.isNew && c.kind !== 'macro',
+  visible: (c) => c.kind !== 'report' && c.kind !== 'macro', // a report or a macro has no datasheet (Access)
   // an object's Run view; a form's Datasheet view is its datasheet mode (M10); a report's Run view is its Print Preview
   active: (c) => sheet(c) || (c.mode === 'run' && c.kind !== 'form' && c.kind !== 'report'),
 };
@@ -520,6 +542,8 @@ const designOf = (kind: RibbonContext['kind']) => (c: RibbonContext) => c.mode =
 /** A Query Design command that edits the grid (A3 Task 8). */
 const grid = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: (c) => designWritable(c) && c.kind === 'query' });
+const macroCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm'): RibbonCommand =>
+  ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designOf('macro') });
 const formOrReportDesign = (c: RibbonContext) => c.mode === 'design' && (c.kind === 'form' || c.kind === 'report');
 const designerWritable = (c: RibbonContext) => formOrReportDesign(c) && !c.readOnly;
 const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.readOnly;
@@ -604,7 +628,8 @@ export const RIBBON: RibbonTab[] = [
         { id: 'createReportDesign', icon: Ruler, labelKey: 'ribbon.cmd.createReportDesign', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
         { id: 'createBlankReport', icon: File, labelKey: 'ribbon.cmd.createBlankReport', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
         plan('later', 'reportWizard', WandSparkles), plan('later', 'labels', Tags)),
-      group('macrosCode', plan('B', 'createMacro', Zap, 'lg'), plan('D', 'createModule', FileCode2), pythonEditor),
+      group('macrosCode', { id: 'createMacro', icon: Zap, labelKey: 'ribbon.cmd.createMacro', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
+        plan('D', 'createModule', FileCode2), pythonEditor),
     ],
   },
   {
@@ -621,7 +646,7 @@ export const RIBBON: RibbonTab[] = [
   {
     id: 'databaseTools', labelKey: 'ribbon.tab.databaseTools', groups: [
       group('tools', { id: 'compactRepair', icon: Wrench, labelKey: 'ribbon.cmd.compactRepair', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly }),
-      group('macro', resized(pythonEditor, 'lg'), plan('B', 'runMacro', Play, 'lg')),
+      group('macro', resized(pythonEditor, 'lg'), { id: 'runMacro', icon: Play, labelKey: 'ribbon.cmd.runMacro', size: 'lg', enabled: (c) => c.hasBase }),
       relationshipsGroup,
       group('analyze', plan('later', 'databaseDocumenter', BookOpen), plan('later', 'analyzePerformance', Gauge), plan('later', 'analyzeTable', ScanSearch)),
       group('moveData', plan('C', 'splitDatabase', Split), plan('C', 'moveToServer', CloudUpload)),
@@ -646,7 +671,7 @@ export const RIBBON: RibbonTab[] = [
         modifyLookups),
       group('showHide', { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: (c) => c.mode === 'design' },
         { id: 'indexes', icon: ListOrdered, labelKey: 'ribbon.cmd.indexes', size: 'lg', enabled: (c) => c.mode === 'design' }),
-      group('tableEvents', plan('B', 'createDataMacros', FileCog), plan('B', 'renameDeleteMacro', FilePen)),
+      group('tableEvents', plan('later', 'createDataMacros', FileCog), plan('later', 'renameDeleteMacro', FilePen)),
       relationshipsGroup,
     ],
   },
@@ -669,9 +694,9 @@ export const RIBBON: RibbonTab[] = [
     // Table Properties (foundation step 2): the Navigation Pane's Properties dialog, read-only on a read-only base.
     id: 'table', labelKey: 'ribbon.tab.table', contextual: true, passive: true, visible: (c) => c.kind === 'table' && sheet(c), groups: [
       group('properties', { id: 'tableProperties', icon: Settings, labelKey: 'ribbon.cmd.tableProperties', size: 'lg', enabled: (c) => c.kind === 'table' && sheet(c) }),
-      group('beforeEvents', plan('B', 'beforeChange', PencilLine, 'lg'), plan('B', 'beforeDelete', Trash, 'lg')),
-      group('afterEvents', plan('B', 'afterInsert', ListPlus, 'lg'), plan('B', 'afterUpdate', PenLine, 'lg'), plan('B', 'afterDelete', ListMinus, 'lg')),
-      group('namedMacros', plan('B', 'namedMacro', Zap, 'lg')),
+      group('beforeEvents', plan('later', 'beforeChange', PencilLine, 'lg'), plan('later', 'beforeDelete', Trash, 'lg')),
+      group('afterEvents', plan('later', 'afterInsert', ListPlus, 'lg'), plan('later', 'afterUpdate', PenLine, 'lg'), plan('later', 'afterDelete', ListMinus, 'lg')),
+      group('namedMacros', plan('later', 'namedMacro', Zap, 'lg')),
       relationshipsGroup,
     ],
   },
@@ -699,13 +724,16 @@ export const RIBBON: RibbonTab[] = [
       group('results', viewDatasheet, { id: 'viewSql', icon: Code, labelKey: 'ribbon.cmd.viewSql', size: 'lg', enabled: (c) => c.kind === 'query' && (c.mode === 'design' || c.mode === 'run'), active: off },
         { id: 'runQuery', icon: Play, labelKey: 'ribbon.cmd.runQuery', size: 'lg', enabled: designOf('query') }),
       group('queryType', grid('selectQuery', Table2, 'lg'), grid('makeTableQuery', Table, 'lg'), grid('appendQuery', ListPlus, 'lg'),
-        grid('updateQuery', PenLine, 'lg'), plan('B', 'crosstabQuery', Grid2x2, 'lg'), grid('deleteQuery', ListX, 'lg'),
+        grid('updateQuery', PenLine, 'lg'), plan('B4', 'crosstabQuery', Grid2x2, 'lg'), grid('deleteQuery', ListX, 'lg'),
         grid('unionQuery', Combine, 'sm'), plan('C', 'passThroughQuery', ArrowRightLeft)),
       group('querySetup', grid('addTables', SquarePlus, 'lg'), grid('insertRows', BetweenHorizontalStart, 'sm'), grid('deleteRows', ListX, 'sm'),
         grid('builder', Wand, 'sm'), grid('insertColumns', BetweenVerticalStart, 'sm'), grid('deleteColumns', Columns3, 'sm'),
         grid('returnValues', ArrowUpNarrowWide, 'sm')),
       group('showHide', grid('queryTotals', Sigma, 'lg'), grid('parameters', Braces, 'lg'), grid('propertySheet', PanelRight, 'sm'),
         { id: 'tableNames', icon: Heading, labelKey: 'ribbon.cmd.tableNames', size: 'sm', enabled: designOf('query'), active: off }),
+      // the Query Builder (Record Source, Row Source): Save As a query, Close (which asks to update the property), as in Access
+      { ...group('builderClose', { id: 'builderSaveAs', icon: Save, labelKey: 'ribbon.cmd.builderSaveAs', size: 'lg', enabled: (c) => !!c.builder && c.hasBase && !c.readOnly },
+        { id: 'builderClose', icon: X, labelKey: 'ribbon.cmd.builderClose', size: 'lg', enabled: (c) => !!c.builder }), visible: (c) => !!c.builder },
     ],
   },
   {
@@ -790,10 +818,12 @@ export const RIBBON: RibbonTab[] = [
   },
   {
     id: 'macroDesign', labelKey: 'ribbon.tab.macroDesign', contextual: true, visible: designOf('macro'), groups: [
-      group('tools', plan('B', 'macroRun', Play, 'lg'), plan('B', 'singleStep', StepForward)),
-      group('expandCollapse', plan('B', 'expandActions', UnfoldVertical), plan('B', 'collapseActions', FoldVertical), plan('B', 'expandAll', ChevronsDown),
-        plan('B', 'collapseAll', ChevronsUp)),
-      group('showHide', plan('B', 'actionCatalog', BookOpen, 'lg'), plan('B', 'showAllActions', ListChecks)),
+      // none changes the file: enabled on a read-only base too. Pressed (the view's command states): Single Step on, the
+      // catalogue shown, unsafe actions listed; Expand / Collapse Actions need a selected block (command state).
+      group('tools', macroCmd('macroRun', Play, 'lg'), { ...macroCmd('singleStep', StepForward), active: off }),
+      group('expandCollapse', macroCmd('expandActions', UnfoldVertical), macroCmd('collapseActions', FoldVertical), macroCmd('expandAll', ChevronsDown),
+        macroCmd('collapseAll', ChevronsUp)),
+      group('showHide', { ...macroCmd('actionCatalog', BookOpen, 'lg'), active: off }, { ...macroCmd('showAllActions', ListChecks), active: off }),
     ],
   },
 ];

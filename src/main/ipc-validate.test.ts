@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, cells, definition, description, fieldFilters, importPath, importPlan, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, bcError, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
   strOrNull, uint, uints, queryRef, queryParams, runActionOptions,
 } from './ipc-validate';
@@ -66,6 +66,13 @@ describe('ipc argument checks', () => {
     expect(() => saveRequest(req(huge, 'a'))).toThrow(INVALID);
     expect(() => saveRequest(req('T', huge))).toThrow(INVALID);
     expect(sourceRef({ kind: 'sql', sql: 'x'.repeat(1_048_576) })).toMatchObject({ kind: 'sql' }); // a query's SQL: 1 MB
+    expect(sourcePageRequest({ offset: 0, limit: 1, where: 'x'.repeat(65_536) }).where).toHaveLength(65_536); // a Where Condition
+    expect(() => sourcePageRequest({ offset: 0, limit: 1, where: 'x'.repeat(65_537) })).toThrow(INVALID);
+    expect(() => sourcePageRequest({ offset: 0, limit: 1, where: 1 })).toThrow(INVALID);
+    const t = { kind: 'table', name: 'T' };
+    expect(exportSource({ ref: t, where: 'x'.repeat(65_536) }).where).toHaveLength(65_536); // a report's Where Condition, exported
+    expect(() => exportSource({ ref: t, where: 'x'.repeat(65_537) })).toThrow(INVALID);
+    expect(exportSource({ ref: t })).toEqual({ ref: t });
     expect(() => sourceRef({ kind: 'sql', sql: 'x'.repeat(1_048_577) })).toThrow(INVALID);
   });
 

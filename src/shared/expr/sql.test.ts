@@ -190,6 +190,8 @@ describe('compileSql', () => {
     expect(sql).not.toContain('DROP');
     expect(params).toContain("x'); DROP TABLE T; --");
   });
+  it('member references are refused', () => expect(() => compileSql(parseCanonical('[TempVars]![v]'), { fields: [], locale: 'fr-FR' }))
+    .toThrow(expect.objectContaining({ code: 'memberNotAllowed' })));
   it('unknown field', () => expect(() => compileSql(parseCanonical('[zz] = 1'), src.ctx)).toThrow(expect.objectContaining({ code: 'unknownField' })));
   it('missing subject', () => expect(() => compileSql(parseCanonical('>2', { criteria: true }), src.ctx)).toThrow(expect.objectContaining({ code: 'unknownField' })));
   it('subject', () => expect(compileSql(parseCanonical('>2', { criteria: true }), { ...src.ctx, subject: 'n' }).sql).toContain('"n"'));

@@ -27,30 +27,30 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
   const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
   try {
     await page.getByTestId('ribbon-tab-create').click();
-    const query = page.getByTestId('cmd-createMacro'); // a placeholder (stage B; queries, forms and reports delivered by A3, A4 and A5)
-    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.createMacro);
-    await expect(page.getByTestId('cmd-labels')).toHaveAccessibleName(fr.ribbon.cmd.labels); // the French labels laid out (« Macro » reads the same in English): the hover lands on it
+    const query = page.getByTestId('cmd-createModule'); // a placeholder (stage D; queries, forms, reports and macros delivered by A3, A4, A5 and B1)
+    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.createModule);
+    await expect(page.getByTestId('cmd-labels')).toHaveAccessibleName(fr.ribbon.cmd.labels); // the French labels are laid out (the hover lands on the right button)
     await expect(query).toHaveAttribute('aria-disabled', 'true');
-    await expect(query).toHaveAttribute('data-planned', 'B');
+    await expect(query).toHaveAttribute('data-planned', 'D');
     await expect(query).not.toHaveAttribute('disabled');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
     await query.hover();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.planned.B);
-    await expect(query).toHaveAccessibleDescription(fr.ribbon.planned.B); // aria-describedby
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.createModule + fr.ribbon.planned.D);   // a small button's tooltip also names it
+    await expect(query).toHaveAccessibleDescription(fr.ribbon.planned.D); // aria-describedby
     await query.click({ force: true }); // Playwright would wait for an aria-disabled button to become enabled
     await expect(docTabs(page)).toHaveCount(0);
     await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
     await page.mouse.move(600, 600);
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
-    // keyboard: Tab reaches it from the previous command (Labels, a placeholder), and the tooltip shows on focus
+    // keyboard: Tab reaches it from the previous command (Macro), and the tooltip shows on focus
     await page.getByTestId('cmd-queryWizard').focus();
     await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.planned.later);
-    await page.getByTestId('cmd-labels').focus();
+    await page.getByTestId('cmd-createMacro').focus();
     await page.keyboard.press('Tab');
     await expect(query).toBeFocused();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.planned.B);
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.createModule + fr.ribbon.planned.D);   // a small button's tooltip also names it
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
     await expect(docTabs(page)).toHaveCount(0);

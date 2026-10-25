@@ -1,9 +1,10 @@
 // Onglets de documents ; la vue de chacun vient du registre documentViews (type + mode).
-import { AppWindow, FileSearch, FileText, Network, Table, X, type LucideIcon } from 'lucide-react';
+import { AppWindow, FileSearch, FileText, Network, Table, X, Zap, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { AppAction, AppState, DocKind, DocTab } from '../state/app-state';
 import { docTabId, showsKind } from './doc-tab-ids';
 import { DocumentView } from './document-views';
+import { inertRef, setModalTabSlot, useModalTab } from './modal-tab';
 import type { AppDispatch } from './nav-menu';
 
 /** designOpen: another tab has this table in Design view (Table Fields then refuses to edit its fields). */
@@ -15,12 +16,14 @@ export const DOC_ICONS: Record<DocKind, LucideIcon> = {
   form: AppWindow,
   report: FileText,
   relations: Network,
+  macro: Zap,
 };
 
 interface Props { state: AppState; readOnly: boolean; dispatch: AppDispatch; onClose(tab: DocTab): void }
 
 export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
   const { t } = useTranslation();
+  const modalTab = useModalTab();   // a Query Builder: its tab is the only one that answers until it closes
   if (!state.tabs.length) {
     return <main className="docs card"><div className="doc-empty muted">{t('nav.openHint')}</div></main>;
   }
@@ -28,14 +31,14 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
     <main className="docs card">
       <div className="dtabs" role="tablist">
         {state.tabs.map((x) => {
-          const active = x.id === state.activeId;
+          const active = !modalTab && x.id === state.activeId;
           const Icon = DOC_ICONS[x.kind];
           const kind = t(`tabs.kind.${x.kind}`);
           const tid = docTabId(x);
           // The Relations window is one per base, titled in the interface language.
           const label = x.kind === 'relations' ? t('relations.title') : x.name;
           return (
-            <div key={x.id} className={`dtab${active ? ' is-active' : ''}`}
+            <div key={x.id} className={`dtab${active ? ' is-active' : ''}`} ref={inertRef(!!modalTab)}
               onAuxClick={(e) => { if (e.button === 1) onClose(x); }}>
               <button role="tab" aria-selected={active} aria-controls={`doc-${x.id}`} data-testid={`doc-tab-${tid}`} className="dtab-btn"
                 onClick={() => dispatch({ type: 'activate', id: x.id })}>
@@ -49,14 +52,35 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
             </div>
           );
         })}
+        {modalTab && (
+          <div className="dtab is-active">
+            <button role="tab" aria-selected id={`${modalTab.testId}-tab`} aria-controls={`${modalTab.testId}-panel`} data-testid={`${modalTab.testId}-tab`} className="dtab-btn">
+              <FileSearch className="ic" aria-hidden />{modalLabel(state, t)} : {t(modalTab.labelKey)}
+            </button>
+            <button className="x" data-testid={`${modalTab.testId}-tab-close`} title={t('backstage.close')} aria-label={t('backstage.close')}
+              onClick={() => modalTab.onRequestClose()}>
+              <X className="ic ic-sm" aria-hidden />
+            </button>
+          </div>
+        )}
       </div>
+      {modalTab && (
+        // aria-modal: the designers' keys stand back, as for a dialog (the shell's shortcuts serve the tab: dialogInFront)
+        <section ref={setModalTabSlot} id={`${modalTab.testId}-panel`} role="dialog" aria-modal="true" aria-labelledby={`${modalTab.testId}-tab`} className="doc modal-tab-panel" />
+      )}
       {state.tabs.map((x) => (
         // every document stays mounted (pending edits survive a tab switch); only the active one is shown
-        <section key={x.id} id={`doc-${x.id}`} role="tabpanel" className="doc" hidden={x.id !== state.activeId}>
+        <section key={x.id} id={`doc-${x.id}`} role="tabpanel" className="doc" hidden={!!modalTab || x.id !== state.activeId}>
           <DocumentView tab={x} active={x.id === state.activeId} readOnly={readOnly} dispatch={dispatch}
             designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
         </section>
       ))}
     </main>
   );
+}
+
+/** The name of the document that opened the Query Builder (the active one), as its tab shows it. */
+function modalLabel(state: AppState, t: (k: string) => string): string {
+  const tab = state.tabs.find((x) => x.id === state.activeId);
+  return !tab ? '' : tab.kind === 'relations' ? t('relations.title') : tab.name;
 }

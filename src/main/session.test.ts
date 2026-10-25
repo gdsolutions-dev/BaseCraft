@@ -526,3 +526,48 @@ describe('session (copy a table: only constraint failures are unsupportedTable)'
     expect(a.listTables().map((x) => x.name)).toEqual(['Src']); // rolled back
   });
 });
+
+describe('session (active content)', () => {
+  it('action queries refused while content is disabled', async () => {
+    const s = create();
+    expect(await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false })).toEqual({ ok: true });
+    expect(s.saveObject('query', 'QMaj', { formatVersion: '1.0', sql: 'UPDATE Clients SET Nom = "Lyon";' }, null)).toEqual({ ok: true });
+    await expect(s.actionCount({ kind: 'query', name: 'QMaj' }, {})).rejects.toThrow('bc:contentDisabled');
+    await expect(s.runAction({ kind: 'query', name: 'QMaj' }, {}, { skipFailures: false, replaceTable: false })).rejects.toThrow('bc:contentDisabled');
+    expect(s.activeContent().present).toBe(true);
+    expect(s.dbUuid()).toMatch(/^[0-9a-f-]{36}$/);
+    s.setContentEnabled(s.activeContent().fingerprint);
+    await expect(s.actionCount({ kind: 'query', name: 'QMaj' }, {})).resolves.toMatchObject({ table: 'Clients' });
+  });
+
+  /** Another tool (another connection) adds an action query to the open base. */
+  const addElsewhere = (name: string, sql: string) => {
+    const other = new DatabaseSync(p);
+    try {
+      other.prepare("INSERT INTO bc_objects (kind, name, definition, created, modified) VALUES ('query', ?, ?, '', '')").run(name, JSON.stringify({ formatVersion: '1.0', sql }));
+    } finally {
+      other.close();
+    }
+  };
+
+  it('content changed by another connection since it was enabled is refused', async () => {
+    const s = create();
+    expect(await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false })).toEqual({ ok: true });
+    expect(s.saveObject('query', 'QMaj', { formatVersion: '1.0', sql: 'UPDATE Clients SET Nom = "Lyon";' }, null)).toEqual({ ok: true });
+    s.setContentEnabled(s.activeContent().fingerprint);
+    await expect(s.actionCount({ kind: 'query', name: 'QMaj' }, {})).resolves.toMatchObject({ table: 'Clients' });
+    addElsewhere('QSup', 'DELETE FROM Clients;');
+    await expect(s.actionCount({ kind: 'query', name: 'QMaj' }, {})).rejects.toThrow('bc:contentDisabled');
+    await expect(s.runAction({ kind: 'query', name: 'QSup' }, {}, { skipFailures: false, replaceTable: false })).rejects.toThrow('bc:contentDisabled');
+  });
+
+  it('a base enabled with no content refuses an action query added by another connection', async () => {
+    const s = create();
+    expect(await s.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false })).toEqual({ ok: true });
+    s.setContentEnabled(''); // opened with no active content
+    await expect(s.actionCount({ kind: 'sql', sql: 'DELETE FROM Clients' }, {})).resolves.toMatchObject({ table: 'Clients' });
+    addElsewhere('QSup', 'DELETE FROM Clients;');
+    await expect(s.runAction({ kind: 'query', name: 'QSup' }, {}, { skipFailures: false, replaceTable: false })).rejects.toThrow('bc:contentDisabled');
+    await expect(s.actionCount({ kind: 'sql', sql: 'DELETE FROM Clients' }, {})).rejects.toThrow('bc:contentDisabled');
+  });
+});

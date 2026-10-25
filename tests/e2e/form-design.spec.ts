@@ -245,6 +245,89 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
   }
 });
 
+test('the « … » of Record Source asks, then opens the Query Builder in a modal tab, which writes back its SQL when closed', async () => {
+  const base = seedBase('formulaire-generateur', (db) => createTable(db, table));
+  const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createFormDesign').click();
+    await page.getByTestId('prop-RecordSource').fill('Clients');
+    await page.getByTestId('prop-RecordSource').press('Enter');
+    await expect(page.getByTestId('prop-RecordSource-build')).toHaveAttribute('title', fr.fieldProp.queryBuilder);
+    // on a table, Access asks first; No leaves everything as it was
+    await page.getByTestId('prop-RecordSource-build').click();
+    await expect(page.getByTestId('modal')).toContainText(fr.query.builderOnTable.split('\n')[0]);
+    await page.getByTestId('modal-btn-no').click();
+    await expect(page.getByTestId('rowsource-builder-tab')).toHaveCount(0);
+    await page.getByTestId('prop-RecordSource-build').click();
+    await page.getByTestId('modal-btn-yes').click();
+    // a tab of its own, named after the form; the ribbon serves it (Query Design and its Close group, Home), the rest stands back
+    await expect(page.getByTestId('rowsource-builder-tab')).toHaveText(new RegExp(` : ${fr.fieldProp.queryBuilder}$`));
+    await expect(page.getByTestId('property-sheet')).toBeHidden();
+    await expect(page.getByTestId('ribbon-tab-queryDesign')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('ribbon-tab-create')).toHaveCount(0);
+    await expect(page.getByTestId('ribbon-tab-file')).toBeDisabled();
+    await expect(page.getByTestId('cmd-builderSaveAs')).toBeEnabled();
+    expect(await page.getByTestId('nav-pane').evaluate((e) => !!e.closest('[inert]'))).toBe(true);
+    const builder = page.getByTestId('rowsource-builder');
+    await expect(builder.getByTestId('qbe-splitter')).toBeVisible();
+    await expect(builder.getByTestId('qbe-box-Clients')).toBeVisible();
+    await builder.getByTestId('qbe-field-Clients-Nom').dblclick();
+    await builder.getByTestId('qbe-field-Clients-Ville').dblclick();
+    await builder.getByTestId('qbe-cell-sort-0').selectOption('asc');
+    // SQL View and back; Run shows the datasheet in the tab, Design View comes back to the grid
+    await page.getByTestId('cmd-viewSql').click();
+    await expect(builder.getByTestId('query-sql')).toHaveValue(/^SELECT \[Clients\]\.\[Nom\], \[Clients\]\.\[Ville\]/);
+    await page.getByTestId('status-view-design').click();
+    await page.getByTestId('cmd-runQuery').click();
+    await expect(builder.getByTestId('datasheet')).toBeVisible();
+    await expect(page.getByTestId('rowsource-builder-tab')).toBeVisible();
+    await page.getByTestId('status-view-sql').click();   // from the datasheet too, as Access
+    await expect(builder.getByTestId('query-sql')).toBeVisible();
+    await page.getByTestId('status-view-design').click();
+    await expect(builder.getByTestId('qbe-cell-field-1')).toHaveValue('Ville');
+    // closing a changed grid asks: Cancel stays, Yes writes the SQL
+    await page.getByTestId('rowsource-builder-tab-close').click();
+    await page.getByTestId('modal-btn-cancel').click();
+    await expect(builder).toBeVisible();
+    await page.getByTestId('rowsource-builder-tab-close').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('rowsource-builder-tab')).toHaveCount(0);
+    expect(await page.getByTestId('nav-pane').evaluate((e) => !!e.closest('[inert]'))).toBe(false);
+    await expect(page.getByTestId('ribbon-tab-formDesign')).toHaveAttribute('aria-selected', 'true');
+    const sql = 'SELECT [Clients].[Nom], [Clients].[Ville] FROM [Clients] ORDER BY [Clients].[Nom];';
+    await expect(page.getByTestId('prop-RecordSource')).toHaveValue(sql);
+    // the Field List follows the SQL
+    await page.getByTestId('cmd-addExistingFields').click();
+    await expect(page.getByTestId('field-Ville')).toBeVisible();
+    await expect(page.getByTestId('field-Solde')).toHaveCount(0);
+    // reopened on that SQL (no question): the same grid; the ribbon's Close, No keeps the property
+    await page.getByTestId('prop-RecordSource-build').click();
+    await expect(builder.getByTestId('qbe-cell-field-1')).toHaveValue('Ville');
+    await builder.getByTestId('qbe-cell-sort-0').selectOption('desc');
+    await page.getByTestId('cmd-builderClose').click();
+    await page.getByTestId('modal-btn-no').click();
+    await expect(page.getByTestId('prop-RecordSource')).toHaveValue(sql);
+    // Ctrl+S takes the SQL at once (closed without a question); SQL only the grid cannot show opens in SQL view
+    await page.getByTestId('prop-RecordSource-build').click();
+    await builder.getByTestId('qbe-cell-sort-0').selectOption('desc');
+    await page.keyboard.press('Control+s');
+    await page.getByTestId('cmd-builderClose').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect(page.getByTestId('prop-RecordSource')).toHaveValue(sql.replace('ORDER BY [Clients].[Nom]', 'ORDER BY [Clients].[Nom] DESC'));
+    const union = 'SELECT [Nom] FROM [Clients] UNION SELECT [Ville] FROM [Clients];';
+    await page.getByTestId('prop-RecordSource').fill(union);
+    await page.getByTestId('prop-RecordSource').press('Enter');
+    await page.getByTestId('prop-RecordSource-build').click();
+    await expect(builder.getByTestId('query-sql')).toBeVisible();
+    await expect(page.getByTestId('status-view-design')).toBeDisabled();
+    await page.getByTestId('cmd-builderClose').click();
+    await expect(page.getByTestId('prop-RecordSource')).toHaveValue(union);
+  } finally {
+    await app.close();
+  }
+});
+
 const sample: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'table', name: 'Clients' }, props: { Width: 9072 }, sections: [
   { kind: 'formHeader', height: 0, props: { Visible: false }, controls: [] },
   { kind: 'detail', height: 2268, props: {}, controls: [{ kind: 'textBox', name: 'Nom', left: 1701, top: 0, width: 2268, height: 340, props: { ControlSource: 'Nom' } }] },

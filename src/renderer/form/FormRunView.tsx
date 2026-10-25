@@ -21,6 +21,7 @@ import { confirmDelete, fieldErrorParams, showRelatedRefusal } from '../datashee
 import { flushCellEditor } from '../datasheet/grid-shared';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import type { DocViewProps } from '../shell/DocumentTabs';
+import type { OpenArgs } from '../state/app-state';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { flashStatus } from '../shell/StatusBar';
@@ -57,7 +58,8 @@ const asker = (modal: ModalApi, region: string) => (ps: SourceInfo['parameters']
 
 export function FormRunView(p: DocViewProps) {
   const { t } = useTranslation();
-  const { tab, readOnly } = p;
+  const { tab } = p;
+  const readOnly = p.readOnly || tab.openArgs?.dataMode === 'readOnly';   // R9: a macro's OpenForm in read-only data mode
   const modal = useModal();
   const [region, setRegion] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -77,7 +79,7 @@ export function FormRunView(p: DocViewProps) {
       // opened from the Navigation Pane (generic path, mode run): its Default View; Datasheet is the tab's datasheet mode
       const o = opening.current;
       if (firstRun(o.tab.id) && o.tab.mode === 'run' && openingMode(doc) === 'datasheet') o.dispatch({ type: 'setMode', id: o.tab.id, mode: 'datasheet' });
-      const records = recordsFor(doc, region, readOnly);
+      const records = recordsFor(doc, region, readOnly, undefined, o.tab.openArgs);   // its subforms never take them
       // its parameters asked once, before the first page; Cancel does not open it (Access), with no error
       void records.open(asker(modal, region)).then((ok) => {
         if (!current) return;
@@ -93,13 +95,15 @@ export function FormRunView(p: DocViewProps) {
     mode={tab.mode === 'datasheet' ? 'datasheet' : 'run'} ancestors={[tab.name]} tab={{ id: tab.id, dispatch: p.dispatch }} />;
 }
 
-/** The form's records, as its definition allows them; a subform's are linked (no record until the master's values come). */
-function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFields?: string[]): FormRecords {
+/** The form's records, as its definition allows them; a subform's are linked (no record until the master's values come).
+ *  `args`: how the tab was opened (OpenForm): its Where Condition restricts the records, its data mode applies (R8, R9). */
+function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFields?: string[], args?: OpenArgs): FormRecords {
   const all = doc.sections.flatMap((s) => flattenControls(s.controls));
   const allow = (n: string) => effectiveProp(doc.props, n, 'form') !== false;
   const records: FormRecords = new FormRecords(dataApi, {
     ref: doc.recordSource, locale: region, readOnly, allowAdditions: allow('AllowAdditions'), allowEdits: allow('AllowEdits'), allowDeletions: allow('AllowDeletions'),
     ...(childFields?.length ? { link: { childFields, values: null } } : {}),
+    ...(args?.where !== undefined ? { where: args.where } : {}), ...(args?.dataMode ? { dataMode: args.dataMode } : {}),
     newRecordValues: () => controlDefaults(all, records.snapshot.info ?? NO_INFO, { locale: region, lang: langOf(), now: () => new Date() }),
   });
   return records;

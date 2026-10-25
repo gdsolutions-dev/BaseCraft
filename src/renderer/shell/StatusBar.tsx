@@ -30,7 +30,7 @@ export function StatusBar({ ctx }: { ctx: RibbonContext }) {
       <span role="status" data-testid="status-message"><span className="status-flash" key={flash?.n}>{flash ? t(flash.key) : ''}</span></span>
       <div className="views" role="group" aria-label={t('status.views')}>
         {form && view('form', AppWindow)}
-        {view('datasheet', Sheet)}
+        {ctx.kind !== 'macro' && view('datasheet', Sheet) /* a macro has no datasheet */}
         {ctx.kind === 'query' && button('sql', t('status.mode.sql'), 'viewSql', sql, Code) /* A3: Access's order */}
         {view('design', PencilRuler)}
       </div>

@@ -50,6 +50,34 @@ describe('loadReportData', () => {
   });
 });
 
+describe('Where Condition (R8)', () => {
+  const CLIENTS = [['Dupont', 'Lyon'], ['Martin', 'LYON'], ['Durand', 'Paris'], ['Éric', 'Lyôn']];
+  const wheres: (string | undefined)[] = [];
+  const api = {
+    objects: { get: async (_k: string, name: string) => ({ name, definition: FACTURES_REPORT }) },
+    sources: {
+      describe: async (): Promise<SourceInfo> => ({ fields: FIELDS, updatable: false, parameters: [] }),
+      page: async (_: RecordSourceRef, r: SourcePageRequest): Promise<SourcePage> => { // the main process applies it; here one condition
+        wheres.push(r.where);
+        const rows = r.where === '[Ville] = "Paris"' ? CLIENTS.filter((c) => c[1] === 'Paris') : CLIENTS;
+        return { rows: rows.slice(r.offset, r.offset + r.limit), rowids: [], total: rows.length };
+      },
+    },
+  };
+  it('report rows restricted by where', async () => {
+    expect((await loadReportData(api, { kind: 'table', name: 'Clients' }, undefined, undefined, '[Ville] = "Paris"')).rows).toEqual([['Durand', 'Paris']]);
+    expect((await loadReportData(api, { kind: 'table', name: 'Clients' })).rows).toHaveLength(4);
+    expect(wheres).toEqual(['[Ville] = "Paris"', undefined]);
+  });
+  it('loadDocData and layoutSavedReport pass it on', async () => {
+    wheres.length = 0;
+    expect((await loadDocData(api, FACTURES_REPORT, undefined, undefined, '[Ville] = "Paris"')).rows).toEqual([['Durand', 'Paris']]);
+    const env: LayoutEnv = { locale: 'fr-FR', lang: 'fr', now: () => new Date(Date.UTC(2026, 9, 22)), errorText: { error: '#Erreur', name: '#Nom?' } };
+    await layoutSavedReport(api, 'x', env, async () => null, undefined, undefined, '[Ville] = "Paris"');
+    expect(wheres).toEqual(['[Ville] = "Paris"', '[Ville] = "Paris"']);
+  });
+});
+
 describe('zoomFor', () => {
   it('zoom', () => {
     expect(zoomFor('actual', { w: 794, h: 1123 }, { w: 500, h: 500 })).toBe(1);

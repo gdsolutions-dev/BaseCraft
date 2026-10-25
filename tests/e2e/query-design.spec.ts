@@ -214,20 +214,23 @@ test('the Lookup tab\'s « … » opens the Query Builder over the Row Source an
     await expect(page.getByTestId('prop-rowSource-build')).toBeEnabled();
     await expect(page.getByTestId('prop-rowSource-build')).toHaveAttribute('title', fr.fieldProp.queryBuilder);
     await page.getByTestId('prop-rowSource-build').click();
+    await page.getByTestId('modal-btn-yes').click();   // Access: create a query based on the table?
     const builder = page.getByTestId('rowsource-builder');
     await expect(builder.getByTestId('qbe-box-Clients')).toBeVisible();
     await builder.getByTestId('qbe-field-Clients-N°').dblclick();
     await builder.getByTestId('qbe-field-Clients-Nom').dblclick();
     await builder.getByTestId('qbe-cell-sort-1').selectOption('asc');
-    await page.getByTestId('rowsource-builder-ok').click();
+    await page.getByTestId('rowsource-builder-tab-close').click();
+    await page.getByTestId('modal-btn-yes').click();
     await expect(builder).toHaveCount(0);
     const sql = 'SELECT [Clients].[N°], [Clients].[Nom] FROM [Clients] ORDER BY [Clients].[Nom];';
     await expect(page.getByTestId('prop-rowSource')).toHaveValue(sql);
     await expect(page.getByTestId('prop-rowSource-note')).toHaveCount(0);
-    // reopened on that SQL: the same grid; Cancel keeps the property
+    // reopened on that SQL: the same grid; closed unchanged, it keeps the property without asking
     await page.getByTestId('prop-rowSource-build').click();
     await expect(builder.getByTestId('qbe-cell-field-1')).toHaveValue('Nom');
-    await page.getByTestId('rowsource-builder-cancel').click();
+    await page.getByTestId('cmd-builderClose').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
     await expect(page.getByTestId('prop-rowSource')).toHaveValue(sql);
   } finally {
     await app.close();

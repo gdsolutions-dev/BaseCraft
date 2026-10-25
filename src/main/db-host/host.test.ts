@@ -130,6 +130,7 @@ describe('with a real session', () => {
 
   it('a write issued during an action query waits until it rolls back (it does not join its savepoint)', async () => {
     // 10.10 -> 9.10; 0.10 -> -0.90 breaks >0: the whole run rolls back
+    await d(req(10, 'setContentEnabled', '')); // no active content
     const run = d(req(1, 'runAction', { kind: 'sql', sql: 'UPDATE Commandes SET Montant = Montant - 1 WHERE Client = 1' }, {}, { skipFailures: false, replaceTable: false }));
     const write = d(req(2, 'insert', 'Clients', { Nom: 'Zoé', Ville: 'Nice' }));
     await Promise.all([run, write]);

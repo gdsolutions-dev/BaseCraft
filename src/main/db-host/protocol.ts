@@ -19,6 +19,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription',
   'describeSource', 'pageSource', 'actionCount', 'runAction',
+  'activeContent', 'setContentEnabled', 'dbUuid',
   'exportText',
   'exportRowCount',
   'exportExcel',

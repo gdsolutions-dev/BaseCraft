@@ -16,15 +16,15 @@ import type { FieldFilter, LookupRow, PageRequest, RowPage } from '../../shared/
 import type { SortSpec } from '../../shared/record-source';
 export type { LookupRow, PageRequest, RowPage };
 
-/** ` WHERE …` for a filter (see compileFilter), '' without one. */
-function where(design: TableDesign, filter: FieldFilter[] | undefined, locale: string) {
-  const f = compileFilter(design, filter ?? [], locale);
+/** ` WHERE …` for a filter and a Where Condition (see compileFilter), '' without either. */
+function where(design: TableDesign, filter: FieldFilter[] | undefined, locale: string, cond?: string) {
+  const f = compileFilter(design, filter ?? [], locale, cond);
   return { sql: f.sql ? ` WHERE ${f.sql}` : '', params: f.params };
 }
 
-/** The rows `filter` keeps; `locale`: the data region (see compileFilter). */
-export function countRows(db: DatabaseSync, table: string, filter: FieldFilter[] = [], locale = 'en-US'): number {
-  const w = filter.length ? where(tableDesign(db, table), filter, locale) : { sql: '', params: [] };
+/** The rows `filter` and `cond` (a Where Condition) keep; `locale`: the data region (see compileFilter). */
+export function countRows(db: DatabaseSync, table: string, filter: FieldFilter[] = [], locale = 'en-US', cond?: string): number {
+  const w = filter.length || cond !== undefined ? where(tableDesign(db, table), filter, locale, cond) : { sql: '', params: [] };
   return Number((db.prepare(`SELECT count(*) AS n FROM ${quoteIdent(table)}${w.sql}`).get(...w.params) as { n: number | bigint }).n);
 }
 
@@ -64,10 +64,10 @@ const SNAPSHOTS = 4;
  *  once per (table, sorts, filter, region) with the same ORDER BY (text keys use UDFs no index serves: one sort of the whole
  *  table, not one per page), then sliced; the last SNAPSHOTS keys are kept until `seq` moves. */
 export function readRows(
-  db: DatabaseSync, design: TableDesign, req: PageRequest, locale = 'en-US', sorts: readonly SortSpec[] = req.sort ? [req.sort] : [], seq?: number,
+  db: DatabaseSync, design: TableDesign, req: PageRequest & { where?: string }, locale = 'en-US', sorts: readonly SortSpec[] = req.sort ? [req.sort] : [], seq?: number,
 ): RowPage {
   const names = design.fields.map((fd) => quoteIdent(fd.name));
-  const w = where(design, req.filter, locale);
+  const w = where(design, req.filter, locale, req.where);
   const from = `FROM ${quoteIdent(design.name)}`;
   if (seq === undefined || !isText(design, sorts)) {
     const stmt = db.prepare(`SELECT rowid, ${names.join(', ')} ${from}${w.sql} ORDER BY ${orderBy(design, sorts)} LIMIT ? OFFSET ?`);
@@ -77,7 +77,7 @@ export function readRows(
   }
   let cache = snapshots.get(db);
   if (cache?.seq !== seq) snapshots.set(db, (cache = { seq, byKey: new Map() }));
-  const key = JSON.stringify([design.name, sorts, req.filter ?? [], locale]);
+  const key = JSON.stringify([design.name, sorts, req.filter ?? [], req.where ?? null, locale]);
   let ids = cache.byKey.get(key);
   if (ids) cache.byKey.delete(key); // re-set below: most recent last
   else {

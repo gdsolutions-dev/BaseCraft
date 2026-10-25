@@ -122,8 +122,9 @@ it('read-only session', async () => {
   const roSession = Session.open(path.join(dir, 'test.basecraft'), { appVersion: '0.0.0', region: 'fr-FR', probe, sessionId: 'b' });
   try {
     expect(roSession.state.readOnly).toBe(true);
+    roSession.setContentEnabled(roSession.activeContent().fingerprint);
     expect(await roSession.runAction(q('QMaj'), {}, opts0)).toEqual({ ok: false, reason: 'readOnly' });
-    expect(roSession.actionCount(q('QMaj'), {}).count).toBe(2);
+    expect((await roSession.actionCount(q('QMaj'), {})).count).toBe(2);
   } finally {
     roSession.close();
   }

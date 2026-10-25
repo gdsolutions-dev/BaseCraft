@@ -37,6 +37,7 @@ import { previewText, runImport, type ImportTexts } from './import/text-import';
 import { excelSource, previewExcel, readSheet } from './exchange/excel-read';
 import { checkQueryDefinition, describeQuerySource, pageQuerySource, type QueryCtx } from './query/source';
 import { actionCount, runAction } from './query/action';
+import { activeContent, type ActiveContent } from './db/active-content';
 
 export interface SessionDeps {
   appVersion: string;
@@ -76,6 +77,9 @@ export class Session {
   /** Write sequence of the cached query totals and sorted-order snapshots (readRows): moved by writeDb(), by another connection's commit, by a new connection. */
   private seq = 0;
   private seen: [DatabaseSync | null, unknown] = [null, null];
+  /** The active content the main process enabled (trust.ts), by its fingerprint ('' : a base with none); null: disabled, until
+   *  the main process says otherwise. */
+  private enabledContent: string | null = null;
 
   static create(path: string, deps: SessionDeps): Session {
     createBaseFile(path, deps.appVersion);
@@ -411,7 +415,7 @@ export class Session {
     const fields = d.fields.map((x) => ({ name: x.name, type: x.props.type, props: x.props, origin: { table: d.name, field: x.name } }));
     return { fields, updatable: true, keyTable: d.name, parameters: [] };
   }
-  /** Filtered as rows.page filters (compileFilter); `total` counts the kept rows. Contract 1.2: a sort or filter field the
+  /** Filtered as rows.page filters (compileFilter), and by `req.where`; `total` counts the kept rows. Contract 1.2: a sort or filter field the
    *  table lacks rejects bc:notFound, a criterion compileFilter refuses rejects bc:invalidArgument (rows.page keeps
    *  bc:invalidArgument for an unknown sort field and bc:invalidFilter). A table has no params. */
   pageSource(ref: RecordSourceRef, req: SourcePageRequest): SourcePage {
@@ -422,16 +426,17 @@ export class Session {
     const missing = (name: string) => !d.fields.some((x) => sameName(x.name, name));
     if (filter.some((f) => missing(f.field)) || (req.sort ?? []).some((s) => missing(s.field))) throw new Error('bc:notFound');
     try {
-      const { rows } = readRows(db, d, { offset: req.offset, limit: req.limit, filter }, this.info.locale, req.sort ?? [], this.writeSeq());
-      return { rows: rows.map((r) => r.values), rowids: rows.map((r) => r.rowid), total: countRows(db, d.name, filter, this.info.locale) };
+      const { where } = req;
+      const { rows } = readRows(db, d, { offset: req.offset, limit: req.limit, filter, ...(where !== undefined ? { where } : {}) }, this.info.locale, req.sort ?? [], this.writeSeq());
+      return { rows: rows.map((r) => r.values), rowids: rows.map((r) => r.rowid), total: countRows(db, d.name, filter, this.info.locale, where) };
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error('bc:invalidArgument');
       throw e;
     }
   }
   private exportPager(src: ExportSource): (offset: number, limit: number) => SourcePage {
-    const { ref, params, sort, filter } = src;
-    return (offset, limit) => this.pageSource(ref, { offset, limit, ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(params ? { params } : {}) });
+    const { ref, params, sort, filter, where } = src;
+    return (offset, limit) => this.pageSource(ref, { offset, limit, ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
   }
   /** Writes the source (the datasheet's pages: pageSource, with its parameters, sort and filter) to `path`, a path the main
    *  process got from a save dialog. Reads only: allowed on a read-only base. Throws bc:writeFailed; the old file is kept. */
@@ -450,9 +455,26 @@ export class Session {
   }
   saveImportSpec(name: string, spec: ImportSpec): void { saveSpec(this.writeDb(), name, spec); }
 
-  /** A3 action queries (src/main/query/action.ts). actionCount only reads; runAction on a read-only base: reason readOnly. */
-  actionCount(ref: QueryRef, params: Record<string, CellInput>): { count: number; table: string } { return actionCount(this.conn(), ref, params, this.queryCtx()); }
+  /** Active content (R3) and the base's identity, for the main process's decision (trust.ts). */
+  activeContent(): ActiveContent { return activeContent(this.conn()); }
+  dbUuid(): string {
+    return (this.conn().prepare(`SELECT value FROM bc_meta WHERE key = 'db_uuid'`).get() as { value: string } | undefined)?.value ?? '';
+  }
+  setContentEnabled(fingerprint: string | null): void { this.enabledContent = fingerprint; }
+  /** Read again at every call: content changed by another connection since it was enabled (an action query or a macro added
+   *  or edited elsewhere) is not the content enabled, and is refused until approved. */
+  private needContent(): void {
+    if (this.enabledContent === null || activeContent(this.conn()).fingerprint !== this.enabledContent) throw new Error('bc:contentDisabled');
+  }
+
+  /** A3 action queries (src/main/query/action.ts), refused bc:contentDisabled while the active content is disabled.
+   *  actionCount only reads; runAction on a read-only base: reason readOnly. */
+  async actionCount(ref: QueryRef, params: Record<string, CellInput>): Promise<{ count: number; table: string }> {
+    this.needContent();
+    return actionCount(this.conn(), ref, params, this.queryCtx());
+  }
   async runAction(ref: QueryRef, params: Record<string, CellInput>, opts: RunActionOptions): Promise<ActionResult> {
+    this.needContent();
     let db: DatabaseSync;
     try { db = this.writeDb(); } catch (e) { if (e instanceof ReadOnlyError) return { ok: false, reason: 'readOnly' }; throw e; }
     // it yields between rows (the write layer is async): a total cached meanwhile must not outlive the run

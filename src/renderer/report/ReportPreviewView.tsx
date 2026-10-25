@@ -176,7 +176,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         data.current = null;
         const params = kept ? asked : await docParameters(api, d, askParameters(modal));
         if (!live()) return;
-        const rows = await loadDocData(api, d, params, ac.signal);
+        const rows = await loadDocData(api, d, params, ac.signal, tab.openArgs?.where);   // OpenReport's Where Condition (R8)
         if (!live()) return;
         data.current = rows;
       }
@@ -243,7 +243,8 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       if (doc.current) await modal.confirm({ titleKey: format === 'excel' ? 'ribbon.cmd.exportExcel' : 'ribbon.cmd.exportText', messageKey: 'exchange.noSource', buttons: ['ok'] });
       return;
     }
-    await exportSource(modal, { ref: src }, tab.name, format);
+    const where = tab.openArgs?.where;   // OpenReport's Where Condition: the export has the preview's rows
+    await exportSource(modal, { ref: src, ...(where !== undefined ? { where } : {}) }, tab.name, format);
   };
 
   const cmds = useRef({ run, pageSetup, applySetup, output, closePreview, exportData });

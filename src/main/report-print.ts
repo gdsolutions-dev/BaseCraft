@@ -155,7 +155,8 @@ export function printDocument(req: PrintRequest): Promise<'printed' | 'canceled'
       try {
         wc.print({ silent: false, printBackground: true, landscape: req.landscape, pageSize: 'A4', margins: { marginType: 'none' } }, (ok, reason) => {
           if (ok) resolve('printed');
-          else if (reason === 'cancelled') resolve('canceled');
+          // Electron reports the Cancel of the dialog as "Print job canceled" (older versions: "cancelled")
+          else if (/cancel/i.test(reason)) resolve('canceled');
           else { console.error('print failed:', reason); reject(new Error('bc:printFailed')); }
         });
       } catch (e) {

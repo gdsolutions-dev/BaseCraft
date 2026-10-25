@@ -199,6 +199,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     await vis(page, 'cmd-viewForm').click();
     for (const [c, nom, ville] of clients as [number, string, string][]) {
       if (c > 1) await nav.getByTestId('nav-new').click();
+      await expect(ctl('Nom')).toHaveValue('');   // the new record is shown: a fill made before is lost when it appears
       await expect(ctl('Nom')).toBeEditable();
       await ctl('Nom').fill(nom);
       await ctl('Ville').fill(ville);

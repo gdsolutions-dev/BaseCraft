@@ -9,17 +9,19 @@ export interface ConfirmOptions { titleKey: string; messageKey: string; params?:
 export interface PromptOptions { titleKey: string; labelKey: string; params?: object; initial: string; validate?: (v: string) => string | null
   /** The label's interpolation values (A3: a parameter's name, never read as a key). */
   labelParams?: object }
+export interface CustomOptions { titleKey: string; titleParams?: object }
 export interface ModalApi {
   confirm(opts: ConfirmOptions): Promise<ModalButton>;
   prompt(opts: PromptOptions): Promise<string | null>;
-  /** A dialog with its own content, in the same queue (A2 Task 13 signature). `close(null)` and Escape cancel. */
-  custom<T>(render: (close: (v: T | null) => void) => ReactNode, opts: { titleKey: string }): Promise<T | null>;
+  /** A dialog with its own content, in the same queue (A2 Task 13 signature). `close(null)` and Escape cancel.
+   *  `titleParams`: the title's interpolation values (B1: a macro's MessageBox title, never read as a key). */
+  custom<T>(render: (close: (v: T | null) => void) => ReactNode, opts: CustomOptions): Promise<T | null>;
 }
 
 type Request =
   | { id: number; kind: 'confirm'; opts: ConfirmOptions; resolve: (v: ModalButton) => void }
   | { id: number; kind: 'prompt'; opts: PromptOptions; resolve: (v: string | null) => void }
-  | { id: number; kind: 'custom'; opts: { titleKey: string }; render: (close: (v: unknown) => void) => ReactNode; resolve: (v: unknown) => void };
+  | { id: number; kind: 'custom'; opts: CustomOptions; render: (close: (v: unknown) => void) => ReactNode; resolve: (v: unknown) => void };
 
 const ModalContext = createContext<ModalApi | null>(null);
 let nextId = 0;
@@ -29,7 +31,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ModalApi>(() => ({
     confirm: (opts) => new Promise((resolve) => setQueue((q) => [...q, { id: ++nextId, kind: 'confirm', opts, resolve }])),
     prompt: (opts) => new Promise((resolve) => setQueue((q) => [...q, { id: ++nextId, kind: 'prompt', opts, resolve }])),
-    custom: <T,>(render: (close: (v: T | null) => void) => ReactNode, opts: { titleKey: string }) => new Promise<T | null>((resolve) =>
+    custom: <T,>(render: (close: (v: T | null) => void) => ReactNode, opts: CustomOptions) => new Promise<T | null>((resolve) =>
       setQueue((q) => [...q, { id: ++nextId, kind: 'custom', opts, render: render as (close: (v: unknown) => void) => ReactNode, resolve: resolve as (v: unknown) => void }])),
   }), []);
   const current = queue[0];
@@ -142,7 +144,7 @@ function Dialog({ req, onDone }: { req: Request; onDone: (v: unknown) => void })
   return (
     <div className="modal-backdrop">
       <div ref={ref} className="modal card" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="modal" onKeyDown={onKeyDown}>
-        <h2 id={titleId} className="modal-title">{t(req.opts.titleKey)}</h2>
+        <h2 id={titleId} className="modal-title">{t(req.opts.titleKey, req.kind === 'custom' ? { ...req.opts.titleParams } : undefined)}</h2>
         {req.kind === 'custom' ? req.render(onDone) : req.kind === 'confirm' ? (
           <p className="modal-message">{t(req.opts.messageKey, { ...req.opts.params })}</p>
         ) : (

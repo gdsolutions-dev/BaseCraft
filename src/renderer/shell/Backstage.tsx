@@ -1,5 +1,5 @@
-// Coulisse (onglet Fichier) : Nouveau, Ouvrir, Enregistrer sous, Compacter et réparer, Récents, Fermer, Options.
-import { ArrowLeft, Database, ExternalLink, FilePlus2, FolderClosed, FolderOpen, Info, Save, Settings2, Wrench } from 'lucide-react';
+// Coulisse (onglet Fichier) : Récents, Nouveau, Ouvrir, Enregistrer sous, Compacter et réparer, Récents, Fermer, Options.
+import { ArrowLeft, Database, ExternalLink, FilePlus2, FolderClosed, FolderOpen, History, Info, Save, Settings2, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppInfo, AppSettings, BasecraftApi, LicenseEntry } from '../../shared/api';
@@ -74,7 +74,7 @@ export function Backstage(p: Props) {
   useEffect(() => { first.current?.focus(); }, []);
   const item = (testid: string, Icon: typeof FilePlus2, label: string, onClick: () => void, extra: { disabled?: boolean; active?: boolean } = {}) => (
     <button data-testid={testid} className={`bs-item${extra.active ? ' is-active' : ''}`} disabled={extra.disabled} onClick={onClick}
-      aria-current={extra.active || undefined} ref={testid === 'bs-new' ? first : undefined}>
+      aria-current={extra.active || undefined} ref={testid === 'bs-recent' ? first : undefined}>
       <Icon className="ic" aria-hidden /><span>{label}</span>
     </button>
   );
@@ -89,6 +89,7 @@ export function Backstage(p: Props) {
           ? <button className="bs-back iconbtn" data-testid="bs-back" aria-label={t('backstage.back')} title={t('backstage.back')} onClick={p.onBack}><ArrowLeft className="ic" aria-hidden /></button>
           : <div className="bs-back-spacer" />}
         <div className="bs-brand"><Database className="ic" aria-hidden />{t('app.title')}</div>
+        {item('bs-recent', History, t('backstage.recent'), () => p.onView('home'), { active: p.view === 'home' })}
         {item('bs-new', FilePlus2, t('backstage.new'), p.onNew)}
         {item('bs-open', FolderOpen, t('backstage.open'), () => p.onOpen())}
         {item('bs-save-as', Save, t('backstage.saveAs'), p.onSaveAs, { disabled: !p.hasBase })}

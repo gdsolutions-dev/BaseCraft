@@ -12,6 +12,7 @@ import { TableDesignView } from '../table-design/TableDesignView';
 import type { DocViewProps } from './DocumentTabs';
 import { ReportPreviewView } from '../report/ReportPreviewView';
 import { ReportDesignView } from '../report/design/ReportDesignView';
+import { MacroDesignView } from '../macro/MacroDesignView';
 
 type ViewMode = 'design' | 'run';
 const views = new Map<string, ComponentType<DocViewProps>>();
@@ -45,3 +46,4 @@ export function DocumentView(p: DocViewProps) {
 
 registerDocumentView('report', 'run', ReportPreviewView);
 registerDocumentView('report', 'design', ReportDesignView);
+registerDocumentView('macro', 'design', MacroDesignView);

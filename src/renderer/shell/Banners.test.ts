@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LockInfo, SessionState } from '../../shared/api';
-import { readOnlyBanner, reconcileBanners } from './Banners';
+import { contentBanner, contentBlocked, onContentBlocked, readOnlyBanner, reconcileBanners } from './Banners';
 
 const holder: LockInfo = { user: 'marie', host: 'PC-1', pid: 42, sessionId: 's1', heartbeatAt: '2026-10-22T10:00:00.000Z' };
 const placeholder: LockInfo = { user: '?', host: '?', pid: 0, sessionId: '?', heartbeatAt: new Date(0).toISOString() };
@@ -64,5 +64,26 @@ describe('reconcileBanners (A2-R14)', () => {
       { kind: 'reconcile', key: 'banner.reconcile', params: { count: 1 } },
       { kind: 'relationsUpdated', key: 'banner.relationsUpdated', params: { names: 'ClientsCommandes' } },
     ]);
+  });
+});
+
+describe('contentBanner (B1: active content disabled)', () => {
+  it('only a disabled state shows the bar', () => {
+    expect(contentBanner(s({ content: 'disabled' }))).toEqual({ key: 'banner.contentDisabled' });
+    expect(contentBanner(s({ content: 'enabled' }))).toBeNull();
+    expect(contentBanner(s({ content: 'none' }))).toBeNull();
+    expect(contentBanner(s({}))).toBeNull();
+  });
+});
+
+describe('contentBlocked (a dismissed security bar comes back when something is blocked)', () => {
+  it('calls the listeners until they unsubscribe', () => {
+    let n = 0;
+    const off = onContentBlocked(() => { n++; });
+    contentBlocked();
+    expect(n).toBe(1);
+    off();
+    contentBlocked();
+    expect(n).toBe(1);
   });
 });

@@ -1,10 +1,10 @@
 // Mode Création d'une requête, comme dans Access : le volet des tables en haut, la grille de création en bas, séparés par une
 // barre déplaçable. La grille n'est jamais stockée : elle est relue du SQL enregistré (parseSql puis toQbe) et réécrite en SQL
-// à l'enregistrement (fromQbe puis printSql), avec la disposition des boîtes. Le même éditeur sert au Générateur de requête du
-// Contenu d'une liste de choix (RowSourceBuilder), qui rend un SQL au lieu d'enregistrer une requête. Le mode SQL fait partie du
+// à l'enregistrement (fromQbe puis printSql), avec la disposition des boîtes. Le même éditeur sert au Générateur de requête
+// (RowSourceBuilder : Contenu d'une liste de choix, Source d'un formulaire ou d'un état), qui rend un SQL au lieu d'enregistrer une requête. Le mode SQL fait partie du
 // Mode Création (DocMode inchangé) : la grille s'y écrit en SQL, le texte revient dans la grille s'il se lit et si elle peut le
 // montrer (sinon, comme dans Access, la requête reste en mode SQL), et l'enregistrement y garde le texte normalisé.
-import { useEffect, useMemo, useReducer, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Dispatch } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { Relation } from '../../shared/api';
@@ -18,13 +18,14 @@ import { printSql } from '../../shared/query/print';
 import { fromQbe, oneLine, toQbe, type IsField, type QbeDesign, type QbeKind } from '../../shared/query/qbe';
 import { parseSql } from '../../shared/query/sql-parser';
 import { api } from '../bridge';
-import { Frame } from '../relations/RelationDialog';
 import { autoLayout, type Point } from '../relations/relations-layout';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { AppDispatch } from '../shell/nav-menu';
+import type { DocTab } from '../state/app-state';
 import { useErrorDialog, useModal } from '../shell/Modal';
+import { ModalTab, shellDispatch } from '../shell/modal-tab';
 import { nameErrorKey } from '../shell/NavPane';
-import { registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
+import { MODAL_SCOPE, modeGuard, registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { Splitter } from '../shell/Splitter';
 import { SPLIT_DEFAULT, loadRatio, pxToRatio, ratioToPx, saveRatio } from '../shell/splitter-model';
 import { JoinDialog } from './JoinDialog';
@@ -32,6 +33,7 @@ import { QbeGrid } from './QbeGrid';
 import { designProblem, editable, pruneInvalid, emptyQbe, fieldEntry, outputAll, qbeReducer, type GridColumn, type QbeAction } from './qbe-edit';
 import { ParametersDialog } from './ParametersDialog';
 import { QueryPropertiesDialog, TopValuesDialog, type QueryProps } from './QueryProperties';
+import { QueryRunView } from './QueryRunView';
 import { runActionFlow } from './run-action';
 import { SqlView } from './SqlView';
 import { ShowTableDialog } from './ShowTableDialog';
@@ -260,21 +262,27 @@ function readSql(text: string): { q: Query } | { error: SqlError } | null {
 
 // ---------- The query's Design view: the grid, or its SQL view ----------
 
-export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
+/** The Query Builder's hooks (RowSourceBuilder): the design it opens on (null: only SQL view can show `sql`), Save (the
+ *  property's new SQL, set when the builder closes), Run (its datasheet), Close (the tab's). */
+interface BuilderHooks { start: { design: QbeDesign | null; sql: string }; update(sql: string): void; run(sql: string): void; close(): void }
+
+export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewProps & { builder?: BuilderHooks }) {
   const { t } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
   const ctx = useDisplayContext();
-  const [model, set] = useReducer(modelReducer, undefined, () => emptyModel());
+  const startDesign = builder?.start.design;
+  const [model, set] = useReducer(modelReducer, undefined, () => emptyModel(startDesign ? editable(startDesign) : undefined));
   const { catalog, ensure } = useCatalog(tab.reloadToken);
   const [state, setState] = useState<{ original: string | null; extra: Record<string, unknown> } | null>(
     tab.isNew ? { original: null, extra: {} } : null);
-  const [view, setView] = useState<'grid' | 'sql'>('grid');
-  const [sql, setSql] = useState('');
+  const [view, setView] = useState<'grid' | 'sql'>(builder && !startDesign ? 'sql' : 'grid');
+  const [sql, setSql] = useState(builder && !startDesign ? builder.start.sql : '');
   const [sqlError, setSqlError] = useState<SqlError | null>(null);
   const [tableRow, setTableRow] = useState(true);
-  // as in Access, on a new query (not one opened in SQL view)
-  const [showTable, setShowTable] = useState(() => !!tab.isNew && !readOnly && sqlRequested(tab.name) < 0);
+  // as in Access, on a new query (not one opened in SQL view); the builder, on an empty Record Source
+  const [showTable, setShowTable] = useState(() => builder ? !!startDesign && !startDesign.tables.length
+    : !!tab.isNew && !readOnly && sqlRequested(tab.name) < 0);
   const [selected, setSelected] = useState(0);
   const [saving, setSaving] = useState(false);
   const [requests, setRequests] = useState(0);
@@ -337,6 +345,9 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     return () => { current = false; };
   }, [tab.name, tab.isNew, tab.reloadToken]);
 
+  // the builder's grid: the fields of its sources
+  useEffect(() => { if (startDesign) void ensure(startDesign.tables.map((x) => x.name)).catch(() => {}); }, []);
+
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: model.dirty }); }, [model.dirty, tab.id, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);
 
@@ -367,8 +378,42 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     return r.sql;
   };
 
+  /** The builder's Save (Access): the grid's SQL becomes the property's, set when the builder closes. */
+  const builderSave = async (): Promise<boolean> => {
+    if (busy.current) return false;
+    await flush();
+    const text = await savedSql();
+    if (text === null) return false;
+    builder!.update(oneLine(text));
+    set({ type: 'clean' });
+    return true;
+  };
+  /** The builder's Save As (Access): a saved query of the grid, the builder going on. */
+  const builderSaveAs = async () => {
+    if (busy.current) return;
+    await flush();
+    const text = await savedSql();
+    if (text === null) return;
+    let name = await askName(t('query.newName', { n: 1 }));
+    while (name !== null) {
+      const res = await api.objects.save('query', name, { formatVersion: '1.0', sql: text, layout: { tables: live.current.model.positions } }, null);
+      if (res.ok) { dispatch({ type: 'objectSaved', kind: 'query', name }); return; }
+      await message(`dialog.op.${res.reason}`, { name, table: '', view: '' });
+      if (res.reason !== 'nameExists') return;
+      name = await askName(name);
+    }
+  };
+  /** The builder's Run (Access): its datasheet, in its tab; an action query runs as anywhere. */
+  const builderRun = async () => {
+    if (busy.current) return;
+    await flush();
+    const text = await savedSql();
+    if (text !== null) builder!.run(text);
+  };
+
   /** The whole save flow; true when the query is saved. */
   const save = async (): Promise<boolean> => {
+    if (builder) return builderSave();
     const { readOnly: ro, state: s } = live.current;
     if (ro || !s || busy.current) return false;
     busy.current = true;
@@ -421,6 +466,11 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     if (busy.current) return false;
     await flush();
     const { model: m, tab: doc, readOnly: ro } = live.current;
+    if (builder) { // its run needs no save; closing it changed asks to update the property (Access)
+      if (reason === 'mode' || !m.dirty) return true;
+      const r = await modal.confirm({ titleKey: 'fieldProp.queryBuilder', messageKey: 'query.builderSave', buttons: ['yes', 'no', 'cancel'] });
+      return r === 'no' || (r === 'yes' && (await save()));
+    }
     if (ro || (!m.dirty && !(reason === 'mode' && doc.isNew))) return true;
     if (reason === 'mode') {
       const r = await modal.confirm({ titleKey: 'query.saveFirstTitle', messageKey: 'query.mustSaveFirst', params: { name: doc.name }, buttons: ['yes', 'no'] });
@@ -545,8 +595,8 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     : model.design.kind === 'select';
   const action = view === 'sql' ? parsed !== null && !runnable : model.design.kind !== 'select';
   const topKind = ['select', 'makeTable', 'append'].includes(model.design.kind);
-  const cmds = useRef({ save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction });
-  cmds.current = { save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction };
+  const cmds = useRef({ save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun });
+  cmds.current = { save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun };
   useEffect(() => {
     const writable = (fn: () => unknown) => () => {
       if (!live.current.readOnly && live.current.state && !busy.current) void fn();
@@ -571,7 +621,9 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     } : {};
     const offCommands = registerCommands(tab.id, {
       save: writable(() => cmds.current.save()),
-      ...(runnable ? { runQuery: () => { void dispatch({ type: 'setMode', id: tab.id, mode: 'run' }); } } : {}),
+      ...(runnable && !builder ? { runQuery: () => { void dispatch({ type: 'setMode', id: tab.id, mode: 'run' }); } } : {}),
+      ...(runnable && builder ? { runQuery: () => void cmds.current.builderRun(), viewDatasheet: () => void cmds.current.builderRun() } : {}),
+      ...(builder ? { builderSaveAs: () => void cmds.current.builderSaveAs() } : {}),
       // not gated on a read-only base: the run says why it cannot write (dialog.op.readOnly)
       ...(action ? { runQuery: () => { if (live.current.state && !busy.current) void cmds.current.runAction(); } } : {}),
       viewSql: () => { // before the query is read: a request, taken once it is
@@ -614,64 +666,93 @@ export function QueryDesignView({ tab, readOnly, dispatch }: DocViewProps) {
   );
 }
 
-// ---------- The Row Source's Query Builder (a lookup's Contenu, A2-R18) ----------
+// ---------- The Query Builder of a Row Source or a Record Source (A2-R18), in a modal tab as in Access ----------
 
-/** The design a Row Source opens on: a table or a saved query becomes the only source; SQL is read back (null when the grid
- *  cannot show it). */
-async function rowSourceDesign(text: string, ensure: (names: string[]) => Promise<Map<string, Fields>>): Promise<QbeDesign | null> {
-  const [tables, queries] = await Promise.all([api.tables.list(), api.objects.list('query')]);
-  const named = [...tables.map((x) => x.name), ...queries.map((x) => x.name)].find((n) => sameName(n, text.trim()));
-  if (!text.trim() || named) return { ...emptyQbe(), tables: named ? [{ name: named }] : [] };
-  const q = parseSql(text);
-  const first = toQbe(q);
-  if (!first) return null;
-  return toQbe(q, isFieldOf(await ensure(first.tables.map((x) => x.name))));
+const BUILDER_SCOPE = `${MODAL_SCOPE}builder`;
+const BUILDER_RUN_SCOPE = `${MODAL_SCOPE}builder-run`;
+
+/** The design the builder opens on: an empty one, the table named, or the SQL read back (null when the grid cannot show it). */
+async function builderDesign(text: string, table: string | undefined, ensure: (names: string[]) => Promise<Map<string, Fields>>): Promise<QbeDesign | null> {
+  if (!text.trim() || table) return { ...emptyQbe(), tables: table ? [{ name: table }] : [] };
+  const r = readSql(text);
+  const first = r && 'q' in r ? toQbe(r.q) : null;
+  if (!first || !r || !('q' in r)) return null;
+  return toQbe(r.q, isFieldOf(await ensure(first.tables.map((x) => x.name))));
 }
 
-/** The Query Builder over a lookup's Row Source: OK gives the grid's SQL on one line (the property is one line), Cancel null. */
+/**
+ * The Query Builder over a Row Source (a lookup's, a list control's) or a Record Source (a form's, a report's), as in Access:
+ * on a table it first asks to make a query of it; on a saved query it opens that query in Design view instead. Otherwise it is
+ * Query Design itself (splitter, SQL view, the Query Design ribbon with its Close group, Run to a datasheet) in a tab that holds
+ * everything else back until it closes; closing a changed design asks to save the SQL and update the property. Gives the SQL
+ * saved (Save, or Yes on closing) on one line (the property is one line), else null.
+ */
 export function RowSourceBuilder({ rowSource, onClose }: { rowSource: string; onClose(sql: string | null): void }) {
   const { t } = useTranslation();
+  const modal = useModal();
   const showError = useErrorDialog();
-  const ctx = useDisplayContext();
-  const [model, set] = useReducer(modelReducer, undefined, () => emptyModel());
-  const { catalog, ensure } = useCatalog(0);
-  const [ready, setReady] = useState<'grid' | 'sqlOnly' | null>(null);
-  const [showTable, setShowTable] = useState(false);
-  const [selected, setSelected] = useState(0);
+  const { ensure } = useCatalog(0);
+  const [start, setStart] = useState<BuilderHooks['start'] | null>(null);
+  const [running, setRunning] = useState<{ sql: string; token: number } | null>(null);
+  const result = useRef<string | null>(null);
 
   useEffect(() => {
-    rowSourceDesign(rowSource, ensure).then((d) => {
-      if (d) set({ type: 'load', model: emptyModel(editable(d)) });
-      setReady(d ? 'grid' : 'sqlOnly');
-      if (d && !d.tables.length) setShowTable(true);
-    }, (e) => { void showError(e).then(() => onClose(null)); });
+    void (async () => {
+      const [tables, queries] = await Promise.all([api.tables.list(), api.objects.list('query')]);
+      const find = (list: { name: string }[]) => list.find((x) => sameName(x.name, rowSource.trim()))?.name;
+      const query = find(queries);
+      if (query) { void shellDispatch({ type: 'open', kind: 'query', name: query, mode: 'design' }); onClose(null); return; }
+      const table = find(tables);
+      if (table && await modal.confirm({ titleKey: 'fieldProp.queryBuilder', messageKey: 'query.builderOnTable', buttons: ['yes', 'no'] }) !== 'yes') {
+        onClose(null);
+        return;
+      }
+      setStart({ design: await builderDesign(rowSource, table, ensure), sql: rowSource });
+    })().catch((e) => { void showError(e).then(() => onClose(null)); });
   }, []);
 
-  const ok = async () => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    await new Promise((r) => setTimeout(r));
-    if (Object.keys(live.current.invalid).length) { await showError(new Error(`bc:invalidQuery|${Object.values(live.current.invalid)[0]}|`)); return; }
-    const r = gridSql(live.current, isFieldOf(catalog.fields));
-    if ('error' in r) { await showError(r.error); return; }
-    onClose(oneLine(r.sql));
+  /** The tab's close (its cross, the ribbon's Close): the design has its say (Yes / No / Cancel), then the SQL saved goes. */
+  const close = async () => {
+    const guard = modeGuard(BUILDER_SCOPE);
+    if (guard && !(await guard('close'))) return;
+    onClose(result.current);
   };
-  const live = useRef(model);
-  live.current = model;
+  const name = t('fieldProp.queryBuilder');
+  const live = useRef({ close, running, name });
+  live.current = { close, running, name };
+  // the tab's own commands, whichever view is in front: Close, and Design or SQL View back from the datasheet
+  useEffect(() => registerCommands(MODAL_SCOPE, {
+    builderClose: () => void live.current.close(),
+    viewDesign: () => { if (live.current.running) setRunning(null); },
+    viewSql: () => {
+      if (!live.current.running) return;
+      sqlRequests.push(live.current.name);   // taken by the design once shown (openSqlView's request)
+      setRunning(null);
+      sqlListeners.forEach((l) => l());
+    },
+  }), []);
 
+  const hooks = useMemo<BuilderHooks | null>(() => start && {
+    start, update: (sql) => { result.current = sql; }, run: (sql) => setRunning((r) => ({ sql, token: (r?.token ?? 0) + 1 })), close: () => void live.current.close(),
+  }, [start]);
+  // its views' tabs: never in the tab bar, their scopes serve the ribbon
+  const designTab = useMemo<DocTab>(() => ({ id: BUILDER_SCOPE, kind: 'query', name, mode: 'design', dirty: false, reloadToken: 0, isNew: true }), [name]);
+  const runTab = useMemo<DocTab>(() => ({ id: BUILDER_RUN_SCOPE, kind: 'query', name, mode: 'run', dirty: false, reloadToken: running?.token ?? 0 }), [name, running?.token]);
+  // the datasheet's end (a parameter cancelled, an error, an action query run) goes back to the design
+  const dispatch = useCallback<AppDispatch>((a) => (a.type === 'close' && a.id === BUILDER_RUN_SCOPE ? setRunning(null) : shellDispatch(a)), []);
+
+  if (!hooks) return null;   // the question on a table comes first
   return (
-    <Frame titleKey="query.rowSourceTitle" testId="rowsource-builder" className="qd-dialog" onCancel={() => onClose(null)}>
-      {ready === 'sqlOnly' && <p className="modal-message">{t('query.sqlOnly')}</p>}
-      {ready === 'grid' && ctx && (
-        <div className="qd">
-          <QbeEditor model={model} set={set} catalog={catalog} ensure={ensure} readOnly={false} ctx={ctx} self={null}
-            showTable={showTable} setShowTable={setShowTable} selected={selected} setSelected={setSelected} split={null} />
-        </div>
+    <ModalTab labelKey="fieldProp.queryBuilder" testId="rowsource-builder" onRequestClose={() => void close()}
+      scope={running ? BUILDER_RUN_SCOPE : BUILDER_SCOPE} kind="query" mode={running ? 'run' : 'design'}>
+      <section className="doc" hidden={!!running}>
+        <QueryDesignView tab={designTab} active={!running} readOnly={false} dispatch={dispatch} builder={hooks} />
+      </section>
+      {running && (
+        <section className="doc">
+          <QueryRunView tab={runTab} active readOnly={false} dispatch={dispatch} sql={running.sql} />
+        </section>
       )}
-      <div className="modal-buttons">
-        {ready === 'grid' && <button className="btn" data-testid="rowsource-builder-tables" onClick={() => setShowTable(true)}>{t('ribbon.cmd.addTables')}</button>}
-        <button className="btn btn-primary" data-testid="rowsource-builder-ok" disabled={ready !== 'grid'} onClick={() => void ok()}>{t('dialog.button.ok')}</button>
-        <button className="btn" data-testid="rowsource-builder-cancel" onClick={() => onClose(null)}>{t('dialog.button.cancel')}</button>
-      </div>
-    </Frame>
+    </ModalTab>
   );
 }

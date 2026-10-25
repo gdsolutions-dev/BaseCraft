@@ -23,6 +23,21 @@ describe('appReducer', () => {
     expect(appReducer(s, { type: 'open', kind: 'form', name: 'F', mode: 'run' }).tabs[0].mode).toBe('run');
   });
 
+  it('open with args on an open form re-applies (R8); without args it only activates; a new tab takes them', () => {
+    const open = (args?: { where?: string; dataMode?: 'add' | 'edit' | 'readOnly' }) => ({ type: 'open', kind: 'form', name: 'F', mode: 'run', ...(args ? { args } : {}) }) as const;
+    const s0 = appReducer(init, open());
+    expect(s0.tabs[0].openArgs).toBeUndefined();
+    const s1 = appReducer(s0, open({ where: '[Ville] = "Lyon"' }));
+    expect(s1.tabs).toHaveLength(1);
+    expect(s1.tabs[0].openArgs).toEqual({ where: '[Ville] = "Lyon"' });
+    expect(s1.tabs[0].reloadToken).toBe(1);
+    const s2 = appReducer(s1, open());
+    expect(s2.tabs[0]).toMatchObject({ openArgs: { where: '[Ville] = "Lyon"' }, reloadToken: 1 });
+    expect(appReducer(init, open({ dataMode: 'add' })).tabs[0]).toMatchObject({ openArgs: { dataMode: 'add' }, reloadToken: 0 });
+    const design = appReducer(appReducer(init, { type: 'open', kind: 'form', name: 'F', mode: 'design' }), open({ where: '1' }));
+    expect(design.tabs[0]).toMatchObject({ mode: 'run', openArgs: { where: '1' }, reloadToken: 0 }); // a new view reads anyway
+  });
+
   it('rename, drop, save', () => {
     expect(appReducer(s1, { type: 'tableRenamed', from: 'Clients', to: 'Contacts' }).tabs[0].name).toBe('Contacts');
     expect(appReducer(s1, { type: 'tableDropped', name: 'Clients' }).tabs).toEqual([]);
@@ -169,5 +184,19 @@ describe('appReducer', () => {
     let s = appReducer(init, { type: 'open', kind: 'query', name: 'Requête1', mode: 'design', isNew: true });
     s = appReducer(s, { type: 'objectSaved', kind: 'query', name: 'Commandes', tabId: s.tabs[0]!.id });
     expect(s.tabs[0]).toMatchObject({ name: 'Commandes', isNew: false, reloadToken: 1 });
+  });
+
+  it('a macro tab opens in design and keeps its kind: new, saved under its name, renamed, deleted; a table of that name is another tab', () => {
+    let s = appReducer(s1, { type: 'open', kind: 'macro', name: 'Macro1', mode: 'design', isNew: true });
+    expect(s.tabs[1]).toMatchObject({ kind: 'macro', name: 'Macro1', mode: 'design', isNew: true });
+    s = appReducer(s, { type: 'objectSaved', kind: 'macro', name: 'MBip', tabId: s.tabs[1]!.id });
+    expect(s.tabs[1]).toMatchObject({ kind: 'macro', name: 'MBip', mode: 'design', isNew: false, reloadToken: 1 });
+    s = appReducer(s, { type: 'open', kind: 'macro', name: 'mbip', mode: 'design' }); // the same macro: its tab is activated
+    s = appReducer(s, { type: 'open', kind: 'table', name: 'MBip', mode: 'datasheet' });
+    expect(s.tabs.map((x) => `${x.kind}:${x.name}`)).toEqual(['table:Clients', 'macro:MBip', 'table:MBip']);
+    s = appReducer(s, { type: 'objectRenamed', kind: 'macro', from: 'MBip', to: 'MSon' });
+    expect(s.tabs.map((x) => x.name)).toEqual(['Clients', 'MSon', 'MBip']);
+    s = appReducer(s, { type: 'objectDeleted', kind: 'macro', name: 'MSon' });
+    expect(s.tabs.map((x) => `${x.kind}:${x.name}`)).toEqual(['table:Clients', 'table:MBip']);
   });
 });

@@ -29,7 +29,7 @@ export interface LexConfig {
 }
 
 const WORD = /[\p{L}_][\p{L}\p{M}\p{Nd}_]*/uy;
-const OPS = ['<=', '>=', '<>', '<', '>', '=', '+', '-', '*', '/', '\\', '^', '&', '(', ')', '.', ';'];
+const OPS = ['<=', '>=', '<>', '<', '>', '=', '+', '-', '*', '/', '\\', '^', '&', '(', ')', '.', ';', '!'];
 /** `(word` : `(SELECT` opens a subquery, always written in canonical SQL, even inside a displayed expression. */
 const PAREN_WORD = /\(\s*([\p{L}_][\p{L}\p{M}\p{Nd}_]*)/uy;
 const ISO_DATE = /^(\d{4}-\d{2}-\d{2})(?: (\d{2}:\d{2}:\d{2}))?$/;
@@ -150,7 +150,7 @@ export function tokenize(text: string, display: LexConfig = CANONICAL_LEX): Toke
       }
       if (c === cfg.listSep) { out.push({ t: 'op', v: ',', start, end: ++i }); continue; }
       const op = OPS.find((o) => text.startsWith(o, i));
-      i += op ? op.length : 1; // inconnu (!, :, ...) : le parseur le refuse ; « . » et « ; » servent au SQL (A3)
+      i += op ? op.length : 1; // inconnu (:, ...) : le parseur le refuse ; « . » et « ; » servent au SQL (A3) ; « ! » aux membres
       out.push({ t: 'op', v: op ?? (c === ',' ? 'bad,' : c), start, end: i }); // « , » qui n'est pas le séparateur : refusé
     }
   }

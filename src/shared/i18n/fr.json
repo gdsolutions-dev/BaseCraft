@@ -38,6 +38,7 @@
       "macroDesign": "Création de macro"
     },
     "group": {
+      "builderClose": "Fermer",
       "view": "Affichages",
       "records": "Enregistrements",
       "sort": "Trier et filtrer",
@@ -93,6 +94,8 @@
       "expandCollapse": "Développer/Réduire"
     },
     "cmd": {
+      "builderSaveAs": "Enregistrer sous",
+      "builderClose": "Fermer",
       "viewDatasheet": "Feuille de données",
       "viewDesign": "Mode Création",
       "newRecord": "Nouveau",
@@ -362,7 +365,11 @@
       "A4": "Prévu dans le lot A4 — Formulaires",
       "A5": "Prévu dans le lot A5 — États",
       "A6": "Prévu dans le lot A6 — Échanges et livraison",
-      "B": "Prévu à l'étape B — Macros et Runtime",
+      "B1": "Prévu dans le lot B1 — Macros et sécurité",
+      "B2": "Prévu dans le lot B2 — Événements",
+      "B3": "Prévu dans le lot B3 — Démarrage de l'application",
+      "B4": "Prévu dans le lot B4 — Jointures et analyse croisée",
+      "B5": "Prévu dans le lot B5 — Runtime",
       "C": "Prévu à l'étape C — Travail à plusieurs",
       "D": "Prévu à l'étape D — Python",
       "E": "Prévu à l'étape E — Import Access",
@@ -394,6 +401,7 @@
     "openHint": "Double-cliquez sur un objet du volet de navigation pour l'ouvrir.",
     "menu": {
       "open": "&Ouvrir",
+      "run": "&Exécuter",
       "design": "Mo&de création",
       "rename": "&Renommer",
       "delete": "&Supprimer",
@@ -423,6 +431,7 @@
     "queries": "Requêtes",
     "forms": "Formulaires",
     "reports": "États",
+    "macros": "Macros",
     "renameObjectTitle": "Renommer l'objet",
     "deleteObjectTitle": "Supprimer l'objet",
     "deleteObjectMessage": "Supprimer « {{name}} » ? Cette opération est irréversible.",
@@ -449,7 +458,8 @@
       "query": "Requête",
       "form": "Formulaire",
       "report": "État",
-      "relations": "Relations"
+      "relations": "Relations",
+      "macro": "Macro"
     },
     "closeWindow": "Fermer « {{name}} »"
   },
@@ -473,6 +483,8 @@
     "lockLost": "Le verrou d'écriture a été perdu : la modification est désactivée.",
     "fileReadOnly": "Lecture seule : le fichier n'est pas modifiable.",
     "takeOver": "Reprendre",
+    "contentDisabled": "Avertissement de sécurité : une partie du contenu actif de cette base (macros, requêtes action) a été désactivée.",
+    "enableContent": "Activer le contenu",
     "riskNetwork": "Cette base se trouve sur un partage réseau. Une coupure pendant une écriture peut l'endommager.",
     "riskSynced": "Cette base se trouve dans un dossier synchronisé. La synchronisation pendant une écriture peut l'endommager.",
     "reconcile": "Changements de structure faits hors de BaseCraft et pris en compte : {{count}}.",
@@ -513,6 +525,7 @@
       "invalidQuery": "Cette requête n'est pas valide. {{reason}}",
       "queryBind": "Cette requête ne peut pas être exécutée : {{detail}}",
       "notSelectQuery": "Ce n'est pas une requête Sélection : elle ne peut pas servir de source d'enregistrements.",
+      "contentDisabled": "Cette opération est bloquée : le contenu de la base n'est pas activé. Cliquez sur « Activer le contenu » dans la barre de sécurité.",
       "missingParameter": "Il manque la valeur du paramètre « {{detail}} ».",
       "invalidParameter": "La valeur saisie pour le paramètre « {{detail}} » n'est pas valide.",
       "cancelled": "L'opération a été annulée.",
@@ -895,6 +908,8 @@
       "maskBadSection": "Sections du masque invalides : la deuxième vaut 0 ou 1, la troisième est un seul caractère.",
       "aggregateContext": "Une fonction d'agrégat (Somme, Compte…) n'est permise que dans une requête Regroupement ou un groupe d'état.",
       "subqueryNotAllowed": "Les sous-requêtes (SELECT …) ne sont pas permises ici.",
+      "memberNotAllowed": "Les références [VarTemp]!, [Formulaires]!… ne sont pas permises ici.",
+      "badMember": "Référence invalide : [VarTemp]![Nom], [VarLocales]![Nom], [ErreurMacro]![Nom], [Formulaires]![Formulaire]![Contrôle] ou [États]![État]![Contrôle].",
       "forbiddenStatement": "Instruction interdite : seules les requêtes Sélection, Ajout, Mise à jour, Suppression et Création de table sont acceptées.",
       "reservedName": "Ce nom est réservé (bc_, bcx_ ou sqlite_) : la requête ne peut pas l'utiliser.",
       "multipleStatements": "Une seule instruction SQL est permise : retirez le texte après le point-virgule.",
@@ -1905,7 +1920,8 @@
       "label": "Nom de la table"
     },
     "sqlOnly": "Cette requête ne peut être affichée qu'en mode SQL.",
-    "rowSourceTitle": "Générateur de requête : Contenu",
+    "builderOnTable": "Vous avez appelé le Générateur de requête sur une table.\n\nVoulez-vous créer une requête basée sur la table ?",
+    "builderSave": "Enregistrer les modifications apportées à l'instruction SQL et mettre à jour la propriété ?",
     "error": {
       "unexpectedToken": "Erreur de syntaxe dans l'instruction SQL.",
       "unexpectedEnd": "L'instruction SQL est incomplète."
@@ -1948,7 +1964,8 @@
       "partial": "La requête ne peut pas modifier tous les enregistrements : {{conversion}} à la suite d'un échec de conversion de type ; {{key}} à la suite de violations de clé, {{lock}} à la suite de violations de verrouillage et {{validation}} à la suite de violations de règles de validation, sur {{total}}. Première erreur : {{message}}. Exécuter quand même la requête ?",
       "fields_one": "{{count}} champ mis à Null",
       "fields_other": "{{count}} champs mis à Null",
-      "inUse": "Le moteur de base de données n'a pas pu verrouiller la table « {{table}} » car elle est déjà utilisée par une autre personne ou un autre processus. Enregistrez ou annulez l'enregistrement en cours de modification, ou enregistrez sa structure, puis exécutez à nouveau la requête."
+      "inUse": "Le moteur de base de données n'a pas pu verrouiller la table « {{table}} » car elle est déjà utilisée par une autre personne ou un autre processus. Enregistrez ou annulez l'enregistrement en cours de modification, ou enregistrez sa structure, puis exécutez à nouveau la requête.",
+      "contentDisabled": "Cette requête action est bloquée : le contenu de la base n'est pas activé. Cliquez sur « Activer le contenu » dans la barre de sécurité."
     },
     "run": {
       "running": "Exécution…",
@@ -2042,5 +2059,146 @@
     "repaired": "Base compactée : {{before}} → {{after}}. Sauvegarde : {{backup}}\n{{count}} problème(s) détecté(s) par le contrôle d'intégrité ont été réparés :\n{{problems}}",
     "corrupt": "La base est endommagée et n'a pas pu être réparée. Le fichier d'origine n'a pas été modifié.\nProblèmes détectés :\n{{problems}}\nSauvegarde : {{backup}}",
     "more": "… et {{count}} autre(s)"
+  },
+  "macro": {
+    "newName": "Macro{{n}}",
+    "action": {
+      "Beep": "Bip",
+      "ClearMacroError": "EffacerMacroErreur",
+      "CloseDatabase": "FermerBaseDonnées",
+      "CloseWindow": "FermerFenêtre",
+      "MessageBox": "ZoneMessage",
+      "OnError": "SurErreur",
+      "OpenForm": "OuvrirFormulaire",
+      "OpenQuery": "OuvrirRequête",
+      "OpenReport": "OuvrirÉtat",
+      "OpenTable": "OuvrirTable",
+      "Quit": "Quitter",
+      "RemoveAllTempVars": "SupprimerToutesVarTemp",
+      "RemoveTempVar": "SupprimerVarTemp",
+      "RunMacro": "ExécuterMacro",
+      "RunSQL": "ExécuterSQL",
+      "SetLocalVar": "DéfinirVarLocale",
+      "SetTempVar": "DéfinirVarTemp",
+      "SetWarnings": "Avertissements",
+      "StopAllMacros": "ArrêtToutesMacros",
+      "StopMacro": "ArrêtMacro"
+    },
+    "arg": {
+      "FormName": "Nom du formulaire",
+      "View": "Affichage",
+      "WhereCondition": "Condition WHERE",
+      "DataMode": "Mode Données",
+      "Message": "Message",
+      "Beep": "Bip",
+      "Type": "Type",
+      "Title": "Titre",
+      "Name": "Nom",
+      "Expression": "Expression",
+      "MacroName": "Nom de macro",
+      "RepeatCount": "Nombre de répétitions",
+      "RepeatExpression": "Expression de répétition",
+      "SQLStatement": "Instruction SQL",
+      "WarningsOn": "Avertissements actifs",
+      "ObjectType": "Type d'objet",
+      "ObjectName": "Nom d'objet",
+      "GoTo": "Atteindre",
+      "QueryName": "Nom de la requête",
+      "ReportName": "Nom de l'état",
+      "TableName": "Nom de la table"
+    },
+    "argValue": {
+      "View": { "form": "Formulaire", "datasheet": "Feuille de données", "design": "Création", "preview": "Aperçu", "print": "Imprimer" },
+      "DataMode": { "empty": "(Par défaut)", "add": "Ajout", "edit": "Modification", "readOnly": "Lecture seule" },
+      "ObjectType": { "empty": "(Fenêtre active)", "table": "Table", "query": "Requête", "form": "Formulaire", "report": "État", "macro": "Macro" },
+      "Beep": { "yes": "Oui", "no": "Non" },
+      "Type": { "none": "Aucun", "critical": "Critique", "warning": "Avertissement", "question": "Question", "information": "Information" },
+      "GoTo": { "next": "Suivant", "macroName": "Nom de macro", "fail": "Échec" },
+      "WarningsOn": { "yes": "Oui", "no": "Non" }
+    },
+    "category": {
+      "ui": "Commandes d'interface utilisateur",
+      "macro": "Commandes de macro",
+      "system": "Commandes système",
+      "filter": "Filtre/Requête/Recherche",
+      "window": "Gestion de fenêtre",
+      "objects": "Objets de base de données"
+    },
+    "block": {
+      "comment": "Commentaire",
+      "group": "Groupe",
+      "if": "Si",
+      "elseIf": "Sinon si",
+      "else": "Sinon",
+      "submacro": "Sous-macro"
+    },
+    "failed": {
+      "title": "Échec de l'action",
+      "macro": "Nom de macro",
+      "action": "Nom de l'action",
+      "args": "Arguments",
+      "number": "Numéro d'erreur",
+      "stop": "Arrêter toutes les macros"
+    },
+    "error": {
+      "unknownAction": "L'action « {{action}} » n'existe pas dans cette version de BaseCraft.",
+      "notFound": "BaseCraft ne trouve pas l'objet « {{name}} ».",
+      "blocked": "L'action {{action}} est bloquée : le contenu de cette base n'est pas activé. Cliquez sur « Activer le contenu » dans la barre de sécurité.",
+      "actionFailed": "L'action {{action}} a échoué : {{detail}}",
+      "expression": "Une expression de l'action {{action}} ne peut pas être calculée : {{detail}}",
+      "missingArgument": "L'argument « {{detail}} » de l'action {{action}} est obligatoire.",
+      "tooDeep": "Trop de macros imbriquées : ExécuterMacro est limité à 20 niveaux.",
+      "tooManySteps": "La macro a été arrêtée : elle a exécuté plus de 100 000 actions.",
+      "badDefinition": "La définition de la macro « {{name}} » n'est pas valide ({{detail}}).",
+      "runSqlSelect": "ExécuterSQL attend une requête action (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "actionCancelled": "L'action {{action}} a été annulée.",
+      "actionNotRun": "L'action {{action}} n'a pas été exécutée."
+    },
+    "msgbox": {
+      "title": "{{title}}",
+      "defaultTitle": "BaseCraft"
+    },
+    "run": {
+      "title": "Exécuter une macro",
+      "name": "Nom de macro :"
+    },
+    "unknownAction": "Action inconnue : {{name}}",
+    "nameLabel": "Nom de la macro",
+    "newSubmacro": "Sub{{n}}",
+    "saveFirstTitle": "Enregistrer la macro",
+    "saveFirst": "Enregistrer les modifications de la macro « {{name}} » ?",
+    "issues": "La macro ne peut pas être enregistrée :\n{{list}}",
+    "issue": {
+      "shape": "{{path}} : définition non valide",
+      "tooMany": "{{path}} : trop d'éléments (10 000 au plus)",
+      "tooDeep": "{{path}} : trop de blocs imbriqués (32 au plus)",
+      "submacroPlace": "{{path}} : une sous-macro ne peut pas être dans un bloc",
+      "submacroOrder": "{{path}} : les sous-macros viennent après les actions de la macro",
+      "duplicateName": "{{path}} : une autre sous-macro porte ce nom",
+      "badName": "{{path}} : ce nom de sous-macro n'est pas valide",
+      "emptyCondition": "{{path}} : la condition est vide",
+      "badExpression": "{{path}} : l'expression n'est pas valide"
+    },
+    "addAction": "Ajouter une nouvelle action",
+    "addElseIf": "Ajouter Sinon si",
+    "addElse": "Ajouter Sinon",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "remove": "Supprimer",
+    "saveBeforeRun": "La macro doit être enregistrée avant d'être exécutée. Enregistrer maintenant ?",
+    "step": {
+      "title": "Pas à pas",
+      "condition": "Condition",
+      "none": "Aucune",
+      "step": "Pas à pas",
+      "continue": "Continuer"
+    },
+    "catalog": {
+      "title": "Catalogue d'actions",
+      "search": "Rechercher",
+      "flow": "Déroulement de programme"
+    }
   }
 }

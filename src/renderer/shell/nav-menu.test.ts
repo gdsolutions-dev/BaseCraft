@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { accessKey, navItemEnabled, navMenuGroups, placeMenu, registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
+
+// The macro menu is assembled from the real registrations (foundation, A6, B1); the modules behind the items' actions are stubbed.
+const stub = vi.hoisted(() => ({ hasView: vi.fn(() => false), runMacroByName: vi.fn(async () => {}) }));
+vi.mock('../bridge', () => ({ api: {} }));
+vi.mock('./document-views', () => ({ hasDocumentView: stub.hasView }));
+vi.mock('./ObjectProperties', () => ({ showObjectProperties: () => {} }));
+vi.mock('../exchange/export', () => ({ exportNamed: () => {} }));
+vi.mock('../exchange/paste', () => ({ pasteClip: () => {} }));
+vi.mock('../macro/macro-shell', () => ({ runMacroByName: stub.runMacroByName }));
 
 const ctx = (over: Partial<NavMenuContext> = {}): NavMenuContext => ({
   kind: 'form', name: 'F', readOnly: false, runtime: false, modal: {} as NavMenuContext['modal'], dispatch: () => {}, reselect: () => {}, ...over,
@@ -99,5 +108,55 @@ describe('nav-menu registry (C6)', () => {
     const item = { left: 600, right: 800, top: 500, bottom: 528 };
     expect(placeMenu(item, { width: 150, height: 60 }, { width: 1000, height: 700 })).toEqual({ left: 800, top: 500 });
     expect(placeMenu(item, { width: 250, height: 260 }, { width: 1000, height: 700 })).toEqual({ left: 350, top: 268 });
+  });
+});
+
+describe('macro menu (B1)', () => {
+  // a fresh registry holding only what the app registers for macros
+  const load = async () => {
+    vi.resetModules();
+    const nav = await import('./nav-menu');
+    await import('./nav-menu-items');
+    await import('../exchange/exchange-menu');
+    await import('../macro/macro-menu');
+    return nav;
+  };
+  beforeEach(() => { stub.hasView.mockReturnValue(false); stub.runMacroByName.mockClear(); });
+
+  it("Run, Design View | Export | Rename, Hide, Delete | Cut, Copy, Paste | Object Properties; Export and Hide are planned for later", async () => {
+    const { navMenuGroups } = await load();
+    const groups = navMenuGroups(ctx({ kind: 'macro', name: 'MBip' }));
+    expect(groups.map((g) => g.map((x) => x.id))).toEqual([['open', 'design'], ['export'], ['rename', 'hide', 'delete'], ['cut', 'copy', 'paste'], ['properties']]);
+    expect(groups.flat().filter((x) => x.planned).map((x) => [x.id, x.planned])).toEqual([['export', 'later'], ['hide', 'later']]);
+    expect(groups.flat().map((x) => x.labelKey)).toEqual(['nav.menu.run', 'nav.menu.design', 'nav.menu.export', 'nav.menu.rename', 'nav.menu.hide', 'nav.menu.delete',
+      'nav.menu.cut', 'nav.menu.copy', 'nav.menu.paste', 'nav.menu.objectProperties']);
+  });
+
+  it('at runtime Design View, Rename, Delete, Cut and Paste are hidden', async () => {
+    const { navMenuGroups } = await load();
+    expect(navMenuGroups(ctx({ kind: 'macro', runtime: true })).map((g) => g.map((x) => x.id))).toEqual([['open'], ['export'], ['hide'], ['copy'], ['properties']]);
+  });
+
+  it('Run runs the macro by its name; Design View is enabled once a Design view is registered, and opens the macro in it', async () => {
+    const { navMenuGroups, navItemEnabled } = await load();
+    const dispatch = vi.fn();
+    const c = ctx({ kind: 'macro', name: 'MBip', dispatch });
+    const [run, design] = navMenuGroups(c)[0]!;
+    expect(navItemEnabled(run!, c)).toBe(true);
+    void run!.run!(c);
+    expect(stub.runMacroByName).toHaveBeenCalledWith('MBip');
+    expect(navItemEnabled(design!, c)).toBe(false);
+    stub.hasView.mockReturnValue(true);
+    expect(navItemEnabled(design!, c)).toBe(true);
+    expect(stub.hasView).toHaveBeenLastCalledWith('macro', 'design');
+    void design!.run!(c);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'open', kind: 'macro', name: 'MBip', mode: 'design' });
+  });
+
+  it('Rename, Delete, Cut and Paste need a writable base; Copy does not', async () => {
+    const { navMenuGroups, navItemEnabled } = await load();
+    stub.hasView.mockReturnValue(true); // Design View is not what is under test
+    const c = ctx({ kind: 'macro', readOnly: true });
+    expect(navMenuGroups(c).flat().filter((x) => x.run && !navItemEnabled(x, c)).map((x) => x.id)).toEqual(['rename', 'delete', 'cut', 'paste']);
   });
 });

@@ -1,0 +1,37 @@
+/* Concepteur de macros : un bloc par élément, les blocs imbriqués en retrait. */
+.macro-design { height: 100%; overflow: auto; padding: var(--bc-space-3); background: var(--bc-surface); }
+.macro-list { display: flex; flex-direction: column; gap: var(--bc-space-2); }
+.macro-block { border: 1px solid transparent; border-radius: var(--bc-radius); padding: 2px var(--bc-space-2); }
+.macro-block:hover { border-color: var(--bc-border); }
+.macro-block.is-selected { border-color: var(--bc-accent); background: var(--bc-surface-2); }
+.macro-block:focus-visible, .macro-branch-head:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+.macro-head { display: flex; align-items: center; gap: var(--bc-space-2); min-height: 28px; }
+.macro-title { font-weight: 600; display: flex; align-items: center; gap: var(--bc-space-2); }
+.macro-tools { margin-left: auto; display: flex; gap: 2px; }
+.macro-body { padding-left: 28px; display: flex; flex-direction: column; gap: 4px; }
+.macro-comment .macro-title { color: var(--bc-text-muted); font-weight: 400; }
+.macro-comment textarea { color: var(--bc-text-muted); }
+.macro-arg { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; align-items: center; gap: var(--bc-space-2); }
+.macro-arg > label { color: var(--bc-text-muted); }
+.macro-arg .pval-error { grid-column: 2 / -1; }
+.macro-arg textarea { grid-column: 2 / -1; font-family: var(--bc-font-mono, monospace); }
+.macro-branch { display: flex; flex-direction: column; gap: 4px; }
+.macro-branch-head { display: flex; align-items: center; gap: var(--bc-space-2); font-weight: 600; border-radius: var(--bc-radius); padding: 2px; }
+.macro-branch-head.is-selected { background: var(--bc-surface-2); outline: 1px solid var(--bc-accent); }
+.macro-branch-head input { flex: 1; min-width: 0; font-weight: 400; }
+.macro-branch > .macro-list { padding-left: 28px; }
+.macro-if-tools { display: flex; justify-content: flex-end; gap: var(--bc-space-3); }
+.macro-link { color: var(--bc-accent); }
+.macro-link:hover:not(:disabled) { text-decoration: underline; }
+.macro-add { max-width: 360px; }
+/* Le volet Catalogue d'actions, à droite des blocs. */
+.macro-designer { display: flex; height: 100%; min-height: 0; }
+.macro-designer > .macro-design { flex: 1; min-width: 0; }
+.macro-catalog { width: 260px; flex: none; overflow: auto; border-left: 1px solid var(--bc-border); background: var(--bc-surface);
+  padding: var(--bc-space-2); display: flex; flex-direction: column; gap: var(--bc-space-2); }
+.macro-catalog-title { font-weight: 600; }
+.macro-catalog h3 { font-size: inherit; font-weight: 600; color: var(--bc-text-muted); margin: 0 0 2px; }
+.macro-catalog ul { list-style: none; margin: 0; padding: 0; }
+.macro-catalog li { padding: 2px var(--bc-space-2); border-radius: var(--bc-radius); cursor: default; user-select: none; }
+.macro-catalog li:hover, .macro-catalog li:focus-visible { background: var(--bc-surface-2); outline: none; }
+.macro-catalog li:focus-visible { box-shadow: inset 0 0 0 1px var(--bc-accent); }

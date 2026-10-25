@@ -109,6 +109,7 @@ const MENUS: [DocKind, NavMenuItem[]][] = [
   ['query', common('nav.menu.objectProperties', 'A6')],
   ['form', [layoutView, ...common('nav.menu.properties', 'later')]],
   ['report', [layoutView, ...common('nav.menu.properties', null)]], // Export › PDF: A5's own item
+  ['macro', common('nav.menu.objectProperties', 'later')], // B1's macro-menu.ts replaces Open and Design View
 ];
 
 for (const [kind, items] of MENUS) registerNavMenuItems(kind, items, { fallback: true });

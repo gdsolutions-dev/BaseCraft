@@ -18,6 +18,12 @@ describe('field-types', () => {
     expect(isValidObjectName('x'.repeat(1e7))).toBe(false)
     expect(Date.now() - t0).toBeLessThan(20)
   })
+  it('member references are refused in a field default or rule and in the table rule', () => {
+    for (const [prop, text] of [['validationRule', '= [TempVars]![v]'], ['defaultValue', '[TempVars]![v]']] as const) {
+      expect(validateDesign(t('T', [f('Prix', 'currency', { [prop]: text })])), text).toEqual([{ code: 'invalidExpression', field: 'Prix', prop }])
+    }
+    expect(validateDesign({ ...t('T', [f('Prix', 'currency')]), validationRule: '[Prix] > [TempVars]![v]' })).toEqual([{ code: 'invalidExpression', prop: 'validationRule' }])
+  })
   it('lone surrogates make a name invalid; a valid astral character does not', () => {
     expect(isValidObjectName('a\uD800b')).toBe(false)
     expect(isValidObjectName('a\uDC00')).toBe(false)

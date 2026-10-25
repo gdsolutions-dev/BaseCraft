@@ -100,7 +100,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
   return (
     <header className="ribbon" aria-label={t('ribbon.label')}>
       <nav className="rtabs" role="tablist">
-        <button className="rtab rtab-file" data-testid="ribbon-tab-file" onClick={onFile}>{t('ribbon.file')}</button>
+        <button className="rtab rtab-file" data-testid="ribbon-tab-file" disabled={!!ctx.builder} onClick={onFile}>{t('ribbon.file')}</button>
         {tabs.map((x, i) => (
           <Fragment key={x.id}>
             {x.contextual && i > 0 && !tabs[i - 1].contextual && <span className="rtab-sep" aria-hidden />}
@@ -115,7 +115,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
             (scroll-padding in shell.css). */}
         <div ref={body} className="rbody" role="tabpanel" onScroll={() => { setTip((x) => (x ? { ...x } : x)); measure(); }}
           onFocus={(e) => e.target.scrollIntoView({ block: 'nearest', inline: 'nearest' })}>
-          {current.groups.map((g) => {
+          {current.groups.filter((g) => !g.visible || g.visible(ctx)).map((g) => {
             // large buttons alone, consecutive small ones stacked in columns, icon-only ones in a grid of three rows
             const items: Item[] = [];
             for (const c of g.commands.filter((x) => !x.visible || x.visible(ctx))) {

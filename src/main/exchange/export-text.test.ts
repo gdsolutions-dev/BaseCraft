@@ -76,6 +76,14 @@ it('sort and filter of the datasheet are honoured; windows-1252 counts what it c
   expect([...fs.readFileSync(out())]).toEqual([...Buffer.from('5;"Zo\xe9 ?";"Nice"\r\n', 'latin1')]);
 });
 
+it('a Where Condition (a report opened by OpenReport) exports only the matching rows', async () => {
+  seedSales(db);
+  const spec = { ...defaultExportSpec(fr), encoding: 'utf-8' as const, hasHeader: false };
+  const r = await session.exportText({ ref: { kind: 'table', name: 'Clients' }, where: '[Nom] = "Dupont"' }, spec, out(), words);
+  expect(r).toMatchObject({ ok: true, rows: 1 });
+  expect(session.exportRowCount({ ref: { kind: 'table', name: 'Clients' }, where: '[Nom] = "Dupont"' })).toBe(1);
+});
+
 it('no rows and no header still writes the BOM; the unqualified ambiguous cells are counted', async () => {
   createTable(db, t('V', [f('A', 'shortText')]));
   expect(await session.exportText({ ref: { kind: 'table', name: 'V' } }, { ...defaultExportSpec(fr), hasHeader: false }, out(), words)).toMatchObject({ ok: true, rows: 0 });

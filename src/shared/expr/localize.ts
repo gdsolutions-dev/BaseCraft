@@ -6,6 +6,7 @@ import { parseDateTime } from '../locale-format';
 import type { SelectQuery } from '../query/ast';
 import { FUNCTIONS, KEYWORDS, type KeywordName } from './catalog';
 import { tokenize, type LexConfig } from './lexer';
+import { MEMBER_ROOTS, type MemberRoot } from './members';
 import {
   CANONICAL_DIALECT, hasAggregate, parseCanonical, parseTokens, sameTree, serializeCriteria, serializeWith, type Dialect, type ParseOptions,
 } from './parser';
@@ -55,6 +56,7 @@ function dialect(ctx: DisplayContext): Dialect {
     kw: (k) => kw.get(k) ?? k,
     fn: (name) => fn.get(name) ?? name,
     num: (v) => v.replace('.', decimalSep),
+    root: (r) => (ctx.lang === 'fr' ? MEMBER_ROOTS[r as MemberRoot].fr : r),
     // Format fixe (jj/mm/aaaa, mm/jj/aaaa ou aaaa/mm/jj ; HH:MM:SS), indépendant de la ponctuation que choisit Intl.
     date: (v) => {
       const [y, mo, d, h, mi, s] = v.split(/[- :]/);

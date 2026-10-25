@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import fr from '../../shared/i18n/fr.json';
 import en from '../../shared/i18n/en.json';
 import {
-  RIBBON, SHELL_SCOPE, commandEnabled, commandState, commandsVersion, isCommandAvailable, openPopupOf, registerCommandStates, registerCommands, runCommand,
+  MODAL_SCOPE, RIBBON, SHELL_SCOPE, commandEnabled, commandState, commandsVersion, isCommandAvailable, openPopupOf, registerCommandStates, registerCommands, runCommand,
   setActiveCommandTab, setOpenPopup,
   setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
@@ -213,7 +213,7 @@ const GALLERY_DONE = ['select', 'textBox', 'label', 'button', 'tabControl', 'opt
 const HEADER_DONE = ['logo', 'title', 'dateTime'] as const;
 
 describe('ribbon catalog (C11: every Access tab, group and command; placeholders name their batch)', () => {
-  const PLANNED: PlannedIn[] = ['A3', 'A4', 'A5', 'A6', 'B', 'C', 'D', 'E', 'later']; // A2 is merged: nothing waits for it
+  const PLANNED: PlannedIn[] = ['A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'C', 'D', 'E', 'later']; // A2 is merged: nothing waits for it
   const get = (o: unknown, k: string) => k.split('.').reduce<unknown>((a, p) => (a as Record<string, unknown> | undefined)?.[p], o);
   const commands = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
   const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: null, isNew: false, kind: null, ...o });
@@ -225,6 +225,10 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commands.filter((c) => c.planned === 'A6').map((c) => c.id)).toEqual([]);
   });
 
+  it('B1 leaves no B1 placeholder', () => {
+    expect(commands.filter((c) => c.planned === 'B1').map((c) => c.id)).toEqual([]);
+  });
+
   it('every tab, group and command has a French and an English label; every batch has its tooltip', () => {
     const keys = [
       ...RIBBON.map((t) => t.labelKey), ...RIBBON.flatMap((t) => t.groups.map((g) => g.labelKey)), ...commands.map((c) => c.labelKey),
@@ -233,8 +237,14 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     for (const k of keys) for (const cat of [fr, en]) expect(typeof get(cat, k) === 'string' && get(cat, k) !== '', k).toBe(true);
     expect(fr.ribbon.planned.A3).toBe('Prévu dans le lot A3 — Requêtes');
     expect(en.ribbon.planned.A5).toBe('Planned for batch A5 — Reports');
-    expect(fr.ribbon.planned.B).toBe("Prévu à l'étape B — Macros et Runtime");
     expect(en.ribbon.planned.later).toBe('Planned for later');
+  });
+
+  it('stage B placeholders name their batch', () => {
+    const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
+    expect(tag('createMacro')).toBeUndefined(); expect(tag('macroRun')).toBeUndefined(); expect(tag('crosstabQuery')).toBe('B4');
+    expect(tag('beforeChange')).toBe('later'); expect(commands.some((c) => (c.planned as string) === 'B')).toBe(false);
+    expect(fr.ribbon.planned.B1).toBe('Prévu dans le lot B1 — Macros et sécurité');
   });
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
@@ -262,7 +272,9 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       // A5 Task 13
       'groupSort', 'reportTotals', 'hideDetails', 'pageNumbers',
       // A6 Task 8
-      'dataType', 'validation', 'required', 'unique', 'indexed', 'find', 'goTo', 'selectMenu'];
+      'dataType', 'validation', 'required', 'unique', 'indexed', 'find', 'goTo', 'selectMenu',
+      // B1 Task 9
+      'createMacro'];
 
     // the same ids stay other batches' placeholders in their own tabs (A6 Table Design and Table Fields, A3 Query Design, A5 Report Design)
     const elsewhere: Record<string, RibbonTabId[]> = { propertySheet: ['design', 'queryDesign', 'reportDesign'], addExistingFields: ['reportDesign'],
@@ -402,6 +414,24 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     }
   });
 
+  it('the Query Builder: only Home and its contextual tabs, its Close group; its scope never falls back on the shell', () => {
+    const builder = ctx({ kind: 'query', mode: 'design', builder: true });
+    expect(visibleTabs(builder).map((t) => t.id)).toEqual(['home', 'queryDesign']);
+    const groups = (c: RibbonContext) => RIBBON.find((t) => t.id === 'queryDesign')!.groups.filter((g) => !g.visible || g.visible(c)).map((g) => g.id);
+    expect(groups(builder)).toContain('builderClose');
+    expect(groups(ctx({ kind: 'query', mode: 'design' }))).not.toContain('builderClose');
+    const shell = vi.fn(), own = vi.fn();
+    reg(SHELL_SCOPE, { viewDesign: shell, save: shell });
+    reg(MODAL_SCOPE, { viewDesign: own });
+    setCommandContext(ctx({ kind: 'query', mode: 'run', builder: true }));
+    setActiveCommandTab(`${MODAL_SCOPE}builder-run`);
+    expect(runCommand('viewDesign')).toBe(true);
+    expect(runCommand('save')).toBe(false);   // the shell would save the form behind
+    expect(own).toHaveBeenCalledTimes(1);
+    expect(shell).not.toHaveBeenCalled();
+    setActiveCommandTab(null);
+  });
+
   it('group ids and command ids are unique within a tab (one tab is rendered at a time: DOM ids rtip-<id>, test ids cmd-<id>)', () => {
     for (const t of RIBBON) {
       expect(new Set(t.groups.map((g) => g.id)).size, t.id).toBe(t.groups.length);
@@ -429,6 +459,24 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     }
     expect(['sizeSpace', 'align', 'bringToFront', 'sendToBack'].map((id) => cmd(id as CommandId).popup)).toEqual([true, true, undefined, undefined]); });
 
+  it('Macro Design (B1): the eight commands delivered, enabled in Design view of a macro (read-only too); Expand / Collapse Actions need a selection', () => {
+    const ids: CommandId[] = ['macroRun', 'singleStep', 'expandActions', 'collapseActions', 'expandAll', 'collapseAll', 'actionCatalog', 'showAllActions'];
+    const tab = RIBBON.find((t) => t.id === 'macroDesign')!.groups.flatMap((g) => g.commands);
+    const handlers = Object.fromEntries(ids.map((id) => [id, () => {}]));
+    reg('m1', handlers);
+    setActiveCommandTab('m1');
+    cleanups.push(registerCommandStates('m1', { expandActions: { enabled: false }, collapseActions: { enabled: false } }));
+    for (const ro of [false, true]) {
+      const c = ctx({ kind: 'macro', mode: 'design', readOnly: ro });
+      expect(ids.filter((id) => commandEnabled(id, c)), String(ro)).toEqual(ids.filter((id) => id !== 'expandActions' && id !== 'collapseActions'));
+    }
+    expect(tab.filter((c) => c.planned !== undefined).map((c) => c.id)).toEqual([]);
+    expect(tab.filter((c) => c.active).map((c) => c.id)).toEqual(['singleStep', 'actionCatalog', 'showAllActions']);
+    expect(tab.every((c) => !c.enabled(ctx({ kind: 'form', mode: 'design' })))).toBe(true);
+    cleanups.push(registerCommandStates('m1', {}));
+    expect(commandEnabled('expandActions', ctx({ kind: 'macro', mode: 'design' }))).toBe(true);
+  });
+
   it('View › Form View (A4): a saved form, in Design or Datasheet view; active in Form view', () => {
     const v = commands.find((c) => c.id === 'viewForm')!;
     expect(v.enabled(ctx({ kind: 'form', mode: 'design' }))).toBe(true); expect(v.enabled(ctx({ kind: 'form', mode: 'design', isNew: true }))).toBe(false);
@@ -449,12 +497,23 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(shown({ kind: 'query', mode: 'design' })).toEqual(['viewDatasheet', 'viewDesign']);
     expect(shown({})).toEqual(['viewDatasheet', 'viewDesign']);   // no document: disabled
     expect(shown({ kind: 'report', mode: 'run' })).toEqual(['viewPrintPreview', 'viewDesign']);   // a report has no datasheet
+    expect(shown({ kind: 'macro', mode: 'design' })).toEqual(['viewDesign']);   // nor a macro
+    expect(view.find((c) => c.id === 'viewDatasheet')!.enabled(ctx({ kind: 'macro', mode: 'design' }))).toBe(false);
   });
 
   it('Create › Form is delivered (A4)', () => {
     const cmd = (id: CommandId) => commands.find((c) => c.id === id)!;
     expect(cmd('createForm').planned).toBeUndefined(); expect(cmd('createForm').enabled(ctx({}))).toBe(true);
     expect(cmd('createForm').enabled(ctx({ readOnly: true }))).toBe(false); expect(cmd('createForm').enabled(ctx({ hasBase: false }))).toBe(false);
+  });
+
+  it('Create › Macro is delivered (B1), in the same group and slot', () => {
+    const create = RIBBON.find((t) => t.id === 'create')!;
+    const macros = create.groups.find((g) => g.id === 'macrosCode')!.commands;
+    const cmd = macros.find((c) => c.id === 'createMacro')!;
+    expect(macros.map((c) => c.id)).toEqual(['createMacro', 'createModule', 'pythonEditor']);
+    expect(cmd.planned).toBeUndefined(); expect(cmd.enabled(ctx({}))).toBe(true);
+    expect(cmd.enabled(ctx({ readOnly: true }))).toBe(false); expect(cmd.enabled(ctx({ hasBase: false }))).toBe(false);
   });
 
   it('Create › Form Design and the Form Design tools are delivered (A4); the tools open read-only too', () => {
@@ -723,6 +782,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "queryType: selectQuery makeTableQuery appendQuery updateQuery crosstabQuery deleteQuery unionQuery passThroughQuery",
           "querySetup: addTables insertRows deleteRows builder insertColumns deleteColumns returnValues",
           "showHide: queryTotals parameters propertySheet tableNames",
+          "builderClose: builderSaveAs builderClose",
         ],
         "relationshipDesign": [
           "tools: editRelationships clearLayout relationshipReport",

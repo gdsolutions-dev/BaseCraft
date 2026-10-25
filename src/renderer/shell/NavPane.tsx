@@ -1,4 +1,4 @@
-// Volet de navigation : groupes Tables, Requêtes, Formulaires, États ; recherche, double-clic, menu contextuel tiré du
+// Volet de navigation : groupes Tables, Requêtes, Formulaires, États, Macros ; recherche, double-clic, menu contextuel tiré du
 // registre nav-menu.ts (éléments du socle : nav-menu-items.ts).
 import { ChevronRight, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
@@ -15,11 +15,11 @@ export { nameErrorKey } from './nav-menu-items';
 /** Same folding as bc_fold (accents and case ignored). */
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('und');
 
-type NavKind = 'table' | 'query' | 'form' | 'report';
+type NavKind = 'table' | 'query' | 'form' | 'report' | 'macro';
 interface Item { kind: NavKind; name: string; description?: string | null }
 const GROUPS: { kind: NavKind; labelKey: string }[] = [
   { kind: 'table', labelKey: 'nav.tables' }, { kind: 'query', labelKey: 'nav.queries' },
-  { kind: 'form', labelKey: 'nav.forms' }, { kind: 'report', labelKey: 'nav.reports' },
+  { kind: 'form', labelKey: 'nav.forms' }, { kind: 'report', labelKey: 'nav.reports' }, { kind: 'macro', labelKey: 'nav.macros' },
 ];
 const itemKey = (x: Item) => `${x.kind}:${x.name}`;
 /** Tables keep their test id; objects carry their kind (a form may share a table's name). */
@@ -44,7 +44,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
   const q = fold(query.trim());
   const items: Item[] = [
     ...tables.map((x) => ({ ...x, kind: 'table' as const })),
-    ...objects.flatMap((o) => (o.kind === 'query' || o.kind === 'form' || o.kind === 'report' ? [{ ...o, kind: o.kind }] : [])), // macros, modules: stage B
+    ...objects.flatMap((o) => (o.kind === 'query' || o.kind === 'form' || o.kind === 'report' || o.kind === 'macro' ? [{ ...o, kind: o.kind }] : [])), // modules: stage D
   ];
   const shown = items.filter((x) => fold(x.name).includes(q));
 
@@ -72,8 +72,8 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
     );
   }
 
-  /** A table runs as a datasheet; a query, form or report in its Run view. */
-  const open = (x: Item) => dispatch({ type: 'open', kind: x.kind, name: x.name, mode: x.kind === 'table' ? 'datasheet' : 'run' });
+  /** A table runs as a datasheet; a query, form or report in its Run view; a macro is run (its menu's Run). */
+  const open = (x: Item) => x.kind === 'macro' ? runNavItem(ctxOf(x), 'open') : dispatch({ type: 'open', kind: x.kind, name: x.name, mode: x.kind === 'table' ? 'datasheet' : 'run' });
 
   return (
     <aside className="nav" data-testid="nav-pane" aria-label={t('nav.title')}>

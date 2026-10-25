@@ -14,6 +14,14 @@ const EN_FR: DisplayContext = { lang: 'en', region: localeInfo('fr-FR') };
 const get = (o: unknown, k: string): unknown => k.split('.').reduce((a: any, p) => a?.[p], o);
 
 describe('display <-> canonical', () => {
+  it('member references: French roots both ways', () => {
+    expect(toDisplay('[TempVars]![Ville]', FR)).toBe('[VarTemp]![Ville]');
+    expect(toDisplay('[Reports]![R]![C]', FR)).toBe('[États]![R]![C]');
+    expect(toDisplay('[TempVars]![Ville]', EN)).toBe('[TempVars]![Ville]');
+    expect(toCanonical('[VarTemp]![Ville] & "x"', FR)).toBe('[TempVars]![Ville] & "x"');
+    expect(toCanonical('[TempVars]![a]', FR)).toBe('[TempVars]![a]');
+    expect(toCanonical('VarTemp!a', EN)).toBe('[TempVars]![a]');
+  });
   it('fr display -> canonical -> en display', () => {
     const c = toCanonical('VraiFaux([Qté]>1,5; "gros; ou pas"; "petit")', FR);
     expect(c).toBe('IIf([Qté] > 1.5, "gros; ou pas", "petit")');
@@ -145,7 +153,8 @@ describe('catalog', () => {
       for (const f of FUNCTIONS) expect(get(c, `expr.fn.${f.name}`), f.name).toEqual(expect.any(String));
       for (const cat of new Set(FUNCTIONS.map((f) => f.category))) expect(get(c, `expr.cat.${cat}`), cat).toEqual(expect.any(String));
       const codes: ExprErrorCode[] = ['unexpectedToken', 'unexpectedEnd', 'unclosedString', 'unclosedBracket', 'badDate', 'badNumber', 'unknownFunction', 'arity',
-        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType'];
+        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType',
+        'memberNotAllowed', 'badMember'];
       for (const k of codes) expect(get(c, `expr.error.${k}`), k).toEqual(expect.any(String));
     }
   });

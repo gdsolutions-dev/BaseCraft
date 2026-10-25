@@ -77,8 +77,10 @@ const MAX_SQL_CHARS = 1_048_576; // a query definition's SQL (definition.ts); Ac
 export const MAX_CRITERIA_CHARS = 2000;
 export const MAX_SORT_KEYS = 8;
 const MAX_PARAMS = 100;
+export const MAX_WHERE_CHARS = 65_536;
 
-/** A page of a record source: at most MAX_PAGE_ROWS rows, MAX_SORT_KEYS sort keys, MAX_FILTERS filters and MAX_PARAMS parameter values. */
+/** A page of a record source: at most MAX_PAGE_ROWS rows, MAX_SORT_KEYS sort keys, MAX_FILTERS filters, MAX_PARAMS parameter
+ *  values and a Where Condition of at most MAX_WHERE_CHARS characters. */
 export function sourcePageRequest(v: unknown): SourcePageRequest {
   if (!isObj(v)) bad();
   const r: SourcePageRequest = { offset: uint(v.offset), limit: uint(v.limit) };
@@ -89,6 +91,7 @@ export function sourcePageRequest(v: unknown): SourcePageRequest {
   }
   if (v.filter !== undefined) r.filter = fieldFilters(v.filter);
   if (v.params !== undefined) r.params = queryParams(v.params);
+  if (v.where !== undefined) r.where = typeof v.where === 'string' && v.where.length <= MAX_WHERE_CHARS ? v.where : bad();
   return r;
 }
 
@@ -255,8 +258,8 @@ export function bcError(e: unknown): Error {
 /** An export's source (A6): a source ref and the datasheet's parameters, sort and filter, checked as a page request is. */
 export function exportSource(v: unknown): ExportSource {
   if (!isObj(v)) bad();
-  const { sort, filter, params } = sourcePageRequest({ offset: 0, limit: 0, sort: v.sort, filter: v.filter, params: v.params });
-  return { ref: sourceRef(v.ref), ...(params ? { params } : {}), ...(sort ? { sort } : {}), ...(filter ? { filter } : {}) };
+  const { sort, filter, params, where } = sourcePageRequest({ offset: 0, limit: 0, sort: v.sort, filter: v.filter, params: v.params, where: v.where });
+  return { ref: sourceRef(v.ref), ...(params ? { params } : {}), ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(where !== undefined ? { where } : {}) };
 }
 export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? bad();
 

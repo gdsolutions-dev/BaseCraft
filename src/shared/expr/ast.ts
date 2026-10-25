@@ -18,7 +18,9 @@ export type Expr =
   | { k: 'star' }                                // `*` de Count(*), seulement comme argument de Count
   // Sous-requêtes (option subquery) : (SELECT …), Exists (SELECT …), x [Not] In (SELECT …)
   | { k: 'sub'; mode: 'scalar' | 'exists'; q: SelectQuery }
-  | { k: 'inSub'; e: Expr; q: SelectQuery; not: boolean };
+  | { k: 'inSub'; e: Expr; q: SelectQuery; not: boolean }
+  // [TempVars]![x], [Forms]![F]![C]… : [racine, nom] ou [racine, objet, contrôle] ; racine canonique (MEMBER_ROOTS)
+  | { k: 'member'; path: string[] };
 
 export interface Span { start: number; end: number }
 
@@ -28,6 +30,8 @@ export type ExprErrorCode =
   | 'tooComplex' // dépasse les limites de SQLite (compileSql)
   | 'subqueryNotAllowed'
   | 'unknownField' // générateur d'expressions : un champ qui n'est pas dans sa liste
+  | 'memberNotAllowed' // [TempVars]![x]… dans du SQL (requête, filtre, critère, règle de table)
+  | 'badMember' // racine inconnue ou chaîne de mauvaise longueur
   | 'aggregateContext' // saisie : un agrégat là où aucun regroupement n'existe (règle, valeur par défaut, filtre)
   // SQL dialect (A3 sql-parser)
   | 'forbiddenStatement' | 'reservedName' | 'multipleStatements' | 'notSupportedYet' | 'badParameterType';

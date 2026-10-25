@@ -40,3 +40,4 @@ registerNavMenuItems('table', [importItem, exportItem, ...clipboardItems]);
 registerNavMenuItems('query', [exportItem, ...clipboardItems]);
 registerNavMenuItems('form', clipboardItems);
 registerNavMenuItems('report', clipboardItems);
+registerNavMenuItems('macro', clipboardItems);

@@ -113,6 +113,23 @@ it('filter on an updatable query keeps its rowids; output names that look like i
   }
 });
 
+it('pages a query and a table with where and filter', () => {
+  saveQ('QClientsLyon', 'SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon"');
+  const q = { kind: 'query', name: 'QClientsLyon' } as const;
+  expect(pageQuerySource(db, q, { offset: 0, limit: 10 }, ctx).total).toBe(2);
+  expect(pageQuerySource(db, q, { offset: 0, limit: 10, where: '[Nom] Like "M*"' }, ctx)).toEqual({ rows: [['Martin', 'LYON']], rowids: [2], total: 1 });
+  expect(pageQuerySource(db, q, { offset: 0, limit: 10, where: '[Nom] Like "*"', filter: [{ field: 'Nom', criteria: '"dupont"' }] }, ctx))
+    .toEqual({ rows: [['Dupont', 'Lyon']], rowids: [1], total: 1 });
+  expect(pageQuerySource(db, q, { offset: 0, limit: 10, where: '[Nom] Like "Z*"' }, ctx).total).toBe(0); // part of the totals key
+  const t = { kind: 'table', name: 'Clients' } as const;
+  expect(session.pageSource(t, { offset: 0, limit: 10, where: '[Nom] Like "M*"' })).toEqual({ rows: [[2, 'Martin', 'LYON']], rowids: [2], total: 1 });
+  expect(session.pageSource(t, { offset: 0, limit: 10, where: '[Ville] = "Lyon"', filter: [{ field: 'Nom', criteria: 'Like "M*"' }] }).total).toBe(1);
+  for (const where of ['[TempVars]![v] = 1', '[Absent] = 1', '[Nom] =']) {
+    expect(() => pageQuerySource(db, q, { offset: 0, limit: 1, where }, ctx)).toThrow(/^bc:invalidArgument$/);
+    expect(() => session.pageSource(t, { offset: 0, limit: 1, where })).toThrow(/^bc:invalidArgument$/);
+  }
+});
+
 it('a table without a real rowid (WITHOUT ROWID, or a field named rowid) gives a read-only source', () => {
   db.exec("CREATE TABLE Ext (k INTEGER PRIMARY KEY, v TEXT) WITHOUT ROWID; INSERT INTO Ext VALUES (1, 'a');");
   db.exec("CREATE TABLE Shadow (rowid INTEGER, v TEXT); INSERT INTO Shadow VALUES (7, 'b');");

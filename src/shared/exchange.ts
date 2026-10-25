@@ -30,8 +30,9 @@ export interface ExportTextSpec {
   delimiter: (typeof EXPORT_DELIMITERS)[number]; qualifier: (typeof EXPORT_QUALIFIERS)[number]; hasHeader: boolean;
   encoding: (typeof EXPORT_ENCODINGS)[number];
 }
-/** Ce qu'on exporte : une source, avec ses paramètres, son tri et son filtre (ceux de la feuille de données). */
-export interface ExportSource { ref: RecordSourceRef; params?: Record<string, CellInput>; sort?: SortSpec[]; filter?: FieldFilter[] }
+/** Ce qu'on exporte : une source, avec ses paramètres, son tri et son filtre (ceux de la feuille de données) ; `where` : la condition
+ *  WHERE d'ouverture d'un état (OpenReport, R8), pour que l'export de l'aperçu ait les mêmes lignes. */
+export interface ExportSource { ref: RecordSourceRef; params?: Record<string, CellInput>; sort?: SortSpec[]; filter?: FieldFilter[]; where?: string }
 export interface ExportWarnings { unmappable: number; truncated: number; ambiguous: number }
 export type ExportResult = { ok: true; rows: number; warnings: ExportWarnings } | { ok: false; reason: 'cancelled' }
   | { ok: false; reason: 'tooManyRows'; limit: number };

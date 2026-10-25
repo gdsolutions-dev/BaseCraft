@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pasteError, type PasteNames } from './paste';
 import type { ObjectClip } from './object-clipboard';
 
-const names: PasteNames = { tables: ['Clients'], queries: ['Ventes'], forms: ['Saisie'], reports: [] };
+const names: PasteNames = { tables: ['Clients'], queries: ['Ventes'], forms: ['Saisie'], reports: [], macros: ['MBip'] };
 const clipT: ObjectClip = { kind: 'table', name: 'Clients', cut: false };
 
 describe('pasteError', () => {
@@ -10,6 +10,10 @@ describe('pasteError', () => {
   it('forms and reports have their own namespace', () => {
     expect(pasteError({ kind: 'form', name: 'Saisie', cut: false }, 'clients', 'data', names)).toBeNull();
     expect(pasteError({ kind: 'form', name: 'Saisie', cut: false }, 'SAISIE', 'data', names)).toBe('nav.paste.exists');
+  });
+  it('macros have their own namespace', () => {
+    expect(pasteError({ kind: 'macro', name: 'MBip', cut: false }, 'saisie', 'data', names)).toBeNull();
+    expect(pasteError({ kind: 'macro', name: 'MBip', cut: false }, 'mbip', 'data', names)).toBe('nav.paste.exists');
   });
   it('append needs an existing other table', () => {
     expect(pasteError(clipT, 'Nouveau', 'append', names)).toBe('nav.paste.appendTarget');

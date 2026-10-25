@@ -7,7 +7,9 @@ import { createBaseFile, openBaseFile } from './file-format';
 import { createTable } from './schema';
 import { insertRow } from './write-layer';
 import { countRows, readRows } from './rows';
-import { compileFilter } from './filter';
+import { compileFilter, compileWhere } from './filter';
+import { tableDesign } from './schema';
+import { seedSales } from '../query/test-db';
 import { parseCanonical, serialize } from '../../shared/expr/parser';
 import { f, t } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
@@ -91,5 +93,40 @@ describe('filters (extra)', () => {
   });
   it('a row error excludes the row (never fails the page)', () => {
     expect(ids('Clients', [{ field: 'Ville', criteria: '> 1 / 0' }])).toEqual([]);
+  });
+});
+
+describe('Where Condition (B1)', () => {
+  let sales: DatabaseSync;
+  beforeEach(() => {
+    const p = path.join(dir, 'sales.basecraft');
+    createBaseFile(p, '0.0.0');
+    sales = openBaseFile(p, 'write', '0.0.0').db;
+    seedSales(sales);
+  });
+  afterEach(() => sales.close());
+  const fieldsOf = (table: string) => tableDesign(sales, table).fields.map((x) => ({ name: x.name, type: x.props.type, numberSize: x.props.numberSize }));
+  const namesWhere = (w: { sql: string; params: unknown[] }) => {
+    const stmt = sales.prepare(`SELECT "Nom" FROM "Clients" WHERE ${w.sql} ORDER BY rowid`);
+    stmt.setReturnArrays(true);
+    return (stmt.all(...(w.params as never[])) as unknown as string[][]).map((r) => r[0]);
+  };
+
+  it('compiles a record-level condition with Access text rules', () => {
+    const w = compileWhere(fieldsOf('Clients'), '[Ville] = "Lyon"', FR);
+    expect(namesWhere(w)).toEqual(['Dupont', 'Martin']); // Lyon, LYON yes; Lyôn no
+  });
+  it('refuses members, unknown fields and text that does not parse', () => {
+    const fl = fieldsOf('Clients');
+    expect(() => compileWhere(fl, '[TempVars]![v] = 1', FR)).toThrow('bc:invalidFilter');
+    expect(() => compileWhere(fl, '[Absent] = 1', FR)).toThrow('bc:invalidFilter');
+    expect(() => compileWhere(fl, '[Ville] =', FR)).toThrow('bc:invalidFilter');
+  });
+  it('is ANDed with the filter by compileFilter, readRows and countRows', () => {
+    const d = tableDesign(sales, 'Clients');
+    expect(countRows(sales, 'Clients', [], FR, '[Ville] = "Lyon"')).toBe(2);
+    expect(countRows(sales, 'Clients', [{ field: 'Nom', criteria: 'Like "M*"' }], FR, '[Ville] = "Lyon"')).toBe(1);
+    expect(readRows(sales, d, { offset: 0, limit: 10, where: '[Ville] = "Lyon"' }, FR, [{ field: 'Nom', dir: 'desc' }], 0).rows.map((r) => r.values[1]))
+      .toEqual(['Martin', 'Dupont']);
   });
 });

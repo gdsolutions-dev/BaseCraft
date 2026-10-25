@@ -1,5 +1,5 @@
 import { parseMask } from './expr/input-mask'
-import { fieldRefs, hasAggregate, parseCanonical, renameRefs, serialize } from './expr/parser'
+import { fieldRefs, hasAggregate, hasMember, parseCanonical, renameRefs, serialize } from './expr/parser'
 
 export type FieldType = 'autoNumber' | 'shortText' | 'longText' | 'number' | 'currency' | 'dateTime' | 'yesNo' | 'hyperlink'
 export type NumberSize = 'byte' | 'integer' | 'longInteger' | 'single' | 'double' | 'decimal'
@@ -186,7 +186,7 @@ export function sameName(a: string, b: string): boolean {
 
 // The fold costs ~1 µs (ICU) and a report compares the same few names millions of times (fields, fonts): cached.
 const folded = new Map<string, string>()
-function foldName(s: string): string {
+export function foldName(s: string): string {
   let f = folded.get(s)
   if (f === undefined) {
     if (folded.size >= 10000) folded.clear()   // ponytail: plain reset, never grows past 10,000 names
@@ -201,7 +201,7 @@ function validExpression(fd: FieldDef, prop: 'defaultValue' | 'validationRule'):
   if (!text) return true
   try {
     const tree = parseCanonical(text, { criteria: prop === 'validationRule' })
-    if (hasAggregate(tree)) return false // Sum, Count… need a group: refused here, so no write ever meets them
+    if (hasAggregate(tree) || hasMember(tree)) return false // Sum, Count… need a group; a member has no value in a write
     const refs = fieldRefs(tree)
     return prop === 'defaultValue' ? refs.length === 0 : refs.every(n => sameName(n, fd.name))
   } catch {
@@ -215,7 +215,7 @@ function validTableRule(design: TableDesign): boolean {
   if (!design.validationRule) return true
   try {
     const tree = parseCanonical(design.validationRule)
-    return !hasAggregate(tree) && fieldRefs(tree).every(n => design.fields.some(fd => sameName(fd.name, n)))
+    return !hasAggregate(tree) && !hasMember(tree) && fieldRefs(tree).every(n => design.fields.some(fd => sameName(fd.name, n)))
   } catch {
     return false
   }

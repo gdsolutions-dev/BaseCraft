@@ -22,13 +22,18 @@ import { setNavImportExcel } from './exchange/exchange-menu';
 import './query/nav-menu-query'; // after the foundation's items (a later registration wins by id)
 import { openSqlView } from './query/QueryDesignView';
 import { setOpenTabs } from './query/run-action';
+import { clearTempVars, macroNamesWithSubs, runMacroByName, setMacroShell } from './macro/macro-shell';
+import { askMacroToRun } from './macro/RunMacroDialog';
+import { localeInfo } from '../shared/locale-format';
 import './report/report-menu'; // A5's Navigation Pane items for reports (C6)
+import './macro/macro-menu'; // B1's Navigation Pane items for macros (C6)
 import './exchange/exchange-menu'; // A6's Navigation Pane items: Export (C6)
 import { exportNamed } from './exchange/export';
 import { setClip } from './exchange/object-clipboard';
 import { runNavClipboard } from './shell/nav-menu';
 import { requestFieldList as requestReportFieldList } from './report/design/ReportDesignView';
 import { showObjectProperties } from './shell/ObjectProperties';
+import { dialogInFront, inertRef, setShellDispatch, useModalTab } from './shell/modal-tab';
 import { Ribbon } from './shell/Ribbon';
 import { RunningNotice } from './shell/RunningNotice';
 import {
@@ -53,11 +58,12 @@ function Shell() {
   const [tables, setTables] = useState<TableSummary[]>([]);
   const [objects, setObjects] = useState<ObjectSummary[]>([]);
   const [backstage, setBackstage] = useState<BackstageView | null>(null);
+  const modalTab = useModalTab();
   const [importing, setImporting] = useState<false | { appendTo?: string; source?: 'text' | 'excel' }>(false);
   const [navSelection, setNavSelection] = useState<{ kind: string; name: string } | null>(null);
   const [state, rawDispatch] = useReducer(appReducer, initialAppState);
-  const live = useRef({ state, tables, objects, readOnly: false, navSelection });
-  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection };
+  const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings });
+  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings };
 
   const refreshSettings = useCallback(async () => {
     const s = await api.app.getSettings();
@@ -90,7 +96,9 @@ function Shell() {
       const tabs = live.current.state.tabs;
       const tab = a.type === 'setMode' ? tabs.find((x) => x.id === a.id)
         : a.isNew ? undefined : tabs.find((x) => isDoc(x, a.kind, a.name));
-      const guard = tab && tab.mode !== (a.type === 'open' ? reopenMode(tab, a.mode) : a.mode) ? modeGuard(tab.id) : undefined;
+      // a macro's Open with args in the same view reads the records again: the record being edited is saved (or asked) first
+      const reload = a.type === 'open' && !!a.args;
+      const guard = tab && (reload || tab.mode !== (a.type === 'open' ? reopenMode(tab, a.mode) : a.mode)) ? modeGuard(tab.id) : undefined;
       if (guard) { // A3: the promise tells whether the document let the change happen (openSqlView drops a refused request)
         return guard('mode').then((ok) => { if (ok) rawDispatch(a); return ok; }, (e) => { void showError(e); return false; });
       }
@@ -115,6 +123,7 @@ function Shell() {
   useEffect(() => {
     rawDispatch({ type: 'reset' });
     setNavSelection(null);
+    clearTempVars(); // TempVars live for the open base: closed, switched (Open, New, Save As)
     if (path) setBackstage(null);
   }, [path]);
 
@@ -127,15 +136,18 @@ function Shell() {
   useEffect(() => { document.title = session ? `${session.fileName} – ${t('app.title')}` : t('app.title'); }, [session, t]);
   const active = state.tabs.find((x) => x.id === state.activeId) ?? null;
   useEffect(() => { setSourceHint(sourceHint(active, navSelection)); }); // pickSource's default preselection
-  const ctx: RibbonContext = {
-    hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null,
-  };
-  useEffect(() => { setActiveCommandTab(state.activeId); }, [state.activeId]);
+  // a Query Builder's tab in front: the ribbon serves its query (its own commands only)
+  const ctx: RibbonContext = modalTab
+    ? { hasBase: !!session, readOnly: !!session?.readOnly, mode: modalTab.mode, isNew: false, kind: modalTab.kind, builder: true }
+    : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null };
+  const commandTab = modalTab?.scope ?? state.activeId;
+  useEffect(() => { setActiveCommandTab(commandTab); }, [commandTab]);
   useEffect(() => { setCommandContext(ctx); }); // cheap: ignored when unchanged
   useEffect(() => { setCommandErrorHandler((e) => void showError(e)); }, [showError]);
   useEffect(() => setNavImportText((table) => setImporting({ appendTo: table })), []);
   useEffect(() => setNavImportExcel((table) => setImporting({ appendTo: table, source: 'excel' })), []);
   useEffect(() => setOpenTabs(() => live.current.state.tabs), []);
+  useEffect(() => setShellDispatch(dispatch), [dispatch]);
 
   /** The forms' names, saved or open (a new form's tab not saved yet). */
   const formNames = (objs: ObjectSummary[], tabs: DocTab[]) => [...objs, ...tabs].filter((x) => x.kind === 'form').map((x) => x.name);
@@ -150,6 +162,12 @@ function Shell() {
   const newReportName = useCallback(() => {
     const { state: s, objects: objs } = live.current;
     return firstFreeName([...s.tabs, ...objs.filter((x) => x.kind === 'report')].map((x) => x.name), (n) => t('report.newName', { n }));
+  }, [t]);
+
+  /** The first « Macro<n> » free among the macros and the open tabs. */
+  const newMacroName = useCallback(() => {
+    const { state: s, objects: objs } = live.current;
+    return firstFreeName([...s.tabs, ...objs.filter((x) => x.kind === 'macro')].map((x) => x.name), (n) => t('macro.newName', { n }));
   }, [t]);
 
   // Create › Form and Report, as Access: the Navigation Pane's selection (a form's or report's own source), else the picker
@@ -266,11 +284,18 @@ function Shell() {
       requestReportFieldList(name);
       rawDispatch({ type: 'open', kind: 'report', name, mode: 'design', isNew: true });
     },
+    // Create › Macro (B1): a new macro in Design view, Macro1…, not saved until the user saves it
+    createMacro: () => rawDispatch({ type: 'open', kind: 'macro', name: newMacroName(), mode: 'design', isNew: true }),
+    // Database Tools › Run Macro: a macro or submacro chosen (or typed), run; its failure is shown by runMacroByName
+    runMacro: async () => {
+      const name = await askMacroToRun(modal, await macroNamesWithSubs());
+      if (name) await runMacroByName(name);
+    },
     viewPrintPreview: () => {
       const id = live.current.state.activeId; // gated: a saved report
       if (id) dispatch({ type: 'setMode', id, mode: 'run' });
     },
-  }), [t, i18n, modal, dispatch, newReportName]);
+  }), [t, i18n, modal, dispatch, newReportName, newMacroName]);
   /** A3: Requête1…, free among tables, queries and open tabs. */
   function newQueryName(): string {
     const { state: s, tables: list, objects: objs } = live.current;
@@ -293,7 +318,7 @@ function Shell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (document.querySelector('[aria-modal="true"]')) return; // a dialog or the backstage is in front
+      if (dialogInFront()) return; // a dialog or the backstage is in front (a Query Builder's tab is served)
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         runCommand('save');
@@ -322,8 +347,12 @@ function Shell() {
     }
     return true;
   };
-  const closeTab = async (tab: DocTab) => {
-    try { if (await leaveDocuments([tab])) rawDispatch({ type: 'close', id: tab.id }); } catch (e) { await showError(e); }
+  const closeTab = async (tab: DocTab): Promise<boolean> => {
+    try {
+      if (!(await leaveDocuments([tab]))) return false;
+      rawDispatch({ type: 'close', id: tab.id });
+      return true;
+    } catch (e) { await showError(e); return false; }
   };
 
   // R24: the window's close button (and the system) asks first; main closes the window only once the documents agree.
@@ -350,9 +379,10 @@ function Shell() {
       void refreshSettings(); // recent files
     }
   };
-  const closeBase = async () => {
-    if (!(await leaveDocuments(live.current.state.tabs))) return;
-    try { await api.base.close(); setClip(null); setSession(null); } catch (e) { await showError(e); }
+  /** false: a document stayed open, or the close failed (a macro's CloseDatabase then fails). */
+  const closeBase = async (): Promise<boolean> => {
+    if (!(await leaveDocuments(live.current.state.tabs))) return false;
+    try { await api.base.close(); setClip(null); setSession(null); return true; } catch (e) { await showError(e); return false; }
   };
   // Compact and Repair (A6): as in Access, every document is closed first (each one asked about its changes).
   const compact = async () => {
@@ -369,8 +399,37 @@ function Shell() {
       void refreshObjects();
     }
   };
+  // A macro's Quit: the window's own close path (every document has its say, then the window closes)
+  const quit = async (): Promise<boolean> => {
+    if (!(await leaveDocuments(live.current.state.tabs))) return false;
+    await api.app.confirmClose();
+    return true;
+  };
+
+  // The macro shell (B1): what the actions of a macro reach. Read through refs, so one registration serves the whole session.
+  const shellRef = useRef({ closeTab, closeBase, quit });
+  shellRef.current = { closeTab, closeBase, quit };
+  useEffect(() => {
+    setMacroShell({
+      dispatch, modal, showError,
+      tabs: () => live.current.state.tabs,
+      active: () => live.current.state.tabs.find((x) => x.id === live.current.state.activeId) ?? null,
+      contentEnabled: () => live.current.session?.content !== 'disabled', // the data process refuses again on its own
+      closeTab: (tab) => shellRef.current.closeTab(tab),
+      closeBase: () => shellRef.current.closeBase(),
+      quit: () => shellRef.current.quit(),
+      region: () => localeInfo(live.current.settings?.region ?? navigator.language),
+      lang: () => (i18n.language === 'en' ? 'en' : 'fr'),
+    });
+    return () => setMacroShell(null);
+  }, [dispatch, modal, showError, i18n]);
+
   const takeOver = async () => {
     try { setSession(await api.base.takeOverLock()); } catch (e) { await showError(e); }
+  };
+
+  const enableContent = async () => {
+    try { setSession(await api.base.enableContent()); } catch (e) { await showError(e); }
   };
 
   const readOnly = !!session?.readOnly;
@@ -378,13 +437,16 @@ function Shell() {
 
   return (
     <div className="app" data-testid="app-root">
+      {/* a Query Builder's tab (modal): all but the ribbon and the status bar (which serve it) and the document tabs stands back */}
       <Ribbon ctx={ctx}
         onFile={() => { void refreshSettings(); setBackstage('home'); }} />
-      {session && <Banners session={session} onTakeOver={() => void takeOver()} />}
+      {session && <div className="contents" ref={inertRef(!!modalTab)}><Banners session={session} onTakeOver={() => void takeOver()} onEnableContent={() => void enableContent()} /></div>}
       <div className="work">
         {session && (
-          <NavPane tables={tables} objects={objects} readOnly={readOnly} active={active && !active.isNew ? active : null}
-            visible={state.navVisible} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection} />
+          <div className="contents" ref={inertRef(!!modalTab)}>
+            <NavPane tables={tables} objects={objects} readOnly={readOnly} active={active && !active.isNew ? active : null}
+              visible={state.navVisible} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection} />
+          </div>
         )}
         <DocumentTabs state={state} readOnly={readOnly} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} />
       </div>

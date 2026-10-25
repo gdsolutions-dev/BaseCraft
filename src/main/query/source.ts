@@ -115,17 +115,17 @@ export function run(db: DatabaseSync, sql: string, params: SqlValue[]): SqlValue
 }
 
 /**
- * The compiled query restricted by `filter` (compileFilter over the output columns, named as the source names them; their
+ * The compiled query restricted by `filter` and `where` (compileFilter over the output columns, named as the source names them; their
  * stored form is a table's). Same columns as `c`: `"bcx_rowid"` first when it has one, then `"c<k>"`. A field the source
  * lacks: bc:notFound; a criterion compileFilter refuses: bc:invalidArgument (contract 1.2).
  */
-function filtered(b: BoundQuery, c: CompiledSelect, filter: FieldFilter[], locale: string): SqlFragment {
-  if (!filter.length) return c;
+function filtered(b: BoundQuery, c: CompiledSelect, filter: FieldFilter[], where: string | undefined, locale: string): SqlFragment {
+  if (!filter.length && where === undefined) return c;
   if (filter.some((f) => !b.columns.some((col) => sameName(col.name, f.field)))) throw new Error('bc:notFound');
   const design: TableDesign = { name: '', fields: b.columns.map(({ name, props }) => ({ name, props })) };
   let w: SqlFragment;
   try {
-    w = compileFilter(design, filter, locale);
+    w = compileFilter(design, filter, locale, where);
   } catch (e) {
     if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error('bc:invalidArgument', { cause: e });
     throw e;
@@ -141,12 +141,12 @@ function filtered(b: BoundQuery, c: CompiledSelect, filter: FieldFilter[], local
 /** A call of Date(), Now() or Time() (the non-deterministic UDFs): such a count changes without any write. */
 const VOLATILE = new RegExp(`\\b(${Object.keys(SQL_FUNCTIONS).filter((n) => !SQL_FUNCTIONS[n].deterministic).join('|')})\\(`);
 
-/** Totals by database, keyed by a hash of (ref, parameter values, filter, region) — a `sql` ref holds up to 1 MB — valid for one writeSeq. */
+/** Totals by database, keyed by a hash of (ref, parameter values, filter, where, region) — a `sql` ref holds up to 1 MB — valid for one writeSeq. */
 const totals = new WeakMap<DatabaseSync, Map<string, { seq: number; total: number }>>();
 const MAX_TOTALS = 256;
 
 /**
- * A page of a query or SQL source: the compiled query as a derived table, filtered by `req.filter` (see `filtered`), sorted
+ * A page of a query or SQL source: the compiled query as a derived table, filtered by `req.filter` and `req.where` (see `filtered`), sorted
  * by `req.sort` (unknown field: bc:notFound), ties kept in the query's own order (its row position); `rowids` of the key
  * table when the query is updatable. `total` counts the filtered rows, cached until the next write (never for a query or
  * filter calling Date(), Now() or Time()).
@@ -160,12 +160,12 @@ export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePage
     return orderKeys(`"c${k}"`, b.columns[k].type, s.dir);
   });
   const compiled = compile(b, values, ctx.info);
-  const c = { ...filtered(b, compiled, req.filter ?? [], ctx.info.locale), hasRowid: compiled.hasRowid };
+  const c = { ...filtered(b, compiled, req.filter ?? [], req.where, ctx.info.locale), hasRowid: compiled.hasRowid };
 
   const seq = ctx.writeSeq();
   const cache = totals.get(db) ?? new Map<string, { seq: number; total: number }>();
   totals.set(db, cache);
-  const key = createHash('sha256').update(JSON.stringify([ref, values, req.filter ?? [], ctx.info.locale])).digest('base64');
+  const key = createHash('sha256').update(JSON.stringify([ref, values, req.filter ?? [], req.where ?? null, ctx.info.locale])).digest('base64');
   const volatile = VOLATILE.test(c.sql);
   let total = !volatile && cache.get(key)?.seq === seq ? cache.get(key)!.total : undefined;
   if (total === undefined) {

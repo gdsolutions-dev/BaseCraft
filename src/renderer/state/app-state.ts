@@ -11,19 +11,23 @@ export type DocKind =
   | 'form'
   | 'report'
   | 'relations'
+  | 'macro'
 
 export type DocMode = 'design' | 'datasheet' | 'run';
 /** isNew: table not saved yet; `name` is then only a provisional label (Table1…), never matched against real tables. */
 /** reloadToken: structure saved (everything is read again); dataToken: rows changed elsewhere (a datasheet re-reads them). */
 /** description: a table's description last set from the Properties dialog; an open design adopts it (its save keeps it). */
 /** dirtySources: a running form's sources with a record being edited, its own and its subforms' (action queries' lock check). */
+/** openArgs: how a macro opened a form or report (OpenForm, OpenReport): its Where Condition (canonical, over the source's
+ *  output columns) restricts the records of that opening (R8), its data mode applies to a form (R9). */
+export interface OpenArgs { where?: string; dataMode?: 'add' | 'edit' | 'readOnly' }
 export interface DocTab {
   id: string; kind: DocKind; name: string; mode: DocMode; dirty: boolean; reloadToken: number; dataToken?: number; isNew?: boolean; description?: string;
-  dirtySources?: RecordSourceRef[];
+  dirtySources?: RecordSourceRef[]; openArgs?: OpenArgs;
 }
 export interface AppState { tabs: DocTab[]; activeId: string | null; navVisible: boolean }
 export type AppAction =
-  | { type: 'open'; kind: DocKind; name: string; mode: DocMode; isNew?: boolean } | { type: 'close'; id: string } | { type: 'activate'; id: string }
+  | { type: 'open'; kind: DocKind; name: string; mode: DocMode; isNew?: boolean; args?: OpenArgs } | { type: 'close'; id: string } | { type: 'activate'; id: string }
   | { type: 'setMode'; id: string; mode: DocMode } | { type: 'setDirty'; id: string; dirty: boolean; sources?: RecordSourceRef[] }
   | { type: 'tableRenamed'; from: string; to: string } | { type: 'tableDropped'; name: string }
   | { type: 'tableSaved'; name: string; tabId?: string } // tabId: the new-table tab that was just saved under `name`
@@ -69,8 +73,14 @@ export function appReducer(s: AppState, a: AppAction): AppState {
   switch (a.type) {
     case 'open': {
       const existing = a.isNew ? undefined : s.tabs.find((t) => isDoc(t, a.kind, a.name));
-      if (existing) return { ...patch(s, existing.id, { mode: reopenMode(existing, a.mode) }), activeId: existing.id };
-      const tab: DocTab = { id: `doc${++seq}`, kind: a.kind, name: a.name, mode: a.mode, dirty: false, reloadToken: 0, ...(a.isNew ? { isNew: true } : {}) };
+      if (existing) {
+        const mode = reopenMode(existing, a.mode);
+        // with args (a macro's Open): they replace the tab's; in the same view its records are read again under them (R8)
+        const args = a.args && { openArgs: a.args, ...(mode === existing.mode ? { reloadToken: existing.reloadToken + 1 } : {}) };
+        return { ...patch(s, existing.id, { mode, ...args }), activeId: existing.id };
+      }
+      const tab: DocTab = { id: `doc${++seq}`, kind: a.kind, name: a.name, mode: a.mode, dirty: false, reloadToken: 0, ...(a.isNew ? { isNew: true } : {}),
+        ...(a.args ? { openArgs: a.args } : {}) };
       return { ...s, tabs: [...s.tabs, tab], activeId: tab.id };
     }
     case 'close': return remove(s, (t) => t.id === a.id);

@@ -9,13 +9,13 @@ import { askPaste, type PasteMode } from './PasteDialog';
 import { getClip, setClip, type ObjectClip } from './object-clipboard';
 
 export type { PasteMode };
-export interface PasteNames { tables: string[]; queries: string[]; forms: string[]; reports: string[] }
+export interface PasteNames { tables: string[]; queries: string[]; forms: string[]; reports: string[]; macros: string[] }
 
 const MAX_CHARS = 64;
 
 /** The names a new object of `kind` competes with: tables and queries share one namespace. */
 export const takenNames = (kind: DocKind, n: PasteNames): string[] =>
-  kind === 'table' || kind === 'query' ? [...n.tables, ...n.queries] : kind === 'form' ? n.forms : n.reports;
+  kind === 'table' || kind === 'query' ? [...n.tables, ...n.queries] : kind === 'form' ? n.forms : kind === 'macro' ? n.macros : n.reports;
 
 /** The i18n key of what refuses this paste, else null. */
 export function pasteError(clip: ObjectClip, name: string, mode: PasteMode, names: PasteNames): string | null {
@@ -30,7 +30,7 @@ export async function pasteNames(): Promise<PasteNames> {
   const { api } = await import('../bridge'); // not at load: the bridge reads window
   const [tables, objects] = await Promise.all([api.tables.list(), api.objects.list()]);
   const of = (k: ObjectKind) => objects.filter((o) => o.kind === k).map((o) => o.name);
-  return { tables: tables.map((x) => x.name), queries: of('query'), forms: of('form'), reports: of('report') };
+  return { tables: tables.map((x) => x.name), queries: of('query'), forms: of('form'), reports: of('report'), macros: of('macro') };
 }
 
 const fail = (modal: ModalApi, messageKey: string, params?: object) =>

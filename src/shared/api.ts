@@ -72,7 +72,11 @@ export interface SessionState {
   reconcileReport?: ReconcileReport;
   migratedBackupPath?: string;
   needsRecovery?: boolean; // crashed base behind a stale lock: only takeOverLock (write open) can recover it
+  /** Active content (spec 4.8): none, or disabled until enabled (trusted folder, approval, « Activer le contenu »). Absent: no base. */
+  content?: ContentState;
 }
+/** Disabled: action queries, RunSQL and unsafe macro actions are refused (bc:contentDisabled). */
+export type ContentState = 'none' | 'disabled' | 'enabled';
 export interface SaveTableRequest { originalName: string | null; design: TableDesign; mapping: FieldMapping[]; allowDataLoss: boolean; acceptExistingViolations?: boolean }
 export type SaveTableResult = AlterResult | { ok: false; reason: 'nameExists' | 'readOnly' };
 export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' }
@@ -130,6 +134,7 @@ export const CH = {
   appLicenses: 'bc:app:licenses',
   openExternal: 'bc:app:openExternal', // only one of AppInfo.links, never a URL made up by the renderer
   edit: 'bc:app:edit', // cut / copy / paste on the focused element of the sender
+  beep: 'bc:app:beep', // the system's beep (macros: Beep, MessageBox)
   closeRequested: 'bc:app:closeRequested', // main → renderer: the window is asked to close
   closeAllowed: 'bc:app:closeAllowed', // renderer → main: every document agreed, close for real
   closeAck: 'bc:app:closeAck', // renderer → main: the close request arrived (the renderer is not hung)
@@ -188,6 +193,7 @@ export const CH = {
   exchangeExportExcel: 'bc:exchange:exportExcel',
   baseSaveAs: 'bc:base:saveAs',
   baseCompact: 'bc:base:compact',
+  baseEnableContent: 'bc:base:enableContent',
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -218,6 +224,8 @@ export interface BasecraftApi {
     openExternal(url: string): Promise<void>;
     /** webContents.cut/copy/paste on the focused element (text fields, the datasheet's own clipboard handling). */
     edit(cmd: 'cut' | 'copy' | 'paste'): Promise<void>;
+    /** The system's beep (shell.beep): the macro actions Beep and MessageBox. */
+    beep(): Promise<void>;
     /** The window's close button (or the system) asks to close: the documents get their say, then confirmClose().
      *  Without a subscriber, the close is confirmed at once. */
     onCloseRequested(cb: () => void): () => void;
@@ -228,7 +236,7 @@ export interface BasecraftApi {
     open(path?: string): Promise<SessionState | null>;
     close(): Promise<void>;
     state(): Promise<SessionState | null>;
-    takeOverLock(): Promise<SessionState>;
+    takeOverLock(): Promise<SessionState | null>;
     onStateChanged(cb: (s: SessionState | null) => void): () => void;
     /** The data process ended on its own: the base is closed (stateChanged null), the window says so once. */
     onHostCrashed(cb: () => void): () => void;
@@ -237,6 +245,9 @@ export interface BasecraftApi {
     saveAs(): Promise<SessionState | null>;
     /** Compact and Repair (A6): the renderer has closed every document first. Rejects bc:readOnly, bc:copyFailed, bc:reopenFailed (the base is then closed). */
     compact(): Promise<CompactResult>;
+    /** « Activer le contenu »: approves the base's current active content (remembered for this file and content), enables it,
+     *  broadcasts the state. Allowed read-only (the approval is local). */
+    enableContent(): Promise<SessionState>;
   };
   tables: {
     list(): Promise<TableSummary[]>;

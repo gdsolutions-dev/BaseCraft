@@ -330,6 +330,7 @@ export function compileValue(e: Expr, ctx: SqlCompileCtx): SqlFragment {
       case 'in': if (x.list.length > MAX_ARGS) tooComplex(); return `bc_in(${[L(), P(x.not ? 1 : 0), val(x.e), ...x.list.map(val)].join(', ')})`;
       case 'isnull': return `bc_isnull(${P(x.not ? 1 : 0)}, ${val(x.e)})`;
       case 'star': return fail('aggregateContext');
+      case 'member': throw new ExprSyntaxError('memberNotAllowed', { start: 0, end: 0 }); // B2: [Forms]! criteria become parameters
       case 'call': {
         if (AGGREGATES.has(x.name)) {
           if (!ctx.aggregate || inAggregate) fail('aggregateContext');

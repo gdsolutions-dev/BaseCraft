@@ -64,6 +64,22 @@ Preview builds for Windows, macOS and Linux are on the [Releases page](https://g
 - **macOS (Apple silicon):** `BaseCraft-x.y.z-mac-arm64.dmg` or `.zip`. The builds are not notarized yet: after copying BaseCraft to Applications, run `xattr -dr com.apple.quarantine /Applications/BaseCraft.app` once, or macOS reports the app as damaged.
 - **Linux:** `BaseCraft-x.y.z-linux-amd64.deb` (`sudo apt install ./BaseCraft-x.y.z-linux-amd64.deb`), `BaseCraft-x.y.z-linux-x86_64.AppImage` (make it executable, then run it) or `.tar.gz`.
 
+### Macros, action queries and trusted folders
+
+Macros and action queries in a base you open are disabled until you click **Enable Content** (« Activer le contenu ») in the security bar, or until the file is in a folder an administrator has trusted. Bases created before 0.3 that already hold saved action queries ask once.
+
+Administrators list trusted folders in a system file that BaseCraft only reads:
+
+- Windows: `%ProgramData%\BaseCraft\trust.json`
+- macOS: `/Library/Application Support/BaseCraft/trust.json`
+- Linux: `/etc/basecraft/trust.json`
+
+```json
+{ "trustedFolders": [{ "path": "D:\\Bases\\Compta", "subfolders": true }] }
+```
+
+Create the folder holding this file with write permission for administrators only, or any user could trust their own folders.
+
 ## Build from source
 
 Requirements: [Node.js](https://nodejs.org/) 24 or later (BaseCraft uses the built-in `node:sqlite`).

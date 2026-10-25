@@ -13,6 +13,13 @@ import {
 } from './parser';
 
 describe('canonical parser', () => {
+  it('member references: parsed and serialised', () => {
+    expect(parseCanonical('[TempVars]![Total] * 2')).toEqual({ k: 'bin', op: '*', l: { k: 'member', path: ['TempVars', 'Total'] }, r: { k: 'num', v: '2' } });
+    expect(serialize(parseCanonical('[forms]![FClients]![Nom]'))).toBe('[Forms]![FClients]![Nom]');
+    expect(() => parseCanonical('[Tables]![x]')).toThrow(expect.objectContaining({ code: 'badMember' }));
+    expect(() => parseCanonical('[Forms]![F]')).toThrow(expect.objectContaining({ code: 'badMember' }));
+    expect(fieldRefs(parseCanonical('[Ville] = [TempVars]![Ville]'))).toEqual(['Ville']);
+  });
   it.each([
     ['1+2*3', '1 + 2 * 3'], ['-2^2', '-2 ^ 2'], ['[A] & "x" & [B]', '[A] & "x" & [B]'],
     ['a Mod 3 = 0 And Not [b]', '[a] Mod 3 = 0 And Not [b]'], ['"Il dit ""oui"""', '"Il dit ""oui"""'],
@@ -95,7 +102,7 @@ describe('canonical parser', () => {
     ('errors %s', (src, code) => expect(() => parseCanonical(src)).toThrow(expect.objectContaining({ code })));
 
   it.each([
-    ['', 'unexpectedEnd'], ['(1', 'unexpectedEnd'], ['1 2', 'unexpectedToken'], ['Forms!X!Y', 'unexpectedToken'],
+    ['', 'unexpectedEnd'], ['(1', 'unexpectedEnd'], ['1 2', 'unexpectedToken'], ['Forms!X', 'badMember'], ['TempVars!', 'unexpectedEnd'],
     ['[A].[B]', 'unexpectedToken'], ['1..2', 'badNumber'], ['1.', 'badNumber'], ['12abc', 'badNumber'], ['#2026-10-21 25:00:00#', 'badDate'],
     ['#21/10/2026#', 'badDate'], ['#2026-10-21', 'badDate'], ['a ; b', 'unexpectedToken'], ['[]', 'unexpectedToken'], ['x = Not y', 'unexpectedToken'],
     ['IIf(1, 2, 3, 4)', 'arity'], ['a And', 'unexpectedEnd'], ['x In ()', 'unexpectedToken'], ['x Is 5', 'unexpectedToken'],

@@ -17,6 +17,7 @@ const describe = vi.fn(async ({ name }: { name: string }) => ({ fields: [], upda
     relations: { cascadeChildren, list: relationsList } as unknown as BasecraftApi['relations'] },
 };
 const { runActionFlow, setOpenTabs } = await import('./run-action');
+const { onContentBlocked } = await import('../shell/Banners');
 
 /** Answers the confirmations and prompts in turn; records what was asked. */
 function fakeModal(confirms: ModalButton[], prompts: string[] = []) {
@@ -46,7 +47,7 @@ it('asks each missing parameter, confirms the count (No by default), then runs',
   runAction.mockReset().mockResolvedValueOnce({ ok: true, count: 4 } satisfies ActionResult);
   const m = fakeModal(['yes'], ['lyon', 'Dupont']);
   const d = deps(m.modal);
-  await runActionFlow(ref, d);
+  expect(await runActionFlow(ref, d)).toBe('done');
   expect(m.labels).toEqual(['V', 'N']);
   expect(m.asked[0]).toMatchObject({ messageKey: 'query.action.confirm_delete', params: { count: 4 }, defaultButton: 'no' });
   expect(runAction).toHaveBeenCalledWith(ref, { V: 'lyon', N: 'Dupont' }, { skipFailures: false, replaceTable: false });
@@ -57,7 +58,7 @@ it('asks each missing parameter, confirms the count (No by default), then runs',
 it('No writes nothing; row errors and an existing table ask again', async () => {
   actionCount.mockReset().mockResolvedValue({ count: 2, table: 'Commandes' });
   runAction.mockReset();
-  await runActionFlow(ref, deps(fakeModal(['no']).modal));
+  expect(await runActionFlow(ref, deps(fakeModal(['no']).modal))).toBe('cancelled'); // a macro's action fails
   expect(runAction).not.toHaveBeenCalled();
 
   runAction.mockResolvedValueOnce({ ok: false, reason: 'tableExists', table: 'Totaux' })
@@ -235,4 +236,40 @@ it('a row refused by the table rule (no field): its table-level message, never t
   expect(messages).toEqual([i18n.t('fieldError.tableRuleError', { table: 'Commandes' }), i18n.t('fieldError.tableRule', { table: 'Commandes', context: 'short' }),
     'Livraison avant commande']);
   expect(messages[0]).not.toBe(i18n.t('query.action.relatedRow', { table: 'Commandes' }));
+});
+
+it('content not enabled: actionCount refuses (bc:contentDisabled), the blocked message is shown, nothing else is asked or run', async () => {
+  actionCount.mockReset().mockRejectedValue(new Error("Error invoking remote method 'bc:queries:actionCount': Error: bc:contentDisabled"));
+  runAction.mockReset();
+  const m = fakeModal([]);
+  const d = deps(m.modal);
+  let barShown = 0;
+  const off = onContentBlocked(() => { barShown++; });
+  expect(await runActionFlow(ref, d)).toBe('blocked');
+  off();
+  expect(barShown).toBe(1); // a dismissed security bar comes back: the message points at it
+  expect(m.asked.map((x) => [x.messageKey, x.buttons])).toEqual([['query.action.contentDisabled', ['ok']]]);
+  expect(m.labels).toEqual([]); // no parameter asked
+  expect(runAction).not.toHaveBeenCalled();
+  expect(d.showError).not.toHaveBeenCalled();
+});
+
+it('warnings: false (SetWarnings): the count, partial and replace questions are answered Yes unseen; errors are still shown', async () => {
+  actionCount.mockReset().mockResolvedValue({ count: 2, table: 'Totaux' });
+  runAction.mockReset()
+    .mockResolvedValueOnce({ ok: false, reason: 'tableExists', table: 'Totaux' })
+    .mockResolvedValueOnce({ ok: false, reason: 'rowErrors', failed: 1, total: 2, errors: [{ field: 'Montant', code: 'validation' }],
+      byCause: { conversion: 0, key: 0, lock: 0, validation: 1 } })
+    .mockResolvedValueOnce({ ok: true, count: 1 });
+  const m = fakeModal([]); // a modal.confirm would answer No
+  await runActionFlow({ kind: 'sql', sql: 'SELECT * INTO Totaux FROM Commandes' }, { ...deps(m.modal), warnings: false });
+  expect(m.asked).toEqual([]);
+  expect(runAction.mock.calls.map((c) => c[2])).toEqual([
+    { skipFailures: false, replaceTable: false }, { skipFailures: false, replaceTable: true }, { skipFailures: true, replaceTable: true },
+  ]);
+
+  runAction.mockReset().mockResolvedValueOnce({ ok: false, reason: 'related', table: 'Clients' });
+  const e = fakeModal([]);
+  await runActionFlow(ref, { ...deps(e.modal), warnings: false });
+  expect(e.asked.map((x) => x.messageKey)).toEqual(['query.action.related']); // an error is shown
 });

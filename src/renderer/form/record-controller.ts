@@ -7,6 +7,7 @@ import { defaultProps, sameName } from '../../shared/field-types';
 import { toOrigin, type RecordSourceRef, type SortSpec, type SourceField, type SourceInfo, type SourcePage, type SourcePageRequest } from '../../shared/record-source';
 import { selectionCriteria } from '../datasheet/filter-model';
 import { PageCache } from '../datasheet/page-cache';
+import type { OpenArgs } from '../state/app-state';
 
 export interface FormDataApi {
   describe(ref: RecordSourceRef): Promise<SourceInfo>;
@@ -22,6 +23,8 @@ export interface FormRecordOptions {
   link?: { childFields: string[]; values: SqlValue[] | null };   // null = maître vide : aucun enregistrement, pas d'ajout
   newRecordValues?: () => Promise<Record<string, CellInput>>;    // valeurs par défaut des contrôles (tâche 7)
   params?: Record<string, CellInput>;                            // valeurs des paramètres de la source, envoyées avec chaque page
+  where?: string;                                                // Where Condition de l'ouverture (R8), envoyée avec chaque page
+  dataMode?: OpenArgs['dataMode'];                               // R9 : 'add' ouvre sur le nouvel enregistrement, 'readOnly' en lecture seule
   now?: () => Date;
 }
 export type RecordError = { field: string; code: FieldErrorCode | 'controlValidation' | 'noMaster'; message?: string; table?: string };
@@ -107,6 +110,7 @@ export class FormRecords {
     }
     this.rebuild();
     await this.place(0);
+    if (this.opts.dataMode === 'add' && !this.declined) { await this.last(); await this.newRecord(); }
     return !this.declined;
   }
 
@@ -292,7 +296,7 @@ export class FormRecords {
 
   // ---- rights ----
 
-  private get ro(): boolean { return this.opts.readOnly || this.refused; }
+  private get ro(): boolean { return this.opts.readOnly || this.opts.dataMode === 'readOnly' || this.refused; }
   /** A record that exists: not the new record, nor the blank of a source with no records and no additions. */
   private get onRow(): boolean { return !this.isNew && this.index < this.total; }
   private get editable(): boolean {
@@ -350,9 +354,11 @@ export class FormRecords {
     const filter = [...this.filter, ...(this.link?.values ? linkFilter(children, this.link.values) : [])];
     const sort = this.sort;
     const params = this.params;
+    const { where } = this.opts;
     const cache: PageCache = new PageCache(async (offset, limit) => {
       const writes = this.writes;
-      const p = await this.api.page(ref, { offset, limit, sort: sort.length ? sort : undefined, filter: filter.length ? filter : undefined, ...(params && { params }) });
+      const p = await this.api.page(ref, { offset, limit, sort: sort.length ? sort : undefined, filter: filter.length ? filter : undefined, ...(params && { params }),
+        ...(where !== undefined && { where }) });
       // A count made before an insert or a delete is out of date: the local one stands until a later reply.
       if (cache === this.cache && writes === this.writes) { this.total = p.total; this.counted = true; }
       // A row with no key-table rowid (A3) is carried with NaN: it is read-only.

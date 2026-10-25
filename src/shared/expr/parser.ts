@@ -4,6 +4,7 @@ import type { SelectQuery } from '../query/ast';
 import { ExprSyntaxError, type BinOp, type Expr, type FunctionTable } from './ast';
 import { AGGREGATES, FUNCTION_TABLE } from './catalog';
 import { asciiLower, bracket, tokenize, type Token } from './lexer';
+import { MEMBER_ROOTS, memberRoot } from './members';
 
 export interface ParseOptions {
   /** Forme d'une règle « Valide si » ou d'un critère : le sujet implicite est inséré. */
@@ -257,6 +258,7 @@ class Parser {
         this.p++;
         if (call && asciiLower(t.v) === 'exists' && this.isSelect(this.peek())) return { k: 'sub', mode: 'exists', q: this.subquery() };
         if (call) return this.nested(() => this.call(t));
+        if (this.isOp('!')) return this.member(t);
         const f = this.peek();
         if (this.opts.qualified && this.isOp('.') && f.t === 'id' && (f.bare || f.v !== '')) {
           this.p += 2;
@@ -280,6 +282,23 @@ class Parser {
     }
   }
 
+  /** `Root!Name` or `Root!Object!Control` from the root `t` (already read): the root is canonical or French, the chain as
+   *  long as the root's arity, else badMember. */
+  private member(t: Token): Expr {
+    const root = memberRoot(t.v);
+    const path: string[] = [root ?? t.v];
+    while (this.eatOp('!')) {
+      const n = this.tok;
+      if (n.t !== 'id' || (!n.bare && n.v === '')) return this.fail();
+      this.p++;
+      path.push(n.v);
+    }
+    if (!root || path.length !== MEMBER_ROOTS[root].arity) {
+      throw new ExprSyntaxError('badMember', { start: t.start, end: this.toks[this.p - 1]!.end });
+    }
+    return { k: 'member', path };
+  }
+
   private call(name: Token): Expr {
     const f = this.fns.get(name.v.toLowerCase());
     if (!f) throw new ExprSyntaxError('unknownFunction', { start: name.start, end: name.end });
@@ -300,7 +319,7 @@ class Parser {
 /** Valeur (par opposition à une condition) : littéral, champ, appel, moins unaire, arithmétique ou `&`. */
 function isValue(e: Expr): boolean {
   switch (e.k) {
-    case 'num': case 'str': case 'date': case 'bool': case 'id': case 'call': return true;
+    case 'num': case 'str': case 'date': case 'bool': case 'id': case 'call': case 'member': return true;
     case 'sub': return e.mode === 'scalar';
     case 'un': return e.op === '-';
     case 'bin': return ARITH_OPS.has(e.op) || e.op === '&';
@@ -364,12 +383,14 @@ export interface Dialect {
   date: (v: string) => string;
   /** Entre arguments et éléments de liste, espace comprise. */
   sep: string;
+  /** Canonical member root (TempVars…) -> text. */
+  root: (r: string) => string;
   /** Subquery -> canonical SQL (Task 2's printer), in every dialect. Required to print a tree that holds one. */
   sub?: (q: SelectQuery) => string;
 }
 
 export const CANONICAL_DIALECT: Dialect = {
-  kw: (k) => k, fn: (n) => n, num: (v) => v, sep: ', ',
+  kw: (k) => k, fn: (n) => n, num: (v) => v, root: (r) => r, sep: ', ',
   date: (v) => `#${v.endsWith(' 00:00:00') ? v.slice(0, 10) : v}#`,
 };
 
@@ -435,6 +456,7 @@ function emitter(d: Dialect, criteria: boolean) {
       case 'isnull': return join(ser(e.e, P_CMP), d.kw('Is'), `${neg(e.not)}${d.kw('Null')}`);
       case 'call': return `${d.fn(e.name)}(${e.args.map(raw).join(d.sep)})`;
       case 'star': return '*';
+      case 'member': return e.path.map((p, i) => bracket(i === 0 ? d.root(p) : p)).join('!');
       case 'sub': return e.mode === 'exists' ? `Exists ${sub(e.q)}` : sub(e.q);
       case 'inSub': return join(ser(e.e, P_CMP), `${neg(e.not)}${d.kw('In')}`, sub(e.q));
     }
@@ -483,6 +505,20 @@ export function hasAggregate(e: Expr): boolean {
     case 'between': return hasAggregate(e.e) || hasAggregate(e.lo) || hasAggregate(e.hi);
     case 'in': return hasAggregate(e.e) || e.list.some(hasAggregate);
     case 'inSub': return hasAggregate(e.e); // a subquery's own aggregates belong to it
+    default: return false;
+  }
+}
+
+/** The tree refers to a member ([TempVars]![x]…): never in SQL, a table or a field rule. Subqueries are not entered. */
+export function hasMember(e: Expr): boolean {
+  switch (e.k) {
+    case 'member': return true;
+    case 'call': return e.args.some(hasMember);
+    case 'un': case 'isnull': case 'inSub': return hasMember(e.e);
+    case 'bin': return hasMember(e.l) || hasMember(e.r);
+    case 'like': return hasMember(e.e) || hasMember(e.pattern);
+    case 'between': return hasMember(e.e) || hasMember(e.lo) || hasMember(e.hi);
+    case 'in': return hasMember(e.e) || e.list.some(hasMember);
     default: return false;
   }
 }

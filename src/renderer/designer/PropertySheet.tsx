@@ -14,6 +14,7 @@ import { parseNumber } from '../../shared/locale-format';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { ExpressionField } from '../expr/ExpressionField';
+import { RowSourceBuilder } from '../query/QueryDesignView';
 import { ComboBox } from '../shell/ComboBox';
 import { useModal } from '../shell/Modal';
 import type { DesignerAction, DesignerState } from './designer-model';
@@ -120,6 +121,9 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowP
   const region = ctx.display.region;
   const aggregates = docKind === 'report';   // source contrôle seulement : un état a des groupes (A5) ; valeur par défaut et règle n'en ont jamais
   const text = (s: string): Parsed => ({ value: s.trim() === '' ? undefined : s.trim() });
+  // « … » de Source et Contenu : le générateur de requête, un onglet modal qui rend son SQL (null = rien à changer)
+  const [building, setBuilding] = useState<{ text: string; resolve(sql: string | null): void } | null>(null);
+  const buildSql = (text: string) => new Promise<string | null>((resolve) => setBuilding({ text, resolve }));
   const field = (props: Omit<TextFieldProps, 'id' | 'testId' | 'label' | 'disabled' | 'mixed' | 'commit' | 'onLost'>) =>
     <TextField id={id} testId={testId} label={t(d.labelKey)} disabled={row.readOnly} mixed={mixed} commit={commit} onLost={onLost} {...props} />;
 
@@ -160,13 +164,20 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowP
         break;
       case 'recordSource':
         editor = field({ shown: fromSourceRef((v ?? null) as RecordSourceRef | null), options: [...ctx.tables, ...ctx.queries],
-          parse: (s) => { const ref = toSourceRef(s, ctx.tables, ctx.queries); return ref || !s.trim() ? { value: ref } : { error: 'sheet.error.unknownSource' }; } });
+          parse: (s) => { const ref = toSourceRef(s, ctx.tables, ctx.queries); return ref || !s.trim() ? { value: ref } : { error: 'sheet.error.unknownSource' }; },
+          buildTitle: t('fieldProp.queryBuilder'),
+          build: async (s) => { const sql = await buildSql(s); return sql === null ? null : { value: { kind: 'sql', sql } }; } });
         break;
       case 'objectName':
         editor = field({ shown: typeof v === 'string' ? v : '', options: ctx.objects(docKind), parse: text });
         break;
       case 'rowSource':   // stocké en texte (Access) ; liste de valeurs : a;b;c, jamais entre guillemets (splitValueList)
-        editor = field({ shown: typeof v === 'string' ? v : '', options: rowSourceTable ? [...ctx.tables, ...ctx.queries] : undefined, parse: text });
+        editor = field({ shown: typeof v === 'string' ? v : '', options: rowSourceTable ? [...ctx.tables, ...ctx.queries] : undefined, parse: text,
+          // une liste de valeurs n'a pas de générateur de requête
+          ...(rowSourceTable ? { buildTitle: t('fieldProp.queryBuilder'), build: async (s: string) => {
+            const sql = await buildSql(s);
+            return sql === null ? null : { value: sql };
+          } } : {}) });
         break;
       case 'bool':
         editor = (
@@ -201,6 +212,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowP
     <div className="dz-prow" title={mixed ? t('sheet.mixed') : undefined}>
       <label htmlFor={id}>{t(d.labelKey)}</label>
       <div className="dz-pval">{editor}</div>
+      {building && <RowSourceBuilder rowSource={building.text} onClose={(sql) => { setBuilding(null); building.resolve(sql); }} />}
     </div>
   );
 }
@@ -209,9 +221,9 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowP
  *  Un texte inchangé n'est jamais réécrit (l'affichage en cm perd de la précision). Un choix dans la liste est validé aussitôt.
  *  `build` : un bouton « … » (générateur d'expressions) dont le résultat est validé tel quel ; null = annulé. */
 interface TextFieldProps { id: string; testId: string; label: string; disabled: boolean; mixed: boolean; shown: string; options?: string[];
-  parse(text: string): Parsed; note?(text: string): string | null; build?(text: string): Promise<{ value: unknown } | null>;
+  parse(text: string): Parsed; note?(text: string): string | null; build?(text: string): Promise<{ value: unknown } | null>; buildTitle?: string;
   commit(v: unknown): string | null; onLost(msg: string): void }
-function TextField({ id, testId, label, disabled, mixed, shown, options, parse, note, build, commit, onLost }: TextFieldProps) {
+function TextField({ id, testId, label, disabled, mixed, shown, options, parse, note, build, buildTitle, commit, onLost }: TextFieldProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +267,7 @@ function TextField({ id, testId, label, disabled, mixed, shown, options, parse, 
         : <input id={id} data-testid={testId} disabled={disabled} spellCheck={false} autoComplete="off" value={value} placeholder={mixed ? t('sheet.mixed') : undefined}
             aria-invalid={!!error} aria-describedby={msg ? msgId : undefined} onChange={(e) => onChange(e.target.value)} />}
       {build && (
-        <button type="button" className="iconbtn" data-testid={`${testId}-build`} disabled={disabled} aria-label={t('builder.title')} title={t('builder.title')}
+        <button type="button" className="iconbtn" data-testid={`${testId}-build`} disabled={disabled} aria-label={buildTitle ?? t('builder.title')} title={buildTitle ?? t('builder.title')}
           onMouseDown={(e) => e.preventDefault()} onClick={() => void openBuilder()}><Ellipsis className="ic ic-sm" aria-hidden /></button>
       )}
       {msg && <div id={msgId} className={error ? 'dz-perror' : 'dz-pnote'} role={error ? 'alert' : undefined} data-testid={`${testId}-${error ? 'error' : 'note'}`}>{t(msg)}</div>}

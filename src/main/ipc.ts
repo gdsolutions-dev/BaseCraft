@@ -3,7 +3,7 @@ import { app, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { CH, type AppInfo, type LicenseEntry, type OpResult, type RelationResult, type SaveTableResult, type SessionState } from '../shared/api';
+import { CH, type AppInfo, type ContentState, type LicenseEntry, type OpResult, type RelationResult, type SaveTableResult, type SessionState } from '../shared/api';
 import { MAX_EXCEL_ROWS } from '../shared/exchange';
 import { sheetName } from '../shared/export-format';
 import { resolveUiLanguage } from '../shared/i18n';
@@ -23,6 +23,7 @@ import {
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { addRecentFile, loadSettings, saveSettings, type AppSettings } from './settings';
+import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, type TrustConfig } from './trust';
 
 let mainWindow: () => BrowserWindow | null = () => null;
 let dir = '';
@@ -31,6 +32,9 @@ let settings: AppSettings;
 let host: DbHost | null = null;
 let closing: Promise<void> = Promise.resolve();
 export const closeVeto = new CloseVeto();
+/** This user's approvals and the administrator's trusted folders (trust.ts), set up once in registerIpc. */
+let approvals: ApprovalStore;
+let trustConfig: TrustConfig = { trustedFolders: [] };
 
 const region = () => regionTag(process.env.BASECRAFT_REGION ?? app.getSystemLocale());
 const uiLanguage = () => resolveUiLanguage(settings.locale, region());
@@ -109,7 +113,7 @@ async function startHost(path: string, create: boolean, sessionId: string): Prom
   const onEvent = (e: HostEvent) => {
     if (host !== me) return;
     const w = mainWindow();
-    if (e.event === 'stateChanged') broadcast(e.state);
+    if (e.event === 'stateChanged') broadcast(me?.state ?? e.state); // with its content state (client.ts keeps it)
     else if (w && !w.isDestroyed()) w.webContents.send(CH.importProgress, { done: e.done, total: e.total });
   };
   try {
@@ -120,6 +124,75 @@ async function startHost(path: string, create: boolean, sessionId: string): Prom
     releaseIfOurs(path, sessionId); // a process that ended during the open may leave its lock
     throw e;
   }
+}
+
+/** The active content enabled in each data process, by fingerprint ('' : none); absent or null: disabled. */
+const enabledFor = new WeakMap<DbHost, string | null>();
+
+/** Tells the data process which content runs (null: none, action queries refused) and sets the state; broadcast if it changed. */
+async function setContent(h: DbHost, fingerprint: string | null, content: ContentState, announce = true): Promise<void> {
+  try { await h.session.setContentEnabled(fingerprint); } catch (e) { if (fingerprint !== null) throw e; } // null: a process gone runs nothing
+  enabledFor.set(h, fingerprint);
+  const changed = h.state.content !== content;
+  h.state = { ...h.state, content };
+  if (announce && changed && host === h) broadcast(h.state);
+}
+
+/**
+ * Decides whether the active content of a base just opened (or reopened after Stop, or taken over) is enabled, and tells its
+ * data process. Any failure (no connection yet: needsRecovery) leaves it disabled.
+ */
+async function decideContent(h: DbHost, announce = false): Promise<void> {
+  try {
+    const a = await h.session.activeContent();
+    const content = contentState(a, await h.session.dbUuid(), h.opened.path, { store: approvals, cfg: trustConfig, platform: process.platform });
+    await setContent(h, content === 'disabled' ? null : a.fingerprint, content, announce);
+  } catch {
+    await setContent(h, null, 'disabled', announce);
+  }
+}
+
+/** The data process refused an action query: its content changed since it was enabled (another connection). The bar shows. */
+async function contentRefused<T>(fn: () => Promise<T>): Promise<T> {
+  const h = host;
+  try {
+    return await fn();
+  } catch (e) {
+    if (h && e instanceof Error && e.message === 'bc:contentDisabled' && h.state.content !== 'disabled') await setContent(h, null, 'disabled');
+    throw e;
+  }
+}
+
+/** R5, after a successful save, rename, delete or copy of an object: content this user authors in a base whose content is
+ *  enabled (or had none) is approved, if nothing changed it elsewhere before (enabledAfterOwnWrite); a base opened disabled
+ *  stays disabled. One at a time, so that one write's "before" is never another's "after". ponytail: a write by another
+ *  connection between the "before" read and this write is approved with it; closing that needs both in one data-process call. */
+let objectWrites: Promise<unknown> = Promise.resolve();
+function objectWrite(fn: () => Promise<OpResult>): Promise<OpResult | SaveTableResult | RelationResult> {
+  const run = async () => {
+    const h = host;
+    const enabled = h ? enabledFor.get(h) ?? null : null;
+    let before: string | null = null;
+    if (h && enabled !== null) try { before = (await h.session.activeContent()).fingerprint; } catch { /* decided below: disabled */ }
+    const r = await tableOp(fn);
+    if (!r.ok || !h || host !== h || enabled === null) return r;
+    try {
+      const a = await h.session.activeContent();
+      const next = enabledAfterOwnWrite(enabled, before, a.fingerprint);
+      if (next === null) await setContent(h, null, 'disabled');
+      else {
+        if (a.present) approvals.approve(await h.session.dbUuid(), next);
+        await setContent(h, next, a.present ? 'enabled' : h.state.content ?? 'none');
+      }
+    } catch (e) {
+      console.error(e); // the write succeeded; the content is decided again at the next opening
+      await setContent(h, null, 'disabled');
+    }
+    return r;
+  };
+  const p = objectWrites.then(run);
+  objectWrites = p.catch(() => {});
+  return p;
 }
 
 /** The same file (its real path), case-insensitive on Windows and macOS: Save As never writes over the open base. */
@@ -142,6 +215,7 @@ export function openBase(path: string, create = false): Promise<SessionState> {
     if (host && samePath(host.opened.path, path)) await closeBase();
     await closing; // a base still closing releases its lock first
     const h = await startHost(path, create, randomUUID());
+    await decideContent(h);
     await closeBase();
     host = h;
     try {
@@ -197,6 +271,7 @@ async function cancelCall(): Promise<void> {
     await h.kill();
     try {
       const n = await startHost(h.opened.path, false, h.opened.sessionId);
+      await decideContent(n);
       if (host !== h) { await n.close(); return; } // closed meanwhile
       host = n;
       broadcast(n.state);
@@ -255,6 +330,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   mainWindow = getMainWindow;
   dir = app.getPath('userData');
   settings = loadSettings(dir);
+  approvals = new ApprovalStore(join(dir, 'trust.json'));
+  // E2E only (unpackaged + BASECRAFT_E2E=1): the tests' trusted folders replace the system file.
+  const e2eTrust = process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? process.env.BASECRAFT_E2E_TRUST_CONFIG : undefined;
+  trustConfig = readTrustConfig(e2eTrust || systemTrustPath(process.platform, process.env));
   // The native popups (<select> lists, menus, scroll bars) follow the app's theme, not Windows'.
   nativeTheme.themeSource = settings.theme;
   const handle = (ch: string, fn: (...args: unknown[]) => unknown) =>
@@ -288,6 +367,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     if (cmd !== 'cut' && cmd !== 'copy' && cmd !== 'paste') throw new TypeError('bc:invalidArgument');
     e.sender[cmd as 'cut' | 'copy' | 'paste']();
   });
+  handle(CH.beep, () => { shell.beep(); });
   // The renderer never chooses the URL: only the links About shows may be opened, in the system browser.
   handle(CH.openExternal, (url) => {
     const links = appInfo().links;
@@ -331,7 +411,25 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
       throw e;
     }
   });
-  handle(CH.baseTakeOverLock, () => need().takeOverLock()); // reopening in write mode, unlinking the lock (bcError in the data process)
+  // Reopening in write mode, unlinking the lock (bcError in the data process); the content is decided again (a crashed base
+  // could not be read before).
+  handle(CH.baseTakeOverLock, async () => {
+    need();
+    const h = host!;
+    await h.session.takeOverLock();
+    await decideContent(h, true);
+    return host === h ? h.state : null;   // closed meanwhile: no base
+  });
+  // « Activer le contenu »: approved for this file and content (local, so allowed read-only), enabled, broadcast.
+  handle(CH.baseEnableContent, async () => {
+    need();
+    const h = host!;
+    const a = await h.session.activeContent();
+    if (a.present) approvals.approve(await h.session.dbUuid(), a.fingerprint);
+    await setContent(h, a.fingerprint, 'enabled', false);
+    if (host === h) broadcast(h.state);
+    return h.state;
+  });
 
   handle(CH.tablesList, () => need().listTables());
   handle(CH.tablesDesign, (n) => need().tableDesign(lookupName(n)));
@@ -383,15 +481,15 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.tablesAppend, (a, b) => rowWrite(() => need().appendTable(lookupName(a), lookupName(b))));
   handle(CH.objectsList, (k) => need().listObjects(objectKindOrAll(k)));
   handle(CH.objectsGet, (k, n) => need().getObject(objectKind(k), lookupName(n)));
-  handle(CH.objectsSave, (k, n, d, o) => tableOp(() => need().saveObject(objectKind(k), nameArg(n), definition(d), o === null ? null : lookupName(o))));
-  handle(CH.objectsRename, (k, a, b) => tableOp(() => need().renameObject(objectKind(k), lookupName(a), nameArg(b))));
-  handle(CH.objectsDelete, (k, n) => tableOp(() => need().deleteObject(objectKind(k), lookupName(n))));
-  handle(CH.objectsCopy, (k, n, to) => tableOp(() => need().copyObject(objectKind(k), lookupName(n), nameArg(to))));
+  handle(CH.objectsSave, (k, n, d, o) => objectWrite(() => need().saveObject(objectKind(k), nameArg(n), definition(d), o === null ? null : lookupName(o))));
+  handle(CH.objectsRename, (k, a, b) => objectWrite(() => need().renameObject(objectKind(k), lookupName(a), nameArg(b))));
+  handle(CH.objectsDelete, (k, n) => objectWrite(() => need().deleteObject(objectKind(k), lookupName(n))));
+  handle(CH.objectsCopy, (k, n, to) => objectWrite(() => need().copyObject(objectKind(k), lookupName(n), nameArg(to))));
   handle(CH.objectsSetDescription, (k, n, d) => tableOp(() => need().setDescription(k === 'table' ? k : objectKind(k), lookupName(n), description(d))));
   handle(CH.sourcesDescribe, (r) => need().describeSource(sourceRef(r)));
   handle(CH.sourcesPage, (r, q) => need().pageSource(sourceRef(r), sourcePageRequest(q)));
-  handle(CH.queriesActionCount, (r, p) => need().actionCount(queryRef(r), queryParams(p)));
-  handle(CH.queriesRunAction, (r, p, o) => need().runAction(queryRef(r), queryParams(p), runActionOptions(o)));
+  handle(CH.queriesActionCount, (r, p) => contentRefused(() => need().actionCount(queryRef(r), queryParams(p))));
+  handle(CH.queriesRunAction, (r, p, o) => contentRefused(() => need().runAction(queryRef(r), queryParams(p), runActionOptions(o))));
   handle(CH.queriesCancel, () => cancelCall());
 
   // Reports: nothing is written into the base (allowed read-only); the PDF goes only to the path chosen in the dialog (4.8).

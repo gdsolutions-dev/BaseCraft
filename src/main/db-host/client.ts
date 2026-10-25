@@ -51,7 +51,8 @@ export class DbHost {
   private constructor(private readonly child: Child, readonly opened: HostOpen, onEvent: (e: HostEvent) => void, onExit: (code: number) => void) {
     child.on('message', (m: HostReply | HostEvent) => {
       if ('event' in m) {
-        if (m.event === 'stateChanged') this.state = m.state;
+        // the content state is the main process's (ipc.ts): kept across the data process's own state changes
+        if (m.event === 'stateChanged') this.state = { ...m.state, ...(this.state?.content ? { content: this.state.content } : {}) };
         onEvent(m);
         return;
       }

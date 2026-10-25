@@ -18,6 +18,7 @@ const api: BasecraftApi = {
     licenses: () => ipcRenderer.invoke(CH.appLicenses),
     openExternal: (url) => ipcRenderer.invoke(CH.openExternal, url),
     edit: (cmd) => ipcRenderer.invoke(CH.edit, cmd),
+    beep: () => ipcRenderer.invoke(CH.beep),
     onCloseRequested: (cb) => {
       onClose = cb;
       return () => { if (onClose === cb) onClose = null; };
@@ -42,6 +43,7 @@ const api: BasecraftApi = {
     },
     saveAs: () => ipcRenderer.invoke(CH.baseSaveAs),
     compact: () => ipcRenderer.invoke(CH.baseCompact),
+    enableContent: () => ipcRenderer.invoke(CH.baseEnableContent),
   },
   tables: {
     list: () => ipcRenderer.invoke(CH.tablesList),

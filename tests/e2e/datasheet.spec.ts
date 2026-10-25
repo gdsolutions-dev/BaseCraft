@@ -191,7 +191,8 @@ test('closing the window with an invalid pending row asks; No keeps the window, 
     const closed = app.waitForEvent('close');
     await closeWindow(app);
     await page.getByTestId('modal-btn-ok').click();
-    await page.getByTestId('modal-btn-yes').click();
+    // the window closes during the click (Playwright may report the page closed): `closed` is the check
+    await page.getByTestId('modal-btn-yes').click().catch(() => undefined);
     await closed;
   } finally {
     await app.close().catch(() => undefined);
@@ -301,6 +302,21 @@ test('a value typed and entered with no delay is saved (scanner, text expander)'
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('nav-record-count')).toHaveText('2');
     expect((await rowsOf(page)).map((r) => r.values[1])).toEqual(['Martin', 'Durand']);
+  } finally {
+    await app.close();
+  }
+});
+
+test('typing fast on a slow machine: the first key, which opens the editor, is kept', async () => {
+  const { app, page } = await launchApp({ args: [await clientsBase('premiere-touche', 'Dupont')], env: FR });
+  try {
+    await openSheet(page);
+    await clickNom(page, 0);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+    await page.keyboard.type('Dupond'); // the session's first editor: the next keys come before it has the focus
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await rowsOf(page))[0].values[1]).toBe('Dupond');
   } finally {
     await app.close();
   }

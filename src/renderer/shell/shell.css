@@ -236,9 +236,16 @@ select:focus-visible { outline: none; border-color: var(--bc-accent); box-shadow
 .modal-title { margin: 0 0 var(--bc-space-2); font-size: 15px; font-weight: 650; }
 .modal-message { margin: 0 0 var(--bc-space-4); white-space: pre-wrap; overflow-wrap: anywhere; }
 .modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--bc-space-4); }
-.modal-field input { height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); outline: 0; }
-.modal-field input:focus { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.modal-field input:not([type="radio"], [type="checkbox"]) { height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); outline: 0; }
+.modal-field input:not([type="radio"], [type="checkbox"]):focus { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .modal-field input[aria-invalid="true"] { border-color: var(--bc-danger); }
+.modal-field input:is([type="radio"], [type="checkbox"]) { margin: 0; accent-color: var(--bc-accent); }
+/* radio or checkbox beside its label, not above it */
+.modal-field:has(> input:is([type="radio"], [type="checkbox"])), .modal-field label:has(> input:is([type="radio"], [type="checkbox"])) { flex-direction: row; display: inline-flex; align-items: center; gap: 6px; }
+fieldset.modal-field { min-inline-size: 0; margin-inline: 0; border: 0; padding: 0; }
+fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
+.modal-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px var(--bc-space-4); }
+.modal-row { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--bc-space-4); }
 .modal-error { color: var(--bc-danger); font-size: 12px; }
 .modal-buttons { display: flex; justify-content: flex-end; gap: var(--bc-space-2); }
 

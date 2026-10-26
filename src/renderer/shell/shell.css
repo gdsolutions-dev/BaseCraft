@@ -225,6 +225,16 @@ button:disabled { opacity: .45; }
 .bs-about-links .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bs-options { display: flex; flex-direction: column; gap: var(--bc-space-4); }
 .bs-options label { display: flex; flex-direction: column; gap: 6px; max-width: 320px; font-weight: 500; }
+.bs-dbopts { margin-top: var(--bc-space-5); }
+.bs-dbopts h2 { margin: 0 0 var(--bc-space-3); font-size: 14px; font-weight: 650; }
+.bs-dbopts input[type="text"] { height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); font-weight: 400; outline: 0; }
+.bs-dbopts input[type="text"]:focus-visible { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.bs-dbopts .bs-field { display: flex; flex-direction: column; gap: 6px; max-width: 420px; font-weight: 500; }
+.bs-dbopts .bs-field > .muted { font-weight: 400; font-size: 12px; }
+.bs-dbopts .bs-options label.bs-check { flex-direction: row; align-items: center; gap: var(--bc-space-2); max-width: none; }
+.bs-dbopts input[type="checkbox"] { margin: 0; accent-color: var(--bc-accent); }
+.bs-icon-row { display: flex; align-items: center; gap: var(--bc-space-2); }
+.bs-icon-preview { width: 32px; height: 32px; object-fit: contain; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); }
 select {
   height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
   background: var(--bc-surface); font-weight: 400;

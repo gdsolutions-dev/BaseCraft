@@ -6,6 +6,7 @@ import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec } from '.
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
 import type { UiLanguage } from './i18n';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest } from './record-source';
+import type { StartupOptions } from './startup';
 
 export type { CellInput, TableDesign };
 export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, SourcePageRequest } from './record-source';
@@ -123,7 +124,7 @@ export interface RelationsLayout { tables: Record<string, { x: number; y: number
 // bc:exists, bc:notBasecraft, bc:newerMajor, bc:needsMigration, bc:cannotOpen (base.create/open),
 // bc:readOnly (rows writes, relations layout), bc:unsupportedTable (rows.*, sources.*), bc:notFound (objects.get, sources.* on a missing table; a query's missing table or query: bc:notFound|unknownSource|<name>),
 // bc:corruptObject (objects.get of a definition that is not a JSON object), bc:needsRecovery / bc:cannotOpen (data access without a
-// readable connection), bc:noBase, bc:invalidArgument, bc:fontMissing / bc:writeFailed / bc:printFailed (reports.*).
+// readable connection), bc:noBase, bc:invalidArgument, bc:badIcon (app.setWindowIcon; also thrown by the renderer's iconPng), bc:fontMissing / bc:writeFailed / bc:printFailed (reports.*).
 // A3 (`bc:<code>|<sub-code>|<detail>`): bc:invalidQuery, bc:queryBind, bc:notSelectQuery, bc:missingParameter, bc:invalidParameter
 // (sources.* of kind query or sql, objects.save of a query), bc:cancelled, bc:hostCrashed.
 export const CH = {
@@ -132,6 +133,7 @@ export const CH = {
   setTheme: 'bc:app:setTheme',
   appInfo: 'bc:app:info',
   appLicenses: 'bc:app:licenses',
+  appSetIcon: 'bc:app:setIcon', // the window icon: a small PNG the renderer re-encoded, or null for BaseCraft's (bc:badIcon)
   openExternal: 'bc:app:openExternal', // only one of AppInfo.links, never a URL made up by the renderer
   edit: 'bc:app:edit', // cut / copy / paste on the focused element of the sender
   beep: 'bc:app:beep', // the system's beep (macros: Beep, MessageBox)
@@ -194,6 +196,8 @@ export const CH = {
   baseSaveAs: 'bc:base:saveAs',
   baseCompact: 'bc:base:compact',
   baseEnableContent: 'bc:base:enableContent',
+  baseStartup: 'bc:base:startup',
+  baseSaveStartup: 'bc:base:saveStartup',
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -222,6 +226,9 @@ export interface BasecraftApi {
     /** The third-party licence inventory shipped with the app (read by the main process, never a renderer path). */
     licenses(): Promise<LicenseEntry[]>;
     openExternal(url: string): Promise<void>;
+    /** The window's icon (Windows, Linux; macOS: nothing): a PNG of at most 256 x 256 px and 1 MiB that the renderer decoded and
+     *  re-encoded, or null for BaseCraft's. Rejects bc:badIcon for a PNG the main process reads as empty or too large. */
+    setWindowIcon(png: Uint8Array | null): Promise<void>;
     /** webContents.cut/copy/paste on the focused element (text fields, the datasheet's own clipboard handling). */
     edit(cmd: 'cut' | 'copy' | 'paste'): Promise<void>;
     /** The system's beep (shell.beep): the macro actions Beep and MessageBox. */
@@ -248,6 +255,10 @@ export interface BasecraftApi {
     /** « Activer le contenu »: approves the base's current active content (remembered for this file and content), enables it,
      *  broadcasts the state. Allowed read-only (the approval is local). */
     enableContent(): Promise<SessionState>;
+    /** The base's startup options (B3), read tolerantly: a wrong or newer value reads as the default. Allowed read-only. */
+    startup(): Promise<StartupOptions>;
+    /** Saves the six options (the other keys of the stored section are kept). Rejects bc:readOnly. */
+    saveStartup(o: StartupOptions): Promise<void>;
   };
   tables: {
     list(): Promise<TableSummary[]>;

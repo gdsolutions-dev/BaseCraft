@@ -2263,5 +2263,27 @@
       "search": "Search",
       "flow": "Program Flow"
     }
+  },
+  "options": {
+    "db": {
+      "title": "Current Database",
+      "appTitle": "Application Title",
+      "appIcon": "Application Icon",
+      "iconBrowse": "Browse…",
+      "iconRemove": "Remove Icon",
+      "iconBad": "This picture cannot be used as an icon.",
+      "startupForm": "Display Form",
+      "none": "(none)",
+      "showNavPane": "Display Navigation Pane",
+      "ribbon": "Ribbon",
+      "ribbonFull": "Full",
+      "ribbonSimplified": "Simplified",
+      "runMode": "Open in run mode",
+      "runModeHelp": "Hides the Navigation Pane and Design view. Hold Shift while opening the database to bypass it.",
+      "nextOpen": "These options take effect the next time the database is opened."
+    }
+  },
+  "startup": {
+    "formNotFound": "The display form “{{name}}” cannot be found."
   }
 }

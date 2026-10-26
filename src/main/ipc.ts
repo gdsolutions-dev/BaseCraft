@@ -18,10 +18,11 @@ import { pickExcelPath, pickExportPath, pickImportPath, pickOpenPath, pickPdfPat
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, uint, uints, description, queryRef, queryParams, runActionOptions,
+  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
+import { setWindowIcon } from './window-icon';
 import { addRecentFile, loadSettings, saveSettings, type AppSettings } from './settings';
 import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, type TrustConfig } from './trust';
 
@@ -368,6 +369,11 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     e.sender[cmd as 'cut' | 'copy' | 'paste']();
   });
   handle(CH.beep, () => { shell.beep(); });
+  handle(CH.appSetIcon, (png) => {
+    const bytes = iconBytes(png);
+    const w = mainWindow();
+    if (w && !w.isDestroyed()) setWindowIcon(w, bytes);
+  });
   // The renderer never chooses the URL: only the links About shows may be opened, in the system browser.
   handle(CH.openExternal, (url) => {
     const links = appInfo().links;
@@ -444,6 +450,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.rowsUpdate, (t, id, c) => rowWrite(() => need().update(lookupName(t), uint(id), cells(c))));
   handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), uints(ids))));
   handle(CH.rowsLookup, (t, fd) => need().lookup(lookupName(t), lookupName(fd)));
+
+  // Startup options (B3): a read-only base reads them; saving rejects (ReadOnlyError) like any write.
+  handle(CH.baseStartup, () => need().startup());
+  handle(CH.baseSaveStartup, (o) => rowWrite(() => need().saveStartup(startupOptions(o))));
 
   handle(CH.relationsList, () => need().listRelations());
   handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), o === null ? null : lookupName(o))));

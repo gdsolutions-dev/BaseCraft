@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { ObjectSummary, SessionState, TableSummary } from '../shared/api';
 import { sameName } from '../shared/field-types';
+import { hasStartup, type StartupOptions } from '../shared/startup';
 import { saveTableInteractive } from './table-design/save-table';
 import { emptyDesign, toSaveRequest, withDefaultPrimaryKey } from './table-design/design-model';
 import { instantReport, uniqueReportName } from '../shared/report/instant';
@@ -25,7 +27,10 @@ import { openSqlView } from './query/QueryDesignView';
 import { setOpenTabs } from './query/run-action';
 import { clearTempVars, macroNamesWithSubs, runMacroByName, setMacroShell } from './macro/macro-shell';
 import { closeEmbeddedOf } from './macro/embedded';
-import { formCancelled } from './form/form-instances';
+import { formCancelled, whenFormOpened } from './form/form-instances';
+import { base64ToBytes, storedIconPng } from './shell/app-icon';
+import { SHIFT_GRACE_MS, shiftHeld } from './shell/shift-key';
+import { FULL_UI, runStartup, type StartupUi } from './shell/startup';
 import { reportShown } from './report/report-events';
 import { askMacroToRun } from './macro/RunMacroDialog';
 import { localeInfo } from '../shared/locale-format';
@@ -53,6 +58,16 @@ export function App() {
   return <ModalProvider><Shell /></ModalProvider>;
 }
 
+/** The window icon from a base's stored icon ('' : BaseCraft's); one that cannot be used leaves BaseCraft's, silently. `current`: still the base it was for. */
+async function applyIcon(appIcon: string, current: () => boolean): Promise<void> {
+  try {
+    const png = appIcon ? await storedIconPng(base64ToBytes(appIcon)) : null;
+    if (current()) await api.app.setWindowIcon(png);
+  } catch {
+    if (current()) await api.app.setWindowIcon(null).catch(() => {});
+  }
+}
+
 function Shell() {
   const { t, i18n } = useTranslation();
   const modal = useModal();
@@ -66,8 +81,17 @@ function Shell() {
   const [importing, setImporting] = useState<false | { appendTo?: string; source?: 'text' | 'excel' }>(false);
   const [navSelection, setNavSelection] = useState<{ kind: string; name: string } | null>(null);
   const [state, rawDispatch] = useReducer(appReducer, initialAppState);
-  const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings });
-  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings };
+  // The UI the base's startup options ask for (B3 R10), set by the startup sequence; the full UI otherwise.
+  const [ui, setUi] = useState<StartupUi>(FULL_UI);
+  const [appTitle, setAppTitle] = useState(''); // the base's Application Title ('' : BaseCraft's)
+  /** The opening whose startup sequence ran (or runs); null: none yet for the open base. */
+  const startedFor = useRef<{ path: string } | null>(null);
+  /** Shift held on the click or key that asked for the opening (Backstage Recent, Open); read once by the sequence (R4). */
+  const openShift = useRef(false);
+  /** This opening's AutoExec, stopped on a blocked action: « Activer le contenu » runs it again once (R6). */
+  const blockedAutoExec = useRef<string | null>(null);
+  const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui });
+  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui };
 
   const refreshSettings = useCallback(async () => {
     const s = await api.app.getSettings();
@@ -111,6 +135,8 @@ function Shell() {
   // Every table change goes through here so that the navigation pane follows. A change of mode of an open document
   // (ribbon, status bar, navigation pane) first asks the document (a dirty design: "save first?"), after its embedded macros.
   const dispatch = useCallback((a: AppAction) => {
+    // R10: run mode has no Design view. Refused like a document that stays: nothing happens, and a macro's OpenForm fails (actionCancelled).
+    if (live.current.ui.runMode && (a.type === 'open' || a.type === 'setMode') && a.mode === 'design') return Promise.resolve(false);
     if (a.type === 'setMode' || a.type === 'open') {
       const tabs = live.current.state.tabs;
       const tab = a.type === 'setMode' ? tabs.find((x) => x.id === a.id)
@@ -150,7 +176,58 @@ function Shell() {
     clearTempVars(); // TempVars live for the open base: closed, switched (Open, New, Save As)
     formCancelled(); reportShown(null, false); // a macro waiting for a form or a preview of the base gone fails (never hangs)
     if (path) setBackstage(null);
+    // R11: every opening starts from the full UI, BaseCraft's title and icon; its own sequence runs next (below)
+    startedFor.current = null;
+    blockedAutoExec.current = null;
+    setUi(FULL_UI);
+    rawDispatch({ type: 'setNav', visible: true, strip: true });
+    setAppTitle('');
+    api.app.setWindowIcon(null).catch(() => {});
   }, [path]);
+
+  // The startup sequence (R3), once per opening of a usable base (a base to recover: once recovered).
+  useEffect(() => {
+    if (!session || session.needsRecovery || startedFor.current?.path === session.path) return;
+    const run = { path: session.path };
+    startedFor.current = run;
+    const shift = openShift.current;
+    openShift.current = false;
+    const stillCurrent = () => startedFor.current === run && live.current.session?.path === run.path;
+    void (async () => {
+      const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro')]);
+      if (!stillCurrent()) return;
+      const autoExec = macros.find((m) => sameName(m.name, 'AutoExec'))?.name ?? null;
+      // (1) title and icon, also when bypassed (they hide nothing); a stored icon that cannot be used leaves BaseCraft's, silently
+      setAppTitle(o.appTitle);
+      if (o.appIcon) void applyIcon(o.appIcon, stillCurrent);
+      // R4: decided once; the grace is waited for only when there is something to bypass
+      let bypass = shift;
+      if (!bypass && hasStartup(o, !!autoExec)) {
+        await new Promise((r) => setTimeout(r, SHIFT_GRACE_MS));
+        bypass = shiftHeld();
+      }
+      if (!stillCurrent()) return;
+      const { autoExecBlocked } = await runStartup(o, autoExec, bypass, {
+        // committed at once: the next action (run mode's Design refusal, the ribbon) sees the new UI
+        setUi: (u) => flushSync(() => setUi(u)),
+        setNav: (visible) => flushSync(() => rawDispatch({ type: 'setNav', visible, strip: visible })),
+        openForm: async (name) => {
+          const stored = (await api.objects.list('form')).find((f) => sameName(f.name, name))?.name;
+          if (!stored) return 'notFound';
+          const opened = whenFormOpened(stored);   // waited for before the dispatch: the form may mount and cancel before it resolves
+          opened.catch(() => {});
+          if ((await dispatch({ type: 'open', kind: 'form', name: stored, mode: 'run' })) === false) return 'cancelled';
+          return opened.then(() => 'opened' as const, () => 'cancelled' as const);
+        },
+        runAutoExec: (name) => runMacroByName(name),
+        formNotFound: async (name) => {
+          await modal.confirm({ titleKey: 'app.title', messageKey: 'startup.formNotFound', params: { name }, buttons: ['ok'] });
+        },
+        stillCurrent,
+      });
+      if (autoExecBlocked && stillCurrent()) blockedAutoExec.current = autoExec;
+    })().catch((e) => { if (stillCurrent()) void showError(e); });
+  }, [session, dispatch, modal, showError]);
 
   const tablesKey = session ? `${session.path}|${session.readOnly}|${!!session.needsRecovery}` : '';
   useEffect(() => {
@@ -158,13 +235,15 @@ function Shell() {
     else { setTables([]); setObjects([]); }
   }, [tablesKey, refreshTables, refreshObjects]);
 
-  useEffect(() => { document.title = session ? `${session.fileName} – ${t('app.title')}` : t('app.title'); }, [session, t]);
+  useEffect(() => { document.title = session ? appTitle || `${session.fileName} – ${t('app.title')}` : t('app.title'); }, [session, appTitle, t]);
   const active = state.tabs.find((x) => x.id === state.activeId) ?? null;
   useEffect(() => { setSourceHint(sourceHint(active, navSelection)); }); // pickSource's default preselection
+  // what the base's startup options ask of the ribbon (B3 R10), the Query Builder's too: it does not depend on how the builder was reached
+  const startupCtx = { ...(ui.ribbon === 'simplified' || ui.runMode ? { ribbon: 'simplified' as const } : {}), ...(ui.runMode ? { runMode: true as const } : {}) };
   // a Query Builder's tab in front: the ribbon serves its query (its own commands only)
   const ctx: RibbonContext = modalTab
-    ? { hasBase: !!session, readOnly: !!session?.readOnly, mode: modalTab.mode, isNew: false, kind: modalTab.kind, builder: true }
-    : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null, embedded: !!active?.embedded };
+    ? { hasBase: !!session, readOnly: !!session?.readOnly, mode: modalTab.mode, isNew: false, kind: modalTab.kind, builder: true, ...startupCtx }
+    : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null, embedded: !!active?.embedded, ...startupCtx };
   const commandTab = modalTab?.scope ?? state.activeId;
   useEffect(() => { setActiveCommandTab(commandTab); }, [commandTab]);
   useEffect(() => { setCommandContext(ctx); }); // cheap: ignored when unchanged
@@ -396,12 +475,16 @@ function Shell() {
       .finally(() => { closing.current = false; });
   }), [showError]);
 
-  const switchBase = async (fn: () => Promise<SessionState | null>) => {
+  const switchBase = async (fn: () => Promise<SessionState | null>, shift = false) => {
     if (!(await leaveDocuments(live.current.state.tabs))) return;
+    openShift.current = shift;   // before the call: the new state may reach the window before it returns
     try {
       const s = await fn();
-      if (s) { setClip(null); setSession(s); setBackstage(null); }
+      // committed at once: the startup effect has read the flag, or none was due (the same base again, a base to recover)
+      if (s) flushSync(() => { setClip(null); setSession(s); setBackstage(null); });
+      openShift.current = false;   // it never outlives its opening
     } catch (e) {
+      openShift.current = false;
       await showError(e);
     } finally {
       void refreshSettings(); // recent files
@@ -470,7 +553,24 @@ function Shell() {
   };
 
   const enableContent = async () => {
-    try { setSession(await api.base.enableContent()); } catch (e) { await showError(e); }
+    try {
+      const s = await api.base.enableContent();
+      flushSync(() => setSession(s));   // committed: the macro shell reads the content enabled
+    } catch (e) { await showError(e); return; }
+    const autoExec = blockedAutoExec.current;   // R6: AutoExec stopped on a blocked action runs again from its start, once
+    blockedAutoExec.current = null;
+    if (autoExec) await runMacroByName(autoExec);
+  };
+
+  // Options › Base de données active: the title and the icon apply at once, the other options at the next opening (R11)
+  // `opened` is this render's base: the section calls the callback it was given when its save began, so a save that resolves
+  // after a switch to another base is dropped (its title and icon are the previous base's).
+  const opened = session?.path;
+  const onStartupApplied = (o: StartupOptions) => {
+    const stillCurrent = () => live.current.session?.path === opened;
+    if (!stillCurrent()) return;
+    setAppTitle(o.appTitle);
+    void applyIcon(o.appIcon, stillCurrent);
   };
 
   const readOnly = !!session?.readOnly;
@@ -488,7 +588,7 @@ function Shell() {
         {session && (
           <div className="contents" ref={inertRef(!!modalTab)}>
             <NavPane tables={tables} objects={objects} readOnly={readOnly} active={active && !active.isNew ? active : null}
-              visible={state.navVisible} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection} />
+              visible={state.navVisible} strip={state.navStrip} runtime={ui.runMode} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection} />
           </div>
         )}
         <DocumentTabs state={state} readOnly={readOnly} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} />
@@ -501,8 +601,9 @@ function Shell() {
       {session !== undefined && showBackstage && (
         <Backstage view={backstage ?? 'home'} onView={setBackstage} onBack={session ? () => setBackstage(null) : null}
           hasBase={!!session} settings={settings} onSettingsChanged={() => void refreshSettings()}
-          onNew={() => void switchBase(api.base.create)} onOpen={(p) => void switchBase(() => api.base.open(p))}
-          onCloseBase={() => void closeBase()} readOnly={readOnly}
+          onNew={() => void switchBase(api.base.create)} onOpen={(p, shift) => void switchBase(() => api.base.open(p), shift)}
+          onCloseBase={() => void closeBase()} readOnly={readOnly} needsRecovery={!!session?.needsRecovery}
+          forms={objects.filter((x) => x.kind === 'form').map((x) => x.name)} onStartupApplied={onStartupApplied}
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />
       )}
     </div>

@@ -28,11 +28,15 @@ const itemTestId = (x: Item) => (x.kind === 'table' ? `nav-item-${x.name}` : `na
 interface Props {
   tables: TableSummary[]; objects: ObjectSummary[]; readOnly: boolean; active: { kind: string; name: string } | null;
   visible: boolean; onToggle(): void; dispatch: Dispatch<AppAction>;
+  /** Run mode (B3 R10): the menus are the Runtime's. */
+  runtime: boolean;
+  /** Hidden, the pane leaves its « Afficher » strip (false: hidden by the startup options, R14). */
+  strip: boolean;
   /** The selected item (the source picker preselects it when no table or query document is active). */
   onSelect?(item: { kind: string; name: string } | null): void;
 }
 
-export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect }: Props) {
+export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, strip }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
   const [query, setQuery] = useState('');
@@ -50,7 +54,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
 
   /** The menu's context for `x`: `reselect` makes the selection follow a renamed object or leave a deleted one. */
   const ctxOf = (x: Item): NavMenuContext => ({
-    kind: x.kind, name: x.name, readOnly, runtime: false, modal, dispatch,
+    kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch,
     reselect: (to) => {
       if (selected !== itemKey(x)) return;
       if (to === null) { setSelectedKey(null); onSelect?.(null); } else setSelected({ kind: x.kind, name: to });
@@ -62,6 +66,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
   useEffect(() => setNavClipboardRunner((id) => runner.current(id)), []);
 
   if (!visible) {
+    if (!strip) return null;
     return (
       <aside className="nav-rail" aria-label={t('nav.title')}>
         <button className="iconbtn" data-testid="nav-show" title={t('nav.show')} aria-label={t('nav.show')} onClick={onToggle}>

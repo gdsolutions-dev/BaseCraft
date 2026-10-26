@@ -6,7 +6,9 @@ import {
   MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type ObjectKind, type PageRequest, type PrintRequest, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
   type SourcePageRequest, type QueryRef, type RunActionOptions,
 } from '../shared/api';
-import { MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
+import { isValidObjectName, MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
+import { pngSize } from '../shared/png';
+import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
 import type { CellInput } from '../shared/coerce';
 import { validExportSpec, type ExportSource, type ExportTextSpec } from '../shared/exchange';
 import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-text';
@@ -140,6 +142,28 @@ export function relationsLayout(v: unknown): RelationsLayout {
     tables[lookupName(k)] = { x: p.x as number, y: p.y as number };
   }
   return { tables };
+}
+
+const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'showNavPane', 'ribbon', 'runMode'];
+/** The startup options to save: exactly the six keys, each of its exact type, and already in the form readStartup reads back
+ *  (a title that cleanTitle would change, an icon that is no PNG, a form that is no object name are refused, never repaired). */
+export function startupOptions(v: unknown): StartupOptions {
+  if (!isObj(v) || Object.keys(v).length !== STARTUP_KEYS.length || !STARTUP_KEYS.every((k) => Object.hasOwn(v, k))) bad();
+  const { appTitle, appIcon, startupForm, showNavPane, ribbon, runMode } = v;
+  if (typeof appTitle !== 'string' || appTitle.length > MAX_APP_TITLE * 2 || appTitle !== cleanTitle(appTitle)) bad(); // 255 code points never take more than 510 UTF-16 units
+  if (typeof appIcon !== 'string' || (appIcon !== '' && !isValidIcon(appIcon))) bad();
+  if (typeof startupForm !== 'string' || (startupForm !== '' && !isValidObjectName(startupForm))) bad();
+  if (typeof showNavPane !== 'boolean' || typeof runMode !== 'boolean' || (ribbon !== 'full' && ribbon !== 'simplified')) bad();
+  return { appTitle, appIcon, startupForm, showNavPane, ribbon, runMode };
+}
+
+/** The window icon the renderer re-encoded: null (BaseCraft's), or a Uint8Array of at most 1 MiB that starts as a PNG does (signature and IHDR chunk).
+ *  Its size is checked where it is read (setWindowIcon: header first, then nativeImage). */
+const MAX_ICON_BYTES = 1024 * 1024;
+export function iconBytes(v: unknown): Uint8Array | null {
+  if (v === null) return null;
+  if (!(v instanceof Uint8Array) || v.byteLength > MAX_ICON_BYTES || pngSize(v) === null) bad();
+  return v;
 }
 
 const MAX_FIELDS = 255; // as in Access; checked before a list is read (a sparse array claims billions of slots)

@@ -6,6 +6,7 @@ import { CH } from '../shared/api';
 import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openBase, registerIpc, whenIdle } from './ipc';
 import { fileArg, handleOpenFile, openAll } from './open-file';
 import { closePrintWindows, PRINT_SCHEME, registerPrintProtocol } from './report-print';
+import { defaultIconPath } from './window-icon';
 
 if (process.env.BASECRAFT_USER_DATA) app.setPath('userData', process.env.BASECRAFT_USER_DATA);
 // The print window's documents and fonts (report-print.ts): a standard scheme, so fonts/<file> resolves against the document.
@@ -31,6 +32,7 @@ const tick = () => {
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 900, minHeight: 600, title: 'BaseCraft',
+    ...(process.platform === 'darwin' ? {} : { icon: defaultIconPath() }), // macOS: the Dock shows the bundle's icon
     // Shown off screen without activation rather than hidden: a hidden window gets no animation frames, which the grid needs.
     ...(e2eHidden ? { show: false, x: -32000, y: -32000, skipTaskbar: true, focusable: false, enableLargerThanScreen: true } : {}),
     webPreferences: {

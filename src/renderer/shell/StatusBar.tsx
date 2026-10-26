@@ -31,8 +31,8 @@ export function StatusBar({ ctx }: { ctx: RibbonContext }) {
       <div className="views" role="group" aria-label={t('status.views')}>
         {form && view('form', AppWindow)}
         {ctx.kind !== 'macro' && view('datasheet', Sheet) /* a macro has no datasheet */}
-        {ctx.kind === 'query' && button('sql', t('status.mode.sql'), 'viewSql', sql, Code) /* A3: Access's order */}
-        {view('design', PencilRuler)}
+        {ctx.kind === 'query' && !ctx.runMode && button('sql', t('status.mode.sql'), 'viewSql', sql, Code) /* A3: Access's order */}
+        {!ctx.runMode && view('design', PencilRuler) /* B3 R10: run mode has no Design view */}
       </div>
     </footer>
   );

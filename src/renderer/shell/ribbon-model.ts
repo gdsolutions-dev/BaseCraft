@@ -371,9 +371,11 @@ export const commandState = (id: CommandId): CommandState | undefined => (active
 
 // ---------- Ruban ----------
 /** isNew: the active document is not saved yet. kind: the active document's kind (null: none).
- *  builder: the Query Builder's modal tab is in front (its query is the active document). embedded: an embedded macro (R16). */
+ *  builder: the Query Builder's modal tab is in front (its query is the active document). embedded: an embedded macro (R16).
+ *  ribbon, runMode (B3, the base's startup options, R10): the simplified ribbon (File, Home, Print Preview only), and run mode
+ *  (no Design view). Both absent: the full ribbon with Design view (keeps the JSON compare of `setCommandContext` cheap). */
 export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean;
-  embedded?: boolean }
+  embedded?: boolean; ribbon?: 'simplified'; runMode?: true }
 
 /**
  * Ruling C11: every Access command has its entry from now on. One not delivered yet carries `planned`, the batch or stage that
@@ -437,9 +439,14 @@ export interface RibbonTab {
   id: RibbonTabId; labelKey: string; contextual?: boolean; passive?: boolean; visible?(ctx: RibbonContext): boolean; groups: RibbonGroup[];
 }
 
-/** In front of the Query Builder, only Home and the builder's contextual tabs (Access: the document behind waits). */
+/** The tabs of the simplified ribbon (R10), besides File: Home and the report's Print Preview. */
+export const SIMPLIFIED_TABS: ReadonlySet<RibbonTabId> = new Set<RibbonTabId>(['home', 'printPreview']);
+
+/** In front of the Query Builder, only Home and the builder's contextual tabs (Access: the document behind waits); they are the
+ *  builder's own, so a simplified ribbon (the base's options) does not take them away: its Close and Save As stay reachable. */
 export const visibleTabs = (ctx: RibbonContext): RibbonTab[] =>
-  RIBBON.filter((t) => (!t.visible || t.visible(ctx)) && (!ctx.builder || t.id === 'home' || !!t.contextual));
+  RIBBON.filter((t) => (!t.visible || t.visible(ctx)) && (!ctx.builder || t.id === 'home' || !!t.contextual)
+    && (ctx.ribbon !== 'simplified' || ctx.builder || SIMPLIFIED_TABS.has(t.id)));
 
 /** C10, on a change of context (object kind or mode): entering it selects its first contextual tab; leaving it restores the tab
  *  selected before (`before`), else Home. `before` keeps the tab chosen outside the contextual tabs that took over. */
@@ -491,7 +498,7 @@ const viewPrintPreview: RibbonCommand = {
   visible: (c) => c.kind === 'report',
   active: (c) => c.kind === 'report' && c.mode === 'run',
 };
-const viewDesign: RibbonCommand = { id: 'viewDesign', icon: PencilRuler, labelKey: 'ribbon.cmd.viewDesign', size: 'lg', enabled: switchable, active: (c) => c.mode === 'design' };
+const viewDesign: RibbonCommand = { id: 'viewDesign', icon: PencilRuler, labelKey: 'ribbon.cmd.viewDesign', size: 'lg', enabled: switchable, visible: (c) => !c.runMode, active: (c) => c.mode === 'design' };
 // Shift+F9 (Access's Requery): the active document reads its data again; enabled only when it registered a handler.
 const refresh: RibbonCommand = { id: 'refresh', icon: RefreshCw, labelKey: 'ribbon.cmd.refresh', size: 'sm', enabled: (c) => c.mode === 'datasheet' || c.mode === 'run' };
 

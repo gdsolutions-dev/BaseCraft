@@ -16,7 +16,7 @@ export function ListBoxCtl({ c, x, style }: CtlProps) {
   const id = x.id(c.name);
   const optId = (i: number) => `${id}-opt-${i}`;
   const ev = x.events(c);
-  const choose = (i: number) => { if (!disabled && !readOnly && i !== row) listChoose(c, x, i, rows[i].display[0] ?? ''); };
+  const choose = (i: number) => { if (!disabled && !readOnly && i !== row) x.update(c, () => listChoose(c, x, i, rows[i].display[0] ?? '')); };
   useEffect(() => { if (row >= 0) document.getElementById(optId(row))?.scrollIntoView({ block: 'nearest' }); }, [row]);
   const onKeyDown = (e: KeyboardEvent) => {
     const to = e.key === 'ArrowDown' ? Math.min(row + 1, rows.length - 1) : e.key === 'ArrowUp' ? Math.max(row - 1, 0)

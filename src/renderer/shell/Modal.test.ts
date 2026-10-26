@@ -24,7 +24,7 @@ it('reads `bc:<code>|<sub-code>|<detail>`: the code, then the sub-code key with 
 
 it('every query error code has its message', () => {
   const bind: Record<QueryBindErrorCode, 0> = { unknownSource: 0, ambiguousField: 0, circular: 0, tooDeep: 0, notGrouped: 0, aggregateInWhere: 0,
-    nestedAggregate: 0, unionArity: 0, updateTarget: 0, unknownTarget: 0, duplicateOutput: 0, insertArity: 0, subqueryArity: 0 };
+    nestedAggregate: 0, unionArity: 0, updateTarget: 0, unknownTarget: 0, duplicateOutput: 0, insertArity: 0, subqueryArity: 0, memberNotAllowed: 0 };
   const keys = [...['invalidQuery', 'queryBind', 'notSelectQuery', 'missingParameter', 'invalidParameter', 'cancelled', 'hostCrashed',
     'invalidQuery_subqueryRows', 'invalidQuery_tooComplex', 'invalidQuery_storedQuery'], ...Object.keys(bind).map((c) => `queryBind_${c}`)];
   for (const lng of ['fr', 'en']) for (const k of keys) expect(i18n.exists(`dialog.error.${k}`, { lng }), `${lng} ${k}`).toBe(true);

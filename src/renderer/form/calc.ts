@@ -17,7 +17,9 @@ export type CalcResult = { ok: true; value: Value; text: string } | { ok: false;
 /** The value of a field whose typed text does not convert, or of a calculated control in error: #Erreur wherever it is used. */
 export const FAILED: unique symbol = Symbol('failed');
 export type CalcValue = Value | typeof FAILED;
-export interface CalcEnv { fields: Record<string, CalcValue>; controls: Record<string, CalcValue>; locale: string; lang: 'fr' | 'en'; now(): Date }
+export interface CalcEnv { fields: Record<string, CalcValue>; controls: Record<string, CalcValue>; locale: string; lang: 'fr' | 'en'; now(): Date;
+  /** [Forms]! / [TempVars]! (B2 R11; absent: unknownField). */
+  member?(path: string[]): Value | Promise<Value> }
 type BaseEnv = Omit<CalcEnv, 'fields' | 'controls'>;
 
 // ponytail: unbounded, one entry per distinct expression text of the open forms; an LRU if definitions ever churn.
@@ -39,23 +41,27 @@ const prop = (c: ControlDef, name: string): string => (typeof c.props[name] === 
 const calcExpr = (c: ControlDef): Expr => parseExpr(prop(c, 'ControlSource').replace(/^=/, ''), false);
 const CIRCULAR: CalcResult = { ok: false, code: 'error' }; // a circular reference shows #Erreur, as in Access
 
+/** `[name]` in the environment: a control first, even a Null one; a field only when no control has the name (unknownField,
+ *  typeMismatch for a text that does not convert). */
+export function envValue(env: Pick<CalcEnv, 'fields' | 'controls'>, name: string): Value {
+  const find = (rec: Record<string, CalcValue>): CalcValue | undefined => {
+    const k = Object.keys(rec).find((n) => sameName(n, name));
+    return k === undefined ? undefined : rec[k];
+  };
+  const ctl = find(env.controls);
+  const v = ctl !== undefined ? ctl : find(env.fields);
+  return v === undefined ? fail('unknownField') : v === FAILED ? fail('typeMismatch') : v;
+}
+
 /** `=…` evaluated with a control's current value first, then the source field (case ignored), as `Me!X` in Access.
  *  Unknown name or unreadable definition: #Nom? ('name'); any other runtime error, aggregates included: #Erreur ('error'). */
 export async function evalControlSource(c: ControlDef, env: CalcEnv): Promise<CalcResult> {
-  const field = (name: string): Value => {
-    const find = (rec: Record<string, CalcValue>): CalcValue | undefined => {
-      const k = Object.keys(rec).find((n) => sameName(n, name));
-      return k === undefined ? undefined : rec[k];
-    };
-    const ctl = find(env.controls); // a control first, even a Null one; a field only when no control has the name
-    const v = ctl !== undefined ? ctl : find(env.fields);
-    return v === undefined ? fail('unknownField') : v === FAILED ? fail('typeMismatch') : v;
-  };
+  const field = (name: string): Value => envValue(env, name);
   let value: Value;
   try {
     const e = calcExpr(c);
     if (fieldRefs(e).some((n) => sameName(n, c.name))) return CIRCULAR; // a control is never in its own environment
-    value = await evaluate(e, { field, now: env.now, locale: env.locale, lang: env.lang });
+    value = await evaluate(e, { field, now: env.now, locale: env.locale, lang: env.lang, member: env.member });
   } catch (e) {
     return { ok: false, code: e instanceof ExprSyntaxError || (e instanceof ExprRuntimeError && e.code === 'unknownField') ? 'name' : 'error' };
   }
@@ -69,9 +75,9 @@ export async function evalControlSource(c: ControlDef, env: CalcEnv): Promise<Ca
  *  fromStored; FAILED when it does not convert) or the stored value; each bound control its field's value; each unbound
  *  control its value (`extra`, by control name); each calculated control its result, in dependency order (a cycle is
  *  #Erreur), also returned as `results` (by control name) for display. */
-export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, stored: Record<string, SqlValue>,
-  pending: Record<string, CellInput>, base: BaseEnv, extra: Record<string, CalcValue> = {}): Promise<CalcEnv & { results: Record<string, CalcResult> }> {
-  const region = infoOf(base.locale);
+/** Each source field from the pending typed text (coerce, then fromStored; FAILED when it does not convert) or the stored value. */
+export function fieldValues(info: SourceInfo, stored: Record<string, SqlValue>, pending: Record<string, CellInput>, locale: string): Record<string, CalcValue> {
+  const region = infoOf(locale);
   const fields: Record<string, CalcValue> = {};
   for (const f of info.fields) {
     const k = Object.keys(pending).find((n) => sameName(n, f.name));
@@ -79,13 +85,27 @@ export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, sto
     const r = coerce(f, pending[k], region);
     fields[f.name] = r.ok ? fromStored(f, r.value) : r.error === 'required' ? null : FAILED; // blank on a required field: Null
   }
-  const controlValues: Record<string, CalcValue> = { ...extra };
-  const all = flattenControls(controls);
-  for (const c of all) {
+  return fields;
+}
+
+/** The controls' values but the calculated ones: `extra` (unbound, by control name), then each bound control its field's. */
+export function controlValues(controls: ControlDef[], info: SourceInfo, fields: Record<string, CalcValue>, extra: Record<string, CalcValue>): Record<string, CalcValue> {
+  const out: Record<string, CalcValue> = { ...extra };
+  for (const c of flattenControls(controls)) {
     const f = boundField(c, info);
-    if (f) controlValues[c.name] = fields[f.name];
+    if (f) out[c.name] = fields[f.name];
   }
-  const env = { ...base, fields, controls: controlValues };
+  return out;
+}
+
+/** The environment of the current record's calculations: fieldValues, controlValues, and each calculated control its result,
+ *  in dependency order (a cycle is #Erreur), also returned as `results` (by control name) for display. */
+export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, stored: Record<string, SqlValue>,
+  pending: Record<string, CellInput>, base: BaseEnv, extra: Record<string, CalcValue> = {}): Promise<CalcEnv & { results: Record<string, CalcResult> }> {
+  const fields = fieldValues(info, stored, pending, base.locale);
+  const ctlValues = controlValues(controls, info, fields, extra);
+  const all = flattenControls(controls);
+  const env = { ...base, fields, controls: ctlValues };
   const results: Record<string, CalcResult> = {};
   const calcs = all.filter((c) => prop(c, 'ControlSource').startsWith('='));
   const state = new Map<ControlDef, 'busy' | 'done'>();
@@ -104,7 +124,7 @@ export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, sto
     }
     const r = cycle ? CIRCULAR : await evalControlSource(c, env);
     results[c.name] = r;
-    controlValues[c.name] = r.ok ? r.value : FAILED;
+    ctlValues[c.name] = r.ok ? r.value : FAILED;
     state.set(c, 'done');
   };
   for (const c of calcs) await run(c);
@@ -123,7 +143,7 @@ export async function controlDefaults(controls: ControlDef[], info: SourceInfo, 
     seen.add(f.name);
     const own = prop(c, 'DefaultValue');
     try {
-      if (own) out[f.name] = toStored(f, await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang }), region);
+      if (own) out[f.name] = toStored(f, await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member }), region);
       else if (f.props.defaultValue) out[f.name] = await defaultInput(f, region, env.now);
     } catch {
       if (own) out[f.name] = null; // the write layer reports a bad field default itself on insert
@@ -144,7 +164,7 @@ export async function unboundDefaults(controls: ControlDef[], env: BaseEnv): Pro
   const out: Record<string, Value> = {};
   for (const c of flattenControls(controls).filter(isUnbound)) {
     const own = prop(c, 'DefaultValue');
-    try { out[c.name] = own ? await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang }) : null; }
+    try { out[c.name] = own ? await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member }) : null; }
     catch { out[c.name] = null; }
   }
   return out;
@@ -155,7 +175,7 @@ export async function checkControlRule(c: ControlDef, value: Value, info: Source
   const rule = prop(c, 'ValidationRule');
   if (!rule) return null;
   try {
-    const r = await evaluate(parseExpr(rule, true), { field: noField, subject: value, now: env.now, locale: env.locale, lang: env.lang });
+    const r = await evaluate(parseExpr(rule, true), { field: noField, subject: value, now: env.now, locale: env.locale, lang: env.lang, member: env.member });
     if (truthy(r, infoOf(env.locale)) !== false) return null;
   } catch {
     // a rule that cannot be evaluated (unreadable, unknown name, type mismatch) blocks, as a False one does

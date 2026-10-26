@@ -6,11 +6,14 @@ import { layoutReport } from '../../shared/report/layout';
 import { readReport } from '../../shared/report/model';
 import { renderDocumentHtml } from '../../shared/report/render';
 import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData } from '../../shared/report/types';
+import type { ReportEvents } from './report-events';
 
 /** Rows per sources.page call: main's cap (MAX_PAGE_ROWS); 500 at a time made 200,000 rows 400 round trips (7 s). */
 export const DATA_PAGE = 10_000;
 
 const aborted = () => Object.assign(new Error('Report loading aborted'), { name: 'AbortError' });
+/** On Open or On No Data cancelled: an AbortError (print and export stop silently) that OpenReport tells apart by its message. */
+export const reportCancelled = () => Object.assign(new Error('bc:actionCancelled'), { name: 'AbortError' });
 
 /** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted.
  *  `where`: the opening's Where Condition (OpenReport, R8): only the rows it keeps. */
@@ -60,14 +63,22 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
 }
 
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
- *  `ready`: the parameters are asked, the long part begins (the progress box). */
+ *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
+ *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
 export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'>, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
-  ready?: () => void, where?: string): Promise<LaidOutReport> {
+  ready?: () => void, where?: string, events?: (doc: DesignDoc) => ReportEvents): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
-  const params = await docParameters(api, doc, ask);
-  ready?.();
-  const data = await loadDocData(api, doc, params, signal, where);
-  return layoutReport(readReport(doc, data.fields), data, { ...env, signal });
+  const ev = events?.(doc), release = ev?.register();
+  try {
+    if (await ev?.open()) throw reportCancelled();
+    const params = await docParameters(api, doc, ask);
+    // ponytail: a report with On No Data / On Format / On Print macros shows no progress box (their message boxes would wait
+    // behind it: one dialog queue), so it cannot be cancelled while laid out; a box that steps aside for them when that matters
+    if (!ev?.layoutMacros) ready?.();
+    const data = await loadDocData(api, doc, params, signal, where);
+    if (!data.rows.length && await ev?.noData()) throw reportCancelled();
+    return await layoutReport(readReport(doc, data.fields), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
+  } finally { release?.(); }
 }
 
 /** What print and export send to main; a document past main's cap rejects with tooLarge before anything is sent (`max`: tests). */

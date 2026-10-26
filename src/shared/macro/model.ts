@@ -47,7 +47,7 @@ export function validateMacro(def: unknown): MacroIssue[] {
     for (const [name, value] of Object.entries(node.args)) {
       if (typeof value !== 'string') { add(`${p}.args.${name}`, 'shape'); continue; }
       const type = known?.args.find((a) => a.name === name)?.type;
-      const formula = type === 'expression' || type === 'where' ? value.trim() === '' ? undefined : value   // blank: not set
+      const formula = type === 'expression' || type === 'where' || type === 'reference' ? value.trim() === '' ? undefined : value   // blank: not set
         : (type === 'text' || type === 'number') && value.startsWith('=') ? value.slice(1) : undefined;     // '=' + expression
       if (formula !== undefined && !parses(formula)) add(`${p}.args.${name}`, 'badExpression');
     }

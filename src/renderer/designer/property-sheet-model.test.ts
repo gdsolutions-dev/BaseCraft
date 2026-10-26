@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
+import { CONTROL_KINDS, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { localeInfo } from '../../shared/locale-format';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
   MIXED, readProp, sheetRows, targetKind, targetsOf, toSourceRef } from './property-sheet-model';
 import type { PropTarget } from './designer-model';
+import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
+import { EVENTS } from '../../shared/design/events';
 
 const ctl = (kind: ControlKind, name: string, left = 0, top = 0, children?: ControlDef[]): ControlDef =>
   ({ kind, name, left, top, width: 2268, height: 340, props: {}, ...(children ? { children } : {}) });
@@ -42,7 +44,41 @@ describe('property sheet model', () => {
     expect(readProp(report, 'report', { kind: 'doc' }, desc('Width'))).toBe(1134 + 2268);
     expect(readProp(doc, 'form', { kind: 'doc' }, desc('Width'))).toBe(defaultFor(desc('Width'), 'form', 'form'));   // un formulaire : inchangé
   });
-  it('events read-only', () => expect(sheetRows(doc, 'form', [{ kind: 'control', name: 'Nom' }], 'event', false).every((r) => r.readOnly)).toBe(true));
+  it('events editable on a writable base, read-only on a read-only one', () => {
+    expect(sheetRows(doc, 'form', [ctlT('Nom')], 'event', false).every((r) => !r.readOnly)).toBe(true);
+    expect(sheetRows(doc, 'form', [ctlT('Nom')], 'event', true).every((r) => r.readOnly)).toBe(true);
+  });
+  it('every catalogue event is editable', () => {
+    const kinds = CONTROL_KINDS;   // every kind, a new one included
+    const form: DesignDoc = { ...doc, sections: [{ kind: 'detail', height: 2268, props: {}, controls: kinds.map((k) => ctl(k, `c_${k}`)) }] };
+    const detail = FACTURES_REPORT.sections.findIndex((s) => s.kind === 'detail');
+    const rows = [
+      ...sheetRows(form, 'form', [{ kind: 'doc' }], 'event', false), ...kinds.flatMap((k) => sheetRows(form, 'form', [ctlT(`c_${k}`)], 'event', false)),
+      ...sheetRows(FACTURES_REPORT, 'report', [{ kind: 'doc' }], 'event', false), ...sheetRows(FACTURES_REPORT, 'report', [{ kind: 'section', index: detail }], 'event', false),
+    ];
+    expect(rows.filter((r) => r.readOnly).map((r) => r.d.name)).toEqual([]);
+    expect(new Set(rows.map((r) => r.d.name))).toEqual(new Set(EVENTS));
+  });
+  it('a report control has no event (control events belong to forms)', () => {
+    const ctlOf = FACTURES_REPORT.sections.flatMap((s) => s.controls).find((c) => c.kind === 'textBox')!;
+    expect(sheetRows(FACTURES_REPORT, 'report', [ctlT(ctlOf.name)], 'event', false)).toEqual([]);
+  });
+  it('report-only events', () => {
+    const rows = (d: DesignDoc, kind: 'form' | 'report', t: PropTarget[], tab: 'event') => sheetRows(d, kind, t, tab, false);
+    const detailOf = (d: DesignDoc) => d.sections.findIndex((s) => s.kind === 'detail');
+    expect(rows(FACTURES_REPORT, 'report', [{ kind: 'section', index: detailOf(FACTURES_REPORT) }], 'event').map((r) => r.d.name)).toEqual(['OnFormat', 'OnPrint']);
+    expect(rows(doc, 'form', [{ kind: 'section', index: 1 }], 'event')).toEqual([]);   // a form's Detail has no On Format / On Print
+    expect(rows(FACTURES_REPORT, 'report', [{ kind: 'doc' }], 'event').map((r) => r.d.name)).toEqual(['OnOpen', 'OnClose', 'OnNoData']);
+    expect(rows(doc, 'form', [{ kind: 'doc' }], 'event').map((r) => r.d.name)).not.toContain('OnNoData');
+  });
+  it('event values: a macro name or an embedded macro, nothing else', () => {
+    const d = desc('OnClick'), t = ctlT('Nom');
+    expect(checkPropValue(doc, t, d, undefined)).toBeNull();
+    expect(checkPropValue(doc, t, d, 'MLyon.Fermer')).toBeNull();
+    expect(checkPropValue(doc, t, d, { embedded: { formatVersion: '1.0', items: [] } })).toBeNull();
+    expect(checkPropValue(doc, t, d, 'a.b.c')).toBe('sheet.error.badMacroName');
+    expect(checkPropValue(doc, t, d, { embedded: { formatVersion: '2.0', items: [] } })).toBe('sheet.error.badEmbedded');
+  });
   it('read-only session: every row read-only; Name read-only in a multi-selection', () => {
     expect(sheetRows(doc, 'form', [ctlT('Nom')], 'all', true).every((r) => r.readOnly)).toBe(true);
     expect(sheetRows(doc, 'form', [ctlT('Nom')], 'other', false).find((r) => r.d.name === 'Name')!.readOnly).toBe(false);

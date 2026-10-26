@@ -61,7 +61,7 @@ export async function replaceFile(path: string, data: Uint8Array, write: typeof 
 }
 
 /** E2E only: the URLs the print partition refused, and the print jobs answered without the system dialog. */
-const e2eLog = { blocked: [] as string[], printed: 0 };
+const e2eLog = { blocked: [] as string[], printed: 0, html: '' /* the last document printed or exported */ };
 
 /** Serves bc-print on its own partition (never the main window's), refuses every permission and every other URL. After ready. */
 export function registerPrintProtocol(): void {
@@ -107,6 +107,7 @@ export function closePrintWindows(): void {
 async function withPrintWindow<T>(req: PrintRequest, job: (wc: WebContents) => Promise<T>): Promise<T> {
   const id = randomUUID();
   docs.set(id, req.html);
+  if (e2e()) e2eLog.html = req.html;
   const win = new BrowserWindow({
     show: false, skipTaskbar: true, focusable: false,
     webPreferences: { partition: PRINT_SCHEME, sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },

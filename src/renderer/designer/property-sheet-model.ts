@@ -3,6 +3,7 @@
 import type { DesignDoc } from '../../shared/design/model';
 import { isColorValue } from '../../shared/design/colors';
 import { effectiveProp, PROPERTY_CATALOG, type PropertyDescriptor, type PropertyTarget } from '../../shared/design/properties';
+import { checkEventValue } from '../../shared/design/events';
 import { ExprSyntaxError, type ExprErrorCode } from '../../shared/expr/ast';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { columnWidthsText, isValidObjectName, parseColumnWidths, sameName } from '../../shared/field-types';
@@ -29,7 +30,7 @@ export function targetsOf(sel: Selection): PropTarget[] {
   return [{ kind: 'doc' }];
 }
 
-const exists = (doc: DesignDoc, t: PropTarget): boolean =>
+export const targetExists = (doc: DesignDoc, t: PropTarget): boolean =>
   t.kind === 'doc' || (t.kind === 'section' ? !!doc.sections[t.index] : !!findControl(doc, t.name));
 
 /** Le genre d'une cible ; une cible disparue (section, contrôle) retombe sur le document (sheetRows l'écarte avant). */
@@ -59,16 +60,16 @@ export function readProp(doc: DesignDoc, docKind: 'form' | 'report', t: PropTarg
 
 const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.stringify(a) === JSON.stringify(b);
 
-/** Une ligne par descripteur qui s'applique au genre de **chaque** cible, dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
- *  Des valeurs différentes donnent MIXED. Événements en lecture seule (étape B) ; Nom en lecture seule dans une sélection multiple. */
+/** Une ligne par descripteur qui s'applique au genre de **chaque** cible (et au genre du document : `objects`), dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
+ *  Des valeurs différentes donnent MIXED. Nom en lecture seule dans une sélection multiple. */
 export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean): SheetRow[] {
-  if (!targets.length || !targets.every((t) => exists(doc, t))) return [];
+  if (!targets.length || !targets.every((t) => targetExists(doc, t))) return [];
   const kinds = targets.map((t) => targetKind(doc, docKind, t));
-  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && kinds.every((k) => d.appliesTo.includes(k))))
+  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k))))
     .map((d) => {
       const values = targets.map((t) => readProp(doc, docKind, t, d));
       return { d, value: values.every((v) => same(v, values[0])) ? values[0] : MIXED,
-        readOnly: readOnly || d.editor === 'event' || (d.name === 'Name' && targets.length > 1) };
+        readOnly: readOnly || (d.name === 'Name' && targets.length > 1) };
     });
 }
 
@@ -92,6 +93,7 @@ export function checkPropValue(doc: DesignDoc, t: PropTarget, d: PropertyDescrip
       return d.integer && !Number.isInteger(v) ? err('notInteger') : null;
     case 'color': return isColorValue(v) ? null : err('invalidColor');
     case 'enum': return d.options?.includes(String(v)) ? null : err('outOfRange');
+    case 'event': { const e = checkEventValue(v); return e && err(e); }
     default: return null;
   }
 }

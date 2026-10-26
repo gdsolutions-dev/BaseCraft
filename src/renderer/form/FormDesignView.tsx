@@ -66,7 +66,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const display = useMemo<DisplayContext>(() => ({ lang, region: localeInfo(region ?? 'en-US') }), [lang, region]);
   const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
   const sheet = useMemo<PropertySheetContext>(() => ({ display, fields: fieldNames, tables: lists.tables, queries: lists.queries,
-    objects: (k) => (k === 'form' ? lists.forms : lists.reports) }), [display, fieldNames, lists]);
+    objects: (k) => (k === 'form' ? lists.forms : lists.reports), owner: { tabId: tab.id, name: tab.name, doc: () => live.current.state.doc } }),
+    [display, fieldNames, lists, tab.id, tab.name]);
   const { host, labels } = useFormHost(sheet);
 
   const live = useRef({ state, readOnly, tab, extra, phase, labels });

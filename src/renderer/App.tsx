@@ -14,6 +14,7 @@ import { requestFieldList } from './form/FormDesignView';
 import { Backstage, type BackstageView, type Settings } from './shell/Backstage';
 import { compactMessage } from './shell/compact-message';
 import { Banners } from './shell/Banners';
+import { DialogHost } from './shell/DialogHost';
 import { DocumentTabs } from './shell/DocumentTabs';
 import { ModalProvider, useErrorDialog, useModal } from './shell/Modal';
 import { NavPane } from './shell/NavPane';
@@ -23,6 +24,9 @@ import './query/nav-menu-query'; // after the foundation's items (a later regist
 import { openSqlView } from './query/QueryDesignView';
 import { setOpenTabs } from './query/run-action';
 import { clearTempVars, macroNamesWithSubs, runMacroByName, setMacroShell } from './macro/macro-shell';
+import { closeEmbeddedOf } from './macro/embedded';
+import { formCancelled } from './form/form-instances';
+import { reportShown } from './report/report-events';
 import { askMacroToRun } from './macro/RunMacroDialog';
 import { localeInfo } from '../shared/locale-format';
 import './report/report-menu'; // A5's Navigation Pane items for reports (C6)
@@ -42,7 +46,7 @@ import {
 import { StatusBar } from './shell/StatusBar';
 import { pickSource, setSourceHint } from './shell/SourcePicker';
 import { selectedSource, sourceHint } from './shell/source-picker-model';
-import { appReducer, initialAppState, isDoc, reopenMode, type AppAction, type DocTab } from './state/app-state';
+import { appReducer, initialAppState, dialogActivates, isDoc, reopenMode, type AppAction, type DocTab } from './state/app-state';
 import './shell/shell.css';
 
 export function App() {
@@ -89,18 +93,38 @@ function Shell() {
     }
   }, [showError]);
 
+  /** The design's embedded macro tabs (R16) have their say first (their Save writes into the design), then a tick lets the design
+   *  take what they wrote before its own guard reads it. False: one stays (it is shown). */
+  const leaveEmbedded = async (owner: DocTab): Promise<boolean> => {
+    const ids = closeEmbeddedOf(owner.id);
+    const tabs = live.current.state.tabs.filter((x) => x.embedded !== undefined && ids.includes(x.embedded));
+    for (const tab of tabs) {
+      const guard = modeGuard(tab.id);
+      if (guard && !(await guard('close'))) { rawDispatch({ type: 'activate', id: tab.id }); return false; }
+    }
+    // ponytail: one setTimeout(0) tick assumed enough for React to render the design's setProp (as the designs' flush() assumes);
+    // a design-side "pending embedded saves" promise if a guard is ever seen reading stale state
+    if (tabs.length) await new Promise((r) => setTimeout(r));
+    return true;
+  };
+
   // Every table change goes through here so that the navigation pane follows. A change of mode of an open document
-  // (ribbon, status bar, navigation pane) first asks the document (a dirty design: "save first?").
+  // (ribbon, status bar, navigation pane) first asks the document (a dirty design: "save first?"), after its embedded macros.
   const dispatch = useCallback((a: AppAction) => {
     if (a.type === 'setMode' || a.type === 'open') {
       const tabs = live.current.state.tabs;
       const tab = a.type === 'setMode' ? tabs.find((x) => x.id === a.id)
-        : a.isNew ? undefined : tabs.find((x) => isDoc(x, a.kind, a.name));
-      // a macro's Open with args in the same view reads the records again: the record being edited is saved (or asked) first
+        : a.isNew || a.embedded ? undefined : tabs.find((x) => isDoc(x, a.kind, a.name));
+      // a macro's Open with args in the same view reads the records again: the record being edited is saved (or asked) first;
+      // in Dialog mode an open form is only activated (R12)
       const reload = a.type === 'open' && !!a.args;
-      const guard = tab && (reload || tab.mode !== (a.type === 'open' ? reopenMode(tab, a.mode) : a.mode)) ? modeGuard(tab.id) : undefined;
-      if (guard) { // A3: the promise tells whether the document let the change happen (openSqlView drops a refused request)
-        return guard('mode').then((ok) => { if (ok) rawDispatch(a); return ok; }, (e) => { void showError(e); return false; });
+      const activateOnly = a.type === 'open' && !!tab && dialogActivates(tab, a.args);
+      const modeChanges = !!tab && !activateOnly && tab.mode !== (a.type === 'open' ? reopenMode(tab, a.mode) : a.mode);
+      const guard = tab && !activateOnly && (reload || modeChanges) ? modeGuard(tab.id) : undefined;
+      const owns = modeChanges && closeEmbeddedOf(tab.id).length > 0;
+      if (guard || owns) { // A3: the promise tells whether the document let the change happen (openSqlView drops a refused request)
+        return (async () => (!owns || await leaveEmbedded(tab!)) && (!guard || await guard('mode')))()
+          .then((ok) => { if (ok) rawDispatch(a); return ok; }, (e) => { void showError(e); return false; });
       }
     }
     rawDispatch(a);
@@ -124,6 +148,7 @@ function Shell() {
     rawDispatch({ type: 'reset' });
     setNavSelection(null);
     clearTempVars(); // TempVars live for the open base: closed, switched (Open, New, Save As)
+    formCancelled(); reportShown(null, false); // a macro waiting for a form or a preview of the base gone fails (never hangs)
     if (path) setBackstage(null);
   }, [path]);
 
@@ -139,7 +164,7 @@ function Shell() {
   // a Query Builder's tab in front: the ribbon serves its query (its own commands only)
   const ctx: RibbonContext = modalTab
     ? { hasBase: !!session, readOnly: !!session?.readOnly, mode: modalTab.mode, isNew: false, kind: modalTab.kind, builder: true }
-    : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null };
+    : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null, embedded: !!active?.embedded };
   const commandTab = modalTab?.scope ?? state.activeId;
   useEffect(() => { setActiveCommandTab(commandTab); }, [commandTab]);
   useEffect(() => { setCommandContext(ctx); }); // cheap: ignored when unchanged
@@ -341,7 +366,10 @@ function Shell() {
   // Each document has its say before it goes (the same guard as for a change of mode): a datasheet saves its pending row
   // (or asks to discard it), a modified design asks to be saved. The first document that stays is shown.
   const leaveDocuments = async (tabs: DocTab[]) => {
-    for (const tab of tabs) {
+    const ordered = [...tabs.filter((x) => x.embedded), ...tabs.filter((x) => !x.embedded)];   // an embedded macro before its design
+    for (const [i, tab] of ordered.entries()) {
+      // ponytail: one setTimeout(0) tick assumed enough for the designs to take what their embedded macros wrote (see leaveEmbedded)
+      if (i > 0 && ordered[i - 1]!.embedded && !tab.embedded) await new Promise((r) => setTimeout(r));
       const guard = modeGuard(tab.id);
       if (guard && !(await guard('close'))) { rawDispatch({ type: 'activate', id: tab.id }); return false; }
     }
@@ -349,7 +377,7 @@ function Shell() {
   };
   const closeTab = async (tab: DocTab): Promise<boolean> => {
     try {
-      if (!(await leaveDocuments([tab]))) return false;
+      if (!(await leaveEmbedded(tab)) || !(await leaveDocuments([tab]))) return false;
       rawDispatch({ type: 'close', id: tab.id });
       return true;
     } catch (e) { await showError(e); return false; }
@@ -406,6 +434,18 @@ function Shell() {
     return true;
   };
 
+  // OpenForm in Dialog mode waits for its tab to leave the state (R12): told after each render that changes the tabs
+  const closeWaiters = useRef<{ id: string; resolve(): void }[]>([]);
+  useEffect(() => {
+    const waiting = closeWaiters.current;
+    closeWaiters.current = waiting.filter((w) => state.tabs.some((x) => x.id === w.id));
+    waiting.filter((w) => !closeWaiters.current.includes(w)).forEach((w) => w.resolve());
+  }, [state.tabs]);
+  const whenClosed = useCallback((id: string) => new Promise<void>((resolve) => {
+    if (live.current.state.tabs.some((x) => x.id === id)) closeWaiters.current.push({ id, resolve });
+    else resolve();
+  }), []);
+
   // The macro shell (B1): what the actions of a macro reach. Read through refs, so one registration serves the whole session.
   const shellRef = useRef({ closeTab, closeBase, quit });
   shellRef.current = { closeTab, closeBase, quit };
@@ -420,9 +460,10 @@ function Shell() {
       quit: () => shellRef.current.quit(),
       region: () => localeInfo(live.current.settings?.region ?? navigator.language),
       lang: () => (i18n.language === 'en' ? 'en' : 'fr'),
+      whenClosed,
     });
     return () => setMacroShell(null);
-  }, [dispatch, modal, showError, i18n]);
+  }, [dispatch, modal, showError, i18n, whenClosed]);
 
   const takeOver = async () => {
     try { setSession(await api.base.takeOverLock()); } catch (e) { await showError(e); }
@@ -434,9 +475,11 @@ function Shell() {
 
   const readOnly = !!session?.readOnly;
   const showBackstage = session === null || backstage !== null;
+  const dialogOpen = state.tabs.some((x) => x.dialog);
 
-  return (
-    <div className="app" data-testid="app-root">
+  return (<>
+    {/* a dialog form (R12): the whole window stands back, but RunningNotice's Stop (above modals) */}
+    <div className="app" data-testid="app-root" ref={inertRef(dialogOpen)}>
       {/* a Query Builder's tab (modal): all but the ribbon and the status bar (which serve it) and the document tabs stands back */}
       <Ribbon ctx={ctx}
         onFile={() => { void refreshSettings(); setBackstage('home'); }} />
@@ -451,7 +494,6 @@ function Shell() {
         <DocumentTabs state={state} readOnly={readOnly} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} />
       </div>
       <StatusBar ctx={ctx} />
-      <RunningNotice />
       {importing && session && (
         <ImportTextWizard tables={tables} queries={objects.filter((o) => o.kind === 'query').map((o) => o.name)} pendingRow={(name) => hasPendingRow(live.current.state.tabs, name)}
           source={importing.source} appendTo={importing.appendTo} onClose={() => setImporting(false)} onImported={onImported} />
@@ -464,5 +506,7 @@ function Shell() {
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />
       )}
     </div>
-  );
+    <DialogHost tabs={state.tabs} activeId={state.activeId} dispatch={dispatch} readOnly={readOnly} />
+    <RunningNotice />
+  </>);
 }

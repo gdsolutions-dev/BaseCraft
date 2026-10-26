@@ -26,7 +26,8 @@ function total(a: AggSpec, data: ReportData, ctx: BandContext, env: LayoutEnv): 
   let c = totalsCache.get(ctx.scope);
   if (c?.data !== data || c.env !== env) totalsCache.set(ctx.scope, c = { data, env, totals: new Map() });
   let p = c.totals.get(a);
-  if (!p) c.totals.set(a, p = computeAggregate(a, { fields: data.fields, rows: data.rows, scope: ctx.scope, env: { now: () => env.now(), locale: env.locale, lang: env.lang } }));
+  if (!p) c.totals.set(a, p = computeAggregate(a, { fields: data.fields, rows: data.rows, scope: ctx.scope,
+    env: { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}) } }));
   return p;
 }
 
@@ -41,7 +42,7 @@ async function valueOf(src: Exclude<ControlSource, { kind: 'none' }>, data: Repo
   try {
     if (src.kind === 'error') return env.errorText.error;
     if (src.kind === 'field') return field(src.name);
-    const base = { now: () => env.now(), locale: env.locale, lang: env.lang };
+    const base = { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}) };
     const totals = new Map<string, Value>();
     for (const a of src.aggs) totals.set(a.id, await total(a, data, ctx, env));
     const page = (name: string, p: string) => sameName(name, p) && column(name) < 0;
@@ -94,14 +95,16 @@ interface Box { c: ControlSpec; item?: LaidOutItem; grow: number; shrunk: boolea
 export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandContext, env: LayoutEnv): Promise<FormattedBand | null> {
   // sans prototype : un contrôle nommé __proto__ reçoit sa valeur comme les autres
   const values: Record<string, Value> = Object.create(null) as Record<string, Value>, failed = new Map<string, string>();
+  const event: SectionEvent = { section: s.kind, ...(s.groupLevel === undefined ? {} : { groupLevel: s.groupLevel }), formatCount: ctx.formatCount,
+    page: ctx.page, values, visible: Object.fromEntries(s.controls.map((c) => [c.name, c.visible])), sectionVisible: s.visible, cancel: false, height: s.height,
+    field: rowField(data.fields, ctx.row === null ? null : data.rows[ctx.row]!) };
+  env.hooks?.onBand?.(event);   // [Reports]! in the values below reads this band: its controls read so far, else its row
   for (const c of s.controls) {
     if (c.source.kind === 'none') continue;
     const v = await valueOf(c.source, data, ctx, env);
     if (typeof v === 'string') failed.set(c.name, v);
     else values[c.name] = v;
   }
-  const event: SectionEvent = { section: s.kind, ...(s.groupLevel === undefined ? {} : { groupLevel: s.groupLevel }), formatCount: ctx.formatCount,
-    page: ctx.page, values, visible: Object.fromEntries(s.controls.map((c) => [c.name, c.visible])), sectionVisible: s.visible, cancel: false, height: s.height };
   await env.hooks?.onFormat?.(event);
   if (event.cancel || !event.sectionVisible) return null;
 

@@ -11,6 +11,7 @@ export function TabCtl({ c, x, style, renderChild }: CtlProps & { renderChild(k:
     if (i === page) return true;
     if (x.sub && !(await x.sub.leavePage(c.name, page))) return false;
     x.setPage(c.name, i);
+    void x.raise('OnChange', c.name);
     return true;
   };
   const ev = x.events(c);   // the strip is the tab control's stop in the tab order

@@ -192,6 +192,11 @@ describe('compileSql', () => {
   });
   it('member references are refused', () => expect(() => compileSql(parseCanonical('[TempVars]![v]'), { fields: [], locale: 'fr-FR' }))
     .toThrow(expect.objectContaining({ code: 'memberNotAllowed' })));
+  it('a filter or a table rule still refuses members', () => {
+    // a context that resolves its own names (a filter, a rule) has no member parameters: still refused
+    const ctx: SqlCompileCtx = { ...src.ctx, ref: () => null };
+    for (const t of ['[n] = [Forms]![F]![C]', '[n] > [TempVars]![v]']) expect(() => compileSql(parseCanonical(t), ctx)).toThrow(expect.objectContaining({ code: 'memberNotAllowed' }));
+  });
   it('unknown field', () => expect(() => compileSql(parseCanonical('[zz] = 1'), src.ctx)).toThrow(expect.objectContaining({ code: 'unknownField' })));
   it('missing subject', () => expect(() => compileSql(parseCanonical('>2', { criteria: true }), src.ctx)).toThrow(expect.objectContaining({ code: 'unknownField' })));
   it('subject', () => expect(compileSql(parseCanonical('>2', { criteria: true }), { ...src.ctx, subject: 'n' }).sql).toContain('"n"'));

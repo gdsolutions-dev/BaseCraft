@@ -16,6 +16,14 @@ export interface FormDataApi {
   update(table: string, rowid: number, changes: Record<string, CellInput>): Promise<RowWriteResult>;
   delete(table: string, rowids: number[]): Promise<DeleteResult>;
 }
+/** The form's record events (Access's order and refusals); the view runs their macros. */
+export interface RecordEvents {
+  beforeInsert?(): Promise<boolean>;   // false: cancelled, the new record's entry is undone (R17)
+  beforeUpdate?(): Promise<boolean>;   // false: the save is refused, the record stays current and dirty (R8)
+  afterUpdate?(): Promise<void>;
+  afterInsert?(): Promise<void>;
+  current?(): void;                    // another record is current: after open, every move, new record, requery, delete
+}
 export interface FormRecordOptions {
   ref: RecordSourceRef | null;   // null = formulaire indépendant : aucun enregistrement, aucune barre de navigation
   locale: string; readOnly: boolean;
@@ -26,6 +34,7 @@ export interface FormRecordOptions {
   where?: string;                                                // Where Condition de l'ouverture (R8), envoyée avec chaque page
   dataMode?: OpenArgs['dataMode'];                               // R9 : 'add' ouvre sur le nouvel enregistrement, 'readOnly' en lecture seule
   now?: () => Date;
+  events?: RecordEvents;
 }
 export type RecordError = { field: string; code: FieldErrorCode | 'controlValidation' | 'noMaster'; message?: string; table?: string };
 export interface RecordSnapshot {
@@ -39,6 +48,8 @@ export interface RecordSnapshot {
   refused: boolean;              // une écriture rejetée bc:readOnly (verrou perdu) : plus aucune écriture, comme `refused` de DatasheetView
   saves: number;                 // écritures réussies du formulaire lui-même (ses listes sont relues après chacune)
   sort: SortSpec[]; filter: FieldFilter[];
+  refusedByEvent: boolean;       // the last save was refused by BeforeUpdate (R8): cleared by an edit, an undo or a save
+  appliedFilter: string | null;  // ApplyFilter's Where Condition (R14), ANDed with the opening's
 }
 
 type Row = RowPage['rows'][number];
@@ -52,6 +63,9 @@ export function linkFilter(childFields: SourceField[], values: SqlValue[]): Fiel
 export function writableField(f: SourceField, info: SourceInfo): boolean {
   return toOrigin(info, { [f.name]: null }) !== null;
 }
+
+/** The Where Conditions sent with each page: both, ANDed in canonical text. */
+const andWhere = (a: string | undefined, b: string | null): string | undefined => (a && b ? `(${a}) And (${b})` : a || b || undefined);
 
 /** A typed value that leaves the stored one as it is (blank on null, Yes/No on a number, a number typed as text). */
 const same = (a: CellInput, b: SqlValue): boolean =>
@@ -77,6 +91,11 @@ export class FormRecords {
   private refused = false;
   private sort: SortSpec[] = [];
   private filter: FieldFilter[] = [];
+  private applied: string | null = null;
+  private refusedByEvent = false;
+  private inserting: Promise<void> | null = null;   // BeforeInsert under way: a save waits for it
+  private beforeDepth = 0;                // BeforeInsert / BeforeUpdate being awaited: a save, move or delete then would deadlock
+  private saved: { isNew: boolean; rec: number } | null = null;   // the write just done: its After events, once `saving` is cleared
   private link: FormRecordOptions['link'];
   private params: FormRecordOptions['params'];
   private declined = false;               // the source's parameters were not given: no rows, no additions
@@ -128,7 +147,7 @@ export class FormRecords {
       status: this.status, error: this.error, info: this.info, total: this.total, index: this.index, isNew: this.isNew,
       values: this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
       editable: this.editable, busy: this.moving > 0, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
-      sort: this.sort, filter: this.filter,
+      sort: this.sort, filter: this.filter, refusedByEvent: this.refusedByEvent, appliedFilter: this.applied,
     });
   }
 
@@ -141,12 +160,22 @@ export class FormRecords {
     return this.cache?.get(index)?.values;
   }
 
-  /** False when refused, with no effect; also while busy (the entry would go to the record being left). */
-  edit(field: string, input: CellInput): boolean {
+  /** False when refused, with no effect; also while busy (the entry would go to the record being left). The first change of
+   *  the new record raises BeforeInsert (R17), unless `silent` (a macro's SetValue, R18). */
+  edit(field: string, input: CellInput, opts?: { silent?: boolean }): boolean {
     const f = this.field(field);
     if (!f || !this.info || !this.editable || f.type === 'autoNumber' || !writableField(f, this.info)) return false;
+    const before = this.opts.events?.beforeInsert;
+    const first = this.isNew && !this.dirty && !opts?.silent && before;
     this.pending[f.name] = input;
+    this.refusedByEvent = false;
     this.emit();
+    if (first) {
+      const rec = this.record;
+      const run: Promise<void> = this.beforeEvent(first).then((ok) => { if (!ok && rec === this.record) this.undoRecord(); })
+        .finally(() => { if (this.inserting === run) this.inserting = null; });
+      this.inserting = run;
+    }
     return true;
   }
 
@@ -161,6 +190,7 @@ export class FormRecords {
 
   undoRecord(): void {
     this.pending = Object.create(null) as Record<string, CellInput>;
+    this.refusedByEvent = false;
     this.errors = [];
     this.controlErrors = [];
     this.emit();
@@ -217,16 +247,33 @@ export class FormRecords {
     }
   }
 
-  /** One save at a time: a call made while one is in flight gets its outcome (never a second insert). */
+  /** One save at a time: a call made while one is in flight gets its outcome (never a second insert). After Update and After
+   *  Insert run once that save is over (their macros may requery, move or delete), for the caller that started it.
+   *  Rejects bc:saveDuringEvent from inside BeforeInsert / BeforeUpdate (that save waits for the event: a deadlock). */
   save(): Promise<boolean> {
-    return (this.saving ??= this.write().finally(() => { this.saving = null; }));
+    if (this.beforeDepth) return Promise.reject(new Error('bc:saveDuringEvent'));
+    if (this.saving) return this.saving;
+    const run = this.write().finally(() => { this.saving = null; });
+    this.saving = run;
+    const ev = this.opts.events;
+    if (!ev?.afterUpdate && !ev?.afterInsert) return run;   // no After event: no extra step (A4's timing)
+    return run.then(async (ok) => {
+      const s = this.saved;
+      this.saved = null;
+      if (s && s.rec === this.record) await this.after(s.isNew);   // not for a record no longer current
+      return ok;
+    });
   }
+
+  /** True while BeforeInsert or BeforeUpdate is awaited: save, moves, requery and delete reject bc:saveDuringEvent meanwhile. */
+  get inBeforeEvent(): boolean { return this.beforeDepth > 0; }
 
   /** Which record is current: another value each time another record becomes current (a delete asked for one passes it). */
   get currentRecord(): number { return this.record; }
 
   /** `rec` (currentRecord when the delete was asked for): nothing is deleted once another record is current, or while a move is under way. */
   async deleteCurrent(rec?: number): Promise<DeleteResult | null> {
+    this.notInBefore();
     if (this.saving) await this.saving; // the save in flight ends on the record it was made for
     if (rec !== undefined && (rec !== this.record || this.moving)) return null;
     if (this.isNew) { this.undoRecord(); return null; }
@@ -249,7 +296,28 @@ export class FormRecords {
   }
 
   setSort(sort: SortSpec[]): Promise<boolean> { return this.reread(() => { this.sort = sort; }); }
-  setFilter(filter: FieldFilter[]): Promise<boolean> { return this.reread(() => { this.filter = filter; }); }
+  /** `applied` given: ApplyFilter's Where Condition too (setAppliedFilter), in the same reading. */
+  setFilter(filter: FieldFilter[], applied?: string | null): Promise<boolean> {
+    return this.reread(() => { this.filter = filter; if (applied !== undefined) this.applied = applied || null; });
+  }
+  /** ApplyFilter (R14): a removable Where Condition ANDed with the opening's; null removes it. Saved first, then read from the start. */
+  setAppliedFilter(where: string | null): Promise<boolean> { return this.reread(() => { this.applied = where || null; }); }
+
+  /** The index (in the form's order) of the first row passing `test`, read through the pages: after `from` going down, before
+   *  it going up (none past either end), or from `from` itself wrapping around for 'all' (each row once). */
+  async find(test: (row: SqlValue[]) => boolean, o: { from: number; dir: 'up' | 'down' | 'all' }): Promise<number | null> {
+    if (this.cache && !this.counted) await this.rowAt(0);
+    const n = this.total;
+    // ponytail: a linear scan (R13); a server-side locate when bases over 100,000 rows make it slow
+    for (let k = 0; k < n; k++) {
+      const i = o.dir === 'all' ? (((o.from + k) % n) + n) % n : o.dir === 'down' ? o.from + 1 + k : o.from - 1 - k;
+      if (i < 0 || i >= n) return null;
+      const row = await this.rowAt(i);
+      if (!row) return null;
+      if (test(row.values)) return i;
+    }
+    return null;
+  }
   /** The master's values: the pending record is saved first, under the values it was typed for; refused, they stay (and setLink
    *  is called again once it is saved or undone). */
   setLink(values: SqlValue[] | null): Promise<boolean> {
@@ -265,6 +333,7 @@ export class FormRecords {
    *  clamped to the last record (the new record stays the new record). */
   async reload(): Promise<boolean> {
     if (!this.info) return false;
+    this.notInBefore();
     if (this.saving) await this.saving;
     if (this.dirty) {
       this.rebuild();
@@ -325,6 +394,7 @@ export class FormRecords {
 
   /** Leave hooks (subforms), then the save of a modified record; false at the first failure, and the record stays current. */
   private async leave(): Promise<boolean> {
+    this.notInBefore();
     if (this.saving) await this.saving; // even after Esc: it ends on the record it was made for
     for (const h of [...this.hooks]) if (!(await h())) return false;
     while (this.dirty) if (!(await this.save())) return false; // again for what was typed during the save
@@ -354,7 +424,7 @@ export class FormRecords {
     const filter = [...this.filter, ...(this.link?.values ? linkFilter(children, this.link.values) : [])];
     const sort = this.sort;
     const params = this.params;
-    const { where } = this.opts;
+    const where = andWhere(this.opts.where, this.applied);
     const cache: PageCache = new PageCache(async (offset, limit) => {
       const writes = this.writes;
       const p = await this.api.page(ref, { offset, limit, sort: sort.length ? sort : undefined, filter: filter.length ? filter : undefined, ...(params && { params }),
@@ -434,9 +504,11 @@ export class FormRecords {
     this.pending = Object.create(null) as Record<string, CellInput>;
     this.errors = [];
     this.controlErrors = [];
+    this.refusedByEvent = false;
     this.status = 'ready';
     this.error = undefined;
     this.emit();
+    this.opts.events?.current?.();
     return true;
   }
 
@@ -451,6 +523,8 @@ export class FormRecords {
   }
 
   private async write(): Promise<boolean> {
+    this.saved = null;
+    if (this.inserting) await this.inserting; // BeforeInsert decides first whether there is anything to save
     const info = this.info;
     if (!info || !this.dirty) return true; // an untouched new record is never inserted
     if (this.controlErrors.length || this.ro) return false;
@@ -460,6 +534,13 @@ export class FormRecords {
       return false;
     }
     const rec = this.record; // the record this save is for: if another one is current when it ends, it changes nothing shown
+    const before = this.opts.events?.beforeUpdate;
+    if (before) {   // before the values sent are taken: a SetValue it runs is saved too
+      const ok = await this.beforeEvent(before);
+      if (rec !== this.record) return false;
+      if (!ok) { this.refusedByEvent = true; this.emit(); return false; }
+      if (!this.dirty) return true;
+    }
     const sent = { ...this.pending };
     const { isNew, rowid } = this;
     let values = sent;
@@ -497,13 +578,29 @@ export class FormRecords {
     this.invalidate();
     this.cache?.set(this.index, { rowid: r.rowid, values: back });
     this.emit();
+    this.saved = { isNew, rec };
     return true;
+  }
+
+  /** A Before event awaited: a failure counts as a refusal (R7). */
+  private async beforeEvent(fn: () => Promise<boolean>): Promise<boolean> {
+    this.beforeDepth++;
+    try { return await fn(); } catch { return false; } finally { this.beforeDepth--; }
+  }
+  private notInBefore(): void { if (this.beforeDepth) throw new Error('bc:saveDuringEvent'); }
+
+  /** After Update, then After Insert for a new record (Access's order); a failure leaves the save done. */
+  private async after(isNew: boolean): Promise<void> {
+    const ev = this.opts.events;
+    await ev?.afterUpdate?.().catch(() => undefined);
+    if (isNew) await ev?.afterInsert?.().catch(() => undefined);
   }
 
   /** A write that succeeded: counted (an insert also dates the page totals); emitted by the caller or here. */
   private done(isNew: boolean): void {
     if (isNew) this.writes++;
     this.saves++;
+    this.refusedByEvent = false;
     this.emit();
   }
 

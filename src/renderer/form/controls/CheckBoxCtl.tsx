@@ -14,10 +14,15 @@ export function CheckBoxCtl({ c, x, style }: CtlProps) {
   const { disabled, readOnly } = controlEnabled(c, x.snap, b?.f ?? null);
   const unbound = isUnbound(c);
   const u = x.unbound[c.name]?.value ?? null;
+  const attrs = ctlAttrs(c, x);
   return (
-    <input type="checkbox" {...ctlAttrs(c, x)} className={`frun-check${c.kind === 'optionButton' ? ' frun-round' : ''}`} style={style}
+    <input type="checkbox" {...attrs} className={`frun-check${c.kind === 'optionButton' ? ' frun-round' : ''}`} style={style}
       checked={unbound ? u !== null && truthy(u) === true : b ? isOn(b.stored, b.pending) : false} disabled={disabled} aria-readonly={readOnly || undefined}
-      onClick={(e) => { if (readOnly) e.preventDefault(); }}   // a read-only checkbox does not toggle
-      onChange={(e) => { if (readOnly) return; if (unbound) x.editUnbound(c, bool(e.target.checked)); else if (b) x.edit(b.f, e.target.checked); }} />
+      onClick={(e) => { if (readOnly) e.preventDefault(); attrs.onClick?.(e); }}   // a read-only checkbox does not toggle
+      onChange={(e) => {
+        if (readOnly) return;
+        const on = e.target.checked;
+        x.update(c, () => { if (unbound) x.editUnbound(c, bool(on)); else if (b) x.edit(b.f, on); });
+      }} />
   );
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Value } from '../../shared/expr/ast';
+import { fail, num, str } from '../../shared/expr/library';
 import type { MacroDef, MacroItem } from '../../shared/macro/model';
-import { FAILURE_NUMBERS, MAX_STEPS, MAX_TEMP_VARS, runMacro, type ActionCall, type MacroHost, type StepInfo } from './engine';
+import { FAILURE_NUMBERS, MAX_STEPS, MAX_TEMP_VARS, runMacro, runMacroDef, type ActionCall, type EventContext, type MacroHost, type StepInfo } from './engine';
 
 const m = (items: MacroItem[]): MacroDef => ({ formatVersion: '1.0', items });
 const act = (action: string, args: Record<string, string> = {}): MacroItem => ({ k: 'action', action, args });
@@ -51,6 +52,14 @@ describe('runMacro', () => {
     const h = host({ M: m([act('SetTempVar', { Name: 'v', Expression: '"Lyon"' }),
       act('OpenForm', { FormName: 'F', WhereCondition: '[Ville] = [TempVars]![v]' })]) });
     await runMacro('M', h); expect(h.calls[0]!.args.WhereCondition).toBe('[Ville] = "Lyon"');
+  });
+
+  it('a reference argument is passed as written, never evaluated (SetValue)', async () => {
+    const h = host({ M: m([act('SetValue', { Item: '[Forms]![F]![C]', Expression: '1 + 2' })]) });
+    expect(await runMacro('M', h)).toEqual({ ok: true });   // evaluating [Forms]! would fail: this host has no objectMember
+    expect(h.calls[0]!.args).toEqual({ Item: '[Forms]![F]![C]', Expression: { t: 'num', v: 3 } });
+    expect(await runMacro('M', host({ M: m([act('SetValue', { Item: '[Forms]![F]![C]', Expression: '1' })]) }, { enabled: false })))
+      .toMatchObject({ ok: false, failure: { code: 'blocked' } });   // unsafe: blocked in disabled mode (R5)
   });
 
   it('a blank required argument is missing', async () => {
@@ -172,5 +181,55 @@ describe('runMacro', () => {
     const h = host({ M: m([{ k: 'if', branches: [{ cond: 'True', items: [act('Beep'), act('Quit')] }] }]) }, { step: async () => 'continue' });
     await runMacro('M', h, { singleStep: true });
     expect(names(h)).toEqual(['Beep', 'Quit']); expect(h.steps).toEqual([{ macro: 'M', condition: 'True', action: 'Beep', args: {} }]);
+  });
+});
+
+describe('events', () => {
+  const ev = (over: Partial<EventContext> = {}): EventContext => ({ object: { kind: 'form', name: 'FCommandes' }, event: 'BeforeUpdate',
+    field: (n) => (n === 'Montant' ? num(5000) : fail('unknownField')), cancellable: true, cancelled: false, ...over });
+
+  it('bare names read the event object; CancelEvent cancels', async () => {
+    const e = ev();
+    const h = host({ M: m([{ k: 'if', branches: [{ cond: '[Montant] > 1000', items: [act('MessageBox', { Message: 'Trop' }), act('CancelEvent')] }] }]) });
+    expect(await runMacro('M', h, { event: e })).toEqual({ ok: true }); expect(e.cancelled).toBe(true);
+    expect(h.calls).toEqual([expect.objectContaining({ action: 'MessageBox', event: e })]);
+  });
+
+  it('a bare name without an event is an unknown field', async () => {
+    expect(await runMacro('M', host({ M: m([act('MessageBox', { Message: '=[Montant]' })]) })))
+      .toMatchObject({ ok: false, failure: { code: 'expression', detail: 'unknownField' } });
+  });
+
+  it('CancelEvent in a non-cancellable event does nothing', async () => {
+    const e = ev({ event: 'AfterUpdate', cancellable: false });
+    expect(await runMacro('M', host({ M: m([act('CancelEvent')]) }), { event: e })).toEqual({ ok: true }); expect(e.cancelled).toBe(false);
+  });
+
+  it('[Forms]! goes to the host', async () => {
+    const h = host({ M: m([act('MessageBox', { Message: '=[Forms]![FClients]![Nom]' })]) });
+    h.objectMember = (p) => (p.join('!') === 'Forms!FClients!Nom' ? str('Dupont') : fail('unknownField'));
+    await runMacro('M', h); expect(h.calls[0]!.args.Message).toBe('Dupont');
+    expect(await runMacro('M', host({ M: m([act('MessageBox', { Message: '=[Reports]![R]![C]' })]) })))
+      .toMatchObject({ ok: false, failure: { code: 'expression', detail: 'unknownField' } });   // no objectMember: unknownField
+  });
+
+  it('an embedded definition runs with its label', async () => {
+    expect(await runMacroDef(m([act('ImportXML')]), 'FClients : B : OnClick', host({})))
+      .toMatchObject({ ok: false, failure: { macro: 'FClients : B : OnClick', code: 'unknownAction' } });
+  });
+
+  it('an embedded definition stops at its first submacro, which OnError MacroName reaches', async () => {
+    const h = host({});
+    const def = m([act('OnError', { GoTo: 'macroName', MacroName: 'Err' }), act('ImportXML'),
+      { k: 'submacro', name: 'Err', items: [act('MessageBox', { Message: '=[MacroError]![MacroName]' })] }]);
+    expect(await runMacroDef(def, 'FClients : B : OnClick', h, { event: ev() })).toEqual({ ok: true });
+    expect(h.calls).toEqual([expect.objectContaining({ macro: 'FClients : B : OnClick.Err', args: expect.objectContaining({ Message: 'FClients : B : OnClick' }) })]);
+  });
+
+  it('RunMacro keeps the event', async () => {
+    const e = ev();
+    const h = host({ M: m([act('RunMacro', { MacroName: 'N' })]), N: m([act('MessageBox', { Message: '=[Montant]' }), act('CancelEvent')]) });
+    expect(await runMacro('M', h, { event: e })).toEqual({ ok: true });
+    expect(e.cancelled).toBe(true); expect(h.calls[0]).toMatchObject({ macro: 'N', event: e, args: { Message: '5000' } });
   });
 });

@@ -156,7 +156,7 @@ describe('A4 catalog additions', () => {
     expect(names).not.toContain('PageIndex');
     expect(PROPERTY_CATALOG.find((p) => p.name === 'Pages')!.default).toBeUndefined();
   });
-  it('the 16 events, targets and defaults of the brief', () => {
+  it('the events of A4, targets and defaults of the brief (B2 narrows and adds: events.test.ts)', () => {
     const byName = (n: string) => PROPERTY_CATALOG.find((p) => p.name === n)!;
     for (const n of ['OnOpen', 'OnLoad', 'OnCurrent', 'OnClose', 'BeforeInsert', 'AfterInsert', 'BeforeUpdate', 'AfterUpdate', 'OnDelete', 'OnClick',
       'OnDblClick', 'OnEnter', 'OnExit', 'OnGotFocus', 'OnLostFocus', 'OnChange']) expect(byName(n).tab, n).toBe('event');
@@ -172,7 +172,7 @@ describe('A4 catalog additions', () => {
     expect(byName('OnEnter').appliesTo).toEqual(expect.arrayContaining(['optionGroup', 'optionButton', 'commandButton', 'subform']));
     expect(byName('OnEnter').appliesTo).not.toContain('tabControl');
     expect(byName('OnExit').appliesTo).toEqual(byName('OnEnter').appliesTo);
-    expect(byName('OnGotFocus').appliesTo).toEqual(['form', 'textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton']);
+    expect(byName('OnGotFocus').appliesTo).toEqual(['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton']);
     expect(byName('OnLostFocus').appliesTo).toEqual(byName('OnGotFocus').appliesTo);
     expect(byName('OnClick').appliesTo).toEqual(expect.arrayContaining(['form', 'commandButton', 'optionGroup', 'checkBox', 'optionButton', 'image', 'tabControl']));
     expect(byName('BeforeUpdate').appliesTo).toContain('optionButton');

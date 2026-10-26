@@ -57,14 +57,15 @@ describe('selectionCriteria (extra)', () => {
 });
 
 describe('filter state', () => {
-  const s: FilterState = { items: [{ field: 'Ville', criteria: '"Lyon"' }], active: true };
+  const s: FilterState = { items: [{ field: 'Ville', criteria: '"Lyon"' }], applied: null, active: true };
   it('a field has one criterion: set replaces it (name case ignored), empty removes it, the filter turns on', () => {
-    expect(withCriteria({ ...s, active: false }, 'ville', '"Paris"')).toEqual({ items: [{ field: 'ville', criteria: '"Paris"' }], active: true });
-    expect(withCriteria(s, 'Solde', '>1000')).toEqual({ items: [...s.items, { field: 'Solde', criteria: '>1000' }], active: true });
-    expect(withCriteria(s, 'Ville', '')).toEqual({ items: [], active: false });
+    expect(withCriteria({ ...s, active: false }, 'ville', '"Paris"')).toEqual({ items: [{ field: 'ville', criteria: '"Paris"' }], applied: null, active: true });
+    expect(withCriteria(s, 'Solde', '>1000')).toEqual({ items: [...s.items, { field: 'Solde', criteria: '>1000' }], applied: null, active: true });
+    expect(withCriteria(s, 'Ville', '')).toEqual({ items: [], applied: null, active: false });
+    expect(withCriteria({ ...s, applied: '[N°] > 1' }, 'Ville', '')).toEqual({ items: [], applied: '[N°] > 1', active: true });   // R14: ApplyFilter's stays
   });
   it('at most 20 fields', () => {
-    let x: FilterState = { items: [], active: false };
+    let x: FilterState = { items: [], applied: null, active: false };
     for (let i = 0; i < 20; i++) x = withCriteria(x, `F${i}`, '1');
     expect(() => withCriteria(x, 'F20', '1')).toThrow(/bc:tooManyFilters/);
     expect(withCriteria(x, 'F3', '2').items).toHaveLength(20);
@@ -72,6 +73,6 @@ describe('filter state', () => {
   it('the filter sent: only when active', () => {
     expect(activeFilter(s)).toEqual(s.items);
     expect(activeFilter({ ...s, active: false })).toBeUndefined();
-    expect(activeFilter({ items: [], active: true })).toBeUndefined();
+    expect(activeFilter({ items: [], applied: null, active: true })).toBeUndefined();
   });
 });

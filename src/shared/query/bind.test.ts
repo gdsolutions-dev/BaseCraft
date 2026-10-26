@@ -8,6 +8,7 @@ import type { SelectQuery } from './ast';
 import { bindQuery, boundArgType, exprType, toSourceInfo, type BoundQuery, type QueryCatalog } from './bind';
 import { parseQueryDefinition, queryDependents } from './definition';
 import { parseSql } from './sql-parser';
+import { printSql } from './print';
 
 // Test base of the plan header (Clients / Commandes), plus T (UNION cases) and W (Decimal, Hyperlink, Yes/No).
 const TABLES: TableDesign[] = [
@@ -418,4 +419,15 @@ it('queryDependents: tables whose lookup Row Source names the query (by name or 
     { name: 'Ignorée', fields: [fd('D', 'dateTime', look('Q'))] }, // Date/Time takes no lookup
     { name: 'Autre', fields: [fd('E', 'shortText', look('SELECT Q FROM Clients')), fd('F', 'shortText', { kind: 'values', values: ['Q'], limitToList: true })] },
   ])).toEqual([{ kind: 'table', name: 'Commandes' }, { kind: 'table', name: 'Ventes' }, { kind: 'table', name: 'Liste' }]);
+});
+it('a form reference in a criterion is a typed parameter', () => {
+  const q = b('SELECT * FROM Commandes WHERE Client = [Forms]![FClients]![N°];');
+  expect(q.params).toEqual([{ name: '[Forms]![FClients]![N°]', type: 'number', props: expect.objectContaining({ numberSize: 'longInteger' }) }]);
+  expect(b('SELECT * FROM Clients WHERE Nom = [Formulaires]![fclients]![Nom] Or Ville = [VarTemp]![v] Or Nom = [États]![E]![C];').params.map((p) => p.name))
+    .toEqual(['[Forms]![fclients]![Nom]', '[TempVars]![v]', '[Reports]![E]![C]']);
+  expect(printSql(parseSql('SELECT * FROM Clients WHERE Nom = [Formulaires]![F]![C];'))).toContain('WHERE [Nom] = [Forms]![F]![C]');
+});
+it('LocalVars in a query is refused', () => {
+  expect(() => b('SELECT * FROM Clients WHERE Nom = [LocalVars]![x];')).toThrow(expect.objectContaining({ code: 'memberNotAllowed' }));
+  expect(() => b('SELECT [MacroError]![Number] FROM Clients;')).toThrow(expect.objectContaining({ code: 'memberNotAllowed', detail: '[MacroError]![Number]' }));
 });

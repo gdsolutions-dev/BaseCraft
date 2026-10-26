@@ -1,6 +1,7 @@
 // Macro en mode Création : les blocs (ActionBlock), l'enregistrement (validateMacro, puis api.objects.save, le nom demandé pour une
 // nouvelle macro), la question à la fermeture d'une macro modifiée, les commandes du ruban Création de macro (Exécuter, Pas à pas,
-// Réduire/développer, Catalogue d'actions, Afficher toutes les actions).
+// Réduire/développer, Catalogue d'actions, Afficher toutes les actions). Une macro incorporée (R16, tab.embedded) se lit dans sa session
+// et s'enregistre dans le formulaire ou l'état ouvert, sans nom ni fichier ; ni Exécuter ni Pas à pas.
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplayContext } from '../../shared/expr/localize';
@@ -14,6 +15,7 @@ import { registerCommandStates, registerCommands, registerModeGuard } from '../s
 import { ActionCatalog } from './ActionCatalog';
 import { ItemList, type BlockCtx } from './ActionBlock';
 import type { ObjectLists } from './ArgEditor';
+import { dropEmbedded, embeddedSession } from './embedded';
 import { initialEdit, macroEdit, pathKey } from './macro-edit';
 import { macroNamesWithSubs, runMacroByName } from './macro-shell';
 import './macro.css';
@@ -23,9 +25,12 @@ const NO_LISTS: ObjectLists = { table: [], query: [], form: [], report: [], macr
 /** Loads the definition (a new macro starts empty), then the designer. */
 export function MacroDesignView(p: DocViewProps) {
   const { t } = useTranslation();
-  const [def, setDef] = useState<MacroDef | { error: string } | null>(() => (p.tab.isNew ? emptyMacro() : null));
+  const emb = p.tab.embedded;
+  const [def, setDef] = useState<MacroDef | { error: string } | null>(() => (p.tab.isNew ? emptyMacro()
+    : emb ? embeddedSession(emb)?.def ?? { error: t('macro.embedded.ownerGone') } : null));
+  useEffect(() => (emb ? () => dropEmbedded(emb) : undefined), [emb]);   // its tab closed: the session goes
   useEffect(() => {
-    if (p.tab.isNew) return;
+    if (p.tab.isNew || emb) return;
     let current = true;
     api.objects.get('macro', p.tab.name).then((r) => { if (current) setDef(parseMacroDef(r.definition)); }).catch((e) => {
       if (!current) return;
@@ -96,6 +101,12 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
         return null;
       }
       const doc = live.current.tab;
+      if (doc.embedded) {   // into its design (R16): the design becomes dirty, nothing is written to the file
+        const session = embeddedSession(doc.embedded);
+        if (!session?.save(live.current.state.def)) { await message('macro.embedded.ownerGone'); return null; }
+        send({ type: 'saved' });
+        return doc.name;
+      }
       let name = doc.isNew ? await askName(doc.name) : doc.name;
       for (;;) {
         if (name === null) return null;
@@ -147,8 +158,7 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     const collapse = (on: boolean) => { const sel = live.current.state.selected; if (sel) send({ type: 'collapse', path: sel, on }); };
     const off = registerCommands(tab.id, {
       save: async () => { await cmds.current.save(); },
-      macroRun: () => cmds.current.run(),
-      singleStep: () => setSingleStep((v) => !v),
+      ...(tab.embedded ? {} : { macroRun: () => cmds.current.run(), singleStep: () => setSingleStep((v) => !v) }),
       expandActions: () => collapse(false), collapseActions: () => collapse(true),
       expandAll: () => send({ type: 'collapseAll', on: false }), collapseAll: () => send({ type: 'collapseAll', on: true }),
       actionCatalog: () => send({ type: 'toggleCatalog' }), showAllActions: () => send({ type: 'toggleShowAll' }),

@@ -1,4 +1,4 @@
-// Bouton de commande : un <button> sans effet (les événements arrivent à l'étape B).
+// Bouton de commande : un <button> ; son clic (souris, Entrée, Espace) déclenche Sur clic (ctlAttrs).
 import { prop } from '../run-model';
 import { ctlAttrs, type CtlProps } from './run-ctx';
 

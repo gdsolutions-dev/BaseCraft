@@ -50,10 +50,11 @@ export type Value = null | { t: 'num'; v: number } | { t: 'str'; v: string } | {
   | { t: 'empty' }; // Empty de VBA : produit seulement par Nz(v) sans valeur de remplacement
 
 export type ExprRuntimeErrorCode = 'typeMismatch' | 'divByZero' | 'badArgument' | 'overflow' | 'unknownField'
-  | 'aggregateContext'; // Sum, Count… hors d'un regroupement (requête Regroupement A3, groupe d'état A5)
+  | 'aggregateContext' // Sum, Count… hors d'un regroupement (requête Regroupement A3, groupe d'état A5)
+  | 'notOpen'; // [Forms]![F]!… / [Reports]![R]!… : F ou R n'est pas ouvert (detail : son nom)
 
 export class ExprRuntimeError extends Error {
-  constructor(public code: ExprRuntimeErrorCode) {
+  constructor(public code: ExprRuntimeErrorCode, public detail?: string) {
     super(code);
     this.name = 'ExprRuntimeError';
   }

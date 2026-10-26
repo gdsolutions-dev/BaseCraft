@@ -71,7 +71,10 @@ export function FormSection({ section, x, width }: { section: SectionDef; x: Run
   const rank = (i: number) => { const k = seq.indexOf(section.controls[i].name); return k < 0 ? seq.length + i : k; };
   const order = section.controls.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
   return (
-    <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, background: back }}>
+    // a click on the section itself, not on a control: the form's On Click / On Dbl Click
+    <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, background: back }}
+      onClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnClick'); }}
+      onDoubleClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnDblClick'); }}>
       {order.map((i) => renderControl(section.controls[i], x, null, i))}
     </div>
   );

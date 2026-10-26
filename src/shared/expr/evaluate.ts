@@ -14,7 +14,7 @@ export { truthy } from './library';
 /** `field(name, table)`: `table` is set for a qualified reference `[T].[F]` (A3). */
 /** `member(path)`: a member reference `[TempVars]![x]`… (absent, or throws: unknownField). */
 export interface EvalEnv {
-  field(name: string, table?: string): Value; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en';
+  field(name: string, table?: string): Value | Promise<Value>; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en';
   member?(path: string[]): Value | Promise<Value>;
 }
 

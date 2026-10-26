@@ -551,6 +551,7 @@
       "queryBind_duplicateOutput": "The column \"{{detail}}\" appears twice in the result: rename it with AS.",
       "queryBind_insertArity": "The number of values to append does not match the number of destination fields.",
       "queryBind_subqueryArity": "This subquery must return a single column: {{detail}}.",
+      "queryBind_memberNotAllowed": "A query cannot use {{detail}}: only [Forms]!, [Reports]! and [TempVars]! references are allowed there.",
       "fontMissing": "An embedded font could not be loaded: the report was neither printed nor exported.",
       "printFailed": "Printing failed.",
       "writeFailed": "The file could not be saved to this location.",
@@ -908,6 +909,7 @@
       "maskBadSection": "Invalid mask sections: the second is 0 or 1, the third a single character.",
       "aggregateContext": "An aggregate function (Sum, Count…) is only allowed in a totals query or a report group.",
       "subqueryNotAllowed": "Subqueries (SELECT …) are not allowed here.",
+      "notOpen": "“{{name}}” is not open.",
       "memberNotAllowed": "References such as [TempVars]! or [Forms]! are not allowed here.",
       "badMember": "Invalid reference: [TempVars]![Name], [LocalVars]![Name], [MacroError]![Name], [Forms]![Form]![Control] or [Reports]![Report]![Control].",
       "forbiddenStatement": "Statement not allowed: only Select, Append, Update, Delete and Make-Table queries are accepted.",
@@ -1440,6 +1442,9 @@
     "OnGotFocus": "On Got Focus",
     "OnLostFocus": "On Lost Focus",
     "OnChange": "On Change",
+    "OnNoData": "On No Data",
+    "OnFormat": "On Format",
+    "OnPrint": "On Print",
     "ColumnHeads": "Column Heads"
   },
   "propValue": {
@@ -1766,7 +1771,8 @@
       "all": "All"
     },
     "mixed": "The selected items have different values",
-    "eventsLater": "Available with macros (stage B)",
+    "embeddedMacro": "[Embedded Macro]",
+    "eventBuild": "Build macro…",
     "yes": "Yes",
     "no": "No",
     "colors": "Colors",
@@ -1781,7 +1787,9 @@
       "unknownField": "This field is not in the source.",
       "unknownSource": "No table or query has this name.",
       "pictureTooLarge": "Picture too large (1 MB at most).",
-      "notInteger": "Enter a whole number."
+      "notInteger": "Enter a whole number.",
+      "badMacroName": "Invalid macro name: “Macro” or “Macro.Submacro”, with no other period or brackets.",
+      "badEmbedded": "Invalid embedded macro."
     },
     "close": "Close the Property Sheet (F4)",
     "lost": "The value of “{{name}}” was not saved:",
@@ -1818,6 +1826,7 @@
     "controlValidation": "The value does not satisfy the validation rule of this control.",
     "invalidDefinition": "This form's definition cannot be read: the form cannot be opened.",
     "closeDiscard": "The current record in “{{name}}” cannot be saved. Close anyway? The entry will be lost.",
+    "closeUnsaved": "You can't save this record at this time. Do you want to close anyway (your changes will be lost)?",
     "list": {
       "truncated": "List limited to the first {{count}} rows.",
       "sourceError": "The list's row source cannot be read: {{message}}"
@@ -2061,6 +2070,11 @@
     "more": "… and {{count}} more"
   },
   "macro": {
+    "embedded": {
+      "title": "{{object}} : {{control}} : {{event}}",
+      "deleteAsk": "Delete the embedded macro?",
+      "ownerGone": "The object or control of this embedded macro no longer exists: it cannot be saved."
+    },
     "newName": "Macro{{n}}",
     "action": {
       "Beep": "Beep",
@@ -2082,7 +2096,20 @@
       "SetTempVar": "SetTempVar",
       "SetWarnings": "SetWarnings",
       "StopAllMacros": "StopAllMacros",
-      "StopMacro": "StopMacro"
+      "StopMacro": "StopMacro",
+      "ApplyFilter": "ApplyFilter",
+      "CancelEvent": "CancelEvent",
+      "DeleteRecord": "DeleteRecord",
+      "FindRecord": "FindRecord",
+      "GoToControl": "GoToControl",
+      "GoToRecord": "GoToRecord",
+      "RefreshRecord": "RefreshRecord",
+      "Requery": "Requery",
+      "SaveRecord": "SaveRecord",
+      "SetProperty": "SetProperty",
+      "SetValue": "SetValue",
+      "ShowAllRecords": "ShowAllRecords",
+      "UndoRecord": "UndoRecord"
     },
     "arg": {
       "FormName": "Form Name",
@@ -2105,7 +2132,20 @@
       "GoTo": "Go To",
       "QueryName": "Query Name",
       "ReportName": "Report Name",
-      "TableName": "Table Name"
+      "TableName": "Table Name",
+      "FindWhat": "Find What",
+      "Match": "Match",
+      "MatchCase": "Match Case",
+      "Search": "Search",
+      "OnlyCurrentField": "Search Only Current Field",
+      "FindFirst": "Find First",
+      "ControlName": "Control Name",
+      "Record": "Record",
+      "Offset": "Offset",
+      "Property": "Property",
+      "Value": "Value",
+      "Item": "Item",
+      "WindowMode": "Window Mode"
     },
     "argValue": {
       "View": { "form": "Form", "datasheet": "Datasheet", "design": "Design", "preview": "Preview", "print": "Print" },
@@ -2114,7 +2154,15 @@
       "Beep": { "yes": "Yes", "no": "No" },
       "Type": { "none": "None", "critical": "Critical", "warning": "Warning", "question": "Question", "information": "Information" },
       "GoTo": { "next": "Next", "macroName": "Macro Name", "fail": "Fail" },
-      "WarningsOn": { "yes": "Yes", "no": "No" }
+      "WarningsOn": { "yes": "Yes", "no": "No" },
+      "Record": { "previous": "Previous", "next": "Next", "first": "First", "last": "Last", "goTo": "Go To", "new": "New" },
+      "Match": { "anywhere": "Any Part of Field", "whole": "Whole Field", "start": "Start of Field" },
+      "MatchCase": { "yes": "Yes", "no": "No" },
+      "Search": { "up": "Up", "down": "Down", "all": "All" },
+      "OnlyCurrentField": { "yes": "Yes", "no": "No" },
+      "FindFirst": { "yes": "Yes", "no": "No" },
+      "Property": { "enabled": "Enabled", "visible": "Visible", "locked": "Locked", "left": "Left", "top": "Top", "width": "Width", "height": "Height", "foreColor": "Fore Color", "backColor": "Back Color", "caption": "Caption", "value": "Value" },
+      "WindowMode": { "normal": "Normal", "dialog": "Dialog" }
     },
     "category": {
       "ui": "User Interface Commands",
@@ -2122,7 +2170,8 @@
       "system": "System Commands",
       "filter": "Filter/Query/Search",
       "window": "Window Management",
-      "objects": "Database Objects"
+      "objects": "Database Objects",
+      "dataEntry": "Data Entry Operations"
     },
     "block": {
       "comment": "Comment",
@@ -2148,11 +2197,25 @@
       "expression": "An expression of the action {{action}} can't be evaluated: {{detail}}",
       "missingArgument": "The argument \"{{detail}}\" of the action {{action}} is required.",
       "tooDeep": "Too many nested macros: RunMacro is limited to 20 levels.",
+      "eventTooDeep": "Events are nested more than 20 levels deep.",
       "tooManySteps": "The macro was stopped: it ran more than 100,000 actions.",
       "badDefinition": "The definition of the macro \"{{name}}\" is not valid ({{detail}}).",
       "runSqlSelect": "RunSQL expects an action query (INSERT, UPDATE, DELETE, SELECT … INTO).",
       "actionCancelled": "The action {{action}} was cancelled.",
-      "actionNotRun": "The action {{action}} was not carried out."
+      "actionNotRun": "The action {{action}} was not carried out.",
+      "propertyNotSupported": "This property cannot be set by a macro on this object.",
+      "notOpen": "The form “{{name}}” is not open.",
+      "noActiveForm": "There is no active form.",
+      "cantGoToRecord": "You can't go to the specified record.",
+      "cantFocus": "This control cannot take the focus (it is hidden or disabled).",
+      "saveRefused": "The record could not be saved.",
+      "badReference": "“{{name}}” is not a control of an open form.",
+      "badValue": "The value “{{name}}” does not suit this property.",
+      "findWhatTooLong": "The text to find is longer than 255 characters.",
+      "saveDuringEvent": "The record cannot be saved or changed while this event (Before Update, Before Insert) is running."
+    },
+    "findRecord": {
+      "notFound": "The search item was not found."
     },
     "msgbox": {
       "title": "{{title}}",

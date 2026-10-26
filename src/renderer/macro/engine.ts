@@ -1,4 +1,5 @@
 // Macro interpreter, with Access's semantics: blocks, OnError, TempVars / LocalVars / MacroError, RunMacro, single step.
+// B2: a run may belong to an event (EventContext): bare [Name], CancelEvent, the event passed on to RunMacro and to every action.
 // Pure and asynchronous: every action the engine does not handle itself goes to the host (the shell).
 import { ExprRuntimeError, ExprSyntaxError, type Expr, type Value } from '../../shared/expr/ast';
 import { evaluate, truthy, type EvalEnv } from '../../shared/expr/evaluate';
@@ -6,12 +7,22 @@ import { fail, infoOf, num, str, toText } from '../../shared/expr/library';
 import { bindMembers } from '../../shared/expr/members';
 import { parseCanonical, serialize } from '../../shared/expr/parser';
 import { foldName, sameName } from '../../shared/field-types';
+import type { EventName } from '../../shared/design/events';
+import type { SectionEvent } from '../../shared/report/types';
 import { actionDef, type ActionDef, type ActionName } from '../../shared/macro/catalog';
 import { validateMacro, type MacroDef, type MacroItem } from '../../shared/macro/model';
 
-/** enum / name / text / sql / where → string (where: canonical, members bound); expression → Value; number → string. */
+/** enum / name / text / sql / reference → string (reference: the canonical text, never evaluated); where → string (canonical, members bound);
+ *  expression → Value; number → string. */
 export type ResolvedArgs = Record<string, string | Value>;
-export interface ActionCall { macro: string; action: ActionName; args: ResolvedArgs; raw: Record<string, string> }
+export interface ActionCall { macro: string; action: ActionName; args: ResolvedArgs; raw: Record<string, string>; event?: EventContext }
+/** The event a run belongs to. */
+export interface EventContext {
+  object: { kind: 'form' | 'report'; name: string }; event: EventName; control?: string;   // the control that raised it (absent: the form, report or section)
+  field(name: string): Value | Promise<Value>;   // a bare [Name]: the object's control, else a field of its source; throws unknownField
+  cancellable: boolean; cancelled: boolean;      // CancelEvent sets cancelled when cancellable
+  report?: SectionEvent;                         // On Format / On Print: the band SetProperty and a bare [Name] act on (R9)
+}
 export interface MacroHost {
   load(name: string): Promise<MacroDef>;            // rejects bc:notFound for an unknown macro
   contentEnabled(): boolean;
@@ -19,6 +30,8 @@ export interface MacroHost {
   tempVars: Map<string, Value>;                     // keyed by foldName(name); shared by every run of this base
   step?(s: StepInfo): Promise<'step' | 'continue' | 'stopAll'>;
   locale: string; lang: 'fr' | 'en'; now(): Date;
+  objectMember?(path: string[]): Value | Promise<Value>;   // [Forms]! / [Reports]! (absent: unknownField)
+  stopAll?(): void;                                 // StopAllMacros ends this run: the host ends the others too
 }
 export interface StepInfo { macro: string; condition: string | null; action: string; args: Record<string, string> }
 export type FailureCode = 'unknownAction' | 'notFound' | 'blocked' | 'actionFailed' | 'expression' | 'missingArgument' | 'tooDeep' | 'tooManySteps' | 'badDefinition';
@@ -41,7 +54,8 @@ class Halt { constructor(public failure?: MacroFailure) {} }
 class Unhandled { constructor(public failure: MacroFailure) {} }
 const FATAL = new Set<FailureCode>(['blocked', 'tooManySteps']);
 
-interface Run { host: MacroHost; steps: number; stepping: boolean; error: MacroFailure | null }
+interface Run { host: MacroHost; steps: number; stepping: boolean; error: MacroFailure | null; event?: EventContext }
+type RunOpts = { singleStep?: boolean; event?: EventContext };
 interface Loaded { name: string; def: MacroDef; items: MacroItem[] }
 interface Frame { name: string; def: MacroDef; locals: Map<string, Value>; onError: { goTo: string; macroName: string }; depth: number }
 
@@ -49,10 +63,19 @@ const isBlank = (s: string | undefined): boolean => s === undefined || s.trim() 
 const macrotask = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 /** Runs `M` (its items up to the first submacro) or `M.Sub`. */
-export async function runMacro(name: string, host: MacroHost, opts: { singleStep?: boolean } = {}): Promise<RunOutcome> {
-  const run: Run = { host, steps: 0, stepping: opts.singleStep === true, error: null };
+export async function runMacro(name: string, host: MacroHost, opts: RunOpts = {}): Promise<RunOutcome> {
+  return start(name, host, opts, () => load(host, name));
+}
+
+/** Runs an embedded definition as runMacro runs `M`; `label` names it in failures and MacroError. */
+export async function runMacroDef(def: MacroDef, label: string, host: MacroHost, opts: RunOpts = {}): Promise<RunOutcome> {
+  return start(label, host, opts, async () => ({ name: label, def: checked(def), items: def.items }));
+}
+
+async function start(name: string, host: MacroHost, opts: RunOpts, get: () => Promise<Loaded>): Promise<RunOutcome> {
+  const run: Run = { host, steps: 0, stepping: opts.singleStep === true, error: null, event: opts.event };
   let loaded: Loaded;
-  try { loaded = await load(host, name); } catch (e) {
+  try { loaded = await get(); } catch (e) {
     return { ok: false, failure: failureOf({ name }, '', {}, e) };
   }
   try {
@@ -71,12 +94,17 @@ async function load(host: MacroHost, name: string): Promise<Loaded> {
     const message = e instanceof Error ? e.message : '';
     throw new Fail(message === 'bc:notFound' ? 'notFound' : message === 'bc:invalidDefinition' ? 'badDefinition' : 'actionFailed', message, e);
   }
-  const issue = validateMacro(def)[0];
-  if (issue) throw new Fail('badDefinition', `${issue.path}: ${issue.code}`);
+  checked(def);
   if (dot < 0) return { name, def, items: def.items };
   const sub = submacro(def, name.slice(dot + 1));
   if (!sub) throw new Fail('notFound', name);
   return { name, def, items: sub.items };
+}
+
+function checked(def: MacroDef): MacroDef {
+  const issue = validateMacro(def)[0];
+  if (issue) throw new Fail('badDefinition', `${issue.path}: ${issue.code}`);
+  return def;
 }
 
 const submacro = (def: MacroDef, name: string): Extract<MacroItem, { k: 'submacro' }> | undefined =>
@@ -167,10 +195,13 @@ function failureOf(frame: { name: string }, action: string, raw: Record<string, 
 
 function env(run: Run, frame: Frame): EvalEnv {
   const { host } = run;
-  return { field: () => fail('unknownField'), now: () => host.now(), locale: host.locale, lang: host.lang, member: (path) => member(run, frame, path) };
+  const ev = run.event;
+  // a qualified [T].[F] (not parsed in macros today, a guard should they be): the event object has no tables
+  return { field: ev ? (name, table) => (table !== undefined ? fail('unknownField') : ev.field(name)) : () => fail('unknownField'), now: () => host.now(), locale: host.locale, lang: host.lang, member: (path) => member(run, frame, path) };
 }
 
-function member(run: Run, frame: Frame, [root, key = '']: string[]): Value {
+function member(run: Run, frame: Frame, path: string[]): Value | Promise<Value> {
+  const [root, key = ''] = path;
   switch (root) {
     case 'TempVars': return run.host.tempVars.get(foldName(key)) ?? null;
     case 'LocalVars': return frame.locals.get(foldName(key)) ?? null;
@@ -182,7 +213,8 @@ function member(run: Run, frame: Frame, [root, key = '']: string[]): Value {
       if (sameName(key, 'MacroName')) return str(e?.macro ?? '');
       return fail('unknownField');
     }
-    default: return fail('unknownField');   // Forms / Reports: B2
+    case 'Forms': case 'Reports': return run.host.objectMember ? run.host.objectMember(path) : fail('unknownField');
+    default: return fail('unknownField');
   }
 }
 
@@ -224,7 +256,7 @@ async function execute(run: Run, frame: Frame, action: ActionName, args: Resolve
   const { host } = run;
   switch (action) {
     case 'StopMacro': return true;
-    case 'StopAllMacros': throw new Halt();
+    case 'StopAllMacros': host.stopAll?.(); throw new Halt();
     case 'RunMacro': {
       if (frame.depth >= MAX_RUN_DEPTH) throw new Fail('tooDeep');
       const countText = args.RepeatCount as string | undefined;   // a non-negative whole number in decimal digits (not 1.5, not 0x10)
@@ -256,6 +288,7 @@ async function execute(run: Run, frame: Frame, action: ActionName, args: Resolve
       return false;
     }
     case 'ClearMacroError': run.error = null; return false;
-    default: if (await host.perform({ macro: frame.name, action, args, raw }) === 'stopAll') throw new Halt(); return false;
+    case 'CancelEvent': if (run.event?.cancellable) run.event.cancelled = true; return false;   // not cancellable: nothing (Access)
+    default: if (await host.perform({ macro: frame.name, action, args, raw, event: run.event }) === 'stopAll') throw new Halt(); return false;
   }
 }

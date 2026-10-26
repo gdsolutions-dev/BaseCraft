@@ -18,7 +18,9 @@ import { exportSource } from '../exchange/export';
 import { registerCommandStates, registerCommands } from '../shell/ribbon-model';
 import { localeInfo } from '../../shared/locale-format';
 import { promptParameters } from '../query/prompt-parameters';
-import { docParameters, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
+import { memberValue } from '../form/form-instances';
+import { docParameters, layoutSavedReport, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
+import { reportEvents, reportShown, type ReportEvents } from './report-events';
 import { orientationStates, withPageSetup } from './page-setup';
 import { PageSetupDialog, PageSetupMenu } from './PageSetupDialog';
 import './preview.css';
@@ -64,7 +66,7 @@ export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
     locale: s.region, lang: s.uiLanguage, now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
-    tick: () => new Promise((r) => setTimeout(r)),
+    tick: () => new Promise((r) => setTimeout(r)), member: memberValue,   // [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }
 
@@ -131,6 +133,22 @@ export async function outputReport(modal: ModalApi, name: string,
   }
 }
 
+/** Print or PDF of a report that is not open (the Navigation Pane, OpenReport's Print): laid out with its events, On Close
+ *  once it is printed or exported; true when its On Open or On No Data cancelled it (nothing is printed, no message). */
+export async function outputSavedReport(modal: ModalApi, name: string, to: 'pdf' | 'printer', where?: string): Promise<boolean> {
+  let ev: ReportEvents | undefined, cancelled = false;
+  await outputReport(modal, name, async (signal, ready) => {
+    try {
+      return await layoutSavedReport(api, name, await layoutEnv(), askParameters(modal), signal, ready, where, (doc) => (ev = reportEvents(doc, name)));
+    } catch (e) {
+      if ((e as Error | null)?.message === 'bc:actionCancelled') cancelled = true;
+      throw e;
+    }
+  }, to);
+  await ev?.close();
+  return cancelled;
+}
+
 export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const { t } = useTranslation();
   const modal = useModal();
@@ -146,6 +164,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const doc = useRef<DesignDoc | null>(null);
   const data = useRef<ReportData | null>(null);
   const ctl = useRef<AbortController | null>(null);
+  const events = useRef<ReportEvents | null>(null);
+  const name = useRef(tab.name);
+  name.current = tab.name;
   const viewport = useRef<HTMLDivElement>(null);
 
   /** Loads from `from` on: the definition, then the data, then the layout. A newer run (or closing the tab) aborts it. */
@@ -155,7 +176,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     ctl.current = ac;
     const live = () => !ac.signal.aborted;
     const before = { phase, data: data.current };
-    let cleared = false;
+    let cleared = false, release: (() => void) | undefined;
+    /** On Open or On No Data cancelled: no preview (OpenReport fails, 2501). */
+    const refused = () => { if (live()) { reportShown(tab.name, false); closePreview(); } };
     try {
       // Refresh (Shift+F9) of a definition already read: its parameters are asked while the pages are still shown
       const kept = from === 'data' ? doc.current : null;
@@ -170,7 +193,13 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         const def = await loadReportDoc(api, tab.name);
         if (!live()) return;
         doc.current = def;
-      }
+        await events.current?.close();   // read again (its design saved): closed, then opened again
+        if (!live()) return;
+        const ev = events.current = reportEvents(def, tab.name);
+        release = ev.register();
+        if (await ev.open()) return refused();   // before the parameters and the rows (Access)
+        if (!live()) return;
+      } else release = events.current?.register();
       const d = doc.current;
       if (from !== 'layout' || !data.current) {
         data.current = null;
@@ -178,8 +207,11 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         if (!live()) return;
         const rows = await loadDocData(api, d, params, ac.signal, tab.openArgs?.where);   // OpenReport's Where Condition (R8)
         if (!live()) return;
+        if (!rows.rows.length && await events.current?.noData()) return refused();
+        if (!live()) return;
         data.current = rows;
       }
+      reportShown(tab.name, true);
       const env = await layoutEnv();
       if (!live()) return;
       const spec = readReport(d, data.current.fields), { width, height } = pageGeometry(spec.page);
@@ -189,7 +221,8 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         shownAt = Date.now();
         setPhase({ k: 'ready', report: { width, height, pages: pages.slice(), issues: [] }, partial: true });
       };
-      const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, onPage: (p) => live() && onPage(p) });
+      const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, onPage: (p) => live() && onPage(p),
+        ...(events.current ? { hooks: events.current.hooks } : {}) });
       if (!live()) return;
       setFirst((f) => Math.max(0, Math.min(f, report.pages.length - 1)));
       setPhase({ k: 'ready', report });
@@ -197,13 +230,14 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     } catch (e) {
       if (!live()) return;   // a newer run, or the tab closed
       if ((e as Error | null)?.name === 'AbortError') {   // Cancel on a parameter prompt: opening, the preview closes; else it stays as it was
-        if (from === 'object') closePreview();
+        if (from === 'object') refused();
         else if (cleared) { data.current = before.data; setPhase(before.phase); }
         return;
       }
       if (e instanceof ReportLoadError) setPhase({ k: 'error', message: t(`report.${e.code}`), list: e.list });
       else { const m = dialogError(e); setPhase({ k: 'error', message: t(m.key, m.params) }); }
-    }
+      reportShown(tab.name, true);   // opened, with its error
+    } finally { release?.(); }
   };
 
   /** Back to Design view when entered from it, else the tab closes. */
@@ -252,8 +286,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
 
   useEffect(() => {
     void cmds.current.run('object');
-    return () => ctl.current?.abort();
+    return () => ctl.current?.abort();   // closing during its macros: the layout stops, no message (a message box shown finishes)
   }, [tab.name, tab.reloadToken]);
+  useEffect(() => () => { reportShown(name.current, false); void events.current?.close(); }, []);   // the preview closes
 
   const ready = phase.k === 'ready' && !phase.partial;
   useEffect(() => registerCommands(tab.id, {

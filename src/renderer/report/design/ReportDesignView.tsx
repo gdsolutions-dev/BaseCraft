@@ -81,7 +81,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const fields = described.key === sourceKey ? described.fields : [];
   const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
   const sheet = useMemo<PropertySheetContext>(() => ({ display, fields: fieldNames, tables: lists.tables, queries: lists.queries,
-    objects: (k) => (k === 'form' ? lists.forms : lists.reports) }), [display, fieldNames, lists]);
+    objects: (k) => (k === 'form' ? lists.forms : lists.reports), owner: { tabId: tab.id, name: tab.name, doc: () => live.current.state.doc } }),
+    [display, fieldNames, lists, tab.id, tab.name]);
   const renderControl = useMemo(() => reportRenderControl(display), [display]);
   const host = useMemo(() => reportHost({ doc: state.doc, sheet, t, renderControl }), [state.doc, sheet, t, renderControl]);
   // les avertissements du moteur, une fois les champs de la source connus

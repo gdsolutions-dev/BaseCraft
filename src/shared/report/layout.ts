@@ -173,7 +173,7 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
     let pg = fresh(1), after = false;
     // the pass that only counts the pages (its pages are never shown): a band of a fixed shape is formatted once per section
     // (pass 2 lays out again if the count were wrong); never with event hooks, which may change anything
-    const counting = total === null && readsPages && !env.hooks, once = new Map<SectionSpec, FormattedBand | null>();
+    const counting = total === null && readsPages && !env.hooks?.onFormat && !env.hooks?.onPrint, once = new Map<SectionSpec, FormattedBand | null>();
 
     const format = async (job: Job): Promise<FormattedBand | null> => {
       await beat();

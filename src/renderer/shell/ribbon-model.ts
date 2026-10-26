@@ -371,8 +371,9 @@ export const commandState = (id: CommandId): CommandState | undefined => (active
 
 // ---------- Ruban ----------
 /** isNew: the active document is not saved yet. kind: the active document's kind (null: none).
- *  builder: the Query Builder's modal tab is in front (its query is the active document). */
-export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean }
+ *  builder: the Query Builder's modal tab is in front (its query is the active document). embedded: an embedded macro (R16). */
+export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean;
+  embedded?: boolean }
 
 /**
  * Ruling C11: every Access command has its entry from now on. One not delivered yet carries `planned`, the batch or stage that
@@ -544,6 +545,7 @@ const grid = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): Rib
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: (c) => designWritable(c) && c.kind === 'query' });
 const macroCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm'): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designOf('macro') });
+const namedMacro = (c: RibbonContext) => designOf('macro')(c) && !c.embedded;
 const formOrReportDesign = (c: RibbonContext) => c.mode === 'design' && (c.kind === 'form' || c.kind === 'report');
 const designerWritable = (c: RibbonContext) => formOrReportDesign(c) && !c.readOnly;
 const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.readOnly;
@@ -820,7 +822,8 @@ export const RIBBON: RibbonTab[] = [
     id: 'macroDesign', labelKey: 'ribbon.tab.macroDesign', contextual: true, visible: designOf('macro'), groups: [
       // none changes the file: enabled on a read-only base too. Pressed (the view's command states): Single Step on, the
       // catalogue shown, unsafe actions listed; Expand / Collapse Actions need a selected block (command state).
-      group('tools', macroCmd('macroRun', Play, 'lg'), { ...macroCmd('singleStep', StepForward), active: off }),
+      // Run and Single Step: not for an embedded macro, an event needs its object (R16)
+      group('tools', { ...macroCmd('macroRun', Play, 'lg'), enabled: namedMacro }, { ...macroCmd('singleStep', StepForward), enabled: namedMacro, active: off }),
       group('expandCollapse', macroCmd('expandActions', UnfoldVertical), macroCmd('collapseActions', FoldVertical), macroCmd('expandAll', ChevronsDown),
         macroCmd('collapseAll', ChevronsUp)),
       group('showHide', { ...macroCmd('actionCatalog', BookOpen, 'lg'), active: off }, { ...macroCmd('showAllActions', ListChecks), active: off }),

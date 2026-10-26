@@ -6,9 +6,10 @@ import { serializeCriteria } from '../../shared/expr/parser';
 import { sameName, type FieldDef } from '../../shared/field-types';
 
 export type SelectionFilter = 'equals' | 'notEquals' | 'contains' | 'notContains';
-/** items: one criterion per field, combined with And; active: applied (Toggle Filter keeps the items). */
-export interface FilterState { items: FieldFilter[]; active: boolean }
-export const NO_FILTER: FilterState = { items: [], active: false };
+/** items: one criterion per field, combined with And; applied: a form's ApplyFilter Where Condition (B2 R14), ANDed with them;
+ *  active: applied (Toggle Filter keeps the items and the Where Condition). */
+export interface FilterState { items: FieldFilter[]; applied: string | null; active: boolean }
+export const NO_FILTER: FilterState = { items: [], applied: null, active: false };
 
 const DATE = /^\d{4}-\d\d-\d\d( \d\d:\d\d:\d\d)?$/;
 /** A non-negative number as a canonical decimal, without exponent (the shortest text that reads back as it). */
@@ -45,11 +46,11 @@ export function selectionCriteria(kind: SelectionFilter, field: FieldDef, value:
  *  one more throws bc:tooManyFilters. */
 export function withCriteria(s: FilterState, field: string, criteria: string): FilterState {
   const others = s.items.filter((x) => !sameName(x.field, field));
-  if (!criteria) return { items: others, active: others.length > 0 && s.active };
+  if (!criteria) return { ...s, items: others, active: (others.length > 0 || !!s.applied) && s.active };
   if (others.length >= MAX_FILTERS) throw new Error('bc:tooManyFilters');
   const at = s.items.findIndex((x) => sameName(x.field, field));
   const items = at < 0 ? [...s.items, { field, criteria }] : s.items.map((x, i) => (i === at ? { field, criteria } : x));
-  return { items, active: true };
+  return { ...s, items, active: true };
 }
 
 /** The filter sent with the page requests and the count: undefined when off or empty. */

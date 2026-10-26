@@ -75,6 +75,8 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     if (key === undefined) throw new Error('bc:missingParameter');
     return { sql: '?', params: [values[key]], type: b.params.find((p) => sameName(p.name, name))?.type ?? null };
   };
+  /** A member the binding made a parameter ([Forms]![F]![C]…, B2 R11): its value bound, never its text. */
+  const paramOf = (qb: BoundQuery, node: Expr): SqlRef | null => { const r = qb.refs.get(node); return r?.kind === 'param' ? param(r.name) : null; };
   const column = (stack: Level[], r: Extract<ResolvedRef, { kind: 'column' }>): SqlRef => {
     const l = stack[stack.length - 1 - r.depth];
     const s = l.sel.sources.find((x) => x.alias === r.alias)!;
@@ -93,7 +95,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
    */
   const nativeInt = (stack: Level[], e: Expr): { ref: SqlRef; exact: boolean } | null => {
     if (e.k === 'num') return Number.isSafeInteger(Number(e.v)) ? { ref: { sql: '?', params: [Number(e.v)], type: null }, exact: true } : null;
-    if (e.k !== 'id') return null;
+    if (e.k !== 'id' && e.k !== 'member') return null; // a member is a parameter ([Forms]![F]![N°], B2 R11)
     const r = stack[stack.length - 1].b.refs.get(e);
     if (r?.kind === 'param') {
       const p = param(r.name); // bc_val('number', n) and an untyped n both read num(n)
@@ -144,6 +146,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
         if (r?.kind === 'output') return { ...compileValue(lvl.sel.columns[r.index].expr, c), type: null }; // the aliased expression
         return r?.kind === 'column' ? column(stack, r) : null;
       },
+      member: (node) => paramOf(lvl.b, node),
     };
     return c;
   };
@@ -233,6 +236,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
         if (r?.kind === 'param') return param(r.name);
         return r?.kind === 'output' ? { sql: `"c${r.index}"`, params: [], type: mode.encoded ? null : qb.columns[r.index].type } : null;
       },
+      member: (node) => paramOf(qb, node),
     };
     return cat('SELECT * FROM (', rel, ') ORDER BY ', list(q.orderBy.map((o) => sortKeys(compileValue(o.e, c), o.dir))));
   }

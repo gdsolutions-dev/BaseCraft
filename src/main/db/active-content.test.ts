@@ -8,7 +8,9 @@ import { saveObject } from './objects';
 import { tableDesign } from './schema';
 import { seedSales } from '../query/test-db';
 import { autoForm, emptyFormDoc } from '../../renderer/form/form-def';
-import type { MacroDef } from '../../shared/macro/model';
+import type { DesignDoc } from '../../shared/design/model';
+import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
+import type { MacroDef, MacroItem } from '../../shared/macro/model';
 import { activeContent } from './active-content';
 import { ApprovalStore, contentState } from '../trust';
 
@@ -84,4 +86,61 @@ it('a form event property counts', () => {
   doc.sections[1]!.controls[0]!.props.OnClick = 'M2';
   expect(saveObject(db, 'form', 'F', doc, 'F')).toEqual({ ok: true });
   expect(activeContent(db).fingerprint).not.toBe(a.fingerprint);
+});
+
+const act = (action: string): MacroItem => ({ k: 'action', action, args: {} });
+/** An empty form whose control B has these properties. */
+const formWith = (props: Record<string, unknown>): DesignDoc => {
+  const doc = emptyFormDoc(null);
+  doc.sections[1]!.controls.push({ kind: 'commandButton', name: 'B', left: 0, top: 0, width: 1000, height: 400, props });
+  return doc;
+};
+/** What a base written by B1 holds: a macro, an action query, a form with one OnClick, a report without events. */
+function seedB1Shaped(): void {
+  save('macro', 'M', { formatVersion: '1.0', items: [{ k: 'action', action: 'OpenForm', args: { FormName: 'FClients' } }] });
+  save('query', 'QMaj', { formatVersion: '1.0', sql: 'UPDATE Clients SET Ville = "Lyon";' });
+  save('form', 'F', formWith({ OnClick: 'M' }));
+  save('report', 'R', FACTURES_REPORT);
+}
+
+// Event catalogue growth (B2) must not move the fingerprint of content B1 could write: the golden value was taken on 2205973, before B2.
+it('B1-shaped content keeps its B1 fingerprint', () => {
+  seedB1Shaped();
+  expect(activeContent(db).fingerprint).toBe('fd09ae43a8113802802ccb1233d4abf3632e697e0dc2a0217a92e61f5fdca5f6');
+});
+
+it('an embedded macro is active content and changes the fingerprint', () => {
+  save('form', 'F2', formWith({ OnClick: { embedded: { formatVersion: '1.0', items: [act('Beep')] } } }));
+  const a = activeContent(db).fingerprint;
+  expect(saveObject(db, 'form', 'F2', formWith({ OnClick: { embedded: { formatVersion: '1.0', items: [act('Quit')] } } }), 'F2')).toEqual({ ok: true });
+  expect(activeContent(db).fingerprint).not.toBe(a);
+});
+
+it('a section On Format counts', () => {
+  const report: DesignDoc = structuredClone(FACTURES_REPORT);
+  save('report', 'R', report);
+  expect(activeContent(db).present).toBe(false);
+  const detail = report.sections.find((s) => s.kind === 'detail')!;
+  detail.props.OnFormat = 'M';
+  expect(saveObject(db, 'report', 'R', report, 'R')).toEqual({ ok: true });
+  expect(activeContent(db).present).toBe(true);
+});
+
+// B2 narrowed where some events apply (R2: OnCurrent no longer on reports, OnGotFocus not on the form object, control events
+// on forms only): a value B1 could store there is still active content — no B1 event name drops out of the fingerprint.
+it('event names no longer offered at a place still count there', () => {
+  const report: DesignDoc = structuredClone(FACTURES_REPORT);
+  report.props.OnCurrent = 'M';
+  save('report', 'R', report);
+  expect(activeContent(db).present).toBe(true);
+  db.exec('DELETE FROM bc_objects');
+  const doc = emptyFormDoc(null);
+  doc.props.OnGotFocus = 'M';
+  save('form', 'F', doc);
+  expect(activeContent(db).present).toBe(true);
+  db.exec('DELETE FROM bc_objects');
+  const r2: DesignDoc = structuredClone(FACTURES_REPORT);
+  r2.sections.find((s) => s.controls.length)!.controls[0]!.props.OnClick = 'M';
+  save('report', 'R', r2);
+  expect(activeContent(db).present).toBe(true);
 });

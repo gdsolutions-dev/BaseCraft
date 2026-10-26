@@ -41,6 +41,8 @@ export interface SqlRef { sql: string; params: SqlParam[]; type: FieldType | nul
 export interface SqlCompileCtx {
   fields: SqlField[]; subject?: string /* nom de champ du sujet implicite */; locale: string;
   ref?: (r: { name: string; table?: string }) => SqlRef | null;
+  /** A query's [Forms]! / [Reports]! / [TempVars]! parameter (B2 R11), else null; absent (a filter, a rule): refused. */
+  member?: (m: Extract<Expr, { k: 'member' }>) => SqlRef | null;
   sub?: (q: SelectQuery, mode: 'scalar' | 'exists' | 'in') => SqlFragment;
   argType?: (e: Expr) => { type: FieldType | null; props?: FieldProps };
   aggregate?: boolean;
@@ -281,9 +283,10 @@ export function compileValue(e: Expr, ctx: SqlCompileCtx): SqlFragment {
   const params: SqlParam[] = [];
   const P = (v: SqlParam): string => { params.push(v); return '?'; };
   const splice = (f: SqlFragment): string => { params.push(...f.params); return f.sql; };
+  const bound = (ref: SqlRef): string => (ref.type === null ? splice(ref) : `bc_val(${P(ref.type)}, ${splice(ref)})`);
   const column = (r: { name: string; table?: string }): string => {
     const ref = ctx.ref?.(r);
-    if (ref) return ref.type === null ? splice(ref) : `bc_val(${P(ref.type)}, ${splice(ref)})`;
+    if (ref) return bound(ref);
     if (r.table !== undefined) return fail('unknownField');
     const f = ctx.fields.find((x) => sameName(x.name, r.name)) ?? fail('unknownField');
     return `bc_val(${P(f.type)}, ${quoteIdent(f.name)})`;
@@ -330,7 +333,11 @@ export function compileValue(e: Expr, ctx: SqlCompileCtx): SqlFragment {
       case 'in': if (x.list.length > MAX_ARGS) tooComplex(); return `bc_in(${[L(), P(x.not ? 1 : 0), val(x.e), ...x.list.map(val)].join(', ')})`;
       case 'isnull': return `bc_isnull(${P(x.not ? 1 : 0)}, ${val(x.e)})`;
       case 'star': return fail('aggregateContext');
-      case 'member': throw new ExprSyntaxError('memberNotAllowed', { start: 0, end: 0 }); // B2: [Forms]! criteria become parameters
+      case 'member': { // a query's [Forms]! / [Reports]! / [TempVars]! parameter (B2 R11); refused anywhere else (filter, rule)
+        const ref = ctx.member?.(x);
+        if (!ref) throw new ExprSyntaxError('memberNotAllowed', { start: 0, end: 0 });
+        return bound(ref);
+      }
       case 'call': {
         if (AGGREGATES.has(x.name)) {
           if (!ctx.aggregate || inAggregate) fail('aggregateContext');

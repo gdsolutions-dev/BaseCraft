@@ -24,14 +24,16 @@ interface Props { state: AppState; readOnly: boolean; dispatch: AppDispatch; onC
 export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
   const { t } = useTranslation();
   const modalTab = useModalTab();   // a Query Builder: its tab is the only one that answers until it closes
-  if (!state.tabs.length) {
+  const tabs = state.tabs.filter((x) => !x.dialog);   // a dialog form is shown by DialogHost (R12), not as a tab
+  const front = frontTabId(state);
+  if (!tabs.length) {
     return <main className="docs card"><div className="doc-empty muted">{t('nav.openHint')}</div></main>;
   }
   return (
     <main className="docs card">
       <div className="dtabs" role="tablist">
-        {state.tabs.map((x) => {
-          const active = !modalTab && x.id === state.activeId;
+        {tabs.map((x) => {
+          const active = !modalTab && x.id === front;
           const Icon = DOC_ICONS[x.kind];
           const kind = t(`tabs.kind.${x.kind}`);
           const tid = docTabId(x);
@@ -68,15 +70,23 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
         // aria-modal: the designers' keys stand back, as for a dialog (the shell's shortcuts serve the tab: dialogInFront)
         <section ref={setModalTabSlot} id={`${modalTab.testId}-panel`} role="dialog" aria-modal="true" aria-labelledby={`${modalTab.testId}-tab`} className="doc modal-tab-panel" />
       )}
-      {state.tabs.map((x) => (
-        // every document stays mounted (pending edits survive a tab switch); only the active one is shown
-        <section key={x.id} id={`doc-${x.id}`} role="tabpanel" className="doc" hidden={!!modalTab || x.id !== state.activeId}>
-          <DocumentView tab={x} active={x.id === state.activeId} readOnly={readOnly} dispatch={dispatch}
+      {tabs.map((x) => (
+        // every document stays mounted (pending edits survive a tab switch); only the active one is shown. Under a dialog its
+        // opener stays active: its dialog closing is no coming back to it (no reading again under a macro's SetValue that follows)
+        <section key={x.id} id={`doc-${x.id}`} role="tabpanel" className="doc" hidden={!!modalTab || x.id !== front}>
+          <DocumentView tab={x} active={x.id === front} readOnly={readOnly} dispatch={dispatch}
             designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
         </section>
       ))}
     </main>
   );
+}
+
+/** The tab shown in front: the active one, or under a dialog form the tab that opened the first dialog (R12). */
+function frontTabId(state: AppState): string | null {
+  let tab = state.tabs.find((x) => x.id === state.activeId);
+  while (tab?.dialog) { const opener = tab.openerId; tab = state.tabs.find((x) => x.id === opener); }
+  return tab?.id ?? null;
 }
 
 /** The name of the document that opened the Query Builder (the active one), as its tab shows it. */

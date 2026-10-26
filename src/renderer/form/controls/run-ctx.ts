@@ -3,6 +3,7 @@
 import type { TFunction } from 'i18next';
 import type { CSSProperties, FocusEvent, KeyboardEvent, RefObject } from 'react';
 import type { CellInput, SqlValue } from '../../../shared/coerce';
+import type { EventName } from '../../../shared/design/events';
 import type { ControlDef } from '../../../shared/design/model';
 import type { Value } from '../../../shared/expr/ast';
 import { infoOf, num, str, toText } from '../../../shared/expr/library';
@@ -30,7 +31,11 @@ export interface RunCtx {
   edit(f: SourceField, input: CellInput): void;
   unbound: Record<string, UnboundValue>;   // unbound inputs' values, by control name (kept across records)
   editUnbound(c: ControlDef, value: Value, text?: string): void;
-  events(c: ControlDef): { onFocus(): void; onBlur(e: FocusEvent): void; onKeyDown(e: KeyboardEvent): void };
+  events(c: ControlDef): { onFocus(): void; onBlur(e: FocusEvent): void; onKeyDown(e: KeyboardEvent): void; onClick?(e?: { detail: number }): void; onDoubleClick?(): void };
+  /** The form's event (no control) or the control's, after those raised before it; resolves true when its macro cancels it. */
+  raise(event: EventName, control?: string): Promise<boolean>;
+  input(c: ControlDef): void;                  // typed in a text box or a combo: On Change, its update events when it is left
+  update(c: ControlDef, apply: () => void): void;   // a value chosen at once (check box, option group, list, a combo's pick): Before / After Update
   pages: Record<string, number>;          // the page shown of each tab control (the first by default)
   setPage(tabControl: string, page: number): void;
   lists: Record<string, ListState>;       // each combo and list box's rows, by control name (absent until read)

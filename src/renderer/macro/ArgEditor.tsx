@@ -80,7 +80,7 @@ export function ArgEditor({ path, action, def, args, ctx }: { path: ItemPath; ac
       return <ComboBox id={id} testId={id} label={t(`macro.arg.${def.name}`)} value={value ?? ''} disabled={ctx.readOnly}
         options={names.map((n) => ({ id: n, label: n }))} onChange={set} />;
     }
-    case 'expression':
+    case 'expression': case 'reference':   // a reference is an expression naming a control or field
       return <ExprInput id={id} testId={id} value={value} ctx={ctx} onCommit={set} />;
     case 'where':
       return <WhereField id={id} testId={id} value={value} action={action} args={args} ctx={ctx} onCommit={set} />;

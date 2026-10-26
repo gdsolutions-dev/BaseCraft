@@ -23,7 +23,8 @@ export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { render
   const ev = x.events(c);
   const choose = (k: ControlDef) => {
     if (readOnly || disabled || prop(k, 'Enabled') === false) return;
-    if (unbound) x.editUnbound(c, num(k.props.OptionValue as number)); else if (b) x.edit(b.f, k.props.OptionValue as number);
+    if (chosen === k.name) return;
+    x.update(c, () => { if (unbound) x.editUnbound(c, num(k.props.OptionValue as number)); else if (b) x.edit(b.f, k.props.OptionValue as number); });
   };
   const keys = (e: KeyboardEvent, i: number) => {
     const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;

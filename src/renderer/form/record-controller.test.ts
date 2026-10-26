@@ -510,3 +510,115 @@ describe('type-ahead (keys typed while a move asked by the user is under way)', 
     expect(got[0].text).toHaveLength(64);
   });
 });
+
+describe('record events, applied filter, find', () => {
+  it('BeforeUpdate false refuses the save and keeps the entry', async () => {
+    const r = await opened({ info: commandes, rows: [[1, 1, 2, 100]], events: { beforeUpdate: async () => false } });
+    r.edit('Montant', '5000');
+    expect(await r.save()).toBe(false); expect(api.updates).toEqual([]);
+    expect(r.snapshot).toMatchObject({ dirty: true, refusedByEvent: true, index: 0 });
+    expect(await r.next()).toBe(false); expect(r.snapshot.index).toBe(0);
+    r.edit('Montant', '6000'); expect(r.snapshot.refusedByEvent).toBe(false);
+  });
+  it('a value set during BeforeUpdate is sent', async () => {
+    let r!: FormRecords;
+    r = await opened({ events: { beforeUpdate: async () => { r.edit('Ville', 'Brest', { silent: true }); return true; } } });
+    r.edit('Nom', 'X'); expect(await r.save()).toBe(true);
+    expect(api.updates).toEqual([['Clients', 1, { Nom: 'X', Ville: 'Brest' }]]);
+  });
+  it('order: before update, write, after update, after insert', async () => {
+    const log: string[] = [];
+    const r = await opened({ events: { beforeUpdate: async () => { log.push('beforeUpdate'); return true; }, afterUpdate: async () => { log.push('afterUpdate'); },
+      afterInsert: async () => { log.push('afterInsert'); } } });
+    const real = api.insert; api.insert = async (t, v) => { log.push('insert'); return real(t, v); };
+    await r.newRecord(); r.edit('Nom', 'Neuf'); expect(await r.save()).toBe(true);
+    expect(log).toEqual(['beforeUpdate', 'insert', 'afterUpdate', 'afterInsert']);
+    log.length = 0; r.edit('Nom', 'Autre'); expect(await r.save()).toBe(true);
+    expect(log).toEqual(['beforeUpdate', 'afterUpdate']);
+  });
+  it('BeforeInsert on the first change of the new record; false undoes it', async () => {
+    let n = 0; let answer = true;
+    const r = await opened({ events: { beforeInsert: async () => { n++; return answer; } } });
+    r.edit('Nom', 'x'); await tick(); expect(n).toBe(0);   // an existing record
+    r.undoRecord(); await r.newRecord();
+    r.edit('Nom', 'a'); r.edit('Nom', 'ab'); await tick(); expect(n).toBe(1); expect(r.snapshot.dirty).toBe(true);
+    r.undoRecord(); answer = false;
+    r.edit('Nom', 'b'); await tick(); expect(n).toBe(2); expect(r.snapshot.dirty).toBe(false);
+    r.edit('Nom', 'c', { silent: true }); await tick(); expect(n).toBe(2); expect(r.snapshot.dirty).toBe(true);
+  });
+  it('BeforeInsert cancelled while a save is asked: refused meanwhile, nothing is inserted', async () => {
+    const gate = deferred<boolean>();
+    const r = await opened({ events: { beforeInsert: () => gate.promise } });
+    await r.newRecord(); r.edit('Nom', 'a');
+    await expect(r.save()).rejects.toThrow('bc:saveDuringEvent');   // BeforeInsert is being awaited
+    gate.resolve(false); await tick();
+    expect(await r.save()).toBe(true); expect(api.inserts).toEqual([]); expect(r.snapshot.dirty).toBe(false);
+  });
+  it('current after open, moves and delete', async () => {
+    let n = 0;
+    const r = await opened({ events: { current: () => { n++; } } });
+    expect(n).toBe(1); await r.next(); expect(n).toBe(2);
+    await r.deleteCurrent(); expect(n).toBe(3);
+    await r.goTo(r.snapshot.index); expect(n).toBe(4); await r.goTo(99); expect(n).toBe(4);
+  });
+  it('applied filter is ANDed with the opening where', async () => {
+    const r = await opened({ where: '[Ville] = "Lyon"' });
+    expect(await r.setAppliedFilter('[Nom] Like "M*"')).toBe(true);
+    expect(api.lastPage.where).toBe('([Ville] = "Lyon") And ([Nom] Like "M*")'); expect(r.snapshot.appliedFilter).toBe('[Nom] Like "M*"');
+    await r.setAppliedFilter(null); expect(api.lastPage.where).toBe('[Ville] = "Lyon"'); expect(r.snapshot.appliedFilter).toBeNull();
+    const s = await opened(); await s.setAppliedFilter('[Nom] Like "M*"'); expect(api.lastPage.where).toBe('[Nom] Like "M*"');
+    await s.setAppliedFilter(null); expect(api.lastPage.where).toBeUndefined();
+  });
+  it('the applied filter saves first; refused, it is not applied', async () => {
+    const r = await opened({ events: { beforeUpdate: async () => false } });
+    r.edit('Nom', 'x'); expect(await r.setAppliedFilter('[Nom] = "x"')).toBe(false); expect(r.snapshot.appliedFilter).toBeNull();
+  });
+  it('find wraps around in the form\'s order', async () => {
+    const r = await opened({ rows: [[1, 'A', ''], [2, 'B', ''], [3, 'C', ''], [4, 'D', ''], [5, 'E', '']] });
+    const isB = (row: SqlValue[]) => row[1] === 'B';
+    expect(await r.find(isB, { from: 3, dir: 'all' })).toBe(1);
+    expect(await r.find(isB, { from: 3, dir: 'down' })).toBeNull();
+    expect(await r.find(isB, { from: 3, dir: 'up' })).toBe(1);
+    expect(await r.find(isB, { from: 1, dir: 'up' })).toBeNull();
+    expect(await r.find(isB, { from: 1, dir: 'all' })).toBe(1);
+    expect(await r.find((row) => row[1] === 'Z', { from: 0, dir: 'all' })).toBeNull();
+  });
+  it('After events run once the save is over: a requery or a move in them goes through', async () => {
+    let r!: FormRecords;
+    r = await opened({ events: { afterInsert: async () => { expect(await r.requery()).toBe(true); } } });
+    await r.newRecord(); r.edit('Nom', 'Neuf'); expect(await r.save()).toBe(true);
+    expect(r.snapshot).toMatchObject({ index: 0, isNew: false, total: 4 });
+    let u!: FormRecords;
+    u = await opened({ events: { afterUpdate: async () => { expect(await u.next()).toBe(true); } } });
+    u.edit('Nom', 'X'); expect(await u.save()).toBe(true); expect(u.snapshot.index).toBe(1);
+  });
+  it('a failing After event leaves the save done', async () => {
+    const r = await opened({ events: { afterUpdate: async () => { throw new Error('macro'); } } });
+    r.edit('Nom', 'X'); expect(await r.save()).toBe(true); expect(r.snapshot.dirty).toBe(false);
+  });
+  it('After events are skipped when another record became current meanwhile', async () => {
+    let n = 0;
+    const r = await opened({ events: { afterUpdate: async () => { n++; } } });
+    const release = hold('update'); r.edit('Nom', 'X');
+    const s = r.save(); await tick(); expect(await (r as unknown as { place(i: number): Promise<boolean> }).place(1)).toBe(true); release(); expect(await s).toBe(true);
+    expect(n).toBe(0);
+  });
+  it('a save, move, requery or delete inside a Before event rejects bc:saveDuringEvent', async () => {
+    let r!: FormRecords; const inner: unknown[] = [];
+    let answer = true;
+    const tryAll = async () => {
+      expect(r.inBeforeEvent).toBe(true);
+      for (const f of [() => r.save(), () => r.goTo(1), () => r.requery(), () => r.deleteCurrent()])
+        inner.push(await f().then(() => 'resolved', (e: unknown) => String(e)));
+      return answer;
+    };
+    r = await opened({ events: { beforeUpdate: tryAll, beforeInsert: tryAll } });
+    r.edit('Nom', 'X'); expect(await r.save()).toBe(true); expect(api.updates).toHaveLength(1);
+    expect(inner).toEqual(Array(4).fill('Error: bc:saveDuringEvent')); expect(r.inBeforeEvent).toBe(false);
+    answer = false; r.edit('Nom', 'Y'); expect(await r.save()).toBe(false); expect(r.snapshot.refusedByEvent).toBe(true);
+    r.undoRecord(); inner.length = 0; answer = true; await r.newRecord();
+    r.edit('Nom', 'Z'); await tick(); expect(r.inBeforeEvent).toBe(false);
+    expect(inner).toEqual(Array(4).fill('Error: bc:saveDuringEvent'));   // from BeforeInsert
+    expect(await r.save()).toBe(true); expect(api.inserts).toHaveLength(1);
+  });
+});

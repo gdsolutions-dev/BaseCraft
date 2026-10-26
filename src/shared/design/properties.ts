@@ -12,7 +12,9 @@ export type PropertyEditorKind = 'text' | 'number' | 'twips' | 'bool' | 'enum' |
 export type DefaultKey = PropertyTarget | `${'form' | 'report'}:${SectionKind | ControlKind}`;
 export interface PropertyDescriptor { name: string; tab: 'format' | 'data' | 'event' | 'other'; editor: PropertyEditorKind;
   appliesTo: PropertyTarget[]; default?: unknown; defaults?: Partial<Record<DefaultKey, unknown>>;
-  options?: string[]; min?: number; max?: number; integer?: boolean /* a whole number (Access) */; labelKey: string /* prop.<Nom> */ }
+  options?: string[]; min?: number; max?: number; integer?: boolean /* a whole number (Access) */; labelKey: string /* prop.<Nom> */
+  /** The kind of object the property belongs to; absent: both. A section kind is shared by forms and reports (`detail`): this tells them apart. */
+  objects?: ('form' | 'report')[] }
 
 /** The default of `d` for one target, the most specific first: `<objectKind>:<target>`, then `<target>`, then `default`.
  *  Access defaults differ by control kind and between forms and reports. */
@@ -31,17 +33,22 @@ const BORDERED: ControlKind[] = ['label', 'textBox', 'checkBox', 'comboBox', 'li
 const INPUTS: ControlKind[] = [...BOUND, 'commandButton'];
 const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'image', 'tabControl'];
 const FOCUSABLE: ControlKind[] = [...INPUTS, 'optionButton', 'subform']; // Enter/Exit: the option group has them, the tab control does not
-// Got/Lost Focus: the option group itself has none (its buttons do)
-const GOT_FOCUS: PropertyTarget[] = ['form', 'textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton'];
+// Got/Lost Focus: the option group itself has none (its buttons do), nor the form (Access fires them only when no control can take the focus)
+const GOT_FOCUS: PropertyTarget[] = ['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton'];
 /** Page header and footer can neither grow, shrink, keep together nor force a page (as in Access). */
 const FLOWING: SectionKind[] = SECTION_KINDS.filter((s) => s !== 'pageHeader' && s !== 'pageFooter');
+/** The report sections that fire On Format and On Print. */
+const REPORT_SECTIONS: SectionKind[] = ['reportHeader', 'pageHeader', 'groupHeader', 'detail', 'groupFooter', 'pageFooter', 'reportFooter'];
 const each = <T>(keys: DefaultKey[], v: T): Partial<Record<DefaultKey, T>> => Object.fromEntries(keys.map((k) => [k, v]));
 
 type Tab = PropertyDescriptor['tab'];
-type Extra = Pick<PropertyDescriptor, 'options' | 'min' | 'max' | 'integer' | 'defaults'>;
+type Extra = Pick<PropertyDescriptor, 'options' | 'min' | 'max' | 'integer' | 'defaults' | 'objects'>;
 const p = (name: string, tab: Tab, editor: PropertyEditorKind, appliesTo: PropertyTarget[], def?: unknown, extra: Extra = {}): PropertyDescriptor => ({
   name, tab, editor, appliesTo, ...(def === undefined ? {} : { default: def }), ...extra, labelKey: `prop.${name}`,
 });
+
+/** Control events fire in Form view only: a report control has none (Global Constraints). */
+const FORM_ONLY: Extra = { objects: ['form'] };
 
 export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   // Format
@@ -114,23 +121,27 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('TabIndex', 'other', 'number', [...INPUTS, 'subform'], undefined, { min: 0, integer: true }),
   p('ControlTipText', 'other', 'text', [...CONTROL_KINDS]),
   p('StatusBarText', 'other', 'text', INPUTS),
-  // Events (read-only in A4, proprietes.md section 9); one descriptor per name, targets as in Access
+  // Events (A4: read-only, proprietes.md section 9; B2: the closed list of events.ts, rulings R2); one descriptor per name, targets as in Access.
+  // OnLoad and OnCurrent fire in a report's Report view only, which BaseCraft does not have: forms only.
   p('OnOpen', 'event', 'event', ['form', 'report']),
-  p('OnLoad', 'event', 'event', ['form', 'report']),
-  p('OnCurrent', 'event', 'event', ['form', 'report']),
+  p('OnLoad', 'event', 'event', ['form']),
+  p('OnCurrent', 'event', 'event', ['form']),
   p('OnClose', 'event', 'event', ['form', 'report']),
   p('BeforeInsert', 'event', 'event', ['form']),
   p('AfterInsert', 'event', 'event', ['form']),
-  p('BeforeUpdate', 'event', 'event', ['form', ...BOUND, 'optionButton']),
-  p('AfterUpdate', 'event', 'event', ['form', ...BOUND, 'optionButton']),
+  p('BeforeUpdate', 'event', 'event', ['form', ...BOUND, 'optionButton'], undefined, FORM_ONLY),
+  p('AfterUpdate', 'event', 'event', ['form', ...BOUND, 'optionButton'], undefined, FORM_ONLY),
   p('OnDelete', 'event', 'event', ['form']),
-  p('OnClick', 'event', 'event', ['form', ...CLICKABLE]),
-  p('OnDblClick', 'event', 'event', ['form', ...CLICKABLE]),
-  p('OnEnter', 'event', 'event', FOCUSABLE),
-  p('OnExit', 'event', 'event', FOCUSABLE),
-  p('OnGotFocus', 'event', 'event', GOT_FOCUS),
-  p('OnLostFocus', 'event', 'event', GOT_FOCUS),
-  p('OnChange', 'event', 'event', ['textBox', 'comboBox', 'tabControl']),
+  p('OnClick', 'event', 'event', ['form', ...CLICKABLE], undefined, FORM_ONLY),
+  p('OnDblClick', 'event', 'event', ['form', ...CLICKABLE], undefined, FORM_ONLY),
+  p('OnEnter', 'event', 'event', FOCUSABLE, undefined, FORM_ONLY),
+  p('OnExit', 'event', 'event', FOCUSABLE, undefined, FORM_ONLY),
+  p('OnGotFocus', 'event', 'event', GOT_FOCUS, undefined, FORM_ONLY),
+  p('OnLostFocus', 'event', 'event', GOT_FOCUS, undefined, FORM_ONLY),
+  p('OnChange', 'event', 'event', ['textBox', 'comboBox', 'tabControl'], undefined, FORM_ONLY),
+  p('OnNoData', 'event', 'event', ['report']),
+  p('OnFormat', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
+  p('OnPrint', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
 ];
 
 export const propertiesFor = (target: PropertyTarget): PropertyDescriptor[] => PROPERTY_CATALOG.filter((x) => x.appliesTo.includes(target));

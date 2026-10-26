@@ -229,6 +229,14 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commands.filter((c) => c.planned === 'B1').map((c) => c.id)).toEqual([]);
   });
 
+  it('B2 leaves no B2 placeholder; the Event tab is delivered in place', () => {
+    expect(commands.filter((c) => c.planned === 'B2').map((c) => c.id)).toEqual([]);
+    expect((fr.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
+    expect((en.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
+    const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual(['B4', 'D', 'D']);   // still planned after B2
+  });
+
   it('every tab, group and command has a French and an English label; every batch has its tooltip', () => {
     const keys = [
       ...RIBBON.map((t) => t.labelKey), ...RIBBON.flatMap((t) => t.groups.map((g) => g.labelKey)), ...commands.map((c) => c.labelKey),
@@ -475,6 +483,8 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(tab.every((c) => !c.enabled(ctx({ kind: 'form', mode: 'design' })))).toBe(true);
     cleanups.push(registerCommandStates('m1', {}));
     expect(commandEnabled('expandActions', ctx({ kind: 'macro', mode: 'design' }))).toBe(true);
+    // an embedded macro (R16): no Run, no Single Step, the rest as usual
+    expect(ids.filter((id) => commandEnabled(id, ctx({ kind: 'macro', mode: 'design', embedded: true })))).toEqual(ids.filter((id) => id !== 'macroRun' && id !== 'singleStep'));
   });
 
   it('View › Form View (A4): a saved form, in Design or Datasheet view; active in Form view', () => {

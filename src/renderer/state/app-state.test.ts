@@ -199,4 +199,57 @@ describe('appReducer', () => {
     s = appReducer(s, { type: 'objectDeleted', kind: 'macro', name: 'MSon' });
     expect(s.tabs.map((x) => `${x.kind}:${x.name}`)).toEqual(['table:Clients', 'table:MBip']);
   });
+  it('OpenForm in Dialog mode (R12): a dialog tab, made active, remembering its opener; closing it activates the opener again', () => {
+    const dialog = { type: 'open', kind: 'form', name: 'FChoix', mode: 'run', args: { windowMode: 'dialog' } } as const;
+    let s = appReducer(appReducer(init, { type: 'open', kind: 'form', name: 'FMenu', mode: 'run' }), { type: 'open', kind: 'table', name: 'Clients', mode: 'datasheet' });
+    s = appReducer(s, { type: 'activate', id: s.tabs[0].id });
+    const opener = s.activeId;
+    s = appReducer(s, dialog);
+    expect(s.tabs[2]).toMatchObject({ name: 'FChoix', dialog: true, openerId: opener });
+    expect(s.activeId).toBe(s.tabs[2].id);
+    // an open form (here the dialog itself, after its opener is activated) is only activated: no second tab, no reload
+    const dlg = s.tabs[2];
+    const again = appReducer(appReducer(s, { type: 'activate', id: opener! }), dialog);
+    expect(again.tabs).toEqual(s.tabs);
+    expect(again.activeId).toBe(dlg.id);
+    const plain = appReducer(s, { ...dialog, name: 'FMenu' });
+    expect(plain.tabs).toEqual(s.tabs);
+    expect(plain.tabs[0].dialog).toBeUndefined();
+    expect(plain.activeId).toBe(opener);
+    // closed: its opener is active again (not its right / left neighbour); the opener gone, the usual neighbour
+    expect(appReducer(s, { type: 'close', id: dlg.id }).activeId).toBe(opener);
+    expect(appReducer(appReducer(s, { type: 'close', id: opener! }), { type: 'close', id: dlg.id }).activeId).toBe(s.tabs[1].id);
+  });
+  it('OpenForm in Dialog mode of a form open in Design view: its tab switches to Form view, not a dialog (it cannot only be activated)', () => {
+    let s = appReducer(init, { type: 'open', kind: 'form', name: 'FChoix', mode: 'design' });
+    const id = s.tabs[0].id;
+    s = appReducer(s, { type: 'open', kind: 'form', name: 'FChoix', mode: 'run', args: { windowMode: 'dialog', where: '[N°] = 1' } });
+    expect(s.tabs).toHaveLength(1);
+    expect(s.tabs[0]).toMatchObject({ id, mode: 'run', openArgs: { where: '[N°] = 1' } });
+    expect(s.tabs[0].dialog).toBeUndefined();
+    expect(s.tabs[0].openArgs?.windowMode).toBeUndefined();
+    expect(s.activeId).toBe(id);
+  });
+  it('embedded macros (R16): a tab of their own, owned by a design; closing the owner or changing its mode closes them', () => {
+    let s = appReducer(init, { type: 'open', kind: 'form', name: 'FClients', mode: 'design' });
+    const owner = s.tabs[0].id;
+    const emb = { type: 'open', kind: 'macro', name: 'FClients : Formulaire : Avant MAJ', mode: 'design', embedded: { id: 'e1', owner } } as const;
+    s = appReducer(s, emb);
+    expect(s.tabs[1]).toMatchObject({ kind: 'macro', mode: 'design', name: 'FClients : Formulaire : Avant MAJ', embedded: 'e1', openerId: owner });
+    s = appReducer(s, { type: 'open', kind: 'macro', name: 'FClients : Formulaire : Avant MAJ', mode: 'design' });   // a saved macro of that name is another tab
+    expect(s.tabs).toHaveLength(3);
+    s = appReducer(s, { type: 'activate', id: owner });
+    s = appReducer(s, emb);   // the same session: its tab is activated
+    expect(s.tabs).toHaveLength(3);
+    expect(s.activeId).toBe(s.tabs[1].id);
+    expect(appReducer(s, { type: 'close', id: owner }).tabs.map((x) => x.embedded ?? x.name)).toEqual(['FClients : Formulaire : Avant MAJ']);
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'run' }).tabs.map((x) => x.embedded ?? x.mode)).toEqual(['run', 'design']);
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'design' }).tabs).toHaveLength(3);   // no change of mode: kept
+    // an Open in another mode (Navigation Pane « Open », a macro's OpenForm) closes them too; in the same mode, kept
+    const opened = appReducer(s, { type: 'open', kind: 'form', name: 'FClients', mode: 'run' });
+    expect(opened.tabs.map((x) => x.embedded ?? x.mode)).toEqual(['run', 'design']);
+    expect(opened.activeId).toBe(owner);
+    expect(appReducer(s, { type: 'open', kind: 'form', name: 'FClients', mode: 'design' }).tabs).toHaveLength(3);
+    expect(appReducer(s, { type: 'close', id: s.tabs[1].id }).tabs.map((x) => x.id)).toEqual([owner, s.tabs[2].id]);
+  });
 });

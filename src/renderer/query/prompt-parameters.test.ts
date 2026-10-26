@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
+import { num } from '../../shared/expr/library';
 import { defaultProps } from '../../shared/field-types';
+import { registerForm, type FormInstance } from '../form/form-instances';
+import { tempVars } from '../macro/temp-vars';
 import { localeInfo } from '../../shared/locale-format';
 import { i18n } from '../i18n';
 import type { ModalApi, PromptOptions } from '../shell/Modal';
@@ -53,4 +56,20 @@ it('cancel on a later prompt returns null and asks no more', async () => {
   const m = fakeModal(['a', null, 'c']);
   expect(await promptParameters(m, [{ name: 'A', type: null }, { name: 'B', type: null }, { name: 'C', type: null }], fr)).toBeNull();
   expect(m.labels).toEqual(['A', 'B']);
+});
+
+it('fills form references and TempVars, asks the rest', async () => {
+  const form = { name: 'FClients', tabId: 't1', value: (c: string) => (c === 'N°' ? num(2) : null) } as unknown as FormInstance;
+  const off = registerForm(form);
+  tempVars.set('seuil', num(50));
+  const m = fakeModal(['01/10/2026']);
+  const out = await promptParameters(m, [{ name: '[Forms]![FClients]![N°]', type: 'number' }, { name: 'Date début :', type: 'dateTime' },
+    { name: '[TempVars]![Seuil]', type: 'currency' }, { name: '[TempVars]![Absente]', type: null }], fr);
+  expect(m.labels).toEqual(['Date début :']);
+  expect(out).toEqual({ '[Forms]![FClients]![N°]': 2, 'Date début :': '01/10/2026', '[TempVars]![Seuil]': 50, '[TempVars]![Absente]': null });
+  off();
+  tempVars.clear();
+  const closed = fakeModal(['3']);
+  expect(await promptParameters(closed, [{ name: '[Forms]![FClients]![N°]', type: 'number' }], fr)).toEqual({ '[Forms]![FClients]![N°]': '3' });
+  expect(closed.labels).toEqual(['[Forms]![FClients]![N°]']); // not open: asked, the reference as its label (Access)
 });

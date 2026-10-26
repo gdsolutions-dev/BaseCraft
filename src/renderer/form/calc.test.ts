@@ -208,3 +208,15 @@ describe('unbound controls', () => {
       .toEqual({ Remise: num(2), Oui: bool(true), Vide: null, Faux: null });
   });
 });
+
+describe('[Forms]! and [TempVars]! in a form (B2 R11)', () => {
+  const member = (p: string[]) => (p[0] === 'Forms' ? str(`${p[1]}.${p[2]}`) : num(7));
+  it('calculated controls, default values and rules read them through the member option', async () => {
+    const base = { ...env(), member };
+    const r = await buildCalcEnv([calcCtl('=[Forms]![FClients]![Nom] & [TempVars]![x]')], infoWith(), {}, {}, base);
+    expect(r.results.T).toMatchObject({ ok: true, text: 'FClients.Nom7' });
+    expect(await unboundDefaults([ctl({ DefaultValue: '[TempVars]![x] + 1' })], base)).toEqual({ T: num(8) });
+    expect(await checkControlRule(ctl({ ValidationRule: '<[TempVars]![x]' }), num(9), infoWith(), base)).not.toBeNull();
+    expect((await buildCalcEnv([calcCtl('=[TempVars]![x]')], infoWith(), {}, {}, env())).results.T).toEqual({ ok: false, code: 'name' });   // no member: #Nom?
+  });
+});

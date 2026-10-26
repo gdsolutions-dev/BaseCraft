@@ -57,7 +57,7 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
   }, [open, shown.length]);
   useLayoutEffect(() => { if (active) document.getElementById(optId(active))?.scrollIntoView({ block: 'nearest' }); });
 
-  const pick = (o: ComboOption) => listChoose(c, x, Number(o.id), o.label);
+  const pick = (o: ComboOption) => x.update(c, () => listChoose(c, x, Number(o.id), o.label));
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (locked) return;
     const t = e.target.value;
@@ -67,6 +67,7 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
     setS({ ...typed(options, t), active: k });
     tail.current = k >= 0 ? t.length : null;
     listChoose(c, x, k >= 0 ? Number(narrowed[k].id) : rowOfText(list.data, t), t);
+    x.input(c);
   };
   const toggle = () => setS(open ? CLOSED : { open: true, filter: null, active: row });
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -79,7 +80,7 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
       if (r.pick) pick(r.pick);
       else if (s.open && r.state.open && r.state.active !== s.active) {   // the arrows in the open list choose as they go (Access)
         const o = visibleOptions(options, r.state.filter)[r.state.active];
-        if (o) pick(o);
+        if (o) { listChoose(c, x, Number(o.id), o.label); x.input(c); }   // its update events when it is left, as a typed text
       }
       return;
     }

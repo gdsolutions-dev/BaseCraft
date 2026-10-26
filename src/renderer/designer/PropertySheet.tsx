@@ -2,21 +2,28 @@
 // onglets Format / Données / Événement / Autres / Toutes, un éditeur par propriété du catalogue (data-testid prop-<Nom>).
 // Une valeur refusée reste dans l'éditeur avec son message (role="alert") et le document ne change pas. Un brouillon encore ouvert quand
 // sa ligne disparaît (autre sélection, autre onglet) est validé ; refusé, il est signalé en tête de la feuille (sheet-lost).
+// Onglet Événement (B2, R1, R16) : un nom de macro (liste des macros et sous-macros, texte libre) ou « [Macro incorporée] » ; « … » ouvre
+// la macro incorporée (ou une nouvelle) dans son onglet du concepteur de macros, ou la macro nommée en mode Création.
 import { Ellipsis, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { colorCss, isColorValue, THEME_COLORS, type ColorValue } from '../../shared/design/colors';
+import { readEvent } from '../../shared/design/events';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
 import { PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { EMBEDDED_FONTS } from '../../shared/fonts';
 import { sameName } from '../../shared/field-types';
 import { parseNumber } from '../../shared/locale-format';
+import { emptyMacro } from '../../shared/macro/model';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { ExpressionField } from '../expr/ExpressionField';
+import { eventSession, openEmbedded } from '../macro/embedded';
+import { macroNamesWithSubs } from '../macro/macro-shell';
 import { RowSourceBuilder } from '../query/QueryDesignView';
 import { ComboBox } from '../shell/ComboBox';
 import { useModal } from '../shell/Modal';
+import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
   MIXED, readProp, sheetRows, targetKind, targetsOf, toSourceRef, type SheetRow } from './property-sheet-model';
@@ -41,6 +48,24 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
   const targets = useMemo(() => targetsOf(state.selection), [state.selection]);
   const rows = useMemo(() => sheetRows(doc, docKind, targets, tab, readOnly), [doc, docKind, targets, tab, readOnly]);
   const selKey = JSON.stringify(targets);   // une autre sélection, un autre onglet : de nouveaux éditeurs (un brouillon en cours est validé)
+  const [macros, setMacros] = useState<string[]>([]);   // la liste d'une propriété d'événement : les macros et leurs sous-macros
+  useEffect(() => {
+    let current = true;
+    macroNamesWithSubs().then((m) => { if (current) setMacros(m); }, () => { /* une base fermée entre-temps : liste vide */ });
+    return () => { current = false; };
+  }, []);
+  const sectionText = (s: SectionDef, i: number) => (p.sectionLabel ? p.sectionLabel(s, i) : t(`designer.section.${s.kind}`));
+
+  /** « … » d'un événement (R16) : la macro nommée en mode Création ; sinon sa macro incorporée, ou une nouvelle, dans son onglet. */
+  const owner = ctx.owner;
+  const buildEvent = owner && targets.length === 1 ? (d: PropertyDescriptor, value: unknown) => {
+    const b = readEvent(value);
+    if (b.kind === 'macro') { void shellDispatch({ type: 'open', kind: 'macro', name: b.name.split('.')[0]!, mode: 'design' }); return; }
+    const target = targets[0]!;
+    const where = target.kind === 'doc' ? t(`tabs.kind.${docKind}`) : target.kind === 'section' ? sectionText(doc.sections[target.index]!, target.index) : target.name;
+    openEmbedded(shellDispatch, eventSession({ owner: owner.tabId, title: t('macro.embedded.title', { object: owner.name, control: where, event: t(d.labelKey) }),
+      def: b.kind === 'embedded' ? b.def : emptyMacro(), target, event: d.name, doc: owner.doc, dispatch }));
+  } : undefined;
 
   const commit = (d: PropertyDescriptor, v: unknown): string | null => {
     for (const x of targets) { const e = checkPropValue(doc, x, d, v); if (e) return e; }
@@ -87,7 +112,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
       <select className="dz-props-object" data-testid="sheet-object" aria-label={t('sheet.selection')} value={objValue} onChange={(e) => pickObject(e.target.value)}>
         {objValue === 'multi' && <option value="multi" disabled>{t('sheet.multiple')}</option>}
         <option value="doc">{t(`tabs.kind.${docKind}`)}</option>
-        {doc.sections.map((s, i) => <option key={`s${i}`} value={`s:${i}`}>{p.sectionLabel ? p.sectionLabel(s, i) : t(`designer.section.${s.kind}`)}</option>)}
+        {doc.sections.map((s, i) => <option key={`s${i}`} value={`s:${i}`}>{sectionText(s, i)}</option>)}
         {doc.sections.flatMap((s) => flattenControls(s.controls)).map((c) => <option key={`c:${c.name}`} value={`c:${c.name}`}>{c.name}</option>)}
       </select>
       <div className="dz-props-tabs" role="tablist" aria-label={t('sheet.title')} onKeyDown={tabKey}>
@@ -96,12 +121,12 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
             data-testid={`sheet-tab-${x}`} className={`dz-props-tab${tab === x ? ' is-active' : ''}`} onClick={() => setTab(x)}>{t(`sheet.tab.${x}`)}</button>
         ))}
       </div>
-      {tab === 'event' && <p className="dz-props-hint" data-testid="sheet-events-later">{t('sheet.eventsLater')}</p>}
       {lost && <div className="dz-props-lost" role="alert" data-testid="sheet-lost">{t('sheet.lost', { name: lost.label })} {t(lost.msg)}</div>}
       <div className="dz-props-list" role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${tab}`}>
         {rows.map((row) => (
           <PropRow key={`${selKey}:${tab}:${row.d.name}`} row={row} id={`${uid}-${row.d.name}`} ctx={ctx} docKind={docKind} rowSourceTable={rowSourceTable}
-            commit={(v) => commit(row.d, v)} onLost={(msg) => setLost({ label: t(row.d.labelKey), msg })} />
+            commit={(v) => commit(row.d, v)} onLost={(msg) => setLost({ label: t(row.d.labelKey), msg })} macros={macros}
+            buildEvent={buildEvent && ((v) => buildEvent(row.d, v))} />
         ))}
       </div>
     </aside>
@@ -109,9 +134,9 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 }
 
 interface RowProps { row: SheetRow; id: string; ctx: PropertySheetContext; docKind: 'form' | 'report'; rowSourceTable: boolean;
-  commit(v: unknown): string | null; onLost(msg: string): void }
+  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void }
 
-function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowProps) {
+function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent }: RowProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const { d } = row;
@@ -129,7 +154,12 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost }: RowP
 
   let editor: ReactNode;
   if (d.editor === 'event') {
-    editor = <input id={id} data-testid={testId} disabled value="" title={t('sheet.eventsLater')} />;
+    const b = mixed ? null : readEvent(v);
+    const build = buildEvent && { buildTitle: t('sheet.eventBuild'), build: async (s: string) => { buildEvent(s.trim()); return null; } };
+    editor = b?.kind === 'embedded'
+      ? <EmbeddedEditor id={id} testId={testId} disabled={row.readOnly} build={buildEvent && (() => buildEvent(v))} commit={commit} />
+      // a name, or a text kept as imported (R1); typed or picked, it is checked by checkEventValue
+      : field({ shown: b?.kind === 'macro' ? b.name : b?.kind === 'other' ? b.text : '', options: macros, parse: text, ...build });
   } else if (d.name === 'ColumnWidths') {   // descripteur texte, montré en cm et stocké en twips (contrat 1.4)
     editor = field({ shown: columnWidthsToDisplay(typeof v === 'string' ? v : '', region), parse: (s) => {
       const w = columnWidthsToStored(s, region);
@@ -271,6 +301,26 @@ function TextField({ id, testId, label, disabled, mixed, shown, options, parse, 
           onMouseDown={(e) => e.preventDefault()} onClick={() => void openBuilder()}><Ellipsis className="ic ic-sm" aria-hidden /></button>
       )}
       {msg && <div id={msgId} className={error ? 'dz-perror' : 'dz-pnote'} role={error ? 'alert' : undefined} data-testid={`${testId}-${error ? 'error' : 'note'}`}>{t(msg)}</div>}
+    </div>
+  );
+}
+
+/** An embedded macro (R16): shown as « [Macro incorporée] », not typed over; Delete or Backspace clears it after a question. */
+function EmbeddedEditor({ id, testId, disabled, build, commit }: { id: string; testId: string; disabled: boolean; build?(): void; commit(v: unknown): string | null }) {
+  const { t } = useTranslation();
+  const modal = useModal();
+  const clear = async () => {
+    const r = await modal.confirm({ titleKey: 'app.title', messageKey: 'macro.embedded.deleteAsk', buttons: ['yes', 'no'], defaultButton: 'no' });
+    if (r === 'yes') commit(undefined);
+  };
+  return (
+    <div className="dz-pfield">
+      <input id={id} data-testid={testId} disabled={disabled} readOnly value={t('sheet.embeddedMacro')}
+        onKeyDown={(e) => { if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); void clear(); } }} />
+      {build && (
+        <button type="button" className="iconbtn" data-testid={`${testId}-build`} disabled={disabled} aria-label={t('sheet.eventBuild')} title={t('sheet.eventBuild')}
+          onClick={build}><Ellipsis className="ic ic-sm" aria-hidden /></button>
+      )}
     </div>
   );
 }

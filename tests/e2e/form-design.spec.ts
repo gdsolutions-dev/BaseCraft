@@ -111,8 +111,8 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await page.getByTestId('prop-FontName').press('Enter');
     await expect(page.getByTestId('prop-FontName-note')).toHaveText(fr.sheet.fontNotPortable);
     await page.getByTestId('sheet-tab-event').click();
-    await expect(page.getByTestId('sheet-events-later')).toBeVisible();
-    await expect(page.getByTestId('prop-OnClick')).toBeDisabled();
+    await expect(page.getByTestId('prop-OnClick')).toBeEnabled();   // B2: a macro name or an embedded macro
+    await expect(page.getByTestId('prop-OnClick-build')).toBeEnabled();
     await page.getByTestId('sheet-tab-all').click();
 
     // clic droit sur la barre de l'en-tête : En-tête/pied de formulaire les affiche (1 cm)

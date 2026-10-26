@@ -26,13 +26,19 @@ export interface LaidOutReport { width: number; height: number; pages: LaidOutPa
 export interface ReportData { fields: SourceField[]; rows: SqlValue[][] }
 export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; now(): Date; errorText: { error: string; name: string };
   hooks?: LayoutHooks; signal?: AbortSignal; tick?(): Promise<void>;
+  /** [Forms]! / [Reports]! / [TempVars]! in the report's own expressions (absent: unknownField, #Nom?). */
+  member?(path: string[]): Value | Promise<Value>;
   /** The pages laid out so far (one array, growing), after each page of a pass whose count is known; a third pass starts a new array. */
   onPage?(pages: LaidOutPage[]): void }
 export interface SectionEvent { section: SectionKind; groupLevel?: number; formatCount: number; page: number;
   values: Record<string, Value>;          // valeur de chaque contrôle lié, modifiable
   visible: Record<string, boolean>;       // modifiable
-  sectionVisible: boolean; cancel: boolean; height: number /* twips, modifiable dans onFormat */ }
-export interface LayoutHooks { onFormat?(e: SectionEvent): Promise<void>; onPrint?(e: SectionEvent): Promise<void> }   // étape B : jamais fournis en A5
+  sectionVisible: boolean; cancel: boolean; height: number /* twips, modifiable dans onFormat */
+  field(name: string): Value }            // a field of the band's row (Null outside a row); unknown: ExprRuntimeError unknownField
+/** The report's On Format / On Print (B2): a layout without them is the same, byte for byte, as with none. */
+export interface LayoutHooks { onFormat?(e: SectionEvent): Promise<void>; onPrint?(e: SectionEvent): Promise<void>;
+  /** The band about to be formatted, before its values are read (changes nothing: the counting pass keeps its shortcut). */
+  onBand?(e: SectionEvent): void }
 
 /** A failure with no `dialog.error` text: the preview and the print show `report.<code>` (and the invalid paths). */
 export class ReportLoadError extends Error {

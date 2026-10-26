@@ -191,3 +191,9 @@ it('literals are bound parameters', () => {
   expect(c.sql).not.toMatch(/DROP|2\.5/);
   expect(c.params).toContain(2.5);
 });
+it('runs with the parameter value', () => {
+  const c = compile('SELECT [N°] FROM Commandes WHERE Client = [Forms]![FClients]![N°] ORDER BY [N°]', { '[Forms]![FClients]![N°]': 2 });
+  expect(c.sql).not.toMatch(/Forms|FClients/); // the reference reaches SQLite as a bound value, never as text
+  expect(run('SELECT [N°] FROM Commandes WHERE Client = [Forms]![FClients]![N°] ORDER BY [N°]', { '[Forms]![FClients]![N°]': 2 }).flat()).toEqual([3, 5]);
+  expect(run('SELECT [N°] FROM Commandes WHERE Montant > [TempVars]![Seuil]', { '[TempVars]![Seuil]': 50 }).flat()).toEqual([4]);
+});

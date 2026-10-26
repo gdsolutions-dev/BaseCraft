@@ -551,6 +551,7 @@
       "queryBind_duplicateOutput": "La colonne « {{detail}} » figure deux fois dans le résultat : renommez-la avec AS.",
       "queryBind_insertArity": "Le nombre de valeurs à ajouter ne correspond pas au nombre de champs de destination.",
       "queryBind_subqueryArity": "Cette sous-requête doit renvoyer une seule colonne : {{detail}}.",
+      "queryBind_memberNotAllowed": "Une requête ne peut pas utiliser {{detail}} : seules les références [Formulaires]!, [États]! et [VarTemp]! y sont permises.",
       "fontMissing": "Une police intégrée n'a pas pu être chargée : l'état n'a été ni imprimé ni exporté.",
       "printFailed": "L'impression a échoué.",
       "writeFailed": "Impossible d'enregistrer le fichier à cet emplacement.",
@@ -908,6 +909,7 @@
       "maskBadSection": "Sections du masque invalides : la deuxième vaut 0 ou 1, la troisième est un seul caractère.",
       "aggregateContext": "Une fonction d'agrégat (Somme, Compte…) n'est permise que dans une requête Regroupement ou un groupe d'état.",
       "subqueryNotAllowed": "Les sous-requêtes (SELECT …) ne sont pas permises ici.",
+      "notOpen": "« {{name}} » n'est pas ouvert.",
       "memberNotAllowed": "Les références [VarTemp]!, [Formulaires]!… ne sont pas permises ici.",
       "badMember": "Référence invalide : [VarTemp]![Nom], [VarLocales]![Nom], [ErreurMacro]![Nom], [Formulaires]![Formulaire]![Contrôle] ou [États]![État]![Contrôle].",
       "forbiddenStatement": "Instruction interdite : seules les requêtes Sélection, Ajout, Mise à jour, Suppression et Création de table sont acceptées.",
@@ -1440,6 +1442,9 @@
     "OnGotFocus": "Sur réception focus",
     "OnLostFocus": "Sur perte focus",
     "OnChange": "Sur changement",
+    "OnNoData": "Sur aucune donnée",
+    "OnFormat": "Au formatage",
+    "OnPrint": "Sur impression",
     "ColumnHeads": "En-têtes colonnes"
   },
   "propValue": {
@@ -1766,7 +1771,8 @@
       "all": "Toutes"
     },
     "mixed": "Les éléments sélectionnés ont des valeurs différentes",
-    "eventsLater": "Disponible avec les macros (étape B)",
+    "embeddedMacro": "[Macro incorporée]",
+    "eventBuild": "Générer la macro…",
     "yes": "Oui",
     "no": "Non",
     "colors": "Couleurs",
@@ -1781,7 +1787,9 @@
       "unknownField": "Ce champ n'existe pas dans la source.",
       "unknownSource": "Aucune table ni requête ne porte ce nom.",
       "pictureTooLarge": "Image trop volumineuse (1 Mo au plus).",
-      "notInteger": "Entrez un nombre entier."
+      "notInteger": "Entrez un nombre entier.",
+      "badMacroName": "Nom de macro non valide : « Macro » ou « Macro.SousMacro », sans autre point ni crochets.",
+      "badEmbedded": "Macro incorporée non valide."
     },
     "close": "Fermer la feuille de propriétés (F4)",
     "lost": "La valeur de « {{name}} » n'a pas été enregistrée :",
@@ -1818,6 +1826,7 @@
     "controlValidation": "La valeur ne respecte pas la règle de validation de ce contrôle.",
     "invalidDefinition": "La définition de ce formulaire est illisible : il ne peut pas être ouvert.",
     "closeDiscard": "L'enregistrement en cours dans « {{name}} » ne peut pas être enregistré. Fermer quand même ? La saisie sera perdue.",
+    "closeUnsaved": "Impossible d'enregistrer cet enregistrement pour l'instant. Voulez-vous fermer quand même (les modifications seront perdues) ?",
     "list": {
       "truncated": "Liste limitée aux {{count}} premières lignes.",
       "sourceError": "Le contenu de la liste ne peut pas être lu : {{message}}"
@@ -2061,6 +2070,11 @@
     "more": "… et {{count}} autre(s)"
   },
   "macro": {
+    "embedded": {
+      "title": "{{object}} : {{control}} : {{event}}",
+      "deleteAsk": "Supprimer la macro incorporée ?",
+      "ownerGone": "L'objet ou le contrôle de cette macro incorporée n'existe plus : elle ne peut pas être enregistrée."
+    },
     "newName": "Macro{{n}}",
     "action": {
       "Beep": "Bip",
@@ -2082,7 +2096,20 @@
       "SetTempVar": "DéfinirVarTemp",
       "SetWarnings": "Avertissements",
       "StopAllMacros": "ArrêtToutesMacros",
-      "StopMacro": "ArrêtMacro"
+      "StopMacro": "ArrêtMacro",
+      "ApplyFilter": "AppliquerFiltre",
+      "CancelEvent": "AnnulerÉvénement",
+      "DeleteRecord": "SupprimerEnregistrement",
+      "FindRecord": "RechercherEnregistrement",
+      "GoToControl": "AtteindreContrôle",
+      "GoToRecord": "AtteindreEnregistrement",
+      "RefreshRecord": "ActualiserEnregistrement",
+      "Requery": "RéexécuterRequête",
+      "SaveRecord": "SauvegarderEnregistrement",
+      "SetProperty": "DéfinirPropriété",
+      "SetValue": "DéfinirValeur",
+      "ShowAllRecords": "AfficherTousEnreg",
+      "UndoRecord": "AnnulerEnregistrement"
     },
     "arg": {
       "FormName": "Nom du formulaire",
@@ -2105,7 +2132,20 @@
       "GoTo": "Atteindre",
       "QueryName": "Nom de la requête",
       "ReportName": "Nom de l'état",
-      "TableName": "Nom de la table"
+      "TableName": "Nom de la table",
+      "FindWhat": "Rechercher",
+      "Match": "Où",
+      "MatchCase": "Respecter la casse",
+      "Search": "Sens",
+      "OnlyCurrentField": "Champ actif uniquement",
+      "FindFirst": "Trouver le premier",
+      "ControlName": "Nom du contrôle",
+      "Record": "Enregistrement",
+      "Offset": "Décalage",
+      "Property": "Propriété",
+      "Value": "Valeur",
+      "Item": "Élément",
+      "WindowMode": "Mode fenêtre"
     },
     "argValue": {
       "View": { "form": "Formulaire", "datasheet": "Feuille de données", "design": "Création", "preview": "Aperçu", "print": "Imprimer" },
@@ -2114,7 +2154,15 @@
       "Beep": { "yes": "Oui", "no": "Non" },
       "Type": { "none": "Aucun", "critical": "Critique", "warning": "Avertissement", "question": "Question", "information": "Information" },
       "GoTo": { "next": "Suivant", "macroName": "Nom de macro", "fail": "Échec" },
-      "WarningsOn": { "yes": "Oui", "no": "Non" }
+      "WarningsOn": { "yes": "Oui", "no": "Non" },
+      "Record": { "previous": "Précédent", "next": "Suivant", "first": "Premier", "last": "Dernier", "goTo": "Atteindre", "new": "Nouveau" },
+      "Match": { "anywhere": "N'importe où dans le champ", "whole": "Champ entier", "start": "Début de champ" },
+      "MatchCase": { "yes": "Oui", "no": "Non" },
+      "Search": { "up": "Vers le haut", "down": "Vers le bas", "all": "Tout" },
+      "OnlyCurrentField": { "yes": "Oui", "no": "Non" },
+      "FindFirst": { "yes": "Oui", "no": "Non" },
+      "Property": { "enabled": "Activé", "visible": "Visible", "locked": "Verrouillé", "left": "Gauche", "top": "Haut", "width": "Largeur", "height": "Hauteur", "foreColor": "Couleur du texte", "backColor": "Couleur de fond", "caption": "Légende", "value": "Valeur" },
+      "WindowMode": { "normal": "Standard", "dialog": "Boîte de dialogue" }
     },
     "category": {
       "ui": "Commandes d'interface utilisateur",
@@ -2122,7 +2170,8 @@
       "system": "Commandes système",
       "filter": "Filtre/Requête/Recherche",
       "window": "Gestion de fenêtre",
-      "objects": "Objets de base de données"
+      "objects": "Objets de base de données",
+      "dataEntry": "Opérations d'entrée de données"
     },
     "block": {
       "comment": "Commentaire",
@@ -2148,11 +2197,25 @@
       "expression": "Une expression de l'action {{action}} ne peut pas être calculée : {{detail}}",
       "missingArgument": "L'argument « {{detail}} » de l'action {{action}} est obligatoire.",
       "tooDeep": "Trop de macros imbriquées : ExécuterMacro est limité à 20 niveaux.",
+      "eventTooDeep": "Les événements sont imbriqués sur plus de 20 niveaux.",
       "tooManySteps": "La macro a été arrêtée : elle a exécuté plus de 100 000 actions.",
       "badDefinition": "La définition de la macro « {{name}} » n'est pas valide ({{detail}}).",
       "runSqlSelect": "ExécuterSQL attend une requête action (INSERT, UPDATE, DELETE, SELECT … INTO).",
       "actionCancelled": "L'action {{action}} a été annulée.",
-      "actionNotRun": "L'action {{action}} n'a pas été exécutée."
+      "actionNotRun": "L'action {{action}} n'a pas été exécutée.",
+      "propertyNotSupported": "Cette propriété ne peut pas être définie par une macro sur cet objet.",
+      "notOpen": "Le formulaire « {{name}} » n'est pas ouvert.",
+      "noActiveForm": "Aucun formulaire actif.",
+      "cantGoToRecord": "Impossible d'atteindre l'enregistrement spécifié.",
+      "cantFocus": "Ce contrôle ne peut pas recevoir le focus (il est masqué ou désactivé).",
+      "saveRefused": "L'enregistrement n'a pas pu être enregistré.",
+      "badReference": "« {{name}} » ne désigne pas un contrôle d'un formulaire ouvert.",
+      "badValue": "La valeur « {{name}} » ne convient pas à cette propriété.",
+      "findWhatTooLong": "Le texte recherché dépasse 255 caractères.",
+      "saveDuringEvent": "Impossible d'enregistrer ou de changer d'enregistrement pendant l'exécution de cet événement (Avant MAJ, Avant insertion)."
+    },
+    "findRecord": {
+      "notFound": "Élément recherché introuvable."
     },
     "msgbox": {
       "title": "{{title}}",

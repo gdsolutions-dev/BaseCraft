@@ -31,6 +31,7 @@ export function TextBoxCtl({ c, x, style }: CtlProps) {
       if (readOnly) return;
       if (unbound) x.editUnbound(c, typedValue(e.target.value, x.display.locale), e.target.value);
       else if (b) x.edit(b.f, e.target.value);
+      x.input(c);
     },
   };
   return c.height > 2 * lines || b?.f.type === 'longText' ? <textarea {...props} /> : <input {...props} />;

@@ -35,7 +35,8 @@ export interface BoundQuery {
 export type QueryBindErrorCode = 'unknownSource' | 'ambiguousField' | 'circular' | 'tooDeep' | 'notGrouped' | 'aggregateInWhere'
   | 'nestedAggregate' | 'unionArity' | 'updateTarget' | 'unknownTarget' | 'duplicateOutput'
   | 'insertArity' // INSERT: values (or the SELECT columns of a field list) and target columns differ in number
-  | 'subqueryArity'; // a scalar or In subquery that does not return exactly one column
+  | 'subqueryArity' // a scalar or In subquery that does not return exactly one column
+  | 'memberNotAllowed'; // [LocalVars]! or [MacroError]! in a query (only Forms, Reports and TempVars become parameters)
 
 export class QueryBindError extends Error {
   constructor(public code: QueryBindErrorCode, public detail: string) {
@@ -167,6 +168,15 @@ function resolve(e: Id, lvl: Level, outputs: boolean): ResolvedRef {
 
 /** Resolves every identifier of `e` (subqueries bound one level deeper) and infers parameter types from comparisons. */
 function walk(e: Expr, lvl: Level, ctx: Ctx, outputs: boolean): void {
+  if (e.k === 'member') {
+    // R11: [Forms]![F]![C], [Reports]![R]![C], [TempVars]![x] are parameters named by their canonical text, filled by the
+    // renderer from the open object (asked when it is not); the value reaches SQLite bound, never as text
+    const name = show(e);
+    if (!['Forms', 'Reports', 'TempVars'].includes(e.path[0]!)) fail('memberNotAllowed', name);
+    ctx.refs.set(e, { kind: 'param', name });
+    addParam(ctx, name);
+    return;
+  }
   if (e.k === 'id') {
     const r = resolve(e, lvl, outputs);
     ctx.refs.set(e, r);
@@ -452,7 +462,7 @@ export function toSourceInfo(b: BoundQuery): SourceInfo {
 /** Type of an expression of the bound query (Access's rules; Sum/Avg as the shared accumulator returns them, C12). */
 export function exprType(e: Expr, b: BoundQuery): FieldType {
   switch (e.k) {
-    case 'id': {
+    case 'id': case 'member': {
       const r = b.refs.get(e);
       if (r?.kind === 'column') return r.type;
       if (r?.kind === 'param') return b.params.find((p) => sameName(p.name, r.name))?.type ?? 'shortText';
@@ -578,7 +588,7 @@ function sumAvg(e: Call, b: BoundQuery): { type: FieldType; num?: NumInfo } {
 
 /** Number size of a `number` expression when known (field, parameter, Sum/Avg, a function returning its argument). */
 function numInfo(e: Expr, b: BoundQuery): NumInfo | undefined {
-  if (e.k === 'id') {
+  if (e.k === 'id' || e.k === 'member') {
     const target = outputTargets.get(e);
     if (target) return numInfo(target, b);
     const r = b.refs.get(e);

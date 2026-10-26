@@ -23,3 +23,9 @@ describe('B1 audit', () => {
     expect(allNavItems().filter((i) => i.planned === 'B1').map((i) => i.id)).toEqual([]);
   });
 });
+
+describe('B2 audit', () => {
+  it('B2 leaves no B2 placeholder in any registered menu', () => {
+    expect(allNavItems().filter((i) => i.planned === 'B2').map((i) => i.id)).toEqual([]);
+  });
+});

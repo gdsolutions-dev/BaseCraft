@@ -3,6 +3,7 @@
 // trois affichages partagent les enregistrements, la saisie, les règles des contrôles, les calculs, les commandes du ruban, F5
 // et la garde de mode.
 import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type FocusEvent, type KeyboardEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 import { flattenControls, type ControlDef, type DesignDoc } from '../../shared/design/model';
@@ -25,13 +26,18 @@ import type { OpenArgs } from '../state/app-state';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { flashStatus } from '../shell/StatusBar';
-import type { Value } from '../../shared/expr/ast';
+import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
+import { fromStored, toStored } from '../../shared/expr/evaluate';
+import { infoOf, toText } from '../../shared/expr/library';
+import type { EventName } from '../../shared/design/events';
 import { buildCalcEnv, checkControlRule, controlDefaults, FAILED, Latest, unboundDefaults, type CalcResult } from './calc';
 import { boundField, controlTexts, isUnbound } from './control-values';
 import type { ListState, RunCtx, RunnerApi, SubformHost, UnboundValue } from './controls/run-ctx';
 import { parseFormDoc } from './form-def';
+import { FormEvents, withOverrides } from './form-events';
+import { formCancelled, formReady, memberValue, registerForm, type FormInstance } from './form-instances';
 import './form-nav-menu';
-import { FormRecords, type FormDataApi, type RecordError, type RecordSnapshot } from './record-controller';
+import { FormRecords, type FormDataApi, type RecordError, type RecordEvents, type RecordSnapshot } from './record-controller';
 import { listOptions, loadRowSource, outOfList, rowOfText } from './row-source';
 import { errorsByControl, prop, tabSequence } from './run-model';
 import { SingleFormView } from './SingleFormView';
@@ -51,10 +57,38 @@ const NO_INFO: SourceInfo = { fields: [], updatable: false, parameters: [] };
 const FOCUSABLE = 'input, textarea, button, [role="listbox"], [tabindex]:not([tabindex="-1"])';
 let nextViewId = 0;
 
-type Loaded = { doc: DesignDoc; records: FormRecords; key: number } | { error: { key: string; params?: Record<string, unknown> } };
+type Loaded = { doc: DesignDoc; records: FormRecords; hub: FormEvents; key: number } | { error: { key: string; params?: Record<string, unknown> } };
 const langOf = (): 'fr' | 'en' => (i18n.language.startsWith('fr') ? 'fr' : 'en');
 /** « Entrer une valeur de paramètre » for a form's, a subform's or a list's source (C3). */
 const asker = (modal: ModalApi, region: string) => (ps: SourceInfo['parameters']) => promptParameters(modal, ps, localeInfo(region));
+const eventBase = (region: string) => ({ locale: region, lang: langOf(), now: () => new Date() });
+/** A save, a move or a delete asked while a Before event's macro runs is refused (bc:saveDuringEvent, Access 2115): nothing happens. */
+const quiet = <T,>(p: Promise<T>, none: T): Promise<T> =>
+  p.catch((e: unknown) => { if (e instanceof Error && e.message === 'bc:saveDuringEvent') return none; throw e; });
+
+/** The tab's form in the registry ([Forms]!, the form actions), registered before On Open: its values and runtime properties
+ *  from then on (its events'); the other actions once it shows (before: bc:actionNotRun), GoToRecord from On Load. */
+function instanceOf(name: string, tabId: string, hub: () => FormEvents | null): FormInstance {
+  const ops = () => { const o = hub()?.form; if (!o) throw new Error('bc:actionNotRun'); return o; };
+  return {
+    name, tabId,
+    value: (c) => { const h = hub(); if (!h) throw new ExprRuntimeError('unknownField', c); return h.value(c); },
+    setProperty: (c, p, v) => {
+      const h = hub();
+      if (!h) throw new Error('bc:actionNotRun');
+      return p === 'value' ? ops().setValue(c, v) : h.setProperty(c, p, v);
+    },
+    goToRecord: async (r, offset) => {
+      const h = hub();
+      if (!h) throw new Error('bc:cantGoToRecord');
+      return h.form ? h.form.goToRecord(r, offset) : h.goToRecord(r, offset);
+    },
+    setValue: async (c, v) => ops().setValue(c, v), goToControl: async (c) => ops().goToControl(c),
+    applyFilter: async (w) => ops().applyFilter(w), showAllRecords: async () => ops().showAllRecords(), find: async (o) => ops().find(o),
+    requery: async (c) => ops().requery(c), saveRecord: async () => ops().saveRecord(), undoRecord: () => ops().undoRecord(),
+    deleteRecord: async (w) => ops().deleteRecord(w), refreshRecord: async () => ops().refreshRecord(),
+  };
+}
 
 export function FormRunView(p: DocViewProps) {
   const { t } = useTranslation();
@@ -72,32 +106,52 @@ export function FormRunView(p: DocViewProps) {
   useEffect(() => {
     if (region === null) return;
     let current = true;
-    api.objects.get('form', name.current).then((r) => {
+    const form = name.current;
+    let hub: FormEvents | null = null;
+    let ready = false;
+    // registered before On Open ([Forms]! in its own events); an OpenForm waiting for it is told when it does not open
+    const release = registerForm(instanceOf(form, tab.id, () => hub));
+    const cancel = () => { if (!ready) formCancelled(form); };
+    api.objects.get('form', form).then(async (r) => {
       if (!current) return;
       let doc: DesignDoc;
-      try { doc = parseFormDoc(r.definition).doc; } catch { setLoaded({ error: { key: 'form.invalidDefinition' } }); return; }
+      try { doc = parseFormDoc(r.definition).doc; } catch { setLoaded({ error: { key: 'form.invalidDefinition' } }); cancel(); return; }
       // opened from the Navigation Pane (generic path, mode run): its Default View; Datasheet is the tab's datasheet mode
       const o = opening.current;
       if (firstRun(o.tab.id) && o.tab.mode === 'run' && openingMode(doc) === 'datasheet') o.dispatch({ type: 'setMode', id: o.tab.id, mode: 'datasheet' });
-      const records = recordsFor(doc, region, readOnly, undefined, o.tab.openArgs);   // its subforms never take them
+      const h = hub = new FormEvents(doc, form, eventBase(region));
+      // On Open, before the records are read; cancelled: the tab closes, with no error (Access)
+      if (await h.raise('OnOpen')) { if (current) { cancel(); o.dispatch({ type: 'close', id: o.tab.id }); } return; }
+      if (!current) return;
+      const records = h.records = recordsFor(doc, region, readOnly, undefined, o.tab.openArgs, h.recordEvents());   // its subforms never take them
       // its parameters asked once, before the first page; Cancel does not open it (Access), with no error
-      void records.open(asker(modal, region)).then((ok) => {
-        if (!current) return;
-        if (ok) setLoaded({ doc, records, key: ++nextViewId }); else o.dispatch({ type: 'close', id: o.tab.id });
-      });
-    }, (e) => { if (current) setLoaded({ error: errorMessage(e) }); });
-    return () => { current = false; };
+      const ok = await records.open(asker(modal, region));
+      if (!current) return;
+      if (!ok) { cancel(); o.dispatch({ type: 'close', id: o.tab.id }); return; }
+      // shown before On Load (its records read): its form actions work there (GoToControl, SetValue, ApplyFilter…)
+      setLoaded({ doc, records, hub: h, key: ++nextViewId });
+      await h.shown;
+      if (!current) return;
+      await h.raise('OnLoad');
+      if (!current) return;
+      await h.start();   // the first On Current
+      if (!current) return;
+      if (records.snapshot.status === 'error') { cancel(); return; }
+      ready = true;
+      formReady(form);
+    }).catch((e: unknown) => { if (current) { setLoaded({ error: errorMessage(e) }); cancel(); } });   // a failed read, or its open throwing
+    return () => { current = false; cancel(); release(); };
   }, [tab.reloadToken, region, readOnly]);
 
   if (loaded && 'error' in loaded) return <div className="doc-empty muted" role="alert" data-testid="form-run-error">{t(loaded.error.key, loaded.error.params)}</div>;
   if (!loaded || region === null) return <div className="frun" aria-busy />;
-  return <FormRunner key={loaded.key} doc={loaded.doc} records={loaded.records} region={region} readOnly={readOnly} active={p.active} name={tab.name}
+  return <FormRunner key={loaded.key} doc={loaded.doc} records={loaded.records} hub={loaded.hub} region={region} readOnly={readOnly} active={p.active} name={tab.name}
     mode={tab.mode === 'datasheet' ? 'datasheet' : 'run'} ancestors={[tab.name]} tab={{ id: tab.id, dispatch: p.dispatch }} />;
 }
 
 /** The form's records, as its definition allows them; a subform's are linked (no record until the master's values come).
  *  `args`: how the tab was opened (OpenForm): its Where Condition restricts the records, its data mode applies (R8, R9). */
-function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFields?: string[], args?: OpenArgs): FormRecords {
+function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFields?: string[], args?: OpenArgs, events?: RecordEvents): FormRecords {
   const all = doc.sections.flatMap((s) => flattenControls(s.controls));
   const allow = (n: string) => effectiveProp(doc.props, n, 'form') !== false;
   const records: FormRecords = new FormRecords(dataApi, {
@@ -105,6 +159,7 @@ function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFiel
     ...(childFields?.length ? { link: { childFields, values: null } } : {}),
     ...(args?.where !== undefined ? { where: args.where } : {}), ...(args?.dataMode ? { dataMode: args.dataMode } : {}),
     newRecordValues: () => controlDefaults(all, records.snapshot.info ?? NO_INFO, { locale: region, lang: langOf(), now: () => new Date() }),
+    ...(events ? { events } : {}),
   });
   return records;
 }
@@ -126,28 +181,36 @@ export interface EmbedLink {
 export const EmbeddedForm = memo(function EmbeddedForm({ name, sub, embed, readOnly }: { name: string; sub: SubformHost; embed: EmbedLink; readOnly: boolean }) {
   const { t } = useTranslation();
   const modal = useModal();
-  const [loaded, setLoaded] = useState<{ doc: DesignDoc; records: FormRecords; key: number } | 'missing' | null>(null);
+  const [loaded, setLoaded] = useState<{ doc: DesignDoc; records: FormRecords; hub: FormEvents; key: number } | 'missing' | 'cancelled' | null>(null);
   const fields = embed.childFields.join(';');
   useEffect(() => {
     let current = true;
-    api.objects.get('form', name).then((r) => {
+    api.objects.get('form', name).then(async (r) => {
       if (!current) return;
       let doc: DesignDoc;
       try { doc = parseFormDoc(r.definition).doc; } catch { setLoaded('missing'); return; }
-      const records = recordsFor(doc, sub.region, readOnly, embed.childFields);
-      setLoaded({ doc, records, key: ++nextViewId });
-      void records.open(asker(modal, sub.region));   // once, not on each master record; Cancel: an empty frame, no additions
+      // its own On Open, On Load and On Current when its records open (never registered, R11)
+      const hub = new FormEvents(doc, name, eventBase(sub.region));
+      if (await hub.raise('OnOpen')) { if (current) setLoaded('cancelled'); return; }
+      if (!current) return;
+      const records = hub.records = recordsFor(doc, sub.region, readOnly, embed.childFields, undefined, hub.recordEvents());
+      setLoaded({ doc, records, hub, key: ++nextViewId });
+      // once, not on each master record; Cancel: an empty frame, no additions
+      if (!(await records.open(asker(modal, sub.region))) || !current) return;
+      await hub.raise('OnLoad');
+      if (current) await hub.start();
     }, () => { if (current) setLoaded('missing'); });
     return () => { current = false; };
   }, [name, sub.region, readOnly, fields]);   // eslint-disable-line react-hooks/exhaustive-deps -- the child fields by their text
   if (loaded === 'missing') return <div className="frun-subform-error" role="alert" data-testid="form-subform-error">{t('form.subform.missing', { name })}</div>;
-  if (!loaded) return null;
-  return <FormRunner key={loaded.key} doc={loaded.doc} records={loaded.records} region={sub.region} readOnly={readOnly} active={sub.active}
+  if (!loaded || loaded === 'cancelled') return null;
+  return <FormRunner key={loaded.key} doc={loaded.doc} records={loaded.records} hub={loaded.hub} region={sub.region} readOnly={readOnly} active={sub.active}
     name={name} mode="embedded" ancestors={[...sub.ancestors, name]} embed={embed} />;
 });
 
 interface RunnerProps {
   doc: DesignDoc; records: FormRecords; region: string; readOnly: boolean; active: boolean;
+  hub: FormEvents;                                     // its events
   name: string;                                        // the form's name (messages, the datasheet's label)
   mode: 'run' | 'datasheet' | 'embedded';              // a subform has no tab mode: its Default View
   ancestors: string[];                                 // its name and the forms above it
@@ -155,7 +218,7 @@ interface RunnerProps {
   embed?: EmbedLink;                                   // a subform
 }
 
-function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, ancestors, embed }: RunnerProps) {
+function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mode, ancestors, embed }: RunnerProps) {
   const { t, i18n: i18 } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -176,20 +239,31 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
   const checks = useRef<Promise<void>>(Promise.resolve());
   const shownError = useRef<unknown>(undefined);
   const subs = useRef(new Map<string, RunnerApi>());   // the subform controls' forms, by control name
+  const typedIn = useRef(new Set<string>());           // text boxes and combos typed in since they got the focus (their update events)
+  const entered = useRef<string | null>(null);         // the control whose Enter has fired and whose Exit has not
+  const away = useRef<string | null>(null);            // that control, when the focus left the form from it (no Exit then)
+  const leaving = useRef<Promise<boolean> | null>(null);   // the last control left: its events (false: it kept the focus)
+  const updating = useRef(new Set<string>());          // controls whose update events are running (a save asked there raises them not again)
+  const inBefore = useRef(0);                          // a control's Before Update running: a save, a move… is refused (2115)
 
   const all = useMemo(() => doc.sections.flatMap((s) => flattenControls(s.controls)), [doc]);
   const byName = useMemo(() => new Map(all.map((c) => [c.name, c])), [all]);
   const display = useMemo(() => ({ locale: region, lang }), [region, lang]);
-  const base = useMemo(() => ({ locale: region, lang, now: () => new Date() }), [region, lang]);
+  const base = useMemo(() => ({ locale: region, lang, now: () => new Date(), member: memberValue }), [region, lang]);   // [Forms]!, [TempVars]! (R11)
+  // the design as shown: with its runtime properties (SetProperty, R9), for the views and the tab order
+  useEffect(() => { hub.didShow(); }, [hub]);   // its form actions are set (hub.form): On Load may run
+  const overrides = useSyncExternalStore(useCallback((cb) => hub.subscribe(cb), [hub]), () => hub.overrides);
+  const shown = useMemo(() => withOverrides(doc, overrides), [doc, overrides]);
+  const shownByName = useMemo(() => new Map(shown.sections.flatMap((s) => flattenControls(s.controls)).map((c) => [c.name, c])), [shown]);
   // Tab stops of each section (a tab control: its strip, then its page shown); Tab on the Detail's last one goes to the next
   // record (Cycle = All Records).
   const [pages, setPages] = useState<Record<string, number>>({});
   const setPage = useCallback((n: string, i: number) => setPages((p) => (p[n] === i ? p : { ...p, [n]: i })), []);
   const sequences = useMemo(() => {
     const out = new Map<string, { seq: string[]; detail: boolean }>();
-    for (const s of doc.sections) { const seq = tabSequence(s, pages); for (const n of seq) out.set(n, { seq, detail: s.kind === 'detail' }); }
+    for (const s of shown.sections) { const seq = tabSequence(s, pages); for (const n of seq) out.set(n, { seq, detail: s.kind === 'detail' }); }
     return out;
-  }, [doc, pages]);
+  }, [shown, pages]);
   const tabRank = (n: string) => { const i = [...sequences.keys()].indexOf(n); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   const stops = useMemo(() => new Set(sequences.keys()), [sequences]);
   const ro = readOnly || snap.refused;
@@ -273,6 +347,10 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     })();
   }, [listCtls, waitInfo, info, display, listTick, snap.saves]);
   const extraOf = () => Object.fromEntries(Object.entries(unboundRef.current).map(([k, u]) => [k, u.value]));
+  const calcRef = useRef(calc);
+  calcRef.current = calc;
+  // a bare [Name] in its events, and [Forms]! (R11), read what the form shows
+  hub.view = { stored: () => storedOf(), extra: extraOf, results: () => (calcRef.current.values === records.snapshot.values ? calcRef.current.results : {}) };
 
   // calculated controls: on each record shown or saved, and when a changed control is left (Access recalculates then)
   useEffect(() => {
@@ -359,11 +437,32 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     checks.current = run.then(() => undefined);
     return run;
   };
-  /** The focused control's rule is checked before a save or a move (a ribbon click leaves it without its blur being done). */
-  const settle = () => {
+  /** A control's Before Update: a save or a move its macro asks for is refused meanwhile (2115). True: cancelled. */
+  const beforeUpdate = async (c: ControlDef): Promise<boolean> => {
+    inBefore.current++;
+    try { return await hub.raise('BeforeUpdate', c); } finally { inBefore.current--; }
+  };
+  /** A value the user changed (R18: never a macro's): Before Update (cancelled: false), then After Update. */
+  const updated = async (c: ControlDef): Promise<boolean> => {
+    updating.current.add(c.name);
+    try {
+      if (await beforeUpdate(c)) return false;
+      typedIn.current.delete(c.name);
+      await hub.raise('AfterUpdate', c);
+      return true;
+    } finally { updating.current.delete(c.name); }
+  };
+  /** Before a save or a move: the controls' events under way, then the focused control's rule (a ribbon click leaves it
+   *  without its blur being done) and its update events when it was typed in (Access: the control's, then the record's;
+   *  asked by an event's macro: at once, nested, R6; never again from inside its own). False: its Before Update cancelled. */
+  const settle = async (): Promise<boolean> => {
     flushCellEditor();   // Datasheet view: an open cell editor's text goes to its record first (Ctrl+S, Shift+F9, a sort…)
+    const wait = hub.idle();
+    if (wait) await wait;
     const c = lastFocused.current ? byName.get(lastFocused.current) : undefined;
-    return queue(() => (c ? checkRule(c) : Promise.resolve(null)));
+    const err = await queue(() => (c ? checkRule(c) : Promise.resolve(null)));
+    if (err || !c || !typedIn.current.has(c.name) || updating.current.has(c.name)) return true;
+    return hub.serial(() => updated(c));
   };
 
   const focusHook = useRef<((n: string) => boolean) | null>(null);   // Datasheet view: the control's column on the current record
@@ -406,8 +505,8 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     if (first) focusBack(first);
   };
   const attempt = async (op: () => Promise<boolean>): Promise<boolean> => {
-    await settle();
-    const ok = await op();
+    if (!(await settle())) return false;
+    const ok = await quiet(op(), false);
     if (!ok) await showRefusal();
     return ok;
   };
@@ -416,7 +515,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     records.expectMove();
     return attempt(op).finally(() => records.endExpected());
   };
-  const firstStop = () => { const d = doc.sections.find((s) => s.kind === 'detail'); return d ? tabSequence(d)[0] : undefined; };
+  const firstStop = () => { const d = shown.sections.find((s) => s.kind === 'detail'); return d ? tabSequence(d)[0] : undefined; };
 
   const edit = (f: SourceField, input: CellInput) => { records.edit(f.name, input); };
   const onFocusOf = (n: string) => {
@@ -436,6 +535,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     const s = records.snapshot;
     const f = s.info ? boundField(c, s.info) : null;
     const was = atFocus.current[c.name];
+    typedIn.current.delete(c.name);   // undone: no update event on leaving it
     if (isUnbound(c) && unboundRef.current[c.name] !== was) {
       const { [c.name]: _, ...rest } = unboundRef.current;
       putUnbound(was ? { ...rest, [c.name]: was } : rest);
@@ -450,13 +550,96 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     }
     setCalcTick((n) => n + 1);
   };
+  /** A control's event, after those raised before it (a control: its own property; none: the form's). */
+  const raiseCtl = (e: EventName, n?: string): Promise<boolean> => {
+    const c = n === undefined ? undefined : byName.get(n);
+    return hub.has(e, c) ? hub.serial(() => hub.raise(e, c)) : Promise.resolve(false);
+  };
+  /** Typed in a text box or a combo: its On Change now, its update events when it is left (or the record saved). */
+  const input = (c: ControlDef) => {
+    typedIn.current.add(c.name);
+    void raiseCtl('OnChange', c.name);
+  };
+  /** A value chosen at once (check box, option group, list box, a combo's pick): Before Update (cancelled: the value before
+   *  comes back), then After Update. */
+  const update = (c: ControlDef, apply: () => void) => {
+    const s = records.snapshot;
+    const f = s.info ? boundField(c, s.info) : null;
+    const k = f ? Object.keys(s.pending).find((n) => sameName(n, f.name)) : undefined;
+    const was = k === undefined ? undefined : s.pending[k];
+    const u = unboundRef.current[c.name];
+    apply();
+    typedIn.current.delete(c.name);
+    if (!hub.has('BeforeUpdate', c) && !hub.has('AfterUpdate', c)) return;
+    void hub.serial(async () => {
+      if (!(await beforeUpdate(c))) { await hub.raise('AfterUpdate', c); return true; }
+      if (isUnbound(c)) {
+        const { [c.name]: _, ...rest } = unboundRef.current;
+        putUnbound(u ? { ...rest, [c.name]: u } : rest);
+      } else if (f) {
+        if (k === undefined) records.undoField(f.name); else records.edit(f.name, was ?? null, { silent: true });
+        setTyped(c.name, undefined);
+      }
+      setCalcTick((n) => n + 1);
+      return false;
+    });
+  };
+  /** The control left (its Enter fired): Before / After Update when typed in, On Exit, On Lost Focus. False: it keeps the focus
+   *  (its Before Update or On Exit cancelled: the focus goes back to it). */
+  const exitFrom = async (c: ControlDef): Promise<boolean> => {
+    if (typedIn.current.has(c.name) && !(await updated(c))) { focusBack(c.name); return false; }   // the entry kept
+    if (await hub.raise('OnExit', c)) { focusBack(c.name); return false; }
+    entered.current = null;
+    await hub.raise('OnLostFocus', c);
+    return true;
+  };
+  /** The form the focus is in: this one, or the master a subform is in (the focus moving between them stays in the form). */
+  const outerRoot = (): Element | null => {
+    let r: Element | null | undefined = root.current;
+    while (r?.parentElement?.closest('.frun')) r = r.parentElement.closest('.frun');
+    return r ?? null;
+  };
   const events = (c: ControlDef) => ({
-    onFocus: () => onFocusOf(c.name),
+    onFocus: () => {
+      onFocusOf(c.name);
+      const from = away.current;
+      away.current = null;
+      // given back (its Exit or Before Update cancelled, its rule refused), or back from outside the form: no Enter again
+      if (entered.current === c.name) return;
+      typedIn.current.delete(c.name);
+      void hub.serial(async () => {
+        // the control the focus left the form from: left now (its Exit); cancelled, it takes the focus back
+        const was = from !== null && entered.current === from ? byName.get(from) : undefined;
+        if (was && !(await exitFrom(was))) return false;
+        if (entered.current !== null) return false;   // the control left kept the focus: it is given back there
+        entered.current = c.name;
+        await hub.raise('OnEnter', c);
+        await hub.raise('OnGotFocus', c);
+        return true;
+      });
+    },
     onBlur: (e: FocusEvent) => {
       if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;   // inside the same option group
       setFocused((v) => (v === c.name ? null : v));
-      checked(c);
+      const check = queue(() => checkRule(c));
+      // a message box taking the focus does not leave the control (Access's boxes take no focus); nor the focus leaving the
+      // form (the ribbon, another document, the Navigation Pane): its Exit comes when another control of the form takes it
+      const to = e.relatedTarget instanceof Element ? e.relatedTarget : null;
+      const toBox = !!to?.closest('[aria-modal="true"]');
+      const outside = !toBox && !(to && outerRoot()?.contains(to));
+      if (outside && entered.current === c.name) away.current = c.name;
+      leaving.current = hub.serial(async () => {
+        const err = await check;
+        setCalcTick((n) => n + 1);
+        // A check that fails, each time the control is left: its message box, and the focus stays (no Exit, Access)
+        if (err) { void showRefusal({ name: c.name, err }); return false; }
+        if (toBox || outside || entered.current !== c.name) return true;
+        return exitFrom(c);
+      });
     },
+    // after the change the click made (a check box's update); a double click's second click is its On Dbl Click (Access)
+    onClick: (e?: { detail: number }) => { if ((e?.detail ?? 0) <= 1) queueMicrotask(() => void raiseCtl('OnClick', c.name)); },
+    onDoubleClick: () => { void raiseCtl('OnDblClick', c.name); },
     onKeyDown: (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (c.kind === 'tabControl') return;   // the strip holds no entry: the record stays as it is
@@ -468,7 +651,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
       } else if ((e.key === 'Home' || e.key === 'End') && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
         e.preventDefault();   // Access: the first field of the first record, the last field of the last record
         const first = e.key === 'Home';
-        const d = doc.sections.find((x) => x.kind === 'detail');
+        const d = shown.sections.find((x) => x.kind === 'detail');
         const seq = d ? tabSequence(d, pages) : [];
         const n = first ? seq[0] : seq[seq.length - 1];
         void userAttempt(() => (first ? records.first() : records.last())).then((ok) => { if (ok && n) requestAnimationFrame(() => focusCtl(n)); });
@@ -541,7 +724,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
   useEffect(() => {
     const back = active && !wasActive.current;
     wasActive.current = active;
-    if (back) void records.reload();
+    if (back) void quiet(records.reload(), false);
   }, [active, records]);
 
   // a record being edited here or in a subform: the tab is dirty (its bullet; an action query on its sources is refused)
@@ -567,12 +750,16 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     const n = lastFocused.current ?? firstStop();
     if (n && !document.querySelector('[aria-modal="true"]')) focusCtl(n);
   });
-  const applyFilter = async (next: FilterState) => {
+  /** The filter (its criteria, and ApplyFilter's Where Condition, R14), on or off; false: refused (the record could not be saved). */
+  const applyFilter = async (next: FilterState): Promise<boolean> => {
     await settle();
     const items = activeFilter(next) ?? [];
-    const ok = await records.setFilter(items);
-    if (ok || JSON.stringify(records.snapshot.filter) === JSON.stringify(items)) { filterRef.current = next; setFilterState(next); }
+    const where = next.active ? next.applied : null;
+    const ok = await quiet(records.setFilter(items, where), false);
+    const s = records.snapshot;
+    if (ok || (JSON.stringify(s.filter) === JSON.stringify(items) && s.appliedFilter === where)) { filterRef.current = next; setFilterState(next); }
     if (ok) back(); else await showRefusal();
+    return ok;
   };
   const setCriteria = async (field: string, criteria: string) => {
     let next: FilterState;
@@ -618,7 +805,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     ), { titleKey: 'datasheet.filter.fieldTitle' });
     if (criteria !== null) await setCriteria(at.f.name, criteria);
   };
-  const toggleFilter = () => { const f = filterRef.current; if (f.items.length) void applyFilter({ ...f, active: !f.active }); };
+  const toggleFilter = () => { const f = filterRef.current; if (f.items.length || f.applied) void applyFilter({ ...f, active: !f.active }); };
 
   const sortBy = async (dir: 'asc' | 'desc' | null) => {
     const at = focusedField();
@@ -628,35 +815,57 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
   const newRecord = async () => {
     if (!(await userAttempt(() => records.newRecord()))) return;
     const n = firstStop();
-    if (n) { focusCtl(n); requestAnimationFrame(() => focusCtl(n)); }   // at once: what is typed next goes there
+    if (!n) return;
+    focusCtl(n);   // at once: what is typed next goes there
+    // again once rendered, unless the focus went elsewhere meanwhile (a click on another control: what is typed goes there)
+    const put = document.activeElement;
+    requestAnimationFrame(() => {
+      if (document.activeElement === put || document.activeElement === document.body) focusCtl(n);
+    });
   };
-  const deleteRecord = async () => {
+  /** `confirm` false: DeleteRecord after SetWarnings No (no confirmation). */
+  const deleteRecord = async (confirm = true): Promise<boolean> => {
     flushCellEditor();
     const s = records.snapshot;
-    if (s.busy) return;   // a move under way (the datasheet refuses it the same way)
+    if (s.busy) return false;   // a move under way (the datasheet refuses it the same way)
     const rec = records.currentRecord;   // the record deleted: never one that became current while the box was open
-    if (s.isNew) { await records.deleteCurrent(rec); back(); return; }   // the new record: its entry is undone
+    if (s.isNew) { await quiet(records.deleteCurrent(rec), null); back(); return true; }   // the new record: its entry is undone
     // its subforms' entries first (refused: the focus stays on the one in error, nothing is deleted)
-    for (const sf of [...subs.current.values()]) if (!(await sf.save())) return;
+    for (const sf of [...subs.current.values()]) if (!(await sf.save())) return false;
     const table = s.info?.keyTable;
-    if (!table || !s.canDelete || !(await confirmDelete(modal, table, 1))) { back(); return; }
-    const r = await records.deleteCurrent(rec);
+    // On Delete before the confirmation (cancelled: nothing is deleted)
+    if (!table || !s.canDelete || (await hub.raise('OnDelete')) || (confirm && !(await confirmDelete(modal, table, 1)))) { back(); return false; }
+    const r = await quiet(records.deleteCurrent(rec), null);
     if (r && !r.ok) await showRelatedRefusal(modal, r);
     back();   // deleted (on the next record) or refused: back to the form
+    return !!r?.ok;
   };
 
+  const closing = useRef(false);   // its On Close running
   /** Before the view goes: its subforms' records, then its own, are saved; refused, discarding is asked, as the datasheet does
-   *  (on close: close anyway, the entry lost?). Yes discards, No stays on the record in error. */
+   *  (on close: close anyway, the entry lost? — refused by an event: R8's question). Yes discards, No stays on the record in
+   *  error. Closing: its On Close once its record is saved or discarded. */
   const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
+    if (reason === 'close' && closing.current) return true;   // CloseWindow in its own On Close: closed once, On Close not raised again
     for (const s of [...subs.current.values()]) if (!(await s.leave(reason))) return false;
-    await settle();
-    if (await records.save()) return true;
-    await showRefusal();
-    const r = await modal.confirm({ titleKey: 'datasheet.discardTitle', messageKey: reason === 'close' ? 'form.closeDiscard' : 'datasheet.discard',
+    const settled = await settle();
+    const saved = settled ? await quiet(records.save(), null) : false;
+    if (saved === null) return false;   // asked while a Before event runs: it stays
+    const gone = async () => {
+      if (reason !== 'close') return true;
+      closing.current = true;
+      try { await hub.raise('OnClose'); } finally { closing.current = false; }
+      return true;
+    };
+    if (saved) return gone();
+    const byEvent = !settled || records.snapshot.refusedByEvent;   // the macro has shown its own message (R8)
+    if (!byEvent) await showRefusal();
+    const r = await modal.confirm({ titleKey: 'datasheet.discardTitle',
+      messageKey: reason !== 'close' ? 'datasheet.discard' : byEvent ? 'form.closeUnsaved' : 'form.closeDiscard',
       params: { name }, buttons: ['yes', 'no'], defaultButton: 'no' });
     if (r !== 'yes') return false;
     records.undoRecord();
-    return true;
+    return gone();
   };
   /** Its subforms' records, then its own: saved, or the refusal's message box (and false). */
   const saveAll = async (): Promise<boolean> => {
@@ -666,7 +875,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
 
   // the record commands (ribbon, Shift+F9), on this form; `run` sends them to the subform that has the focus (Access)
   const handlers: Record<string, () => unknown> = {
-    newRecord, deleteRecord, save: () => attempt(() => records.save()),
+    newRecord, deleteRecord: () => deleteRecord(), save: () => attempt(() => records.save()),
     sortAsc: () => sortBy('asc'), sortDesc: () => sortBy('desc'), sortClear: () => sortBy(null),
     filter: filterField, filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
     refresh: () => refresh(true),
@@ -690,7 +899,96 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     const s = lastFocused.current ? subs.current.get(lastFocused.current) : undefined;
     if (s) s.run(cmd); else void handlers[cmd]?.();
   };
-  const hasFilter = filter.items.length > 0;
+  // ---- the form actions of macros (its registered instance passes them on)
+  /** A save, a move, a requery or a delete asked while a Before Update / Before Insert of the form runs: refused (Access 2115),
+   *  never waited for (the event waits for the macro). */
+  const notInBefore = () => { if (records.inBeforeEvent || inBefore.current) throw new Error('bc:saveDuringEvent'); };
+  const must = (ok: boolean, code: string) => { if (!ok) throw new Error(`bc:${code}`); };
+  const named = (n: string): ControlDef => { const c = all.find((x) => sameName(x.name, n)); if (!c) throw new Error(`bc:notFound||${n}`); return c; };
+  /** The tab control a control is on (its page shown first by GoToControl), with its page. */
+  const tabOf = (n: string): { tc: ControlDef; page: number } | null => {
+    for (const tc of shownByName.values()) {
+      const k = tc.kind === 'tabControl' ? (tc.children ?? []).find((x) => flattenControls([x]).some((y) => y.name === n)) : undefined;
+      if (k) return { tc, page: typeof k.props.PageIndex === 'number' ? k.props.PageIndex : 0 };
+    }
+    return null;
+  };
+  hub.form = {
+    setValue: async (n, v) => {
+      const c = all.find((x) => sameName(x.name, n));
+      const s = records.snapshot;
+      const info = s.info ?? NO_INFO;
+      if (c && isUnbound(c)) { putUnbound({ ...unboundRef.current, [c.name]: { value: v } }); setCalcTick((k) => k + 1); return; }
+      const f = c ? boundField(c, info) : info.fields.find((x) => sameName(x.name, n));
+      if (!f) throw new Error(c ? 'bc:readOnly' : `bc:notFound||${n}`);   // a calculated control, a label…
+      // R18: no update event, no Before Insert
+      if (!records.edit(f.name, toStored(f, v, infoOf(region)), { silent: true })) throw new Error('bc:readOnly');
+      setCalcTick((k) => k + 1);
+    },
+    goToRecord: async (r, offset) => {
+      notInBefore();
+      must(await settle(), 'actionCancelled');
+      await hub.goToRecord(r, offset);
+    },
+    goToControl: async (n) => {
+      const c = shownByName.get(named(n).name)!;
+      const tab = tabOf(c.name);
+      if ([c, tab?.tc].some((x) => x && (prop(x, 'Visible') === false || prop(x, 'Enabled') === false))) throw new Error('bc:cantFocus');
+      if (tab && (pages[tab.tc.name] ?? 0) !== tab.page) flushSync(() => setPage(tab.tc.name, tab.page));   // its page shown first
+      leaving.current = null;
+      focusCtl(c.name);
+      const left = leaving.current as Promise<boolean> | null;
+      if (lastFocused.current !== c.name) throw new Error('bc:cantFocus');   // a label, a line…
+      // inside Before Insert: the control left and this one have their events once it ends (waiting would wait for itself)
+      if (hub.inInsert) return;
+      await hub.drain();   // the control left, then this one: their events (R6)
+      if (left && !(await left)) throw new Error('bc:actionCancelled');   // its Before Update or On Exit cancelled
+    },
+    applyFilter: async (where) => { notInBefore(); must(await applyFilter({ ...filterRef.current, applied: where, active: true }), 'saveRefused'); },
+    showAllRecords: async () => { notInBefore(); must(await applyFilter(NO_FILTER), 'saveRefused'); },
+    find: async (o) => {
+      notInBefore();
+      must(await settle(), 'actionCancelled');
+      const s = records.snapshot;
+      const info = s.info;
+      if (!info) return false;
+      const at = focusedField();
+      const bound = [...new Set(all.map((c) => boundField(c, info)).filter((f): f is SourceField => !!f))];
+      const idx = (o.onlyCurrentField && at ? [at.f] : bound).map((f) => info.fields.indexOf(f));
+      // R13: the value's text in the region; case ignored unless Match Case, accents kept
+      const loc = infoOf(region);
+      const norm = (x: string) => (o.matchCase ? x : x.toLocaleLowerCase(region));
+      const what = norm(o.what);
+      const test = (row: SqlValue[]) => idx.some((k) => {
+        const v = row[k];
+        if (v === null || v === undefined) return false;
+        let text: string;
+        try { const val = fromStored(info.fields[k]!, v); if (val === null) return false; text = norm(toText(val, loc)); } catch { return false; }
+        return o.match === 'whole' ? text === what : o.match === 'start' ? text.startsWith(what) : text.includes(what);
+      });
+      // the controller's `from`: excluded going up or down, included for All (from the record after the current one)
+      const here = s.isNew ? s.total : s.index;
+      const from = o.findFirst ? (o.search === 'up' ? s.total : o.search === 'down' ? -1 : 0) : o.search === 'all' ? here + 1 : here;
+      const i = await records.find(test, { from, dir: o.search });
+      if (i === null) return false;
+      await hub.goToRecord('goTo', i + 1);
+      return true;
+    },
+    requery: async (n) => {
+      if (!n) { notInBefore(); must(await refresh(true), 'actionCancelled'); return; }
+      const c = named(n);
+      if (c.kind === 'subform') { await subs.current.get(c.name)?.requery(false); return; }
+      if (c.kind === 'comboBox' || c.kind === 'listBox') { listParams.current.delete(c.name); setListTick((k) => k + 1); return; }   // its [Forms]! parameters read again
+      setCalcTick((k) => k + 1);
+    },
+    saveRecord: async () => { notInBefore(); must(await attempt(() => records.save()), 'saveRefused'); },
+    undoRecord: () => { records.undoRecord(); clearTyped(); typedIn.current.clear(); setCalcTick((k) => k + 1); },
+    // not deleted (On Delete cancelled, a record that cannot be deleted, refused): Access's 2501
+    deleteRecord: async (warnings) => { notInBefore(); must(await deleteRecord(warnings), 'actionCancelled'); },
+    refreshRecord: async () => { notInBefore(); await records.reload(); },
+  };
+
+  const hasFilter = filter.items.length > 0 || !!filter.applied;
   // Toggle Filter follows the form that has the focus: this one, or the subform it is in (which reports its own)
   const [subFilters, setSubFilters] = useState<Record<string, boolean>>({});
   const focusedFilter = focused !== null && Object.hasOwn(subFilters, focused) ? subFilters[focused] : hasFilter;
@@ -812,7 +1110,7 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
       document.removeEventListener('focusin', onFocus, true);
     };
   }, [records, view]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const columns = useMemo(() => datasheetColumns(doc, info ?? NO_INFO), [doc, info]);
+  const columns = useMemo(() => datasheetColumns(shown, info ?? NO_INFO), [shown, info]);
   // Continuous Forms: the record changed with the focus left on the row it was on (Page Down, its record selector): the same
   // control on the current record keeps it, so that typing goes on there
   useEffect(() => {
@@ -877,7 +1175,8 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
       </div>
     );
   }
-  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, pages, setPage, lists, typed: typedTexts, setTyped, sub };
+  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, pages, setPage, lists, typed: typedTexts, setTyped, sub,
+    raise: raiseCtl, input, update };
   /** Another record, made current; then the focus on `n` there (the control clicked: already focused), else on the last control. */
   const goRow = (i: number, n?: string) => void userAttempt(() => records.goTo(i)).then((ok) => {
     if (!ok) return;
@@ -891,17 +1190,17 @@ function FormRunner({ tab, active, readOnly, doc, records, region, name, mode, a
     return {
       ...x, results: values ? calcFor(values) : {}, defaults: {}, focused: null, errors: {}, typed: {}, other: true,
       snap: { ...snap, status: values ? snap.status : 'loading', index: i, isNew: i >= snap.total, values: values ?? [], pending: {}, dirty: false, errors: [], editable: false },
-      id: (n) => `${viewId}-r${i}-${n}`, edit: () => {},
+      id: (n) => `${viewId}-r${i}-${n}`, edit: () => {}, input: () => {}, update: () => {},
       events: (c) => ({ onFocus: () => goRow(i, c.name), onBlur: () => {}, onKeyDown: () => {} }),
     };
   };
-  const filterState = !filter.items.length ? 'none' : filter.active ? 'on' : 'off';
+  const filterState = !hasFilter ? 'none' : filter.active ? 'on' : 'off';
   const onGo = (row: number) => void userAttempt(() => records.goTo(row));
   const nav = { messages, filter: filterState, onGo, onNew: () => void newRecord(), onToggleFilter: toggleFilter } as const;
   return (
     <>
-      {view === 'single' && <SingleFormView doc={doc} x={x} root={root} {...nav} />}
-      {view === 'continuous' && <ContinuousFormView doc={doc} x={x} rowCtx={rowCtx} root={root} onRow={(i) => goRow(i)} {...nav} />}
+      {view === 'single' && <SingleFormView doc={shown} x={x} root={root} {...nav} />}
+      {view === 'continuous' && <ContinuousFormView doc={shown} x={x} rowCtx={rowCtx} root={root} onRow={(i) => goRow(i)} {...nav} />}
       {view === 'datasheet' && (
         <FormDatasheet columns={columns} byName={byName} x={x} rowCtx={rowCtx} root={root} focusHook={focusHook} {...nav}
           ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf}

@@ -2,14 +2,11 @@
 // Mode création (le concepteur de bandes, tâche 12), Exporter › PDF, Imprimer…, Aperçu avant impression.
 // Mêmes id que les éléments génériques du socle, qu'ils remplacent ; Imprimer et Exporter n'ouvrent pas d'onglet.
 import { Eye, FileType, FolderOutput, PencilRuler, Printer, ScrollText } from 'lucide-react';
-import { api } from '../bridge';
 import { registerNavMenuItems, type NavMenuContext } from '../shell/nav-menu';
-import { layoutSavedReport } from './load';
-import { askParameters, layoutEnv, outputBusy, outputReport } from './ReportPreviewView';
+import { outputBusy, outputSavedReport } from './ReportPreviewView';
 
 const preview = (c: NavMenuContext) => { void c.dispatch({ type: 'open', kind: 'report', name: c.name, mode: 'run' }); };
-const output = (to: 'pdf' | 'printer') => (c: NavMenuContext) =>
-  outputReport(c.modal, c.name, async (signal, ready) => layoutSavedReport(api, c.name, await layoutEnv(), askParameters(c.modal), signal, ready), to);
+const output = (to: 'pdf' | 'printer') => async (c: NavMenuContext) => { await outputSavedReport(c.modal, c.name, to); };   // cancelled by an event: silently
 const idle = () => !outputBusy();   // one print or export at a time
 
 registerNavMenuItems('report', [

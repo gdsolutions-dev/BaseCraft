@@ -105,6 +105,9 @@ describe('addableActions', () => {
   it('unsafe actions only with Show All Actions', () => {
     expect(addableActions(false).map((a) => a.name)).not.toContain('RunSQL');
     expect(addableActions(true).map((a) => a.name)).toContain('RunSQL');
+    expect(addableActions(false).map((a) => a.name)).not.toContain('SetValue');
+    expect(addableActions(true).map((a) => a.name)).toContain('SetValue');
+    expect(addableActions(false).map((a) => a.name)).toContain('SetProperty');   // the safe way to set a control's value (R5)
   });
 });
 

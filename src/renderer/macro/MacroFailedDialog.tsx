@@ -2,6 +2,7 @@
 // affichée), le numéro et le message de l'erreur, et le seul bouton « Arrêter toutes les macros ».
 import { createElement } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ExprRuntimeError } from '../../shared/expr/ast';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
 import { actionDef } from '../../shared/macro/catalog';
@@ -12,6 +13,9 @@ import type { MacroFailure } from './engine';
 
 const t = (key: string, params: Record<string, unknown> = {}) => i18n.t(key, params);
 export const actionLabel = (name: string) => (i18n.exists(`macro.action.${name}`) ? t(`macro.action.${name}`) : name);
+
+/** The form actions' own refusals (B2): `bc:<code>` or `bc:<code>||<name>`. */
+const FORM_REFUSALS = new Set(['notOpen', 'noActiveForm', 'cantGoToRecord', 'cantFocus', 'saveRefused', 'propertyNotSupported', 'badReference', 'badValue', 'findWhatTooLong', 'saveDuringEvent']);
 
 /** The failure's message: `macro.error.<code>`; an action's own refusal (`bc:<code>`) in its own words. */
 export function failureMessage(f: MacroFailure): string {
@@ -24,12 +28,16 @@ export function failureMessage(f: MacroFailure): string {
       if (code === 'notFound') return t('macro.error.notFound', { name });
       if (code === 'runSqlSelect') return t('macro.error.runSqlSelect');
       if (code === 'actionCancelled' || code === 'actionNotRun') return t(`macro.error.${code}`, { action });
+      if (code && FORM_REFUSALS.has(code)) return t('macro.error.actionFailed', { action, detail: t(`macro.error.${code}`, { name }) });
       if (code) { const m = errorMessage(f.cause ?? detail); return t('macro.error.actionFailed', { action, detail: t(m.key, m.params) }); }
       return t('macro.error.actionFailed', { action, detail });
     case 'expression':
-      return t('macro.error.expression', { action, detail: i18n.exists(`expr.error.${detail}`) ? t(`expr.error.${detail}`) : detail });
+      return t('macro.error.expression', { action, detail: i18n.exists(`expr.error.${detail}`)
+        ? t(`expr.error.${detail}`, { name: f.cause instanceof ExprRuntimeError ? f.cause.detail : '' }) : detail });   // notOpen: the object's name
     case 'notFound': case 'badDefinition':
       return t(`macro.error.${f.code}`, { name: f.code === 'badDefinition' ? f.raw.MacroName || f.macro : name, detail });
+    case 'tooDeep':
+      return t(detail === 'events' ? 'macro.error.eventTooDeep' : 'macro.error.tooDeep');   // runEvent's nesting, else RunMacro's
     default:
       return t(`macro.error.${f.code}`, { action, detail });
   }
@@ -40,7 +48,7 @@ export function argText(action: string, arg: string, value: string, ctx: Display
   const type = actionDef(action)?.args.find((a) => a.name === arg)?.type;
   try {
     if (type === 'enum') return t(`macro.argValue.${arg}.${value || 'empty'}`);
-    if (type === 'expression' || type === 'where') return value && toDisplay(value, ctx);
+    if (type === 'expression' || type === 'where' || type === 'reference') return value && toDisplay(value, ctx);
     if ((type === 'text' || type === 'number') && value.startsWith('=')) return `=${toDisplay(value.slice(1), ctx)}`;
   } catch { /* as stored */ }
   return value;

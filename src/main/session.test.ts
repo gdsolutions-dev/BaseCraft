@@ -61,6 +61,17 @@ describe('session (brief)', () => {
     expect(lockOwner()).toBe('a'); // closing a read-only session leaves the holder's lock alone
   });
 
+  it('startup options: read in a read-only session, saved only by the writer', () => {
+    const a = create();
+    const mine = { ...a.startup(), appTitle: 'Gestion des ventes', runMode: true };
+    a.saveStartup(mine);
+    const b = open({ sessionId: 'b' });
+    expect(b.state.readOnly).toBe(true);
+    expect(b.startup()).toEqual(mine);
+    expect(() => b.saveStartup({ ...mine, runMode: false })).toThrow(ReadOnlyError);
+    expect(a.startup()).toEqual(mine);
+  });
+
   it('stale lock can be taken over', async () => {
     const a = create();
     t = 31_000;

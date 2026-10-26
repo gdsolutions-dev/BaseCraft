@@ -4,9 +4,10 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, uints, queryRef, queryParams, runActionOptions,
+  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
+import { DEFAULT_STARTUP } from '../shared/startup';
 import { localeInfo } from '../shared/locale-format';
 import { clients } from '../shared/test-fixtures';
 
@@ -197,6 +198,34 @@ describe('ipc argument checks', () => {
     expect(Object.getPrototypeOf(named.tables)).toBeNull();
     expect(Object.keys(named.tables)).toEqual(['__proto__', 'constructor', 'prototype']);
     expect(Object.getOwnPropertyDescriptor(named.tables, '__proto__')?.value).toEqual({ x: 1, y: 2 });
+  });
+
+  it('startupOptions is strict', () => {
+    expect(startupOptions({ ...DEFAULT_STARTUP, startupForm: 'FMenu' })).toEqual({ ...DEFAULT_STARTUP, startupForm: 'FMenu' });
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+    const full = { appTitle: 'Gestion des ventes', appIcon: png, startupForm: 'FMenu', showNavPane: false, ribbon: 'simplified', runMode: true };
+    expect(startupOptions(full)).toEqual(full);
+    expect(startupOptions({ ...DEFAULT_STARTUP, appTitle: 'é'.repeat(255) }).appTitle).toHaveLength(255);
+    const { runMode: _runMode, ...missing } = DEFAULT_STARTUP;
+    const gif = btoa('GIF89a\u0001\u0000\u0001\u0000');
+    for (const v of [
+      { ...DEFAULT_STARTUP, ribbon: 'custom' }, { ...DEFAULT_STARTUP, appTitle: 'a\u202Eb' }, { ...DEFAULT_STARTUP, runMode: 1 }, null, [], 'x',
+      { ...DEFAULT_STARTUP, showNavPane: 'true' }, { ...DEFAULT_STARTUP, appTitle: 5 }, { ...DEFAULT_STARTUP, appTitle: ' x' }, { ...DEFAULT_STARTUP, appTitle: 'x\n' },
+      { ...DEFAULT_STARTUP, appTitle: 'é'.repeat(256) }, { ...DEFAULT_STARTUP, appTitle: 'x'.repeat(1_000_000) },
+      { ...DEFAULT_STARTUP, appIcon: 'AAAA' }, { ...DEFAULT_STARTUP, appIcon: gif }, { ...DEFAULT_STARTUP, appIcon: 3 },
+      { ...DEFAULT_STARTUP, startupForm: 'a.b' }, { ...DEFAULT_STARTUP, startupForm: ' x' }, { ...DEFAULT_STARTUP, startupForm: 3 },
+      missing, { ...DEFAULT_STARTUP, v: 2 },
+      JSON.parse('{"__proto__":{},"appTitle":"","appIcon":"","startupForm":"","showNavPane":true,"ribbon":"full","runMode":false}'),
+    ]) expect(() => startupOptions(v)).toThrow(INVALID);
+  });
+
+  it('iconBytes takes a small PNG or null', () => {
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+    expect(iconBytes(null)).toBeNull(); expect(iconBytes(png)).toEqual(png);
+    const edge = new Uint8Array(1024 * 1024); edge.set(png); // exactly 1 MiB: still taken
+    expect(iconBytes(edge)).toBe(edge);
+    for (const v of [new Uint8Array(2 * 1024 * 1024), new Uint8Array(1024 * 1024 + 1).fill(0x89), 'iVBOR', undefined, [137, 80, 78, 71], new Uint8Array(0), new Uint8Array(png.length).fill(1),
+      new TextEncoder().encode('GIF89a......'), png.slice(0, 7), Uint8Array.from(png, (b, i) => (i === 12 ? 0x58 : b)) /* no IHDR */, new Uint16Array(png.buffer.slice(0, 8)), { 0: 137 }]) expect(() => iconBytes(v)).toThrow(INVALID);
   });
 
   it('integer arrays', () => {

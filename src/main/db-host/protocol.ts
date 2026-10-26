@@ -20,6 +20,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription',
   'describeSource', 'pageSource', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
+  'startup', 'saveStartup',
   'exportText',
   'exportRowCount',
   'exportExcel',

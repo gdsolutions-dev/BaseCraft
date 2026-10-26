@@ -29,7 +29,9 @@ export interface DocTab {
   id: string; kind: DocKind; name: string; mode: DocMode; dirty: boolean; reloadToken: number; dataToken?: number; isNew?: boolean; description?: string;
   dirtySources?: RecordSourceRef[]; openArgs?: OpenArgs; dialog?: true; openerId?: string; embedded?: string;
 }
-export interface AppState { tabs: DocTab[]; activeId: string | null; navVisible: boolean }
+/** navStrip: the hidden Navigation Pane leaves its « Afficher » strip. False when the startup options hid it (R14: the pane is
+ *  gone, as in Access); F11 (toggleNav) brings it back, after which its own strip and button behave as before. */
+export interface AppState { tabs: DocTab[]; activeId: string | null; navVisible: boolean; navStrip: boolean }
 export type AppAction =
   | { type: 'open'; kind: DocKind; name: string; mode: DocMode; isNew?: boolean; args?: OpenArgs; embedded?: { id: string; owner: string } } | { type: 'close'; id: string } | { type: 'activate'; id: string }
   | { type: 'setMode'; id: string; mode: DocMode } | { type: 'setDirty'; id: string; dirty: boolean; sources?: RecordSourceRef[] }
@@ -37,14 +39,14 @@ export type AppAction =
   | { type: 'tableSaved'; name: string; tabId?: string } // tabId: the new-table tab that was just saved under `name`
   | { type: 'tableDataChanged'; name: string } // rows added elsewhere (import): never reloads a design
   | { type: 'tablesChanged' } // tables created elsewhere (an import, its error table): only the Relations window reloads
-  | { type: 'toggleNav' } | { type: 'reset' }
+  | { type: 'toggleNav' } | { type: 'setNav'; visible: boolean; strip: boolean } | { type: 'reset' }
   | { type: 'objectRenamed'; kind: ObjectKind; from: string; to: string } | { type: 'objectDeleted'; kind: ObjectKind; name: string }
   | { type: 'objectSaved'; kind: ObjectKind; name: string; tabId?: string } // tabId: the new-object tab just saved under `name`
   | { type: 'listsChanged' } // a description (Properties dialog): only the navigation pane's lists are read again
   | { type: 'tableDescribed'; name: string; description: string } // Properties dialog: a table's tabs take it, never dirtied
   | { type: 'queryDataChanged' }; // A3: an action query wrote rows: every query datasheet re-reads its rows
 
-export const initialAppState: AppState = { tabs: [], activeId: null, navVisible: true };
+export const initialAppState: AppState = { tabs: [], activeId: null, navVisible: true, navStrip: true };
 
 let seq = 0;
 // Tables by exact name: the main process only hands out live names, and twins ("Été", "été" of another tool) are two tables
@@ -133,8 +135,9 @@ export function appReducer(s: AppState, a: AppAction): AppState {
     case 'queryDataChanged':
       return { ...s, tabs: s.tabs.map((t) => (t.kind === 'query' && t.mode === 'run' ? { ...t, dataToken: (t.dataToken ?? 0) + 1 } : t)) };
     case 'tableDescribed': return { ...s, tabs: s.tabs.map((t) => (isTable(t, a.name) ? { ...t, description: a.description } : t)) };
-    case 'toggleNav': return { ...s, navVisible: !s.navVisible };
-    case 'reset': return { ...initialAppState, navVisible: s.navVisible };
+    case 'toggleNav': return { ...s, navVisible: !s.navVisible, navStrip: true };
+    case 'setNav': return { ...s, navVisible: a.visible, navStrip: a.strip };
+    case 'reset': return { ...initialAppState, navVisible: s.navVisible, navStrip: s.navStrip };   // the startup sequence sets both per opening
     case 'objectRenamed': return { ...s, tabs: s.tabs.map((t) => (isDoc(t, a.kind, a.from) ? { ...t, name: a.to } : t)) };
     case 'objectDeleted': return remove(s, (t) => isDoc(t, a.kind, a.name));
     case 'objectSaved':

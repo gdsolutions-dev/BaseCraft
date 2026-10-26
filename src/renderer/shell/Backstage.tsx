@@ -1,10 +1,12 @@
 // Coulisse (onglet Fichier) : Récents, Nouveau, Ouvrir, Enregistrer sous, Compacter et réparer, Récents, Fermer, Options.
 import { ArrowLeft, Database, ExternalLink, FilePlus2, FolderClosed, FolderOpen, History, Info, Save, Settings2, Wrench } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AppInfo, AppSettings, BasecraftApi, LicenseEntry } from '../../shared/api';
+import type { StartupOptions } from '../../shared/startup';
 import { api } from '../bridge';
 import { applyTheme } from '../i18n';
+import { CurrentDatabaseOptions } from './CurrentDatabaseOptions';
 import { trapFocus } from './Modal';
 
 export type Settings = Awaited<ReturnType<BasecraftApi['app']['getSettings']>>;
@@ -58,8 +60,14 @@ interface Props {
   view: BackstageView; onView(v: BackstageView): void;
   onBack: (() => void) | null; // null: no base open, the backstage cannot be left
   hasBase: boolean; settings: Settings | null; onSettingsChanged(): void;
-  onNew(): void; onOpen(path?: string): void; onCloseBase(): void;
+  onNew(): void; onCloseBase(): void;
+  /** shift: Shift held on the click or key that asked for it (the base's startup is bypassed, B3 R4). */
+  onOpen(path?: string, shift?: boolean): void;
   readOnly: boolean; onSaveAs(): void; onCompact(): void; // A6
+  /** Options › Base de données active (B3): the forms to choose from; the title and icon saved, to apply at once (R11). */
+  forms: readonly string[]; onStartupApplied(o: StartupOptions): void;
+  /** A base behind a stale lock that is not recovered yet: its options cannot be read, so the section waits for the take-over. */
+  needsRecovery: boolean;
 }
 
 const splitPath = (p: string) => {
@@ -72,7 +80,7 @@ export function Backstage(p: Props) {
   const first = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => { first.current?.focus(); }, []);
-  const item = (testid: string, Icon: typeof FilePlus2, label: string, onClick: () => void, extra: { disabled?: boolean; active?: boolean } = {}) => (
+  const item = (testid: string, Icon: typeof FilePlus2, label: string, onClick: (e: MouseEvent) => void, extra: { disabled?: boolean; active?: boolean } = {}) => (
     <button data-testid={testid} className={`bs-item${extra.active ? ' is-active' : ''}`} disabled={extra.disabled} onClick={onClick}
       aria-current={extra.active || undefined} ref={testid === 'bs-recent' ? first : undefined}>
       <Icon className="ic" aria-hidden /><span>{label}</span>
@@ -91,7 +99,7 @@ export function Backstage(p: Props) {
         <div className="bs-brand"><Database className="ic" aria-hidden />{t('app.title')}</div>
         {item('bs-recent', History, t('backstage.recent'), () => p.onView('home'), { active: p.view === 'home' })}
         {item('bs-new', FilePlus2, t('backstage.new'), p.onNew)}
-        {item('bs-open', FolderOpen, t('backstage.open'), () => p.onOpen())}
+        {item('bs-open', FolderOpen, t('backstage.open'), (e) => p.onOpen(undefined, e.shiftKey))}
         {item('bs-save-as', Save, t('backstage.saveAs'), p.onSaveAs, { disabled: !p.hasBase })}
         {item('bs-compact', Wrench, t('backstage.compact'), p.onCompact, { disabled: !p.hasBase || p.readOnly })}
         {item('bs-close', FolderClosed, t('backstage.close'), p.onCloseBase, { disabled: !p.hasBase })}
@@ -109,7 +117,7 @@ export function Backstage(p: Props) {
                   const { name, dir } = splitPath(f);
                   return (
                     <li key={f}>
-                      <button data-testid={`bs-recent-${i}`} className="bs-recent-item" title={f} onClick={() => p.onOpen(f)}>
+                      <button data-testid={`bs-recent-${i}`} className="bs-recent-item" title={f} onClick={(e) => p.onOpen(f, e.shiftKey)}>
                         <Database className="ic" aria-hidden />
                         <span className="bs-recent-text"><span className="bs-recent-name">{name}</span><span className="muted">{dir}</span></span>
                       </button>
@@ -145,6 +153,7 @@ export function Backstage(p: Props) {
                 </label>
               </div>
             )}
+            {p.hasBase && !p.needsRecovery && <CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} />}
           </section>
         )}
       </main>

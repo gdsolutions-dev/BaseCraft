@@ -237,6 +237,12 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual(['B4', 'D', 'D']);   // still planned after B2
   });
 
+  it('B3 leaves no B3 placeholder', () => {
+    expect(commands.filter((c) => c.planned === 'B3').map((c) => c.id)).toEqual([]);
+    const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual(['B4', 'D', 'D']);   // still planned after B3
+  });
+
   it('every tab, group and command has a French and an English label; every batch has its tooltip', () => {
     const keys = [
       ...RIBBON.map((t) => t.labelKey), ...RIBBON.flatMap((t) => t.groups.map((g) => g.labelKey)), ...commands.map((c) => c.labelKey),
@@ -578,6 +584,27 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(shown('report', 'design')).toEqual(['reportDesign', 'arrange', 'format', 'pageSetup']);
     expect(shown('report', 'run')).toEqual(['printPreview']);
     expect(shown('macro', 'design')).toEqual(['macroDesign']);
+  });
+
+  it('the simplified ribbon keeps Home and Print Preview', () => {
+    const base: RibbonContext = { hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form' };
+    expect(visibleTabs({ ...base, ribbon: 'simplified' }).map((t) => t.id)).toEqual(['home']);
+    expect(visibleTabs({ ...base, mode: 'run', kind: 'report', ribbon: 'simplified' }).map((t) => t.id)).toEqual(['home', 'printPreview']);
+    expect(visibleTabs(base).map((t) => t.id)).toContain('formDesign');
+  });
+
+  it('the Query Builder under the simplified ribbon and run mode keeps its own tabs, and has no Design View either', () => {
+    const builder: RibbonContext = { hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'query', builder: true };
+    expect(visibleTabs({ ...builder, ribbon: 'simplified', runMode: true }).map((t) => t.id)).toEqual(['home', 'queryDesign']);   // Close and Save As stay
+    const home = (c: RibbonContext) => visibleTabs(c).find((t) => t.id === 'home')!.groups[0]!.commands.filter((x) => !x.visible || x.visible(c)).map((x) => x.id);
+    expect(home({ ...builder, ribbon: 'simplified', runMode: true })).not.toContain('viewDesign');
+    expect(home(builder)).toContain('viewDesign');
+  });
+
+  it('run mode hides Design View', () => {
+    const home = (c: RibbonContext) => visibleTabs(c).find((t) => t.id === 'home')!.groups[0]!.commands.filter((x) => !x.visible || x.visible(c)).map((x) => x.id);
+    expect(home({ hasBase: true, readOnly: false, mode: 'run', isNew: false, kind: 'form', ribbon: 'simplified', runMode: true })).toEqual(['viewForm', 'viewDatasheet']);
+    expect(home({ hasBase: true, readOnly: false, mode: 'run', isNew: false, kind: 'form' })).toEqual(['viewForm', 'viewDatasheet', 'viewDesign']);   // full: unchanged
   });
 
   it('C10: entering a context selects its first contextual tab, leaving restores the tab selected before', () => {

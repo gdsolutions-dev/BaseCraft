@@ -1,8 +1,8 @@
 import { _electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, FILE_EXTENSION, openBaseFile } from '../../src/main/db/file-format';
 import { saveObject } from '../../src/main/db/objects';
 import type { BasecraftApi } from '../../src/shared/api';
@@ -12,7 +12,7 @@ import { createTable } from '../../src/main/db/schema';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../src/shared/report/fixtures/factures';
 
 export async function launchApp(
-  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean } = {},
+  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean } = {},
 ): Promise<{ app: ElectronApplication; page: Page; userDataDir: string }> {
   const userDataDir = opts.userDataDir ?? mkdtempSync(join(tmpdir(), 'basecraft-'));
   // Bases seeded in the temporary folder are trusted (their active content is enabled), unless `untrusted`: nothing is then.
@@ -36,7 +36,8 @@ export async function launchApp(
   // A base named on the command line opens in the main process after the window loads (main/index.ts): wait until it is open
   // (its lock taken, or found held by another instance). A second instance launched next then always finds the first one's
   // lock and opens read-only, however slow the machine; a fixed wait for the banner raced both the open and the lock.
-  if (opts.args?.some((a) => a.toLowerCase().endsWith(FILE_EXTENSION))) {
+  // waitOpen false: a base whose startup closes it or quits at once (its open state may never be seen).
+  if (opts.waitOpen !== false && opts.args?.some((a) => a.toLowerCase().endsWith(FILE_EXTENSION))) {
     await expect.poll(() => page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.base.state()),
       { timeout: 20_000, message: 'the base given on the command line opens' }).not.toBeNull();
   }
@@ -60,6 +61,26 @@ export function seedBase(name: string, setup?: (db: DatabaseSync) => void | Prom
   }
   if (pending instanceof Promise) return pending.then(() => p).finally(() => db.close());
   db.close();
+  return p;
+}
+
+/** A base left by a crash: a hot journal (uncommitted rows already spilled to the file) and a lock whose holder is long gone. It opens
+ *  read-only and `needsRecovery` (session.test.ts has the same recipe); the banner's take-over recovers it. Returns its path. */
+export function seedCrashed(name: string): string {
+  const src = seedBase(`${name}-src`);
+  const p = join(mkdtempSync(join(tmpdir(), 'basecraft-seed-')), name + FILE_EXTENSION);
+  const w = new DatabaseSync(src);
+  try {
+    w.exec('PRAGMA cache_size=5; CREATE TABLE big(x)');
+    w.exec('BEGIN');
+    for (let i = 0; i < 300; i++) w.prepare('INSERT INTO big VALUES (?)').run('y'.repeat(2000) + i);
+    copyFileSync(src, p);
+    copyFileSync(`${src}-journal`, `${p}-journal`);
+    w.exec('ROLLBACK');
+  } finally {
+    w.close();
+  }
+  writeFileSync(`${p}.lock`, JSON.stringify({ user: 'u', host: 'h', pid: 1, sessionId: 'dead', heartbeatAt: new Date(0).toISOString() }), 'utf8');
   return p;
 }
 

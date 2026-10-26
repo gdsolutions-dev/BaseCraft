@@ -162,7 +162,14 @@ describe('appReducer', () => {
   it('toggleNav and reset', () => {
     expect(appReducer(init, { type: 'toggleNav' }).navVisible).toBe(false);
     const hidden = appReducer(s1, { type: 'toggleNav' });
-    expect(appReducer(hidden, { type: 'reset' })).toEqual({ tabs: [], activeId: null, navVisible: false });
+    expect(appReducer(hidden, { type: 'reset' })).toEqual({ tabs: [], activeId: null, navVisible: false, navStrip: true });
+  });
+  it('setNav hides without a strip; F11 brings the strip back', () => {
+    const s = appReducer(init, { type: 'setNav', visible: false, strip: false });
+    expect(s).toMatchObject({ navVisible: false, navStrip: false });
+    expect(appReducer(s, { type: 'reset' })).toMatchObject({ navVisible: false, navStrip: false });   // Task 4 sets both per opening
+    expect(appReducer(s, { type: 'toggleNav' })).toMatchObject({ navVisible: true, navStrip: true });
+    expect(appReducer(appReducer(s, { type: 'toggleNav' }), { type: 'toggleNav' })).toMatchObject({ navVisible: false, navStrip: true });
   });
   it('objects: one tab per kind and name; table actions never touch another kind', () => {
     let s = appReducer(s1, { type: 'open', kind: 'form', name: 'Clients', mode: 'run' });

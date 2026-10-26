@@ -2263,5 +2263,27 @@
       "search": "Rechercher",
       "flow": "Déroulement de programme"
     }
+  },
+  "options": {
+    "db": {
+      "title": "Base de données active",
+      "appTitle": "Titre de l'application",
+      "appIcon": "Icône de l'application",
+      "iconBrowse": "Parcourir…",
+      "iconRemove": "Supprimer l'icône",
+      "iconBad": "Cette image ne peut pas servir d'icône.",
+      "startupForm": "Afficher le formulaire",
+      "none": "(aucun)",
+      "showNavPane": "Afficher le volet de navigation",
+      "ribbon": "Ruban",
+      "ribbonFull": "Complet",
+      "ribbonSimplified": "Simplifié",
+      "runMode": "Ouvrir en mode exécution",
+      "runModeHelp": "Masque le volet de navigation et le mode Création. Maintenez Maj enfoncée à l'ouverture pour l'ignorer.",
+      "nextOpen": "Ces options prennent effet à la prochaine ouverture de la base."
+    }
+  },
+  "startup": {
+    "formNotFound": "Le formulaire de démarrage « {{name}} » est introuvable."
   }
 }

@@ -12,7 +12,7 @@
     "files": ["out/**/*", "!**/node_modules/**"],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": { "buildResources": "build" },
-    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }],
+    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }],
     "fileAssociations": [{ "ext": "basecraft", "name": "BaseCraft database", "role": "Editor", "mimeType": "application/x-basecraft" }],
     "win": { "target": ["nsis", "zip"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },

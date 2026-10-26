@@ -29,6 +29,8 @@ import { copyRows, deleteRows, insertRow, updateRow, type RowWriteResult } from 
 import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
+import { saveStartupOptions, startupOptions } from './db/startup';
+import type { StartupOptions } from '../shared/startup';
 import { writeTextExport } from './exchange/export-text';
 import { writeExcelExport } from './exchange/export-excel';
 import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, type ExportTextSpec } from '../shared/exchange';
@@ -456,6 +458,9 @@ export class Session {
   saveImportSpec(name: string, spec: ImportSpec): void { saveSpec(this.writeDb(), name, spec); }
 
   /** Active content (R3) and the base's identity, for the main process's decision (trust.ts). */
+  /** Startup options (B3): read-only allowed; a wrong key reads as its default (R12). */
+  startup(): StartupOptions { return startupOptions(this.conn()); }
+  saveStartup(o: StartupOptions): void { saveStartupOptions(this.writeDb(), o); }
   activeContent(): ActiveContent { return activeContent(this.conn()); }
   dbUuid(): string {
     return (this.conn().prepare(`SELECT value FROM bc_meta WHERE key = 'db_uuid'`).get() as { value: string } | undefined)?.value ?? '';

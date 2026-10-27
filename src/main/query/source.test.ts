@@ -10,6 +10,8 @@ import { printSql } from '../../shared/query/print';
 import { parseSql } from '../../shared/query/sql-parser';
 import { describeQuerySource, pageQuerySource, rowSourceRef, sourceHasValue, type QueryRef } from './source';
 import { seedSales, seedSalesRelation } from './test-db';
+import { createTable } from '../db/schema';
+import { f, t } from '../../shared/test-fixtures';
 
 const probe: RiskProbe = { platform: 'win32', env: {}, homedir: 'C:\\Users\\x', windowsDriveType: () => 3 };
 let dir: string;
@@ -35,7 +37,7 @@ afterEach(() => {
 
 it('describe a parameter query', () => {
   saveQ('QDepuis', 'SELECT [N°], Montant, Le FROM Commandes WHERE Le >= [Date début :]');
-  expect(describeQuerySource(db, { kind: 'query', name: 'QDepuis' }))
+  expect(describeQuerySource(db, { kind: 'query', name: 'QDepuis' }, ctx.info))
     .toMatchObject({ updatable: true, keyTable: 'Commandes', parameters: [{ name: 'Date début :', type: 'dateTime' }] });
 });
 
@@ -53,11 +55,34 @@ it('missing / invalid parameter', () => {
     .toThrow(/^bc:invalidParameter\|invalidDate\|Date début :$/);
 });
 
-it('sql source, sort, multi-table read-only', () => {
-  const ref = { kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' } as const;
+it('sql source, sort, multi-table read-only: a many-to-many join (R7)', () => {
+  // Ville is unique on neither side: no "one" side, read-only (B4 R1)
+  createTable(db, t('Tarifs', [f('Ville', 'shortText'), f('Montant', 'currency')]));
+  db.exec(`INSERT INTO "Tarifs" VALUES ('Paris', 9), ('Paris', 8), ('Lyon', 1)`);
+  const ref = { kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Tarifs ON Clients.Ville = Tarifs.Ville' } as const;
+  expect(describeQuerySource(db, ref, ctx.info)).toMatchObject({ updatable: false });
   expect(pageQuerySource(db, ref, { offset: 0, limit: 2, sort: [{ field: 'Montant', dir: 'desc' }] }, ctx))
-    .toEqual({ rows: [['Durand', 99.99], ['Dupont', 10.1]], rowids: [null, null], total: 5 });
+    .toEqual({ rows: [['Durand', 9], ['Durand', 8]], rowids: [null, null], total: 4 }); // Lyon = LYON (Access comparison)
   expect(() => pageQuerySource(db, ref, { offset: 0, limit: 2, sort: [{ field: 'Zzz', dir: 'asc' }] }, ctx)).toThrow(/^bc:notFound$/); // contract 1.2
+});
+
+it("an updatable join's rowids are the key table's, also through a saved query (P2); a row without its key record has none (R5)", () => {
+  const QV = 'SELECT Commandes.[N°], Clients.Nom, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client';
+  saveQ('QV', QV);
+  for (const sql of [QV, 'SELECT * FROM QV', 'SELECT Nom, Montant FROM QV']) {
+    const p = pageQuerySource(db, { kind: 'sql', sql }, { offset: 0, limit: 10, sort: [{ field: 'Nom', dir: 'asc' }] }, ctx);
+    if (sql !== 'SELECT Nom, Montant FROM QV') expect(p.rowids).toEqual(p.rows.map((r) => r[0])); // Commandes.N°
+    expect(p.rowids).toEqual([1, 2, 4, 3, 5]); // Dupont, Durand, Martin
+  }
+  const left = { kind: 'sql', sql: 'SELECT Nom, Commandes.[N°] FROM Clients LEFT JOIN Commandes ON Clients.[N°] = Commandes.Client' } as const;
+  expect(pageQuerySource(db, left, { offset: 0, limit: 10, filter: [{ field: 'Nom', criteria: '"Éric"' }] }, ctx))
+    .toEqual({ rows: [['Éric', null]], rowids: [null], total: 1 });
+});
+
+it('a joined table without a real rowid makes the join read-only', () => {
+  db.exec('CREATE TABLE Villes (Ville TEXT PRIMARY KEY, Pays TEXT) WITHOUT ROWID');
+  expect(describeQuerySource(db, { kind: 'sql', sql: 'SELECT Nom, Pays FROM Villes INNER JOIN Clients ON Villes.Ville = Clients.Ville' }, ctx.info))
+    .toMatchObject({ updatable: false });
 });
 
 it("a page keeps the query's own order, which also breaks ties of the page sort; offset pages", () => {
@@ -78,7 +103,7 @@ it('text sorts as Access: accents order, case ties (then the query order)', () =
 it('an updatable query, also through a saved query, gives the key table rowids', () => {
   saveQ('QLyon', 'SELECT Nom AS Client, Ville FROM Clients WHERE Ville = "Lyon"');
   const ref = { kind: 'sql', sql: 'SELECT * FROM QLyon' } as const;
-  expect(describeQuerySource(db, ref)).toMatchObject({ updatable: true, keyTable: 'Clients', fields: [{ name: 'Client', origin: { table: 'Clients', field: 'Nom' } }, { name: 'Ville' }] });
+  expect(describeQuerySource(db, ref, ctx.info)).toMatchObject({ updatable: true, keyTable: 'Clients', fields: [{ name: 'Client', origin: { table: 'Clients', field: 'Nom' } }, { name: 'Ville' }] });
   expect(pageQuerySource(db, ref, { offset: 0, limit: 10, sort: [{ field: 'Client', dir: 'desc' }] }, ctx))
     .toEqual({ rows: [['Martin', 'LYON'], ['Dupont', 'Lyon']], rowids: [2, 1], total: 2 });
   expect(pageQuerySource(db, { kind: 'sql', sql: 'SELECT Ville FROM Clients UNION SELECT Ville FROM QLyon' }, { offset: 0, limit: 10 }, ctx).rowids)
@@ -88,11 +113,11 @@ it('an updatable query, also through a saved query, gives the key table rowids',
 it('filter on a sql source: criteria on the output columns, total of the kept rows', () => {
   const ref = { kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' } as const;
   expect(pageQuerySource(db, ref, { offset: 0, limit: 10, sort: [{ field: 'Montant', dir: 'desc' }], filter: [{ field: 'Nom', criteria: '"martin"' }] }, ctx))
-    .toEqual({ rows: [['Martin', 0.2], ['Martin', 0.1]], rowids: [null, null], total: 2 });
+    .toEqual({ rows: [['Martin', 0.2], ['Martin', 0.1]], rowids: [3, 5], total: 2 }); // updatable join (R7): Commandes rowids
   // a criterion naming another output column, a page past the first, limit 0
   const f = [{ field: 'montant', criteria: '<11 And >[Montant]-1 And >0.15' }];
   expect(pageQuerySource(db, ref, { offset: 1, limit: 10, sort: [{ field: 'Montant', dir: 'asc' }], filter: f }, ctx))
-    .toEqual({ rows: [['Dupont', 10.1]], rowids: [null], total: 2 });
+    .toEqual({ rows: [['Dupont', 10.1]], rowids: [1], total: 2 });
   expect(() => pageQuerySource(db, ref, { offset: 0, limit: 1, filter: [{ field: 'Nom', criteria: '>>' }] }, ctx)).toThrow(/^bc:invalidArgument$/);
   expect(() => pageQuerySource(db, ref, { offset: 0, limit: 1, filter: [{ field: 'Nom', criteria: '[Zzz]' }] }, ctx)).toThrow(/^bc:invalidArgument$/);
   expect(() => pageQuerySource(db, ref, { offset: 0, limit: 1, filter: [{ field: 'Ville', criteria: '"x"' }] }, ctx)).toThrow(/^bc:notFound$/);
@@ -134,8 +159,8 @@ it('a table without a real rowid (WITHOUT ROWID, or a field named rowid) gives a
   db.exec("CREATE TABLE Ext (k INTEGER PRIMARY KEY, v TEXT) WITHOUT ROWID; INSERT INTO Ext VALUES (1, 'a');");
   db.exec("CREATE TABLE Shadow (rowid INTEGER, v TEXT); INSERT INTO Shadow VALUES (7, 'b');");
   for (const [sql, row] of [['SELECT * FROM Ext', [1, 'a']], ['SELECT v FROM Shadow', ['b']]] as const) {
-    expect(describeQuerySource(db, { kind: 'sql', sql })).toMatchObject({ updatable: false });
-    expect(describeQuerySource(db, { kind: 'sql', sql }).keyTable).toBeUndefined();
+    expect(describeQuerySource(db, { kind: 'sql', sql }, ctx.info)).toMatchObject({ updatable: false });
+    expect(describeQuerySource(db, { kind: 'sql', sql }, ctx.info).keyTable).toBeUndefined();
     expect(pageQuerySource(db, { kind: 'sql', sql }, { offset: 0, limit: 10 }, ctx)).toEqual({ rows: [row], rowids: [null], total: 1 });
   }
 });
@@ -195,12 +220,12 @@ it.each([
   [{ kind: 'sql', sql: 'SELECT * FROM' }, /^bc:invalidQuery\|unexpectedEnd\|13$/],
   [{ kind: 'query', name: 'Nope' }, /^bc:notFound$/],
   [{ kind: 'sql', sql: 'SELECT * FROM Zzz' }, /^bc:notFound\|unknownSource\|Zzz$/], // contract 1.2: a missing table
-])('errors %#', (ref, re) => expect(() => describeQuerySource(db, ref as QueryRef)).toThrow(re));
+])('errors %#', (ref, re) => expect(() => describeQuerySource(db, ref as QueryRef, ctx.info)).toThrow(re));
 
 it('broken after a table rename', () => {
   saveQ('QC', 'SELECT * FROM Clients');
   expect(session.renameTable('Clients', 'Contacts')).toEqual({ ok: true });
-  expect(() => describeQuerySource(db, { kind: 'query', name: 'QC' })).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
+  expect(() => describeQuerySource(db, { kind: 'query', name: 'QC' }, ctx.info)).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
   expect(() => session.describeSource({ kind: 'sql', sql: 'SELECT * FROM QC' })).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
   expect(() => session.pageSource({ kind: 'query', name: 'QC' }, { offset: 0, limit: 1 })).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
 });
@@ -208,8 +233,8 @@ it('broken after a table rename', () => {
 it('a stored query whose definition no longer reads is named', () => {
   db.prepare(`INSERT INTO bc_objects (kind, name, definition, created, modified) VALUES ('query', 'QBad', ?, '', '')`)
     .run(JSON.stringify({ formatVersion: '1.0', sql: 'SELECT * FROM' }));
-  expect(() => describeQuerySource(db, { kind: 'query', name: 'qbad' })).toThrow(/^bc:invalidQuery\|storedQuery\|QBad$/);
-  expect(() => describeQuerySource(db, { kind: 'sql', sql: 'SELECT * FROM Clients WHERE Exists (SELECT * FROM QBad)' }))
+  expect(() => describeQuerySource(db, { kind: 'query', name: 'qbad' }, ctx.info)).toThrow(/^bc:invalidQuery\|storedQuery\|QBad$/);
+  expect(() => describeQuerySource(db, { kind: 'sql', sql: 'SELECT * FROM Clients WHERE Exists (SELECT * FROM QBad)' }, ctx.info))
     .toThrow(/^bc:invalidQuery\|storedQuery\|QBad$/);
 });
 
@@ -267,6 +292,6 @@ it('the cached total is per region: a criterion reads text in the region', () =>
 it('a virtual table of another tool parses and binds, but the authorizer refuses to read it (its own bc:invalidQuery)', () => {
   db.exec('CREATE VIRTUAL TABLE "Notes" USING fts5("Texte")');
   const r = { kind: 'sql', sql: 'SELECT * FROM Notes' } as const;
-  expect(describeQuerySource(db, r).fields.map((x) => x.name)).toEqual(['Texte']);
+  expect(describeQuerySource(db, r, ctx.info).fields.map((x) => x.name)).toEqual(['Texte']);
   expect(() => pageQuerySource(db, r, { offset: 0, limit: 10 }, ctx)).toThrow(/^bc:invalidQuery$/);
 });

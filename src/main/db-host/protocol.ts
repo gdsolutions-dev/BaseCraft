@@ -18,7 +18,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'cascadeChildren',
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription',
-  'describeSource', 'pageSource', 'actionCount', 'runAction',
+  'describeSource', 'pageSource', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
   'startup', 'saveStartup',
   'exportText',

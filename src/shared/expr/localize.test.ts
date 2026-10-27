@@ -153,7 +153,7 @@ describe('catalog', () => {
       for (const f of FUNCTIONS) expect(get(c, `expr.fn.${f.name}`), f.name).toEqual(expect.any(String));
       for (const cat of new Set(FUNCTIONS.map((f) => f.category))) expect(get(c, `expr.cat.${cat}`), cat).toEqual(expect.any(String));
       const codes: ExprErrorCode[] = ['unexpectedToken', 'unexpectedEnd', 'unclosedString', 'unclosedBracket', 'badDate', 'badNumber', 'unknownFunction', 'arity',
-        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType',
+        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType', 'badCrosstab',
         'memberNotAllowed', 'badMember'];
       for (const k of codes) expect(get(c, `expr.error.${k}`), k).toEqual(expect.any(String));
     }

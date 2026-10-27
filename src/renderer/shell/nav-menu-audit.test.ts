@@ -35,3 +35,9 @@ describe('B3 audit', () => {
     expect(allNavItems().filter((i) => i.planned === 'B3').map((i) => i.id)).toEqual([]);
   });
 });
+
+describe('B4 audit', () => {
+  it('B4 leaves no B4 placeholder in any registered menu', () => {
+    expect(allNavItems().filter((i) => i.planned === 'B4').map((i) => i.id)).toEqual([]);
+  });
+});

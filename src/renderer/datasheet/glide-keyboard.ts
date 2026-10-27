@@ -31,25 +31,30 @@ const PLACEHOLDER = 'x';
 /**
  * Glide opens the editor by typing only for ASCII keys (/[ -~]/): « é », « ç », « à » or a dead-key result (« ê ») would be
  * lost. The key is replaced by an ASCII one, which opens the editor the usual way, then that first character is put back.
+ * It is put back as soon as the editor is in the DOM (a mutation observer runs before the next key is handled), not on an
+ * animation frame: frames can come late (a busy or hidden window), after the next keys and Enter (« xlodie » was saved).
  */
 export function openEditorWith(target: EventTarget, ch: string): void {
   firstChar = ch;
-  target.dispatchEvent(new KeyboardEvent('keydown', { key: PLACEHOLDER, bubbles: true, cancelable: true }));
-  const putBack = (frames: number) => {
-    if (firstChar !== ch) return; // taken by a custom editor (takeFirstChar)
+  const done = () => {
+    observer.disconnect();
+    clearTimeout(timer);
+    if (firstChar === ch) firstChar = null;
+  };
+  const observer = new MutationObserver(() => {
+    if (firstChar !== ch) return done(); // taken by a custom editor (takeFirstChar)
     const ta = document.querySelector<HTMLTextAreaElement>(`${EDITOR} textarea`);
-    if (ta?.value.startsWith(PLACEHOLDER)) {
-      firstChar = null;
+    if (!ta) return;
+    if (ta.value.startsWith(PLACEHOLDER)) {
       // React's controlled textarea: the native setter, then an input event, so that Glide's onChange sees it.
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(ta, ch + ta.value.slice(1));
       ta.dispatchEvent(new Event('input', { bubbles: true }));
-    } else if (frames > 0) {
-      requestAnimationFrame(() => putBack(frames - 1));
-    } else {
-      firstChar = null;
     }
-  };
-  putBack(30);
+    done();
+  });
+  observer.observe(document.getElementById('portal') ?? document.body, { childList: true, subtree: true });
+  const timer = setTimeout(done, 1000); // no editor opened (the key refused): a later editor must not get the character
+  target.dispatchEvent(new KeyboardEvent('keydown', { key: PLACEHOLDER, bubbles: true, cancelable: true }));
 }
 let firstChar: string | null = null;
 

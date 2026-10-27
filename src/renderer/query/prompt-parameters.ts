@@ -33,3 +33,13 @@ export async function promptParameters(modal: ModalApi, params: SourceInfo['para
   }
   return out;
 }
+
+/** A query's parameter values before its datasheet (QueryRunView): asked once; a crosstab whose headings need them (B4 R11)
+ *  is described again with them (`describe`), its headings then known. The prompts keep the first description's list: an
+ *  expansion over no pivot value lists only the parameters its rows use. null: cancelled. */
+export async function runParameters(modal: ModalApi, info: SourceInfo, region: LocaleInfo,
+  describe: (values: Record<string, CellInput>) => Promise<unknown>): Promise<Record<string, CellInput> | null> {
+  const values = info.parameters.length ? await promptParameters(modal, info.parameters, region) : {};
+  if (values && info.crosstab?.headings === 'needsParameters') await describe(values);
+  return values;
+}

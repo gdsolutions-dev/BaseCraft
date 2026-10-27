@@ -281,10 +281,11 @@ test('recette A3', async () => {
     await expect(cell(page, 1, 0)).toHaveText('Dupond');
     expect((await rowsOf(page, 'Clients'))[0]).toEqual([1, 'Dupond', 'Lyon']);
     await page.getByTestId('doc-tab-close-query-Clients de Lyon').click();
-    // the join of step 2 stays read-only
+    // B4 R7: the join of step 2 is updatable
     await runWith(page, 'Commandes depuis', '05/10/2026');
-    await expect(doc(page).getByTestId('nav-readonly')).toHaveText(fr.query.readOnly);
-    await expect(doc(page).getByTestId('nav-new')).toBeDisabled();
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('3');
+    await expect(doc(page).getByTestId('nav-readonly')).toHaveCount(0);
+    await expect(doc(page).getByTestId('nav-new')).toBeEnabled();
     await page.getByTestId('doc-tab-close-query-Commandes depuis').click();
 
     // 6. an Update query on customer 1: 2 rows announced; 0,10 - 1 breaks the > 0 rule; run anyway: 9,10 and 0,10

@@ -4,7 +4,7 @@ import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import {
   MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type ObjectKind, type PageRequest, type PrintRequest, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
-  type SourcePageRequest, type QueryRef, type RunActionOptions,
+  type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions,
 } from '../shared/api';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
 import { pngSize } from '../shared/png';
@@ -289,6 +289,13 @@ export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? 
 
 /** A3 action queries: a query or SQL ref (never a table), at most MAX_PARAMS parameter values, the run's two options. */
 export const queryRef = (v: unknown): QueryRef => { const r = sourceRef(v); return r.kind === 'table' ? bad() : r; };
+/** B4 sources.save: a query or SQL ref (never a table), a key rowid (null: a new record), values as cells(). */
+export function sourceSaveRequest(r: unknown, q: unknown): [QueryRef, SourceSaveRequest] {
+  if (!isObj(q)) bad();
+  return [queryRef(r), { rowid: q.rowid === null ? null : uint(q.rowid) /* as rows.update */, values: cells(q.values) }];
+}
+/** B4 sources.autoLookup: a query or SQL ref (never a table), the link values as cells(). */
+export const autoLookupRequest = (r: unknown, v: unknown): [QueryRef, Record<string, CellInput>] => [queryRef(r), cells(v)];
 export function queryParams(v: unknown): Record<string, CellInput> {
   if (!isObj(v) || Object.keys(v).length > MAX_PARAMS) bad();
   return cells(v);

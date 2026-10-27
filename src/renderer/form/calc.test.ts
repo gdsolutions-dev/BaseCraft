@@ -55,6 +55,12 @@ describe('controlDefaults', () => {
     [bound('qté', { DefaultValue: '2 + 3' }), bound('Quand', { DefaultValue: 'Date()' }), bound('Nom', { DefaultValue: '"x" & 1' })],
     infoWith(sf('Qté', 'shortText'), sf('Quand', 'dateTime'), sf('Nom', 'shortText')), env()))
     .toEqual({ Qté: '5', Quand: '2026-10-21 00:00:00', Nom: 'x1' }));
+  it("a join's 'one' table gets no default: a new record never writes it (B4 R2), AutoLookup shows its parent", async () => {
+    const info: SourceInfo = { fields: [{ ...sf('Client', 'number', { defaultValue: '1' }), origin: { table: 'Commandes', field: 'Client' } },
+      { ...sf('Ville', 'shortText', { defaultValue: '"Lyon"' }), origin: { table: 'Clients', field: 'Ville' } }], updatable: true, keyTable: 'Commandes', parameters: [],
+    tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }] };
+    expect(await controlDefaults([bound('Client'), bound('Ville', { DefaultValue: '"Paris"' })], info, env())).toEqual({ Client: 1 });
+  });
   it('two controls bound to the same field: the first one decides', async () => {
     const info = infoWith(sf('Qté', 'number', { defaultValue: '1' }));
     expect(await controlDefaults([bound('Qté', { DefaultValue: '5' }), { ...bound('qté', { DefaultValue: '7' }), name: 'Qté2' }], info, env())).toEqual({ Qté: 5 });

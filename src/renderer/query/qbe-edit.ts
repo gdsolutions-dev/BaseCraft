@@ -5,9 +5,10 @@ import { bracket } from '../../shared/expr/lexer';
 import { sameName } from '../../shared/field-types';
 import type { JoinKind, ParamDecl } from '../../shared/query/ast';
 import type { Expr } from '../../shared/expr/ast';
-import { parseCanonical } from '../../shared/expr/parser';
-import { named, splitAlias, type QbeColumn, type QbeDesign, type QbeJoin, type QbeKind, type QbeTotal } from '../../shared/query/qbe';
-import { QUERY_PARSE } from '../../shared/query/sql-parser';
+import { listSeparator, toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
+import { hasAggregate, parseCanonical } from '../../shared/expr/parser';
+import { named, splitAlias, type QbeColumn, type QbeCrosstab, type QbeDesign, type QbeJoin, type QbeKind, type QbeTotal } from '../../shared/query/qbe';
+import { isHeadingLiteral, QUERY_PARSE } from '../../shared/query/sql-parser';
 
 export type QbeAction =
   | { type: 'addTable'; name: string; relations: Relation[] }          // automatic alias « Clients_1 » when already present; default joins
@@ -17,8 +18,8 @@ export type QbeAction =
   | { type: 'moveColumn'; from: number; to: number } | { type: 'setTotals'; on: boolean } | { type: 'setKind'; kind: QbeKind; target?: string }
   // Task 9: Insert / Delete Rows (a criteria row, in every column); the query's properties (null: Top Values All)
   | { type: 'insertRow'; at: number } | { type: 'deleteRow'; at: number }
-  | { type: 'setProps'; top?: QbeDesign['top'] | null; distinct?: boolean; outputAll?: boolean; params?: ParamDecl[] };
-export type QbeRow = 'field' | 'table' | 'total' | 'sort' | 'show' | `criteria${number}` | 'appendTo' | 'updateTo' | 'deleteRole';
+  | { type: 'setProps'; top?: QbeDesign['top'] | null; distinct?: boolean; outputAll?: boolean; params?: ParamDecl[]; headings?: string[] /* [] : no IN */ };
+export type QbeRow = 'field' | 'table' | 'total' | 'sort' | 'show' | `criteria${number}` | 'appendTo' | 'updateTo' | 'deleteRole' | 'crosstab';
 
 /** A grid column; `uid` (given by the reducer) keeps a column's identity when columns move (React keys, cell errors). */
 export type GridColumn = QbeColumn & { uid?: number };
@@ -64,19 +65,28 @@ function blank(d: QbeDesign, uid: number): GridColumn {
 const without = <T,>(o: T, ...keys: (keyof T)[]): T => { const c = { ...o }; for (const k of keys) delete c[k]; return c; };
 
 /** What the kind keeps: Update and Delete have no totals, sort or hidden column; only Append has Append To, only Update its
- *  Update To, only Delete its roles. */
+ *  Update To, only Delete its roles; a crosstab has totals (its Crosstab cells start empty), and only it has them and its
+ *  Column Headings. */
 function forKind(d: QbeDesign, kind: QbeKind, target?: string): QbeDesign {
-  const action = kind === 'update' || kind === 'delete';
+  const action = kind === 'update' || kind === 'delete', ct = kind === 'crosstab';
   const columns = d.columns.map((c) => {
     let x: QbeColumn = c;
     if (action) x = { ...without(x, 'sort', 'total'), show: true };
+    if (ct) x = { ...x, total: x.total ?? 'groupBy' };
+    else if (d.kind === 'crosstab') { // the Show row comes back: a hidden column stays hidden, the Column Heading and Value show
+      const shown = x.show || x.crosstab === 'columnHeading' || x.crosstab === 'value';
+      x = { ...without(x, 'crosstab'), show: shown && x.total !== 'where' };
+    }
     if (kind !== 'append') x = without(x, 'appendTo');
     if (kind !== 'update') x = without(x, 'updateTo');
     x = kind === 'delete' ? { ...x, deleteRole: x.deleteRole ?? (x.field.trim() === '*' ? 'from' : 'where') } : without(x, 'deleteRole');
     return x;
   });
-  const { target: _old, ...rest } = d;
-  return { ...rest, kind, totals: action ? false : d.totals, columns, ...((kind === 'makeTable' || kind === 'append') && target !== undefined && { target }) };
+  const { target: _old, headings: _h, ...rest } = d;
+  return {
+    ...rest, kind, totals: ct || (action ? false : d.totals), columns, ...((kind === 'makeTable' || kind === 'append') && target !== undefined && { target }),
+    ...(ct && d.kind === 'crosstab' && d.headings && { headings: d.headings }),
+  };
 }
 
 export function qbeReducer(d: QbeDesign, a: QbeAction): QbeDesign {
@@ -145,9 +155,10 @@ export function qbeReducer(d: QbeDesign, a: QbeAction): QbeDesign {
           case 'field': return { ...c, field: text };
           case 'show': return { ...c, show: v === true };
           case 'table': case 'appendTo': case 'updateTo': return text ? { ...c, [row]: text } : without(c, row);
-          case 'sort': return text ? { ...c, sort: text as 'asc' | 'desc' } : without(c, 'sort');
+          case 'sort': return text && c.crosstab !== 'columnHeading' ? { ...c, sort: text as 'asc' | 'desc' } : without(c, 'sort'); // R13
           case 'total': return { ...c, total: text as QbeTotal };
           case 'deleteRole': return { ...c, deleteRole: text as 'from' | 'where' };
+          case 'crosstab': return !text ? without(c, 'crosstab') : text === 'columnHeading' ? { ...without(c, 'sort'), crosstab: text } : { ...c, crosstab: text as QbeCrosstab };
           default: return c;
         }
       });
@@ -165,6 +176,7 @@ export function qbeReducer(d: QbeDesign, a: QbeAction): QbeDesign {
       return { ...d, columns: list };
     }
     case 'setTotals':
+      if (d.kind === 'crosstab') return d; // Total is forced on (R13)
       return { ...d, totals: a.on, columns: cols.map((c) => (a.on ? { ...c, total: c.total ?? 'groupBy' } : without(c, 'total'))) };
     case 'setKind': return forKind(d, a.kind, a.target);
     case 'insertRow': case 'deleteRow':
@@ -178,6 +190,7 @@ export function qbeReducer(d: QbeDesign, a: QbeAction): QbeDesign {
       let out: QbeDesign = a.top === undefined ? d : a.top === null ? rest : { ...d, top: a.top };
       if (a.distinct !== undefined) out = { ...out, distinct: a.distinct };
       if (a.params) out = { ...out, params: a.params };
+      if (a.headings) { const { headings: _h, ...noIn } = out; out = a.headings.length ? { ...out, headings: a.headings } : noIn; }
       if (a.outputAll !== undefined && a.outputAll !== outputAll(out)) {
         out = a.outputAll ? padded({ ...out, columns: [{ ...blank(out, nextUid(cols)), field: '*' }, ...cols] })
           : { ...out, columns: cols.filter((c) => !isOutputAll(c)) };
@@ -203,6 +216,25 @@ export function parseTop(text: string, all: string): QbeDesign['top'] | null | u
 }
 export const topText = (top: QbeDesign['top'], all: string): string => (top ? `${top.n}${top.percent ? '%' : ''}` : all);
 
+/** Column Headings as typed (B4 R13): values in their display form, separated by the region's list separator outside quotes;
+ *  each one canonical. [] (no IN) for an empty text; undefined when a part is not a value (a field, an expression, an error). */
+export function parseHeadings(text: string, ctx: DisplayContext): string[] | undefined {
+  if (!text.trim()) return [];
+  const sep = listSeparator(ctx.region), parts = [''];
+  let quoted = false;
+  for (const ch of text) {
+    if (ch === '"') quoted = !quoted;
+    if (ch === sep && !quoted) parts.push(''); else parts[parts.length - 1] += ch;
+  }
+  try {
+    const out = parts.map((p) => toCanonical(p, ctx));
+    return out.every((c) => isHeadingLiteral(parseCanonical(c))) ? out : undefined;
+  } catch {
+    return undefined;
+  }
+}
+export const headingsText = (headings: string[], ctx: DisplayContext): string => headings.map((h) => toDisplay(h, ctx)).join(listSeparator(ctx.region));
+
 /** A Field cell's entry (canonical), as Access fills the Table row: a field qualified by a box, or `T.*`, goes to that box; a
  *  bare field to the column's box when it has it, else to the first box that has it; anything else (an expression, a
  *  parameter, an unknown box) stays as typed, without a table. */
@@ -227,8 +259,9 @@ export function fieldEntry(canonical: string, boxes: { alias: string; fields: st
 export function gridRows(d: QbeDesign): QbeRow[] {
   const n = Math.max(ROWS_MIN, ...d.columns.map((c) => c.criteria.length));
   const criteria = Array.from({ length: n }, (_, i) => `criteria${i}` as const);
-  const head: QbeRow[] = ['field', 'table', ...(d.totals ? ['total' as const] : [])];
+  const head: QbeRow[] = ['field', 'table', ...(d.totals || d.kind === 'crosstab' ? ['total' as const] : [])];
   switch (d.kind) {
+    case 'crosstab': return [...head, 'crosstab', 'sort', ...criteria];
     case 'update': return [...head, 'updateTo', ...criteria];
     case 'delete': return [...head, 'deleteRole', ...criteria];
     case 'append': return [...head, 'sort', 'appendTo', ...criteria];
@@ -261,7 +294,27 @@ export function designProblem(d: QbeDesign): string | null {
     : d.kind === 'update' ? !used.some((c) => c.updateTo?.trim())
     : d.kind === 'delete' ? false
     : !used.some((c) => c.show && c.total !== 'where');
+  if (d.kind === 'crosstab') return crosstabProblem(used);
   if (noField) return 'bc:invalidQuery|noField|';
   if (d.kind === 'delete' && d.tables.length > 1 && !used.some((c) => c.deleteRole === 'from')) return 'bc:invalidQuery|deleteFrom|';
   return null;
+}
+
+/** The Crosstab row's rules (R13): a Row Heading grouped, and none Where; exactly one Column Heading, grouped; exactly one
+ *  Value, an aggregate or an Expression holding one; any other column (« (not shown) », or not chosen) Where. */
+function crosstabProblem(cols: QbeColumn[]): string | null {
+  const role = (r: QbeColumn['crosstab']) => cols.filter((c) => c.crosstab === r);
+  const rows = role('rowHeading'), [heading, ...headings] = role('columnHeading'), [value, ...values] = role('value');
+  const problem = (sub: string) => `bc:invalidQuery|${sub}|`;
+  if (!rows.some((c) => c.total === 'groupBy') || rows.some((c) => c.total === 'where')) return problem('crosstabRowHeading');
+  if (!heading || headings.length) return problem('crosstabColumnHeading');
+  if (!value || values.length) return problem('crosstabValue');
+  if (!aggregates(value)) return problem('crosstabValueTotal');
+  if (heading.total !== 'groupBy') return problem('crosstabHeadingTotal');
+  if (cols.some((c) => (c.crosstab === undefined || c.crosstab === 'none') && c.total !== 'where')) return problem('crosstabNone');
+  return null;
+}
+function aggregates(c: QbeColumn): boolean {
+  if (c.total !== 'expression') return c.total !== undefined && c.total !== 'groupBy' && c.total !== 'where';
+  try { return hasAggregate(parseCanonical(splitAlias(c.field).expr, QUERY_PARSE)); } catch { return true; } // fromQbe reports a bad cell
 }

@@ -3,7 +3,8 @@ import type { Expr } from '../expr/ast';
 import { localeInfo } from '../locale-format';
 import { toCanonical, toDisplay } from '../expr/localize';
 import { printSelect, printSql } from './print';
-import type { Query, SelectQuery } from './ast';
+import { isSelectBody, type Query, type SelectQuery } from './ast';
+import { queryDependents } from './definition';
 import { parseSql, QUERY_PARSE } from './sql-parser';
 
 const SQL1 = 'SELECT [Clients].[Nom], [Commandes].[Montant]\nFROM [Clients] INNER JOIN [Commandes] ON [Clients].[N°] = [Commandes].[Client]\nWHERE [Commandes].[Le] >= [Date début :]\nORDER BY [Commandes].[Montant] DESC;';
@@ -25,10 +26,51 @@ it.each([
   ['DROP TABLE Clients', 'forbiddenStatement'], ['SELECT 1 FROM T; DROP TABLE T', 'multipleStatements'], ['ATTACH "x" AS y', 'forbiddenStatement'],
   ['PRAGMA writable_schema=1', 'forbiddenStatement'], ['VACUUM INTO "c:/x"', 'forbiddenStatement'], ['SELECT * FROM bc_meta', 'reservedName'],
   ['SELECT * FROM [BC_Objects]', 'reservedName'], ['SELECT * FROM sqlite_master', 'reservedName'], ['SELECT load_extension("x") FROM T', 'unknownFunction'],
-  ['SELECT a FROM T -- x', 'unexpectedToken'], ['TRANSFORM Sum(x) SELECT a FROM T GROUP BY a PIVOT b', 'notSupportedYet'],
+  ['SELECT a FROM T -- x', 'unexpectedToken'],
   ['PARAMETERS [p] Blob; SELECT * FROM T', 'badParameterType'], ['SELECT FROM T', 'unexpectedToken'],
 ])('refuses %s', (src, code) => expect(() => parseSql(src)).toThrow(expect.objectContaining({ code })));
 it('error span points into the text', () => expect(() => parseSql('SELECT a FROM T WHERE a >')).toThrow(expect.objectContaining({ code: 'unexpectedEnd', span: expect.objectContaining({ start: 25 }) })));
+
+describe('crosstab (B4 R8)', () => {
+  const X = 'TRANSFORM Sum([Commandes].[Montant]) AS [SommeDeMontant]\nSELECT [Clients].[Nom], Sum([Commandes].[Montant]) AS [Total]\n'
+    + 'FROM [Clients] INNER JOIN [Commandes] ON [Clients].[N°] = [Commandes].[Client]\nWHERE [Commandes].[Le] >= [Du]\nGROUP BY [Clients].[Nom]\n'
+    + 'PIVOT Month([Commandes].[Le]) AS [Mois] IN (10, 9, 11);';
+  it('round trip', () => { expect(printSql(parseSql(X))).toBe(X); expect(isSelectBody(parseSql(X))).toBe(true);
+    expect(printSql(parseSql(`PARAMETERS [Du] DateTime;\n${X}`))).toBe(`PARAMETERS [Du] DateTime;\n${X}`); });
+  it('lower case and Access spacing read back canonical', () => expect(printSql(parseSql('transform count(*) select Client from Commandes group by Client pivot Ville')))
+    .toBe('TRANSFORM Count(*)\nSELECT [Client]\nFROM [Commandes]\nGROUP BY [Client]\nPIVOT [Ville];'));
+  it.each([
+    ['TRANSFORM Sum(x) SELECT a FROM T GROUP BY a', 'badCrosstab'], ['TRANSFORM Sum(x) SELECT DISTINCT a FROM T GROUP BY a PIVOT b', 'badCrosstab'],
+    ['TRANSFORM Sum(x) SELECT TOP 5 a FROM T GROUP BY a PIVOT b', 'badCrosstab'], ['TRANSFORM Sum(x) SELECT a FROM T GROUP BY a UNION SELECT a FROM T PIVOT b', 'badCrosstab'],
+    ['TRANSFORM Sum(x) SELECT a FROM T GROUP BY a PIVOT b IN ([c])', 'badCrosstab'], ['SELECT a FROM T PIVOT b', 'unexpectedToken'],
+  ])('%s', (sql, code) => expect(() => parseSql(sql)).toThrow(expect.objectContaining({ code })));
+  it.each([
+    // a pivot expression holding a top-level In is parenthesised, else it would read back as the headings list
+    ['TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT (b In (1, 2))', 'TRANSFORM Count(*)\nSELECT [a]\nFROM [T]\nGROUP BY [a]\nPIVOT ([b] In (1, 2));'],
+    ['TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT IIf(b In (1, 2), 1, 0) In (0, 1)', 'TRANSFORM Count(*)\nSELECT [a]\nFROM [T]\nGROUP BY [a]\nPIVOT IIf([b] In (1, 2), 1, 0) IN (0, 1);'],
+    ['transform max(x) as m select a from t where a > 1 group by a having count(*) > 1 order by a desc pivot b as c in ("x", #2026-10-01#, null, true, 1.5)',
+      'TRANSFORM Max([x]) AS [m]\nSELECT [a]\nFROM [t]\nWHERE [a] > 1\nGROUP BY [a]\nHAVING Count(*) > 1\nORDER BY [a] DESC\nPIVOT [b] AS [c] IN ("x", #2026-10-01#, Null, True, 1.5);'],
+    ['TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b IN (-1, 0, 1.5, -2.5)', 'TRANSFORM Count(*)\nSELECT [a]\nFROM [T]\nGROUP BY [a]\nPIVOT [b] IN (-1, 0, 1.5, -2.5);'],
+  ])('crosstab %s', (src, out) => { expect(printSql(parseSql(src))).toBe(out); expect(printSql(parseSql(out))).toBe(out); });
+  it('headings and refusals', () => {
+    expect(parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT (b In (1, 2))').body).toMatchObject({ k: 'crosstab', pivot: { k: 'in' } });
+    expect(parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b IN (1)').body).toMatchObject({ pivot: { k: 'id', name: 'b' }, headings: [{ k: 'num', v: '1' }] });
+    expect(refusal('TRANSFORM Sum(x) SELECT a INTO U FROM T GROUP BY a PIVOT b')).toEqual(['badCrosstab', 'INTO']);
+    expect(refusal('TRANSFORM Sum(x) SELECT DISTINCTROW a FROM T PIVOT b')).toEqual(['badCrosstab', 'DISTINCTROW']);
+    expect(refusal('TRANSFORM Sum(x) SELECT a FROM T PIVOT b IN (1, - -1)')).toEqual(['badCrosstab', '-']);
+    expect(refusal('TRANSFORM Sum(x) SELECT a FROM T PIVOT b IN (1, --1)')).toEqual(['unexpectedToken', '--']);
+    expect(refusal('TRANSFORM Sum(x) SELECT a FROM T PIVOT b IN (-#2026-10-01#)')).toEqual(['badCrosstab', '-']);
+    expect(refusal('TRANSFORM Sum(x) SELECT a FROM T PIVOT b; SELECT c FROM T WHERE c In (1)')[0]).toBe('multipleStatements');
+    expect(refusal('TRANSFORM Sum(x) SELECT a FROM T PIVOT b IN (1) AS c')).toEqual(['unexpectedToken', 'AS']);
+    expect(refusal('PIVOT b')).toEqual(['unexpectedToken', 'PIVOT']);
+  });
+  it('an empty headings list prints no IN', () => {
+    const q = parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b');
+    expect(printSql({ ...q, body: { ...q.body, headings: [] } as Query['body'] })).toBe('TRANSFORM Count(*)\nSELECT [a]\nFROM [T]\nGROUP BY [a]\nPIVOT [b];');
+  });
+  it('dependents', () => expect(queryDependents('QDepuis', [{ kind: 'query', name: 'QX', definition: { formatVersion: '1.0', sql: 'TRANSFORM Count(*) SELECT Le FROM QDepuis GROUP BY Le PIVOT Montant;' } }]))
+    .toEqual([{ kind: 'query', name: 'QX' }]));
+});
 
 // ---- Beyond the brief ------------------------------------------------------------------------------------------
 
@@ -118,7 +160,7 @@ it.each([
   ['drop table Clients', 'forbiddenStatement', 'drop'],
   ['PARAMETERS a Long; CREATE TABLE T (a Long)', 'forbiddenStatement', 'CREATE'],
   ['WITH x AS (SELECT 1 FROM T) SELECT * FROM x', 'forbiddenStatement', 'WITH'],
-  ['SELECT a FROM T GROUP BY a PIVOT b', 'notSupportedYet', 'PIVOT'],
+  ['SELECT a FROM T GROUP BY a PIVOT b', 'unexpectedToken', 'PIVOT'],
   ['SELECT a FROM T; ', null, null],
   ['SELECT a FROM T;;', 'multipleStatements', ';'],
   ['SELECT a FROM T WHERE a = 1 /* x */', 'unexpectedToken', '*'],

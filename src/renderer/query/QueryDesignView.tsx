@@ -229,6 +229,7 @@ const SPLIT_KEY = 'basecraft.query.splitRatio';
 const BAR = 6, PANE_MIN = 120, GRID_MIN = 140;
 const KIND_COMMANDS: [CommandId, QbeKind][] = [
   ['selectQuery', 'select'], ['makeTableQuery', 'makeTable'], ['appendQuery', 'append'], ['updateQuery', 'update'], ['deleteQuery', 'delete'],
+  ['crosstabQuery', 'crosstab'],
 ];
 
 // ---------- SQL view requests (Navigation Pane, the datasheet's status bar, Create > SQL Query) ----------
@@ -557,13 +558,14 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     const desc = description.current;
     const d = m.design;
     const got = await modal.custom<QueryProps>((close) => (
-      <QueryPropertiesDialog kind={d.kind} initial={{ description: desc.value, outputAll: outputAll(d), distinct: d.distinct, top: d.top ?? null }} onClose={close} />
+      <QueryPropertiesDialog kind={d.kind} ctx={ctx!} initial={{ description: desc.value, outputAll: outputAll(d), distinct: d.distinct, top: d.top ?? null, headings: d.headings ?? [] }} onClose={close} />
     ), { titleKey: 'query.props.title' });
     if (!got) return;
     if (got.description !== desc.value) { desc.value = got.description; set({ type: 'touch' }); }
     if (JSON.stringify([got.outputAll, got.distinct, got.top]) !== JSON.stringify([outputAll(d), d.distinct, d.top ?? null])) {
       set({ type: 'setProps', top: got.top, distinct: got.distinct, outputAll: got.outputAll });
     }
+    if (JSON.stringify(got.headings) !== JSON.stringify(d.headings ?? [])) set({ type: 'setProps', headings: got.headings });
   };
 
   /** Run of an action query (Task 10): the grid's SQL, or the SQL view's text, as it stands (Access runs the design, saved
@@ -590,11 +592,13 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     void toSql();
   }, [requests, state === null, tab.name]);
 
+  const kind = model.design.kind;
+  // a crosstab has a datasheet (read-only, B4 R9), never an action query's run
   const runnable = view === 'sql'
     ? parsed !== null && isSelectBody(parsed)
-    : model.design.kind === 'select';
-  const action = view === 'sql' ? parsed !== null && !runnable : model.design.kind !== 'select';
-  const topKind = ['select', 'makeTable', 'append'].includes(model.design.kind);
+    : kind === 'select' || kind === 'crosstab';
+  const action = view === 'sql' ? parsed !== null && !runnable : !runnable;
+  const topKind = ['select', 'makeTable', 'append'].includes(kind);
   const cmds = useRef({ save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun });
   cmds.current = { save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun };
   useEffect(() => {
@@ -603,13 +607,15 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     };
     const col = () => Math.min(selected, live.current.model.design.columns.length);
     const grid = view === 'grid' ? {
-      ...Object.fromEntries(KIND_COMMANDS.map(([id, kind]) => [id, writable(() => cmds.current.setKind(kind))])),
+      // a Row Source or Record Source is never a crosstab's grid (B4 R12)
+      ...Object.fromEntries(KIND_COMMANDS.filter(([, k]) => !builder || k !== 'crosstab').map(([id, k]) => [id, writable(() => cmds.current.setKind(k))])),
       addTables: writable(() => setShowTable(true)),
       insertColumns: writable(() => set({ type: 'insertColumn', at: col() })),
       deleteColumns: writable(() => { if (col() < live.current.model.design.columns.length) set({ type: 'deleteColumn', at: col() }); }),
       insertRows: writable(() => set({ type: 'insertRow', at: lastRow.current })),
       deleteRows: writable(() => set({ type: 'deleteRow', at: lastRow.current })),
-      queryTotals: writable(() => set({ type: 'setTotals', on: !live.current.model.design.totals })),
+      // a crosstab's Total row is forced on (B4 R13)
+      ...(kind !== 'crosstab' ? { queryTotals: writable(() => set({ type: 'setTotals', on: !live.current.model.design.totals })) } : {}),
       // Top Values: a SELECT's TOP (Select, Make-Table, Append), as in Access
       ...(topKind ? { returnValues: writable(() => cmds.current.returnValues()) } : {}),
       propertySheet: writable(() => cmds.current.propertySheet()),
@@ -635,10 +641,10 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     });
     const offStates = registerCommandStates(tab.id, view === 'sql'
       ? { viewSql: { active: true }, viewDesign: { active: false, enabled: !gridless } }
-      : { tableNames: { active: tableRow } });
+      : { tableNames: { active: tableRow }, ...Object.fromEntries(KIND_COMMANDS.map(([id, k]) => [id, { active: k === kind }])) });
     const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
     return () => { offCommands(); offStates(); offGuard(); };
-  }, [tab.id, runnable, action, selected, dispatch, view, gridless, tableRow, topKind]);
+  }, [tab.id, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind]);
 
   if (!state || !ctx) return <div className="qd" ref={root} aria-busy />;
   if (view === 'sql') {
@@ -675,7 +681,8 @@ const BUILDER_RUN_SCOPE = `${MODAL_SCOPE}builder-run`;
 async function builderDesign(text: string, table: string | undefined, ensure: (names: string[]) => Promise<Map<string, Fields>>): Promise<QbeDesign | null> {
   if (!text.trim() || table) return { ...emptyQbe(), tables: table ? [{ name: table }] : [] };
   const r = readSql(text);
-  const first = r && 'q' in r ? toQbe(r.q) : null;
+  // a crosstab is no Row Source (B4 R12): SQL view only, where running or using it says why
+  const first = r && 'q' in r && r.q.body.k !== 'crosstab' ? toQbe(r.q) : null;
   if (!first || !r || !('q' in r)) return null;
   return toQbe(r.q, isFieldOf(await ensure(first.tables.map((x) => x.name))));
 }

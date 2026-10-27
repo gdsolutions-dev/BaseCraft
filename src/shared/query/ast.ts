@@ -18,10 +18,17 @@ export interface UnionQuery { k: 'union'; parts: SelectQuery[]; all: boolean[] /
 export interface InsertQuery { k: 'insert'; target: string; columns: string[]; source: SelectQuery | { values: Expr[] } }
 export interface UpdateQuery { k: 'update'; from: FromItem; set: { target: Expr /* id */; value: Expr }[]; where?: Expr }
 export interface DeleteQuery { k: 'delete'; target?: string /* DELETE [T].* */; from: FromItem; where?: Expr }
+/** TRANSFORM value [AS a] SELECT … PIVOT pivot [AS a] [IN (headings)] (B4 R8): `select` holds the row items, FROM, WHERE,
+ *  GROUP BY, HAVING and ORDER BY, never DISTINCT, TOP or INTO; headings are literals (num, str, date, bool, Null). */
+export interface CrosstabQuery {
+  k: 'crosstab'; value: Expr; valueAlias?: string;
+  select: SelectQuery;
+  pivot: Expr; pivotAlias?: string; headings?: Expr[];
+}
 export interface ParamDecl { name: string; type: FieldType; numberSize?: NumberSize }
-export interface Query { params: ParamDecl[]; body: SelectQuery | UnionQuery | InsertQuery | UpdateQuery | DeleteQuery }
-/** A select or union query (it has a datasheet), not an action query. */
-export const isSelectBody = ({ body }: Query): boolean => body.k === 'union' || (body.k === 'select' && body.into === undefined);
+export interface Query { params: ParamDecl[]; body: SelectQuery | UnionQuery | InsertQuery | UpdateQuery | DeleteQuery | CrosstabQuery }
+/** A select, union or crosstab query (it has a datasheet), not an action query. */
+export const isSelectBody = ({ body }: Query): boolean => body.k === 'union' || body.k === 'crosstab' || (body.k === 'select' && body.into === undefined);
 /** Definition stored in `bc_objects` for a query; unknown keys are kept. */
 export interface QueryDefinition { formatVersion: '1.0'; sql: string; layout?: QbeLayout; [unknownKey: string]: unknown }
 export interface QbeLayout { tables: Record<string /* alias */, { x: number; y: number }>; widths?: number[] }

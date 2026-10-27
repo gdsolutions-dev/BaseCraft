@@ -21,25 +21,29 @@ export type ActionKind = 'makeTable' | 'append' | 'update' | 'delete';
 const parse = (sql: string): Query | null => { try { return parseSql(sql); } catch { return null; } };
 const kindOf = (q: Query): ActionKind | null => {
   const k = q.body.k;
-  return isSelectBody(q) ? null : k === 'insert' ? 'append' : k === 'select' || k === 'union' ? 'makeTable' : k;
+  return isSelectBody(q) || k === 'crosstab' ? null : k === 'insert' ? 'append' : k === 'select' || k === 'union' ? 'makeTable' : k;
 };
 
 let openTabs: () => readonly DocTab[] = () => [];
 /** The shell's open documents (App), read when an action query is about to run. */
 export function setOpenTabs(fn: () => readonly DocTab[]): void { openTabs = fn; }
-/** `table` is in use, as Access's lock refuses it: a datasheet of it, or of a query that writes it, or a form (Form or
+/** `table` is in use, as Access's lock refuses it: a datasheet of it, or of a query that writes it (its key table or a join's 'one' table), or a form (Form or
  *  Datasheet view, A4) with a record being edited on a source that writes it (its own or a subform's: the tab's dirtySources) (saved after the run, it would land on the
  *  rows the query changed: a lost update, a deleted row, another table's row after a replace) or, for a Make-Table that
  *  replaces it, a design of it not saved (reloaded over the edits). */
 async function inUse(table: string, makeTable: boolean): Promise<boolean> {
-  const keyTable = async (ref: RecordSourceRef) => (await api.sources.describe(ref).catch(() => null))?.keyTable;
+  // a query writes its key table and, through a join, its 'one' tables (B4)
+  const writes = async (ref: RecordSourceRef) => {
+    const info = await api.sources.describe(ref).catch(() => null);
+    return (info?.tables?.map((x) => x.table) ?? [info?.keyTable]).some((x) => x !== undefined && sameName(x, table));
+  };
   for (const x of openTabs()) {
     if (!x.dirty || x.isNew) continue;
     if (x.kind === 'table' && x.name === table && (x.mode === 'datasheet' || makeTable)) return true;
-    if (x.kind === 'query' && x.mode === 'run' && await keyTable({ kind: 'query', name: x.name }) === table) return true;
+    if (x.kind === 'query' && x.mode === 'run' && await writes({ kind: 'query', name: x.name })) return true;
     if (x.kind === 'form' && x.mode !== 'design') {
       // the sources whose record is being edited, the form's own or a subform's, as the form publishes them with its tab
-      for (const src of x.dirtySources ?? []) if (src.kind === 'table' ? sameName(src.name, table) : sameName(await keyTable(src) ?? '', table)) return true;
+      for (const src of x.dirtySources ?? []) if (src.kind === 'table' ? sameName(src.name, table) : await writes(src)) return true;
     }
   }
   return false;

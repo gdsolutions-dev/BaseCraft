@@ -9,8 +9,8 @@ import type {
   ActionResult, CascadeChild, CompactResult, DeleteResult, QueryRef, RunActionOptions, FieldFilter, LookupRow, ObjectKind, ObjectSummary, OpResult, Relation, RelationResult, RelationsLayout, SaveTableRequest,
   SaveTableResult, SessionState,
 } from '../shared/api';
-import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest } from '../shared/record-source';
-import type { CellInput } from '../shared/coerce';
+import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from '../shared/record-source';
+import type { CellInput, SqlValue } from '../shared/coerce';
 import { defaultProps, quoteIdent, sameName, validateDesign, type FieldProps, type TableDesign } from '../shared/field-types';
 import type { ImportPlan, ImportResult, ImportSpec, TextPreview } from '../shared/import-text';
 import { localeInfo, type LocaleInfo } from '../shared/locale-format';
@@ -37,7 +37,8 @@ import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, ty
 import { deleteSpec, loadSpecs, saveSpec } from './import/specs';
 import { previewText, runImport, type ImportTexts } from './import/text-import';
 import { excelSource, previewExcel, readSheet } from './exchange/excel-read';
-import { checkQueryDefinition, describeQuerySource, pageQuerySource, type QueryCtx } from './query/source';
+import { checkQueryDefinition, describeQuerySource, pageQuerySource, resolve, type QueryCtx } from './query/source';
+import { autoLookup, saveSourceRow } from './query/join-write';
 import { actionCount, runAction } from './query/action';
 import { activeContent, type ActiveContent } from './db/active-content';
 
@@ -411,8 +412,8 @@ export class Session {
     return this.dataDesign(name);
   }
   /** `query` and `sql`: src/main/query/source.ts (A3). */
-  describeSource(ref: RecordSourceRef): SourceInfo {
-    if (ref.kind !== 'table') return describeQuerySource(this.conn(), ref);
+  describeSource(ref: RecordSourceRef, params?: Record<string, CellInput> /* a crosstab's (B4 R11) */): SourceInfo {
+    if (ref.kind !== 'table') return describeQuerySource(this.conn(), ref, this.info, params);
     const d = this.sourceTable(ref.name);
     const fields = d.fields.map((x) => ({ name: x.name, type: x.props.type, props: x.props, origin: { table: d.name, field: x.name } }));
     return { fields, updatable: true, keyTable: d.name, parameters: [] };
@@ -436,6 +437,16 @@ export class Session {
       throw e;
     }
   }
+  /** B4: a record of an updatable query (src/main/query/join-write.ts); a read-only base: ReadOnlyError. */
+  async saveSource(ref: QueryRef, req: SourceSaveRequest): Promise<SourceSaveResult> {
+    const db = this.writeDb();
+    return saveSourceRow(db, resolve(db, ref), req, this.info);
+  }
+  /** B4 R4: AutoLookup; reads only. */
+  autoLookup(ref: QueryRef, values: Record<string, CellInput>): Record<string, SqlValue> {
+    const db = this.conn();
+    return autoLookup(db, resolve(db, ref), values, this.info);
+  }
   private exportPager(src: ExportSource): (offset: number, limit: number) => SourcePage {
     const { ref, params, sort, filter, where } = src;
     return (offset, limit) => this.pageSource(ref, { offset, limit, ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
@@ -444,7 +455,7 @@ export class Session {
    *  process got from a save dialog. Reads only: allowed on a read-only base. Throws bc:writeFailed; the old file is kept. */
   async exportText(src: ExportSource, spec: ExportTextSpec, path: string, texts: { yes: string; no: string },
     tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
-    const { fields } = this.describeSource(src.ref);
+    const { fields } = this.describeSource(src.ref, src.params);
     return writeTextExport({ fields, spec, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src) });
   }
   /** The rows an export of `src` holds (the main process refuses an Excel export above the sheet limit before asking where). */
@@ -452,7 +463,7 @@ export class Session {
   /** As exportText, to an .xlsx workbook with one sheet named `sheet`: typed cells, never formulas. A source above the Excel row
    *  limit resolves { ok: false, reason: 'tooManyRows' } and writes nothing. */
   async exportExcel(src: ExportSource, path: string, sheet: string, tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
-    const { fields } = this.describeSource(src.ref);
+    const { fields } = this.describeSource(src.ref, src.params);
     return writeExcelExport({ fields, path, sheet, tick, info: this.info, page: this.exportPager(src) });
   }
   saveImportSpec(name: string, spec: ImportSpec): void { saveSpec(this.writeDb(), name, spec); }

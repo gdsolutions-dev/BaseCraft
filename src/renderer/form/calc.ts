@@ -132,7 +132,8 @@ export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, sto
 }
 
 /** Values of a new record for its bound controls: the control's Default Value converted for the field (empty on an error),
- *  else the field's own default. Shown at once, sent only on insert (FormRecords' newRecordValues). */
+ *  else the field's own default. Shown at once, sent only on insert (FormRecords' newRecordValues). None for a join's 'one'
+ *  table: a new record does not insert into it, AutoLookup shows its parent (B4 R2, R4). */
 export async function controlDefaults(controls: ControlDef[], info: SourceInfo, env: BaseEnv): Promise<Record<string, CellInput>> {
   const region = infoOf(env.locale);
   const out: Record<string, CellInput> = {};
@@ -140,6 +141,7 @@ export async function controlDefaults(controls: ControlDef[], info: SourceInfo, 
   for (const c of controls) {
     const f = boundField(c, info);
     if (!f || seen.has(f.name)) continue; // two controls on one field: the first one's default, as shown in the first control
+    if (info.tables?.some((t) => t.role === 'one' && f.origin && sameName(t.table, f.origin.table))) continue; // never inserted (B4 R2)
     seen.add(f.name);
     const own = prop(c, 'DefaultValue');
     try {

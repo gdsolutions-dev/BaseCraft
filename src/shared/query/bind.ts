@@ -7,9 +7,12 @@ import { RANGES } from '../coerce';
 import { CANONICAL_DIALECT, serializeWith } from '../expr/parser';
 import { defaultProps, isReservedName, isValidObjectName, sameName, type FieldProps, type FieldType, type TableDesign } from '../field-types';
 import type { SourceInfo } from '../record-source';
-import { isSelectBody, type FromItem, type Query, type SelectQuery } from './ast';
+import { isSelectBody, type CrosstabQuery, type FromItem, type Query, type SelectQuery } from './ast';
+import { literalOf } from '../expr/members';
+import { crosstabSelect, inValues, MAX_COLUMNS, MAX_PIVOT_COLUMNS, type Heading } from './crosstab';
 import { printSelect } from './print';
 import { parseSql } from './sql-parser';
+import { writePlan, type WriteTable } from './write-plan';
 
 export interface QueryCatalog { table(name: string): TableDesign | null; query(name: string): string | null /* canonical SQL */ }
 export type ResolvedRef =
@@ -29,14 +32,24 @@ export interface BoundQuery {
   aggregate: boolean; updatable: boolean;
   /** Updatable SELECT: the table written and its source's alias. UPDATE / DELETE / INSERT: the target table (and alias). */
   keyTable?: string; keyAlias?: string;
+  /** Updatable SELECT (B4 R1): the tables written, and the bound query whose FROM holds them (itself or an inner saved query). */
+  writePlan?: WriteTable[]; writeLevel?: BoundQuery;
   /** Binding of each SELECT node of this query (not those of `inner` queries). */
   selects: Map<SelectQuery, BoundSelect>;
+  /** A crosstab (B4 R9): `query` is its rewritten SELECT (crosstabSelect), `source` the TRANSFORM query. 'data': headings
+   *  from the data, `columns` the row columns only until expandCrosstab binds it with them. */
+  crosstab?: { headings: 'fixed' | 'data'; source: Query };
 }
 export type QueryBindErrorCode = 'unknownSource' | 'ambiguousField' | 'circular' | 'tooDeep' | 'notGrouped' | 'aggregateInWhere'
   | 'nestedAggregate' | 'unionArity' | 'updateTarget' | 'unknownTarget' | 'duplicateOutput'
   | 'insertArity' // INSERT: values (or the SELECT columns of a field list) and target columns differ in number
   | 'subqueryArity' // a scalar or In subquery that does not return exactly one column
-  | 'memberNotAllowed'; // [LocalVars]! or [MacroError]! in a query (only Forms, Reports and TempVars become parameters)
+  | 'memberNotAllowed' // [LocalVars]! or [MacroError]! in a query (only Forms, Reports and TempVars become parameters)
+  | 'crosstabRowHeading' // a crosstab without GROUP BY (no row heading)
+  | 'crosstabValue' // a crosstab value (TRANSFORM) without an aggregate
+  | 'pivotAggregate' // an aggregate in PIVOT
+  | 'tooManyColumns' // a crosstab past 254 headings or 255 columns (R10); detail: its number of columns
+  | 'crosstabAsSource'; // a saved crosstab used as a source (R12); detail: its name
 
 export class QueryBindError extends Error {
   constructor(public code: QueryBindErrorCode, public detail: string) {
@@ -205,6 +218,7 @@ function savedQuery(name: string, ctx: Ctx): BoundQuery {
   if (sql === null) return fail('unknownSource', name);
   if (ctx.chain.length >= MAX_SAVED_DEPTH) fail('tooDeep', name);
   const q = parseSql(sql);
+  if (q.body.k === 'crosstab') fail('crosstabAsSource', name); // R12
   if (isSelectBody(q)) {
     const b = bindIn(q, ctx.catalog, [...ctx.chain, name], ctx.saved);
     ctx.saved.push([name, b, ctx.chain.length]);
@@ -356,7 +370,32 @@ function sameBound(a: unknown, b: unknown, refs: Map<Expr, ResolvedRef>): boolea
 
 // ---- Query ----
 
-function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['saved']): BoundQuery {
+/** A crosstab bound as its rewritten SELECT (B4 R9): with `headings` (expandCrosstab: named in the region), else its IN
+ *  list, else (headings from the data) one placeholder Null heading, so the value's and the pivot's parameters and grouping
+ *  are bound too; its column is dropped. Heading columns are bound under aliases no identifier can name (`\u0001<i>`), so
+ *  a heading named like a parameter never captures it; the names, and R9's duplicateOutput check, come after. */
+function bindCrosstab(q: Query, x: CrosstabQuery, catalog: QueryCatalog, chain: string[], saved: Ctx['saved'], headings?: Heading[]): BoundQuery {
+  if (!x.select.groupBy.length) fail('crosstabRowHeading');
+  if (!aggOf(x.value)) fail('crosstabValue', show(x.value));
+  const a = aggOf(x.pivot);
+  if (a) fail('pivotAggregate', show(a));
+  const fixed = !!x.headings?.length;
+  const values = headings?.map((h) => h.value) ?? (fixed ? inValues(x).map(literalOf) : [{ k: 'null' } as Expr]);
+  const n = x.select.items.length + values.length;
+  if (values.length > MAX_PIVOT_COLUMNS || n > MAX_COLUMNS) fail('tooManyColumns', String(n));
+  // no field name holds a control character
+  const out = bindIn({ params: q.params, body: crosstabSelect(x, values.map((value, i) => ({ name: `\u0001${i}`, value }))) }, catalog, chain, saved);
+  const rows = out.columns.length - values.length;
+  if (headings) {
+    headings.forEach((h, i) => { out.columns[rows + i].name = h.name; });
+    out.columns.forEach((c, i) => { if (out.columns.slice(0, i).some((o) => sameName(o.name, c.name))) fail('duplicateOutput', c.name); });
+  } else if (!fixed) out.columns = out.columns.slice(0, rows);
+  out.crosstab = { headings: fixed ? 'fixed' : 'data', source: q };
+  return out;
+}
+
+function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['saved'], headings?: Heading[]): BoundQuery {
+  if (q.body.k === 'crosstab') return bindCrosstab(q, q.body, catalog, chain, saved, headings);
   const ctx: Ctx = {
     catalog, chain, saved, refs: new Map(), selects: new Map(),
     params: q.params.map((p) => ({ name: p.name, type: p.type, props: { ...defaultProps(p.type), ...(p.numberSize && { numberSize: p.numberSize }), required: false } })),
@@ -369,9 +408,12 @@ function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['sa
       const s = bindSelect(body, undefined, ctx);
       if (body.into !== undefined && (!isValidObjectName(body.into) || isReservedName(body.into))) fail('unknownTarget', body.into);
       Object.assign(out, { columns: s.columns, sources: s.sources, aggregate: s.grouped });
-      const single = body.from.length === 1 && body.from[0].k === 'source' ? s.sources[0] : undefined;
-      if (single && !s.grouped && !body.distinct && body.into === undefined && (single.kind === 'table' || single.inner!.updatable)) {
-        Object.assign(out, { updatable: true, keyTable: single.design?.name ?? single.inner!.keyTable, keyAlias: single.alias });
+      // a single saved query carries its own plan (A3); otherwise the plan of this FROM (B4 R1)
+      const saved = body.from.length === 1 && body.from[0].k === 'source' && s.sources[0].kind === 'query' ? s.sources[0] : undefined;
+      const plan = saved ? (saved.inner!.updatable ? saved.inner!.writePlan! : null) : writePlan(s.sources, body.from, ctx.refs);
+      if (plan && !s.grouped && !body.distinct && body.into === undefined) {
+        Object.assign(out, { updatable: true, keyTable: plan[0].table, keyAlias: saved?.alias ?? plan[0].alias, writePlan: plan,
+          writeLevel: saved ? saved.inner!.writeLevel : out });
       }
       break;
     }
@@ -446,15 +488,28 @@ function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['sa
 /** Binds a parsed query against the catalog. Throws QueryBindError, Error('bc:notSelectQuery') for an action query used
  *  as a source, or the ExprSyntaxError of a saved query that does not parse. `name`: the saved query `q` is (opened or
  *  being saved), first in the chain, so a cycle through it reads `QA → QB → QA`. */
-export function bindQuery(q: Query, catalog: QueryCatalog, name?: string): BoundQuery {
-  return bindIn(q, catalog, name === undefined ? [] : [name], []);
+export function bindQuery(q: Query, catalog: QueryCatalog, name?: string, headings?: Heading[] /* a crosstab's: expandCrosstab */): BoundQuery {
+  return bindIn(q, catalog, name === undefined ? [] : [name], [], headings);
 }
 
 export function toSourceInfo(b: BoundQuery): SourceInfo {
   return {
     fields: b.columns.map(({ name, type, props, origin }) => (origin ? { name, type, props, origin } : { name, type, props })),
     updatable: b.updatable, ...(b.updatable && { keyTable: b.keyTable }), parameters: b.params,
+    ...(b.crosstab && { crosstab: { headings: b.crosstab.headings } }),
+    ...(b.updatable && b.writePlan && { tables: b.writePlan.map((w) => ({ table: w.table, role: w.role, readOnly: w.readOnly, lookupBy: lookupBy(b, w) })) }),
   };
+}
+
+/** Output columns whose change looks `w` up: those showing a child field of a join on the way from the key table to `w` (R4). */
+function lookupBy(b: BoundQuery, w: WriteTable): string[] {
+  const plan = b.writePlan!, links: { table: string; field: string }[] = [];
+  for (let x: WriteTable | undefined = w; x?.parent; ) {
+    const via = plan.find((y) => y.alias === x!.parent!.via)!;
+    links.push(...x.parent.pairs.map((p) => ({ table: via.table, field: p.child })));
+    x = via;
+  }
+  return b.columns.filter((c) => c.origin && links.some((l) => sameName(l.table, c.origin!.table) && sameName(l.field, c.origin!.field))).map((c) => c.name);
 }
 
 // ---- Types ----

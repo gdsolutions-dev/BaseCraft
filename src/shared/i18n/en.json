@@ -538,6 +538,7 @@
       "invalidQuery_subqueryRows": "A subquery returns more than one record where a single value is expected.",
       "invalidQuery_tooComplex": "This query is too complex (too many tables, columns or nesting levels).",
       "invalidQuery_storedQuery": "The query \"{{detail}}\" cannot be read: its SQL is not valid.",
+      "invalidQuery_badCrosstab": "Invalid crosstab query: TRANSFORM, a plain SELECT with GROUP BY, then PIVOT.",
       "queryBind_unknownSource": "The table or query \"{{detail}}\" does not exist: it may have been renamed or deleted.",
       "queryBind_ambiguousField": "The name \"{{detail}}\" can refer to more than one field or source: name the table, for example [Table].[Field].",
       "queryBind_circular": "These queries call each other in a loop: {{detail}}.",
@@ -552,6 +553,11 @@
       "queryBind_insertArity": "The number of values to append does not match the number of destination fields.",
       "queryBind_subqueryArity": "This subquery must return a single column: {{detail}}.",
       "queryBind_memberNotAllowed": "A query cannot use {{detail}}: only [Forms]!, [Reports]! and [TempVars]! references are allowed there.",
+      "queryBind_crosstabRowHeading": "A crosstab query needs at least one row heading: group it with GROUP BY.",
+      "queryBind_crosstabValue": "The value of a crosstab query (TRANSFORM) must be an aggregate function, such as Sum or Count: {{detail}}.",
+      "queryBind_pivotAggregate": "The column heading of a crosstab query (PIVOT) cannot contain an aggregate function: {{detail}}.",
+      "queryBind_tooManyColumns": "This crosstab query would give {{detail}} columns: 255 at most, 254 of them column headings. Restrict the data or fix the column headings (IN).",
+      "queryBind_crosstabAsSource": "The crosstab query \"{{detail}}\" cannot be the source of another query or of a lookup list.",
       "fontMissing": "An embedded font could not be loaded: the report was neither printed nor exported.",
       "printFailed": "Printing failed.",
       "writeFailed": "The file could not be saved to this location.",
@@ -563,7 +569,13 @@
       "invalidQuery_unlinkedTables": "The tables of an Update or Delete query must all be joined.",
       "invalidQuery_updateTarget": "“{{detail}}” cannot be updated: the Update To row applies to a field of a table.",
       "invalidQuery_noTarget": "Specify the name of the query's destination table.",
-      "invalidQuery_deleteFrom": "Specify the table containing the records you want to delete: its “*” field with “From” in the Delete row."
+      "invalidQuery_deleteFrom": "Specify the table containing the records you want to delete: its “*” field with “From” in the Delete row.",
+      "invalidQuery_crosstabRowHeading": "A crosstab query needs at least one “Row Heading” with “Group By” in the Total row; a row heading cannot be “Where”.",
+      "invalidQuery_crosstabColumnHeading": "A crosstab query needs exactly one “Column Heading” in the Crosstab row.",
+      "invalidQuery_crosstabValue": "A crosstab query needs exactly one “Value” in the Crosstab row.",
+      "invalidQuery_crosstabValueTotal": "The “Value” of a crosstab query must have an aggregate Total (Sum, Count…) or “Expression” with an aggregate function.",
+      "invalidQuery_crosstabHeadingTotal": "The “Column Heading” of a crosstab query must have “Group By” in the Total row.",
+      "invalidQuery_crosstabNone": "A “(not shown)” column of a crosstab query must have “Where” in the Total row; choose its role in the Crosstab row."
     },
     "op": {
       "nameExists": "An object with this name already exists.",
@@ -915,8 +927,9 @@
       "forbiddenStatement": "Statement not allowed: only Select, Append, Update, Delete and Make-Table queries are accepted.",
       "reservedName": "This name is reserved (bc_, bcx_ or sqlite_): the query cannot use it.",
       "multipleStatements": "Only one SQL statement is allowed: remove the text after the semicolon.",
-      "notSupportedYet": "This kind of query (Crosstab, pass-through) is not available yet.",
+      "notSupportedYet": "This kind of query (pass-through) is not available yet.",
       "badParameterType": "Unknown parameter type.",
+      "badCrosstab": "Invalid crosstab query: TRANSFORM, a plain SELECT with GROUP BY, then PIVOT.",
       "badCount": "Enter a whole number from 1 to 255.",
       "badWidths": "Enter widths in cm separated by “;” (55.88 cm at most).",
       "badListWidth": "Enter “Auto” or a width in cm (55.88 cm at most).",
@@ -1878,7 +1891,8 @@
       "or": "or:",
       "appendTo": "Append To:",
       "updateTo": "Update To:",
-      "deleteRole": "Delete:"
+      "deleteRole": "Delete:",
+      "crosstab": "Crosstab:"
     },
     "total": {
       "groupBy": "Group By",
@@ -1898,6 +1912,12 @@
       "none": "(not sorted)",
       "asc": "Ascending",
       "desc": "Descending"
+    },
+    "crosstab": {
+      "rowHeading": "Row Heading",
+      "columnHeading": "Column Heading",
+      "value": "Value",
+      "none": "(not shown)"
     },
     "deleteRole": {
       "from": "From",
@@ -1948,7 +1968,9 @@
       "top": "Top Values",
       "badTop": "Enter \"All\", a positive whole number or a percentage from 1 to 100 (for example 25 or 5%).",
       "outputAll": "Output All Fields",
-      "distinct": "Unique Values"
+      "distinct": "Unique Values",
+      "columnHeadings": "Column Headings",
+      "badHeadings": "Each heading must be a value (number, quoted text, date)."
     },
     "action": {
       "title": "Action query",

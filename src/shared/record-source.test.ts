@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultProps } from './field-types';
-import { toOrigin, type SourceInfo } from './record-source';
+import { lookupFor, writableColumn, type SourceInfo } from './record-source';
 
 const field = (name: string, origin?: { table: string; field: string }) => ({ name, type: 'shortText' as const, props: defaultProps('shortText'), ...(origin ? { origin } : {}) });
 const info: SourceInfo = {
@@ -8,25 +8,51 @@ const info: SourceInfo = {
   updatable: true, keyTable: 'Clients', parameters: [],
 };
 
-describe('toOrigin', () => {
-  it('maps output aliases back to the key table fields', () => {
-    expect(toOrigin(info, { client: 'Dupont', Ville: null })).toEqual({ table: 'Clients', values: { Nom: 'Dupont', Ville: null } });
-    expect(toOrigin(info, {})).toEqual({ table: 'Clients', values: {} });
+describe('writableColumn', () => {
+  it('without tables (A3): an aliased key table field yes; computed, unknown, another table or a read-only source no', () => {
+    expect(['Client', 'ville', 'Total', 'Absent'].map((n) => writableColumn(info, n))).toEqual([true, true, false, false]);
+    expect(writableColumn({ ...info, fields: [...info.fields, field('Pays', { table: 'Pays', field: 'Nom' })] }, 'Pays')).toBe(false);
+    expect(writableColumn({ ...info, updatable: false }, 'Client')).toBe(false);
   });
-
-  it('null when the source is not updatable, or a written column has no origin, is unknown or is in another table', () => {
-    expect(toOrigin({ ...info, updatable: false }, { Client: 'x' })).toBeNull();
-    expect(toOrigin({ ...info, keyTable: undefined }, { Client: 'x' })).toBeNull();
-    expect(toOrigin(info, { Total: 3 })).toBeNull(); // computed column: read-only
-    expect(toOrigin(info, { Absent: 3 })).toBeNull();
-    const joined: SourceInfo = { ...info, fields: [...info.fields, field('Pays', { table: 'Pays', field: 'Nom' })] };
-    expect(toOrigin(joined, { Pays: 'France' })).toBeNull();
+  it('with tables: a field of any plan table that is not one of its read-only join fields', () => {
+    const joined: SourceInfo = { ...info, keyTable: 'Commandes', fields: [...info.fields, field('Clé', { table: 'Clients', field: 'N°' }),
+      field('Client', { table: 'Commandes', field: 'Client' }), field('Pays', { table: 'Pays', field: 'Nom' })].slice(1),
+    tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }] };
+    expect(['Ville', 'Clé', 'Client', 'Total', 'Pays', 'Absent'].map((n) => writableColumn(joined, n))).toEqual([true, false, true, false, false, false]);
   });
+});
 
-  it('a field named __proto__ stays an ordinary key', () => {
-    const odd: SourceInfo = { ...info, fields: [field('P', { table: 'Clients', field: '__proto__' })] };
-    const r = toOrigin(odd, { P: 1 })!;
-    expect(Object.keys(r.values)).toEqual(['__proto__']);
-    expect(Object.getPrototypeOf(r.values)).toBe(Object.prototype);
+describe('lookupFor (B4 R4)', () => {
+  // Commandes ⋈ Clients ⋈ Produits: two 'one' tables, each looked up by its own link
+  const two: SourceInfo = {
+    fields: [field('Client', { table: 'Commandes', field: 'Client' }), field('Produit', { table: 'Commandes', field: 'Produit' }),
+      field('Nom', { table: 'Clients', field: 'Nom' }), field('Prix', { table: 'Produits', field: 'Prix' }), field('Total')],
+    updatable: true, keyTable: 'Commandes', parameters: [],
+    tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] },
+      { table: 'Produits', role: 'one', readOnly: ['Réf'], lookupBy: ['Produit'] }],
+  };
+  it('a link change looks up only the tables it links: their whole link is sent, only their columns come back', () => {
+    expect(lookupFor(two, 'client')).toEqual({ links: ['Client'], columns: ['Nom'] }); // Produits (and a Prix typed for it) untouched
+    expect(lookupFor(two, 'Produit')).toEqual({ links: ['Produit'], columns: ['Prix'] });
+    expect(lookupFor(two, 'Nom')).toBeNull(); // not a link
+    expect(lookupFor({ ...two, tables: undefined }, 'Client')).toBeNull(); // A3: no join
+  });
+  it('a chain and a composite link: every link column of each table looked up, once', () => {
+    const chain: SourceInfo = { ...two, tables: [two.tables![0]!, { table: 'Clients', role: 'one', readOnly: [], lookupBy: ['Client', 'Produit'] },
+      { table: 'Produits', role: 'one', readOnly: [], lookupBy: ['Produit'] }] };
+    expect(lookupFor(chain, 'Produit')).toEqual({ links: ['Client', 'Produit'], columns: ['Nom', 'Prix'] });
+    expect(lookupFor(chain, 'Client')).toEqual({ links: ['Client'], columns: ['Nom'] }); // Produit links Produits, not looked up
+  });
+  it('an intermediate link of a chain looks the far table up from the value typed, not through the near one', () => {
+    // Lignes ⋈ Commandes ⋈ Clients: Commande (Lignes.Commande) links Commandes then Clients; Client (Commandes.Client) links Clients
+    const l3: SourceInfo = {
+      fields: [field('Commande', { table: 'Lignes', field: 'Commande' }), field('Client', { table: 'Commandes', field: 'Client' }),
+        field('Nom', { table: 'Clients', field: 'Nom' })],
+      updatable: true, keyTable: 'Lignes', parameters: [],
+      tables: [{ table: 'Lignes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Commandes', role: 'one', readOnly: ['N°'], lookupBy: ['Commande'] },
+        { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Commande', 'Client'] }],
+    };
+    expect(lookupFor(l3, 'Client')).toEqual({ links: ['Client'], columns: ['Nom'] });
+    expect(lookupFor(l3, 'Commande')).toEqual({ links: ['Commande', 'Client'], columns: ['Client', 'Nom'] });
   });
 });

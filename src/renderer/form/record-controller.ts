@@ -1,10 +1,13 @@
 // Enregistrements d'un formulaire en mode Formulaire (module pur) : lecture par pages de la source, enregistrement courant,
-// nouvel enregistrement, écritures par rows.* sur keyTable avec les noms origin.field (contrat A3/A4/A5, section 1.2).
+// nouvel enregistrement, écritures par rows.* sur une table, par sources.save sur une requête (contrat A3/A4/A5, section 1.2 ;
+// B4 : une requête multitable, recherche automatique du côté un).
 // Les trois vues (formulaire unique, continu, feuille de données) partagent ce contrôleur.
-import type { DeleteResult, FieldFilter, RowPage, RowWriteResult } from '../../shared/api';
+import type { DeleteResult, FieldFilter, QueryRef, RowPage, RowWriteResult } from '../../shared/api';
 import type { CellInput, FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { defaultProps, sameName } from '../../shared/field-types';
-import { toOrigin, type RecordSourceRef, type SortSpec, type SourceField, type SourceInfo, type SourcePage, type SourcePageRequest } from '../../shared/record-source';
+import { lookupFor, writableColumn, type RecordSourceRef, type SortSpec, type SourceField, type SourceInfo, type SourcePage, type SourcePageRequest,
+  type SourceSaveRequest, type SourceSaveResult } from '../../shared/record-source';
+import { applyLookup, Lookups } from '../datasheet/row-buffer';
 import { selectionCriteria } from '../datasheet/filter-model';
 import { PageCache } from '../datasheet/page-cache';
 import type { OpenArgs } from '../state/app-state';
@@ -15,6 +18,8 @@ export interface FormDataApi {
   insert(table: string, values: Record<string, CellInput>): Promise<RowWriteResult>;
   update(table: string, rowid: number, changes: Record<string, CellInput>): Promise<RowWriteResult>;
   delete(table: string, rowids: number[]): Promise<DeleteResult>;
+  save(ref: QueryRef, req: SourceSaveRequest): Promise<SourceSaveResult>;   // query and sql sources; tables keep insert/update
+  autoLookup(ref: QueryRef, values: Record<string, CellInput>): Promise<Record<string, SqlValue>>;
 }
 /** The form's record events (Access's order and refusals); the view runs their macros. */
 export interface RecordEvents {
@@ -59,9 +64,9 @@ export function linkFilter(childFields: SourceField[], values: SqlValue[]): Fiel
   return childFields.map((f, i) => ({ field: f.name, criteria: selectionCriteria('equals', f, values[i] ?? null) }));
 }
 
-/** A field the form can write: it maps to a field of the key table (a computed column cannot). */
+/** A field the form can write (B4 R2): a field of the key table or of a 'one' table, not a join field nor a computed column. */
 export function writableField(f: SourceField, info: SourceInfo): boolean {
-  return toOrigin(info, { [f.name]: null }) !== null;
+  return writableColumn(info, f.name);
 }
 
 /** The Where Conditions sent with each page: both, ANDed in canonical text. */
@@ -84,6 +89,9 @@ export class FormRecords {
   private isNew = false;
   private rowid = NaN;
   private values: SqlValue[] = [];
+  private looked = Object.create(null) as Record<string, SqlValue>;   // AutoLookup's values (R4): shown over `values`, never written
+  private shown: SqlValue[] | null = null;  // `values` with `looked` over them (null: none), one array until either changes
+  private readonly lookups = new Lookups();   // AutoLookups by link: a save waits for them, a failure stops it
   private pending = Object.create(null) as Record<string, CellInput>; // no prototype: a field may be named __proto__
   private errors: RecordError[] = [];
   private controlErrors: RecordError[] = [];
@@ -107,7 +115,6 @@ export class FormRecords {
   private moving = 0;                     // moves under way (place, delete): edits are refused meanwhile
   private nav = 0;                        // the latest move: an earlier one that ends after it changes nothing
   private record = 0;                     // changes each time another record becomes current (a failed move leaves it)
-  private keyNames: string[] | null = null;
   private saves = 0;
   private ahead: { keys: string; claimed: boolean } | null = null;   // the user move asked for or under way: keys typed meanwhile
   private aheadDone: ((r: { text: string; applied: boolean }) => void) | null = null;
@@ -145,7 +152,7 @@ export class FormRecords {
   get snapshot(): RecordSnapshot {
     return (this.snap ??= {
       status: this.status, error: this.error, info: this.info, total: this.total, index: this.index, isNew: this.isNew,
-      values: this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
+      values: this.shown ?? this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
       editable: this.editable, busy: this.moving > 0, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
       sort: this.sort, filter: this.filter, refusedByEvent: this.refusedByEvent, appliedFilter: this.applied,
     });
@@ -170,6 +177,7 @@ export class FormRecords {
     this.pending[f.name] = input;
     this.refusedByEvent = false;
     this.emit();
+    this.lookUp(f.name);
     if (first) {
       const rec = this.record;
       const run: Promise<void> = this.beforeEvent(first).then((ok) => { if (!ok && rec === this.record) this.undoRecord(); })
@@ -186,10 +194,12 @@ export class FormRecords {
     this.errors = this.errors.filter(other);
     this.controlErrors = this.controlErrors.filter(other);
     this.emit();
+    this.lookUp(name); // a link given back: its parent shown again (R4)
   }
 
   undoRecord(): void {
     this.pending = Object.create(null) as Record<string, CellInput>;
+    this.unlook();
     this.refusedByEvent = false;
     this.errors = [];
     this.controlErrors = [];
@@ -413,7 +423,6 @@ export class FormRecords {
     this.flush(); // waiters look again, at the new cache
     this.cache = null;
     this.pageError = undefined;
-    this.keyNames = null; // a requery reads the key table's design again
     this.total = 0;
     this.counted = false;
     const ref = this.opts.ref;
@@ -502,6 +511,7 @@ export class FormRecords {
     this.rowid = row?.rowid ?? NaN;
     this.values = row ? row.values : this.isNew ? this.info!.fields.map(() => null) : [];
     this.pending = Object.create(null) as Record<string, CellInput>;
+    this.unlook();
     this.errors = [];
     this.controlErrors = [];
     this.refusedByEvent = false;
@@ -522,9 +532,45 @@ export class FormRecords {
     return Object.fromEntries(out);
   }
 
+  /** AutoLookup (B4 R4), as the datasheet's: `column` links 'one' tables (lookupFor), so they show the parent it now points to
+   *  (blank: none). Their whole link is sent (typed, else looked up, else the subform's link value, else stored). Only their
+   *  columns change; what was typed in them goes, except an edit made meanwhile. Nothing is written; the latest lookup of a link wins. */
+  private lookUp(column: string): void {
+    const ref = this.opts.ref, info = this.info;
+    if (!ref || ref.kind === 'table' || !info) return;
+    const what = lookupFor(info, column);
+    if (!what) return;
+    const link = this.isNew ? this.linkDefaults : {};
+    const values = Object.create(null) as Record<string, CellInput>;
+    for (const name of what.links) {
+      const i = this.fieldIndex(name), n = info.fields[i]?.name ?? name;
+      values[n] = Object.hasOwn(this.pending, n) ? this.pending[n] : Object.hasOwn(this.looked, n) ? this.looked[n] : Object.hasOwn(link, n) ? link[n] : this.values[i] ?? null;
+    }
+    const sent = { ...this.pending };
+    this.lookups.ask(what.links, this.api.autoLookup(ref, values), (got) => {
+      const mine: Record<string, SqlValue> = Object.create(null) as Record<string, SqlValue>;
+      for (const [k, v] of Object.entries(got)) { const c = what.columns.find((x) => sameName(x, k)); if (c !== undefined) mine[c] = v; }
+      applyLookup(this.pending, this.looked, mine, sent);
+      this.reshow();
+      this.emit();
+    });
+  }
+  /** No looked-up value any more (another record, an undo); a lookup in flight changes nothing then. */
+  private unlook(): void {
+    this.lookups.reset();
+    this.looked = Object.create(null) as Record<string, SqlValue>;
+    this.shown = null;
+  }
+  private reshow(): void {
+    const fields = this.info?.fields ?? [];
+    this.shown = Object.keys(this.looked).length
+      ? this.values.map((v, i) => (fields[i] && Object.hasOwn(this.looked, fields[i].name) ? this.looked[fields[i].name] : v)) : null;
+  }
+
   private async write(): Promise<boolean> {
     this.saved = null;
     if (this.inserting) await this.inserting; // BeforeInsert decides first whether there is anything to save
+    if (this.lookups.busy) await this.lookups.settled(); // the parent's values first: a lookup drops what was typed for the old one (R4)
     const info = this.info;
     if (!info || !this.dirty) return true; // an untouched new record is never inserted
     if (this.controlErrors.length || this.ro) return false;
@@ -541,6 +587,14 @@ export class FormRecords {
       if (!ok) { this.refusedByEvent = true; this.emit(); return false; }
       if (!this.dirty) return true;
     }
+    if (this.lookups.busy) await this.lookups.settled(); // again: a link set by BeforeUpdate (SetValue) is looked up before `sent` (R4)
+    if (rec !== this.record) return false;
+    const failed = this.lookups.failure;
+    if (failed) {   // the parent is unknown: nothing is written, the save fails with the lookup's error (a new one each time)
+      const e = failed.e;
+      this.rejected(e instanceof Error ? new Error(e.message, { cause: e }) : new Error(String(e)));
+      return false;
+    }
     const sent = { ...this.pending };
     const { isNew, rowid } = this;
     let values = sent;
@@ -550,29 +604,37 @@ export class FormRecords {
       try { defaults = (await this.opts.newRecordValues?.()) ?? {}; } catch (e) { if (rec === this.record) this.rejected(e); return false; }
       values = { ...this.own(defaults), ...this.own(link), ...sent };
     }
-    const w = toOrigin(info, values);
-    if (!w || rec !== this.record) return false;
+    const ref = this.opts.ref;
+    if (!ref || rec !== this.record) return false;
     this.writeError = undefined;
-    let r: RowWriteResult;
+    const look = this.lookups.asked;
+    let r: RowWriteResult | SourceSaveResult;
     try {
-      r = isNew ? await this.api.insert(w.table, w.values) : await this.api.update(w.table, rowid, w.values);
+      r = ref.kind !== 'table' ? await this.api.save(ref, { rowid: isNew ? null : rowid, values })
+        : isNew ? await this.api.insert(ref.name, values) : await this.api.update(ref.name, rowid, values);
     } catch (e) {
       if (rec === this.record) this.rejected(e); // not on a record that is no longer current
       return false;
     }
     if (rec !== this.record) { if (r.ok) this.done(isNew); this.invalidate(); return r.ok; }
     if (!r.ok) {
-      this.errors = r.errors.map((e) => ({ ...e, field: this.sourceName(info, e.field) }));
+      this.errors = r.errors; // by the source's fields: a table's own, a query's output columns (sources.save)
       this.emit();
       return false;
     }
-    const back = await this.readBack(info, r.values, values);
-    if (rec !== this.record) { this.done(isNew); this.invalidate(); return true; }
+    // A query's values read back (its tables' columns, by output column) over the current ones: a computed column keeps its own.
+    const got = r.values, now = this.shown ?? this.values;
+    const back = Array.isArray(got) ? got : info.fields.map((f, i) => {
+      const k = Object.keys(got).find((x) => sameName(x, f.name));
+      return k === undefined ? now[i] ?? null : got[k];
+    });
     // Changes typed during the save stay pending, against the record that now exists.
     for (const k of Object.keys(sent)) if (Object.is(this.pending[k], sent[k])) delete this.pending[k];
     this.errors = [];
     this.rowid = r.rowid;
     this.values = back;
+    if (look === this.lookups.asked) this.looked = Object.create(null) as Record<string, SqlValue>; // else a lookup since: still shown
+    this.reshow();
     if (isNew) { this.total++; this.isNew = false; } // at the end of the list, as in Access, until the next sort
     this.done(isNew);
     this.invalidate();
@@ -602,33 +664,6 @@ export class FormRecords {
     this.saves++;
     this.refusedByEvent = false;
     this.emit();
-  }
-
-  /** The written row (the key table's fields, in its order) as the source's values; a computed column keeps its value.
-   *  `written`: the values sent, by source field (shown as typed when the key table cannot be described). */
-  private async readBack(info: SourceInfo, row: SqlValue[], written: Record<string, CellInput>): Promise<SqlValue[]> {
-    if (this.opts.ref?.kind === 'table') return row; // a table source lists the table's own fields, in order
-    const keyTable = info.keyTable!;
-    try {
-      this.keyNames ??= (await this.api.describe({ kind: 'table', name: keyTable })).fields.map((f) => f.name);
-    } catch {
-      // The write is done: the values sent stand until the next read (a Yes/No as stored, 1 or 0).
-      return info.fields.map((f, i) => {
-        if (!Object.hasOwn(written, f.name)) return this.values[i] ?? null;
-        const v = written[f.name];
-        return typeof v === 'boolean' ? Number(v) : v;
-      });
-    }
-    const names = this.keyNames;
-    return info.fields.map((f, i) => {
-      const j = f.origin && sameName(f.origin.table, keyTable) ? names.findIndex((n) => sameName(n, f.origin!.field)) : -1;
-      return j >= 0 ? row[j] : this.values[i] ?? null;
-    });
-  }
-
-  /** The source field written to a key-table field, for an error the write layer names by origin.field. */
-  private sourceName(info: SourceInfo, field: string): string {
-    return info.fields.find((f) => f.origin && sameName(f.origin.table, info.keyTable ?? '') && sameName(f.origin.field, field))?.name ?? field;
   }
 
   private rejected(e: unknown): void {

@@ -10,7 +10,9 @@ const tablesList = vi.fn(async () => [{ name: 'Commandes' }]);
 const cascadeChildren = vi.fn(async (_t: string): Promise<{ table: string; effect: 'deleted' | 'modified' }[]> => []);
 const relationsList = vi.fn(async (): Promise<object[]> => []);
 const baseState = vi.fn(async () => ({ readOnly: false }));
-const describe = vi.fn(async ({ name }: { name: string }) => ({ fields: [], updatable: true, keyTable: name === 'QCommandes' ? 'Commandes' : 'Clients', parameters: [] }));
+const describe = vi.fn(async ({ name }: { name: string }) => name === 'QV' // a join (B4): Commandes, and Clients through it
+  ? { fields: [], updatable: true, keyTable: 'Commandes', parameters: [], tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }] }
+  : { fields: [], updatable: true, keyTable: name === 'QCommandes' ? 'Commandes' : 'Clients', parameters: [] });
 (globalThis as unknown as { window: { basecraft: Partial<BasecraftApi> } }).window = {
   basecraft: { queries: { actionCount, runAction }, tables: { list: tablesList } as unknown as BasecraftApi['tables'],
     sources: { describe } as unknown as BasecraftApi['sources'], base: { state: baseState } as unknown as BasecraftApi['base'],
@@ -272,4 +274,18 @@ it('warnings: false (SetWarnings): the count, partial and replace questions are 
   const e = fakeModal([]);
   await runActionFlow(ref, { ...deps(e.modal), warnings: false });
   expect(e.asked.map((x) => x.messageKey)).toEqual(['query.action.related']); // an error is shown
+});
+
+it('a dirty datasheet of a join query holds every table it writes (B4): an Update query on its one side is refused', async () => {
+  setOpenTabs(() => [{ id: 'qv', kind: 'query', name: 'QV', mode: 'run', dirty: true, reloadToken: 0 }]);
+  try {
+    actionCount.mockReset().mockResolvedValue({ count: 1, table: 'Clients' });
+    runAction.mockReset().mockResolvedValue({ ok: true, count: 1 });
+    const m = fakeModal(['yes']);
+    expect(await runActionFlow({ kind: 'sql', sql: 'UPDATE Clients SET Nom = "X" WHERE [N°] = 1' }, deps(m.modal))).toBe('failed');
+    expect(m.asked.map((x) => [x.messageKey, x.params])).toEqual([['query.action.inUse', { table: 'Clients' }]]);
+    expect(runAction).not.toHaveBeenCalled();
+  } finally {
+    setOpenTabs(() => []);
+  }
 });

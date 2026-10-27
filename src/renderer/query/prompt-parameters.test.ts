@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { num } from '../../shared/expr/library';
 import { defaultProps } from '../../shared/field-types';
 import { registerForm, type FormInstance } from '../form/form-instances';
@@ -6,7 +6,7 @@ import { tempVars } from '../macro/temp-vars';
 import { localeInfo } from '../../shared/locale-format';
 import { i18n } from '../i18n';
 import type { ModalApi, PromptOptions } from '../shell/Modal';
-import { promptParameters } from './prompt-parameters';
+import { promptParameters, runParameters } from './prompt-parameters';
 
 const fr = localeInfo('fr-FR');
 /** Answers the prompts in turn; records each label's name and the last validate. */
@@ -72,4 +72,22 @@ it('fills form references and TempVars, asks the rest', async () => {
   const closed = fakeModal(['3']);
   expect(await promptParameters(closed, [{ name: '[Forms]![FClients]![N°]', type: 'number' }], fr)).toEqual({ '[Forms]![FClients]![N°]': '3' });
   expect(closed.labels).toEqual(['[Forms]![FClients]![N°]']); // not open: asked, the reference as its label (Access)
+});
+
+it('a crosstab whose headings need the parameters (B4 R11): asked once, then described again with the values', async () => {
+  const m = fakeModal(['01/10/2026']);
+  const describe = vi.fn(async () => ({ fields: [], updatable: false, parameters: [] }));
+  const values = await runParameters(m, { fields: [], updatable: false, parameters: [{ name: 'Du', type: 'dateTime' }], crosstab: { headings: 'needsParameters' } }, fr, describe);
+  expect(values).toEqual({ Du: '01/10/2026' });
+  expect(m.labels).toEqual(['Du']);
+  expect(describe).toHaveBeenCalledTimes(1);
+  expect(describe).toHaveBeenCalledWith({ Du: '01/10/2026' });
+  // headings known (IN, or the data with no parameter), or a plain query: no second describe; cancel: none either
+  for (const crosstab of [{ headings: 'fixed' as const }, { headings: 'data' as const }, undefined]) {
+    describe.mockClear();
+    expect(await runParameters(fakeModal(['x']), { fields: [], updatable: false, parameters: [{ name: 'P', type: null }], ...(crosstab && { crosstab }) }, fr, describe)).toEqual({ P: 'x' });
+    expect(describe).not.toHaveBeenCalled();
+  }
+  expect(await runParameters(fakeModal([null]), { fields: [], updatable: false, parameters: [{ name: 'Du', type: null }], crosstab: { headings: 'needsParameters' } }, fr, describe)).toBeNull();
+  expect(describe).not.toHaveBeenCalled();
 });

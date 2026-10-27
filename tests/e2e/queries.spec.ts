@@ -116,10 +116,16 @@ test('a one-table query is updatable: an edit and a new record reach the Clients
   }
 });
 
-test('a join is read-only: no new record row, cells not editable, the reason in the navigation bar; sorting works', async () => {
+/** A3's join written as a cross product (B4 R7): the same 5 rows, read-only by R1. */
+const QVENTES_VIRGULE = 'SELECT Clients.Nom, Commandes.Montant, Commandes.Le FROM Clients, Commandes WHERE Clients.[N°] = Commandes.Client;';
+
+test('a join is read-only (a cross product, B4 R7): no new record row, cells not editable, the reason in the navigation bar; sorting works', async () => {
   const { app, page } = await launchApp({ args: [seedSalesE2E('jointure')], env: FR });
   try {
-    await openQuery(page, 'QVentes');
+    expect(await page.evaluate((sql) => (window as unknown as Win).basecraft.objects.save('query', 'QVentesVirgule', { formatVersion: '1.0', sql }, null), QVENTES_VIRGULE)).toEqual({ ok: true });
+    await page.reload();
+    await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
+    await openQuery(page, 'QVentesVirgule');
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('5');
     await expect(rowcount(page)).toHaveAttribute('aria-rowcount', '6'); // header + 5 records, no new record row
     await expect(doc(page).getByTestId('nav-readonly')).toHaveText(fr.query.readOnly);
@@ -129,13 +135,26 @@ test('a join is read-only: no new record row, cells not editable, the reason in 
     await expect(cellEditor(page)).toHaveCount(0); // a read-only cell opens no editor
     await page.keyboard.press('Escape');
     await expect(cell(page, 0, 0)).toHaveText('Dupont');
-    await expect(page.getByTestId('doc-tab-query-QVentes')).not.toContainText('•');
+    await expect(page.getByTestId('doc-tab-query-QVentesVirgule')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-home').click();
     for (const id of ['newRecord', 'deleteRecord']) await expect(page.getByTestId(`cmd-${id}`)).toBeDisabled();
     await expect(page.getByTestId('cmd-sortAsc')).toBeEnabled();
     await clickCell(page, 30, 0, 0); // Escape left no selection: the sort applies to the selected column
     await page.getByTestId('cmd-sortAsc').click();
     for (const [row, nom] of ['Dupont', 'Dupont', 'Durand', 'Martin', 'Martin'].entries()) await expect(cell(page, 0, row)).toHaveText(nom);
+  } finally {
+    await app.close();
+  }
+});
+
+test('B4 R7: a one-to-many join (QVentes) is updatable: no read-only note, a new record row', async () => {
+  const { app, page } = await launchApp({ args: [seedSalesE2E('jointure-r7')], env: FR });
+  try {
+    await openQuery(page, 'QVentes');
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('5');
+    await expect(doc(page).getByTestId('nav-readonly')).toHaveCount(0);
+    await expect(doc(page).getByTestId('nav-new')).toBeEnabled();
+    await expect(rowcount(page)).toHaveAttribute('aria-rowcount', '7'); // header + 5 records + the new record row
   } finally {
     await app.close();
   }

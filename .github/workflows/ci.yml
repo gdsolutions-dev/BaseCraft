@@ -21,7 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # macOS on hold since 2026-10-27 until the owner reactivates it: add macos-latest back here.
+        os: [windows-latest, ubuntu-latest]
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:

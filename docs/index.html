@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BaseCraft — desktop databases, the Access way</title>
 <meta name="description" content="BaseCraft is an open-source desktop database application in the spirit of Microsoft Access, for Windows, macOS and Linux.">
+<link rel="icon" type="image/png" sizes="32x32" href="logo/png/icone-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="logo/png/icone-16.png">
+<link rel="apple-touch-icon" href="logo/png/icone-256.png">
+<meta property="og:image" content="https://gdsolutions-dev.github.io/BaseCraft/logo/png/icone-512.png">
 <style>
 @font-face {
   font-family: "Inter Variable";
@@ -12,14 +16,16 @@
   font-weight: 100 900;
   font-display: swap;
 }
+/* gd solutions charter: orange #EF572C, navy #364554, white; Inter 800 for titles */
 :root {
-  --bg: #f2f3f5; --surface: #ffffff; --text: #1b1f27; --muted: #5f6775;
-  --border: #e1e4e9; --accent: #3e63dd; --accent-contrast: #ffffff;
+  --orange: #EF572C; --navy: #364554;
+  --bg: #f5f6f8; --surface: #ffffff; --text: #364554; --muted: #5d6b79;
+  --border: #e1e5ea; --link: #c8401a; --hero: #364554; --hero-text: #ffffff; --hero-muted: #c9d1d9;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121418; --surface: #1a1d23; --text: #e6e8ec; --muted: #9aa1ad;
-    --border: #2e333c; --accent: #7b93f7; --accent-contrast: #0b1020;
+    --bg: #1c242d; --surface: #26313c; --text: #e8ecf0; --muted: #a9b4bf;
+    --border: #364554; --link: #f58a6a; --hero: #141b22; --hero-text: #ffffff; --hero-muted: #a9b4bf;
   }
 }
 * { box-sizing: border-box; }
@@ -27,48 +33,64 @@ body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.6 "Inter Variable", system-ui, sans-serif;
 }
-main { max-width: 920px; margin: 0 auto; padding: 0 16px 64px; }
-header { padding: 72px 0 40px; }
-h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
-h1 span { color: var(--accent); }
-h2 { font-size: 1.4rem; margin: 48px 0 16px; }
-.lead { font-size: 1.2rem; color: var(--muted); max-width: 640px; margin: 0; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+.hero { background: var(--hero); color: var(--hero-text); padding: 28px 0 0; overflow: hidden; }
+.hero nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--hero-text); text-decoration: none; font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
+.brand span { color: var(--orange); }
+.hero nav a.gh { color: var(--hero-text); text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+.hero-body { padding: 56px 0 40px; }
+h1 { font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
+h1 span { color: var(--orange); }
+h2 { font-weight: 800; letter-spacing: -0.02em; font-size: 1.5rem; margin: 56px 0 16px; }
+.lead { font-size: 1.2rem; color: var(--hero-muted); max-width: 640px; margin: 0; }
 .badge {
-  display: inline-block; margin-bottom: 20px; padding: 2px 10px; border-radius: 99px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 0.85rem;
+  display: inline-block; margin-bottom: 20px; padding: 2px 12px; border-radius: 99px;
+  background: rgba(239, 87, 44, 0.15); color: #ffb39c; font-size: 0.85rem; font-weight: 600;
 }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
 .btn {
-  display: inline-block; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  display: inline-block; padding: 11px 20px; border-radius: 6px; text-decoration: none; font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: var(--hero-text);
 }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.btn.primary { background: var(--orange); border-color: var(--orange); }
+.btn:hover { filter: brightness(1.08); }
+.shot { display: block; width: 100%; height: auto; border-radius: 10px 10px 0 0; box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.35); }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; }
-.card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--orange); border-radius: 6px; padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; }
 .card p { margin: 0; color: var(--muted); }
 ol.roadmap { padding: 0; list-style: none; display: grid; gap: 12px; }
 ol.roadmap li { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 20px; }
-ol.roadmap b { display: inline-block; min-width: 2em; color: var(--accent); }
-ol.roadmap .now { border-color: var(--accent); }
+ol.roadmap b { display: inline-block; min-width: 2em; color: var(--orange); font-weight: 800; }
+ol.roadmap .done { border-left: 4px solid var(--orange); }
 code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
-footer { border-top: 1px solid var(--border); margin-top: 64px; padding-top: 20px; color: var(--muted); font-size: 0.9rem; }
-a { color: var(--accent); }
+footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 20px 0 48px; color: var(--muted); font-size: 0.9rem; }
+a { color: var(--link); }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <div class="badge">Early development · not released yet</div>
-    <h1>Desktop databases,<br><span>the Access way.</span></h1>
-    <p class="lead">BaseCraft is an open-source desktop database application in the spirit of Microsoft Access. Tables, queries, forms, reports, macros and code, with a modern interface, on Windows, macOS and Linux.</p>
-    <div class="actions">
-      <a class="btn primary" href="https://github.com/gdsolutions-dev/BaseCraft/releases">Download preview (Windows, Linux)</a>
-      <a class="btn" href="https://github.com/gdsolutions-dev/BaseCraft">View on GitHub</a>
-      <a class="btn" href="maquettes/">See the UI mockups</a>
+<div class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./"><img src="logo/png/symbole-blanc-1024.png" alt="" width="40" height="40"><b>Base<span>Craft</span></b></a>
+      <a class="gh" href="https://github.com/gdsolutions-dev/BaseCraft">GitHub</a>
+    </nav>
+    <div class="hero-body">
+      <div class="badge">Preview 0.2.0 · early development</div>
+      <h1>Desktop databases,<br><span>the Access way.</span></h1>
+      <p class="lead">BaseCraft is an open-source desktop database application in the spirit of Microsoft Access. Tables, queries, forms, reports, macros and code, with a modern interface, on Windows, macOS and Linux.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/gdsolutions-dev/BaseCraft/releases">Download preview</a>
+        <a class="btn" href="https://github.com/gdsolutions-dev/BaseCraft">View on GitHub</a>
+        <a class="btn" href="maquettes/">See the UI mockups</a>
+      </div>
     </div>
-  </header>
+    <img class="shot" src="images/screenshot.png" alt="BaseCraft report Design view with grouping and totals" width="1923" height="1203">
+  </div>
+</div>
 
+<main class="wrap">
   <h2>Why BaseCraft</h2>
   <div class="grid">
     <div class="card"><h3>Familiar</h3><p>Design view and run view for every object, a QBE query grid, datasheets and property sheets. If you know Access, you know BaseCraft.</p></div>
@@ -79,7 +101,7 @@ a { color: var(--accent); }
 
   <h2>Roadmap</h2>
   <ol class="roadmap">
-    <li class="now"><b>A</b> Replace Excel: tables ✓, relations and expressions (in progress), queries, forms, reports and PDF export</li>
+    <li class="done"><b>A</b> Replace Excel: tables, relations and expressions, queries, forms, reports and PDF export ✓</li>
     <li><b>B</b> Automate and distribute: events, macros, BaseCraft Runtime</li>
     <li><b>C</b> Work together: PostgreSQL, SQL Server and Access linked tables</li>
     <li><b>D</b> Python code in place of VBA</li>
@@ -87,7 +109,7 @@ a { color: var(--accent); }
   </ol>
 
   <footer>
-    BaseCraft is licensed under the <a href="https://github.com/gdsolutions-dev/BaseCraft/blob/main/LICENSE">AGPL-3.0</a>.
+    BaseCraft is licensed under the <a href="https://github.com/gdsolutions-dev/BaseCraft/blob/main/LICENSE">AGPL-3.0</a> and developed by gd solutions.
     Microsoft Access is a trademark of Microsoft Corporation; BaseCraft is not affiliated with Microsoft.
   </footer>
 </main>

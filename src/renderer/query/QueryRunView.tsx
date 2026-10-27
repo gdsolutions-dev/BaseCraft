@@ -8,11 +8,12 @@ import { api } from '../bridge';
 import { DatasheetView } from '../datasheet/DatasheetView';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { bcErrorCode, useErrorDialog, useModal } from '../shell/Modal';
-import { promptParameters } from './prompt-parameters';
+import { runParameters } from './prompt-parameters';
 import { runActionFlow } from './run-action';
 
 /**
- * A select query: describe, the parameter prompts (Cancel closes the tab), a first count with the values (an error the query
+ * A select query: describe, the parameter prompts (Cancel closes the tab; a crosstab whose headings need them is described
+ * again with them, B4 R11), a first count with the values (an error the query
  * meets when it runs shows before any grid), then the datasheet. Any bc:* error shows, then the tab closes. An action query
  * (bc:notSelectQuery) runs through runActionFlow, then the tab closes (a select query whose source became an action query:
  * runActionFlow shows bc:notSelectQuery). A save of the query's design
@@ -44,7 +45,7 @@ export function QueryRunView(p: DocViewProps & { sql?: string }) {
           return null;
         });
         if (info === null) return close();
-        const values = info.parameters.length ? await promptParameters(modal, info.parameters, region) : {};
+        const values = await runParameters(modal, info, region, (v) => api.sources.describe(source, v));
         if (values === null) return close();
         await api.sources.page(source, { offset: 0, limit: 0, params: values });
         if (started.current === token) setParams({ values, token });

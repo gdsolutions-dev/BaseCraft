@@ -50,7 +50,7 @@ function lookupProps(f: SourceField, kind: ControlKind): Record<string, unknown>
 export function boundControlWithLabel(doc: DesignDoc, f: SourceField, at: { section: number; left: number; top: number },
   opts: { objectKind: 'form' | 'report'; labelSuffix: string }): ControlDef[] {
   const kind = controlKindFor(f);
-  const name = uniqueName(doc, f.name);
+  const name = uniqueName(doc, f.name.replace(/[.!`[\]]/g, '_')); // colonne d'une jointure (« Clients.N° ») : pas de « . » dans un nom de contrôle
   const width = kind === 'checkBox' ? 284 : 2268;
   // la section s'agrandit au dépôt (fit, dans le réducteur) ; le contrôle reste dans la limite d'Access
   const left = Math.min(Math.max(at.left, LABEL_WIDTH), MAX_TWIPS - width), top = Math.min(Math.max(0, at.top), MAX_TWIPS - HEIGHT);

@@ -8,13 +8,13 @@ import '@glideapps/glide-data-grid/dist/index.css';
 import { CircleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { FieldFilter, LookupData, RowPage, RowWriteResult } from '../../shared/api';
+import type { FieldFilter, LookupData, QueryRef, RowPage, RowWriteResult } from '../../shared/api';
 import type { CellInput, FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { FORMATS_BY_TYPE } from '../../shared/expr/format';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { lookupOf, MASK_TYPES, sameName, type FieldDef, type FieldType, type TableDesign } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
-import { toOrigin, type RecordSourceRef, type SourceInfo } from '../../shared/record-source';
+import { lookupFor, writableColumn, type RecordSourceRef, type SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
@@ -44,9 +44,8 @@ import './datasheet.css';
 
 installEditorCommitFix();
 
-/** A query's datasheet: its columns (`editable`: from the key table of an updatable query) and, per column, the index of its
- *  field in the key table's design (a written row's values come back in that order). */
-type SourceShape = { info: SourceInfo; editable: boolean[]; back: (number | null)[] };
+/** A query's datasheet: its columns (`editable`: writableColumn, B4 R2). */
+type SourceShape = { info: SourceInfo; editable: boolean[] };
 type Shape = { design: TableDesign; locale: string; cache: PageCache; defaults: SqlValue[] /* shown on the new record's row */; src?: SourceShape };
 type Sort = { field: string; dir: 'asc' | 'desc' } | null;
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
@@ -85,8 +84,9 @@ const columnOf = (f: SourceInfo['fields'][number]): FieldDef => ({ name: f.name,
 
 /**
  * Without `source`: a table's datasheet (rows.*, tables.design). With `source` (a query, A3): its rows through sources.page
- * with `params` (kept for the tab's life); writes only through an updatable source, on its key table (toOrigin), only in its
- * key table's columns; a multi-table source is read-only (no new record, `query.readOnly` in the navigation bar).
+ * with `params` (kept for the tab's life); writes only through an updatable source (sources.save: its key table and, through a
+ * join, its 'one' tables, B4), only in its writable columns; a source that is not updatable is read-only (no new record,
+ * `query.readOnly` in the navigation bar). A row without its key record (an outer join's) is read-only (R5).
  */
 export interface DatasheetProps extends DocViewProps { source?: Exclude<RecordSourceRef, { kind: 'table' }>; params?: Record<string, CellInput> }
 
@@ -142,17 +142,33 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
 
   // The data, from the table (rows.*) or from the query (sources.page with the tab's parameter values; writes on its key table).
   const withParams = () => (live.current.params ? { params: live.current.params } : {});
-  const countRows = (filter?: FieldFilter[]): Promise<number> => {
+  /** A crosstab page whose headings differ from the columns shown (B4 R14: Refresh after an order in a new month): the
+   *  structure is read again (described with the tab's values), once per new set of names. */
+  const [restructure, bumpRestructure] = useReducer((n: number) => n + 1, 0);
+  const pendingHeadings = useRef<string | null>(null);
+  const headingsChanged = (columns: string[] | undefined) => {
+    const s = live.current.shape;
+    if (!columns || !s) return;
+    const key = JSON.stringify(columns);
+    if (key === JSON.stringify(s.design.fields.map((x) => x.name)) || key === pendingHeadings.current) return;
+    pendingHeadings.current = key;
+    bumpRestructure();
+  };
+  /** `check`: a crosstab's headings compared (R14); never while the structure itself is read (its count). */
+  const countRows = (filter?: FieldFilter[], check = false): Promise<number> => {
     const src = live.current.source;
     if (!src) return api.rows.count(live.current.tab.name, filter);
-    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams() }).then((p) => p.total);
+    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams() })
+      .then((p) => { if (check) headingsChanged(p.columns); return p.total; });
   };
   const pageRows = async (offset: number, limit: number): Promise<RowPage> => {
     const src = live.current.source;
     const q = query();
     if (!src) return api.rows.page(live.current.tab.name, { offset, limit, ...q });
     const p = await api.sources.page(src, { offset, limit, ...(q.sort ? { sort: [q.sort] } : {}), ...(q.filter ? { filter: q.filter } : {}), ...withParams() });
-    return { rows: p.rows.map((values, i) => ({ rowid: p.rowids[i] ?? 0 /* read-only source: never written */, values })) };
+    headingsChanged(p.columns);
+    // A row with no key-table rowid (a read-only source, an outer join's row without its key record: R5) carries NaN.
+    return { rows: p.rows.map((values, i) => ({ rowid: p.rowids[i] ?? NaN, values })) };
   };
   /** The table rows are written to and deleted from (a query's key table). */
   const dataTable = () => live.current.shape?.src?.info.keyTable ?? live.current.tab.name;
@@ -161,23 +177,23 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const origin = src?.info.fields.find((f) => f.name === fd.name)?.origin; // a query's column: its field's list
     return origin ? api.rows.lookup(origin.table, origin.field) : null;
   };
-  /** A query's row: its columns to the key table's fields (toOrigin), the answer back to its columns. */
-  const writeSource = async (src: SourceShape, rowid: number | null, changes: Record<string, CellInput>): Promise<RowWriteResult> => {
-    const w = toOrigin(src.info, changes);
-    if (!w) return { ok: false, errors: [{ field: Object.keys(changes)[0] ?? '', code: 'readOnly', message: t('query.readOnly') }] };
-    const r = rowid === null ? await api.rows.insert(w.table, w.values) : await api.rows.update(w.table, rowid, w.values);
-    if (!r.ok) {
-      const column = (field: string) => src.info.fields.find((f) => f.origin && sameName(f.origin.table, w.table) && sameName(f.origin.field, field))?.name ?? field;
-      return { ok: false, errors: r.errors.map((e) => ({ ...e, field: column(e.field) })) };
-    }
-    return { ok: true, rowid: r.rowid, values: src.back.map((i) => (i === null ? null : r.values[i] ?? null)) };
+  /** A query's row, saved by its output columns in one transaction (sources.save, B4 R3); the columns read back replace the
+   *  row's, the others (computed) stay until its page is read again. */
+  const writeSource = async (src: SourceShape, ref: QueryRef, rowid: number | null, changes: Record<string, CellInput>): Promise<RowWriteResult> => {
+    const r = await api.sources.save(ref, { rowid, values: changes });
+    if (!r.ok) return r; // errors already name output columns
+    const s = live.current.shape;
+    const at = buffer.pending?.rowIndex;
+    const before = rowid === null ? s?.defaults : at === undefined ? undefined : s?.cache.get(at)?.values;
+    return { ok: true, rowid: r.rowid, values: src.info.fields.map((f, k) => (Object.hasOwn(r.values, f.name) ? r.values[f.name]! : before?.[k] ?? null)) };
   };
 
   /** Also in `live` at once: a save that ends before React renders reads the selection the user just moved to. */
   const setSelection = (sel: GridSelection) => { live.current.selection = sel; setSelectionState(sel); };
   const [buffer] = useState(() => new RowBuffer((rowid, changes) => {
     const src = live.current.shape?.src;
-    if (src) return writeSource(src, rowid, changes);
+    const ref = live.current.source;
+    if (src && ref) return writeSource(src, ref, rowid, changes);
     const name = live.current.tab.name; // renamed meanwhile: the row goes to the table under its new name
     return rowid === null ? api.rows.insert(name, changes) : api.rows.update(name, rowid, changes);
   }));
@@ -223,6 +239,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const run = async (): Promise<boolean> => {
       try {
         for (let p = buffer.pending; p; p = buffer.pending) { // edits typed during a save are saved next
+          if (buffer.lookups.busy) await buffer.lookups.settled(); // the parents' values first: a lookup drops what was typed for the old one (R4)
+          const failed = buffer.lookups.failure;
+          if (failed) throw failed.e; // the parent is unknown: nothing is written, the row stays (Escape, or a lookup that succeeds, lifts it)
           const out = await buffer.commit();
           // The box is part of the attempt: a save asked while it is open shares this one (never a second box).
           if (out.status === 'failed') { await showFailure(p.rowIndex, out.errors); return false; }
@@ -275,8 +294,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     setRows({ adding: false });
   };
 
-  // Structure saved (reloadToken): a pending row is saved first, then design, rows and columns are read again. A rename
-  // (name only) changes nothing here: saves and page requests already use the live name, the pending row stays.
+  // Structure saved (reloadToken), or a crosstab's headings changed (restructure): a pending row is saved first, then design,
+  // rows and columns are read again. A rename (name only) changes nothing here: saves and page requests already use the live
+  // name, the pending row stays.
   useEffect(() => {
     let current = true;
     void (async () => {
@@ -290,11 +310,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         let src: SourceShape | undefined;
         const [table, settings] = await Promise.all([source ? null : api.tables.design(name), api.app.getSettings()]);
         if (source) {
-          const info = await api.sources.describe(source);
-          const key = info.updatable && info.keyTable !== undefined ? await api.tables.design(info.keyTable) : null;
-          const fromKey = info.fields.map((f) => !!key && !!f.origin && sameName(f.origin.table, key.name));
-          const back = info.fields.map((f, k) => (fromKey[k] ? key!.fields.findIndex((x) => sameName(x.name, f.origin!.field)) : -1));
-          src = { info, editable: fromKey, back: back.map((i) => (i < 0 ? null : i)) };
+          const info = await api.sources.describe(source, live.current.params); // a crosstab's headings need them (B4 R11)
+          src = { info, editable: info.fields.map((f) => writableColumn(info, f.name)) };
         }
         const design: TableDesign = src ? { name, fields: src.info.fields.map(columnOf) } : table!;
         // A sort and the criteria of fields still there are kept (a reload after a structure change); the others go.
@@ -327,6 +344,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         setError(null);
         setUnsupported(false);
         rows.current = { count, adding: false };
+        pendingHeadings.current = null;
         setShape({ design, locale: settings.region, cache, defaults, ...(src ? { src } : {}) });
         setLookups(lists);
       } catch (e) {
@@ -339,12 +357,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       }
     })();
     return () => { current = false; };
-  }, [tab.reloadToken]);
+  }, [tab.reloadToken, restructure]);
 
   // Rows changed elsewhere (an import appended to this table, or Refresh): the rows and their count are read again; structure,
   // sort, filter and a pending row stay.
   const reloadRows = () => {
-    void countRows(activeFilter(live.current.filter)).then((count) => {
+    void countRows(activeFilter(live.current.filter), true).then((count) => {
       if (!alive.current) return;
       live.current.shape?.cache.invalidate();
       setRows({ count });
@@ -430,10 +448,36 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (row >= count && !(adding && row === count)) return;
     if (row < count && !s.cache.fresh(row)) return; // cannot happen: rows shown from before a reload are read-only
     const rowid = row === count ? null : s.cache.get(row)?.rowid;
-    if (rowid === undefined || (s.src && !s.src.editable[col])) return; // a query's computed column, or another table's
+    // a query's computed column, a join field, a row without its key record (R5)
+    if (rowid === undefined || Number.isNaN(rowid) || (s.src && !s.src.editable[col])) return;
     const field = s.design.fields[col];
     buffer.edit(row, rowid, field.name, fromEdit(field, cell));
     bump();
+    if (s.src) lookUp(row, field.name);
+  };
+
+  /** AutoLookup (B4 R4): a link column of the pending row changed, so the parents it links (lookupFor) show the values of the
+   *  parent it now points to (blank: none). Their whole link is sent (typed, else looked up, else stored): a table is looked up
+   *  only when all of its link is known. Only their columns change; an edit typed meanwhile stays. Nothing is written; the
+   *  latest lookup of a link wins (buffer.lookups). A failure says nothing until the row is saved, which it refuses (commitRow). */
+  const lookUp = (row: number, column: string) => {
+    const { shape: s, source: ref } = live.current;
+    const p = buffer.pending;
+    const what = s?.src && lookupFor(s.src.info, column);
+    if (!s || !what || !ref || p?.rowIndex !== row) return;
+    const looked = buffer.looked;
+    const stored = row >= rows.current.count ? s.defaults : s.cache.get(row)?.values;
+    const values: Record<string, CellInput> = Object.create(null) as Record<string, CellInput>;
+    for (const name of what.links) {
+      const k = s.design.fields.findIndex((f) => sameName(f.name, name));
+      const f = s.design.fields[k]?.name ?? name;
+      values[f] = Object.hasOwn(p.changes, f) ? p.changes[f]! : Object.hasOwn(looked, f) ? looked[f]! : stored?.[k] ?? null;
+    }
+    buffer.lookups.ask(what.links, api.sources.autoLookup(ref, values), (got) => {
+      if (live.current.shape !== s) return;
+      buffer.lookedUp(row, Object.fromEntries(Object.entries(got).filter(([k]) => what.columns.some((c) => sameName(c, k)))), p.changes);
+      bump();
+    });
   };
 
   const onRowAppended = async (): Promise<undefined> => {
@@ -460,7 +504,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       const page = await pageRows(lo, indices[indices.length - 1] - lo + 1);
       indices.forEach((i, k) => { ids[k] ??= page.rows[i - lo]?.rowid; });
     }
-    return ids.filter((x): x is number => x !== undefined);
+    return ids.filter((x): x is number => x !== undefined && !Number.isNaN(x)); // a row without its key record is never deleted (R5)
   };
 
   const deleteRecords = async (sel: GridSelection = live.current.selection) => {
@@ -474,7 +518,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const p = buffer.pending;
     const dropsPending = p !== null && targets.includes(p.rowIndex);
     if (p && !dropsPending && !(await commitRow())) return;
-    const existing = targets.filter((i) => i < rows.current.count);
+    // a row without its key record (R5) is never deleted, nor counted in the question
+    const existing = targets.filter((i) => i < rows.current.count && !Number.isNaN(s.cache.get(i)?.rowid ?? 0));
     if (existing.length) {
       // The real keys decide (A2-R14, A2-R15): ON DELETE CASCADE deletes related records, SET NULL / SET DEFAULT modify them.
       if (!(await confirmDelete(modal, dataTable(), existing.length))) return;
@@ -482,7 +527,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (dropsPending || targets.includes(rows.current.count)) discardRow();
     if (!existing.length) return;
     try {
-      const r = await api.rows.delete(dataTable(), await rowids(existing));
+      const ids = await rowids(existing); // rows never loaded: a keyless one is dropped here
+      const r = ids.length ? await api.rows.delete(dataTable(), ids) : { ok: true as const };
       if (!r.ok) await showRelatedRefusal(modal, r);
     } catch (e) {
       await writeError(e);
@@ -720,10 +766,13 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const saved = isNew ? undefined : shape.cache.get(row);
     if (!isNew && !saved) return LOADING;
     // Read-only: during a save, other rows while one is pending, rows from before a sort/delete until their page lands.
-    const locked = ro || busyRef.current || (p !== null && p.rowIndex !== row) || (!isNew && !shape.cache.fresh(row)) || (!!shape.src && !shape.src.editable[col]);
+    const locked = ro || busyRef.current || (p !== null && p.rowIndex !== row) || (!isNew && !shape.cache.fresh(row)) || (!!shape.src && !shape.src.editable[col])
+      || (!isNew && Number.isNaN(saved!.rowid)); // a row without its key record (R5)
     const lookup = lookups.get(field.name)?.list;
     let cell: GridCell;
+    const looked = p?.rowIndex === row ? buffer.looked : {}; // AutoLookup's values (R4), under what was typed since
     if (p?.rowIndex === row && Object.hasOwn(p.changes, field.name)) cell = inputCell(field, p.changes[field.name], { readOnly: locked, locale: shape.locale, lookup });
+    else if (Object.hasOwn(looked, field.name)) cell = toCell(field, looked[field.name] ?? null, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', readOnly: locked, lookup });
     else if (isNew && field.props.type === 'autoNumber') cell = { kind: GridCellKind.Text, data: '', displayData: t('datasheet.newRecord'), allowOverlay: false, readonly: true };
     else {
       // The new record's row shows the default values, as stored values (display and edit text).

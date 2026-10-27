@@ -550,6 +550,8 @@ const designOf = (kind: RibbonContext['kind']) => (c: RibbonContext) => c.mode =
 /** A Query Design command that edits the grid (A3 Task 8). */
 const grid = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: (c) => designWritable(c) && c.kind === 'query' });
+/** Query Type (B4 Task 8): pressed for the design's kind (QueryDesignView's command states). */
+const queryKind = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand => ({ ...grid(id, icon, size), active: off });
 const macroCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm'): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designOf('macro') });
 const namedMacro = (c: RibbonContext) => designOf('macro')(c) && !c.embedded;
@@ -732,8 +734,8 @@ export const RIBBON: RibbonTab[] = [
       // Table Names (the Table row, a view option: also on a read-only base); the grid commands are registered in the grid only.
       group('results', viewDatasheet, { id: 'viewSql', icon: Code, labelKey: 'ribbon.cmd.viewSql', size: 'lg', enabled: (c) => c.kind === 'query' && (c.mode === 'design' || c.mode === 'run'), active: off },
         { id: 'runQuery', icon: Play, labelKey: 'ribbon.cmd.runQuery', size: 'lg', enabled: designOf('query') }),
-      group('queryType', grid('selectQuery', Table2, 'lg'), grid('makeTableQuery', Table, 'lg'), grid('appendQuery', ListPlus, 'lg'),
-        grid('updateQuery', PenLine, 'lg'), plan('B4', 'crosstabQuery', Grid2x2, 'lg'), grid('deleteQuery', ListX, 'lg'),
+      group('queryType', queryKind('selectQuery', Table2, 'lg'), queryKind('makeTableQuery', Table, 'lg'), queryKind('appendQuery', ListPlus, 'lg'),
+        queryKind('updateQuery', PenLine, 'lg'), queryKind('crosstabQuery', Grid2x2, 'lg'), queryKind('deleteQuery', ListX, 'lg'),
         grid('unionQuery', Combine, 'sm'), plan('C', 'passThroughQuery', ArrowRightLeft)),
       group('querySetup', grid('addTables', SquarePlus, 'lg'), grid('insertRows', BetweenHorizontalStart, 'sm'), grid('deleteRows', ListX, 'sm'),
         grid('builder', Wand, 'sm'), grid('insertColumns', BetweenVerticalStart, 'sm'), grid('deleteColumns', Columns3, 'sm'),

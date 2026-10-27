@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation } from '../../shared/api';
-import { fromQbe, type QbeDesign } from '../../shared/query/qbe';
+import { fromQbe, toQbe, type QbeColumn, type QbeDesign } from '../../shared/query/qbe';
+import { parseSql } from '../../shared/query/sql-parser';
 import { printSql } from '../../shared/query/print';
-import { defaultJoins, editable, fieldEntry, gridRows, pruneInvalid, designProblem, emptyQbe, outputAll, parseTop, qbeReducer, ROWS_MIN, topText } from './qbe-edit';
+import { localeInfo } from '../../shared/locale-format';
+import { defaultJoins, editable, fieldEntry, gridRows, headingsText, pruneInvalid, designProblem, emptyQbe, outputAll, parseHeadings, parseTop, qbeReducer, ROWS_MIN, topText } from './qbe-edit';
 
 const rel: Relation = { name: 'ClientsCommandes', parentTable: 'Clients', parentFields: ['N°'], childTable: 'Commandes', childFields: ['Client'],
   enforce: true, cascadeUpdate: false, cascadeDelete: false, joinType: 1 };
@@ -192,5 +194,97 @@ describe('Insert Rows / Delete Rows (criteria rows), query properties', () => {
     expect(outputAll(d)).toBe(false);
     expect(d).not.toHaveProperty('top');
     expect(printSql(fromQbe(d))).toMatch(/^PARAMETERS \[Mini\] Currency;\nSELECT \[Clients\]\.\[Nom\], /);
+  });
+});
+
+describe('crosstab (B4 R13)', () => {
+  type Role = 'rowHeading' | 'columnHeading' | 'value' | 'none';
+  const TOTAL = { rowHeading: 'groupBy', columnHeading: 'groupBy', value: 'sum', none: 'where' } as const;
+  const crosstabDesign = (roles: Role[], totals: Partial<Record<Role, QbeColumn['total']>> = {}): QbeDesign => ({
+    ...withClients, kind: 'crosstab', totals: true,
+    columns: roles.map((r) => ({ field: '[Nom]', table: 'Clients', show: r === 'rowHeading', criteria: [], total: totals[r] ?? TOTAL[r], crosstab: r })),
+  });
+  it.each([
+    [[], 'bc:invalidQuery|crosstabRowHeading|'], [['rowHeading', 'value'], 'bc:invalidQuery|crosstabColumnHeading|'],
+    [['rowHeading', 'columnHeading'], 'bc:invalidQuery|crosstabValue|'],
+    [['rowHeading', 'columnHeading', 'columnHeading', 'value'], 'bc:invalidQuery|crosstabColumnHeading|'],
+    [['rowHeading', 'columnHeading', 'value', 'value'], 'bc:invalidQuery|crosstabValue|'],
+    [['rowHeading', 'columnHeading', 'value', 'none'], null],
+  ] as [Role[], string | null][])('designProblem %#', (roles, key) => expect(designProblem(crosstabDesign(roles))).toBe(key));
+  it('Value must aggregate, headings must group, not shown must be Where', () => {
+    const all: Role[] = ['rowHeading', 'columnHeading', 'value'];
+    expect(designProblem(crosstabDesign(all, { value: 'groupBy' }))).toBe('bc:invalidQuery|crosstabValueTotal|');
+    expect(designProblem(crosstabDesign(all, { value: 'where' }))).toBe('bc:invalidQuery|crosstabValueTotal|');
+    const expr = (field: string): QbeDesign => { const d = crosstabDesign(all, { value: 'expression' }); d.columns[2] = { ...d.columns[2], field }; return d; };
+    expect(designProblem(expr('Nz(Sum([Montant]), 0)'))).toBeNull();
+    expect(designProblem(expr('[Montant] * 2'))).toBe('bc:invalidQuery|crosstabValueTotal|');
+    expect(designProblem(crosstabDesign(all, { columnHeading: 'sum' }))).toBe('bc:invalidQuery|crosstabHeadingTotal|');
+    expect(designProblem(crosstabDesign([...all, 'none'], { none: 'groupBy' }))).toBe('bc:invalidQuery|crosstabNone|');
+    const unchosen = crosstabDesign(all);
+    unchosen.columns.push({ field: '[Ville]', table: 'Clients', show: false, criteria: [], total: 'groupBy' });
+    expect(designProblem(unchosen)).toBe('bc:invalidQuery|crosstabNone|');   // a Crosstab cell left empty is « (not shown) »
+    expect(designProblem(crosstabDesign(['rowHeading', ...all], { rowHeading: 'where' }))).toBe('bc:invalidQuery|crosstabRowHeading|');
+    expect(designProblem(crosstabDesign([...all, 'rowHeading'], { rowHeading: 'sum' }))).toBe('bc:invalidQuery|crosstabRowHeading|'); // a row total is not enough
+  });
+  it('a crosstab read from SQL, made a Select query, shows its Column Heading and Value again', () => {
+    const q = parseSql('TRANSFORM Count([N°]) SELECT Nom FROM Clients GROUP BY Nom PIVOT Ville');
+    const s = qbeReducer(editable(toQbe(q)!), { type: 'setKind', kind: 'select' });
+    expect(s.columns.map((c) => c.show)).toEqual([true, true, true]);
+    expect(printSql(fromQbe(s))).toBe('SELECT [Clients].[Nom], [Clients].[Ville], Count([Clients].[N°])\nFROM [Clients]\nGROUP BY [Clients].[Nom], [Clients].[Ville];');
+  });
+  it('a column hidden in a Select query stays hidden through a crosstab and back, as in Access', () => {
+    const q = parseSql('SELECT Nom, Ville FROM Clients');
+    let d = qbeReducer(editable(toQbe(q)!), { type: 'setCell', col: 1, row: 'show', value: false });
+    d = qbeReducer(qbeReducer(d, { type: 'setKind', kind: 'crosstab' }), { type: 'setKind', kind: 'select' });
+    expect(d.columns.map((c) => c.show)).toEqual([true, false]);
+  });
+  it('no Sort on the Column Heading (R13): set as Column Heading clears it, a Sort typed there is ignored', () => {
+    let d = qbeReducer(oneCol, { type: 'setKind', kind: 'crosstab' });
+    d = qbeReducer(d, { type: 'setCell', col: 0, row: 'sort', value: 'desc' });
+    d = qbeReducer(d, { type: 'setCell', col: 0, row: 'crosstab', value: 'columnHeading' });
+    expect(d.columns[0]).not.toHaveProperty('sort');
+    expect(qbeReducer(d, { type: 'setCell', col: 0, row: 'sort', value: 'asc' }).columns[0]).not.toHaveProperty('sort');
+    expect(qbeReducer(qbeReducer(d, { type: 'setCell', col: 0, row: 'crosstab', value: 'rowHeading' }), { type: 'setCell', col: 0, row: 'sort', value: 'asc' }).columns[0].sort).toBe('asc');
+  });
+  it('grid rows', () => expect(gridRows({ ...emptyQbe(), kind: 'crosstab', totals: true })).toEqual(['field', 'table', 'total', 'crosstab', 'sort', 'criteria0', 'criteria1', 'criteria2']));
+  it('setKind: totals on, Crosstab cells empty; setCell crosstab; leaving drops crosstab and headings', () => {
+    const d = qbeReducer(oneCol, { type: 'setKind', kind: 'crosstab' });
+    expect(d).toMatchObject({ kind: 'crosstab', totals: true });
+    expect(d.columns[0]).toMatchObject({ total: 'groupBy' });
+    expect(d.columns[0]).not.toHaveProperty('crosstab');
+    const e = qbeReducer({ ...qbeReducer(d, { type: 'setCell', col: 0, row: 'crosstab', value: 'rowHeading' }), headings: ['1'] }, { type: 'setKind', kind: 'crosstab' });
+    expect(e.columns[0].crosstab).toBe('rowHeading');
+    expect(qbeReducer(e, { type: 'setCell', col: 0, row: 'crosstab', value: '' }).columns[0]).not.toHaveProperty('crosstab');
+    expect(qbeReducer(e, { type: 'setTotals', on: false }).totals).toBe(true);
+    const s = qbeReducer(e, { type: 'setKind', kind: 'select' });
+    expect(s).not.toHaveProperty('headings');
+    expect(s.columns[0]).not.toHaveProperty('crosstab');
+    expect(s.totals).toBe(true);
+  });
+});
+
+describe('Column Headings (B4 R13)', () => {
+  const frCtx = { lang: 'fr' as const, region: localeInfo('fr-FR') };
+  const enCtx = { lang: 'en' as const, region: localeInfo('en-US') };
+  it('values in their display form, the region list separator outside quotes', () => {
+    expect(parseHeadings('10;9;11', frCtx)).toEqual(['10', '9', '11']);
+    expect(parseHeadings(' 1,5 ; -1 ; "a;b" ; Null', frCtx)).toEqual(['1.5', '-1', '"a;b"', 'Null']);
+    expect(parseHeadings('1.5, "x, y", True', enCtx)).toEqual(['1.5', '"x, y"', 'True']);
+    expect(parseHeadings('', frCtx)).toEqual([]);
+    expect(parseHeadings('  ', frCtx)).toEqual([]);
+  });
+  it('anything but a value is refused', () => {
+    for (const s of ['[x]', '10;[x]', 'Mois([Le])', '1+1', '10;;9', '"a', 'Nom']) expect(parseHeadings(s, frCtx), s).toBeUndefined();
+  });
+  it('shown in the display form, read back the same', () => {
+    expect(headingsText(['1.5', '-1', '"a;b"'], frCtx)).toBe('1,5;-1;"a;b"');
+    expect(headingsText(['1.5', '"x"'], enCtx)).toBe('1.5,"x"');
+    expect(parseHeadings(headingsText(['10', '9', '11'], frCtx), frCtx)).toEqual(['10', '9', '11']);
+  });
+  it('setProps sets the IN list; [] removes it; other properties keep it', () => {
+    const d = qbeReducer({ ...withClients, kind: 'crosstab', totals: true }, { type: 'setProps', headings: ['10', '9'] });
+    expect(d.headings).toEqual(['10', '9']);
+    expect(qbeReducer(d, { type: 'setProps', distinct: false }).headings).toEqual(['10', '9']);
+    expect('headings' in qbeReducer(d, { type: 'setProps', headings: [] })).toBe(false);
   });
 });

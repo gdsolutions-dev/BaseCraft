@@ -18,7 +18,7 @@ import { pickExcelPath, pickExportPath, pickImportPath, pickOpenPath, pickPdfPat
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
+  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, autoLookupRequest, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
@@ -496,8 +496,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.objectsDelete, (k, n) => objectWrite(() => need().deleteObject(objectKind(k), lookupName(n))));
   handle(CH.objectsCopy, (k, n, to) => objectWrite(() => need().copyObject(objectKind(k), lookupName(n), nameArg(to))));
   handle(CH.objectsSetDescription, (k, n, d) => tableOp(() => need().setDescription(k === 'table' ? k : objectKind(k), lookupName(n), description(d))));
-  handle(CH.sourcesDescribe, (r) => need().describeSource(sourceRef(r)));
+  handle(CH.sourcesDescribe, (r, p) => need().describeSource(sourceRef(r), p === undefined ? undefined : queryParams(p)));
   handle(CH.sourcesPage, (r, q) => need().pageSource(sourceRef(r), sourcePageRequest(q)));
+  handle(CH.sourcesSave, (r, q) => rowWrite(() => need().saveSource(...sourceSaveRequest(r, q))));
+  handle(CH.sourcesAutoLookup, (r, v) => need().autoLookup(...autoLookupRequest(r, v)));
   handle(CH.queriesActionCount, (r, p) => contentRefused(() => need().actionCount(queryRef(r), queryParams(p))));
   handle(CH.queriesRunAction, (r, p, o) => contentRefused(() => need().runAction(queryRef(r), queryParams(p), runActionOptions(o))));
   handle(CH.queriesCancel, () => cancelCall());

@@ -4,7 +4,7 @@ import { ExprSyntaxError, type Expr } from '../expr/ast';
 import { asciiLower, tokenize, type Token } from '../expr/lexer';
 import { parseExprAt, type ParseOptions } from '../expr/parser';
 import { isReservedName, sameName, type FieldType, type NumberSize } from '../field-types';
-import type { FromItem, JoinKind, OrderItem, ParamDecl, Query, SelectItem, SelectQuery } from './ast';
+import type { CrosstabQuery, FromItem, JoinKind, OrderItem, ParamDecl, Query, SelectItem, SelectQuery } from './ast';
 
 /** SQL words that end an expression or a name: a bare one is never a field, an alias or a source (`[From]` is). Access
  *  reserves them too. */
@@ -51,7 +51,7 @@ class SqlParser {
   private fail(t: Token = this.tok): never {
     throw new ExprSyntaxError(t.t === 'eof' ? 'unexpectedEnd' : 'unexpectedToken', { start: t.start, end: t.end });
   }
-  private err(code: 'reservedName' | 'tooComplex' | 'forbiddenStatement' | 'notSupportedYet' | 'badParameterType', t: Token): never {
+  private err(code: 'reservedName' | 'tooComplex' | 'forbiddenStatement' | 'badParameterType' | 'badCrosstab', t: Token): never {
     throw new ExprSyntaxError(code, { start: t.start, end: t.end });
   }
   private isOp(v: string, t: Token = this.tok): boolean { return t.t === 'op' && t.v === v; }
@@ -93,9 +93,10 @@ class SqlParser {
     return table;
   }
 
-  private expr(): Expr {
-    const { e, end } = parseExprAt(this.toks, this.p, QUERY_PARSE);
-    for (let i = this.p; i < end; i++) if (this.toks[i].t === 'id' && this.isOp('.', this.toks[i + 1])) this.table(this.toks[i]);
+  /** An expression; `toks` ends it earlier (PIVOT's expression stops at its IN). */
+  private expr(toks: Token[] = this.toks): Expr {
+    const { e, end } = parseExprAt(toks, this.p, QUERY_PARSE);
+    for (let i = this.p; i < end; i++) if (toks[i].t === 'id' && this.isOp('.', toks[i + 1])) this.table(toks[i]);
     this.p = end;
     return e;
   }
@@ -111,10 +112,10 @@ class SqlParser {
     if (first.t === 'id' && first.bare) {
       const w = asciiLower(first.v);
       if (FORBIDDEN.has(w)) this.err('forbiddenStatement', first);
-      if (w === 'transform' || w === 'pivot') this.err('notSupportedYet', first);
     }
     let body: Query['body'];
     if (this.isWord('select')) body = this.selectStatement();
+    else if (this.eatWord('transform')) body = this.crosstab();
     else if (this.eatWord('insert')) body = this.insert();
     else if (this.eatWord('update')) body = this.update();
     else if (this.eatWord('delete')) body = this.delete();
@@ -123,7 +124,6 @@ class SqlParser {
     const t = this.tok;
     if (t.t !== 'eof') {
       if (semicolon) throw new ExprSyntaxError('multipleStatements', { start: t.start, end: this.toks[this.toks.length - 1].start });
-      if (this.isWord('pivot')) this.err('notSupportedYet', t);
       this.fail();
     }
     return { params, body };
@@ -162,6 +162,39 @@ class SqlParser {
       parts.push(this.selectCore(false));
     }
     return { k: 'union', parts, all, orderBy: this.orderBy() };
+  }
+
+  /** TRANSFORM (read) value [AS a] SELECT … [ORDER BY …] PIVOT e [AS a] [IN (literal, …)]; any other SELECT form is
+   *  badCrosstab (B4 R8). */
+  private crosstab(): CrosstabQuery {
+    const value = this.expr();
+    const valueAlias = this.eatWord('as') ? this.name().v : undefined;
+    const head = this.at(1);
+    if (this.isWord('select') && ['distinct', 'distinctrow', 'top'].some((w) => this.isWord(w, head))) this.err('badCrosstab', head);
+    const core = this.selectCore(true);
+    if (core.into !== undefined) this.err('badCrosstab', this.into!);
+    if (this.isWord('union')) this.err('badCrosstab', this.tok);
+    const select = { ...core, orderBy: this.orderBy() };
+    if (!this.eatWord('pivot')) return this.tok.t === 'eof' || this.isOp(';') ? this.err('badCrosstab', this.tok) : this.fail();
+    const at = topLevelIn(this.toks, this.p);
+    const inTok = this.toks[at];
+    const pivot = at < 0 ? this.expr() : this.expr([...this.toks.slice(0, at), { t: 'eof', v: '', start: inTok.start, end: inTok.end }]);
+    const q: CrosstabQuery = { k: 'crosstab', value, ...(valueAlias !== undefined && { valueAlias }), select, pivot };
+    if (this.eatWord('as')) q.pivotAlias = this.name().v;
+    if (at >= 0) {
+      if (this.p !== at) this.fail();
+      this.p++;
+      this.expectOp('(');
+      q.headings = [];
+      do {
+        const t = this.tok;
+        const h = this.expr();
+        if (!isHeadingLiteral(h)) this.err('badCrosstab', t);
+        q.headings.push(h);
+      } while (this.eatOp(','));
+      this.expectOp(')');
+    }
+    return q;
   }
 
   /** The expression parser's subquery hook: SELECT at the current token, one query level deeper. */
@@ -305,6 +338,23 @@ class SqlParser {
     const q: Query['body'] = { k: 'delete', ...(target !== undefined && { target }), from };
     return this.eatWord('where') ? { ...q, where: this.expr() } : q;
   }
+}
+
+const LITERALS = new Set<Expr['k']>(['num', 'str', 'date', 'bool', 'null']);
+/** A column heading of PIVOT … IN (B4 R8): a literal, or `-` on a number (-1: literalOf's form). */
+export const isHeadingLiteral = (h: Expr): boolean => LITERALS.has(h.k) || (h.k === 'un' && h.op === '-' && h.e.k === 'num');
+
+/** Position of the first `In` at parenthesis depth 0 from `pos` to the statement's end (`;`), or -1: after PIVOT, its column headings list (Access
+ *  reads `PIVOT x In (…)` so; the printer parenthesises a pivot expression that would read so). */
+export function topLevelIn(toks: Token[], pos: number): number {
+  for (let depth = 0, i = pos; toks[i].t !== 'eof'; i++) {
+    const t = toks[i];
+    if (t.t === 'op' && t.v === ';') return -1;
+    if (t.t === 'op' && t.v === '(') depth++;
+    else if (t.t === 'op' && t.v === ')') depth--;
+    else if (depth === 0 && t.t === 'kw' && t.v === 'In') return i;
+  }
+  return -1;
 }
 
 /** Subquery hook of the expression parser: `toks[pos]` is SELECT; `end` is the closing parenthesis. */

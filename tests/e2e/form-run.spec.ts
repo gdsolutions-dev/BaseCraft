@@ -566,18 +566,20 @@ test('other controls: option group (arrows), tab pages by mouse and keyboard, im
 /** A form on `ref`, one text box per field. */
 const formOn = (ref: RecordSourceRef, fields: string[]): DesignDoc => ({ ...formFor('', fields), recordSource: ref });
 
-test('query sources (A3): a single-table query with an alias writes its table; a Totals query, a join and a Union query are read-only, said in the navigation bar', async () => {
+test('query sources (A3, B4 R7): a single-table query with an alias writes its table, so does a one-to-many join; a Totals query, a cross product and a Union query are read-only, said in the navigation bar', async () => {
   const base = seedBase('fx-requetes', (db) => {
     seedSales(db);
     for (const [q, sql] of [['QNoms', 'SELECT [N°], Nom AS Client, Ville FROM Clients;'], ['QTotaux', 'SELECT Client, Sum(Montant) AS Total FROM Commandes GROUP BY Client;'],
       ['QVentes', 'SELECT Clients.Nom, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client;'],
+      ['QVentesVirgule', 'SELECT Clients.Nom, Commandes.Montant, Commandes.Le FROM Clients, Commandes WHERE Clients.[N°] = Commandes.Client;'],
       ['QUnion', 'SELECT Nom, Ville FROM Clients UNION SELECT Nom, Ville FROM Clients;']]) {
       const r = saveObject(db, 'query', q!, { formatVersion: '1.0', sql }, null);
       if (!r.ok) throw new Error(r.reason);
     }
     seedForm(db, 'FNoms', formOn({ kind: 'query', name: 'QNoms' }, ['Client', 'Ville']));
     seedForm(db, 'FTotaux', formOn({ kind: 'query', name: 'QTotaux' }, ['Client', 'Total']));
-    seedForm(db, 'FVentes', formOn({ kind: 'sql', sql: 'SELECT * FROM QVentes' }, ['Nom', 'Montant']));
+    seedForm(db, 'FVentes', formOn({ kind: 'sql', sql: 'SELECT * FROM QVentesVirgule' }, ['Nom', 'Montant']));
+    seedForm(db, 'FJointure', formOn({ kind: 'query', name: 'QVentes' }, ['Nom', 'Montant']));
     seedForm(db, 'FUnion', formOn({ kind: 'query', name: 'QUnion' }, ['Nom', 'Ville']));
   });
   const { app, page } = await launchApp({ args: [base], env: FR });
@@ -595,6 +597,13 @@ test('query sources (A3): a single-table query with an alias writes its table; a
     await page.keyboard.press('Shift+Enter');
     await expect(dirty).toHaveCount(0);
     expect((await bc(page).rows())[0]).toEqual([1, 'Dupond', 'Lyon']);
+
+    // R7: the one-to-many join is updatable now: no note, a new record, its controls editable
+    await open('FJointure');
+    await expect(ctl('Nom')).toHaveValue('Dupond');
+    await expect(note).toHaveCount(0);
+    await expect(page.getByTestId('nav-new').filter({ visible: true })).toBeEnabled();
+    for (const n of ['Nom', 'Montant']) await expect(ctl(n)).not.toHaveAttribute('readonly', '');
 
     for (const [form, fields] of [['FTotaux', ['Client', 'Total']], ['FVentes', ['Nom', 'Montant']], ['FUnion', ['Nom', 'Ville']]] as const) {
       await open(form);

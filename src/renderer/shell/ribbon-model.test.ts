@@ -6,6 +6,7 @@ import {
   setActiveCommandTab, setOpenPopup,
   setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
+import { parseSql } from '../../shared/query/sql-parser';
 
 const cleanups: (() => void)[] = [];
 const reg = (tab: string, h: Parameters<typeof registerCommands>[1]) => { const u = registerCommands(tab, h); cleanups.push(u); return u; };
@@ -234,14 +235,21 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect((fr.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     expect((en.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual(['B4', 'D', 'D']);   // still planned after B2
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, 'D', 'D']);   // crosstabQuery delivered in B4 Task 8
   });
 
   it('B3 leaves no B3 placeholder', () => {
     expect(commands.filter((c) => c.planned === 'B3').map((c) => c.id)).toEqual([]);
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual(['B4', 'D', 'D']);   // still planned after B3
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, 'D', 'D']);   // crosstabQuery delivered in B4 Task 8
   });
+
+  it('B4 leaves no B4 placeholder', () => {
+    expect(commands.filter((c) => c.planned === 'B4').map((c) => c.id)).toEqual([]);
+    expect(commands.find((c) => c.id === 'crosstabQuery')?.planned).toBeUndefined();
+  });
+
+  it('A3\'s refusal of TRANSFORM is gone', () => expect(() => parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b')).not.toThrow());
 
   it('every tab, group and command has a French and an English label; every batch has its tooltip', () => {
     const keys = [
@@ -256,7 +264,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('stage B placeholders name their batch', () => {
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect(tag('createMacro')).toBeUndefined(); expect(tag('macroRun')).toBeUndefined(); expect(tag('crosstabQuery')).toBe('B4');
+    expect(tag('createMacro')).toBeUndefined(); expect(tag('macroRun')).toBeUndefined(); expect(tag('crosstabQuery')).toBeUndefined();
     expect(tag('beforeChange')).toBe('later'); expect(commands.some((c) => (c.planned as string) === 'B')).toBe(false);
     expect(fr.ribbon.planned.B1).toBe('Prévu dans le lot B1 — Macros et sécurité');
   });
@@ -281,6 +289,8 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       // A3 Task 8: the query designer
       'createQueryDesign', 'runQuery', 'selectQuery', 'makeTableQuery', 'appendQuery', 'updateQuery', 'deleteQuery', 'addTables',
       'insertColumns', 'deleteColumns', 'queryTotals', 'builder',
+      // B4 Task 8
+      'crosstabQuery',
       // A5 Task 12
       'viewPrintPreview', 'createReportDesign', 'createBlankReport', 'pageSize', 'margins', 'portrait', 'landscape', 'morePages',
       // A5 Task 13
@@ -313,7 +323,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     // Query Design: the grid commands in a writable design, Run, SQL View and Table Names in any design (Task 9: no A3
     // placeholder left)
     const qd = RIBBON.find((t) => t.id === 'queryDesign')!.groups.flatMap((g) => g.commands);
-    for (const id of ['selectQuery', 'makeTableQuery', 'appendQuery', 'updateQuery', 'deleteQuery', 'addTables', 'insertColumns', 'deleteColumns', 'queryTotals', 'builder',
+    for (const id of ['selectQuery', 'makeTableQuery', 'appendQuery', 'updateQuery', 'crosstabQuery', 'deleteQuery', 'addTables', 'insertColumns', 'deleteColumns', 'queryTotals', 'builder',
       'unionQuery', 'insertRows', 'deleteRows', 'returnValues', 'parameters', 'propertySheet']) {
       const c = qd.find((x) => x.id === id)!;
       expect(c.enabled(ctx({ kind: 'query', mode: 'design' })), id).toBe(true);

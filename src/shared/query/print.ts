@@ -1,10 +1,10 @@
 // Query tree -> canonical BaseCraft SQL (SQL view, stored form). Pure module.
 // Upper-case keywords, bracketed identifiers, one clause per line, A2 canonical expressions; parseSql reads it back.
 import type { Expr } from '../expr/ast';
-import { bracket as id } from '../expr/lexer';
+import { bracket as id, tokenize } from '../expr/lexer';
 import { CANONICAL_DIALECT, serializeWith, type Dialect } from '../expr/parser';
 import type { FromItem, OrderItem, ParamDecl, Query, SelectItem, SelectQuery } from './ast';
-import { PARAMETER_TYPES } from './sql-parser';
+import { PARAMETER_TYPES, topLevelIn } from './sql-parser';
 
 const DIALECT: Dialect = { ...CANONICAL_DIALECT, sub: (q) => printSelect(q) };
 const ex = (e: Expr): string => serializeWith(e, DIALECT);
@@ -62,6 +62,14 @@ function body(b: Query['body']): string[] {
       `UPDATE ${from(b.from)}`, `SET ${b.set.map((s) => `${ex(s.target)} = ${ex(s.value)}`).join(', ')}`,
       ...(b.where ? [`WHERE ${ex(b.where)}`] : []),
     ];
+    case 'crosstab': {
+      const as = (a: string | undefined): string => (a === undefined ? '' : ` AS ${id(a)}`);
+      const pivot = ex(b.pivot);
+      return [
+        `TRANSFORM ${ex(b.value)}${as(b.valueAlias)}`, printSelect(b.select),
+        `PIVOT ${topLevelIn(tokenize(pivot), 0) < 0 ? pivot : `(${pivot})`}${as(b.pivotAlias)}${b.headings?.length ? ` IN (${b.headings.map(ex).join(', ')})` : ''}`,
+      ];
+    }
     case 'delete': return [
       `DELETE ${b.target === undefined ? '*' : `${id(b.target)}.*`}`, `FROM ${from(b.from)}`, ...(b.where ? [`WHERE ${ex(b.where)}`] : []),
     ];

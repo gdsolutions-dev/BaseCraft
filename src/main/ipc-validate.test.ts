@@ -4,7 +4,7 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
+  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { DEFAULT_STARTUP } from '../shared/startup';
@@ -351,5 +351,22 @@ describe('action queries (A3)', () => {
     expect(() => queryParams(Object.fromEntries(Array.from({ length: 101 }, (_, i) => [`p${i}`, 1])))).toThrow(INVALID);
     expect(runActionOptions({ skipFailures: true, replaceTable: false, x: 1 })).toEqual({ skipFailures: true, replaceTable: false });
     expect(() => runActionOptions({ skipFailures: 1, replaceTable: false })).toThrow(INVALID);
+  });
+});
+
+describe('record sources through a join (B4)', () => {
+  const q = { kind: 'sql', sql: 'SELECT 1' };
+  it('sourceSaveRequest: a query ref, a null or non-negative safe-integer rowid (as rows.update), cells', () => {
+    expect(sourceSaveRequest(q, { rowid: 3, values: { Nom: 'x' } })).toEqual([q, { rowid: 3, values: { Nom: 'x' } }]);
+    expect(sourceSaveRequest({ kind: 'query', name: 'Q' }, { rowid: null, values: {} })).toEqual([{ kind: 'query', name: 'Q' }, { rowid: null, values: {} }]);
+    expect(() => sourceSaveRequest({ kind: 'table', name: 'T' }, { rowid: 1, values: {} })).toThrow(INVALID);
+    for (const rowid of [1.5, '1', undefined, 2 ** 53, -1]) expect(() => sourceSaveRequest(q, { rowid, values: {} })).toThrow(INVALID);
+    for (const values of [['x'], { a: {} }, null]) expect(() => sourceSaveRequest(q, { rowid: 1, values })).toThrow(INVALID);
+    expect(() => sourceSaveRequest(q, null)).toThrow(INVALID);
+  });
+  it('autoLookupRequest: a query ref, cells', () => {
+    expect(autoLookupRequest(q, { Client: '2' })).toEqual([q, { Client: '2' }]);
+    expect(() => autoLookupRequest({ kind: 'table', name: 'T' }, {})).toThrow(INVALID);
+    expect(() => autoLookupRequest(q, ['2'])).toThrow(INVALID);
   });
 });

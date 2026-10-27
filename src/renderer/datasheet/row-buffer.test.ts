@@ -8,6 +8,29 @@ const deferred = () => {
 };
 
 describe('RowBuffer', () => {
+  it('lookedUp shows the parent values without making them pending, and drops pending edits of those fields (B4 R4)', () => {
+    const b = new RowBuffer(vi.fn());
+    b.edit(0, 3, 'Nom', 'x'); b.edit(0, 3, 'Client', 2);
+    b.lookedUp(0, { Nom: 'Martin' });
+    expect(b.pending).toEqual({ rowIndex: 0, rowid: 3, changes: { Client: 2 } });
+    expect(b.looked).toEqual({ Nom: 'Martin' });
+    b.lookedUp(1, { Nom: 'Durand' }); // another row: ignored
+    expect(b.looked).toEqual({ Nom: 'Martin' });
+    b.edit(0, 3, 'Nom', 'Martin SA'); // typed after the lookup: pending again, shown over the looked-up value
+    expect(b.pending?.changes).toEqual({ Client: 2, Nom: 'Martin SA' });
+    b.discard();
+    expect(b.looked).toEqual({}); // the row goes, its looked-up values too
+  });
+
+  it('lookedUp keeps an edit typed while the lookup was in flight (only the edits sent with it go)', () => {
+    const b = new RowBuffer(vi.fn());
+    b.edit(0, 3, 'Nom', 'x'); b.edit(0, 3, 'Client', 2);
+    const sent = b.pending!.changes; // when the lookup is asked
+    b.edit(0, 3, 'Nom', 'y'); b.edit(0, 3, 'Ville', 'Nice'); // typed before its answer
+    b.lookedUp(0, { Nom: 'Martin', Ville: 'LYON' }, sent);
+    expect(b.pending?.changes).toEqual({ Client: 2, Nom: 'y', Ville: 'Nice' });
+  });
+
   it('row buffer saves when leaving a modified row', async () => {
     const save = vi.fn().mockResolvedValue({ ok: true, rowid: 7, values: [] }); const b = new RowBuffer(save);
     b.edit(3, null, 'Nom', 'A'); b.edit(3, null, 'Ville', 'B');

@@ -51,6 +51,7 @@ describe('session (brief)', () => {
     const b = open({ sessionId: 'b' });
     expect(b.state).toMatchObject({ readOnly: true, readOnlyReason: 'heldByOther', lockStale: false, lockHolder: expect.objectContaining({ pid: process.pid }) });
     await expect(b.insert('Clients', { Nom: 'x' })).rejects.toThrow(ReadOnlyError);
+    await expect(b.saveSource({ kind: 'sql', sql: 'SELECT Nom FROM Clients' }, { rowid: 1, values: { Nom: 'x' } })).rejects.toThrow(ReadOnlyError);
     await expect(b.saveTable({ originalName: null, design: clients, mapping: [], allowDataLoss: false })).rejects.toThrow(ReadOnlyError);
     const spec = { ...defaultSpec(localeInfo('fr-FR')), fields: [] };
     expect(() => b.importRun(p, { spec, target: { kind: 'new', table: 'T', primaryKey: { kind: 'auto' } } }, {} as ImportTexts)).toThrow(ReadOnlyError);

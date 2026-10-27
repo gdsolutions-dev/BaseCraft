@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { DeleteResult, RowWriteResult } from '../../shared/api';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 import { defaultProps, type FieldProps, type FieldType } from '../../shared/field-types';
-import type { RecordSourceRef, SourceField, SourceInfo, SourcePageRequest } from '../../shared/record-source';
+import type { RecordSourceRef, SourceField, SourceInfo, SourcePageRequest, SourceSaveRequest } from '../../shared/record-source';
 import { FormRecords, linkFilter, writableField, type FormDataApi, type FormRecordOptions } from './record-controller';
 
 type WriteError = Extract<RowWriteResult, { ok: false }>['errors'][number];
@@ -19,6 +19,15 @@ const totaux = (): SourceInfo => ({ fields: [sfo('Client', 'shortText', 'Clients
   { name: 'Total', type: 'number', props: defaultProps('number') }], updatable: true, keyTable: 'Clients', parameters: [] });
 const queryRows = (): SqlValue[][] => [['Dupont', 'Paris', 10], ['Martin', 'Lyon', 20]];
 const commandes = infoOf('Commandes', [sf('N°', 'autoNumber'), sf('Client', 'number'), sf('Qté', 'number'), sf('Montant', 'currency')]);
+/** Task 2's QV: Commandes ⋈ Clients on the relation; Commandes is the key table, Clients a 'one' table looked up by Client. */
+const QV_INFO: SourceInfo = {
+  fields: [sfo('Commandes.N°', 'autoNumber', 'Commandes', 'N°'), sfo('Client', 'number', 'Commandes', 'Client'), sfo('Clients.N°', 'autoNumber', 'Clients', 'N°'),
+    sfo('Nom', 'shortText', 'Clients', 'Nom'), sfo('Montant', 'currency', 'Commandes', 'Montant')],
+  updatable: true, keyTable: 'Commandes', parameters: [],
+  tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }],
+};
+const QV_ROWS = (): SqlValue[][] => [[1, 1, 1, 'Dupont', 10.1], [2, 1, 1, 'Dupont', 0.1], [3, 2, 2, 'Martin', 0.2], [4, 3, 3, 'Durand', 99.99], [5, 2, 2, 'Martin', 0.1]];
+const NOMS: Record<number, string> = { 1: 'Dupont', 2: 'Martin', 3: 'Durand', 4: 'Éric' };
 
 function fakeApi() {
   let next: { fail?: WriteError; reject?: unknown } | null = null;
@@ -33,6 +42,13 @@ function fakeApi() {
     updates: [] as [string, number, Record<string, CellInput>][],
     inserts: [] as [string, Record<string, CellInput>][],
     deletes: [] as [string, number[]][],
+    saves: [] as [RecordSourceRef, SourceSaveRequest][],
+    looks: [] as Record<string, CellInput>[],
+    /** sources.autoLookup's answer (QV's clients by default) */
+    lookup: (v: Record<string, CellInput>): Record<string, SqlValue> => {
+      const n = Number(v.Client), nom = NOMS[n] ?? null;
+      return { 'Clients.N°': nom === null ? null : n, Nom: nom };
+    },
     describeError: undefined as unknown,
     deleteResult: undefined as DeleteResult | undefined,
     get lastPage() { return a.pages[a.pages.length - 1]; },
@@ -65,6 +81,20 @@ function fakeApi() {
       const i = a.rowids.indexOf(rowid);
       return outcome() ?? { ok: true, rowid, values: a.info.fields.map((f, j) => (changes[f.origin?.field ?? f.name] ?? a.rows[i]?.[j] ?? null) as SqlValue) };
     },
+    async save(ref, req) {
+      a.calls.push('save'); a.saves.push([ref, req]);
+      const fail = outcome(); if (fail) return fail as Extract<RowWriteResult, { ok: false }>;
+      const i = req.rowid === null ? -1 : a.rowids.indexOf(req.rowid);
+      const row = a.info.fields.map((_f, j) => a.rows[i]?.[j] ?? null);
+      // a join's link written: its parent's columns are read back from the parent found (R3), then what was typed
+      if (a.info.tables && Object.hasOwn(req.values, 'Client')) for (const [k, v] of Object.entries(a.lookup(req.values))) row[a.info.fields.findIndex((f) => f.name === k)] = v;
+      a.info.fields.forEach((f, j) => { if (Object.hasOwn(req.values, f.name)) row[j] = req.values[f.name] as SqlValue; });
+      const rowid = req.rowid ?? 99;
+      if (i < 0) { a.rows.push(row); a.rowids.push(rowid); } else a.rows[i] = row;
+      // the plan's tables read back: every column with an origin (a computed one is not)
+      return { ok: true, rowid, values: Object.fromEntries(a.info.fields.flatMap((f, j) => (f.origin ? [[f.name, row[j]]] : []))) };
+    },
+    async autoLookup(_ref, values) { a.calls.push('autoLookup'); a.looks.push(values); return a.lookup(values); },
     async delete(table, rowids) {
       a.calls.push('delete'); a.deletes.push([table, rowids]);
       if (a.deleteResult) return a.deleteResult;
@@ -90,7 +120,7 @@ function failPage(offset: number): void {
 }
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 /** The next call of api[k] waits until the returned function is called (the write is recorded then); later calls answer at once. */
-function hold(k: 'update' | 'insert'): () => void {
+function hold(k: 'update' | 'insert' | 'save' | 'autoLookup'): () => void {
   const gate = deferred();
   const real = api[k] as (...a: unknown[]) => Promise<RowWriteResult>;
   (api as Record<string, unknown>)[k] = async (...args: unknown[]) => { (api as Record<string, unknown>)[k] = real; await gate.promise; return real(...args); };
@@ -137,9 +167,10 @@ describe('FormRecords', () => {
   it('untouched new record is never inserted', async () => { const r = await opened(); await r.newRecord(); await r.goTo(0); expect(api.inserts).toEqual([]); });
   it('insert merges defaults, link values, pending', async () => { const r = await opened({ info: commandes, rows: [], link: { childFields: ['Client'], values: [2] }, newRecordValues: async () => ({ Qté: '1' }) });
     await r.newRecord(); r.edit('Montant', '10'); await r.save(); expect(api.inserts).toEqual([['Commandes', { Qté: '1', Client: 2, Montant: '10' }]]); });
-  it('writes use origin names, computed columns are read-only', async () => {
-    const r = await opened({ info: { fields: [sfo('Client', 'shortText', 'Clients', 'Nom'), { name: 'Total', type: 'number', props: defaultProps('number') }], updatable: true, keyTable: 'Clients', parameters: [] } });
-    r.edit('Total', '3'); expect(r.snapshot.pending).toEqual({}); r.edit('Client', 'X'); await r.save(); expect(api.updates).toEqual([['Clients', 1, { Nom: 'X' }]]); });
+  it('a query writes by output column, computed columns are read-only', async () => {
+    const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: { fields: [sfo('Client', 'shortText', 'Clients', 'Nom'), { name: 'Total', type: 'number', props: defaultProps('number') }], updatable: true, keyTable: 'Clients', parameters: [] } });
+    r.edit('Total', '3'); expect(r.snapshot.pending).toEqual({}); r.edit('Client', 'X'); await r.save();
+    expect(api.saves).toEqual([[{ kind: 'query', name: 'Q' }, { rowid: 1, values: { Client: 'X' } }]]); });
   it("the link values a new record shows (by source field), those of the master's current record", async () => {
     const r = await opened({ info: commandes, rows: [], link: { childFields: ['client'], values: [2] } });
     expect(r.linkDefaults).toEqual({ Client: 2 });
@@ -227,9 +258,9 @@ describe('FormRecords', () => {
     expect(r.snapshot).toMatchObject({ index: 3, isNew: true, values: [null, null, null] });
     r.edit('Nom', 'Petit'); expect(await r.save()).toBe(true);
     expect(api.inserts).toEqual([['Clients', { Nom: 'Petit' }]]); expect(r.snapshot).toMatchObject({ index: 3, total: 4, isNew: false, values: [null, 'Petit', null] }); });
-  it('write errors name the source field, not the origin field', async () => {
-    const r = await opened({ info: { fields: [sfo('N°', 'autoNumber', 'Clients', 'N°'), sfo('Client', 'shortText', 'Clients', 'Nom')], updatable: true, keyTable: 'Clients', parameters: [] } });
-    api.failNext({ field: 'Nom', code: 'required' }); r.edit('Client', ''); expect(await r.save()).toBe(false);
+  it('write errors name the source field (sources.save names output columns), not the origin field', async () => {
+    const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: { fields: [sfo('N°', 'autoNumber', 'Clients', 'N°'), sfo('Client', 'shortText', 'Clients', 'Nom')], updatable: true, keyTable: 'Clients', parameters: [] } });
+    api.failNext({ field: 'Client', code: 'required' }); r.edit('Client', ''); expect(await r.save()).toBe(false);
     expect(r.snapshot.errors).toEqual([{ field: 'Client', code: 'required' }]); });
   it('control errors block the save without a call', async () => { const r = await opened(); r.edit('Nom', 'x');
     r.setControlErrors([{ field: 'Nom', code: 'controlValidation', message: 'non' }]); expect(await r.save()).toBe(false); expect(api.updates).toEqual([]);
@@ -254,9 +285,10 @@ describe('FormRecords', () => {
   it('a source that is not updatable is read-only', async () => {
     const r = await opened({ ref: { kind: 'query', name: 'Totaux' }, info: { ...clients, updatable: false } });
     expect(r.snapshot).toMatchObject({ editable: false, canAdd: false }); r.edit('Nom', 'x'); expect(r.snapshot.dirty).toBe(false); });
-  it('an aliased single-table query writes the origin field', async () => {
+  it('an aliased single-table query saves by output column through sources.save', async () => {
     const r = await opened({ ref: { kind: 'query', name: 'Clients Q' }, info: { fields: [sfo('Client', 'shortText', 'Clients', 'Nom')], updatable: true, keyTable: 'Clients', parameters: [] } });
-    r.edit('Client', 'X'); expect(await r.save()).toBe(true); expect(api.updates).toEqual([['Clients', 1, { Nom: 'X' }]]); });
+    r.edit('Client', 'X'); expect(await r.save()).toBe(true);
+    expect(api.saves).toEqual([[{ kind: 'query', name: 'Clients Q' }, { rowid: 1, values: { Client: 'X' } }]]); expect(api.updates).toEqual([]); });
   it('a row with a null rowid from a query is read-only', async () => {
     const r = await opened({ ref: { kind: 'sql', sql: 'SELECT Nom FROM Clients' }, rowids: [null, null, null] });
     expect(r.snapshot.editable).toBe(false); });
@@ -295,8 +327,11 @@ describe('FormRecords', () => {
   it('no parameters: open never asks', async () => {
     const r = new FormRecords(api, { ref: { kind: 'table', name: 'Clients' }, locale: 'fr', readOnly: false, allowAdditions: true, allowEdits: true, allowDeletions: true });
     expect(await r.open(async () => { throw new Error('asked'); })).toBe(true); expect(r.snapshot.total).toBe(3); expect(api.lastPage.params).toBeUndefined(); });
-  it('writableField follows toOrigin', () => { expect(writableField(clients.fields[1], clients)).toBe(true);
-    expect(writableField({ name: 'Total', type: 'number', props: defaultProps('number') }, clients)).toBe(false); });
+  it('writableField follows writableColumn (B4 R2)', () => { expect(writableField(clients.fields[1], clients)).toBe(true);
+    expect(writableField({ name: 'Total', type: 'number', props: defaultProps('number') }, clients)).toBe(false);
+    const q = (n: string) => writableField(QV_INFO.fields.find((f) => f.name === n)!, QV_INFO);
+    expect(['Client', 'Nom', 'Montant', 'Clients.N°'].map(q)).toEqual([true, true, true, false]); // the one side's join field: read-only
+    expect(writableField(totaux().fields[2], totaux())).toBe(false); });
 });
 
 describe('FormRecords: races (fix round 1)', () => {
@@ -344,21 +379,11 @@ describe('FormRecords: races (fix round 1)', () => {
     expect(api.inserts).toEqual([]); expect(r.snapshot).toMatchObject({ pending: { Nom: 'x' }, refused: false });
     expect(String(r.snapshot.writeError)).toContain('bc:invalidArgument');
   });
-  it('values read back fall back to the entry when the key table cannot be described', async () => {
+  it('a query save shows the columns read back by name, whatever their order; the others keep their value', async () => {
     const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: totaux(), rows: queryRows() });
-    api.describe = async () => { throw new Error('bc:notFound'); };
-    api.update = async (_t, rowid) => ({ ok: true, rowid, values: [1, 'X', 'Paris'] });
-    r.edit('Client', 'X'); expect(await r.save()).toBe(true);
-    expect(r.snapshot).toMatchObject({ values: ['X', 'Paris', 10], dirty: false });
-  });
-  it('a requery describes the key table again (its design may have changed)', async () => {
-    const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: totaux(), rows: queryRows() });
-    api.update = async (_t, rowid) => ({ ok: true, rowid, values: [1, 'X', 'Paris'] });
-    r.edit('Client', 'X'); await r.save(); expect(r.snapshot.values).toEqual(['X', 'Paris', 10]);
-    api.tables.Clients = infoOf('Clients', [sf('Ville', 'shortText'), sf('Nom', 'shortText'), sf('N°', 'autoNumber')]); // fields reordered
-    api.update = async (_t, rowid) => ({ ok: true, rowid, values: ['Lyon', 'Y', 1] });
-    expect(await r.requery()).toBe(true); r.edit('Client', 'Y'); await r.save();
-    expect(r.snapshot.values).toEqual(['Y', 'Lyon', 10]); expect(api.describes.filter((d) => d.kind === 'table')).toHaveLength(2);
+    api.save = async (_ref, req) => ({ ok: true, rowid: req.rowid!, values: { Ville: 'Lyon', client: 'X' } }); // read back: Client re-cased
+    r.edit('Client', 'x'); expect(await r.save()).toBe(true);
+    expect(r.snapshot).toMatchObject({ values: ['X', 'Lyon', 10], dirty: false });
   });
   it('a failed page no longer blocks moves once the cache is invalidated', async () => {
     const r = await opened(); failPage(50);
@@ -384,15 +409,14 @@ describe('FormRecords: API calls (fix round 1)', () => {
   it('refused: no further write call', async () => { const r = await opened(); api.rejectNext(new Error('bc:readOnly')); r.edit('Nom', 'x'); await r.save();
     expect(await r.save()).toBe(false); expect(await r.next()).toBe(false); expect(await r.deleteCurrent()).toBeNull();
     expect(api.calls).toEqual(['describe', 'page', 'update']); });
-  it('a query source: the written row is mapped back through the key table, a computed column keeps its value', async () => {
+  it('a query source: one save by output column, a computed column keeps its value, no table describe', async () => {
     const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: totaux(), rows: queryRows() });
-    api.update = async (t, rowid, changes) => { api.updates.push([t, rowid, changes]); return { ok: true, rowid, values: [1, 'X', 'Paris'] }; };
     r.edit('Client', 'X'); expect(await r.save()).toBe(true);
-    expect(api.updates).toEqual([['Clients', 1, { Nom: 'X' }]]);
-    expect(api.describes).toEqual([{ kind: 'query', name: 'Q' }, { kind: 'table', name: 'Clients' }]);
+    expect(api.calls).toEqual(['describe', 'page', 'save']);
+    expect(api.saves).toEqual([[{ kind: 'query', name: 'Q' }, { rowid: 1, values: { Client: 'X' } }]]);
+    expect(api.describes).toEqual([{ kind: 'query', name: 'Q' }]);
     expect(r.snapshot.values).toEqual(['X', 'Paris', 10]);
-    api.update = async (_t, rowid) => ({ ok: true, rowid, values: [1, 'X', 'Lyon'] });
-    r.edit('Ville', 'Lyon'); await r.save(); expect(r.snapshot.values).toEqual(['X', 'Lyon', 10]); expect(api.describes).toHaveLength(2); // described once
+    r.edit('Ville', 'Lyon'); await r.save(); expect(r.snapshot.values).toEqual(['X', 'Lyon', 10]);
   });
 });
 
@@ -620,5 +644,140 @@ describe('record events, applied filter, find', () => {
     r.edit('Nom', 'Z'); await tick(); expect(r.inBeforeEvent).toBe(false);
     expect(inner).toEqual(Array(4).fill('Error: bc:saveDuringEvent'));   // from BeforeInsert
     expect(await r.save()).toBe(true); expect(api.inserts).toHaveLength(1);
+  });
+});
+
+describe('a form bound to a join query (B4)', () => {
+  const QV: RecordSourceRef = { kind: 'query', name: 'QV' };
+  const valueOf = (r: FormRecords, name: string): SqlValue | undefined => r.snapshot.values[QV_INFO.fields.findIndex((f) => f.name === name)];
+  const settled = async (_r: FormRecords): Promise<void> => { for (let i = 0; i < 3; i++) await tick(); };
+  const onQV = (o: Partial<FormRecordOptions> = {}) => opened({ ref: QV, info: QV_INFO, rows: QV_ROWS(), ...o });
+
+  it('typing a client number shows its name before the save', async () => {
+    const r = await onQV(); await r.newRecord();
+    r.edit('Client', 2); await settled(r);
+    expect(valueOf(r, 'Nom')).toBe('Martin'); expect(valueOf(r, 'Clients.N°')).toBe(2); expect(r.snapshot.pending).toEqual({ Client: 2 });
+    expect(api.looks).toEqual([{ Client: 2 }]); expect(api.saves).toEqual([]); // nothing written by a lookup
+    r.undoRecord(); expect(valueOf(r, 'Nom')).toBeNull(); expect(r.snapshot.dirty).toBe(false);
+  });
+  it('a lookup drops pending "one" edits (R4)', async () => {
+    const r = await onQV();
+    r.edit('Nom', 'x'); r.edit('Client', 3); await settled(r);
+    expect(r.snapshot.pending).toEqual({ Client: 3 }); expect(valueOf(r, 'Nom')).toBe('Durand');
+  });
+  it('a link edit sends only that link; a column that links nothing looks nothing up', async () => {
+    const r = await onQV();
+    r.edit('Montant', 5); r.edit('Nom', 'y'); await settled(r); expect(api.looks).toEqual([]);
+    r.edit('Client', 4); await settled(r); expect(api.looks).toEqual([{ Client: 4 }]);
+  });
+  it('save goes through sources.save with the key rowid', async () => {
+    const r = await onQV(); await r.goTo(2);
+    r.edit('Nom', 'Martin SA'); expect(await r.save()).toBe(true);
+    expect(api.saves).toEqual([[QV, { rowid: 3, values: { Nom: 'Martin SA' } }]]); expect(api.updates).toEqual([]);
+    expect(r.snapshot).toMatchObject({ dirty: false, values: [3, 2, 2, 'Martin SA', 0.2] });
+    api.calls.length = 0; await r.goTo(4); expect(api.calls).toEqual(['page']); // the cache was invalidated (R6): record 5 is read again
+  });
+  it('a new record is saved with a null rowid', async () => {
+    const r = await onQV(); await r.newRecord();
+    r.edit('Client', 2); r.edit('Montant', 12.5); await settled(r); expect(await r.save()).toBe(true);
+    expect(api.saves).toEqual([[QV, { rowid: null, values: { Client: 2, Montant: 12.5 } }]]);
+    expect(r.snapshot).toMatchObject({ isNew: false, total: 6, dirty: false, values: [null, 2, 2, 'Martin', 12.5] }); // as read back
+  });
+  it('errors come back on the form\'s fields', async () => {
+    const r = await onQV();
+    api.failNext({ field: 'Nom', code: 'required', table: 'Clients' }); r.edit('Nom', ''); expect(await r.save()).toBe(false);
+    expect(r.snapshot.errors).toEqual([{ field: 'Nom', code: 'required', table: 'Clients' }]); expect(r.snapshot.dirty).toBe(true);
+  });
+  it('a save waits for the lookup in flight: the stale one-side edit is not sent', async () => {
+    const r = await onQV();
+    const go = hold('autoLookup');
+    r.edit('Nom', 'x'); r.edit('Client', 3);
+    const saved = r.save(); await tick(); expect(api.saves).toEqual([]);
+    go(); expect(await saved).toBe(true);
+    expect(api.saves).toEqual([[QV, { rowid: 1, values: { Client: 3 } }]]); expect(valueOf(r, 'Nom')).toBe('Durand');
+  });
+  it('the latest lookup wins; an edit typed during a lookup is kept', async () => {
+    const r = await onQV();
+    const go = hold('autoLookup');
+    r.edit('Client', 2); r.edit('Client', 3); await settled(r); expect(valueOf(r, 'Nom')).toBe('Durand');
+    go(); await settled(r); expect(valueOf(r, 'Nom')).toBe('Durand'); // the earlier answer (Martin) changes nothing
+    const go2 = hold('autoLookup');
+    r.edit('Client', 2); r.edit('Nom', 'y'); go2(); await settled(r);
+    expect(r.snapshot.pending).toEqual({ Client: 2, Nom: 'y' }); expect(valueOf(r, 'Nom')).toBe('Martin');
+  });
+  it('a link given back (undoField) shows its own parent again', async () => {
+    const r = await onQV();
+    r.edit('Client', 3); await settled(r); expect(valueOf(r, 'Nom')).toBe('Durand');
+    r.undoField('Client'); await settled(r);
+    expect(valueOf(r, 'Nom')).toBe('Dupont'); expect(api.looks).toEqual([{ Client: 3 }, { Client: 1 }]); expect(r.snapshot.dirty).toBe(false);
+  });
+  it("a link set by BeforeUpdate (SetValue) is looked up before the values are sent: the old parent's edit is not written (R4)", async () => {
+    let r!: FormRecords;
+    r = await onQV({ events: { beforeUpdate: async () => { r.edit('Client', 3, { silent: true }); return true; } } });
+    r.edit('Nom', 'x');
+    const go = hold('autoLookup');
+    const saved = r.save(); await settled(r); expect(api.saves).toEqual([]); // waits for the lookup BeforeUpdate started
+    go(); expect(await saved).toBe(true);
+    expect(api.saves).toEqual([[QV, { rowid: 1, values: { Client: 3 } }]]);
+  });
+  it('a failed lookup stops the save: nothing written, the error shown; a lookup that succeeds lets it go', async () => {
+    const r = await onQV();
+    api.autoLookup = async () => { throw new Error('bc:hostCrashed'); };
+    r.edit('Nom', 'x'); r.edit('Client', 3); await settled(r);
+    expect(r.snapshot.writeError).toBeUndefined(); // a read: no message until a save needs it
+    expect(await r.save()).toBe(false); expect(api.saves).toEqual([]);
+    expect(String(r.snapshot.writeError)).toContain('bc:hostCrashed'); expect(r.snapshot).toMatchObject({ refused: false, pending: { Nom: 'x', Client: 3 } });
+    const first = r.snapshot.writeError;
+    expect(await r.save()).toBe(false); expect(r.snapshot.writeError).not.toBe(first); // shown again
+    api.autoLookup = async (_ref, v) => api.lookup(v);
+    r.edit('Client', 3); await settled(r);
+    expect(await r.save()).toBe(true); expect(api.saves).toEqual([[QV, { rowid: 1, values: { Client: 3 } }]]);
+  });
+  describe('two links (final review M1): one lookup per link', () => {
+    // Commandes ⋈ Clients (by Client) ⋈ Employés (by Employé)
+    const QE_INFO: SourceInfo = {
+      fields: [sfo('Commandes.N°', 'autoNumber', 'Commandes', 'N°'), sfo('Client', 'number', 'Commandes', 'Client'), sfo('Nom', 'shortText', 'Clients', 'Nom'),
+        sfo('Employé', 'number', 'Commandes', 'Employé'), sfo('Prénom', 'shortText', 'Employés', 'Prénom')],
+      updatable: true, keyTable: 'Commandes', parameters: [],
+      tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: [], lookupBy: ['Client'] },
+        { table: 'Employés', role: 'one', readOnly: [], lookupBy: ['Employé'] }],
+    };
+    const onQE = async () => {
+      api.lookup = (v) => (Object.hasOwn(v, 'Client') ? { Nom: NOMS[Number(v.Client)] ?? null } : { Prénom: v.Employé === 2 ? 'Léa' : null });
+      return opened({ ref: QV, info: QE_INFO, rows: [[1, 1, 'Dupont', 1, 'Paul']] });
+    };
+    const shown = (r: FormRecords, name: string) => r.snapshot.values[QE_INFO.fields.findIndex((f) => f.name === name)];
+    it("a lookup of the other link does not make this one's answer stale", async () => {
+      const r = await onQE();
+      const go = hold('autoLookup');
+      r.edit('Nom', 'x'); r.edit('Client', 3); r.edit('Employé', 2); await settled(r);
+      go(); await settled(r);
+      expect(shown(r, 'Nom')).toBe('Durand'); expect(shown(r, 'Prénom')).toBe('Léa');
+      expect(await r.save()).toBe(true); expect(api.saves).toEqual([[QV, { rowid: 1, values: { Client: 3, Employé: 2 } }]]);
+    });
+    it("a lookup of the other link that succeeds does not lift this one's failure", async () => {
+      const r = await onQE();
+      api.autoLookup = async (_ref, v) => { if (Object.hasOwn(v, 'Client')) throw new Error('bc:hostCrashed'); return api.lookup(v); };
+      r.edit('Nom', 'x'); r.edit('Client', 3); await settled(r);
+      r.edit('Employé', 2); await settled(r);
+      expect(await r.save()).toBe(false); expect(api.saves).toEqual([]); expect(String(r.snapshot.writeError)).toContain('bc:hostCrashed');
+    });
+  });
+  it('a lookup answered after a move changes nothing', async () => {
+    const r = await onQV();
+    const go = hold('autoLookup');
+    r.edit('Client', 3); r.undoRecord(); expect(await r.goTo(1)).toBe(true);
+    go(); await settled(r); expect(r.snapshot.values).toEqual(QV_ROWS()[1]);
+  });
+  it('a row without its key record is read-only (R5)', async () => {
+    const r = await opened({ ref: QV, info: QV_INFO, rows: QV_ROWS(), rowids: [null, 2, 3, 4, 5] });
+    expect(r.snapshot).toMatchObject({ editable: false, canDelete: false }); expect(r.edit('Nom', 'x')).toBe(false);
+  });
+  it('B2 events around a join save: BeforeUpdate refuses, then After Update after the save', async () => {
+    const seen: string[] = [];
+    let ok = false;
+    const r = await onQV({ events: { beforeUpdate: async () => { seen.push('before'); return ok; }, afterUpdate: async () => { seen.push(`after ${api.saves.length}`); } } });
+    r.edit('Montant', 7); expect(await r.save()).toBe(false); expect(api.saves).toEqual([]); expect(r.snapshot.refusedByEvent).toBe(true);
+    ok = true; expect(await r.save()).toBe(true); expect(seen).toEqual(['before', 'before', 'after 1']);
   });
 });

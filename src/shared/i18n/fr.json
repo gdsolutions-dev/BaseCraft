@@ -538,6 +538,7 @@
       "invalidQuery_subqueryRows": "Une sous-requête renvoie plus d'un enregistrement alors qu'une seule valeur est attendue.",
       "invalidQuery_tooComplex": "Cette requête est trop complexe (trop de tables, de colonnes ou d'imbrications).",
       "invalidQuery_storedQuery": "La requête « {{detail}} » est illisible : son SQL n'est pas valide.",
+      "invalidQuery_badCrosstab": "Requête Analyse croisée incorrecte : TRANSFORM, un SELECT simple avec GROUP BY, puis PIVOT.",
       "queryBind_unknownSource": "La table ou la requête « {{detail}} » n'existe pas : elle a peut-être été renommée ou supprimée.",
       "queryBind_ambiguousField": "Le nom « {{detail}} » peut désigner plusieurs champs ou sources : précisez la table, par exemple [Table].[Champ].",
       "queryBind_circular": "Ces requêtes s'appellent en boucle : {{detail}}.",
@@ -552,6 +553,11 @@
       "queryBind_insertArity": "Le nombre de valeurs à ajouter ne correspond pas au nombre de champs de destination.",
       "queryBind_subqueryArity": "Cette sous-requête doit renvoyer une seule colonne : {{detail}}.",
       "queryBind_memberNotAllowed": "Une requête ne peut pas utiliser {{detail}} : seules les références [Formulaires]!, [États]! et [VarTemp]! y sont permises.",
+      "queryBind_crosstabRowHeading": "Une requête Analyse croisée doit avoir au moins un en-tête de ligne : regroupez-la avec GROUP BY.",
+      "queryBind_crosstabValue": "La valeur d'une requête Analyse croisée (TRANSFORM) doit être une fonction d'agrégat, par exemple Sum ou Count : {{detail}}.",
+      "queryBind_pivotAggregate": "L'en-tête de colonne d'une requête Analyse croisée (PIVOT) ne peut pas contenir de fonction d'agrégat : {{detail}}.",
+      "queryBind_tooManyColumns": "Cette requête Analyse croisée donnerait {{detail}} colonnes : 255 au plus, dont 254 en-têtes de colonne. Restreignez les données ou fixez les en-têtes de colonne (IN).",
+      "queryBind_crosstabAsSource": "La requête Analyse croisée « {{detail}} » ne peut pas servir de source à une autre requête ni à une liste de choix.",
       "fontMissing": "Une police intégrée n'a pas pu être chargée : l'état n'a été ni imprimé ni exporté.",
       "printFailed": "L'impression a échoué.",
       "writeFailed": "Impossible d'enregistrer le fichier à cet emplacement.",
@@ -563,7 +569,13 @@
       "invalidQuery_unlinkedTables": "Les tables d'une requête Mise à jour ou Suppression doivent toutes être jointes.",
       "invalidQuery_updateTarget": "« {{detail}} » ne peut pas être mis à jour : la ligne Mise à jour s'applique au champ d'une table.",
       "invalidQuery_noTarget": "Indiquez le nom de la table de destination de la requête.",
-      "invalidQuery_deleteFrom": "Indiquez la table contenant les enregistrements à supprimer : son champ « * » avec « De » dans la ligne Supprimer."
+      "invalidQuery_deleteFrom": "Indiquez la table contenant les enregistrements à supprimer : son champ « * » avec « De » dans la ligne Supprimer.",
+      "invalidQuery_crosstabRowHeading": "Une requête Analyse croisée a besoin d'au moins un « En-tête de ligne » avec l'opération « Regroupement » ; un en-tête de ligne ne peut pas avoir l'opération « Où ».",
+      "invalidQuery_crosstabColumnHeading": "Une requête Analyse croisée a besoin d'un seul « En-tête de colonne » dans la ligne Analyse.",
+      "invalidQuery_crosstabValue": "Une requête Analyse croisée a besoin d'une seule « Valeur » dans la ligne Analyse.",
+      "invalidQuery_crosstabValueTotal": "La « Valeur » d'une requête Analyse croisée doit avoir une opération de calcul (Somme, Compte…) ou « Expression » avec une fonction de regroupement.",
+      "invalidQuery_crosstabHeadingTotal": "L'« En-tête de colonne » d'une requête Analyse croisée doit avoir l'opération « Regroupement ».",
+      "invalidQuery_crosstabNone": "Une colonne « (non affiché) » d'une requête Analyse croisée doit avoir l'opération « Où » ; choisissez son rôle dans la ligne Analyse."
     },
     "op": {
       "nameExists": "Un objet porte déjà ce nom.",
@@ -915,8 +927,9 @@
       "forbiddenStatement": "Instruction interdite : seules les requêtes Sélection, Ajout, Mise à jour, Suppression et Création de table sont acceptées.",
       "reservedName": "Ce nom est réservé (bc_, bcx_ ou sqlite_) : la requête ne peut pas l'utiliser.",
       "multipleStatements": "Une seule instruction SQL est permise : retirez le texte après le point-virgule.",
-      "notSupportedYet": "Ce type de requête (Analyse croisée, SQL direct) n'est pas encore disponible.",
+      "notSupportedYet": "Ce type de requête (SQL direct) n'est pas encore disponible.",
       "badParameterType": "Type de paramètre inconnu.",
+      "badCrosstab": "Requête Analyse croisée incorrecte : TRANSFORM, un SELECT simple avec GROUP BY, puis PIVOT.",
       "badCount": "Entrez un nombre entier de 1 à 255.",
       "badWidths": "Entrez des largeurs en cm séparées par « ; » (55,88 cm au plus).",
       "badListWidth": "Entrez « Auto » ou une largeur en cm (55,88 cm au plus).",
@@ -1878,7 +1891,8 @@
       "or": "Ou :",
       "appendTo": "Ajouter à :",
       "updateTo": "Mise à jour :",
-      "deleteRole": "Supprimer :"
+      "deleteRole": "Supprimer :",
+      "crosstab": "Analyse :"
     },
     "total": {
       "groupBy": "Regroupement",
@@ -1898,6 +1912,12 @@
       "none": "(non trié)",
       "asc": "Croissant",
       "desc": "Décroissant"
+    },
+    "crosstab": {
+      "rowHeading": "En-tête de ligne",
+      "columnHeading": "En-tête de colonne",
+      "value": "Valeur",
+      "none": "(non affiché)"
     },
     "deleteRole": {
       "from": "De",
@@ -1948,7 +1968,9 @@
       "top": "Valeurs supérieures",
       "badTop": "Entrez « Tout », un nombre entier positif ou un pourcentage de 1 à 100 (par exemple 25 ou 5 %).",
       "outputAll": "Afficher tous les champs",
-      "distinct": "Valeurs distinctes"
+      "distinct": "Valeurs distinctes",
+      "columnHeadings": "En-têtes des colonnes",
+      "badHeadings": "Chaque en-tête doit être une valeur (nombre, texte entre guillemets, date)."
     },
     "action": {
       "title": "Requête action",

@@ -5,11 +5,11 @@ import type { DesignError, TableDesign } from './field-types';
 import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec } from './exchange';
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
 import type { UiLanguage } from './i18n';
-import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest } from './record-source';
+import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { StartupOptions } from './startup';
 
 export type { CellInput, TableDesign };
-export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, SourcePageRequest } from './record-source';
+export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 
 export interface LockInfo { user: string; host: string; pid: number; sessionId: string; heartbeatAt: string }
 export type LocationRisk = 'local' | 'network' | 'synced';
@@ -185,6 +185,8 @@ export const CH = {
   objectsCopy: 'bc:objects:copy',
   sourcesDescribe: 'bc:sources:describe',
   sourcesPage: 'bc:sources:page',
+  sourcesSave: 'bc:sources:save',
+  sourcesAutoLookup: 'bc:sources:autoLookup',
   objectsSetDescription: 'bc:objects:setDescription',
   queriesActionCount: 'bc:queries:actionCount',
   queriesRunAction: 'bc:queries:runAction',
@@ -332,10 +334,15 @@ export interface BasecraftApi {
      *  object in bc_objects (its modified date moves). At most 255 characters (else bc:invalidArgument); '' or null removes it. */
     setDescription(kind: ObjectKind | 'table', name: string, description: string | null): Promise<OpResult>;
   };
-  /** Record sources of query datasheets, forms and reports. Writes go through rows.* on keyTable when updatable.
+  /** Record sources of query datasheets, forms and reports. Writes go through rows.* on a table, sources.save on an updatable query (B4).
    *  page: at most 10 000 rows and 8 sort keys; `filter` as rows.page applies it, `total` counts the filtered rows. A criterion
    *  that cannot be compiled rejects bc:invalidArgument; a missing table, sort field or filter field bc:notFound. */
-  sources: { describe(ref: RecordSourceRef): Promise<SourceInfo>; page(ref: RecordSourceRef, req: SourcePageRequest): Promise<SourcePage> };
+  sources: { describe(ref: RecordSourceRef, params?: Record<string, CellInput> /* a crosstab's (B4 R11) */): Promise<SourceInfo>; page(ref: RecordSourceRef, req: SourcePageRequest): Promise<SourcePage>;
+    /** B4 R2, R3: one record of an updatable query or SQL source, the key table and its one tables in one transaction
+     *  (src/main/query/join-write.ts). A read-only base rejects bc:readOnly. */
+    save(ref: QueryRef, req: SourceSaveRequest): Promise<SourceSaveResult>;
+    /** B4 R4: the looked-up tables' output columns for the link values in `values` (Null when no parent). Reads only. */
+    autoLookup(ref: QueryRef, values: Record<string, CellInput>): Promise<Record<string, SqlValue>> };
   /** Action queries (A3). Same errors as sources.* of kind query or sql (bc:missingParameter||<name> first); a select query
    *  rejects bc:invalidArgument. actionCount: the rows the query would write and the table it writes (reads only). */
   queries: {

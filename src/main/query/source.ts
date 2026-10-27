@@ -7,7 +7,7 @@ import { SQL_FUNCTIONS, type SqlFragment } from '../../shared/expr/sql';
 import { defaultProps, quoteIdent, sameName, type TableDesign } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { isSelectBody, type Query } from '../../shared/query/ast';
-import { bindQuery, toSourceInfo, type BoundQuery, type QueryCatalog } from '../../shared/query/bind';
+import { bindQuery, QueryBindError, toSourceInfo, type BoundQuery, type QueryCatalog } from '../../shared/query/bind';
 import { invalidQueryError, isSqlSource, parseQueryDefinition } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import type { RecordSourceRef, SourceField, SourceInfo, SourcePage, SourcePageRequest } from '../../shared/record-source';
@@ -17,6 +17,7 @@ import { getObject } from '../db/objects';
 import { hasRealRowid, isTableName, listTables, tableDesign } from '../db/schema';
 import { authorizedPrepare, queryError } from './authorizer';
 import { compileSelect, orderKeys, type CompiledSelect } from './compile';
+import { expandCrosstab } from './crosstab';
 
 import type { QueryRef } from '../../shared/api';
 
@@ -55,7 +56,7 @@ function parse(sql: string): Query {
 /**
  * The bound SELECT or UNION of `ref` (with `action`: the bound action query, bc:invalidArgument for a SELECT or UNION). bc:notFound (saved query missing), bc:notFound|unknownSource|<name> (a table or query it
  * names is missing: contract 1.2), bc:invalidQuery|…, bc:notSelectQuery, bc:queryBind|…. A key table without a real rowid
- * (WITHOUT ROWID, a field named rowid: adopted tables) makes the query read-only, as its table datasheet refuses it.
+ * (WITHOUT ROWID, a field named rowid: adopted tables), or a joined table without one, makes the query read-only, as its table datasheet refuses it.
  */
 export function resolve(db: DatabaseSync, ref: QueryRef, action = false): BoundQuery {
   let q: Query;
@@ -74,12 +75,20 @@ export function resolve(db: DatabaseSync, ref: QueryRef, action = false): BoundQ
     if (e instanceof Error && e.message.startsWith('bc:queryBind|unknownSource|')) throw new Error(e.message.replace('bc:queryBind', 'bc:notFound'), { cause: e });
     throw e;
   }
-  if (bound.updatable && !hasRealRowid(db, tableDesign(db, bound.keyTable!))) bound.updatable = false;
+  // every table written (B4: the key table and the 'one' tables) is located by its rowid
+  const written = bound.writePlan?.map((w) => w.table) ?? [bound.keyTable!];
+  if (bound.updatable && !written.every((t) => hasRealRowid(db, tableDesign(db, t)))) bound.updatable = false;
   return bound;
 }
 
-export function describeQuerySource(db: DatabaseSync, ref: QueryRef): SourceInfo {
-  return toSourceInfo(resolve(db, ref));
+/** A crosstab (B4 R11): its IN headings; else those of the data, with `params` when it has parameters — without them, its
+ *  row columns only and `crosstab.headings` 'needsParameters'. `params`: as a page's, converted in the region. */
+export function describeQuerySource(db: DatabaseSync, ref: QueryRef, info: LocaleInfo, params?: Record<string, CellInput>): SourceInfo {
+  const b = resolve(db, ref);
+  if (!b.crosstab) return toSourceInfo(b);
+  if (b.crosstab.headings === 'fixed') return toSourceInfo(expandCrosstab(db, b, {}, info)); // IN: no value needed
+  if (b.params.length && !params) return { ...toSourceInfo(b), crosstab: { headings: 'needsParameters' } };
+  return toSourceInfo(expandCrosstab(db, b, paramValues(b, params ?? {}, info), info));
 }
 
 /** Each parameter's value, converted in the region as its type stores it. bc:missingParameter||<name>, bc:invalidParameter|<FieldErrorCode>|<name>. */
@@ -95,7 +104,7 @@ export function paramValues(b: BoundQuery, input: Record<string, CellInput>, inf
   return out;
 }
 
-function compile(b: BoundQuery, values: Record<string, SqlValue>, info: LocaleInfo): CompiledSelect {
+export function compile(b: BoundQuery, values: Record<string, SqlValue>, info: LocaleInfo): CompiledSelect {
   try {
     return compileSelect(b, values, { locale: info.locale });
   } catch (e) {
@@ -152,20 +161,25 @@ const MAX_TOTALS = 256;
  * filter calling Date(), Now() or Time()).
  */
 export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePageRequest, ctx: QueryCtx): SourcePage {
-  const b = resolve(db, ref);
-  const values = paramValues(b, req.params ?? {}, ctx.info);
-  const keys = (req.sort ?? []).map((s) => {
+  const resolved = resolve(db, ref);
+  const values = paramValues(resolved, req.params ?? {}, ctx.info);
+  const b = expandCrosstab(db, resolved, values, ctx.info); // a crosstab: its headings from these values (R11)
+  const columns = b.crosstab && { columns: b.columns.map((x) => x.name) }; // R14
+  // a crosstab's heading gone (its last row deleted): its sort and criteria go, the page brings the columns to rebuild (R14)
+  const shown = (field: string) => !b.crosstab || b.columns.some((c) => sameName(c.name, field));
+  const sort = (req.sort ?? []).filter((s) => shown(s.field)), filter = (req.filter ?? []).filter((f) => shown(f.field));
+  const keys = sort.map((s) => {
     const k = b.columns.findIndex((c) => sameName(c.name, s.field));
     if (k < 0) throw new Error('bc:notFound');
     return orderKeys(`"c${k}"`, b.columns[k].type, s.dir);
   });
   const compiled = compile(b, values, ctx.info);
-  const c = { ...filtered(b, compiled, req.filter ?? [], req.where, ctx.info.locale), hasRowid: compiled.hasRowid };
+  const c = { ...filtered(b, compiled, filter, req.where, ctx.info.locale), hasRowid: compiled.hasRowid };
 
   const seq = ctx.writeSeq();
   const cache = totals.get(db) ?? new Map<string, { seq: number; total: number }>();
   totals.set(db, cache);
-  const key = createHash('sha256').update(JSON.stringify([ref, values, req.filter ?? [], req.where ?? null, ctx.info.locale])).digest('base64');
+  const key = createHash('sha256').update(JSON.stringify([ref, values, filter, req.where ?? null, ctx.info.locale])).digest('base64');
   const volatile = VOLATILE.test(c.sql);
   let total = !volatile && cache.get(key)?.seq === seq ? cache.get(key)!.total : undefined;
   if (total === undefined) {
@@ -173,7 +187,7 @@ export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePage
     if (cache.size >= MAX_TOTALS) cache.clear(); // ponytail: drop all past 256 keys; an LRU if forms page many parameter sets
     if (!volatile) cache.set(key, { seq, total });
   }
-  if (req.limit === 0) return { rows: [], rowids: [], total };
+  if (req.limit === 0) return { rows: [], rowids: [], total, ...columns };
 
   const out = [...(c.hasRowid ? ['"bcx_rowid"'] : []), ...b.columns.map((_, k) => `"c${k}"`)].join(', ');
   // the query's own ORDER BY stays inside; row_number() over its rows, in that order, breaks the page sort's ties
@@ -182,8 +196,8 @@ export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePage
     : `SELECT ${out} FROM (${c.sql}) AS "bcx_q" LIMIT ? OFFSET ?`;
   const rows = run(db, sql, [...c.params, req.limit, req.offset]);
   return c.hasRowid
-    ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => Number(r[0])), total }
-    : { rows, rowids: rows.map(() => null), total };
+    ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => (r[0] === null ? null : Number(r[0]))) /* an outer join's row without its key record (R5) */, total }
+    : { rows, rowids: rows.map(() => null), total, ...columns };
 }
 
 /**
@@ -210,9 +224,16 @@ export function rowSourceRef(db: DatabaseSync, text: string): RecordSourceRef | 
   return query && { kind: 'query', name: query.name };
 }
 
+/** A lookup's Row Source, never a crosstab (R12): bc:queryBind|crosstabAsSource|<its name>. */
+function lookupSource(db: DatabaseSync, ref: QueryRef): BoundQuery {
+  const b = resolve(db, ref);
+  if (b.crosstab) throw new QueryBindError('crosstabAsSource', ref.kind === 'query' ? ref.name : '');
+  return b;
+}
+
 /** Limit To List through a query or SQL Row Source: column `column` of the source holds `value`, compared as stored. */
 export function sourceHasValue(db: DatabaseSync, ref: QueryRef, column: number, value: SqlValue, info: LocaleInfo): boolean {
-  const b = resolve(db, ref);
+  const b = lookupSource(db, ref);
   if (!Number.isSafeInteger(column) || column < 0 || column >= b.columns.length) throw new Error('bc:invalidArgument');
   const c = compile(b, paramValues(b, {}, info), info);
   return run(db, `SELECT 1 FROM (${c.sql}) WHERE "c${column}" = ? LIMIT 1`, [...c.params, value]).length > 0;
@@ -221,7 +242,7 @@ export function sourceHasValue(db: DatabaseSync, ref: QueryRef, column: number, 
 /** A lookup list through a query or SQL Row Source (A2-R18): its columns and its first `limit` rows, in the query's order.
  *  bc:missingParameter when it has parameters (a list asks none, as in a datasheet). */
 export function sourceLookupRows(db: DatabaseSync, ref: QueryRef, limit: number, info: LocaleInfo): { fields: SourceField[]; rows: SqlValue[][] } {
-  const b = resolve(db, ref);
+  const b = lookupSource(db, ref);
   const c = compile(b, paramValues(b, {}, info), info);
   return { fields: toSourceInfo(b).fields, rows: run(db, `SELECT ${b.columns.map((_, k) => `"c${k}"`).join(', ')} FROM (${c.sql}) LIMIT ${limit}`, c.params) };
 }

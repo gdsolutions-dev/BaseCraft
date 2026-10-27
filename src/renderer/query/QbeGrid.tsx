@@ -1,5 +1,5 @@
 // Grille de création, comme dans Access : une colonne par champ, les lignes Champ, Table, Opération (Totaux), Tri, Afficher,
-// Critères et Ou (qui s'allongent à la saisie) ; Ajouter à, Mise à jour ou Supprimer selon le type de requête. Champ, Critères,
+// Critères et Ou (qui s'allongent à la saisie) ; Ajouter à, Mise à jour, Supprimer ou Analyse selon le type de requête. Champ, Critères,
 // Ou et Mise à jour sont des ExpressionField (forme affichée, « … » vers le générateur) ; une cellule illisible bloque
 // l'enregistrement. Le sélecteur au-dessus d'une colonne la sélectionne et la déplace (glisser) ; un champ glissé du volet des
 // tables sur une colonne s'y insère.
@@ -7,7 +7,7 @@ import { useId, type DragEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ExprErrorCode } from '../../shared/expr/ast';
 import type { DisplayContext } from '../../shared/expr/localize';
-import { oneLine, type QbeDesign, type QbeTotal } from '../../shared/query/qbe';
+import { oneLine, type QbeCrosstab, type QbeDesign, type QbeTotal } from '../../shared/query/qbe';
 import { printSelect } from '../../shared/query/print';
 import { QUERY_PARSE } from '../../shared/query/sql-parser';
 import { ExpressionField } from '../expr/ExpressionField';
@@ -15,6 +15,7 @@ import { gridRows, type GridColumn, type QbeRow } from './qbe-edit';
 import { FIELD_DRAG, type PaneBox } from './TablePane';
 
 const TOTALS: QbeTotal[] = ['groupBy', 'sum', 'avg', 'min', 'max', 'count', 'stDev', 'var', 'first', 'last', 'expression', 'where'];
+const CROSSTAB: QbeCrosstab[] = ['rowHeading', 'columnHeading', 'value', 'none'];
 const COLUMN_DRAG = 'application/x-basecraft-column';
 /** Grid cells parse as the SQL dialect does (qualified names, subqueries printed on one line). */
 const CELL = { qualified: true, subquery: QUERY_PARSE.subquery, printSub: (q: Parameters<typeof printSelect>[0]) => oneLine(printSelect(q)) };
@@ -89,12 +90,19 @@ export function QbeGrid({ design, boxes, ctx, readOnly, selected, invalid, table
             {TOTALS.map((x) => <option key={x} value={x}>{t(`query.total.${x}`)}</option>)}
           </select>
         );
-      case 'sort':
+      case 'sort': // none on a crosstab's Column Heading: its order is the data's or Column Headings' (B4 R13)
         return (
-          <select {...common} value={c?.sort ?? ''} onChange={(e) => onCell(i, r, e.target.value)}>
+          <select {...common} disabled={readOnly || c.crosstab === 'columnHeading'} value={c?.sort ?? ''} onChange={(e) => onCell(i, r, e.target.value)}>
             <option value="">{t('query.sort.none')}</option>
             <option value="asc">{t('query.sort.asc')}</option>
             <option value="desc">{t('query.sort.desc')}</option>
+          </select>
+        );
+      case 'crosstab': // empty: not chosen yet, which saving refuses unless Where (B4 R13)
+        return (
+          <select {...common} value={c.crosstab ?? ''} onChange={(e) => onCell(i, r, e.target.value)}>
+            <option value="" />
+            {CROSSTAB.map((x) => <option key={x} value={x}>{t(`query.crosstab.${x}`)}</option>)}
           </select>
         );
       case 'show':

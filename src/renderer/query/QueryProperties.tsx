@@ -1,11 +1,13 @@
 // Feuille de propriétés de la requête et zone Valeurs supérieures, comme dans Access, limitées à ce que le dialecte dit :
-// Description, Afficher tous les champs (SELECT *), Valeurs distinctes (DISTINCT), Valeurs supérieures (TOP n [PERCENT]).
+// Description, Afficher tous les champs (SELECT *), Valeurs distinctes (DISTINCT), Valeurs supérieures (TOP n [PERCENT]) ;
+// pour une analyse croisée, En-têtes des colonnes (PIVOT … IN, B4 R13) seulement.
 // Enregistrement unique (DISTINCTROW) et les autres propriétés d'Access n'ont pas d'équivalent : absentes.
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { DisplayContext } from '../../shared/expr/localize';
 import type { QbeDesign, QbeKind } from '../../shared/query/qbe';
 import { MAX_DESCRIPTION } from '../shell/ObjectProperties';
-import { parseTop, topText } from './qbe-edit';
+import { headingsText, parseHeadings, parseTop, topText } from './qbe-edit';
 
 /** Access's choices in the Top Values box; any other number or percentage can be typed. */
 const TOP_CHOICES = ['5', '25', '100', '5%', '25%'];
@@ -43,20 +45,24 @@ export function TopValuesDialog({ top, onClose }: { top: QbeDesign['top']; onClo
   );
 }
 
-export interface QueryProps { description: string; outputAll: boolean; distinct: boolean; top: QbeDesign['top'] | null }
+export interface QueryProps { description: string; outputAll: boolean; distinct: boolean; top: QbeDesign['top'] | null; headings: string[] }
 
 /** The query's property sheet (a dialog): what each kind has in Access, among the properties the dialect supports. */
-export function QueryPropertiesDialog({ kind, initial, onClose }: { kind: QbeKind; initial: QueryProps; onClose(v: QueryProps | null): void }) {
+export function QueryPropertiesDialog({ kind, ctx, initial, onClose }: { kind: QbeKind; ctx: DisplayContext; initial: QueryProps; onClose(v: QueryProps | null): void }) {
   const { t } = useTranslation();
   const all = t('query.props.all');
   const [p, setP] = useState(initial);
   const [top, setTop] = useState(topText(initial.top ?? undefined, all));
   const [error, setError] = useState(false);
+  const [headings, setHeadings] = useState(() => headingsText(initial.headings, ctx));
+  const [headingsError, setHeadingsError] = useState(false);
   const selectLike = kind === 'select' || kind === 'makeTable' || kind === 'append';
   const ok = () => {
     const v = selectLike ? parseTop(top, all) : null;
     if (v === undefined) return setError(true);
-    onClose({ ...p, top: v });
+    const h = kind === 'crosstab' ? parseHeadings(headings, ctx) : initial.headings;
+    if (h === undefined) return setHeadingsError(true);
+    onClose({ ...p, top: v, headings: h });
   };
   const check = (key: 'outputAll' | 'distinct') => (
     <label className="qp-check">
@@ -77,6 +83,13 @@ export function QueryPropertiesDialog({ kind, initial, onClose }: { kind: QbeKin
           <span>{t('query.props.top')}</span>
           <TopValuesInput testId="query-props-top" label={t('query.props.top')} value={top} onChange={(v) => { setTop(v); setError(false); }} />
           {error && <span className="modal-error" role="alert" data-testid="query-props-error">{t('query.props.badTop')}</span>}
+        </label>
+      )}
+      {kind === 'crosstab' && (
+        <label className="modal-field">
+          <span>{t('query.props.columnHeadings')}</span>
+          <input data-testid="query-props-headings" spellCheck={false} value={headings} onChange={(e) => { setHeadings(e.target.value); setHeadingsError(false); }} />
+          {headingsError && <span className="modal-error" role="alert" data-testid="query-props-headings-error">{t('query.props.badHeadings')}</span>}
         </label>
       )}
       <div className="modal-buttons">

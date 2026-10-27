@@ -299,3 +299,57 @@ describe('plainField (a Field cell shows Nom, as Access does)', () => {
     expect(plainField('[Somme]', any, 'en')).toBe('Somme');
   });
 });
+
+describe('crosstab (B4 R13)', () => {
+  const X = 'TRANSFORM Sum([Commandes].[Montant])\nSELECT [Clients].[Nom], Sum([Commandes].[Montant]) AS [Total]\n'
+    + 'FROM [Clients] INNER JOIN [Commandes] ON [Clients].[N°] = [Commandes].[Client]\nWHERE [Commandes].[Le] >= [Du]\nGROUP BY [Clients].[Nom]\n'
+    + 'PIVOT Month([Commandes].[Le]) AS [Mois] IN (10, 9, 11);';
+  const isField = (t: string, f: string): boolean => (t === 'Clients' ? ['N°', 'Nom', 'Ville'] : ['N°', 'Client', 'Montant', 'Le']).includes(f);
+  const ct = (columns: QbeColumn[], o: Partial<QbeDesign> = {}): QbeDesign => design('crosstab', columns, { totals: true, ...o });
+
+  it('crosstab round trip', () => {
+    const q = parseSql(X);
+    const d = toQbe(q, isField)!;   // columns in this order: row items, Column Heading, Value, Where columns
+    expect(d).toMatchObject({ kind: 'crosstab', totals: true, headings: ['10', '9', '11'] });
+    expect(d.columns.map((c) => [c.field, c.total, c.crosstab])).toEqual([['[Nom]', 'groupBy', 'rowHeading'], ['Total: [Montant]', 'sum', 'rowHeading'],
+      ['Mois: Month([Commandes].[Le])', 'groupBy', 'columnHeading'], ['[Montant]', 'sum', 'value'], ['[Le]', 'where', 'none']]);
+    expect(printSql(fromQbe(d, isField))).toBe(printSql(q));
+  });
+  it('round trips: a value alias, Count(*), an expression value, signed headings, no headings, parameters', () => {
+    for (const sql of [
+      'PARAMETERS [Du] DateTime;\nTRANSFORM Sum([Commandes].[Montant]) AS [S]\nSELECT [Commandes].[Client]\nFROM [Commandes]\nWHERE [Commandes].[Le] >= [Du]\nGROUP BY [Commandes].[Client]\nORDER BY [Commandes].[Client] DESC\nPIVOT [Commandes].[Le];',
+      'TRANSFORM Count(*)\nSELECT [Commandes].[Client]\nFROM [Commandes]\nGROUP BY [Commandes].[Client]\nPIVOT [Commandes].[Montant] IN (-1, 0, 1.5);',
+      'TRANSFORM Nz(Sum([Commandes].[Montant]), 0) AS [V]\nSELECT [Commandes].[Client]\nFROM [Commandes]\nGROUP BY [Commandes].[Client]\nPIVOT Year([Commandes].[Le]);',
+    ]) expect(printSql(fromQbe(toQbe(parseSql(sql))!))).toBe(sql);
+    expect(toQbe(parseSql('TRANSFORM Count(*) SELECT Client FROM Commandes GROUP BY Client PIVOT Le IN (-1)'))!.headings).toEqual(['-1']);
+    expect(toQbe(parseSql('TRANSFORM Count(*) SELECT Client FROM Commandes GROUP BY Client PIVOT Le'))).not.toHaveProperty('headings');
+    expect(toQbe(parseSql('TRANSFORM Nz(Sum(Montant), 0) SELECT Client FROM Commandes GROUP BY Client PIVOT Le'))!.columns[2])
+      .toMatchObject({ field: 'Nz(Sum([Montant]), 0)', total: 'expression', crosstab: 'value' });
+  });
+  it.each([
+    'TRANSFORM Count(*) SELECT * FROM Commandes GROUP BY Client PIVOT Le',                       // `*` row item
+    'TRANSFORM Count(*) SELECT Client FROM Commandes GROUP BY Client, Montant PIVOT Le',          // a GROUP BY not shown
+    'TRANSFORM Count(*) SELECT Client FROM Commandes GROUP BY Client ORDER BY Month(Le) PIVOT Month(Le)', // sort on the Column Heading
+    'TRANSFORM Count(*) SELECT Client FROM Commandes GROUP BY Client HAVING Max(Le) > #2026-01-01# PIVOT Le', // a hidden HAVING column
+  ])('SQL view only: %s', (sql) => expect(toQbe(parseSql(sql))).toBeNull());
+  it('criteria: Row Heading -> HAVING, Column Heading -> WHERE', () => {
+    const d = ct([col('[Nom]', 'Clients', { total: 'groupBy', crosstab: 'rowHeading', criteria: ['"Dupont"'] }),
+      col('Mois: Month([Le])', undefined, { total: 'groupBy', crosstab: 'columnHeading', criteria: ['>=9'] }),
+      col('[Montant]', 'Commandes', { total: 'sum', crosstab: 'value' })]);
+    const sql = printSql(fromQbe({ ...d, tables: [{ name: 'Clients' }, { name: 'Commandes' }],
+      joins: [{ l: 'Clients', lField: 'N°', r: 'Commandes', rField: 'Client', kind: 'inner' }] }));
+    expect(sql).toBe('TRANSFORM Sum([Commandes].[Montant])\nSELECT [Clients].[Nom]\nFROM [Clients] INNER JOIN [Commandes] ON [Clients].[N°] = [Commandes].[Client]\n'
+      + 'WHERE Month([Le]) >= 9\nGROUP BY [Clients].[Nom]\nHAVING [Clients].[Nom] = "Dupont"\nPIVOT Month([Le]) AS [Mois];');
+  });
+  it('normalizeQbe: no Sort on the Column Heading, Show from the Crosstab row, no Top or Unique Values; other kinds drop it', () => {
+    const d = normalizeQbe(ct([col('[Client]', 'Commandes', { total: 'groupBy', crosstab: 'rowHeading', show: false }),
+      col('[Le]', 'Commandes', { total: 'groupBy', crosstab: 'columnHeading', sort: 'asc' }), col('[Montant]', 'Commandes', { total: 'sum', crosstab: 'value' })],
+      { distinct: true, top: { n: 5, percent: false }, headings: ['1'] }));
+    expect(d.columns.map((c) => [c.show, c.sort])).toEqual([[true, undefined], [false, undefined], [false, undefined]]);
+    expect(d).toMatchObject({ distinct: false, headings: ['1'] });
+    expect(d).not.toHaveProperty('top');
+    const s = normalizeQbe({ ...d, kind: 'select' });
+    expect(s).not.toHaveProperty('headings');
+    expect(s.columns.some((c) => 'crosstab' in c)).toBe(false);
+  });
+});

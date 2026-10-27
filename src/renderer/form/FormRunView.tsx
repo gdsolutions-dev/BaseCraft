@@ -52,6 +52,8 @@ const dataApi: FormDataApi = {
   insert: (table, values) => api.rows.insert(table, values),
   update: (table, rowid, changes) => api.rows.update(table, rowid, changes),
   delete: (table, rowids) => api.rows.delete(table, rowids),
+  save: (ref, req) => api.sources.save(ref, req),
+  autoLookup: (ref, values) => api.sources.autoLookup(ref, values),
 };
 const NO_INFO: SourceInfo = { fields: [], updatable: false, parameters: [] };
 const FOCUSABLE = 'input, textarea, button, [role="listbox"], [tabindex]:not([tabindex="-1"])';
@@ -224,13 +226,17 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const showError = useErrorDialog();
   const lang: 'fr' | 'en' = i18.language.startsWith('fr') ? 'fr' : 'en';
   const snap = useSyncExternalStore(useCallback((cb) => records.subscribe(cb), [records]), () => records.snapshot);
+  // the record shown, as last saved: another key on a move or a save, the same when AutoLookup fills it (B4 R4: its values
+  // change, its defaults, calculated results and texts typed stay until recalculated)
+  const recKey = (): string => `${records.currentRecord}/${records.snapshot.saves}`;
+  const shownKey = recKey();
   const info = snap.info;
   const root = useRef<HTMLDivElement>(null);
   const [viewId] = useState(() => `frun${++nextViewId}`);
   const [focused, setFocused] = useState<string | null>(null);
   const lastFocused = useRef<string | null>(null);   // the control that has (or last had) the focus: a subform's when it is in it
   const lastOwn = useRef<string | null>(null);       // the last of this form's own controls focused
-  const [calc, setCalc] = useState<{ values: unknown; results: Record<string, CalcResult> }>({ values: null, results: {} });
+  const [calc, setCalc] = useState<{ key: string; results: Record<string, CalcResult> }>({ key: '', results: {} });
   const [calcTick, setCalcTick] = useState(0);
   const [filter, setFilterState] = useState<FilterState>(NO_FILTER);
   const filterRef = useRef(filter);
@@ -269,17 +275,18 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const ro = readOnly || snap.refused;
 
   // the new record shows its default values at once (sent only on insert: newRecordValues)
-  const [defaults, setDefaults] = useState<{ values: unknown; map: Record<string, SqlValue> }>({ values: null, map: {} });
+  const [defaults, setDefaults] = useState<{ key: string; map: Record<string, SqlValue> }>({ key: '', map: {} });
   useEffect(() => {
     const s = records.snapshot;
     if (!s.isNew || !s.info) return;
+    const key = recKey();
     void controlDefaults(all, s.info, base).then((map) => {
       const shown = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, typeof v === 'boolean' ? Number(v) : v]));
-      if (records.snapshot.values === s.values) setDefaults({ values: s.values, map: shown });
+      if (recKey() === key) setDefaults({ key, map: shown });
     }, () => { /* blank */ });
-  }, [snap.values, snap.isNew, all, base]);
+  }, [shownKey, snap.isNew, all, base]);
   // a subform's new record: its link values too (Access fills them at once; written on insert)
-  const newDefaults = (s: RecordSnapshot) => (s.isNew ? { ...(defaults.values === s.values ? defaults.map : {}), ...records.linkDefaults } : {});
+  const newDefaults = (s: RecordSnapshot) => (s.isNew ? { ...(defaults.key === recKey() ? defaults.map : {}), ...records.linkDefaults } : {});
   const shownDefaults = newDefaults(snap);
   const storedOf = (s = records.snapshot) => ({
     ...Object.fromEntries((s.info?.fields ?? []).map((f, i) => [f.name, s.values[i] ?? null])),
@@ -317,7 +324,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     setTypedTexts(typedRef.current);
   };
   const clearTyped = () => { if (Object.keys(typedRef.current).length) { typedRef.current = {}; setTypedTexts({}); } };
-  useEffect(clearTyped, [snap.values]);   // another record (or the record saved): its entry was its own
+  useEffect(clearTyped, [shownKey]);   // another record (or the record saved): its entry was its own
   const listsRef = useRef(lists);
   listsRef.current = lists;
   const [listTick, setListTick] = useState(0);
@@ -350,17 +357,17 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const calcRef = useRef(calc);
   calcRef.current = calc;
   // a bare [Name] in its events, and [Forms]! (R11), read what the form shows
-  hub.view = { stored: () => storedOf(), extra: extraOf, results: () => (calcRef.current.values === records.snapshot.values ? calcRef.current.results : {}) };
+  hub.view = { stored: () => storedOf(), extra: extraOf, results: () => (calcRef.current.key === recKey() ? calcRef.current.results : {}) };
 
   // calculated controls: on each record shown or saved, and when a changed control is left (Access recalculates then)
   useEffect(() => {
     const tok = latest.current.next();
-    const s = records.snapshot;
+    const s = records.snapshot, key = recKey();
     void buildCalcEnv(all, s.info ?? NO_INFO, storedOf(s), s.pending, base, extraOf()).then((env) => {
-      if (latest.current.isCurrent(tok)) setCalc({ values: s.values, results: env.results });
+      if (latest.current.isCurrent(tok)) setCalc({ key, results: env.results });
     }, () => { /* an evaluator failure leaves the controls blank */ });
   }, [snap.values, snap.info, calcTick, all, base, defaults]);
-  const results = calc.values === snap.values ? calc.results : {};   // never a result computed for another record
+  const results = calc.key === shownKey ? calc.results : {};   // never a result computed for another record
   // Continuous Forms and Datasheet: the other rows' calculated controls, by row (its values as read: a row read again is
   // calculated again); a new cache when what they depend on changes (the old one's late results go nowhere: Latest)
   const hasCalc = useMemo(() => all.some((c) => typeof c.props.ControlSource === 'string' && c.props.ControlSource.startsWith('=')), [all]);
@@ -401,7 +408,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
    *  then its Validation Rule. A bound control's error joins the record's control errors (they block its save), an unbound
    *  one's the form's own errors; a check that passes takes its error away. The control's error now, else null. */
   const checkRule = async (c: ControlDef): Promise<RecordError | null> => {
-    const s = records.snapshot;
+    const s = records.snapshot, key = recKey();
     const info = s.info ?? NO_INFO;
     const f = boundField(c, info);
     const list = c.kind === 'comboBox' && prop(c, 'LimitToList') === true ? listsRef.current[c.name] : undefined;
@@ -416,7 +423,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
         const v = env.fields[f.name];
         if (v !== FAILED && v !== undefined) err = await checkControlRule(c, v, info, base);
       }
-      if (records.snapshot.values !== s.values) return null;   // another record meanwhile: its errors are its own
+      if (recKey() !== key) return null;   // another record meanwhile: its errors are its own
       const before = records.getControlErrors();
       const next = [...before.filter((e) => !sameName(e.field, f.name)), ...(err ? [err] : [])];
       if (JSON.stringify(before) !== JSON.stringify(next)) records.setControlErrors(next);

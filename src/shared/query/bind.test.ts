@@ -4,7 +4,8 @@ import { coerce } from '../coerce';
 import { localeInfo } from '../locale-format';
 import { f, t } from '../test-fixtures';
 import { defaultProps, type FieldProps, type TableDesign } from '../field-types';
-import type { SelectQuery } from './ast';
+import type { CrosstabQuery, SelectQuery } from './ast';
+import { inHeadings } from './crosstab';
 import { bindQuery, boundArgType, exprType, toSourceInfo, type BoundQuery, type QueryCatalog } from './bind';
 import { parseQueryDefinition, queryDependents } from './definition';
 import { parseSql } from './sql-parser';
@@ -46,7 +47,7 @@ it('provenance and output names', () => {
   expect(q.columns.map((c) => [c.name, c.type, c.origin])).toEqual([
     ['Clients.N°', 'autoNumber', { table: 'Clients', field: 'N°' }], ['Commandes.N°', 'autoNumber', { table: 'Commandes', field: 'N°' }],
     ['Nom', 'shortText', { table: 'Clients', field: 'Nom' }], ['Expr1000', 'currency', undefined]]);
-  expect(q.updatable).toBe(false);
+  expect(q).toMatchObject({ updatable: true, keyTable: 'Commandes' }); // R7: a one-to-many join is updatable (B4)
 });
 it('single table query is updatable', () => expect(b('SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon"')).toMatchObject({ updatable: true, keyTable: 'Clients' }));
 it('updatable through a saved query', () => expect(b('SELECT * FROM QClientsLyon')).toMatchObject({ updatable: true, keyTable: 'Clients' }));
@@ -80,7 +81,8 @@ it('correlated subquery resolves outer columns', () => {
 });
 it('toSourceInfo', () => expect(toSourceInfo(b('SELECT Nom FROM Clients WHERE Ville = [V]'))).toEqual({
   fields: [{ name: 'Nom', type: 'shortText', props: expect.objectContaining({ type: 'shortText' }), origin: { table: 'Clients', field: 'Nom' } }],
-  updatable: true, keyTable: 'Clients', parameters: [{ name: 'V', type: 'shortText', props: expect.objectContaining({ type: 'shortText' }) }] }));
+  updatable: true, keyTable: 'Clients', parameters: [{ name: 'V', type: 'shortText', props: expect.objectContaining({ type: 'shortText' }) }],
+  tables: [{ table: 'Clients', role: 'key', readOnly: [], lookupBy: [] }] }));
 it('definition validation', () => {
   expect(parseQueryDefinition({ formatVersion: '1.0', sql: 'SELECT * FROM T', future: 1 })).toMatchObject({ future: 1 });
   for (const bad of [null, { formatVersion: '2.0', sql: 'SELECT 1 FROM T' }, { formatVersion: '1.0', sql: 'DROP TABLE T' }, { formatVersion: '1.0', sql: 'x'.repeat(1_048_577) }])
@@ -392,6 +394,24 @@ describe('parseQueryDefinition', () => {
   ])('refuses %j', (def) => expect(() => parseQueryDefinition(def)).toThrow(new TypeError('bc:invalidQuery')));
 });
 
+it('a crosstab binds as its rewritten SELECT (B4 R9)', () => {
+  const data = b('TRANSFORM Count(*) SELECT Ville FROM Clients WHERE Nom <> [N] GROUP BY Ville PIVOT Ville');
+  expect(toSourceInfo(data)).toMatchObject({ fields: [{ name: 'Ville' }], updatable: false, crosstab: { headings: 'data' }, parameters: [{ name: 'N', type: 'shortText' }] });
+  const fixedSql = parseSql('TRANSFORM Sum(Montant) SELECT Client FROM Commandes GROUP BY Client PIVOT Month(Le) IN (10, -1.5)');
+  const fixed = bindQuery(fixedSql, cat, undefined, inHeadings(fixedSql.body as CrosstabQuery, localeInfo('fr-FR')));
+  expect(fixed.columns.map((c) => [c.name, c.type])).toEqual([['Client', 'number'], ['10', 'currency'], ['-1,5', 'currency']]);
+  // bound without a region: heading columns keep internal names until expandCrosstab names them
+  expect(b('TRANSFORM Sum(Montant) SELECT Client AS [10] FROM Commandes GROUP BY Client PIVOT Month(Le) IN (10)').columns.map((c) => c.name)).toEqual(['10', '0']);
+  expect(fixed.crosstab?.headings).toBe('fixed');
+  // the value's and the pivot's parameters count even when the headings come from the data
+  expect(b('TRANSFORM Sum(Montant * [k]) SELECT Client FROM Commandes GROUP BY Client PIVOT Month(Le) + [d]').params.map((p) => p.name).sort()).toEqual(['d', 'k']);
+  const dup = parseSql('TRANSFORM Count(*) SELECT Ville FROM Clients GROUP BY Ville PIVOT Ville IN (1, 1)');
+  expect(() => bindQuery(dup, cat, undefined, inHeadings(dup.body as CrosstabQuery, localeInfo('fr-FR')))).toThrow('bc:queryBind|duplicateOutput|1');
+  expect(() => b(`TRANSFORM Count(*) SELECT Ville FROM Clients GROUP BY Ville PIVOT Ville IN (${Array.from({ length: 255 }, (_, i) => i).join(', ')})`))
+    .toThrow('bc:queryBind|tooManyColumns|256');
+  expect(() => b(`TRANSFORM Count(*) SELECT Ville, Nom FROM Clients GROUP BY Ville, Nom PIVOT Ville IN (${Array.from({ length: 254 }, (_, i) => i).join(', ')})`))
+    .toThrow('bc:queryBind|tooManyColumns|256');
+});
 it('queryDependents finds queries, forms and reports using a query', () => expect(queryDependents('QClientsLyon', [
   { kind: 'query', name: 'QNoms', definition: { formatVersion: '1.0', sql: 'SELECT Nom FROM [qclientslyon];' } },
   { kind: 'query', name: 'QSub', definition: { formatVersion: '1.0', sql: 'SELECT * FROM Clients WHERE [N°] In (SELECT [N°] FROM QClientsLyon);' } },

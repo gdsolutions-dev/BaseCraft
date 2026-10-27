@@ -34,7 +34,7 @@ export type ExprErrorCode =
   | 'badMember' // racine inconnue ou chaîne de mauvaise longueur
   | 'aggregateContext' // saisie : un agrégat là où aucun regroupement n'existe (règle, valeur par défaut, filtre)
   // SQL dialect (A3 sql-parser)
-  | 'forbiddenStatement' | 'reservedName' | 'multipleStatements' | 'notSupportedYet' | 'badParameterType';
+  | 'forbiddenStatement' | 'reservedName' | 'multipleStatements' | 'notSupportedYet' | 'badParameterType' | 'badCrosstab';
 
 export class ExprSyntaxError extends Error {
   constructor(public code: ExprErrorCode, public span: Span) {

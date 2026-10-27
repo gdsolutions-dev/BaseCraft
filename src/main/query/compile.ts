@@ -46,8 +46,8 @@ export function orderKeys(columnSql: string, type: FieldType, dir: 'asc' | 'desc
 interface Level { b: BoundQuery; sel: BoundSelect; alias: Map<BoundSource, string> }
 /** `rowid`: `"bcx_rowid"` first (an updatable query, and its saved source). `encoded`: columns left bc-encoded (a scalar or
  *  In subquery, read by bc_one / bc_list; an action query's values), instead of the stored form. `key`: an action query's
- *  target alias, whose rowid comes first (this level only, never its sources). */
-interface Mode { rowid: boolean; encoded: boolean; key?: string }
+ *  target alias, whose rowid comes first (this level only, never its sources). `locate`: compileLocator's aliases. */
+interface Mode { rowid: boolean; encoded: boolean; key?: string; locate?: string[] }
 
 /**
  * SELECT or UNION of a bound query -> one parameterised SQLite statement. `values`: the converted parameter values, by
@@ -63,6 +63,17 @@ export function compileSelect(b: BoundQuery, values: Record<string, SqlValue>, o
   if (top.k !== 'select' && top.k !== 'union') throw new Error('bc:notSelectQuery');
   const hasRowid = top.k === 'select' && b.updatable && b.keyAlias !== undefined;
   return { ...compiler(b, values, opts).body(b, { rowid: hasRowid, encoded: false }), hasRowid };
+}
+
+/**
+ * B4 R3: `SELECT "<alias>".rowid…` (one per table of `level.writePlan`, in plan order) `FROM <the level's FROM, ON as
+ * compileSelect> WHERE "<key alias>".rowid = ?` — the rows of the query's own join for one key row, without its WHERE. The
+ * fragment's params are the ON's (bc_truth's locale…); the caller appends the key rowid.
+ */
+export function compileLocator(level: BoundQuery, opts: CompileOptions): SqlFragment {
+  const q = level.query.body;
+  if (q.k !== 'select' || !level.writePlan) throw new Error('bc:invalidArgument');
+  return compiler(level, {}, opts).select(q, level, [], { rowid: false, encoded: true, locate: level.writePlan.map((w) => w.alias) });
 }
 
 /** The SELECT compiler of a bound query: `select` (one SELECT node of `b`) and `body` (a whole query). */
@@ -165,16 +176,21 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     const grouped = ctx(stack, sel.grouped);
 
     let i = 0; // sources in binding order: joins flattened left to right
-    const from = (x: FromItem): F => {
+    const fromItem = (x: FromItem): F => {
       if (x.k === 'join') {
-        const l = from(x.l); // before the right side: `i` follows the binding order
-        const r = x.r.k === 'join' ? cat('(', from(x.r), ')') : from(x.r);
+        const l = fromItem(x.l); // before the right side: `i` follows the binding order
+        const r = x.r.k === 'join' ? cat('(', fromItem(x.r), ')') : fromItem(x.r);
         return cat(l, ` ${x.kind.toUpperCase()} JOIN `, r, ' ON ', cond(x.on, stack, plain));
       }
       const s = sel.sources[i++];
       const as = ` AS "${lvl.alias.get(s)}"`;
       return s.kind === 'table' ? cat(quoteIdent(s.design!.name), as) : cat('(', body(s.inner!, { rowid: mode.rowid, encoded: false }), ')', as);
     };
+    if (mode.locate) { // a locator: the rowid of each of these sources, on the row whose first one has rowid ?
+      const at = (a: string) => `"${lvl.alias.get(sel.sources.find((x) => x.alias === a)!)}".rowid`;
+      const from = list(q.from.map(fromItem));
+      return cat('SELECT ', mode.locate.map((a, k) => `${at(a)} AS "bcx_r${k}"`).join(', '), ' FROM ', from, ` WHERE ${at(mode.locate[0])} = ?`);
+    }
     const cols = sel.columns.map((col, k): F => {
       const r = col.expr.k === 'id' ? qb.refs.get(col.expr) : undefined;
       const v = mode.encoded ? compileValue(col.expr, grouped)
@@ -183,7 +199,9 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
       return cat(v, ` AS "c${k}"`);
     });
     if (mode.rowid || mode.key !== undefined) {
-      const s = mode.key !== undefined ? sel.sources.find((x) => x.alias === mode.key)! : sel.sources[0];
+      // the key (many-most) table's rowid, at every level (B4 R3: a join is written through it)
+      const key = mode.key ?? qb.keyAlias;
+      const s = sel.sources.find((x) => x.alias === key) ?? sel.sources[0];
       cols.unshift({ sql: `"${lvl.alias.get(s)}".${s.kind === 'table' ? 'rowid' : '"bcx_rowid"'} AS "bcx_rowid"`, params: [] });
     }
     const gkeys = (es: Expr[]): F[] => es.map((e) => cat('bc_gkey(', compileValue(e, plain), ')'));
@@ -196,7 +214,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     const hidden = wrapped ? order.flatMap((o, k) => [cat('bc_skey(', o.x, `) AS "bcx_s${k}"`), cat('bc_gkey(', o.x, `) AS "bcx_o${k}"`)]) : [];
     const core = cat(
       'SELECT ', list([...cols, ...hidden]),
-      q.from.length ? cat(' FROM ', list(q.from.map(from))) : '',
+      q.from.length ? cat(' FROM ', list(q.from.map(fromItem))) : '',
       q.where ? cat(' WHERE ', cond(q.where, stack, plain)) : '',
       groupBy.length ? cat(' GROUP BY ', list(groupBy)) : '',
       q.having ? cat(' HAVING ', cond(q.having, stack, grouped)) : '',

@@ -346,6 +346,24 @@ test('accented first letters open the editor (é, ç, ê from a dead key)', asyn
   }
 });
 
+test('late animation frames (a busy or hidden window): a click focuses the cell, an accented first key is kept', async () => {
+  const { app, page } = await launchApp({ args: [await clientsBase('images-tardives', 'Dupont')], env: FR });
+  try {
+    await openSheet(page);
+    // Every frame 400 ms late: after Glide renders its accessible cells (200 ms after the click), after the keys typed next.
+    await page.evaluate(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb) => raf(() => setTimeout(() => raf(cb), 400));
+    });
+    await clickNom(page, 0); // the focus came from the navigation pane: Glide takes it in a frame, onto the cell
+    await typeIntoCell(page, 'Élodie'); // « É » opens the editor through a placeholder, put back at once (not in a frame)
+    await closeEditor(page, 'Enter');
+    await expect.poll(async () => (await rowsOf(page))[0].values[1]).toBe('Élodie');
+  } finally {
+    await app.close();
+  }
+});
+
 test('renaming the table keeps an invalid pending row and its error', async () => {
   const { app, page } = await launchApp({ args: [await clientsBase('renommer')], env: FR });
   try {

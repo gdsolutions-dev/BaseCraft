@@ -109,6 +109,12 @@ describe('form definition', () => {
     expect(JSON.stringify(d)).not.toMatch(/"#[0-9a-f]{6}"/);   // couleurs de thème seulement
     expect(validateDesignDoc(d)).toEqual([]); expect(parseFormDoc(JSON.parse(JSON.stringify(d))).dropped).toBe(0);
   });
+  it("auto form on a join: a column named Table.Field gets a valid control name, its Control Source stays the column (B4)", () => {
+    const f = (name: string) => ({ name, type: 'autoNumber' as const, props: { type: 'autoNumber' as const, required: false, indexed: 'no' as const, primaryKey: false } });
+    const d = autoForm({ kind: 'query', name: 'QSaisie' }, 'QSaisie', { updatable: true, parameters: [], fields: [f('Commandes.N°'), f('Clients.N°')] }, labels);
+    expect(d.sections[1].controls.map((c) => [c.name, c.props.ControlSource])).toEqual([['Commandes_N°', 'Commandes.N°'], ['Clients_N°', 'Clients.N°']]);
+    expect(validateDesignDoc(d)).toEqual([]); expect(parseFormDoc(JSON.parse(JSON.stringify(d))).dropped).toBe(0);
+  });
   it('auto form layout: columnar, 0,15 cm apart, labels at 0,5 cm, controls at 3,5 cm, widths by type, Width fitted', () => {
     const d = autoForm(tbl('Clients'), 'Clients', clientsInfo, labels);
     expect(d.recordSource).toEqual(tbl('Clients'));

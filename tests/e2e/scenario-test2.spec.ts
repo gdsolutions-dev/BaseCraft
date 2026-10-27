@@ -112,7 +112,8 @@ test('scenario 2: large CSV import, analytical queries, export to Excel', async 
       await page.getByTestId('cmd-runQuery').click();
       try {
         await expect(doc(page).getByTestId('nav-record-count')).toHaveText(String(rows), { timeout: 120_000 });
-        await expect(doc(page).getByTestId('glide-cell-1-0')).not.toBeEmpty();
+        // the first page of rows runs the query again, after the count: as long again on a slow machine
+        await expect(doc(page).getByTestId('glide-cell-1-0')).not.toBeEmpty({ timeout: 120_000 });
       } finally {
         timings[`run ${name}`] = Date.now() - q0;
         await page.screenshot({ path: join(OUT, `${name}.png`) });

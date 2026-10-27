@@ -10,7 +10,9 @@ import { printSelect } from './print';
 import { QUERY_PARSE } from './sql-parser';
 
 export type QbeTotal = 'groupBy' | 'sum' | 'avg' | 'min' | 'max' | 'count' | 'stDev' | 'var' | 'first' | 'last' | 'expression' | 'where';
-export type QbeKind = 'select' | 'makeTable' | 'append' | 'update' | 'delete';
+export type QbeKind = 'select' | 'makeTable' | 'append' | 'update' | 'delete' | 'crosstab';
+/** The Crosstab row (B4 R13). */
+export type QbeCrosstab = 'rowHeading' | 'columnHeading' | 'value' | 'none';
 export interface QbeColumn {
   field: string;                 // canonical: '[Montant]', '*', 'Total: [Prix] * [Qté]' (alias « Name: expr », as in Access)
   table?: string;                // source alias; absent for an expression
@@ -18,6 +20,7 @@ export interface QbeColumn {
   sort?: 'asc' | 'desc'; show: boolean;
   criteria: string[];            // Criteria, Or, Or…: short canonical criterion (A2-R4), '' = empty
   appendTo?: string; updateTo?: string /* canonical expression */; deleteRole?: 'from' | 'where';
+  crosstab?: QbeCrosstab;        // crosstab kind only; absent = not chosen yet
 }
 export interface QbeTable { name: string; alias?: string }
 /** `kind` 'left': every row of `l` ("Include ALL records from l"), whichever side of the JOIN it ends up on. */
@@ -28,6 +31,7 @@ export type IsField = (source: string, field: string) => boolean;
 export interface QbeDesign {
   kind: QbeKind; target?: string /* makeTable, append */; tables: QbeTable[]; joins: QbeJoin[]; totals: boolean; distinct: boolean;
   top?: { n: number; percent: boolean }; params: ParamDecl[]; columns: QbeColumn[];
+  headings?: string[];           // crosstab: Column Headings, canonical literals (PIVOT … IN)
 }
 
 /** The Total row's aggregates. StDevP and VarP are SQL-only, as in Access: an Expression column. */
@@ -49,7 +53,7 @@ const bin = (op: BinOp, l: Expr, r: Expr): Expr => ({ k: 'bin', op, l, r });
 const fold = (es: Expr[], op: 'And' | 'Or'): Expr => es.reduce((a, b) => bin(op, a, b));
 /** Operands of the left-associative chain `a op b op c`; a right operand that is itself an `op` stays whole. */
 const spine = (e: Expr, op: 'And' | 'Or'): Expr[] => (e.k === 'bin' && e.op === op ? [...spine(e.l, op), e.r] : [e]);
-const selectLike = (k: QbeKind): boolean => k === 'select' || k === 'makeTable' || k === 'append';
+const selectLike = (k: QbeKind): boolean => k === 'select' || k === 'makeTable' || k === 'append' || k === 'crosstab';
 const aliasOf = (t: QbeTable): string => t.alias ?? t.name;
 const flip = (k: JoinKind): JoinKind => (k === 'left' ? 'right' : k === 'right' ? 'left' : k);
 const invalid = (sub: string, detail = ''): never => { throw new TypeError(`bc:invalidQuery|${sub}|${detail}`); };
@@ -111,6 +115,7 @@ function columnExpr(c: QbeColumn): { alias?: string; e: Expr } {
 function exprOf(c: QbeColumn, part: 'where' | 'output', totals: boolean): Expr | null {
   if (isStar(c)) return totals && c.total === 'count' && part === 'output' ? COUNT_STAR : null;
   const { e } = columnExpr(c);
+  if (c.crosstab === 'columnHeading') return part === 'where' ? e : null; // its criteria go to WHERE (R13)
   if (!totals) return e;
   if ((c.total === 'where') !== (part === 'where')) return null;
   const fn = c.total && AGG[c.total];
@@ -179,7 +184,7 @@ export function fromQbe(design: QbeDesign, isField?: IsField): Query {
   });
   const select = (into?: string): SelectQuery => ({
     k: 'select', distinct: d.distinct, ...(d.top && { top: d.top }), items, from,
-    groupBy: d.totals ? d.columns.filter((c) => c.total === 'groupBy' && !isStar(c)).map((c) => columnExpr(c).e) : [],
+    groupBy: d.totals ? d.columns.filter((c) => c.total === 'groupBy' && !isStar(c) && c.crosstab !== 'columnHeading').map((c) => columnExpr(c).e) : [],
     orderBy: d.columns.filter((c) => c.sort).map((c) => ({ e: exprOf(c, 'output', d.totals)!, dir: c.sort! })),
     ...(into !== undefined && { into }), ...(where && { where }), ...(having && { having }),
   });
@@ -204,6 +209,16 @@ export function fromQbe(design: QbeDesign, isField?: IsField): Query {
     case 'delete': {
       const t = d.columns.find((c) => c.deleteRole === 'from')?.table;
       return { params, body: { k: 'delete', ...(t !== undefined && { target: t }), from: single(), ...(where && { where }) } };
+    }
+    case 'crosstab': {
+      const h = d.columns.find((c) => c.crosstab === 'columnHeading') ?? invalid('crosstabColumnHeading');
+      const v = d.columns.find((c) => c.crosstab === 'value') ?? invalid('crosstabValue');
+      const pivotAlias = splitAlias(h.field).alias, valueAlias = splitAlias(v.field).alias;
+      return { params, body: {
+        k: 'crosstab', value: exprOf(v, 'output', true)!, ...(valueAlias !== undefined && { valueAlias }), select: select(),
+        pivot: columnExpr(h).e, ...(pivotAlias !== undefined && { pivotAlias }),
+        ...(d.headings?.length && { headings: d.headings.map((s) => parseCanonical(s, QUERY_PARSE)) }),
+      } };
     }
   }
 }
@@ -244,12 +259,12 @@ function sources(items: FromItem[]): { tables: QbeTable[]; joins: QbeJoin[] } | 
 export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
   const b = q.body;
   if (b.k === 'union' || (b.k === 'insert' && 'values' in b.source)) return null;
-  const sel = b.k === 'select' ? b : b.k === 'insert' && !('values' in b.source) ? b.source : undefined;
+  const sel = b.k === 'select' ? b : b.k === 'crosstab' ? b.select : b.k === 'insert' && !('values' in b.source) ? b.source : undefined;
   const src = sources(sel ? sel.from : b.k === 'update' || b.k === 'delete' ? [b.from] : []);
   if (!src) return null;
   const kind: QbeKind = b.k === 'select' ? (b.into === undefined ? 'select' : 'makeTable') : b.k === 'insert' ? 'append' : b.k;
-  const action = kind === 'update' || kind === 'delete';
-  const totals = !!sel && (sel.groupBy.length > 0 || sel.having !== undefined
+  const action = kind === 'update' || kind === 'delete', ct = kind === 'crosstab';
+  const totals = ct || !!sel && (sel.groupBy.length > 0 || sel.having !== undefined
     || sel.items.some((i) => 'e' in i && hasAggregate(i.e)) || sel.orderBy.some((o) => hasAggregate(o.e)));
 
   // An unqualified field belongs to the only source, when there is one; never a name that is an output alias (bind reads
@@ -276,7 +291,7 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
   const hidden = (e: Expr, part: 'where' | 'output'): QbeColumn => {
     const base = { show: action, criteria: [], ...(kind === 'delete' && { deleteRole: 'where' as const }) };
     if (!totals) return { ...fieldOf(e), ...base };
-    if (part === 'where') return { ...fieldOf(e), ...base, total: 'where' };
+    if (part === 'where') return { ...fieldOf(e), ...base, total: 'where', ...(ct && { crosstab: 'none' as const }) };
     if (isCountStar(e)) return { field: '*', ...base, total: 'count' };
     return isAgg(e) ? { ...fieldOf(e.args[0]), ...base, total: TOTAL_OF.get(e.name)! } : { ...fieldOf(e), ...base, total: 'expression' };
   };
@@ -332,7 +347,7 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
     }
     let g = 0; // GROUP BY entries already shown: a groupBy column only in GROUP BY order
     sel.items.forEach((it, i) => {
-      const extra = { show: true, criteria: [], ...(appendTo[i] !== undefined && { appendTo: appendTo[i] }) };
+      const extra = { show: true, criteria: [], ...(appendTo[i] !== undefined && { appendTo: appendTo[i] }), ...(ct && { crosstab: 'rowHeading' as const }) };
       if ('all' in it) { add({ field: '*', ...(it.table !== undefined && { table: it.table }), ...(totals && { total: 'groupBy' as const }), ...extra }); return; }
       if (!totals) { add({ ...fieldOf(it.e, it.alias), ...extra }); return; }
       if (g < sel.groupBy.length && same(sel.groupBy[g], it.e)) { g++; add({ ...fieldOf(it.e, it.alias), total: 'groupBy', ...extra }); return; }
@@ -341,6 +356,13 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
       else add({ ...fieldOf(it.e, it.alias), total: 'expression', ...extra });
     });
     for (; g < sel.groupBy.length; g++) add({ ...fieldOf(sel.groupBy[g]), total: 'groupBy', show: false, criteria: [] });
+    if (b.k === 'crosstab') {
+      add({ ...fieldOf(b.pivot, b.pivotAlias), total: 'groupBy', show: false, criteria: [], crosstab: 'columnHeading' });
+      const v = b.value, a = b.valueAlias, value = { show: false, criteria: [], crosstab: 'value' as const };
+      if (isCountStar(v)) add({ field: named(a, '*'), total: 'count', ...value });
+      else if (isAgg(v)) add({ ...fieldOf(v.args[0], a), total: TOTAL_OF.get(v.name)!, ...value });
+      else add({ ...fieldOf(v, a), total: 'expression', ...value });
+    }
     if (!place(sel.where, 'where') || !place(sel.having, 'output')) return null;
     let pos = -1; // sorts left to right; an out-of-order one gets a hidden column further right
     for (const o of sel.orderBy) {
@@ -349,6 +371,8 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
       cols[i].sort = o.dir;
       pos = i;
     }
+    // the crosstab grid has no Show row: a `*` item, a GROUP BY not shown, a hidden HAVING or ORDER BY column: SQL view only
+    if (ct && cols.some((c) => !c.crosstab || (isStar(c) && c.total !== 'count'))) return null;
   } else if (b.k === 'update') {
     for (const s of b.set) add({ ...fieldOf(s.target), show: true, criteria: [], updateTo: text(s.value) });
     if (!place(b.where, 'where')) return null;
@@ -359,7 +383,7 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
   const target = b.k === 'insert' ? b.target : b.k === 'select' ? b.into : undefined;
   return normalizeQbe({
     kind, ...(target !== undefined && { target }), ...src, totals, distinct: sel?.distinct ?? false, ...(sel?.top && { top: sel.top }),
-    params: q.params, columns: cols,
+    params: q.params, columns: cols, ...(b.k === 'crosstab' && b.headings?.length && { headings: b.headings.map(text) }),
   }, isField);
 }
 
@@ -368,7 +392,7 @@ export function toQbe(q: Query, isField?: IsField): QbeDesign | null {
  *  joins in FROM order (the joins attaching one table share the first one's kind); every column with as many criteria
  *  rows, up to the grid's last non-empty row. */
 export function normalizeQbe(d: QbeDesign, isField?: IsField): QbeDesign {
-  const sel = selectLike(d.kind), totals = sel && d.totals;
+  const sel = selectLike(d.kind), ct = d.kind === 'crosstab', totals = ct || (sel && d.totals);
   const order = attachOrder(d.tables, d.joins);
   const tables = order.map((o) => o.t);
   const joins = order.flatMap(({ t, js }) => {
@@ -383,15 +407,18 @@ export function normalizeQbe(d: QbeDesign, isField?: IsField): QbeDesign {
     const count = star && totals && c.total === 'count';
     const total = totals ? (star && !count ? 'groupBy' : c.total ?? 'groupBy') : undefined;
     const where = total === 'where';
-    const sort = sel && (!star || count) && !where ? c.sort : undefined;
+    const crosstab = ct ? c.crosstab : undefined;
+    const sort = sel && (!star || count) && !where && crosstab !== 'columnHeading' ? c.sort : undefined;
     const appendTo = d.kind === 'append' && !where ? filled(c.appendTo) : undefined;
     const updateTo = d.kind === 'update' ? filled(c.updateTo) : undefined;
     const deleteRole = d.kind === 'delete' ? c.deleteRole ?? 'where' : undefined;
-    const show = d.kind === 'update' || d.kind === 'delete' ? true : d.kind === 'append' ? appendTo !== undefined : c.show && !where;
+    const show = d.kind === 'update' || d.kind === 'delete' ? true : d.kind === 'append' ? appendTo !== undefined
+      : ct ? crosstab === 'rowHeading' && !where : c.show && !where;
     return {
       field, ...(table !== undefined && !count && { table }), ...(total && { total }), ...(sort && { sort }), show,
       criteria: star && !count ? [] : Array.from(c.criteria, (s) => s?.trim() ?? ''),
       ...(appendTo !== undefined && { appendTo }), ...(updateTo !== undefined && { updateTo }), ...(deleteRole && { deleteRole }),
+      ...(crosstab && { crosstab }),
     };
   });
   // A field of a table keeps (or, alone or qualified in the cell, gets) its table; an expression has none; a bare name
@@ -413,6 +440,7 @@ export function normalizeQbe(d: QbeDesign, isField?: IsField): QbeDesign {
   for (const c of columns) c.criteria = Array.from({ length: rows }, (_, i) => c.criteria[i] ?? '');
   return {
     kind: d.kind, ...((d.kind === 'makeTable' || d.kind === 'append') && d.target !== undefined && { target: d.target }),
-    tables, joins, totals, distinct: sel && d.distinct, ...(sel && d.top && { top: d.top }), params: d.params, columns,
+    tables, joins, totals, distinct: sel && !ct && d.distinct, ...(sel && !ct && d.top && { top: d.top }), params: d.params, columns,
+    ...(ct && d.headings?.length && { headings: d.headings }),
   };
 }

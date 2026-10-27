@@ -102,8 +102,10 @@ const api: BasecraftApi = {
     setDescription: (kind, name, description) => ipcRenderer.invoke(CH.objectsSetDescription, kind, name, description),
   },
   sources: {
-    describe: (ref) => ipcRenderer.invoke(CH.sourcesDescribe, ref),
+    describe: (ref, params) => ipcRenderer.invoke(CH.sourcesDescribe, ref, params),
     page: (ref, req) => ipcRenderer.invoke(CH.sourcesPage, ref, req),
+    save: (ref, req) => ipcRenderer.invoke(CH.sourcesSave, ref, req),
+    autoLookup: (ref, values) => ipcRenderer.invoke(CH.sourcesAutoLookup, ref, values),
   },
   queries: {
     actionCount: (ref, params) => ipcRenderer.invoke(CH.queriesActionCount, ref, params),

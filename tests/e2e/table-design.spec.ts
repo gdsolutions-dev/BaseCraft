@@ -324,7 +324,7 @@ for (const [theme, os] of [['light', 'dark'], ['dark', 'light']] as const) {
       await page.getByTestId('modal-input').fill('Comptes');
       await page.getByTestId('modal-btn-ok').click();
       await page.getByTestId('modal-btn-no').click();
-      expect(await stored()).toBe('fixed');
+      await expect.poll(stored).toBe('fixed');
 
       // Format half scrolled out of the property panel, focus elsewhere: the toggle opens the list without scrolling the
       // panel; a scroll that leaves the field in sight moves the list with it; one that hides the field closes the list,
@@ -367,7 +367,7 @@ for (const [theme, os] of [['light', 'dark'], ['dark', 'light']] as const) {
       await input.fill('0.00 "€"');
       await expect(list).toHaveCount(0);
       await page.keyboard.press('Control+s');
-      expect(await stored()).toBe('0.00 "€"');
+      await expect.poll(stored).toBe('0.00 "€"');
 
       // keyboard: Alt+Down opens without moving, Down moves, Escape closes, Enter picks; typing filters
       await input.fill('');
@@ -383,7 +383,7 @@ for (const [theme, os] of [['light', 'dark'], ['dark', 'light']] as const) {
       await expect(list).toHaveCount(0);
       await expect(input).toHaveValue(fr.format.fixed);
       await page.keyboard.press('Control+s');
-      expect(await stored()).toBe('fixed');
+      await expect.poll(stored).toBe('fixed');
       // aria-selected follows the active option (APG); the stored value is marked apart, not by colour alone
       await input.press('ArrowDown');
       await input.press('ArrowDown');
@@ -406,7 +406,7 @@ for (const [theme, os] of [['light', 'dark'], ['dark', 'light']] as const) {
       await input.press('Tab');
       await expect(input).not.toBeFocused();
       await page.keyboard.press('Control+s');
-      expect(await stored()).toBe('scientific');
+      await expect.poll(stored).toBe('scientific');
     } finally {
       await app.close();
     }

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/icon.png" alt="BaseCraft" width="128" height="128">
+<img src="docs/logo/png/icone-256.png" alt="BaseCraft" width="128" height="128">
 
 <h1>BaseCraft</h1>
 
@@ -9,10 +9,10 @@ Build tables, queries, forms and reports in a single file that stays a plain SQL
 Windows · macOS · Linux</p>
 
 <p>
-<a href="LICENSE"><img alt="license: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-0f9d8a"></a>
-<img alt="written in TypeScript" src="https://img.shields.io/badge/written%20in-TypeScript-3178c6">
-<img alt="runs on Windows · macOS · Linux" src="https://img.shields.io/badge/runs%20on-Windows%20·%20macOS%20·%20Linux-0f9d8a">
-<img alt="no account, no telemetry" src="https://img.shields.io/badge/no%20account-no%20telemetry-0f766e">
+<a href="LICENSE"><img alt="license: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-EF572C"></a>
+<img alt="written in TypeScript" src="https://img.shields.io/badge/written%20in-TypeScript-364554">
+<img alt="runs on Windows · macOS · Linux" src="https://img.shields.io/badge/runs%20on-Windows%20·%20macOS%20·%20Linux-EF572C">
+<img alt="no account, no telemetry" src="https://img.shields.io/badge/no%20account-no%20telemetry-364554">
 <br>
 <a href="https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml/badge.svg"></a>
 <a href="https://github.com/gdsolutions-dev/BaseCraft/releases"><img alt="latest release" src="https://img.shields.io/github/v/release/gdsolutions-dev/BaseCraft?include_prereleases&label=release"></a>

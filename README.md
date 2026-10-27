@@ -1,14 +1,32 @@
-# BaseCraft
+<div align="center">
 
-[![CI](https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml/badge.svg)](https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml)
+<img src="build/icon.png" alt="BaseCraft" width="128" height="128">
 
-**A desktop database application in the spirit of Microsoft Access — for Windows, macOS and Linux.**
+<h1>BaseCraft</h1>
+
+<p><strong>The desktop database workbench; an open-source application in the spirit of Microsoft Access.</strong><br>
+Build tables, queries, forms and reports in a single file that stays a plain SQLite database.<br>
+Windows · macOS · Linux</p>
+
+<p>
+<a href="LICENSE"><img alt="license: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-0f9d8a"></a>
+<img alt="written in TypeScript" src="https://img.shields.io/badge/written%20in-TypeScript-3178c6">
+<img alt="runs on Windows · macOS · Linux" src="https://img.shields.io/badge/runs%20on-Windows%20·%20macOS%20·%20Linux-0f9d8a">
+<img alt="no account, no telemetry" src="https://img.shields.io/badge/no%20account-no%20telemetry-0f766e">
+<br>
+<a href="https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/gdsolutions-dev/BaseCraft/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://github.com/gdsolutions-dev/BaseCraft/releases"><img alt="latest release" src="https://img.shields.io/github/v/release/gdsolutions-dev/BaseCraft?include_prereleases&label=release"></a>
+</p>
+
+<p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>Website</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">Download</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">UI mockups</a></p>
+
+<img src="docs/images/screenshot.png" alt="BaseCraft report Design view with grouping and totals" width="900">
+
+</div>
 
 BaseCraft brings back the Access way of building small data applications — tables, queries, forms, reports, macros and code — with a modern interface, and without being tied to Windows. Everything a database contains lives in **a single file**, which is a plain SQLite database that any SQLite tool can still open.
 
 > **Status: early development.** Stage A (tables, relationships, queries, forms, reports, import and export) is complete in preview 0.2.0. Expect breaking changes before 1.0.
-
-Website: https://gdsolutions-dev.github.io/BaseCraft/
 
 ## Why
 

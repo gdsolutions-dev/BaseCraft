@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft recupera la forma de construir pequeñas aplicaciones de datos al estilo Access (tablas, consultas, formularios, informes, macros y código) con una interfaz moderna y sin depender de Windows. Todo lo que contiene una base de datos vive en **un único archivo**, que es una base de datos SQLite normal que cualquier herramienta SQLite puede seguir abriendo.
 
-> **Estado: desarrollo temprano.** La etapa A (tablas, relaciones, consultas, formularios, informes, importación y exportación) está completa en la versión preliminar 0.2.0. Se esperan cambios incompatibles antes de la 1.0.
+> **Estado: desarrollo temprano.** La etapa A (tablas, relaciones, consultas, formularios, informes, importación y exportación) está completa en la versión preliminar 0.3.0. Se esperan cambios incompatibles antes de la 1.0.
 
 ## Por qué
 
@@ -45,7 +45,7 @@ El objetivo: que un buen usuario de Excel, sin escribir código, construya en un
 - **Tus datos siguen siendo tuyos.** Un archivo `.basecraft` es una base de datos SQLite corriente. Las tablas de usuario son tablas SQLite reales con los nombres que elegiste; BaseCraft nunca incluye funciones ni colaciones personalizadas en el esquema.
 - **Seguro por defecto.** Sin pérdida de datos tras un fallo; un archivo recibido por correo electrónico no puede dañar tu equipo.
 - **Nada que instalar para uso individual.** Sin servidor, sin Python, sin entorno de ejecución adicional.
-- **Bilingüe.** Interfaz en inglés y francés, incluidas las expresiones mostradas en el idioma de la interfaz.
+- **Multilingüe.** Interfaz en 11 idiomas (inglés, francés, español, alemán, italiano, portugués, neerlandés, polaco, japonés, chino, coreano); las expresiones se muestran en francés o en inglés.
 
 ## Qué funciona hoy
 

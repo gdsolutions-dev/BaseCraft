@@ -1,6 +1,6 @@
 {
   "name": "basecraft",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Desktop database application in the spirit of Microsoft Access",
   "author": "SARL IN SET <info@in-set.com>",

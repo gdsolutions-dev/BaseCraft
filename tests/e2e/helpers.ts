@@ -1,6 +1,6 @@
 import { _electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { copyFileSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, FILE_EXTENSION, openBaseFile } from '../../src/main/db/file-format';
@@ -12,7 +12,7 @@ import { createTable } from '../../src/main/db/schema';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../src/shared/report/fixtures/factures';
 
 export async function launchApp(
-  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean } = {},
+  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean; runtime?: boolean } = {},
 ): Promise<{ app: ElectronApplication; page: Page; userDataDir: string }> {
   const userDataDir = opts.userDataDir ?? mkdtempSync(join(tmpdir(), 'basecraft-'));
   // Bases seeded in the temporary folder are trusted (their active content is enabled), unless `untrusted`: nothing is then.
@@ -25,7 +25,7 @@ export async function launchApp(
   if (opts.untrusted) delete env.BASECRAFT_E2E_TRUST_CONFIG;
   delete env.ELECTRON_RUN_AS_NODE; // sinon Electron démarre comme Node simple
   const app = await _electron.launch({
-    args: ['.', ...(opts.args ?? [])],
+    args: [opts.runtime ? 'out-runtime' : '.', ...(opts.args ?? [])], // runtime: the Runtime build, out-runtime (npm run build:runtime)
     env,
   });
   const page = await app.firstWindow();
@@ -42,6 +42,13 @@ export async function launchApp(
       { timeout: 20_000, message: 'the base given on the command line opens' }).not.toBeNull();
   }
   return { app, page, userDataDir };
+}
+
+/** File › Options › « Base de données active » (O1): the Backstage must be open; « Générales » is the category shown on entry. */
+export async function openDbOptions(page: Page): Promise<void> {
+  await page.getByTestId('bs-options').click();
+  await page.getByTestId('opt-cat-currentDb').click();
+  await expect(page.getByTestId('opt-db')).toBeVisible();
 }
 
 /** Creates a base in a fresh temporary folder, lets `setup` fill it (createTable, insertRow…), closes it, returns its path.
@@ -80,8 +87,14 @@ export function seedCrashed(name: string): string {
   } finally {
     w.close();
   }
-  writeFileSync(`${p}.lock`, JSON.stringify({ user: 'u', host: 'h', pid: 1, sessionId: 'dead', heartbeatAt: new Date(0).toISOString() }), 'utf8');
+  writeFileSync(`${p}.lock`, JSON.stringify({ user: 'u', host: hostname(), pid: 1, sessionId: 'dead', heartbeatAt: new Date(0).toISOString() }), 'utf8');
   return p;
+}
+
+/** A base file read raw, read-only (the app may hold its lock), waiting out a write in progress (5 s busy timeout). */
+export function inFile<T>(path: string, sql: string): T[] {
+  const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 });
+  try { return db.prepare(sql).all() as T[]; } finally { db.close(); }
 }
 
 /** A form saved in a seeded base (inside `seedBase`'s setup), as the foundation stores it. */

@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { HEARTBEAT_MS } from './db/lock';
 import { CH } from '../shared/api';
-import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openBase, registerIpc, whenIdle } from './ipc';
+import { PRODUCT_NAME } from '../shared/product';
+import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openFromSystem, openLastBase, registerIpc, whenIdle } from './ipc';
 import { fileArg, handleOpenFile, openAll } from './open-file';
 import { closePrintWindows, PRINT_SCHEME, registerPrintProtocol } from './report-print';
 import { defaultIconPath } from './window-icon';
@@ -31,7 +32,7 @@ const tick = () => {
 
 function createWindow(): void {
   const win = new BrowserWindow({
-    width: 1280, height: 800, minWidth: 900, minHeight: 600, title: 'BaseCraft',
+    width: 1280, height: 800, minWidth: 900, minHeight: 600, title: PRODUCT_NAME,
     ...(process.platform === 'darwin' ? {} : { icon: defaultIconPath() }), // macOS: the Dock shows the bundle's icon
     // Shown off screen without activation rather than hidden: a hidden window gets no animation frames, which the grid needs.
     ...(e2eHidden ? { show: false, x: -32000, y: -32000, skipTaskbar: true, focusable: false, enableLargerThanScreen: true } : {}),
@@ -78,7 +79,7 @@ function spawnProcess(p: string): void {
   child.on('error', console.error);
   child.unref();
 }
-const openDeps = { hasBase, open: async (f: string) => { await openBase(f); }, spawn: spawnProcess };
+const openDeps = { hasBase, open: openFromSystem, spawn: spawnProcess };
 const openFile = (p: string) => void handleOpenFile(p, openDeps).catch(console.error);
 let ready = false;
 const pendingFiles: string[] = [];
@@ -94,10 +95,13 @@ app.whenReady().then(() => {
   registerIpc(() => mainWindow);
   registerPrintProtocol();
   createWindow();
-  // `electron . <file>` in dev/tests, `BaseCraft.exe <file>` once packaged, or a file queued by macOS before ready
+  // `electron . <file>` in dev/tests, `BaseCraft.exe <file>` once packaged, or a file queued by macOS before ready;
+  // none: the last base, when « Ouvrir la dernière base » is on and its file is still there (else nothing opens: the Backstage shows; ipc.ts openLastBase)
   const first = fileArg(process.argv);
   ready = true;
-  void openAll([...(first ? [first] : []), ...pendingFiles].map((f) => resolve(f)), openDeps).catch(console.error);
+  const files = [...(first ? [first] : []), ...pendingFiles];
+  if (files.length) void openAll(files.map((f) => resolve(f)), openDeps).catch(console.error);
+  else void openLastBase().catch(console.error);
   setInterval(tick, HEARTBEAT_MS);
   powerMonitor.on('resume', tick);
 });

@@ -1,6 +1,7 @@
 // Menu contextuel du volet de navigation (règle C6) : registre par type d'objet. Le socle inscrit les éléments génériques
 // (nav-menu-items.ts) ; chaque lot inscrit les siens dans son propre module, par un seul appel, sans modifier ce fichier.
 import type { LucideIcon } from 'lucide-react';
+import type { TableSummary } from '../../shared/api';
 import type { AppAction, DocKind } from '../state/app-state';
 import type { ModalApi } from './Modal';
 import type { PlannedIn } from './ribbon-model';
@@ -11,11 +12,15 @@ export const NAV_MENU_GROUPS: readonly NavMenuGroup[] = ['open', 'transfer', 'ob
 /** The shell's dispatch: a change of mode or an open that the document's mode guard decides answers whether it happened. */
 export type AppDispatch = (a: AppAction) => void | Promise<boolean>;
 
-/** `reselect`: the pane's selection follows a renamed object (its new name) or a deleted one (null). */
+/** `reselect`: the pane's selection follows a renamed object (its new name) or a deleted one (null). `link`: a linked table's source (C1). */
 export interface NavMenuContext {
   kind: DocKind; name: string; readOnly: boolean; runtime: boolean; modal: ModalApi; dispatch: AppDispatch;
   reselect(name: string | null): void;
+  link?: TableSummary['link'];
 }
+
+/** Design items a linked table lacks: its structure and name belong to its file (C1 R2, R8; its Design view opens read-only). */
+export const designNotLink = (c: NavMenuContext): boolean => !c.runtime && !c.link;
 
 /**
  * labelKey: an i18n label whose `&` marks the access key. enabled false: disabled for a temporary

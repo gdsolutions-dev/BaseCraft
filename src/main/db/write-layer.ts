@@ -1,7 +1,7 @@
 // Couche d'écriture unique : toute écriture de données passe ici (conversion, validation, transaction).
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, listItemValue, type CellInput, type FieldErrorCode, type SqlValue } from '../../shared/coerce';
-import { lookupOf, MASK_TYPES, valueListRows, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { lookupOf, MASK_TYPES, sameName, valueListRows, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { checkMasked, parseMask } from '../../shared/expr/input-mask';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { foreignKeys, listTables, parentOf, pickName, quoteIdent, refColumns, sqliteSameName, tableDesign } from './schema';
@@ -10,7 +10,7 @@ import { degraded, lookupSource, queryRowSource } from './rows';
 import { sourceHasValue } from '../query/source';
 import { inTransaction } from './tx';
 
-import type { DeleteResult, RowWriteResult } from '../../shared/api';
+import type { DeleteResult, RowWriteResult, WriteConflict } from '../../shared/api';
 export type { DeleteResult, RowWriteResult };
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
 
@@ -48,17 +48,41 @@ function convert(design: TableDesign, values: Record<string, CellInput>, info: L
   return { errors, cols, nulled };
 }
 
-function readBack(db: DatabaseSync, design: TableDesign, rowid: number): SqlValue[] {
+function readRow(db: DatabaseSync, design: TableDesign, rowid: number): SqlValue[] | undefined {
   const stmt = db.prepare(`SELECT ${design.fields.map((fd) => quoteIdent(fd.name)).join(', ')} FROM ${quoteIdent(design.name)} WHERE rowid = ?`);
   stmt.setReturnArrays(true);
-  const row = stmt.get(rowid) as unknown as SqlValue[] | undefined;
+  return stmt.get(rowid) as unknown as SqlValue[] | undefined;
+}
+function readBack(db: DatabaseSync, design: TableDesign, rowid: number): SqlValue[] {
+  const row = readRow(db, design, rowid);
   if (!row) throw new Error('row not found');
   return row;
 }
 
+/** R8: the row still holds the values read when editing began (`IS`: Null is not '', numbers compare exactly)? Undefined
+ *  when the row is gone. Only the fields of `expected` the design has are compared; none: true. */
+function unchanged(db: DatabaseSync, design: TableDesign, rowid: number, expected: Record<string, SqlValue>): boolean | undefined {
+  const pairs = Object.entries(expected).flatMap(([k, v]) => {
+    const fd = design.fields.find((x) => sameName(x.name, k));
+    return fd ? [{ fd, v }] : [];
+  });
+  if (pairs.length === 0) return true;
+  const row = db.prepare(`SELECT ${pairs.map((p) => `(${quoteIdent(p.fd.name)} IS ?)`).join(' AND ')} AS same FROM ${quoteIdent(design.name)} WHERE rowid = ?`)
+    .get(...pairs.map((p) => p.v), rowid) as { same: number } | undefined;
+  return row ? !!row.same : undefined;
+}
+
+/** R8: the conflict of row `rowid` against `expected` (by field name; unknown names ignored, none: no conflict), else
+ *  undefined. Run inside the write transaction (or before a rule that reads the stored row). */
+export function expectedConflict(db: DatabaseSync, design: TableDesign, rowid: number, expected: Record<string, SqlValue>): WriteConflict<SqlValue[]> | undefined {
+  const same = unchanged(db, design, rowid, expected);
+  if (same === undefined) return { ok: false, conflict: 'deleted' };
+  return same ? undefined : { ok: false, conflict: 'changed', current: readBack(db, design, rowid) };
+}
+
 /** Traduit `UNIQUE constraint failed: T.a[, T.b]` en erreur de champ ; sinon relance.
  *  Comparaison avec la conception (les noms peuvent contenir ", ") ; clé composée : on signale la première colonne. */
-function duplicateOrThrow(design: TableDesign, e: unknown): RowWriteResult {
+function duplicateOrThrow(design: TableDesign, e: unknown): Extract<RowWriteResult, { errors: unknown }> {
   const m = e instanceof Error ? /^UNIQUE constraint failed: ([\s\S]+)$/.exec(e.message) : null;
   const p = design.name + '.';
   if (m && m[1].startsWith(p)) {
@@ -143,7 +167,10 @@ function blockingKey(db: DatabaseSync, table: string, rowids: number[], changed:
  *  integer value for the AutoNumber is accepted, as Access appends it. `nullOnConversion` (A3 action queries run anyway): a
  *  value its field cannot store is written as Null and reported in `nulled`, as Access does; the field's rule then runs on
  *  the Null, and a Required or primary-key field refuses it. */
-export interface WriteOptions { enforceMask?: boolean; allowAutoNumber?: boolean; nullOnConversion?: boolean }
+export interface WriteOptions { enforceMask?: boolean; allowAutoNumber?: boolean; nullOnConversion?: boolean
+  /** By field name: the record as read when editing began (R8). An update then compares it inside its transaction; a change
+   *  since is a conflict and nothing is written. Unknown names are ignored. Inserts never check it. */
+  expected?: Record<string, SqlValue> }
 
 /** Typed text checked against its field's input mask (empty passes: Required handles it). A text field stores the masked
  *  text (with or without literals); a number or date keeps its full text for the normal conversion. */
@@ -193,8 +220,9 @@ function notInList(db: DatabaseSync, cols: { fd: FieldDef; value: SqlValue }[], 
   return errors;
 }
 
-/** Absent fields get their default value (converted like an input); every field's rule is then checked. */
-export async function insertRow(db: DatabaseSync, design: TableDesign, values: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<RowWriteResult> {
+/** Absent fields get their default value (converted like an input); every field's rule is then checked. Never a conflict
+ *  (R8: inserts are not checked). */
+export async function insertRow(db: DatabaseSync, design: TableDesign, values: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<Exclude<RowWriteResult, { conflict: unknown }>> {
   if (opts.enforceMask) {
     const m = applyMasks(design, values);
     if (m.errors.length > 0) return { ok: false, errors: m.errors };
@@ -252,7 +280,8 @@ function referencedField(db: DatabaseSync, table: string, changed: string[]): st
   return changed.find((n) => keys.some((k) => refColumns(db, k, table).some((c) => sqliteSameName(c, n)))) ?? changed[0]!;
 }
 
-/** Only the changed fields' rules are checked (a row that broke a later rule stays editable). */
+/** Only the changed fields' rules are checked (a row that broke a later rule stays editable). With `opts.expected` (R8): the
+ *  row changed since editing began → `{ conflict: 'changed', current }` (as `values` would be), gone → `'deleted'`. */
 export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: number, changes: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<RowWriteResult> {
   if (opts.enforceMask) {
     const m = applyMasks(design, changes);
@@ -265,14 +294,20 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
   if (unlisted.length > 0) return { ok: false, errors: unlisted };
   const broken = await checkRules(design, storedOf(cols), Object.keys(changes), now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
-  if (design.validationRule) { // the whole record: stored values with the changes
-    const current = readBack(db, design, rowid);
+  if (design.validationRule && opts.expected) { // a conflict first: the rule would read another workstation's values
+    const c = expectedConflict(db, design, rowid, opts.expected);
+    if (c) return c;
+  }
+  const current = design.validationRule ? readRow(db, design, rowid) : undefined;
+  if (current) { // the whole record: stored values with the changes (a row gone is reported in the transaction)
     const row = { ...Object.fromEntries(design.fields.map((fd, i) => [fd.name, current[i] ?? null])), ...storedOf(cols) };
     const record = await checkRecordRule(design, row, now, info);
     if (record) return { ok: false, errors: [record] };
   }
   try {
-    return inTransaction(db, () => {
+    return inTransaction(db, (): RowWriteResult => {
+      const c = opts.expected && expectedConflict(db, design, rowid, opts.expected);
+      if (c) return c;
       if (cols.length > 0) {
         const n = db.prepare(`UPDATE OR ABORT ${quoteIdent(design.name)} SET ${cols.map((c) => `${quoteIdent(c.fd.name)} = ?`).join(', ')} WHERE rowid = ?`)
           .run(...cols.map((c) => c.value), rowid).changes;

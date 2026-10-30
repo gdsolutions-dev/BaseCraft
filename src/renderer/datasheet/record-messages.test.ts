@@ -51,11 +51,38 @@ describe('record messages', () => {
     const asked: ConfirmOptions[] = [];
     const modal = { confirm: async (o: ConfirmOptions) => { asked.push(o); return 'yes' as const; } } as unknown as ModalApi;
     const relations = (r: () => Promise<{ table: string; effect: 'deleted' | 'modified' }[]>) => ({ cascadeChildren: r });
-    expect(await confirmDelete(modal, 'Clients', 1, relations(async () => [{ table: 'Commandes', effect: 'deleted' }]))).toBe(true);
-    expect(await confirmDelete(modal, 'Clients', 2, relations(() => Promise.reject(new Error('x'))))).toBe(true);
+    const on = async () => true;
+    expect(await confirmDelete(modal, 'Clients', 1, relations(async () => [{ table: 'Commandes', effect: 'deleted' }]), on)).toBe(true);
+    expect(await confirmDelete(modal, 'Clients', 2, relations(() => Promise.reject(new Error('x'))), on)).toBe(true);
     expect(asked).toEqual([
       { titleKey: 'datasheet.deleteTitle', messageKey: 'datasheet.deleteCascade', params: { count: 1 }, buttons: ['yes', 'no'], defaultButton: 'no' },
       { titleKey: 'datasheet.deleteTitle', messageKey: 'datasheet.delete', params: { count: 2 }, buttons: ['yes', 'no'], defaultButton: 'no' },
     ]);
+  });
+
+  it('record changes off: deletes without asking (nor looking for the cascade)', async () => {
+    const asked: ConfirmOptions[] = [];
+    const modal = { confirm: async (o: ConfirmOptions) => { asked.push(o); return 'no' as const; } } as unknown as ModalApi;   // would refuse
+    let looked = 0;
+    const relations = { cascadeChildren: async () => { looked++; return []; } };
+    expect(await confirmDelete(modal, 'Clients', 2, relations, async () => false)).toBe(true);
+    expect(asked).toEqual([]);
+    expect(looked).toBe(0);
+  });
+
+  it('the setting is read when asking, from the window', async () => {
+    let on = true;
+    (globalThis as unknown as { window: object }).window = { basecraft: { app: { getSettings: async () => ({ confirmRecordChanges: on }) }, relations: { cascadeChildren: async () => [] } } };
+    try {
+      const asked: ConfirmOptions[] = [];
+      const modal = { confirm: async (o: ConfirmOptions) => { asked.push(o); return 'yes' as const; } } as unknown as ModalApi;
+      expect(await confirmDelete(modal, 'Clients', 1)).toBe(true);
+      expect(asked).toHaveLength(1);
+      on = false;
+      expect(await confirmDelete(modal, 'Clients', 1)).toBe(true);
+      expect(asked).toHaveLength(1);
+    } finally {
+      delete (globalThis as unknown as { window?: object }).window;
+    }
   });
 });

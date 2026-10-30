@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LockInfo, SessionState } from '../../shared/api';
-import { contentBanner, contentBlocked, onContentBlocked, readOnlyBanner, reconcileBanners } from './Banners';
+import { contentBanner, contentBlocked, onContentBlocked, readOnlyBanner, reconcileBanners, riskBanner } from './Banners';
 
 const holder: LockInfo = { user: 'marie', host: 'PC-1', pid: 42, sessionId: 's1', heartbeatAt: '2026-10-22T10:00:00.000Z' };
 const placeholder: LockInfo = { user: '?', host: '?', pid: 0, sessionId: '?', heartbeatAt: new Date(0).toISOString() };
@@ -39,6 +39,25 @@ describe('readOnlyBanner (R23: "Reprendre" if and only if lockStale)', () => {
   it('lock lost and read-only file', () => {
     expect(readOnlyBanner(s({ readOnlyReason: 'lockLost', lockStale: true }))).toEqual({ key: 'banner.lockLost', takeOver: true });
     expect(readOnlyBanner(s({ readOnlyReason: 'fileReadOnly' }))).toEqual({ key: 'banner.fileReadOnly', takeOver: false });
+  });
+});
+
+describe('a data file (C3 R4, R6)', () => {
+  it('in use by others in exclusive mode: names them; refused shared mode: says why', () => {
+    expect(readOnlyBanner(s({ readOnlyReason: 'inUse', users: [holder, { ...holder, user: 'paul', host: 'PC-2' }] })))
+      .toEqual({ key: 'banner.inUse', params: { users: 'marie (PC-1), paul (PC-2)' }, takeOver: false });
+    expect(readOnlyBanner(s({ readOnlyReason: 'syncedFolder', dataFile: true }))).toEqual({ key: 'banner.syncedFolder', takeOver: false });
+    expect(readOnlyBanner(s({ readOnlyReason: 'unsupportedClient', dataFile: true }))).toEqual({ key: 'banner.unsupportedClient', takeOver: false });
+  });
+
+  it('no network risk banner for a data file; any other base, or a synchronized folder, keeps it', () => {
+    expect(riskBanner(s({ locationRisk: 'network', dataFile: true }))).toBeNull();
+    expect(riskBanner(s({ locationRisk: 'network' }))).toBe('banner.riskNetwork');
+    expect(riskBanner(s({ locationRisk: 'synced', dataFile: true }))).toBe('banner.riskSynced');
+    expect(riskBanner(s({ locationRisk: 'local' }))).toBeNull();
+  });
+  it('a data file refused shared mode in a synchronized folder: its read-only banner only (C3 R6)', () => {
+    expect(riskBanner(s({ locationRisk: 'synced', dataFile: true, readOnlyReason: 'syncedFolder' }))).toBeNull();
   });
 });
 

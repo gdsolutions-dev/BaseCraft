@@ -1,8 +1,11 @@
 node_modules/
 out/
+out-runtime/
 dist/
+dist-runtime/
 test-results/
 playwright-report/
 .claude/
 docs/analyse-access/raw/
 docs/analyse-access/captures/
+docs/analyse-access/OptionsAccess/

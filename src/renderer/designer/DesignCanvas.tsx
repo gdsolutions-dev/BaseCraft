@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { flattenControls, TWIPS_PER_CM, type ControlDef, type SectionDef } from '../../shared/design/model';
 import { sameName } from '../../shared/field-types';
 import type { DesignerHost, ToolState } from './Designer';
+import { clipboardAction, clipContext } from './designer-clipboard';
 import { CONTAINER_KINDS, designerReducer, docWidth, documentKind, findControl, type DesignerAction, type DesignerState } from './designer-model';
 import type { Handle } from './geometry';
 import { gestureEnd, keyAction, placeRect, type Gesture } from './pointer';
@@ -221,6 +222,13 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const onKeyDown = (e: KeyboardEvent) => {
     if ((e.target as HTMLElement).closest('[role="menu"]')) return;
     if (e.key === 'Escape' && drag) { e.preventDefault(); cancel(); return; }
+    const clip = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey ? ({ c: 'copy', x: 'cut', v: 'paste' } as const)[e.key.toLowerCase() as 'c'] : undefined;
+    if (clip) {   // Ctrl+C, Ctrl+X, Ctrl+V : les contrôles (Accueil › Presse-papiers passe par l'hôte)
+      e.preventDefault();
+      const a = readOnly && clip !== 'copy' ? null : clipboardAction(clip, state, clipContext(host, t));
+      if (a) dispatch(a);
+      return;
+    }
     const a = keyAction(e.key, { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey }, gridStep(state.doc));
     if (!a || e.altKey) return;
     if (readOnly && a.type !== 'select' && a.type !== 'selectAll') return;

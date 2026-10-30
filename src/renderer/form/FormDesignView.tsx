@@ -1,6 +1,6 @@
 // Formulaire en mode Création : le concepteur générique avec l'hôte des formulaires, la Feuille de propriétés, la Liste des champs,
 // l'ordre de tabulation ; chargement et enregistrement par api.objects (genre 'form').
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DesignDoc, SectionDef } from '../../shared/design/model';
 import type { DisplayContext } from '../../shared/expr/localize';
@@ -8,6 +8,7 @@ import { localeInfo } from '../../shared/locale-format';
 import type { SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
 import { ArrangePopup, Designer, FormatPopup, type ToolState } from '../designer/Designer';
+import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
 import { designerReducer, findControl, initDesigner, type DesignerAction } from '../designer/designer-model';
 import { FieldList } from '../designer/FieldList';
@@ -17,7 +18,7 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
 import { nameErrorKey } from '../shell/nav-menu-items';
-import { registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
+import { registerCommandStates, registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
 import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, nextFreeTop, parseFormDoc, shouldReload, withTabOrder } from './form-def';
 import { useFormHost } from './form-host';
 import { proposeLinks } from './links';
@@ -70,8 +71,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     [display, fieldNames, lists, tab.id, tab.name]);
   const { host, labels } = useFormHost(sheet);
 
-  const live = useRef({ state, readOnly, tab, extra, phase, labels });
-  live.current = { state, readOnly, tab, extra, phase, labels };
+  const live = useRef({ state, readOnly, tab, extra, phase, labels, host });
+  live.current = { state, readOnly, tab, extra, phase, labels, host };
 
   // la définition : à l'ouverture, puis à chaque enregistrement venu d'ailleurs tant que le concepteur n'a rien de modifié
   useEffect(() => {
@@ -212,6 +213,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     const off = registerCommands(tab.id, {
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
+      ...clipboardCommands(() => live.current.state, send, () => clipContext(live.current.host, t)),
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
       ...Object.fromEntries(Object.entries(GALLERY_TOOLS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })])),
       logo: () => logoFile.current?.click(),
@@ -225,6 +227,9 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
     return () => { off(); offGuard(); };
   }, [tab.id, selected]);
+  // Coller grisé tant qu'aucun presse-papiers (contrôles qu'un formulaire reçoit, objets du volet) n'a rien à coller
+  const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));
+  useEffect(() => registerCommandStates(tab.id, { paste: { enabled: pasteable } }), [tab.id, pasteable]);
 
   // F5 (Access, C7) : du mode Création au mode Formulaire, tant que cet onglet est actif
   useEffect(() => {

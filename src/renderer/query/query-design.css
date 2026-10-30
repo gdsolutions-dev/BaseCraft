@@ -49,7 +49,20 @@
 .query-params { max-height: 60vh; overflow: auto; }
 .qp-check { display: flex; align-items: center; gap: var(--bc-space-2); margin: var(--bc-space-2) 0; }
 
-/* Afficher la table */
+/* Ajouter des tables : volet à droite de la requête (Access) */
+.qd-body { flex: 1; min-height: 0; display: flex; }
+.qd-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.qd-side { flex: none; width: 260px; display: flex; flex-direction: column; gap: var(--bc-space-2); padding: var(--bc-space-3);
+  border-left: 1px solid var(--bc-border); background: var(--bc-surface); }
+.qd-side-head { display: flex; align-items: center; justify-content: space-between; }
+.qd-side-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.qd-side .qd-tabs { margin-bottom: 0; }
+.qd-side-search { width: 100%; height: 30px; box-sizing: border-box; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
+  background: var(--bc-surface); color: var(--bc-text); }
+.qd-side-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; border: 1px solid var(--bc-border); }
+.qd-side > .btn { width: 100%; }
+
+/* Onglets du volet */
 .qd-tabs { display: flex; gap: 2px; margin-bottom: var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
 .qd-tab { padding: 6px 12px; border-radius: var(--bc-radius) var(--bc-radius) 0 0; color: var(--bc-text-muted); }
 .qd-tab.is-active { color: var(--bc-accent); box-shadow: inset 0 -2px 0 var(--bc-accent); }

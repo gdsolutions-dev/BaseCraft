@@ -1,5 +1,5 @@
 // Mode Création : grille des champs en haut, « Propriétés du champ » en bas, enregistrement par Ctrl+S ou le ruban.
-import { ChevronRight, KeyRound } from 'lucide-react';
+import { ChevronRight, KeyRound, Link } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplayContext } from '../../shared/expr/localize';
@@ -28,7 +28,7 @@ const GRID_MIN = 34 + 3 * 30; // header + 3 rows
 const PROPS_MIN = 128; // heading + tab bar + 2 rows
 const CELL = /^design-row-(\d+)-(key|name|type|desc)$/;
 
-export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
+export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -38,16 +38,22 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const focusNext = useRef<string | null>(null);
   const [ratio, setRatio] = useState(() => loadRatio(SPLIT_KEY));
+  // An existing table is usable once its design is loaded (until then, a save would take it for a new table).
+  const ready = !!tab.isNew || model.originalName !== null;
   const [avail, setAvail] = useState(0); // height shared by the two panes, kept up to date on window resize
+  const banner = useRef<HTMLDivElement>(null); // a linked table's banner (C1 R8) takes its room above the panes
+  const linked = !!link;
   useEffect(() => {
     const el = root.current;
     if (!el) return;
-    const measure = () => setAvail(Math.max(0, el.clientHeight - BAR));
+    const above = () => (banner.current ? banner.current.getBoundingClientRect().bottom - el.getBoundingClientRect().top : 0);
+    const measure = () => setAvail(Math.max(0, el.clientHeight - BAR - above()));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    if (banner.current) ro.observe(banner.current); // its text wraps on a narrow window
     return () => ro.disconnect();
-  }, []);
+  }, [linked, ready]);
   const gridPx = ratioToPx(ratio, avail, GRID_MIN, PROPS_MIN);
   const setGridPx = (px: number) => { const r = pxToRatio(px, avail); setRatio(r); saveRatio(SPLIT_KEY, r); };
   const lastExpression = useRef<Expression>('prop-validationRule'); // the Builder command's target (its field's test id)
@@ -59,8 +65,6 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
   const ctx = useMemo<DisplayContext | null>(() => (region === null ? null : { lang, region: localeInfo(region) }), [lang, region]);
-  // An existing table is usable once its design is loaded (until then, a save would take it for a new table).
-  const ready = !!tab.isNew || model.originalName !== null;
   const live = useRef({ model, readOnly, tab, picked, ready });
   live.current = { model, readOnly, tab, picked, ready };
 
@@ -307,6 +311,11 @@ export function TableDesignView({ tab, readOnly, dispatch }: DocViewProps) {
     <div className="tdesign" ref={root} aria-busy={saving}
       onFocus={(e) => { const m = /^prop-(defaultValue|validationRule)$|^table-prop-validationRule$/.exec(e.target.dataset.testid ?? ''); if (m) lastExpression.current = m[0] as Expression; }}>
       <div className="designer">
+      {link && ( // C1 R8: read-only (the shell passes readOnly), its structure belongs to its file
+        <div ref={banner} className="banner banner-info tdesign-link" role="status" data-testid="design-link-banner">
+          <Link className="ic" aria-hidden /><span className="banner-text">{t('link.designBanner', { path: link.path })}</span>
+        </div>
+      )}
       <div className="dgrid-wrap" data-testid="design-grid-pane" style={avail > 0 ? { flex: 'none', height: gridPx } : undefined}>
         <table className="dgrid" aria-label={t('designer.grid')}>
           <colgroup><col className="c-sel" /><col className="c-name" /><col className="c-type" /><col /></colgroup>

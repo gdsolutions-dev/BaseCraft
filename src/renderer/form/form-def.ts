@@ -193,3 +193,7 @@ export function firstFreeName(existing: string[], nameOf: (n: number) => string)
   while (existing.some((x) => sameName(x, nameOf(n)))) n++;
   return nameOf(n);
 }
+
+/** The forms' names, saved or open (a new form's tab not saved yet). */
+export const formNames = (objs: readonly { kind: string; name: string }[], tabs: readonly { kind: string; name: string }[]): string[] =>
+  [...objs, ...tabs].filter((x) => x.kind === 'form').map((x) => x.name);

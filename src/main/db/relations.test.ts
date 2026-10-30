@@ -514,7 +514,7 @@ describe('relations (fix round 2, A2-R13: the SQLite schema is the source of tru
     createTable(w, commandes);
     w.close();
     const r10 = new DatabaseSync(old);
-    r10.exec("DROP TABLE bc_relations; DROP TABLE bc_objects; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
+    r10.exec("DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_relations; DROP TABLE bc_objects; UPDATE bc_meta SET value='0' WHERE key='format_minor'");
     r10.close();
     db = openBaseFile(old, 'write', '0.2.0').db;
     expect(reconcile(db)).toEqual(EMPTY);

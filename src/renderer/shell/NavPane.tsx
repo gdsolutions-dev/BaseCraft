@@ -1,6 +1,6 @@
 // Volet de navigation : groupes Tables, Requêtes, Formulaires, États, Macros ; recherche, double-clic, menu contextuel tiré du
 // registre nav-menu.ts (éléments du socle : nav-menu-items.ts).
-import { ChevronRight, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { ChevronRight, Link2, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObjectSummary, TableSummary } from '../../shared/api';
@@ -10,13 +10,14 @@ import { useModal } from './Modal';
 import { NavMenu } from './NavMenu';
 import { runNavItem, setNavClipboardRunner, type NavMenuContext } from './nav-menu';
 import './nav-menu-items';
+import '../links/nav-menu-links'; // C1: Refresh Link, Convert to Local Table (run items)
 export { nameErrorKey } from './nav-menu-items';
 
 /** Same folding as bc_fold (accents and case ignored). */
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('und');
 
 type NavKind = 'table' | 'query' | 'form' | 'report' | 'macro';
-interface Item { kind: NavKind; name: string; description?: string | null }
+interface Item { kind: NavKind; name: string; description?: string | null; link?: TableSummary['link'] }
 const GROUPS: { kind: NavKind; labelKey: string }[] = [
   { kind: 'table', labelKey: 'nav.tables' }, { kind: 'query', labelKey: 'nav.queries' },
   { kind: 'form', labelKey: 'nav.forms' }, { kind: 'report', labelKey: 'nav.reports' }, { kind: 'macro', labelKey: 'nav.macros' },
@@ -30,13 +31,15 @@ interface Props {
   visible: boolean; onToggle(): void; dispatch: Dispatch<AppAction>;
   /** Run mode (B3 R10): the menus are the Runtime's. */
   runtime: boolean;
+  /** Default shortcut menus (O1 R5); false: right-click and Shift+F10 open nothing. */
+  shortcutMenus: boolean;
   /** Hidden, the pane leaves its « Afficher » strip (false: hidden by the startup options, R14). */
   strip: boolean;
   /** The selected item (the source picker preselects it when no table or query document is active). */
   onSelect?(item: { kind: string; name: string } | null): void;
 }
 
-export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, strip }: Props) {
+export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
   const [query, setQuery] = useState('');
@@ -54,7 +57,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
 
   /** The menu's context for `x`: `reselect` makes the selection follow a renamed object or leave a deleted one. */
   const ctxOf = (x: Item): NavMenuContext => ({
-    kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch,
+    kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch, ...(x.link ? { link: x.link } : {}),
     reselect: (to) => {
       if (selected !== itemKey(x)) return;
       if (to === null) { setSelectedKey(null); onSelect?.(null); } else setSelected({ kind: x.kind, name: to });
@@ -115,12 +118,13 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    if (!shortcutMenus) return;
                     e.currentTarget.focus(); // the menu gives the focus back to the item when it closes
                     setSelected(x);
                     const r = e.currentTarget.getBoundingClientRect(); // keyboard (Shift+F10) gives 0,0
                     setMenu({ item: x, x: e.clientX || r.left + 24, y: e.clientY || r.bottom });
                   }}>
-                  <Icon className="ic" aria-hidden /><span>{x.name}</span>
+                  {x.link ? <Link2 className="ic" aria-hidden data-testid={`nav-item-link-${x.name}`} /> : <Icon className="ic" aria-hidden />}<span>{x.name}</span>
                 </button>
               ))}
             </details>

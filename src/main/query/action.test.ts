@@ -113,6 +113,11 @@ it('make table never replaces a query', async () => {
   expect(await runAction(db, sqlRef('SELECT * INTO Bilan FROM Commandes'), {}, { skipFailures: false, replaceTable: true }, ctx)).toEqual({ ok: false, reason: 'nameExists', table: 'Bilan' });
 });
 
+it('make table never replaces a link', async () => {
+  db.exec("INSERT INTO bc_links (name, source_id, remote_name) VALUES ('Bilan', 's', 'Bilan')");
+  expect(await runAction(db, sqlRef('SELECT * INTO bilan FROM Commandes'), {}, { skipFailures: false, replaceTable: true }, ctx)).toEqual({ ok: false, reason: 'nameExists', table: 'bilan' });
+});
+
 it('a select query is no action query', async () => {
   expect(() => actionCount(db, sqlRef('SELECT * FROM Clients'), {}, ctx)).toThrow('bc:invalidArgument');
 });

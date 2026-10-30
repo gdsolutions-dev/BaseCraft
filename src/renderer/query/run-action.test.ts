@@ -10,13 +10,15 @@ const tablesList = vi.fn(async () => [{ name: 'Commandes' }]);
 const cascadeChildren = vi.fn(async (_t: string): Promise<{ table: string; effect: 'deleted' | 'modified' }[]> => []);
 const relationsList = vi.fn(async (): Promise<object[]> => []);
 const baseState = vi.fn(async () => ({ readOnly: false }));
+const getSettings = vi.fn(async () => ({ confirmActionQueries: true }));
 const describe = vi.fn(async ({ name }: { name: string }) => name === 'QV' // a join (B4): Commandes, and Clients through it
   ? { fields: [], updatable: true, keyTable: 'Commandes', parameters: [], tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }] }
   : { fields: [], updatable: true, keyTable: name === 'QCommandes' ? 'Commandes' : 'Clients', parameters: [] });
 (globalThis as unknown as { window: { basecraft: Partial<BasecraftApi> } }).window = {
   basecraft: { queries: { actionCount, runAction }, tables: { list: tablesList } as unknown as BasecraftApi['tables'],
     sources: { describe } as unknown as BasecraftApi['sources'], base: { state: baseState } as unknown as BasecraftApi['base'],
-    relations: { cascadeChildren, list: relationsList } as unknown as BasecraftApi['relations'] },
+    relations: { cascadeChildren, list: relationsList } as unknown as BasecraftApi['relations'],
+    app: { getSettings } as unknown as BasecraftApi['app'] },
 };
 const { runActionFlow, setOpenTabs } = await import('./run-action');
 const { onContentBlocked } = await import('../shell/Banners');
@@ -240,20 +242,70 @@ it('a row refused by the table rule (no field): its table-level message, never t
   expect(messages[0]).not.toBe(i18n.t('query.action.relatedRow', { table: 'Commandes' }));
 });
 
-it('content not enabled: actionCount refuses (bc:contentDisabled), the blocked message is shown, nothing else is asked or run', async () => {
-  actionCount.mockReset().mockRejectedValue(new Error("Error invoking remote method 'bc:queries:actionCount': Error: bc:contentDisabled"));
+it('content not enabled: actionCount refuses (bc:contentDisabled), the blocked message is shown, nothing else is asked or run, whatever the confirmation setting', async () => {
+  for (const confirmActions of [undefined, async () => false]) { // O1: turning the count question off never lets a disabled base run
+    actionCount.mockReset().mockRejectedValue(new Error("Error invoking remote method 'bc:queries:actionCount': Error: bc:contentDisabled"));
+    runAction.mockReset();
+    const m = fakeModal([]);
+    const d = { ...deps(m.modal), confirmActions };
+    let barShown = 0;
+    const off = onContentBlocked(() => { barShown++; });
+    expect(await runActionFlow(ref, d)).toBe('blocked');
+    off();
+    expect(barShown).toBe(1); // a dismissed security bar comes back: the message points at it
+    expect(m.asked.map((x) => [x.messageKey, x.buttons])).toEqual([['query.action.contentDisabled', ['ok']]]);
+    expect(m.labels).toEqual([]); // no parameter asked
+    expect(runAction).not.toHaveBeenCalled();
+    expect(d.showError).not.toHaveBeenCalled();
+  }
+});
+
+it('action queries off (O1): no count question; the partial, replace and refusal questions still show', async () => {
+  const off = async () => false;
+  actionCount.mockReset().mockResolvedValue({ count: 2, table: 'Commandes' });
+  runAction.mockReset().mockResolvedValueOnce({ ok: true, count: 2 });
+  const a = fakeModal([]); // a modal.confirm would answer No
+  expect(await runActionFlow(ref, { ...deps(a.modal), confirmActions: off })).toBe('done');
+  expect(a.asked).toEqual([]);
+  expect(runAction).toHaveBeenCalledTimes(1);
+
+  runAction.mockReset()
+    .mockResolvedValueOnce({ ok: false, reason: 'rowErrors', failed: 1, total: 2, errors: [{ field: 'Montant', code: 'validation' }],
+      byCause: { conversion: 0, key: 0, lock: 0, validation: 1 } })
+    .mockResolvedValueOnce({ ok: true, count: 1 });
+  const b = fakeModal(['yes']);
+  expect(await runActionFlow(ref, { ...deps(b.modal), confirmActions: off })).toBe('done');
+  expect(b.asked.map((x) => x.messageKey)).toEqual(['query.action.partial']);
+  expect(runAction.mock.calls.map((c) => c[2])).toEqual([{ skipFailures: false, replaceTable: false }, { skipFailures: true, replaceTable: false }]);
+
+  runAction.mockReset().mockResolvedValueOnce({ ok: false, reason: 'tableExists', table: 'Totaux' }).mockResolvedValueOnce({ ok: true, count: 2 });
+  const c = fakeModal(['no']);
+  expect(await runActionFlow({ kind: 'sql', sql: 'SELECT * INTO Totaux FROM Commandes' }, { ...deps(c.modal), confirmActions: off })).toBe('cancelled');
+  expect(c.asked.map((x) => x.messageKey)).toEqual(['query.action.replace']);
+
+  runAction.mockReset().mockResolvedValueOnce({ ok: false, reason: 'related', table: 'Clients' });
+  const e = fakeModal([]);
+  expect(await runActionFlow(ref, { ...deps(e.modal), confirmActions: off })).toBe('failed');
+  expect(e.asked.map((x) => x.messageKey)).toEqual(['query.action.related']);
+
+  actionCount.mockReset().mockResolvedValue({ count: 2, table: 'Commandes' });
   runAction.mockReset();
-  const m = fakeModal([]);
-  const d = deps(m.modal);
-  let barShown = 0;
-  const off = onContentBlocked(() => { barShown++; });
-  expect(await runActionFlow(ref, d)).toBe('blocked');
-  off();
-  expect(barShown).toBe(1); // a dismissed security bar comes back: the message points at it
-  expect(m.asked.map((x) => [x.messageKey, x.buttons])).toEqual([['query.action.contentDisabled', ['ok']]]);
-  expect(m.labels).toEqual([]); // no parameter asked
+  const w = fakeModal(['no']); // setting on, a count answered No: still asked
+  expect(await runActionFlow(ref, { ...deps(w.modal), confirmActions: async () => true })).toBe('cancelled');
+  expect(w.asked.map((x) => x.messageKey)).toEqual(['query.action.confirm_delete']);
   expect(runAction).not.toHaveBeenCalled();
-  expect(d.showError).not.toHaveBeenCalled();
+});
+
+it('the action queries setting is read when the count would be asked, from the window by default', async () => {
+  actionCount.mockReset().mockResolvedValue({ count: 3, table: 'Commandes' });
+  runAction.mockReset().mockResolvedValue({ ok: true, count: 3 });
+  getSettings.mockResolvedValueOnce({ confirmActionQueries: false });
+  const off = fakeModal([]);
+  expect(await runActionFlow(ref, deps(off.modal))).toBe('done');
+  expect(off.asked).toEqual([]);
+  const on = fakeModal(['yes']); // the stub answers true again
+  expect(await runActionFlow(ref, deps(on.modal))).toBe('done');
+  expect(on.asked.map((x) => x.messageKey)).toEqual(['query.action.confirm_delete']);
 });
 
 it('warnings: false (SetWarnings): the count, partial and replace questions are answered Yes unseen; errors are still shown', async () => {

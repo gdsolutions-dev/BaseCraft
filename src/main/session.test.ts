@@ -284,12 +284,13 @@ describe('session (lock lifecycle and data access)', () => {
     fs.copyFileSync(src + '-journal', p + '-journal');
     w.exec('ROLLBACK');
     w.close();
-    overwriteLock(p, { user: 'u', host: 'h', pid: 1, sessionId: 'dead', heartbeatAt: new Date(0).toISOString() });
+    overwriteLock(p, { user: 'u', host: os.hostname(), pid: 1, sessionId: 'dead', heartbeatAt: new Date(0).toISOString() });
     t = 31_000;
     const s = open();
     expect(s.state).toMatchObject({ readOnly: true, readOnlyReason: 'heldByOther', lockStale: true, needsRecovery: true });
     expect(() => s.listTables()).toThrow('bc:needsRecovery');
     expect(() => s.count('big')).toThrow('bc:needsRecovery');
+    expect(s.dataStamp()).toBe(''); // the refresh timer (C3 R10) asks it every interval: no connection, nothing to watch
     expect(s.takeOverLock()).toMatchObject({ readOnly: false });
     expect(s.state.needsRecovery).toBeUndefined();
     expect(s.count('big')).toBe(0); // the uncommitted rows were rolled back

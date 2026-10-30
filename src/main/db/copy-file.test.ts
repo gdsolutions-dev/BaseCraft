@@ -159,12 +159,45 @@ describe('compactBase', () => {
     expect(s.db().prepare('SELECT Nom FROM Clients').all()).toEqual([{ Nom: 'Durand' }]); // the session works again
   });
 
+  // The backups are bounded (O1 G5): a swap refused before the rename (Windows: another session's handle on the file) leaves
+  // the original as it was, so its backup is a redundant copy and goes; every other failure, and a repair, keeps it.
+  const backups = () => fs.readdirSync(dir).filter((f) => f.includes('.backup-'));
+  const refuseSwap = () => { let n = 0; return (from: string, to: string) => { if (++n === 2) throw Object.assign(new Error('busy'), { code: 'EBUSY' }); fs.renameSync(from, to); }; };
+
+  it('a swap refused before the rename: the original untouched, reopened, and its redundant backup removed', async () => {
+    const s = seeded();
+    s.db().prepare('INSERT INTO Clients (Nom) VALUES (?)').run('Durand');
+    const original = readFileSync(p);
+    await expect(compactBase(s, { rename: refuseSwap() })).rejects.toThrow(/^bc:copyFailed\|EBUSY/);
+    expect(backups()).toEqual([]);
+    expect(readFileSync(p)).toEqual(original);
+    expect(leftovers()).toEqual([]);
+    expect(s.db().prepare('SELECT Nom FROM Clients').all()).toEqual([{ Nom: 'Durand' }]);
+  });
+
+  it('a swap refused and the original not reopened: the backup is kept', async () => {
+    const s = seeded();
+    const original = readFileSync(p);
+    const broken = { ...s, reopen: () => { throw new Error('cannot reopen'); } };
+    await expect(compactBase(broken, { rename: refuseSwap() })).rejects.toThrow(/^bc:copyFailed\|EBUSY/);
+    expect(backups()).toHaveLength(1);
+    expect(readFileSync(path.join(dir, backups()[0]!))).toEqual(original);
+  });
+
+  it('a copy that fails before the swap (the first rename): the backup is kept', async () => {
+    const s = seeded();
+    const rename = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); };
+    await expect(compactBase(s, { rename })).rejects.toThrow(/^bc:copyFailed\|ENOSPC/);
+    expect(backups()).toHaveLength(1);
+  });
+
   it('a corrupt base whose copy fails: corrupt, original untouched', async () => {
     const s = seeded();
     const original = readFileSync(p);
     const r = await compactBase(s, { check: () => ['row 2 missing from index'] });
     expect(r).toMatchObject({ ok: false, reason: 'corrupt', problems: ['row 2 missing from index'] });
     if (r.ok) return;
+    expect(backups()).toEqual([path.basename(r.backupPath)]);
     expect(existsSync(r.backupPath)).toBe(true);
     expect(readFileSync(p)).toEqual(original);
     expect(leftovers()).toEqual([]);
@@ -174,7 +207,9 @@ describe('compactBase', () => {
     const s = seeded();
     let n = 0;
     const check: CopyDeps['check'] = () => (n++ === 0 ? ['row 2 missing from index'] : []);
-    expect(await compactBase(s, { check })).toMatchObject({ ok: true, repaired: ['row 2 missing from index'] });
+    const r = await compactBase(s, { check });
+    expect(r).toMatchObject({ ok: true, repaired: ['row 2 missing from index'] });
+    expect(backups()).toHaveLength(1);   // kept: compactOnClose drops a backup only when nothing was repaired
   });
 });
 
@@ -222,7 +257,7 @@ describe('fix round 1', () => {
   });
 
   const writeLock = (base: string, heartbeatAt: string) =>
-    fs.writeFileSync(`${base}.lock`, JSON.stringify({ user: 'u', host: 'h', pid: 1, sessionId: 'other', heartbeatAt }));
+    fs.writeFileSync(`${base}.lock`, JSON.stringify({ user: 'u', host: os.hostname(), pid: 1, sessionId: 'other', heartbeatAt }));
 
   it('Save As: a live lock appearing during the copy refuses the rename (target untouched, temp removed)', async () => {
     const s = Session.create(p, sessionDeps);
@@ -289,5 +324,6 @@ describe('fix round 1', () => {
     fail = true;
     const e = await s.compact().then(() => null, (x: Error) => x);
     expect(e).toMatchObject({ name: 'BaseLostError', message: expect.stringMatching(/^bc:reopenFailed\|/) });
+    expect(fs.readdirSync(dir).filter((f) => f.includes('.backup-'))).toHaveLength(1);   // the swap was done: the backup is kept
   });
 });

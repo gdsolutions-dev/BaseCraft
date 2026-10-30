@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,7 @@ import en from '../../shared/i18n/en.json';
 import type { ImportTexts } from '../import/text-import';
 import { ReadOnlyError } from '../session';
 import { createDispatcher, openSession } from './host';
-import type { HostEvent, HostReply, HostRequest } from './protocol';
+import { HOST_METHODS, READ_METHODS, type HostEvent, type HostReply, type HostRequest } from './protocol';
 
 const req = (id: number, method: string, ...args: unknown[]): HostRequest => ({ id, method, args });
 const opened = (target: object) => {
@@ -76,6 +76,44 @@ it('a reply that cannot be cloned rejects instead of hanging', async () => {
   expect(reply(out, 2)).toMatchObject({ ok: false });
 });
 
+describe('R16: a transient malformed read', () => {
+  const corrupt = () => Object.assign(new Error('database disk image is malformed'), { errcode: 11 });
+  const pause = vi.fn(async (_ms: number) => {});
+  beforeEach(() => pause.mockClear());
+  const dispatcher = (target: object, wait: (ms: number) => Promise<void>) => {
+    const out: (HostReply | HostEvent)[] = [];
+    const d = createDispatcher(() => target, (m) => out.push(m), new Set(Object.keys(target)), wait);
+    return { d, out };
+  };
+  const call = async ({ d, out }: ReturnType<typeof dispatcher>, method: string) => {
+    await d(req(0, 'open', {}));
+    await d(req(1, method));
+    const { name: _name, ...r } = reply(out, 1) as HostReply & { name?: string };
+    return (({ id: _id, ...rest }) => rest)(r);
+  };
+
+  it('a read that meets a transient malformed page is retried once after 250 ms', async () => {
+    const page = vi.fn().mockImplementationOnce(() => { throw corrupt(); }).mockReturnValue({ rows: [] });
+    expect(await call(dispatcher({ page }, pause), 'page')).toEqual({ ok: true, value: { rows: [] } });
+    expect(page).toHaveBeenCalledTimes(2);
+    expect(pause).toHaveBeenCalledWith(250);
+  });
+  it('a read malformed twice is reported bc:fileDamaged', async () => {
+    const page = vi.fn(() => { throw corrupt(); });
+    expect(await call(dispatcher({ page }, pause), 'page')).toEqual({ ok: false, message: 'bc:fileDamaged' });
+    expect(page).toHaveBeenCalledTimes(2);
+  });
+  it('a write that meets it is reported at once, never retried', async () => {
+    const update = vi.fn(() => { throw corrupt(); });
+    expect(await call(dispatcher({ update }, pause), 'update')).toEqual({ ok: false, message: 'bc:fileDamaged' });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(pause).not.toHaveBeenCalled();
+  });
+  it('READ_METHODS are HOST_METHODS', () => {
+    for (const m of READ_METHODS) expect(HOST_METHODS.has(m), m).toBe(true);
+  });
+});
+
 it('an open error is a bc:<code> rejection (the host applies bcError)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bchost-'));
   try {
@@ -83,7 +121,7 @@ it('an open error is a bc:<code> rejection (the host applies bcError)', async ()
     fs.writeFileSync(p, 'not a base');
     const out: (HostReply | HostEvent)[] = [];
     const d = createDispatcher(openSession, (m) => out.push(m));
-    await d(req(1, 'open', { path: p, create: false, appVersion: '0.0.0', region: 'fr-FR', sessionId: 'a' }));
+    await d(req(1, 'open', { path: p, create: false, appVersion: '0.0.0', region: 'fr-FR', sessionId: 'a', shared: { openMode: 'shared', updateRetries: 2, updateRetryMs: 250 } }));
     expect(out).toEqual([{ id: 1, ok: false, name: 'Error', message: 'bc:notBasecraft' }]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -106,7 +144,7 @@ describe('with a real session', () => {
     db.close();
     out = [];
     d = createDispatcher(openSession, (m) => out.push(m));
-    await d(req(0, 'open', { path: p, create: false, appVersion: '0.0.0', region: 'fr-FR', sessionId: 'a' }));
+    await d(req(0, 'open', { path: p, create: false, appVersion: '0.0.0', region: 'fr-FR', sessionId: 'a', shared: { openMode: 'shared', updateRetries: 2, updateRetryMs: 250 } }));
     expect(value(0)).toMatchObject({ readOnly: false, fileName: 'test.basecraft' });
   });
   afterEach(async () => {

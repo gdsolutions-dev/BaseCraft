@@ -9,6 +9,7 @@ import { actionDef } from '../../shared/macro/catalog';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import { bcErrorCode, errorMessage, type ModalApi } from '../shell/Modal';
+import { formulaLang } from '../../shared/i18n';
 import type { MacroFailure } from './engine';
 
 const t = (key: string, params: Record<string, unknown> = {}) => i18n.t(key, params);
@@ -77,6 +78,6 @@ function MacroFailed({ f, ctx, onClose }: { f: MacroFailure; ctx: DisplayContext
 
 export async function showMacroFailed(modal: ModalApi, f: MacroFailure): Promise<void> {
   const s = await api.app.getSettings();
-  const ctx: DisplayContext = { lang: s.uiLanguage, region: localeInfo(s.region) };
+  const ctx: DisplayContext = { lang: formulaLang(s.uiLanguage), region: localeInfo(s.region) };
   await modal.custom<true>((close) => createElement(MacroFailed, { f, ctx, onClose: close }), { titleKey: 'macro.failed.title' });
 }

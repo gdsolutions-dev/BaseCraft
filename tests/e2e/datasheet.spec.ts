@@ -1,5 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createTable } from '../../src/main/db/schema';
@@ -238,7 +239,7 @@ test('a write refused because the lock was lost: after "Take over", the sheet is
     await clickNom(page, 0);
     await typeIntoCell(page, 'Durand');
     // Another instance took the lock over (its holder looks dead, so ours can take it back); the next write finds out.
-    writeFileSync(`${base}.lock`, JSON.stringify({ user: 'autre', host: 'PC-2', pid: 1, sessionId: 'voleur', heartbeatAt: '2000-01-01T00:00:00.000Z' }));
+    writeFileSync(`${base}.lock`, JSON.stringify({ user: 'autre', host: hostname(), pid: 1, sessionId: 'voleur', heartbeatAt: '2000-01-01T00:00:00.000Z' }));
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.readOnly);
     await page.getByTestId('modal-btn-ok').click();

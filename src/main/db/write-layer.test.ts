@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, openBaseFile } from './file-format';
 import { createTable, dropTable, renameTable } from './schema';
 import { tableDesign } from './schema';
@@ -10,6 +10,7 @@ import { copyRows, deleteRows, insertRow, updateRow } from './write-layer';
 import { countRows } from './rows';
 import { f, t, clients } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
+import { seedSales } from '../query/test-db';
 
 let dir: string;
 let db: DatabaseSync;
@@ -277,5 +278,64 @@ describe('write layer: primary keys of adopted tables', () => {
     createTable(db, own);
     expect(await insertRow(db, own, { v: 'a' }, fr)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
     expect(await insertRow(db, own, { Code: null, v: 'a' }, fr)).toEqual({ ok: false, errors: [{ field: 'Code', code: 'required' }] });
+  });
+});
+
+describe('write layer: optimistic locking (C3 R8, G3)', () => {
+  // two connections a, b on one base; Clients row 3 = Durand Paris
+  let a: DatabaseSync;
+  let b: DatabaseSync;
+  let d: ReturnType<typeof tableDesign>;
+  const info = fr;
+  const now = () => new Date();
+  const orig = { 'N°': 3, Nom: 'Durand', Ville: 'Paris' };
+  const read = (x: DatabaseSync, sql: string): unknown => Object.values(x.prepare(sql).get() as object)[0];
+  beforeEach(() => {
+    const p = path.join(dir, 'shared.basecraft');
+    createBaseFile(p, '0.0.0');
+    a = openBaseFile(p, 'write', '0.0.0').db;
+    seedSales(a);
+    d = tableDesign(a, 'Clients');
+    b = new DatabaseSync(p);
+  });
+  afterEach(() => { b.close(); a.close(); });
+
+  it('unchanged since read: saved', async () => expect((await updateRow(a, d, 3, { Ville: 'Lille' }, info, now, { expected: orig })).ok).toBe(true));
+  it('changed by another connection: conflict with the current row, nothing written', async () => {
+    b.prepare(`UPDATE Clients SET Ville = 'Brest' WHERE rowid = 3`).run();
+    expect(await updateRow(a, d, 3, { Ville: 'Lille' }, info, now, { expected: orig }))
+      .toEqual({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(read(b, 'SELECT Ville FROM Clients WHERE rowid = 3')).toBe('Brest');
+  });
+  it('deleted by another connection', async () => {
+    b.prepare('DELETE FROM Clients WHERE rowid = 3').run();
+    expect(await updateRow(a, d, 3, { Ville: 'Lille' }, info, now, { expected: orig })).toEqual({ ok: false, conflict: 'deleted' });
+  });
+  it('Null and empty text differ; floats compare exactly', async () => {
+    b.prepare(`UPDATE Clients SET Ville = '' WHERE rowid = 3`).run();
+    expect(await updateRow(a, d, 3, { Ville: 'Lille' }, info, now, { expected: { ...orig, Ville: null } })).toMatchObject({ ok: false, conflict: 'changed' });
+    expect(read(b, 'SELECT Ville FROM Clients WHERE rowid = 3')).toBe('');
+    b.prepare('UPDATE Commandes SET Montant = ? WHERE rowid = 1').run(0.1 + 0.2);
+    const cd = tableDesign(a, 'Commandes');
+    expect((await updateRow(a, cd, 1, { Montant: '5' }, info, now, { expected: { Montant: 0.1 + 0.2 } })).ok).toBe(true);
+    expect(await updateRow(a, cd, 1, { Montant: '6' }, info, now, { expected: { Montant: 0.3 } })).toMatchObject({ ok: false, conflict: 'changed' });
+  });
+  it('a name the design lacks is ignored; no expected keeps today\'s path', async () => {
+    b.prepare(`UPDATE Clients SET Ville = 'Brest' WHERE rowid = 3`).run();
+    expect((await updateRow(a, d, 3, { Ville: 'Lille' }, info, now, { expected: { Inconnu: 1 } })).ok).toBe(true);
+    expect((await updateRow(a, d, 3, { Ville: 'Nantes' }, info, now)).ok).toBe(true);
+    expect(read(b, 'SELECT Ville FROM Clients WHERE rowid = 3')).toBe('Nantes');
+  });
+  it('a table with a record rule: a deleted row is a conflict, not an error', async () => {
+    const r = { ...d, validationRule: '[Nom] <> ""' };
+    b.prepare('DELETE FROM Clients WHERE rowid = 3').run();
+    expect(await updateRow(a, r, 3, { Ville: 'Lille' }, info, now, { expected: orig })).toEqual({ ok: false, conflict: 'deleted' });
+  });
+  it('a record rule broken by another workstation\'s change: the conflict, not the rule', async () => {
+    const r = { ...d, validationRule: '[Ville] <> "Brest"' };
+    b.prepare(`UPDATE Clients SET Ville = 'Brest' WHERE rowid = 3`).run();
+    expect(await updateRow(a, r, 3, { Nom: 'Durant' }, info, now, { expected: orig }))
+      .toEqual({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(await updateRow(a, r, 3, { Nom: 'Durant' }, info, now)).toMatchObject({ ok: false, errors: [{ code: 'validation' }] }); // without expected: the rule
   });
 });

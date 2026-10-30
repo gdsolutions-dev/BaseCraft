@@ -61,7 +61,7 @@ describe('file-format', () => {
   it('creates and opens a BaseCraft file', () => {
     createBaseFile(p, '0.1.0');
     const b = openBaseFile(p, 'write', '0.1.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 2, appVersion: '0.1.0', options: {} });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 3, appVersion: '0.1.0', options: {} });
     expect(b.meta.dbUuid).toMatch(/^[0-9a-f-]{36}$/);
     expect(b.db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID });
     expect(b.db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'delete' });
@@ -171,6 +171,59 @@ describe('file-format', () => {
     expect(tableExists(db, 'bc_marker')).toBe(false);
     db.close();
     expect(metaValue(p, 'format_major')).toBe('1');
+  });
+  it('migrate: false refuses an older base and leaves it untouched', () => {
+    createBaseFile(p, '0.1.0');
+    const raw = new DatabaseSync(p);
+    raw.exec("DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'"); // a 1.1 base, as A2 wrote it
+    raw.close();
+    const before = fs.readFileSync(p);
+    const files = fs.readdirSync(dir);
+    for (const mode of ['write', 'readOnly'] as const) expectCode(() => openBaseFile(p, mode, '9.9.9', { migrate: false }), 'needsDesigner');
+    expect(fs.readFileSync(p)).toEqual(before); // no backup, no migration, no app_version stamp
+    expect(fs.readdirSync(dir)).toEqual(files);
+  });
+  it('migrate: false opens a current or newer-minor base', () => {
+    createBaseFile(p, '0.1.0');
+    openBaseFile(p, 'write', '0.1.0', { migrate: false }).db.close(); // current
+    const raw = new DatabaseSync(p);
+    raw.exec("UPDATE bc_meta SET value='5' WHERE key='format_minor'; INSERT INTO bc_meta VALUES ('futureKey','x')");
+    raw.close();
+    const b = openBaseFile(p, 'write', '0.1.0', { migrate: false });
+    b.db.close();
+    expect(b.meta.formatMinor).toBe(5);
+    expect(metaValue(p, 'futureKey')).toBe('x');
+  });
+  it.each(['write', 'readOnly'] as const)('olderMinorAsIs opens an older minor as it is (%s): no migration, no backup, format kept', (mode) => {
+    createBaseFile(p, '0.1.0');
+    const raw = new DatabaseSync(p);
+    raw.exec("DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value='2' WHERE key='format_minor'"); // a 1.2 base, as B5 wrote it
+    raw.close();
+    const files = fs.readdirSync(dir);
+    const b = openBaseFile(p, mode, '0.1.0', { olderMinorAsIs: true });
+    expect(b).toMatchObject({ migrated: false, backupPath: undefined, meta: { formatMajor: 1, formatMinor: 2 } });
+    expect(tableExists(b.db, 'bc_links')).toBe(false);
+    b.db.close();
+    expect(metaValue(p, 'format_minor')).toBe('2');
+    expect(fs.readdirSync(dir)).toEqual(files);
+  });
+  it('olderMinorAsIs never stamps app_version, even in write mode (a linked file)', () => {
+    createBaseFile(p, '0.0.0');
+    openBaseFile(p, 'write', '9.9.9', { olderMinorAsIs: true }).db.close();
+    expect(metaValue(p, 'app_version')).toBe('0.0.0');
+  });
+  it.each(['write', 'readOnly'] as const)('olderMinorAsIs refuses an older major (%s) with needsDesigner: no backup, no migration, bytes untouched', (mode) => {
+    createBaseFile(p, '0.1.0');
+    const before = fs.readFileSync(p);
+    const files = fs.readdirSync(dir);
+    expectCode(() => openBaseFile(p, mode, '0.2.0', { current: cur, migrations: m, olderMinorAsIs: true }), 'needsDesigner');
+    expect(fs.readFileSync(p)).toEqual(before); // no migration, no app_version stamp
+    expect(fs.readdirSync(dir)).toEqual(files); // no backup
+  });
+  it('olderMinorAsIs still refuses a newer major', () => {
+    const before = editMeta("UPDATE bc_meta SET value='2' WHERE key='format_major'");
+    expectCode(() => openBaseFile(p, 'write', '0.1.0', { olderMinorAsIs: true }), 'newerMajor');
+    expect(fs.readFileSync(p)).toEqual(before);
   });
   it('read-only open never migrates', () => {
     createBaseFile(p, '0.1.0');

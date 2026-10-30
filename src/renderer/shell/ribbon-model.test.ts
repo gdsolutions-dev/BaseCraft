@@ -88,6 +88,18 @@ describe('command registry', () => {
     expect(save).toHaveBeenCalledOnce(); expect(create).toHaveBeenCalledOnce();
   });
 
+  it('run mode runs only the commands of the ribbon it shows: Create, Relationships, Table Fields are refused (B3 Minor 6b)', () => {
+    const run = vi.fn();
+    reg(SHELL_SCOPE, { createTableDesign: run, createMacro: run, relationships: run, tableProperties: run, compactRepair: run, copy: run });
+    reg('t1', { addShortText: run, save: run });
+    setActiveCommandTab('t1');
+    setCommandContext({ ...writableSheet, ribbon: 'simplified', runMode: true });
+    for (const id of ['createTableDesign', 'createMacro', 'relationships', 'tableProperties', 'addShortText', 'compactRepair'] as const) expect(runCommand(id), id).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(runCommand('save')).toBe(true); expect(runCommand('copy')).toBe(true);   // Home's
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it('runCommand tells whether the command ran (F4 prevents the default only then)', () => {
     reg('t1', { save: () => {} });
     setActiveCommandTab('t1');
@@ -125,6 +137,21 @@ describe('ribbon model', () => {
     expect(importText.enabled(ctx({ hasBase: false, mode: null }))).toBe(false);
     expect(cmd('importExcel').enabled(ctx({ mode: null }))).toBe(true);
     expect(cmd('importExcel').enabled(ctx({ readOnly: true }))).toBe(false);
+    // C1: External Data › BaseCraft or SQLite Database links tables of another file, on a writable base
+    expect(cmd('linkBaseCraft').planned).toBeUndefined();
+    expect(cmd('linkBaseCraft').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('linkBaseCraft').enabled(ctx({ readOnly: true }))).toBe(false);
+    // C2: External Data › Link Access Database, on a writable base; importing an Access file stays planned for stage E
+    expect(cmd('linkAccess').planned).toBeUndefined();
+    expect(cmd('linkAccess').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('linkAccess').enabled(ctx({ readOnly: true }))).toBe(false);
+    expect(cmd('importAccess').planned).toBe('E');
+    // C1: the Linked Table Manager is delivered (C11), on a writable base, last of the import group
+    expect(cmd('linkedTableManager').planned).toBeUndefined();
+    expect(cmd('linkedTableManager').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('linkedTableManager').enabled(ctx({ readOnly: true }))).toBe(false);
+    expect(cmd('linkedTableManager').enabled(ctx({ hasBase: false, mode: null }))).toBe(false);
+    expect(RIBBON.find((t) => t.id === 'externalData')!.groups.find((g) => g.id === 'import')!.commands.at(-1)!.id).toBe('linkedTableManager');
     expect(cmd('compactRepair').planned).toBeUndefined(); // A6: Compact and Repair needs the write lock
     expect(cmd('compactRepair').enabled(ctx({ mode: null }))).toBe(true);
     expect(cmd('compactRepair').enabled(ctx({ readOnly: true }))).toBe(false);
@@ -149,6 +176,12 @@ describe('ribbon model', () => {
     expect(cmd('viewDesign').enabled(ctx({ mode: null }))).toBe(false);
     expect(cmd('viewDatasheet').enabled(ctx({ mode: 'design' }))).toBe(true);
     expect(cmd('viewDatasheet').enabled(ctx({ mode: 'design', isNew: true }))).toBe(false); // a table not saved yet has no data
+  });
+
+  it("a linked table's Design view is read-only (C1 R8): its tools are off, the base's commands stay", () => {
+    const linked = ctx({ mode: 'design', kind: 'table', linked: true });
+    for (const id of ['save', 'primaryKey', 'builder', 'insertRows', 'deleteRows', 'testValidationRules'] as const) expect(cmd(id).enabled(linked)).toBe(false);
+    for (const id of ['propertySheet', 'indexes', 'viewDatasheet', 'createTableDesign'] as const) expect(cmd(id).enabled(linked)).toBe(true);
   });
 
   it('refresh (Shift+F9): Home tab, Records group; on a datasheet or a Run view, never in Design view', () => {
@@ -247,6 +280,17 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   it('B4 leaves no B4 placeholder', () => {
     expect(commands.filter((c) => c.planned === 'B4').map((c) => c.id)).toEqual([]);
     expect(commands.find((c) => c.id === 'crosstabQuery')?.planned).toBeUndefined();
+  });
+
+  it('B5 leaves no B5 placeholder', () => {
+    expect(commands.filter((c) => c.planned === 'B5').map((c) => c.id)).toEqual([]);
+  });
+
+  it('C1 delivers the linked-table placeholders, C3 the Split Database; the other C commands stay, ODBC is for later (G1)', () => {
+    expect(commands.find((c) => c.id === 'linkedTableManager')?.planned).toBeUndefined();
+    expect(commands.find((c) => c.id === 'splitDatabase')?.planned).toBeUndefined(); // C3
+    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id).sort()).toEqual(['importPostgreSql', 'importSqlServer', 'moveToServer', 'passThroughQuery']);
+    expect(commands.find((c) => c.id === 'importOdbc')?.planned).toBe('later');
   });
 
   it('A3\'s refusal of TRANSFORM is gone', () => expect(() => parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b')).not.toThrow());
@@ -596,6 +640,11 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(shown('macro', 'design')).toEqual(['macroDesign']);
   });
 
+  it('datasheet design off hides Table Fields only (O1 R9)', () => {
+    const shown = visibleTabs(ctx({ kind: 'table', mode: 'datasheet', datasheetDesign: false })).filter((t) => t.contextual).map((t) => t.id);
+    expect(shown).toEqual(['table']);
+  });
+
   it('the simplified ribbon keeps Home and Print Preview', () => {
     const base: RibbonContext = { hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form' };
     expect(visibleTabs({ ...base, ribbon: 'simplified' }).map((t) => t.id)).toEqual(['home']);
@@ -778,7 +827,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "relationships: relationships objectDependencies",
         ],
         "externalData": [
-          "import: importExcel importXml importText importAccess importSqlServer importPostgreSql importOdbc savedImports linkedTableManager",
+          "import: importExcel importXml importText linkBaseCraft linkAccess importAccess importSqlServer importPostgreSql importOdbc savedImports linkedTableManager",
           "export: savedExports exportExcel exportText exportPdf exportAccess exportXml exportMore",
         ],
         "formDesign": [

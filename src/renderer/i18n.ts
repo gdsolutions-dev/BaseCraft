@@ -1,11 +1,10 @@
 import i18next from 'i18next';
-import fr from '../shared/i18n/fr.json';
-import en from '../shared/i18n/en.json';
-import type { UiLanguage } from '../shared/i18n';
+import { catalogs } from '../shared/i18n/catalogs';
+import { UI_LANGUAGES, type UiLanguage } from '../shared/i18n';
 
 export const i18n = i18next.createInstance();
 void i18n.init({
-  resources: { fr: { translation: fr }, en: { translation: en } },
+  resources: Object.fromEntries(UI_LANGUAGES.map((l) => [l, { translation: catalogs[l] }])),
   lng: 'en',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },

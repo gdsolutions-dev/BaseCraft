@@ -83,13 +83,15 @@ const parameterError = (e: unknown) => {
  * with the refused rows counted by cause (Yes: the valid rows are written), `tableExists` asks `query.action.replace` (Yes: replaced). Any other refusal or error is shown. After a
  * run, the open table and query datasheets read their rows again (`dispatch`), a Make-Table's table its design, and the
  * Navigation Pane its lists. While the base's active content is not enabled, actionCount refuses (`bc:contentDisabled`): `query.action.contentDisabled`
- * is shown at once, before any parameter, count or question. `warnings: false` (SetWarnings Off) answers the count, partial-failure and replace questions Yes
- * unseen; refusals and errors are still shown.
+ * is shown at once, before any parameter, count or question, whatever the setting. `warnings: false` (SetWarnings Off) answers the count, partial-failure and replace questions Yes
+ * unseen; refusals and errors are still shown. `confirmActions` (default: the « Requêtes action » setting, read when the count would be asked) false skips the count question only.
  * Resolves how it ended (its message already shown): 'done', 'cancelled' (a question answered No, a parameter cancelled),
  * 'blocked' (content not enabled), 'failed' (refused or an error). A macro's action fails unless 'done'.
  */
-export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; region: LocaleInfo; showError(e: unknown): Promise<void>; dispatch?: AppDispatch; warnings?: boolean }): Promise<ActionOutcome> {
+export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; region: LocaleInfo; showError(e: unknown): Promise<void>; dispatch?: AppDispatch; warnings?: boolean;
+  confirmActions?(): Promise<boolean> }): Promise<ActionOutcome> {
   const { modal } = deps;
+  const confirmActions = deps.confirmActions ?? (async () => (await api.app.getSettings()).confirmActionQueries);
   const ask = (messageKey: string, params: object): Promise<ModalButton> => deps.warnings === false ? Promise.resolve('yes')
     : modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['yes', 'no'], defaultButton: 'no' });
   const message = (messageKey: string, params: object = {}) => modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['ok'] });
@@ -125,7 +127,8 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
     for (const t of await writtenTables(table, kind)) {
       if (await inUse(t, kind === 'makeTable')) { await message('query.action.inUse', { table: t }); return 'failed'; }
     }
-    if ((await ask(`query.action.confirm_${kind}`, { count })) !== 'yes') return 'cancelled';
+    // « Requêtes action » off (read now): this question goes, the others stay; actionCount has checked the base's content above
+    if ((await confirmActions()) && (await ask(`query.action.confirm_${kind}`, { count })) !== 'yes') return 'cancelled';
     // Make-Table: the table it may replace, as spelled now (a replace may change its spelling: `totaux` -> `Totaux`)
     const into = q.body.k === 'select' ? q.body.into : undefined;
     const before = into === undefined ? undefined : (await api.tables.list()).find((t) => sameName(t.name, into))?.name;

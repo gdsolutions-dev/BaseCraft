@@ -9,6 +9,7 @@ export interface LockDeps {
   writeExclusive?: (path: string, data: string) => void;
   writeInPlace?: (path: string, data: string) => void; // default: r+ (no truncate)
   readText?: (path: string) => string;
+  hostname?: () => string; // default os.hostname(): who counts as "this host" for stale judging, and the host we write
 }
 export type LockResult =
   | { status: 'acquired'; lock: HeldLock }
@@ -50,7 +51,7 @@ function readLock(lockPath: string, deps: LockDeps = {}): { raw: string; info: L
 }
 
 function newInfo(sessionId: string, deps: LockDeps): LockInfo {
-  return { user: os.userInfo().username, host: os.hostname(), pid: process.pid, sessionId, heartbeatAt: new Date((deps.now ?? Date.now)()).toISOString() };
+  return { user: os.userInfo().username, host: (deps.hostname ?? os.hostname)(), pid: process.pid, sessionId, heartbeatAt: new Date((deps.now ?? Date.now)()).toISOString() };
 }
 
 function held(basePath: string, info: LockInfo, deps: LockDeps): HeldLock {
@@ -83,6 +84,23 @@ function create(basePath: string, sessionId: string, deps: LockDeps): LockResult
   return { status: 'acquired', lock: held(basePath, info, deps) };
 }
 
+// First sight, in this process, of the bytes of each lock another host wrote (see isStale).
+// ponytail: one entry per lock path seen, never pruned (a few bytes each); prune on release if a long-running host ever sees thousands.
+const seen = new Map<string, { raw: string; since: number }>();
+
+/** R13. This host's lock: `now - heartbeatAt` (one clock). Another host's lock: its bytes unchanged for STALE_AFTER_MS of OUR clock,
+ *  counted from the first time this process saw them (workstation clocks may disagree, so its heartbeatAt is never compared to ours).
+ *  Unreadable: stale at once. */
+function isStale(lockPath: string, cur: { raw: string; info: LockInfo; readable: boolean }, deps: LockDeps): boolean {
+  if (!cur.readable) return true;
+  const now = (deps.now ?? Date.now)();
+  if (cur.info.host === (deps.hostname ?? os.hostname)()) return now - Date.parse(cur.info.heartbeatAt) > STALE_AFTER_MS;
+  const first = seen.get(lockPath);
+  if (first?.raw === cur.raw) return now - first.since > STALE_AFTER_MS;
+  seen.set(lockPath, { raw: cur.raw, since: now });
+  return false;
+}
+
 /** Main process heartbeat while the data process is busy: rewrites the heartbeat of the lock only if it is still ours. */
 export function keepAlive(basePath: string, sessionId: string, deps: LockDeps = {}): 'ok' | 'lost' {
   const lockPath = lockPathFor(basePath);
@@ -105,11 +123,10 @@ export function releaseIfOurs(basePath: string, sessionId: string, deps: LockDep
 
 /** Current holder as seen from outside (null when there is no lock file); the info object is valid for takeOverStaleLock. */
 export function peekLock(basePath: string, deps: LockDeps = {}): Extract<LockResult, { status: 'heldByOther' }> | null {
-  const cur = readLock(lockPathFor(basePath), deps);
+  const lockPath = lockPathFor(basePath);
+  const cur = readLock(lockPath, deps);
   if (!cur) return null;
-  const now = (deps.now ?? Date.now)();
-  const stale = !cur.readable || now - Date.parse(cur.info.heartbeatAt) > STALE_AFTER_MS;
-  return { status: 'heldByOther', info: cur.info, stale };
+  return { status: 'heldByOther', info: cur.info, stale: isStale(lockPath, cur, deps) };
 }
 
 export function acquireLock(basePath: string, sessionId: string, deps: LockDeps = {}): LockResult {
@@ -140,15 +157,14 @@ export function takeOverStaleLock(basePath: string, observed: LockInfo, sessionI
   const lockPath = lockPathFor(basePath);
   const cur = readLock(lockPath, deps);
   if (cur) {
-    const now = (deps.now ?? Date.now)();
     // Could not read it: it may be live, never remove what we cannot see.
-    if (cur.readError) return { status: 'heldByOther', info: observed, stale: now - Date.parse(observed.heartbeatAt) > STALE_AFTER_MS };
+    if (cur.readError) return { status: 'heldByOther', info: observed, stale: isStale(lockPath, cur, deps) };
     const same = rawOf.has(observed)
       ? cur.raw === rawOf.get(observed)
       : cur.info.sessionId === observed.sessionId && cur.info.heartbeatAt === observed.heartbeatAt;
     if (!same) return peekLock(basePath, deps) ?? acquireLock(basePath, sessionId, deps);
     // The holder may have heartbeated since we observed it.
-    if (cur.readable && now - Date.parse(cur.info.heartbeatAt) <= STALE_AFTER_MS) return { status: 'heldByOther', info: cur.info, stale: false };
+    if (cur.readable && !isStale(lockPath, cur, deps)) return { status: 'heldByOther', info: cur.info, stale: false };
     // ponytail: check-then-unlink is not atomic. A concurrent take-over can slip in between; the loser's next
     // heartbeat() returns 'lost', so two holders overlap for at most one heartbeat interval (HEARTBEAT_MS).
     try { fs.unlinkSync(lockPath); } catch (e) { if (errCode(e) !== 'ENOENT') throw e; }

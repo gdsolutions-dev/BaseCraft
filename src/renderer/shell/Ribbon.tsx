@@ -62,7 +62,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     const iconOnly = c.size === 'xs';
     // ponytail: a long label (Access's « Compacter et réparer une base de données ») needs a wider large button to stay on two lines;
     // decided by length, the 900 px layout e2e catches a label too long even for that.
-    const size = `rbtn-${c.size}${c.size === 'lg' && label.length > 24 ? ' rbtn-wide' : ''}`;
+    const size = `rbtn-${c.size}${c.size === 'lg' && label.length >= 24 ? ' rbtn-wide' : ''}`;
     const content = <><Icon className={c.size === 'lg' ? 'ic ic-lg' : 'ic'} aria-hidden />{!iconOnly && <span>{label}</span>}</>;
     if (c.planned) {
       const tipId = `rtip-${c.id}`;

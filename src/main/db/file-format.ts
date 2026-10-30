@@ -2,13 +2,25 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type AggregateOptions } from 'node:sqlite';
-import { BC_OBJECTS_DDL, BC_RELATIONS_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
+import { BC_LINKS_DDL, BC_OBJECTS_DDL, BC_RELATIONS_DDL, BC_SOURCES_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
 import { fold, SQL_AGGREGATES, SQL_FUNCTIONS } from '../../shared/expr/sql';
 import { inTransaction } from './tx';
 
 export const FILE_EXTENSION = '.basecraft';
 export const APPLICATION_ID = 0x42435246; // 'BCRF'
-export const CURRENT_FORMAT = { major: 1, minor: 2 };
+export const CURRENT_FORMAT = { major: 1, minor: 3 };
+
+/** Every CREATE TABLE of a new base's bc_* tables, in order (createBaseFile runs them; openPlainSqlite runs them as TEMP). */
+export const SYSTEM_DDL: readonly string[] = [
+  'CREATE TABLE bc_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  `CREATE TABLE bc_tables (name TEXT PRIMARY KEY COLLATE NOCASE, props TEXT NOT NULL DEFAULT '{}')`,
+  `CREATE TABLE bc_fields (table_name TEXT NOT NULL COLLATE NOCASE, field_name TEXT NOT NULL COLLATE NOCASE,
+  position INTEGER NOT NULL, props TEXT NOT NULL, PRIMARY KEY (table_name, field_name))`,
+  BC_RELATIONS_DDL,
+  BC_OBJECTS_DDL,
+  BC_SOURCES_DDL,
+  BC_LINKS_DDL,
+];
 
 export interface BaseMeta {
   formatMajor: number;
@@ -23,7 +35,7 @@ export interface Migration {
   toMinor: number;
   up(db: DatabaseSync): void;
 }
-export type BaseFileErrorCode = 'exists' | 'notBasecraft' | 'newerMajor' | 'needsMigration' | 'cannotOpen';
+export type BaseFileErrorCode = 'exists' | 'notBasecraft' | 'newerMajor' | 'needsMigration' | 'needsDesigner' | 'cannotOpen';
 export class BaseFileError extends Error {
   constructor(public code: BaseFileErrorCode, message?: string) {
     super(message ?? code);
@@ -57,12 +69,7 @@ export function createBaseFile(filePath: string, appVersion: string): void {
   try {
     db.exec(`PRAGMA application_id=${APPLICATION_ID}`);
     db.exec('BEGIN');
-    db.exec(`CREATE TABLE bc_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE bc_tables (name TEXT PRIMARY KEY COLLATE NOCASE, props TEXT NOT NULL DEFAULT '{}');
-CREATE TABLE bc_fields (table_name TEXT NOT NULL COLLATE NOCASE, field_name TEXT NOT NULL COLLATE NOCASE,
-  position INTEGER NOT NULL, props TEXT NOT NULL, PRIMARY KEY (table_name, field_name));
-${BC_RELATIONS_DDL};
-${BC_OBJECTS_DDL};`);
+    for (const ddl of SYSTEM_DDL) db.exec(ddl);
     const ins = db.prepare('INSERT INTO bc_meta (key, value) VALUES (?, ?)');
     ins.run('format_major', String(CURRENT_FORMAT.major));
     ins.run('format_minor', String(CURRENT_FORMAT.minor));
@@ -164,11 +171,15 @@ export function backupCopy(filePath: string, now: Date = new Date()): string {
   }
 }
 
+/** `opts.migrate` false (the Runtime, which never changes a base's format): a base with a migration pending is refused with
+ *  needsDesigner, whatever the mode, before any backup or write. `opts.olderMinorAsIs` (a linked file, which a front-end never
+ *  migrates): an older minor of the current major is opened as it is, in either mode, with no migration, no backup and no
+ *  app_version stamp; an older major, whose migration a front-end must not run, is refused with needsDesigner as `migrate: false` does. */
 export function openBaseFile(
   filePath: string,
   mode: 'write' | 'readOnly',
   appVersion: string,
-  opts: { current?: { major: number; minor: number }; migrations?: Migration[]; now?: () => Date } = {},
+  opts: { current?: { major: number; minor: number }; migrations?: Migration[]; now?: () => Date; migrate?: boolean; olderMinorAsIs?: boolean } = {},
 ): OpenedBase {
   const current = opts.current ?? CURRENT_FORMAT;
   const migrations = opts.migrations ?? MIGRATIONS;
@@ -221,7 +232,8 @@ export function openBaseFile(
   if (meta.formatMajor < current.major && !pending.some((m) => m.toMajor === current.major)) {
     throw new BaseFileError('cannotOpen'); // no migration path: never re-stamp without a schema change
   }
-  const needsMigration = older && pending.length > 0;
+  const needsMigration = older && pending.length > 0 && !(opts.olderMinorAsIs && meta.formatMajor === current.major);
+  if (needsMigration && (opts.migrate === false || opts.olderMinorAsIs)) throw new BaseFileError('needsDesigner');
   if (needsMigration && mode === 'readOnly') throw new BaseFileError('needsMigration');
 
   const backupPath = needsMigration ? backupCopy(filePath, now()) : undefined;
@@ -256,7 +268,7 @@ export function openBaseFile(
         throw e;
       }
       meta = readMeta(db);
-    } else if (mode === 'write' && meta.appVersion !== appVersion) {
+    } else if (mode === 'write' && meta.appVersion !== appVersion && !opts.olderMinorAsIs) { // a linked file is never stamped
       db.prepare('UPDATE bc_meta SET value = ? WHERE key = ?').run(appVersion, 'app_version');
       meta = readMeta(db);
     }

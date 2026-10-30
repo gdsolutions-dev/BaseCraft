@@ -17,7 +17,13 @@ export const BC_OBJECTS_DDL = `CREATE TABLE bc_objects (
   PRIMARY KEY (kind, name)
 )`;
 
+// Format 1.3: linked files (C1). `props` is JSON: a source holds { path, relative? }, a link { description? }; unknown kinds and keys
+// are kept. Names are compared by sameName in links/store.ts (the PRIMARY KEY is binary), as bc_objects.
+export const BC_SOURCES_DDL = `CREATE TABLE bc_sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}')`;
+export const BC_LINKS_DDL = `CREATE TABLE bc_links (name TEXT PRIMARY KEY, source_id TEXT NOT NULL, remote_name TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}')`;
+
 export const MIGRATIONS: Migration[] = [
   { toMajor: 1, toMinor: 1, up: (db) => db.exec(BC_RELATIONS_DDL) },
   { toMajor: 1, toMinor: 2, up: (db) => db.exec(BC_OBJECTS_DDL) },
+  { toMajor: 1, toMinor: 3, up: (db) => { db.exec(BC_SOURCES_DDL); db.exec(BC_LINKS_DDL); } },
 ];

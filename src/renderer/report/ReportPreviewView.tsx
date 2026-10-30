@@ -9,6 +9,7 @@ import { layoutReport } from '../../shared/report/layout';
 import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
 import { renderPageHtml, reportCss } from '../../shared/report/render';
 import type { LaidOutPage, LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
+import { RUNTIME } from '../../shared/product';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
@@ -23,6 +24,7 @@ import { docParameters, layoutSavedReport, loadDocData, loadReportDoc, printRequ
 import { reportEvents, reportShown, type ReportEvents } from './report-events';
 import { orientationStates, withPageSetup } from './page-setup';
 import { PageSetupDialog, PageSetupMenu } from './PageSetupDialog';
+import { formulaLang } from '../../shared/i18n';
 import './preview.css';
 
 /** Tabs whose preview was entered from Design view (the designer adds its tab when it lets the change of mode through):
@@ -65,7 +67,7 @@ const faces = (r: LaidOutReport) => new Set(r.pages.flatMap((p) => p.bands.flatM
 export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
-    locale: s.region, lang: s.uiLanguage, now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
+    locale: s.region, lang: formulaLang(s.uiLanguage), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue,   // [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }
@@ -246,14 +248,15 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     else dispatch({ type: 'close', id: tab.id });
   };
 
-  /** Page Setup dialog, Margins, Size, Portrait, Landscape: saved into the definition, then laid out again. */
+  /** Page Setup dialog, Margins, Size, Portrait, Landscape: saved into the definition, then laid out again. BaseCraft Runtime
+   *  saves no design (B5 R7): applied to this preview only. */
   const applySetup = async (patch: Partial<PageSetup>) => {
     const d = doc.current;
     if (!d) return;
     const def = withPageSetup(d, patch);
     if (def === d) return;
-    const r = await api.objects.save('report', tab.name, def, tab.name);
-    if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }
+    const r = RUNTIME ? null : await api.objects.save('report', tab.name, def, tab.name);
+    if (r && !r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }
     doc.current = def;
     await run('layout');
   };

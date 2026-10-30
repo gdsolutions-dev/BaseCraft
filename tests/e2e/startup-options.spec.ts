@@ -8,7 +8,8 @@ import { openBaseFile, readOptions, updateOptions } from '../../src/main/db/file
 import { CH, type BasecraftApi } from '../../src/shared/api';
 import type { DesignDoc } from '../../src/shared/design/model';
 import { SHIFT_GRACE_MS } from '../../src/renderer/shell/shift-key';
-import { launchApp, seedBase, seedCrashed, seedForm } from './helpers';
+import { DEFAULT_STARTUP } from '../../src/shared/startup';
+import { launchApp, openDbOptions, seedBase, seedCrashed, seedForm } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -27,8 +28,7 @@ const windowTitle = (app: ElectronApplication) => app.evaluate(({ BrowserWindow 
 const lastIcon = (app: ElectronApplication) => app.evaluate(() => (globalThis as { __bcIconE2E?: { last: unknown } }).__bcIconE2E?.last);
 const openOptions = async (page: Page) => {
   await page.getByTestId('ribbon-tab-file').click();
-  await page.getByTestId('bs-options').click();
-  await expect(page.getByTestId('opt-db')).toBeVisible();
+  await openDbOptions(page);
 };
 
 test('every option saves at once; title and icon apply now, the others at the next opening', async () => {
@@ -36,7 +36,8 @@ test('every option saves at once; title and icon apply now, the others at the ne
   const { app, page } = await launchApp({ args: [path], env: FR });
   try {
     await openOptions(page);
-    await expect(page.getByTestId('opt-db').locator('h2')).toHaveText('Base de données active');
+    await expect(page.getByTestId('opt-cat-currentDb')).toHaveText('Base de données active');
+    await expect(page.getByTestId('opt-db').locator('.bs-opthead')).toHaveText(fr.options.db.header);
     await expect(page.getByTestId('opt-db-next-open')).toHaveText(fr.options.db.nextOpen);
     await expect(page.getByTestId('opt-db-runmode')).toHaveAccessibleDescription(fr.options.db.runModeHelp);
     await expect(page.getByTestId('opt-db-form').locator('option')).toHaveText(['(aucun)', 'FClients', 'FMenu']);
@@ -71,7 +72,7 @@ test('every option saves at once; title and icon apply now, the others at the ne
     await page.getByTestId('opt-db-runmode').check();
     await expect(page.getByTestId('opt-db-ribbon')).toBeDisabled();
     await expect(page.getByTestId('opt-db-ribbon').locator('option:checked')).toHaveText('Simplifié');
-    await expect.poll(() => startup(page)).toEqual({ appTitle: 'Gestion des ventes', startupForm: 'FMenu', showNavPane: false, runMode: true, ribbon: 'full', appIcon: icon });
+    await expect.poll(() => startup(page)).toEqual({ ...DEFAULT_STARTUP, appTitle: 'Gestion des ventes', startupForm: 'FMenu', showNavPane: false, runMode: true, appIcon: icon });
     await page.getByTestId('bs-back').click();
     await expect(page.getByTestId('nav-pane')).toBeVisible();          // R11: this window is unchanged
     await expect(page.getByTestId('ribbon-tab-create')).toBeVisible();
@@ -101,7 +102,8 @@ test('a base opened read-only shows the section disabled', async () => {
   try {
     await expect(b.page.getByTestId('banner-readonly')).toBeVisible();
     await openOptions(b.page);
-    for (const id of ['title', 'icon-input', 'icon-browse', 'icon-remove', 'form', 'navpane', 'ribbon', 'runmode']) {
+    for (const id of ['title', 'icon-input', 'icon-browse', 'icon-remove', 'form', 'navpane', 'ribbon', 'runmode', 'iconforms', 'statusbar', 'doctabs',
+      'specialkeys', 'compact', 'datasheetdesign', 'fullmenus', 'shortcutmenus']) {
       await expect(b.page.getByTestId(`opt-db-${id}`), id).toBeDisabled();
     }
   } finally {
@@ -141,7 +143,7 @@ test('what a newer BaseCraft stored in the section is kept when the section save
     await page.getByTestId('opt-db-title').press('Enter');
     await expect.poll(() => windowTitle(app)).toBe('Autre titre');
     await closeBase(page);
-    expect(section()).toEqual({ appTitle: 'Autre titre', appIcon: readFileSync(ICON).toString('base64'), startupForm: 'Disparu', showNavPane: true, ribbon: 'full', runMode: false, v: 2, menuBar: 'X' });
+    expect(section()).toEqual({ ...DEFAULT_STARTUP, appTitle: 'Autre titre', appIcon: readFileSync(ICON).toString('base64'), startupForm: 'Disparu', v: 2, menuBar: 'X' });   // the page saves the whole object: the eight O1 keys join the unknown ones
   } finally {
     await app.close();
   }

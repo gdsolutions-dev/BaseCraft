@@ -31,10 +31,19 @@ export function readOnlyBanner(s: SessionState): { key: string; params?: Record<
   if (!s.readOnly) return null;
   if (s.readOnlyReason === 'fileReadOnly') return { key: 'banner.fileReadOnly', takeOver };
   if (s.readOnlyReason === 'lockLost') return { key: 'banner.lockLost', takeOver };
+  if (s.readOnlyReason === 'inUse') return { key: 'banner.inUse', params: { users: (s.users ?? []).map((u) => `${u.user} (${u.host})`).join(', ') }, takeOver };
+  if (s.readOnlyReason === 'syncedFolder' || s.readOnlyReason === 'unsupportedClient') return { key: `banner.${s.readOnlyReason}`, takeOver };
   const h = s.lockHolder;
   if (!h) return { key: 'banner.readOnlyReleased', takeOver }; // the holder closed the base: no lock left
   if (isPlaceholder(h)) return { key: 'banner.readOnlyUnreadable', takeOver };
   return { key: 'banner.readOnlyHeld', params: { user: h.user, host: h.host }, takeOver };
+}
+
+/** The location risk banner; none for a data file on a network share (C3 R6: shared mode is its purpose), nor beside the
+ *  syncedFolder read-only banner, which says the same. */
+export function riskBanner(s: SessionState): 'banner.riskNetwork' | 'banner.riskSynced' | null {
+  if (s.locationRisk === 'synced') return s.readOnlyReason === 'syncedFolder' ? null : 'banner.riskSynced';
+  return s.locationRisk === 'network' && !s.dataFile ? 'banner.riskNetwork' : null;
 }
 
 /** What reconcile changed: a count of structure changes, then the relations it dropped or kept without integrity, by name. */
@@ -82,9 +91,8 @@ export function Banners({ session, onTakeOver, onEnableContent }: { session: Ses
     const text = t(ro.key, ro.params);
     out.push(banner('readonly', 'warning', ro.takeOver && !session.needsRecovery && ro.key !== 'banner.readOnlyReleased' ? t('banner.stale', { message: text }) : text, { takeOver: ro.takeOver }));
   }
-  if (session.locationRisk !== 'local') {
-    out.push(banner('risk', 'warning', t(session.locationRisk === 'network' ? 'banner.riskNetwork' : 'banner.riskSynced'), { dismissible: true }));
-  }
+  const risk = riskBanner(session);
+  if (risk) out.push(banner('risk', 'warning', t(risk), { dismissible: true }));
   for (const b of reconcileBanners(session.reconcileReport)) out.push(banner(b.kind, 'info', t(b.key, b.params), { dismissible: true }));
   if (session.migratedBackupPath) out.push(banner('migrated', 'info', t('banner.migrated', { path: session.migratedBackupPath }), { dismissible: true }));
 

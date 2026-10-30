@@ -27,7 +27,8 @@ const DELIMS: [string, string][] = [['\t', 'tab'], [';', 'semicolon'], [',', 'co
 const INDEXED = ['no', 'yesDuplicates', 'yesNoDuplicates'] as const;
 const ENCODING_LABEL: Record<string, string> = { 'utf-8': 'UTF-8', 'windows-1252': 'Windows-1252', 'utf-16le': 'UTF-16 LE' };
 
-export function ImportTextWizard({ source = 'text', tables, queries, pendingRow, onClose, onImported, appendTo }: Props) {
+export function ImportTextWizard({ source = 'text', tables: all, queries, pendingRow, onClose, onImported, appendTo }: Props) {
+  const tables = all.filter((x) => !x.link); // appended to: local tables only (C1); a new table's name is checked against all
   const { t } = useTranslation();
   const showError = useErrorDialog();
   const ref = useRef<HTMLDivElement>(null);
@@ -87,7 +88,7 @@ export function ImportTextWizard({ source = 'text', tables, queries, pendingRow,
     const s: ImportSpec = { ...EXCEL_SPEC, hasHeader: x.hasHeader, fields: x.fields };
     setXl(x); setSpec(s); setCol(0);
     setPv({ encoding: 'utf-8', spec: s, inferred: x.fields, lines: [], header: x.header, rows: x.rows, columns: x.columns, assumedDecimal: false });
-    setTable(defaultTableName(x.sheet, [...tables.map((y) => y.name), ...queries], t('designer.newTableName', { n: 1 })));
+    setTable(defaultTableName(x.sheet, [...all.map((y) => y.name), ...queries], t('designer.newTableName', { n: 1 })));
     if (appendDesign) setMapping(mapByName(x.fields.map((f) => f.name), appendDesign));
   };
   const reparseExcel = async (sheet: string | null, hasHeader: boolean | null) => {
@@ -136,7 +137,7 @@ export function ImportTextWizard({ source = 'text', tables, queries, pendingRow,
         const r = await api.importText.preview(p, null);
         setPv(r); setSpec(r.spec); setLoaded(p); setCol(0);
         fields = r.spec.fields;
-        setTable(defaultTableName(p, [...tables.map((x) => x.name), ...queries], t('designer.newTableName', { n: 1 })));
+        setTable(defaultTableName(p, [...all.map((x) => x.name), ...queries], t('designer.newTableName', { n: 1 })));
       } catch (e) {
         const code = bcErrorCode(e);
         if (code === 'invalidArgument') setError(t('importText.error.fileNotFound'));
@@ -170,7 +171,7 @@ export function ImportTextWizard({ source = 'text', tables, queries, pendingRow,
     if (s === 'finish' && mode === 'new') {
       const k = nameErrorKey(table);
       if (k) return t(k);
-      const clash = destinationNameError(table, tables.map((x) => x.name), queries);
+      const clash = destinationNameError(table, all.map((x) => x.name), queries);
       if (clash) return t(clash.key, clash.params);
     }
     return null;

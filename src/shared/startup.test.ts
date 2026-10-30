@@ -6,7 +6,10 @@ const PNG_1PX_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 
 describe('startup options', () => {
   it('defaults show everything', () => {
-    expect(readStartup(undefined)).toEqual({ appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false });
+    expect(readStartup(undefined)).toEqual({
+      appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
+      statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false,
+    });
     expect(startupHides(DEFAULT_STARTUP)).toBe(false);
     expect(hasStartup(DEFAULT_STARTUP, false)).toBe(false);
     expect(hasStartup(DEFAULT_STARTUP, true)).toBe(true);
@@ -27,6 +30,22 @@ describe('startup options', () => {
     expect(readStartup('x')).toEqual(DEFAULT_STARTUP);
     expect(readStartup(null)).toEqual(DEFAULT_STARTUP);
     expect(readStartup({ appTitle: 5, appIcon: 5, startupForm: 5 })).toEqual(DEFAULT_STARTUP);
+  });
+
+  it('reads the eight switches key by key', () => {
+    expect(readStartup({ statusBar: 'no', fullMenus: 0, specialKeys: false, future: { x: 1 } })).toEqual({ ...DEFAULT_STARTUP, specialKeys: false });
+    for (const k of ['statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms'] as const) {
+      expect(readStartup({ [k]: !DEFAULT_STARTUP[k] })).toEqual({ ...DEFAULT_STARTUP, [k]: !DEFAULT_STARTUP[k] });   // each is read on its own
+      for (const wrong of ['true', 1, null, [], {}]) expect(readStartup({ [k]: wrong })[k]).toBe(DEFAULT_STARTUP[k]);
+    }
+  });
+
+  it('the switches that hide something are bypassable, the others are not', () => {
+    for (const k of ['statusBar', 'documentTabs', 'specialKeys', 'datasheetDesign', 'fullMenus', 'shortcutMenus'] as const) {
+      expect(startupHides({ ...DEFAULT_STARTUP, [k]: false })).toBe(true);
+      expect(hasStartup({ ...DEFAULT_STARTUP, [k]: false }, false)).toBe(true);
+    }
+    expect(startupHides({ ...DEFAULT_STARTUP, compactOnClose: true, iconForForms: true })).toBe(false);
   });
 
   it('each key is read on its own', () => {
@@ -57,5 +76,9 @@ describe('startup options', () => {
     expect(readStartup({ appIcon: 'iVBORw0K' }).appIcon).toBe(''); // a truncated signature
     expect(readStartup({ appIcon: PNG_1PX_BASE64.slice(0, -1) }).appIcon).toBe(''); // not a multiple of 4
     expect(readStartup({ appIcon: ` ${PNG_1PX_BASE64}` }).appIcon).toBe('');
+  });
+
+  it('frontEnd and dataFile default to false and read alone', () => {
+    expect(readStartup({ dataFile: 'yes', frontEnd: true })).toMatchObject({ dataFile: false, frontEnd: true });
   });
 });

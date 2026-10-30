@@ -5,8 +5,12 @@ import type { CellInput, SqlValue } from '../../shared/coerce';
 export type CommitOutcome =
   | { status: 'none' }
   | { status: 'saved'; rowid: number; values: SqlValue[] }
-  | { status: 'failed'; errors: Extract<RowWriteResult, { ok: false }>['errors'] };
-type Pending = { rowIndex: number; rowid: number | null; changes: Record<string, CellInput>; looked: Record<string, SqlValue> /* AutoLookup (B4 R4): shown, never written */ };
+  | { status: 'failed'; errors: Extract<RowWriteResult, { errors: unknown }>['errors'] }
+  | { status: 'conflict'; conflict: 'changed'; current: SqlValue[] } | { status: 'conflict'; conflict: 'deleted' };   // C3 R8
+type Pending = { rowIndex: number; rowid: number | null; changes: Record<string, CellInput>; looked: Record<string, SqlValue> /* AutoLookup (B4 R4): shown, never written */
+  /** C3 R8: the row's values at its first edit (null: a new row), what its save expects to find; after a save that leaves typed
+   *  changes pending, the saved row's values. */
+  original: SqlValue[] | null };
 
 export class RowBuffer {
   private row: Pending | null = null;
@@ -14,10 +18,10 @@ export class RowBuffer {
   /** The pending row's AutoLookups (R4): reset with the row. */
   readonly lookups = new Lookups();
 
-  constructor(private readonly save: (rowid: number | null, changes: Record<string, CellInput>) => Promise<RowWriteResult>) {}
+  constructor(private readonly save: (rowid: number | null, changes: Record<string, CellInput>, original: SqlValue[] | null) => Promise<RowWriteResult>) {}
 
   /** Every unsaved change of the row, including those of a save in flight. */
-  get pending(): Omit<Pending, 'looked'> | null {
+  get pending(): Omit<Pending, 'looked' | 'original'> | null {
     return this.row && { rowIndex: this.row.rowIndex, rowid: this.row.rowid, changes: { ...this.row.changes } };
   }
 
@@ -26,11 +30,17 @@ export class RowBuffer {
     return { ...this.row?.looked };
   }
 
-  edit(rowIndex: number, rowid: number | null, field: string, input: CellInput): void {
+  /** `original`: the row's values as shown, kept from the first edit of the row (a refresh meanwhile changes nothing, R8). */
+  edit(rowIndex: number, rowid: number | null, field: string, input: CellInput, original: SqlValue[] | null = null): void {
     if (this.row && this.row.rowIndex !== rowIndex) throw new Error(`row ${this.row.rowIndex} is pending: leave it before editing row ${rowIndex}`);
     // No prototype: a field may be named __proto__, constructor… (copies made by spreading keep them as own keys).
-    this.row ??= { rowIndex, rowid, changes: Object.create(null) as Record<string, CellInput>, looked: Object.create(null) as Record<string, SqlValue> };
+    this.row ??= { rowIndex, rowid, changes: Object.create(null) as Record<string, CellInput>, looked: Object.create(null) as Record<string, SqlValue>, original };
     this.row.changes[field] = input;
+  }
+
+  /** Write Conflict › Save Record (R9): the next save expects `values` (the record as it is now: last writer wins). */
+  setOriginal(values: SqlValue[]): void {
+    if (this.row) this.row.original = values;
   }
 
   /** A parent's values found by AutoLookup for the pending row: shown, not pending; what was typed in those fields goes (R4),
@@ -54,12 +64,16 @@ export class RowBuffer {
     const sent = { ...row.changes };
     this.inflight = (async (): Promise<CommitOutcome> => {
       try {
-        const r = await this.save(row.rowid, sent);
-        if (!r.ok) return { status: 'failed', errors: r.errors };
+        const r = await this.save(row.rowid, sent, row.original);
+        if (!r.ok) {
+          if ('errors' in r) return { status: 'failed', errors: r.errors };
+          return r.conflict === 'changed' ? { status: 'conflict', conflict: 'changed', current: r.current } : { status: 'conflict', conflict: 'deleted' };
+        }
         if (this.row === row) {
           // Changes typed during the save stay pending, against the row that now exists.
           for (const k of Object.keys(sent)) if (Object.is(row.changes[k], sent[k])) delete row.changes[k];
           row.rowid = r.rowid;
+          row.original = r.values;
           if (!Object.keys(row.changes).length) this.row = null;
         }
         return { status: 'saved', rowid: r.rowid, values: r.values };

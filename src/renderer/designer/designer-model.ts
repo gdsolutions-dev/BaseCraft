@@ -291,7 +291,7 @@ function insert(s: DesignerState, a: Extract<DesignerAction, { type: 'insert' }>
   const added = a.controls.map(fresh);
   const doc = parent ? updateControl(s.doc, parent.name, (c) => ({ ...c, children: [...(c.children ?? []), ...added] }))
     : mapLists(s.doc, (list, owner, si) => (owner === null && si === section ? [...list, ...added] : list));
-  return push(s, fit(doc, s.objectKind), { kind: 'controls', names: [added[0].name] });
+  return push(s, fit(doc, s.objectKind), { kind: 'controls', names: added.map((c) => c.name) });
 }
 
 function changeSection(s: DesignerState, a: Extract<DesignerAction, { type: 'changeSection' }>): DesignerState {

@@ -14,12 +14,18 @@ import { printSelect } from './print';
 import { parseSql } from './sql-parser';
 import { writePlan, type WriteTable } from './write-plan';
 
-export interface QueryCatalog { table(name: string): TableDesign | null; query(name: string): string | null /* canonical SQL */ }
+/** The source of the front-end's own tables (R10). */
+export const LOCAL_SOURCE = 'local';
+export interface QueryCatalog {
+  table(name: string): TableDesign | null; query(name: string): string | null /* canonical SQL */;
+  /** The data source a table comes from (C1 R10, a link's source id); default LOCAL_SOURCE. */
+  sourceOf?(table: string): string;
+}
 export type ResolvedRef =
   | { kind: 'column'; alias: string; field: string; type: FieldType; props: FieldProps; depth: number /* 0 = same level, n = enclosing query */ }
   | { kind: 'param'; name: string /* as written: look it up in `params` with sameName */ }
   | { kind: 'output'; index: number /* alias of the same SELECT: its column index */ };
-export interface BoundSource { alias: string; name: string; kind: 'table' | 'query' | 'derived'; design?: TableDesign; inner?: BoundQuery }
+export interface BoundSource { alias: string; name: string; kind: 'table' | 'query' | 'derived'; design?: TableDesign; inner?: BoundQuery; source?: string /* a table's */ }
 export interface BoundColumn { name: string; type: FieldType; props: FieldProps; origin?: { table: string; field: string }; expr: Expr }
 export interface BoundParam { name: string; type: FieldType | null; props?: FieldProps }   // = SourceInfo['parameters'][number]
 /** One SELECT of the tree: the body, a UNION part, a subquery or INSERT's source (a derived table or a saved query has
@@ -27,6 +33,8 @@ export interface BoundParam { name: string; type: FieldType | null; props?: Fiel
 export interface BoundSelect { sources: BoundSource[]; columns: BoundColumn[]; grouped: boolean }
 export interface BoundQuery {
   query: Query; columns: BoundColumn[]; params: BoundParam[]; sources: BoundSource[];
+  /** The one source of every table read or written, subqueries and saved queries included (R10); LOCAL_SOURCE without any. */
+  source: string;
   /** Every `id` of the tree, subqueries included, plus the `id`s `*` expands to (`columns[i].expr`) and the SET targets. */
   refs: Map<Expr, ResolvedRef>;
   aggregate: boolean; updatable: boolean;
@@ -49,7 +57,8 @@ export type QueryBindErrorCode = 'unknownSource' | 'ambiguousField' | 'circular'
   | 'crosstabValue' // a crosstab value (TRANSFORM) without an aggregate
   | 'pivotAggregate' // an aggregate in PIVOT
   | 'tooManyColumns' // a crosstab past 254 headings or 255 columns (R10); detail: its number of columns
-  | 'crosstabAsSource'; // a saved crosstab used as a source (R12); detail: its name
+  | 'crosstabAsSource' // a saved crosstab used as a source (R12); detail: its name
+  | 'mixedSources'; // tables from two data sources in one query (C1 R10); detail: the first table whose source differs
 
 export class QueryBindError extends Error {
   constructor(public code: QueryBindErrorCode, public detail: string) {
@@ -75,7 +84,16 @@ interface Ctx {
   /** Saved queries being bound (outermost first); saved queries already bound, with the chain length they fit under. */
   catalog: QueryCatalog; chain: string[]; saved: [string, BoundQuery, number][];
   params: BoundParam[]; refs: Map<Expr, ResolvedRef>; selects: Map<SelectQuery, BoundSelect>;
+  /** The source of the tables met so far in this query's tree (R10); undefined before the first. */
+  source?: string;
 }
+
+/** `source` joins the query's (R10): a table from another source than the ones before fails, named. */
+function joinSource(ctx: Ctx, source: string, table: string): void {
+  if (ctx.source === undefined) ctx.source = source;
+  else if (ctx.source !== source) fail('mixedSources', table);
+}
+const sourceOf = (catalog: QueryCatalog, table: string): string => catalog.sourceOf?.(table) ?? LOCAL_SOURCE;
 
 const cols = (s: BoundSource): Col[] => s.design?.fields.map((x) => ({ name: x.name, type: x.props.type, props: x.props })) ?? s.inner!.columns;
 /** By alias only (an unaliased source's alias is its name), as in Access: an aliased table's own name is no longer a
@@ -230,12 +248,19 @@ function savedQuery(name: string, ctx: Ctx): BoundQuery {
 function bindSource(f: Exclude<FromItem, { k: 'join' }>, ctx: Ctx): BoundSource {
   if (f.k === 'derived') {
     const inner = bindIn({ params: [], body: f.q }, ctx.catalog, ctx.chain, ctx.saved);
+    joinSource(ctx, inner.source, f.alias); // a saved or derived query's tables join the enclosing query's
     merge(ctx, inner.params);
     return { alias: f.alias, name: f.alias, kind: 'derived', inner };
   }
   const design = ctx.catalog.table(f.name);
-  if (design) return { alias: f.alias ?? design.name, name: design.name, kind: 'table', design };
+  if (design) {
+    // asked by the name the query gives: a link's design carries its source table's name
+    const source = sourceOf(ctx.catalog, f.name);
+    joinSource(ctx, source, f.name);
+    return { alias: f.alias ?? design.name, name: design.name, kind: 'table', design, source };
+  }
   const inner = savedQuery(f.name, ctx);
+  joinSource(ctx, inner.source, f.name);
   merge(ctx, inner.params);
   return { alias: f.alias ?? f.name, name: f.name, kind: 'query', inner };
 }
@@ -400,13 +425,14 @@ function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['sa
     catalog, chain, saved, refs: new Map(), selects: new Map(),
     params: q.params.map((p) => ({ name: p.name, type: p.type, props: { ...defaultProps(p.type), ...(p.numberSize && { numberSize: p.numberSize }), required: false } })),
   };
-  const out: BoundQuery = { query: q, columns: [], params: [], sources: [], refs: ctx.refs, aggregate: false, updatable: false, selects: ctx.selects };
+  const out: BoundQuery = { query: q, columns: [], params: [], sources: [], source: LOCAL_SOURCE, refs: ctx.refs, aggregate: false, updatable: false, selects: ctx.selects };
   const body = q.body;
   let union: BoundSelect | undefined;
   switch (body.k) {
     case 'select': {
       const s = bindSelect(body, undefined, ctx);
       if (body.into !== undefined && (!isValidObjectName(body.into) || isReservedName(body.into))) fail('unknownTarget', body.into);
+      if (body.into !== undefined) joinSource(ctx, LOCAL_SOURCE, body.into); // PF4: a Make-Table writes a front-end table
       Object.assign(out, { columns: s.columns, sources: s.sources, aggregate: s.grouped });
       // a single saved query carries its own plan (A3); otherwise the plan of this FROM (B4 R1)
       const saved = body.from.length === 1 && body.from[0].k === 'source' && s.sources[0].kind === 'query' ? s.sources[0] : undefined;
@@ -428,6 +454,7 @@ function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['sa
     }
     case 'insert': {
       const design = catalog.table(body.target) ?? fail('unknownTarget', body.target);
+      joinSource(ctx, sourceOf(catalog, body.target), body.target);
       body.columns.forEach((c, i) => {
         if (!design.fields.some((x) => sameName(x.name, c))) fail('unknownTarget', c);
         if (body.columns.slice(0, i).some((x) => sameName(x, c))) fail('duplicateOutput', c);
@@ -478,6 +505,7 @@ function bindIn(q: Query, catalog: QueryCatalog, chain: string[], saved: Ctx['sa
     }
   }
   out.params = ctx.params.map((p) => (p.type === null ? { name: p.name, type: null } : p));
+  out.source = ctx.source ?? LOCAL_SOURCE; // the parser gives every query a table; a tree without one is local
   for (const s of ctx.selects.values()) {
     for (const c of s.columns) Object.assign(c, { type: exprType(c.expr, out), props: columnProps(c.expr, out) });
   }

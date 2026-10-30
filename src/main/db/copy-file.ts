@@ -56,7 +56,9 @@ export function vacuumInto(db: DatabaseSync, target: string, deps: CopyDeps = {}
 /**
  * Compact and Repair: checks the open base, backs it up, writes a compacted copy beside it (`<path>.compact`), then closes
  * the session's handle (Windows cannot rename over an open file), renames the copy over the base and reopens it. The write
- * lock file is never touched. A base whose copy fails while it has problems: `corrupt`, the original untouched.
+ * lock file is never touched. A base whose copy fails while it has problems: `corrupt`, the original untouched. The backup stays
+ * after a repair, a corrupt result or any failure, except when the swap itself is refused (the original then unchanged and
+ * reopened): the backup would repeat it, and is removed.
  */
 export async function compactBase(
   s: { db(): DatabaseSync; path: string; reopen(): void; close(): void }, deps: CopyDeps & { now?: Date } = {},
@@ -83,7 +85,10 @@ export async function compactBase(
     rename(tmp, s.path);
   } catch (e) {
     remove(tmp);
-    try { s.reopen(); } catch (e2) { console.error(e2); } // the original, untouched; the rename's error is the one told
+    try {
+      s.reopen(); // the original, untouched; the rename's error is the one told
+      remove(backupPath); // swap refused before anything changed and the base opens again: the backup only repeats it (O1 G5)
+    } catch (e2) { console.error(e2); }
     throw typed(e);
   }
   try {

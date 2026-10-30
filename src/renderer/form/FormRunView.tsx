@@ -18,12 +18,14 @@ import { i18n } from '../i18n';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from '../datasheet/filter-model';
 import { FilterMenu, type FilterMenuState } from '../datasheet/FilterMenu';
 import { editText, lookupList } from '../datasheet/datasheet-cells';
+import { onDataRefresh } from '../shell/data-refresh';
 import { confirmDelete, fieldErrorParams, showRelatedRefusal } from '../datasheet/record-messages';
 import { flushCellEditor } from '../datasheet/grid-shared';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { OpenArgs } from '../state/app-state';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
+import { askWriteConflict, recordText, showRecordDeleted, type ConflictChoice } from '../shell/WriteConflictDialog';
 import { registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { flashStatus } from '../shell/StatusBar';
 import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
@@ -50,7 +52,7 @@ const dataApi: FormDataApi = {
   describe: (ref) => api.sources.describe(ref),
   page: (ref, req) => api.sources.page(ref, req),
   insert: (table, values) => api.rows.insert(table, values),
-  update: (table, rowid, changes) => api.rows.update(table, rowid, changes),
+  update: (table, rowid, changes, expected) => api.rows.update(table, rowid, changes, expected),
   delete: (table, rowids) => api.rows.delete(table, rowids),
   save: (ref, req) => api.sources.save(ref, req),
   autoLookup: (ref, values) => api.sources.autoLookup(ref, values),
@@ -125,7 +127,7 @@ export function FormRunView(p: DocViewProps) {
       // On Open, before the records are read; cancelled: the tab closes, with no error (Access)
       if (await h.raise('OnOpen')) { if (current) { cancel(); o.dispatch({ type: 'close', id: o.tab.id }); } return; }
       if (!current) return;
-      const records = h.records = recordsFor(doc, region, readOnly, undefined, o.tab.openArgs, h.recordEvents());   // its subforms never take them
+      const records = h.records = recordsFor(doc, region, readOnly, modal, undefined, o.tab.openArgs, h.recordEvents());   // its subforms never take them
       // its parameters asked once, before the first page; Cancel does not open it (Access), with no error
       const ok = await records.open(asker(modal, region));
       if (!current) return;
@@ -153,10 +155,22 @@ export function FormRunView(p: DocViewProps) {
 
 /** The form's records, as its definition allows them; a subform's are linked (no record until the master's values come).
  *  `args`: how the tab was opened (OpenForm): its Where Condition restricts the records, its data mode applies (R8, R9). */
-function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, childFields?: string[], args?: OpenArgs, events?: RecordEvents): FormRecords {
+function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, modal: ModalApi, childFields?: string[], args?: OpenArgs, events?: RecordEvents): FormRecords {
   const all = doc.sections.flatMap((s) => flattenControls(s.controls));
   const allow = (n: string) => effectiveProp(doc.props, n, 'form') !== false;
+  /** Write Conflict (C3 R9); Copy to Clipboard: the bound controls' field names and texts, as the form shows them. */
+  const onConflict = async (): Promise<ConflictChoice> => {
+    const choice = await askWriteConflict(modal);
+    const s = records.snapshot;
+    if (choice === 'copy' && s.info) {
+      const bound = all.flatMap((c) => { const f = boundField(c, s.info!); return f ? [{ c, f, i: s.info!.fields.indexOf(f) }] : []; });
+      const ctx = { locale: region, lang: langOf() };
+      await api.app.writeClipboard(recordText(bound.map((b) => b.f.name), bound.map((b) => controlTexts(b.c, b.f, s.values[b.i] ?? null, s.pending[b.f.name], ctx).display)));
+    }
+    return choice;
+  };
   const records: FormRecords = new FormRecords(dataApi, {
+    onConflict, onDeleted: () => showRecordDeleted(modal),
     ref: doc.recordSource, locale: region, readOnly, allowAdditions: allow('AllowAdditions'), allowEdits: allow('AllowEdits'), allowDeletions: allow('AllowDeletions'),
     ...(childFields?.length ? { link: { childFields, values: null } } : {}),
     ...(args?.where !== undefined ? { where: args.where } : {}), ...(args?.dataMode ? { dataMode: args.dataMode } : {}),
@@ -195,7 +209,7 @@ export const EmbeddedForm = memo(function EmbeddedForm({ name, sub, embed, readO
       const hub = new FormEvents(doc, name, eventBase(sub.region));
       if (await hub.raise('OnOpen')) { if (current) setLoaded('cancelled'); return; }
       if (!current) return;
-      const records = hub.records = recordsFor(doc, sub.region, readOnly, embed.childFields, undefined, hub.recordEvents());
+      const records = hub.records = recordsFor(doc, sub.region, readOnly, modal, embed.childFields, undefined, hub.recordEvents());
       setLoaded({ doc, records, hub, key: ++nextViewId });
       // once, not on each master record; Cancel: an empty frame, no additions
       if (!(await records.open(asker(modal, sub.region))) || !current) return;
@@ -740,6 +754,18 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const dirtyKey = JSON.stringify(dirtySources);
   useEffect(() => { embed?.dirty(dirtySources); }, [embed, dirtyKey]);   // eslint-disable-line react-hooks/exhaustive-deps -- by their text
   useEffect(() => () => embed?.dirty([]), [embed]);
+  // C3 R10: another workstation wrote: the records are read again where the form stands, unless a record is being edited here
+  // or in a subform (a reload would save the subform's first); a refresh skipped so is run once that editing ends
+  const editing = useRef(false);
+  editing.current = dirtySources.length > 0;
+  const missedRefresh = useRef(false);
+  const refreshIfMissed = useCallback(() => {
+    if (!missedRefresh.current || editing.current || records.snapshot.dirty) return;
+    missedRefresh.current = false;
+    void quiet(records.reload(), false);
+  }, [records]);
+  useEffect(() => onDataRefresh(() => { missedRefresh.current = true; refreshIfMissed(); }), [refreshIfMissed]);
+  useEffect(() => { if (dirtySources.length === 0) refreshIfMissed(); }, [dirtyKey, refreshIfMissed]);   // eslint-disable-line react-hooks/exhaustive-deps -- by their text
   const tabId = tab?.id;
   const dispatch = tab?.dispatch;
   useEffect(() => { if (tabId) dispatch?.({ type: 'setDirty', id: tabId, dirty: dirtySources.length > 0, sources: dirtySources }); }, [dirtyKey, tabId, dispatch]);   // eslint-disable-line react-hooks/exhaustive-deps

@@ -31,12 +31,48 @@ describe('RowBuffer', () => {
     expect(b.pending?.changes).toEqual({ Client: 2, Nom: 'y', Ville: 'Nice' });
   });
 
+  it('keeps the values of the first edit as the original', async () => {
+    const save = vi.fn(async () => ({ ok: true, rowid: 3, values: [] }) as RowWriteResult);
+    const b = new RowBuffer(save);
+    b.edit(2, 3, 'Ville', 'Lille', [3, 'Durand', 'Paris']); b.edit(2, 3, 'Nom', 'D.', [3, 'Durand', 'Brest' /* refreshed meanwhile */]);
+    await b.commit();
+    expect(save).toHaveBeenCalledWith(3, { Ville: 'Lille', Nom: 'D.' }, [3, 'Durand', 'Paris']);
+  });
+
+  it('a write conflict (C3 R8) keeps the row pending; setOriginal makes the next save expect the current values', async () => {
+    const save = vi.fn<(...a: unknown[]) => Promise<RowWriteResult>>()
+      .mockResolvedValueOnce({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] })
+      .mockResolvedValueOnce({ ok: false, conflict: 'deleted' })
+      .mockResolvedValueOnce({ ok: true, rowid: 3, values: [3, 'Durand', 'Lille'] });
+    const b = new RowBuffer(save);
+    b.edit(2, 3, 'Ville', 'Lille', [3, 'Durand', 'Paris']);
+    expect(await b.commit()).toEqual({ status: 'conflict', conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(b.pending).toEqual({ rowIndex: 2, rowid: 3, changes: { Ville: 'Lille' } });
+    b.setOriginal([3, 'Durand', 'Brest']);
+    expect(await b.commit()).toEqual({ status: 'conflict', conflict: 'deleted' });
+    expect(await b.commit()).toMatchObject({ status: 'saved' });
+    expect(save.mock.calls.map((c) => c[2])).toEqual([[3, 'Durand', 'Paris'], [3, 'Durand', 'Brest'], [3, 'Durand', 'Brest']]);
+  });
+
+  it('a save that leaves typed changes pending makes the saved values the original (never a conflict with its own write)', async () => {
+    const first = deferred();
+    const save = vi.fn<(...a: unknown[]) => Promise<RowWriteResult>>().mockReturnValueOnce(first.promise).mockResolvedValue({ ok: true, rowid: 3, values: [] });
+    const b = new RowBuffer(save);
+    b.edit(2, 3, 'Ville', 'Lille', [3, 'Durand', 'Paris']);
+    const out = b.commit();
+    b.edit(2, 3, 'Nom', 'D.');
+    first.resolve({ ok: true, rowid: 3, values: [3, 'Durand', 'Lille'] });
+    await out;
+    await b.commit();
+    expect(save).toHaveBeenLastCalledWith(3, { Nom: 'D.' }, [3, 'Durand', 'Lille']);
+  });
+
   it('row buffer saves when leaving a modified row', async () => {
     const save = vi.fn().mockResolvedValue({ ok: true, rowid: 7, values: [] }); const b = new RowBuffer(save);
     b.edit(3, null, 'Nom', 'A'); b.edit(3, null, 'Ville', 'B');
     expect(await b.leaveRow(3)).toEqual({ status: 'none' });
     expect(await b.leaveRow(4)).toMatchObject({ status: 'saved', rowid: 7 });
-    expect(save).toHaveBeenCalledWith(null, { Nom: 'A', Ville: 'B' }); expect(b.pending).toBeNull();
+    expect(save).toHaveBeenCalledWith(null, { Nom: 'A', Ville: 'B' }, null); expect(b.pending).toBeNull();
   });
 
   it('failed save keeps pending; discard clears', async () => {
@@ -52,7 +88,7 @@ describe('RowBuffer', () => {
     expect(await b.commit()).toEqual({ status: 'none' });
     b.edit(5, 12, 'Nom', 'X');
     expect(await b.commit()).toEqual({ status: 'saved', rowid: 12, values: [12, 'X'] });
-    expect(save).toHaveBeenCalledWith(12, { Nom: 'X' });
+    expect(save).toHaveBeenCalledWith(12, { Nom: 'X' }, null);
   });
 
   it('commits are serialized: a fast double Enter saves the row once', async () => {
@@ -85,7 +121,7 @@ describe('RowBuffer', () => {
     await out;
     expect(b.pending).toEqual({ rowIndex: 3, rowid: 9, changes: { Nom: 'A2', Ville: 'B' } });
     await b.commit();
-    expect(save).toHaveBeenLastCalledWith(9, { Nom: 'A2', Ville: 'B' });
+    expect(save).toHaveBeenLastCalledWith(9, { Nom: 'A2', Ville: 'B' }, []); // the inserted row's values
     expect(b.pending).toBeNull();
   });
 
@@ -106,7 +142,7 @@ describe('RowBuffer', () => {
     expect(await b.commit()).toMatchObject({ status: 'failed' });
     b.edit(2, null, 'Nom', 'Durand');
     expect(await b.commit()).toMatchObject({ status: 'saved', rowid: 4 });
-    expect(save).toHaveBeenLastCalledWith(null, { Ville: 'Lyon', Nom: 'Durand' });
+    expect(save).toHaveBeenLastCalledWith(null, { Ville: 'Lyon', Nom: 'Durand' }, null);
   });
 
   it('refuses an edit of another row while one is pending (the caller leaves the row first)', () => {

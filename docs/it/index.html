@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BaseCraft — database desktop, alla maniera di Access</title>
+<meta name="description" content="BaseCraft è un'applicazione database desktop open source nello spirito di Microsoft Access, per Windows, macOS e Linux.">
+<link rel="icon" type="image/png" sizes="32x32" href="../logo/png/icone-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../logo/png/icone-16.png">
+<link rel="apple-touch-icon" href="../logo/png/icone-256.png">
+<meta property="og:image" content="https://gdsolutions-dev.github.io/BaseCraft/logo/png/icone-512.png">
+<style>
+@font-face {
+  font-family: "Inter Variable";
+  src: url("../maquettes/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+/* gd solutions charter: orange #EF572C, navy #364554, white; Inter 800 for titles */
+:root {
+  --orange: #EF572C; --navy: #364554;
+  --bg: #f5f6f8; --surface: #ffffff; --text: #364554; --muted: #5d6b79;
+  --border: #e1e5ea; --link: #c8401a; --hero: #364554; --hero-text: #ffffff; --hero-muted: #c9d1d9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c242d; --surface: #26313c; --text: #e8ecf0; --muted: #a9b4bf;
+    --border: #364554; --link: #f58a6a; --hero: #141b22; --hero-text: #ffffff; --hero-muted: #a9b4bf;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 "Inter Variable", system-ui, sans-serif;
+}
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+.hero { background: var(--hero); color: var(--hero-text); padding: 28px 0 0; overflow: hidden; }
+.hero nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--hero-text); text-decoration: none; font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
+.brand span { color: var(--orange); }
+.hero nav a.gh { color: var(--hero-text); text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+.hero-body { padding: 56px 0 40px; }
+h1 { font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
+h1 span { color: var(--orange); }
+h2 { font-weight: 800; letter-spacing: -0.02em; font-size: 1.5rem; margin: 56px 0 16px; }
+.lead { font-size: 1.2rem; color: var(--hero-muted); max-width: 640px; margin: 0; }
+.badge {
+  display: inline-block; margin-bottom: 20px; padding: 2px 12px; border-radius: 99px;
+  background: rgba(239, 87, 44, 0.15); color: #ffb39c; font-size: 0.85rem; font-weight: 600;
+}
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.btn {
+  display: inline-block; padding: 11px 20px; border-radius: 6px; text-decoration: none; font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: var(--hero-text);
+}
+.btn.primary { background: var(--orange); border-color: var(--orange); }
+.btn:hover { filter: brightness(1.08); }
+.shot { display: block; width: 100%; height: auto; border-radius: 10px 10px 0 0; box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.35); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--orange); border-radius: 6px; padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; }
+.card p { margin: 0; color: var(--muted); }
+ol.roadmap { padding: 0; list-style: none; display: grid; gap: 12px; }
+ol.roadmap li { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 20px; }
+ol.roadmap b { display: inline-block; min-width: 2em; color: var(--orange); font-weight: 800; }
+ol.roadmap .done { border-left: 4px solid var(--orange); }
+code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 20px 0 48px; color: var(--muted); font-size: 0.9rem; }
+a { color: var(--link); }
+.langs { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 16px; }
+.langs a[aria-current] { color: inherit; font-weight: 700; text-decoration: none; }
+</style>
+<link rel="alternate" hreflang="en" href="https://gdsolutions-dev.github.io/BaseCraft/">
+<link rel="alternate" hreflang="fr" href="https://gdsolutions-dev.github.io/BaseCraft/fr/">
+<link rel="alternate" hreflang="es" href="https://gdsolutions-dev.github.io/BaseCraft/es/">
+<link rel="alternate" hreflang="de" href="https://gdsolutions-dev.github.io/BaseCraft/de/">
+<link rel="alternate" hreflang="it" href="https://gdsolutions-dev.github.io/BaseCraft/it/">
+<link rel="alternate" hreflang="pt" href="https://gdsolutions-dev.github.io/BaseCraft/pt/">
+<link rel="alternate" hreflang="nl" href="https://gdsolutions-dev.github.io/BaseCraft/nl/">
+<link rel="alternate" hreflang="pl" href="https://gdsolutions-dev.github.io/BaseCraft/pl/">
+<link rel="alternate" hreflang="ja" href="https://gdsolutions-dev.github.io/BaseCraft/ja/">
+<link rel="alternate" hreflang="zh-Hans" href="https://gdsolutions-dev.github.io/BaseCraft/zh/">
+<link rel="alternate" hreflang="ko" href="https://gdsolutions-dev.github.io/BaseCraft/ko/">
+<link rel="alternate" hreflang="x-default" href="https://gdsolutions-dev.github.io/BaseCraft/">
+</head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./"><img src="../logo/png/symbole-blanc-1024.png" alt="" width="40" height="40"><b>Base<span>Craft</span></b></a>
+      <a class="gh" href="https://github.com/gdsolutions-dev/BaseCraft">GitHub</a>
+    </nav>
+    <div class="hero-body">
+      <div class="badge">Anteprima 0.2.0 · sviluppo iniziale</div>
+      <h1>Database desktop,<br><span>alla maniera di Access.</span></h1>
+      <p class="lead">BaseCraft è un'applicazione database desktop open source nello spirito di Microsoft Access. Tabelle, query, maschere, report, macro e codice, con un'interfaccia moderna, su Windows, macOS e Linux.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/gdsolutions-dev/BaseCraft/releases">Scarica l'anteprima</a>
+        <a class="btn" href="https://github.com/gdsolutions-dev/BaseCraft">Vedi su GitHub</a>
+        <a class="btn" href="../maquettes/">Vedi i mockup dell'interfaccia</a>
+      </div>
+    </div>
+    <img class="shot" src="../images/screenshot.png" alt="Visualizzazione Struttura di un report BaseCraft con raggruppamenti e totali" width="1923" height="1203">
+  </div>
+</div>
+
+<main class="wrap">
+  <h2>Perché BaseCraft</h2>
+  <div class="grid">
+    <div class="card"><h3>Familiare</h3><p>Visualizzazione Struttura e visualizzazione di esecuzione per ogni oggetto, una griglia di query QBE, fogli dati e finestre delle proprietà. Se conosci Access, conosci BaseCraft.</p></div>
+    <div class="card"><h3>Un unico file aperto</h3><p>Un intero database vive in un solo file <code>.basecraft</code>, un semplice database SQLite che qualsiasi strumento SQLite può leggere.</p></div>
+    <div class="card"><h3>Multipiattaforma</h3><p>Un'unica applicazione per Windows, macOS e Linux. Nessun server e nient'altro da installare per l'uso singolo.</p></div>
+    <div class="card"><h3>Sicuro per impostazione predefinita</h3><p>Nessun dato perso dopo un arresto anomalo, blocco in scrittura tra le macchine e i file ricevuti via e-mail non possono danneggiare il tuo computer.</p></div>
+  </div>
+
+  <h2>Roadmap</h2>
+  <ol class="roadmap">
+    <li class="done"><b>A</b> Sostituire Excel: tabelle, relazioni ed espressioni, query, maschere, report ed esportazione PDF ✓</li>
+    <li><b>B</b> Automatizzare e distribuire: eventi, macro, BaseCraft Runtime</li>
+    <li><b>C</b> Lavorare insieme: tabelle collegate PostgreSQL, SQL Server e Access</li>
+    <li><b>D</b> Codice Python al posto di VBA</li>
+    <li><b>E</b> Importare database Access esistenti</li>
+  </ol>
+
+  <footer>
+  <nav class="langs" aria-label="Language"><a href="../" lang="en" hreflang="en" data-lang="en">English</a> <a href="../fr/" lang="fr" hreflang="fr" data-lang="fr">Français</a> <a href="../es/" lang="es" hreflang="es" data-lang="es">Español</a> <a href="../de/" lang="de" hreflang="de" data-lang="de">Deutsch</a> <a href="./" lang="it" hreflang="it" data-lang="it" aria-current="page">Italiano</a> <a href="../pt/" lang="pt" hreflang="pt" data-lang="pt">Português</a> <a href="../nl/" lang="nl" hreflang="nl" data-lang="nl">Nederlands</a> <a href="../pl/" lang="pl" hreflang="pl" data-lang="pl">Polski</a> <a href="../ja/" lang="ja" hreflang="ja" data-lang="ja">日本語</a> <a href="../zh/" lang="zh-Hans" hreflang="zh-Hans" data-lang="zh">简体中文</a> <a href="../ko/" lang="ko" hreflang="ko" data-lang="ko">한국어</a></nav>
+  
+    BaseCraft è distribuito con licenza <a href="https://github.com/gdsolutions-dev/BaseCraft/blob/main/LICENSE">AGPL-3.0</a> e sviluppato da gd solutions.
+    Microsoft Access è un marchio di Microsoft Corporation; BaseCraft non è affiliato a Microsoft.
+  </footer>
+</main>
+<script>
+document.querySelectorAll('.langs a').forEach(function (a) {
+  a.addEventListener('click', function () { try { localStorage.setItem('bc-lang', a.dataset.lang); } catch (e) {} });
+});
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { ObjectKind, ObjectSummary, OpResult } from '../../shared/api';
 import { isReservedName, isValidObjectName, sameName } from '../../shared/field-types';
 import { isTableName } from './schema';
+import { isLinkName } from '../links/store';
 import { inTransaction } from './tx';
 
 export type { ObjectKind, ObjectSummary };
@@ -68,12 +69,12 @@ function find(db: DatabaseSync, kind: ObjectKind, name: string): string | undefi
 const row = (db: DatabaseSync, kind: ObjectKind, name: string): Row =>
   db.prepare('SELECT * FROM bc_objects WHERE kind = ? AND name = ?').get(kind, name) as unknown as Row;
 
-/** `name` is taken in `kind`'s namespace by another object than `self` (a query also clashes with a table). Saving or
+/** `name` is taken in `kind`'s namespace by another object than `self` (a query also clashes with a table or a link). Saving or
  *  renaming an object onto its own name never clashes, even with a table an older version let share it. */
 function taken(db: DatabaseSync, kind: ObjectKind, name: string, self?: string): boolean {
   const o = find(db, kind, name);
   if (o !== undefined && o !== self) return true;
-  return kind === 'query' && !(self !== undefined && sameName(self, name)) && isTableName(db, name);
+  return kind === 'query' && !(self !== undefined && sameName(self, name)) && (isTableName(db, name) || isLinkName(db, name));
 }
 
 export function listObjects(db: DatabaseSync, kind?: ObjectKind): ObjectSummary[] {

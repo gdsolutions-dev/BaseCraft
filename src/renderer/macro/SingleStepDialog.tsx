@@ -9,6 +9,7 @@ import { actionDef } from '../../shared/macro/catalog';
 import { api } from '../bridge';
 import type { ModalApi } from '../shell/Modal';
 import type { StepInfo } from './engine';
+import { formulaLang } from '../../shared/i18n';
 import { actionLabel, argText } from './MacroFailedDialog';
 
 type StepAnswer = 'step' | 'continue' | 'stopAll';
@@ -42,6 +43,6 @@ function SingleStep({ s, ctx, onClose }: { s: StepInfo; ctx: DisplayContext; onC
 /** Asks before the next action; closed without an answer (Escape), the run stops, the safe way out. */
 export async function askStep(modal: ModalApi, s: StepInfo): Promise<StepAnswer> {
   const settings = await api.app.getSettings();
-  const ctx: DisplayContext = { lang: settings.uiLanguage, region: localeInfo(settings.region) };
+  const ctx: DisplayContext = { lang: formulaLang(settings.uiLanguage), region: localeInfo(settings.region) };
   return (await modal.custom<StepAnswer>((close) => createElement(SingleStep, { s, ctx, onClose: close }), { titleKey: 'macro.step.title' })) ?? 'stopAll';
 }

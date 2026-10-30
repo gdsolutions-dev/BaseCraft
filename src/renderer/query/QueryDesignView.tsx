@@ -174,7 +174,8 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
   const join = joinEdit === null ? undefined : d.joins[joinEdit];
 
   return (
-    <>
+    <div className="qd-body">
+      <div className="qd-main">
       <div ref={pane} className="qbe-pane-wrap" style={split ? { flex: 'none', height: split.px, display: 'flex' } : { flex: 1, minHeight: 0, display: 'flex' }}>
         <TablePane boxes={boxes} joins={d.joins} positions={model.positions} readOnly={readOnly}
           onMove={(alias, p, done) => set({ type: 'move', alias, p, dirty: done && !readOnly })}
@@ -192,6 +193,7 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
         onInvalid={(key, code: ExprErrorCode | null) => set({ type: 'invalid', key, code })}
         onDropField={(col, alias, field) => set({ type: 'addField', table: alias, field, at: col })}
         onMoveColumn={(from, to) => { set({ type: 'moveColumn', from, to }); setSelected(to); }} />
+      </div>
       {showTable && (
         <ShowTableDialog tables={catalog.tables} queries={catalog.queries.filter((n) => self === null || !sameName(n, self))}
           onAdd={add} onClose={() => setShowTable(false)} />
@@ -200,7 +202,7 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
         <JoinDialog join={join} onCancel={() => setJoinEdit(null)}
           onOk={(kind) => { setJoinEdit(null); set({ type: 'setJoinKind', index: joinEdit!, kind }); }} />
       )}
-    </>
+    </div>
   );
 }
 

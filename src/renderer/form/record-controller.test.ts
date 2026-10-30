@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { DeleteResult, RowWriteResult } from '../../shared/api';
+import type { DeleteResult, RowWriteResult, WriteConflict } from '../../shared/api';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 import { defaultProps, type FieldProps, type FieldType } from '../../shared/field-types';
 import type { RecordSourceRef, SourceField, SourceInfo, SourcePageRequest, SourceSaveRequest } from '../../shared/record-source';
@@ -30,7 +30,7 @@ const QV_ROWS = (): SqlValue[][] => [[1, 1, 1, 'Dupont', 10.1], [2, 1, 1, 'Dupon
 const NOMS: Record<number, string> = { 1: 'Dupont', 2: 'Martin', 3: 'Durand', 4: 'Éric' };
 
 function fakeApi() {
-  let next: { fail?: WriteError; reject?: unknown } | null = null;
+  let next: { fail?: WriteError; reject?: unknown; conflict?: WriteConflict<SqlValue[]> } | null = null;
   const a = {
     info: clients,
     tables: { Clients: clients } as Record<string, SourceInfo>, // what describe answers for a table ref other than the form's own
@@ -40,6 +40,7 @@ function fakeApi() {
     calls: [] as string[],
     pages: [] as SourcePageRequest[],
     updates: [] as [string, number, Record<string, CellInput>][],
+    expected: [] as (Record<string, SqlValue> | undefined)[],   // each update's and save's (C3 R8)
     inserts: [] as [string, Record<string, CellInput>][],
     deletes: [] as [string, number[]][],
     saves: [] as [RecordSourceRef, SourceSaveRequest][],
@@ -54,11 +55,12 @@ function fakeApi() {
     get lastPage() { return a.pages[a.pages.length - 1]; },
     failNext(e: WriteError) { next = { fail: e }; },
     rejectNext(e: unknown) { next = { reject: e }; },
+    conflictNext(c: WriteConflict<SqlValue[]>) { next = { conflict: c }; },
   };
   const outcome = (): RowWriteResult | null => {
     const n = next; next = null;
     if (n?.reject) throw n.reject;
-    return n?.fail ? { ok: false, errors: [n.fail] } : null;
+    return n?.conflict ?? (n?.fail ? { ok: false, errors: [n.fail] } : null);
   };
   const api: FormDataApi = {
     async describe(ref) {
@@ -76,13 +78,13 @@ function fakeApi() {
       if (r.ok) { a.rows.push(r.values); a.rowids.push(r.rowid); } // the server now counts it
       return r;
     },
-    async update(table, rowid, changes) {
-      a.calls.push('update'); a.updates.push([table, rowid, changes]);
+    async update(table, rowid, changes, expected) {
+      a.calls.push('update'); a.updates.push([table, rowid, changes]); a.expected.push(expected);
       const i = a.rowids.indexOf(rowid);
       return outcome() ?? { ok: true, rowid, values: a.info.fields.map((f, j) => (changes[f.origin?.field ?? f.name] ?? a.rows[i]?.[j] ?? null) as SqlValue) };
     },
     async save(ref, req) {
-      a.calls.push('save'); a.saves.push([ref, req]);
+      a.calls.push('save'); a.saves.push([ref, { rowid: req.rowid, values: req.values }]); a.expected.push(req.expected);
       const fail = outcome(); if (fail) return fail as Extract<RowWriteResult, { ok: false }>;
       const i = req.rowid === null ? -1 : a.rowids.indexOf(req.rowid);
       const row = a.info.fields.map((_f, j) => a.rows[i]?.[j] ?? null);
@@ -332,6 +334,83 @@ describe('FormRecords', () => {
     const q = (n: string) => writableField(QV_INFO.fields.find((f) => f.name === n)!, QV_INFO);
     expect(['Client', 'Nom', 'Montant', 'Clients.N°'].map(q)).toEqual([true, true, true, false]); // the one side's join field: read-only
     expect(writableField(totaux().fields[2], totaux())).toBe(false); });
+});
+
+describe('write conflicts (C3 R8, R9)', () => {
+  const DURAND = { 'N°': 3, Nom: 'Durand', Ville: 'Nantes' };
+  it.each(['save', 'drop', 'copy'] as const)('a conflict resolved by %s', async (choice) => {
+    const asked: unknown[] = [];
+    const r = await opened({ onConflict: async (c) => { asked.push(c); return choice; } });
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    api.conflictNext({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(await r.save()).toBe(true);
+    expect(asked).toEqual([{ current: [3, 'Durand', 'Brest'] }]);
+    if (choice === 'save') {   // the same changes, expecting the record as it is now: last writer wins
+      expect(api.updates).toEqual([['Clients', 3, { Ville: 'Lille' }], ['Clients', 3, { Ville: 'Lille' }]]);
+      expect(api.expected).toEqual([DURAND, { 'N°': 3, Nom: 'Durand', Ville: 'Brest' }]);
+      expect(r.snapshot).toMatchObject({ values: [3, 'Durand', 'Lille'], dirty: false });
+    } else {   // copy (the view put the record on the clipboard) as drop: the changes go, the record shows the other user's values
+      expect(api.updates).toHaveLength(1);
+      expect(r.snapshot).toMatchObject({ values: [3, 'Durand', 'Brest'], pending: {}, dirty: false });
+      expect(r.row(2)).toEqual([3, 'Durand', 'Brest']);
+    }
+  });
+  it('a new conflict after Save Record asks again', async () => {
+    let n = 0;
+    const r = await opened({ onConflict: async () => {   // changed again before Save Record's write
+      if (n++) return 'drop';
+      api.conflictNext({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Vannes'] });
+      return 'save';
+    } });
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    api.conflictNext({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(await r.save()).toBe(true);
+    expect(api.expected.slice(1)).toEqual([{ 'N°': 3, Nom: 'Durand', Ville: 'Brest' }]);
+    expect(n).toBe(2);
+    expect(r.snapshot).toMatchObject({ values: [3, 'Durand', 'Vannes'], dirty: false });
+  });
+  it('a record deleted by another user drops the changes', async () => {
+    let told = 0;
+    const r = await opened({ onDeleted: async () => { told++; } });
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    api.conflictNext({ ok: false, conflict: 'deleted' });
+    api.rows.splice(2, 1); api.rowids.splice(2, 1);   // gone from the server
+    const pages = api.pages.length;
+    expect(await r.save()).toBe(false);
+    expect(told).toBe(1);
+    expect(api.pages.length).toBeGreaterThan(pages);   // read again: the form moves on
+    expect(r.snapshot).toMatchObject({ dirty: false, total: 2, index: 1, values: [2, 'Martin', 'Lyon'] });
+  });
+  it('the original is the record at the first edit, then the saved values once a save leaves typed changes pending', async () => {
+    const r = await opened();
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    const release = hold('update');
+    const first = r.save();
+    await tick();
+    r.edit('Nom', 'D.');   // typed during the save
+    release();
+    expect(await first).toBe(true);
+    expect(await r.save()).toBe(true);
+    expect(api.expected).toEqual([DURAND, { 'N°': 3, Nom: 'Durand', Ville: 'Lille' }]);
+  });
+  it('a query sends the original by output column', async () => {
+    const r = await opened({ ref: { kind: 'query', name: 'Q' }, info: totaux(), rows: queryRows() });
+    r.edit('Ville', 'Nice');
+    await r.save();
+    expect(api.expected).toEqual([{ Client: 'Dupont', Ville: 'Paris', Total: 10 }]);
+  });
+  it('a failed clipboard write leaves the record dirty, nothing dropped', async () => {
+    const r = await opened({ onConflict: async () => { throw new Error('clipboard'); } });
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    api.conflictNext({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'] });
+    expect(await r.save()).toBe(false);
+    expect(r.snapshot).toMatchObject({ pending: { Ville: 'Lille' }, dirty: true, writeError: new Error('clipboard') });
+  });
 });
 
 describe('FormRecords: races (fix round 1)', () => {

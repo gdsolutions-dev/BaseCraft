@@ -10,7 +10,7 @@ import { i18n } from '../i18n';
 import type { DocKind } from '../state/app-state';
 import { nameErrorKey } from './name-error';
 import { hasDocumentView } from './document-views';
-import { registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
+import { designNotLink, registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
 import { showObjectProperties } from './ObjectProperties';
 
 export { nameErrorKey };
@@ -48,11 +48,14 @@ async function rename(c: NavMenuContext) {
 
 async function remove(c: NavMenuContext) {
   const table = c.kind === 'table';
-  const ok = await c.modal.confirm({
-    titleKey: table ? 'nav.deleteTitle' : 'nav.deleteObjectTitle', messageKey: table ? 'nav.deleteMessage' : 'nav.deleteObjectMessage',
-    params: { name: c.name }, buttons: ['yes', 'no'], defaultButton: 'no',
-  });
-  if (ok !== 'yes') return;
+  // « Suppressions de documents » off (read now): no question; a refusal (relations…) is still explained by `op`
+  if ((await api.app.getSettings()).confirmDocumentDeletions) {
+    const ok = await c.modal.confirm({ // a link: only the link goes, its data stays in its file (C1)
+      titleKey: table ? 'nav.deleteTitle' : 'nav.deleteObjectTitle', messageKey: c.link ? 'link.confirmDelete' : table ? 'nav.deleteMessage' : 'nav.deleteObjectMessage',
+      params: { name: c.name, path: c.link?.path }, buttons: ['yes', 'no'], defaultButton: 'no',
+    });
+    if (ok !== 'yes') return;
+  }
   if (table) await op(c, () => api.tables.drop(c.name), () => { c.dispatch({ type: 'tableDropped', name: c.name }); c.reselect(null); }, { name: c.name });
   else {
     const kind = c.kind as ObjectKind;
@@ -72,7 +75,8 @@ async function copy(c: NavMenuContext) {
   }
 }
 
-const properties = (c: NavMenuContext) => showObjectProperties(c.modal, { kind: c.kind as ObjectKind | 'table', name: c.name }, c.readOnly, c.dispatch);
+// run mode (BaseCraft Runtime) shows the properties without saving a description (a design change)
+const properties = (c: NavMenuContext) => showObjectProperties(c.modal, { kind: c.kind as ObjectKind | 'table', name: c.name }, c.readOnly || c.runtime, c.dispatch);
 
 /** Generic Open and Design View, the double-click's path (a table's Run view is its datasheet): enabled once the kind has a
  *  view for that mode. A batch delivering its views replaces them by registering the same ids. */
@@ -84,9 +88,9 @@ const view = (mode: 'run' | 'design') => ({
 /** The open, object, clipboard and properties groups every listed kind shares. */
 const common = (propertiesLabel: string, exportPlanned: NavMenuItem['planned'] | null): NavMenuItem[] => [
   { id: 'open', group: 'open', order: 10, labelKey: 'nav.menu.open', icon: Sheet, ...view('run') },
-  { id: 'design', group: 'open', order: 20, labelKey: 'nav.menu.design', icon: PencilRuler, visible: design, ...view('design') },
+  { id: 'design', group: 'open', order: 20, labelKey: 'nav.menu.design', icon: PencilRuler, visible: design, ...view('design') }, // a link: read-only, after a warning (App, C1 R8)
   ...(exportPlanned ? [{ id: 'export', group: 'transfer', order: 20, labelKey: 'nav.menu.export', icon: FolderOutput, planned: exportPlanned } as NavMenuItem] : []),
-  { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: design, enabled: writable, run: rename },
+  { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: designNotLink, enabled: writable, run: rename },
   { id: 'hide', group: 'object', order: 20, labelKey: 'nav.menu.hide', icon: EyeOff, planned: 'later' },
   { id: 'delete', group: 'object', order: 30, labelKey: 'nav.menu.delete', icon: Trash2, visible: design, enabled: writable, run: remove },
   { id: 'cut', group: 'clipboard', order: 10, labelKey: 'nav.menu.cut', icon: Scissors, visible: design, planned: 'A6' },

@@ -1,11 +1,21 @@
 {
   "app": {
     "title": "BaseCraft",
+    "titleRuntime": "BaseCraft Runtime",
     "language": {
       "label": "Interface language",
       "system": "System language",
       "fr": "Français",
-      "en": "English"
+      "en": "English",
+      "es": "Español",
+      "de": "Deutsch",
+      "it": "Italiano",
+      "pt": "Português",
+      "nl": "Nederlands",
+      "pl": "Polski",
+      "ja": "日本語",
+      "zh": "简体中文",
+      "ko": "한국어"
     },
     "theme": {
       "label": "Theme",
@@ -356,7 +366,9 @@
       "actionCatalog": "Action Catalog",
       "showAllActions": "Show All Actions",
       "viewForm": "Form View",
-      "viewPrintPreview": "Print Preview"
+      "viewPrintPreview": "Print Preview",
+      "linkBaseCraft": "BaseCraft or SQLite Database",
+      "linkAccess": "Link Access Database"
     },
     "scrollLeft": "Scroll the ribbon left",
     "scrollRight": "Scroll the ribbon right",
@@ -422,7 +434,10 @@
       "sqlView": "S&QL View",
       "exportPdf": "&PDF",
       "print": "Pr&int…",
-      "printPreview": "Print Pre&view"
+      "printPreview": "Print Pre&view",
+      "refreshLink": "Refresh Link",
+      "convertToLocal": "Convert to Local Table",
+      "linkedTableManager": "Linked Table Manager"
     },
     "renameTitle": "Rename table",
     "renameLabel": "New name",
@@ -482,6 +497,9 @@
     "needsRecovery": "This database was not closed properly and must be recovered before it can be viewed. Take it over to repair it.",
     "lockLost": "The write lock was lost: editing is disabled.",
     "fileReadOnly": "Read-only: the file cannot be modified.",
+    "inUse": "Opened read-only: this data file is in use by {{users}}. Exclusive mode is only possible when nobody else is using it.",
+    "syncedFolder": "Opened read-only: a shared data file cannot be used in a synchronized folder (OneDrive, Dropbox…). Put it on a network drive, or move to a server.",
+    "unsupportedClient": "Opened read-only: shared mode on a network drive is not supported on this system. Use a Windows workstation, or move to a server.",
     "takeOver": "Take over",
     "contentDisabled": "Security warning: some active content of this database (macros, action queries) has been disabled.",
     "enableContent": "Enable Content",
@@ -497,6 +515,7 @@
   "dialog": {
     "newBaseName": "Database1",
     "copyName": "{{name}} copy",
+    "compactOnClose": "BaseCraft is compacting the database before closing it. This can take a moment: closing finishes by itself.",
     "errorTitle": "BaseCraft",
     "button": {
       "ok": "OK",
@@ -505,9 +524,13 @@
       "cancel": "Cancel"
     },
     "error": {
+      "busy": "The data file is busy on another workstation. Try again in a moment.",
+      "fileDamaged": "The data file could not be read correctly. Try again; if it happens again, have the share checked (opportunistic locks off) or run Compact and Repair from a workstation that has it open alone.",
+      "dataFileInUse": "The structure cannot be changed: the data file is in use by {{detail}}. Ask them to close it, then try again.",
       "notBasecraft": "This file is not a BaseCraft database.",
       "newerMajor": "This database was created by a newer version of BaseCraft. Update BaseCraft to open it.",
       "needsMigration": "This database must be upgraded, which is impossible while it is read-only.",
+      "needsDesigner": "This database was saved by an earlier version of BaseCraft. Open it once with BaseCraft (the full application) to upgrade it.",
       "cannotOpen": "This file cannot be opened.",
       "exists": "A file with this name already exists.",
       "invalidArgument": "The request is not valid.",
@@ -535,6 +558,18 @@
       "copyFailed": "Copying the database failed; the original file was not changed. ({{detail}})",
       "targetInUse": "This file is open by another user or another BaseCraft window: it cannot be replaced. Choose another name.",
       "reopenFailed": "The database was compacted but could not be reopened; it was closed. Open it again (a backup was made before compacting). ({{detail}})",
+      "linkedTable": "The structure of a linked table cannot be changed. Open the database that holds it to change it.",
+      "linkUnavailable_missingFile": "The linked table's file cannot be found: {{detail}}. Give its new location in the Linked Table Manager.",
+      "linkUnavailable_missingTable": "The linked file {{detail}} no longer holds this table.",
+      "linkUnavailable_needsMigration": "The linked file {{detail}} was saved by an earlier version of BaseCraft. Open it once with BaseCraft to upgrade it.",
+      "linkUnavailable_newerMajor": "The linked file {{detail}} was created by a newer version of BaseCraft.",
+      "linkUnavailable_cannotOpen": "The linked file {{detail}} cannot be opened.",
+      "linkUnavailable_unsupportedKind": "This version of BaseCraft cannot open this source: {{detail}}.",
+      "linkUnavailable_readOnly": "The linked file {{detail}} is open by another user or another BaseCraft window: its linked tables stay read-only.",
+      "linkUnavailable_self": "{{detail}} is the open database: a database cannot be linked to itself.",
+      "linkUnavailable_needsPassword": "This Access database is password-protected: {{detail}}",
+      "linkUnavailable_syncedFolder": "The data file {{detail}} stays read-only: a shared data file cannot be used in a synchronized folder (OneDrive, Dropbox…). Put it on a network drive, or move to a server.",
+      "linkUnavailable_unsupportedClient": "The data file {{detail}} stays read-only: shared mode on a network drive is not supported on this system. Use a Windows workstation, or move to a server.",
       "invalidQuery_subqueryRows": "A subquery returns more than one record where a single value is expected.",
       "invalidQuery_tooComplex": "This query is too complex (too many tables, columns or nesting levels).",
       "invalidQuery_storedQuery": "The query \"{{detail}}\" cannot be read: its SQL is not valid.",
@@ -558,6 +593,7 @@
       "queryBind_pivotAggregate": "The column heading of a crosstab query (PIVOT) cannot contain an aggregate function: {{detail}}.",
       "queryBind_tooManyColumns": "This crosstab query would give {{detail}} columns: 255 at most, 254 of them column headings. Restrict the data or fix the column headings (IN).",
       "queryBind_crosstabAsSource": "The crosstab query \"{{detail}}\" cannot be the source of another query or of a lookup list.",
+      "queryBind_mixedSources": "A query covers a single data source: “{{detail}}” does not come from the same source as the query's other tables.",
       "fontMissing": "An embedded font could not be loaded: the report was neither printed nor exported.",
       "printFailed": "Printing failed.",
       "writeFailed": "The file could not be saved to this location.",
@@ -1662,6 +1698,7 @@
   },
   "about": {
     "title": "About BaseCraft",
+    "titleRuntime": "About BaseCraft Runtime",
     "version": "Version {{version}}",
     "tagline": "Desktop database application in the spirit of Microsoft Access.",
     "licence": "Free software under the {{licence}} licence.",
@@ -1924,11 +1961,12 @@
       "where": "Where"
     },
     "showTable": {
-      "title": "Show Table",
+      "title": "Add Tables",
       "tables": "Tables",
       "queries": "Queries",
       "both": "Both",
-      "add": "Add",
+      "search": "Search",
+      "add": "Add Selected Tables",
       "close": "Close",
       "none": "No objects."
     },
@@ -2090,6 +2128,15 @@
     "repaired": "Database compacted: {{before}} → {{after}}. Backup: {{backup}}\n{{count}} problem(s) found by the integrity check were repaired:\n{{problems}}",
     "corrupt": "The database is damaged and could not be repaired. The original file was not changed.\nProblems found:\n{{problems}}\nBackup: {{backup}}",
     "more": "… and {{count}} more"
+  },
+  "split": {
+    "title": "Database Splitter",
+    "intro": "This wizard moves the tables of the current database to a new data file, preferably placed on a shared network drive. The current database becomes a front-end application linked to those tables: each workstation can then use its own copy of the front-end. A backup copy of the database is made before the split.",
+    "ok": "Split Database",
+    "defaultName": "{{name}}_data",
+    "done": "Database successfully split. Data file: {{path}}. Backup copy: {{backup}}.",
+    "noTables": "This database contains no local table to move.",
+    "self": "The data file cannot be the open database. Choose another name or folder."
   },
   "macro": {
     "embedded": {
@@ -2287,8 +2334,57 @@
     }
   },
   "options": {
+    "cat": {
+      "general": "General",
+      "currentDb": "Current Database",
+      "client": "Client Settings"
+    },
+    "general": {
+      "header": "General options for working with {{product}}.",
+      "ui": "User Interface Options",
+      "creation": "Creating databases",
+      "defaultFolder": "Default database folder:",
+      "browse": "Browse…"
+    },
+    "client": {
+      "header": "Options for changing client behavior.",
+      "editing": "Editing",
+      "confirm": "Confirm",
+      "confirmRecords": "Record changes",
+      "confirmDeletions": "Document deletions",
+      "confirmActions": "Action queries",
+      "display": "Display",
+      "recentCount": "Show this number of Recent Databases:",
+      "advanced": "Advanced",
+      "openLast": "Open last used database when {{product}} starts",
+      "openMode": "Default open mode",
+      "openModeShared": "Shared",
+      "openModeExclusive": "Exclusive",
+      "recordLocking": "Default record locking",
+      "lockNone": "No locks",
+      "lockAll": "All records",
+      "lockEdited": "Edited record",
+      "refreshInterval": "Refresh interval (sec)",
+      "updateRetries": "Number of update retries",
+      "updateRetryMs": "Update retry interval (msec)"
+    },
     "db": {
-      "title": "Current Database",
+      "header": "Options for the current database.",
+      "application": "Application Options",
+      "docWindow": "Document Window Options",
+      "statusBar": "Display Status Bar",
+      "documentTabs": "Display Document Tabs",
+      "specialKeys": "Use Special Keys",
+      "specialKeysHelp": "F11: show or hide the Navigation Pane.",
+      "compactOnClose": "Compact on Close",
+      "frontEnd": "Front-end application (its local tables are reference only)",
+      "dataFile": "Shared data file (opened in shared mode by several workstations)",
+      "datasheetDesign": "Enable design changes for tables in Datasheet view",
+      "navigation": "Navigation",
+      "ribbonSection": "Ribbon and Toolbar Options",
+      "fullMenus": "Allow Full Menus",
+      "shortcutMenus": "Allow Default Shortcut Menus",
+      "iconForForms": "Use as Form and Report Icon",
       "appTitle": "Application Title",
       "appIcon": "Application Icon",
       "iconBrowse": "Browse…",
@@ -2307,5 +2403,66 @@
   },
   "startup": {
     "formNotFound": "The display form “{{name}}” cannot be found."
+  },
+  "link": {
+    "filterBasecraft": "BaseCraft databases",
+    "filterSqlite": "SQLite files",
+    "filterAccess": "Access databases",
+    "title": "Link Tables",
+    "ok": "Link",
+    "taken": "Name already used in this database",
+    "refreshed": "Link refreshed.",
+    "confirmConvert": "Convert “{{name}}” to a local table? The data is copied into this database and the link is removed.",
+    "confirmDelete": "Delete the link to “{{name}}”? The table stays in {{path}}.",
+    "source": "Source: {{path}}",
+    "designTitle": "Linked Table",
+    "designWarning": "“{{name}}” is a linked table: its structure belongs to its source file and can't be modified here. Do you want to open it anyway, read-only?",
+    "designBanner": "Linked table, read-only: its structure belongs to {{path}}.",
+    "kind": { "basecraft": "BaseCraft database", "sqlite": "SQLite file", "access": "Access database" },
+    "tables": "Tables",
+    "selectAll": "Select All",
+    "noTables": "This file has no tables.",
+    "skipped": "Columns not linked, of a type BaseCraft does not read (attachment, OLE object, multivalued field, binary, Date/Time Extended): {{names}}",
+    "unsupported": "Table not supported: {{reason}}",
+    "password": { "title": "Database Password", "label": "Password for {{path}}:", "wrong": "Incorrect password." },
+    "error": {
+      "nameExists": "These names are already used in this database: {{names}}.",
+      "missingTables": "These tables are no longer in the file: {{names}}.",
+      "self": "A database cannot be linked to itself.",
+      "readOnly": "The database is open read-only."
+    }
+  },
+  "ltm": {
+    "title": "Linked Table Manager",
+    "col": { "name": "Table", "kind": "Type", "path": "File", "state": "State" },
+    "state": {
+      "ok": "OK",
+      "readOnly": "Read-only: opened by {{user}} on {{host}}",
+      "readOnlyFile": "Read-only",
+      "stale": "Abandoned lock — refresh to take it over",
+      "missingFile": "File not found",
+      "missingTable": "Table missing from the file",
+      "needsMigration": "Earlier version of BaseCraft",
+      "newerMajor": "Newer version of BaseCraft",
+      "cannotOpen": "File cannot be read",
+      "unsupportedKind": "Source not supported",
+      "needsPassword": "Password required",
+      "syncedFolder": "Synchronized folder: read-only",
+      "unsupportedClient": "Shared mode not supported on this system: read-only"
+    },
+    "risk": { "network": "Network location", "synced": "Synchronized folder" },
+    "shared": "Shared data file",
+    "refresh": "Refresh",
+    "relink": "Change Source…",
+    "close": "Close",
+    "missingTables": "The chosen file does not contain: {{names}}. Nothing was changed."
+  },
+  "wc": {
+    "title": "Write Conflict",
+    "message": "This record has been changed by another user since you started editing it. If you save the record, you will overwrite the changes the other user made. If you copy your changes to the clipboard, you can look at the values the other user entered, then paste your changes back.",
+    "save": "Save Record",
+    "copy": "Copy to Clipboard",
+    "drop": "Drop Changes",
+    "deleted": "This record has been deleted by another user. Your changes cannot be saved."
   }
 }

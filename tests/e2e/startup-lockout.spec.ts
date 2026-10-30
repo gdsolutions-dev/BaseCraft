@@ -14,7 +14,7 @@ import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import type { MacroItem } from '../../src/shared/macro/model';
 import { DEFAULT_STARTUP, type StartupOptions } from '../../src/shared/startup';
 import { SHIFT_GRACE_MS } from '../../src/renderer/shell/shift-key';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, openDbOptions, seedBase, seedForm } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -54,8 +54,7 @@ const lastIcon = (app: ElectronApplication) => app.evaluate(() => (globalThis as
 const baseState = (page: Page) => page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.base.state());
 const openOptions = async (page: Page) => {
   await page.getByTestId('ribbon-tab-file').click();
-  await page.getByTestId('bs-options').click();
-  await expect(page.getByTestId('opt-db')).toBeVisible();
+  await openDbOptions(page);
 };
 /** AutoExec's MessageBox « Suite », answered. */
 const suite = async (page: Page) => {

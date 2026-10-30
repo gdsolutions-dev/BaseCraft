@@ -13,7 +13,7 @@ import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import type { MacroItem } from '../../src/shared/macro/model';
 import { DEFAULT_STARTUP } from '../../src/shared/startup';
 import { SHIFT_GRACE_MS } from '../../src/renderer/shell/shift-key';
-import { launchApp, seedBase, seedForm, seedReportsE2E } from './helpers';
+import { launchApp, openDbOptions, seedBase, seedForm, seedReportsE2E } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -94,8 +94,7 @@ test('recette B3: AutoExec opens a menu whose buttons open forms, filter and pri
     await expect(page.getByTestId('ribbon-tab-create')).toBeVisible();
     expect(await startup(page)).toEqual(DEFAULT_STARTUP);
     await page.getByTestId('ribbon-tab-file').click();
-    await page.getByTestId('bs-options').click();
-    await expect(page.getByTestId('opt-db')).toBeVisible();
+    await openDbOptions(page);
     await page.getByTestId('opt-db-title').fill('Gestion des ventes');
     await page.getByTestId('opt-db-title').press('Enter');
     await expect.poll(() => windowTitle(app)).toBe('Gestion des ventes');   // at once (R11)

@@ -133,3 +133,50 @@ describe('lock', () => {
     releaseIfOurs(p, 'S1');
   });
 });
+
+// R13: a lock written by another host is judged on OUR clock, from the first time we saw its bytes (clocks may disagree).
+describe("stale on the reader's own clock", () => {
+  const deps = { now, hostname: () => 'A' };
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const writeLock = (host: string, heartbeatAt: number) => overwriteLock(p, { user: 'u', host, pid: 1, sessionId: 's9', heartbeatAt: iso(heartbeatAt) });
+  beforeEach(() => { t = 1_000_000; });
+
+  it('another host ahead of our clock is live while it beats', () => {
+    writeLock('B', t + 10 * 60_000);
+    expect(peekLock(p, deps)!.stale).toBe(false);
+    t += 20_000; writeLock('B', t + 10 * 60_000); t += 20_000;
+    expect(peekLock(p, deps)!.stale).toBe(false);
+  });
+  it('another host behind our clock is live while it beats', () => {
+    writeLock('B', t - 10 * 60_000);
+    expect(peekLock(p, deps)!.stale).toBe(false); // the old rule said stale
+    t += 25_000; writeLock('B', t - 10 * 60_000); t += 25_000;
+    expect(peekLock(p, deps)!.stale).toBe(false);
+  });
+  it('another host that stops beating is stale after 30 s of our clock', () => {
+    writeLock('B', t + 10 * 60_000); peekLock(p, deps);
+    t += 29_000; expect(peekLock(p, deps)!.stale).toBe(false);
+    t += 2_000; expect(peekLock(p, deps)!.stale).toBe(true);
+    expect(takeOverStaleLock(p, peekLock(p, deps)!.info, 'me', deps).status).toBe('acquired');
+  });
+  it("a take-over of another host's lock first seen now is refused: not observed for 30 s yet", () => {
+    writeLock('B', 0);
+    expect(takeOverStaleLock(p, peekLock(p, { now, hostname: () => 'A' })!.info, 'me', { now, hostname: () => 'A' }).status).toBe('heldByOther');
+  });
+  it('our own host keeps the clock rule', () => {
+    writeLock('A', t - 31_000); expect(peekLock(p, deps)!.stale).toBe(true);
+    writeLock('A', t - 5_000); expect(peekLock(p, deps)!.stale).toBe(false);
+  });
+  it('the host we write is the injected one, so our own lock is judged on one clock', () => {
+    acquireLock(p, 's1', deps); t += 31_000;
+    expect(JSON.parse(readFileSync(lockPathFor(p), 'utf8')).host).toBe('A');
+    expect(peekLock(p, deps)!.stale).toBe(true);
+  });
+  it('a lock that cannot be read stays stale at once, and is not removed by the take-over', () => {
+    writeLock('A', t);
+    const seen = peekLock(p, deps)!;
+    const readText = () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); };
+    expect(takeOverStaleLock(p, seen.info, 'me', { ...deps, readText })).toMatchObject({ status: 'heldByOther', stale: true });
+    expect(existsSync(lockPathFor(p))).toBe(true);
+  });
+});

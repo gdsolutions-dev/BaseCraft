@@ -8,7 +8,9 @@ export type ModalButton = 'yes' | 'no' | 'cancel' | 'ok';
 export interface ConfirmOptions { titleKey: string; messageKey: string; params?: object; buttons: ModalButton[]; defaultButton?: ModalButton }
 export interface PromptOptions { titleKey: string; labelKey: string; params?: object; initial: string; validate?: (v: string) => string | null
   /** The label's interpolation values (A3: a parameter's name, never read as a key). */
-  labelParams?: object }
+  labelParams?: object
+  /** C2 R7: a password (the field hides what is typed). `error`: shown from the start (the previous try was refused). */
+  secret?: boolean; error?: string }
 export interface CustomOptions { titleKey: string; titleParams?: object }
 export interface ModalApi {
   confirm(opts: ConfirmOptions): Promise<ModalButton>;
@@ -110,7 +112,7 @@ function Dialog({ req, onDone }: { req: Request; onDone: (v: unknown) => void })
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(req.kind === 'prompt' ? req.opts.initial : '');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(req.kind === 'prompt' ? req.opts.error ?? null : null);
   const buttons: ModalButton[] = req.kind === 'confirm' ? req.opts.buttons : ['ok', 'cancel'];
   const def = (req.kind === 'confirm' && req.opts.defaultButton) || buttons[0];
 
@@ -150,7 +152,7 @@ function Dialog({ req, onDone }: { req: Request; onDone: (v: unknown) => void })
         ) : (
           <label className="modal-field">
             <span>{t(req.opts.labelKey, { ...req.opts.params, ...req.opts.labelParams })}</span>
-            <input data-testid="modal-input" value={value} aria-invalid={error !== null}
+            <input data-testid="modal-input" type={req.opts.secret ? 'password' : 'text'} autoComplete="off" value={value} aria-invalid={error !== null}
               onChange={(e) => { setValue(e.target.value); setError(null); }} />
             {error && <span className="modal-error" role="alert" data-testid="modal-error">{error}</span>}
           </label>

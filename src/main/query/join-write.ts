@@ -11,14 +11,16 @@ import { toSourceInfo, type BoundQuery } from '../../shared/query/bind';
 import type { WriteTable } from '../../shared/query/write-plan';
 import { writableColumn, type SourceSaveRequest, type SourceSaveResult } from '../../shared/record-source';
 import { inTransactionAsync } from '../db/tx';
-import { insertRow, updateRow, type RowWriteResult } from '../db/write-layer';
+import { expectedConflict, insertRow, updateRow, type RowWriteResult } from '../db/write-layer';
 import { compileLocator } from './compile';
 import { run } from './source';
 
-type FieldError = Extract<RowWriteResult, { ok: false }>['errors'][number];
+type FieldError = Extract<RowWriteResult, { errors: unknown }>['errors'][number];
 
 /** A refusal inside the save's transaction: rolls every table back and carries its errors out. */
 class Refused extends Error { constructor(readonly errors: FieldError[]) { super('refused'); } }
+/** A write conflict of one table (R8): rolls every table back too. */
+class Conflict extends Error { constructor(readonly conflict: 'changed' | 'deleted') { super('conflict'); } }
 
 const designOf = (level: BoundQuery, w: WriteTable): TableDesign => level.sources.find((s) => s.alias === w.alias)!.design!;
 const fieldOf = (d: TableDesign, name: string): FieldDef => d.fields.find((x) => sameName(x.name, name))!;
@@ -39,7 +41,9 @@ export function locateRow(db: DatabaseSync, level: BoundQuery, keyRowid: number,
  * readOnly on it and nothing written; a source that is not updatable: readOnly on its first column. Then, in one
  * transaction: the key table (insert when `req.rowid` is null, update when it has values), then each "one" table with
  * values on the parent located after the writes before it (no parent: noParent; found twice: readOnly; `table` set). Any
- * refusal rolls every table back; errors name output columns.
+ * refusal rolls every table back; errors name output columns. `req.expected` (R8, by output column): the key row is
+ * compared first, even when only "one" tables are written; then each table's update on its own fields. The first conflict
+ * rolls everything back, `current` read back after it.
  */
 export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: SourceSaveRequest, info: LocaleInfo): Promise<SourceSaveResult> {
   if (!b.updatable || !b.writePlan || !b.writeLevel) return { ok: false, errors: [{ field: b.columns[0]?.name ?? '', code: 'readOnly' }] };
@@ -60,17 +64,49 @@ export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: Source
       ?? b.columns.find((c) => sameOrigin(c.origin, plan[i].table, e.field))?.name ?? e.field;
     return { ...e, field, ...(plan[i].role === 'one' && e.table === undefined && { table: plan[i].table }) };
   });
-  const opts = { enforceMask: true }; // datasheet and form entry
+  /** The expected values of plan table `i`, by its field (R8); a new record is an insert, never checked. */
+  const expectedOf = (i: number): Record<string, SqlValue> | undefined => req.rowid === null || !req.expected ? undefined : Object.fromEntries(b.columns.flatMap((c) => {
+    const k = Object.keys(req.expected!).find((x) => sameName(x, c.name));
+    return k === undefined || plan.findIndex((w) => sameOrigin(c.origin, w.table)) !== i ? [] : [[c.origin!.field, req.expected![k]]];
+  }));
+  const update = async (i: number, d: TableDesign, id: number, values: Record<string, CellInput>) => {
+    const r = await updateRow(db, d, id, values, info, undefined, { enforceMask: true /* datasheet and form entry */, expected: expectedOf(i) });
+    if ('conflict' in r) throw new Conflict(r.conflict);
+    if (!r.ok) throw new Refused(mapped(i, r.errors));
+    return r;
+  };
+  /** Each plan table's row of key row `rowid`, for its output columns. */
+  const readValues = (rowid: number): Record<string, SqlValue> => {
+    const at = locateRow(db, level, rowid, info);
+    const out: [string, SqlValue][] = [];
+    for (const c of b.columns) {
+      const i = plan.findIndex((w) => sameOrigin(c.origin, w.table));
+      const id = i === 0 ? rowid : i < 0 || at === 'ambiguous' ? undefined : at[i];
+      if (id === undefined) continue;
+      const s = db.prepare(`SELECT ${quoteIdent(c.origin!.field)} FROM ${quoteIdent(plan[i].table)} WHERE rowid = ?`);
+      s.setReturnArrays(true);
+      out.push([c.name, id === null ? null : ((s.get(id) as unknown as SqlValue[] | undefined)?.[0] ?? null)]);
+    }
+    return Object.fromEntries(out);
+  };
 
   try {
     return await inTransactionAsync(db, async () => {
       let rowid = req.rowid;
+      // the key row first, written or not: gone or re-linked, a "one" table must not be written through it (R8)
+      const keyExpected = expectedOf(0);
+      if (rowid !== null && keyExpected && Object.keys(keyExpected).length) {
+        const c = expectedConflict(db, designOf(level, plan[0]), rowid, keyExpected);
+        if (c) throw new Conflict(c.conflict);
+      }
       const keyValues = valuesOf(0);
       if (rowid === null || Object.keys(keyValues).length) {
         const kd = designOf(level, plan[0]);
-        const r = rowid === null ? await insertRow(db, kd, keyValues, info, undefined, opts) : await updateRow(db, kd, rowid, keyValues, info, undefined, opts);
-        if (!r.ok) throw new Refused(mapped(0, r.errors));
-        rowid = r.rowid;
+        if (rowid === null) {
+          const r = await insertRow(db, kd, keyValues, info, undefined, { enforceMask: true });
+          if (!r.ok) throw new Refused(mapped(0, r.errors));
+          rowid = r.rowid;
+        } else await update(0, kd, rowid, keyValues);
       }
       for (let i = 1; i < plan.length; i++) {
         const values = valuesOf(i);
@@ -79,24 +115,13 @@ export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: Source
         const at = locateRow(db, level, rowid, info); // again for each table: a chain's link may have just changed
         if (at === 'ambiguous') throw new Refused([{ field: first, code: 'readOnly', table: plan[i].table }]);
         if (at[i] === null) throw new Refused([{ field: first, code: 'noParent', table: plan[i].table }]);
-        const r = await updateRow(db, designOf(level, plan[i]), at[i]!, values, info, undefined, opts);
-        if (!r.ok) throw new Refused(mapped(i, r.errors));
+        await update(i, designOf(level, plan[i]), at[i]!, values);
       }
-      // read back: each plan table's row, for its output columns
-      const at = locateRow(db, level, rowid, info);
-      const out: [string, SqlValue][] = [];
-      for (const c of b.columns) {
-        const i = plan.findIndex((w) => sameOrigin(c.origin, w.table));
-        const id = i === 0 ? rowid : i < 0 || at === 'ambiguous' ? undefined : at[i];
-        if (id === undefined) continue;
-        const s = db.prepare(`SELECT ${quoteIdent(c.origin!.field)} FROM ${quoteIdent(plan[i].table)} WHERE rowid = ?`);
-        s.setReturnArrays(true);
-        out.push([c.name, id === null ? null : ((s.get(id) as unknown as SqlValue[] | undefined)?.[0] ?? null)]);
-      }
-      return { ok: true as const, rowid, values: Object.fromEntries(out) };
+      return { ok: true as const, rowid, values: readValues(rowid) };
     });
   } catch (e) {
     if (e instanceof Refused) return { ok: false, errors: e.errors };
+    if (e instanceof Conflict) return e.conflict === 'deleted' ? { ok: false, conflict: 'deleted' } : { ok: false, conflict: 'changed', current: readValues(req.rowid!) };
     throw e;
   }
 }

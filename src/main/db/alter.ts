@@ -9,6 +9,7 @@ import {
 } from './schema';
 import type { AlterResult, FieldMapping, Relation } from '../../shared/api';
 import { countViolations } from './rules';
+import { isLinkName } from '../links/store';
 export type { AlterResult, FieldMapping };
 export { isExternal, sqlTokens } from './schema';
 
@@ -151,7 +152,7 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
   // Only a new name can clash (a twin another tool made, "été" beside "Été", does not stop altering "Été"). A query clash only
   // matters for a rename: a table that an older version let share a query's name can still be saved.
   if (design.name !== old.name && listTables(db).some((x) => x.name !== old.name && sameName(x.name, design.name))) throw new NameExistsError(design.name);
-  if (!sameName(old.name, design.name) && isQueryName(db, design.name)) throw new NameExistsError(design.name);
+  if (!sameName(old.name, design.name) && (isQueryName(db, design.name) || isLinkName(db, design.name))) throw new NameExistsError(design.name);
   if (db.isTransaction) throw new Error('alterTable cannot run inside a transaction');
   const relations = relationsOf(db, old.name);
   const guarded = relationField(db, old, design, sources, relations);

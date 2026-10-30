@@ -10,7 +10,7 @@ import { errorMessage, type ModalApi } from './Modal';
 import type { AppDispatch } from './nav-menu';
 
 export const MAX_DESCRIPTION = 255;
-interface Target { kind: ObjectKind | 'table'; name: string; description: string; created?: string; modified?: string }
+interface Target { kind: ObjectKind | 'table'; name: string; description: string; created?: string; modified?: string; source?: string /* a link's file (C1) */ }
 
 /** Reads the object's current properties, then shows the dialog; a saved description refreshes the pane's lists. */
 export async function showObjectProperties(modal: ModalApi, ref: { kind: ObjectKind | 'table'; name: string }, readOnly: boolean, dispatch: AppDispatch): Promise<void> {
@@ -18,7 +18,7 @@ export async function showObjectProperties(modal: ModalApi, ref: { kind: ObjectK
   let target: Target | undefined;
   if (kind === 'table') {
     const x = (await api.tables.list()).find((t) => sameName(t.name, ref.name));
-    if (x) target = { kind, name: x.name, description: x.description ?? '' };
+    if (x) target = { kind, name: x.name, description: x.description ?? '', ...(x.link ? { source: x.link.path } : {}) };
   } else {
     const o = (await api.objects.list(kind)).find((t) => sameName(t.name, ref.name));
     if (o) target = { kind, name: o.name, description: o.description ?? '', created: o.created, modified: o.modified };
@@ -50,6 +50,7 @@ function PropertiesForm({ target, region, readOnly, onClose }: { target: Target;
     <div data-testid="object-properties" className="object-properties">
       {row('type', t(`tabs.kind.${target.kind}`))}
       {row('name', target.name)}
+      {target.source && <p data-testid="object-properties-source">{t('link.source', { path: target.source })}</p>}
       <label className="modal-field">
         <span>{t('objectProperties.description')}</span>
         <textarea data-testid="object-properties-description" rows={3} maxLength={MAX_DESCRIPTION} value={text} readOnly={readOnly}

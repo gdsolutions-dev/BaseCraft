@@ -14,6 +14,8 @@ import { AddTablesDialog, RelationDialog, draftOf, type RelationDraft } from './
 import { BOX_W, autoLayout, boxHeight, deleteRefusal, isUniqueField, linePath, linkSides, type Box, type Point } from './relations-layout';
 import './relations.css';
 
+/** C1 R11: the window shows this base's relations, never a linked file's. */
+const localRelations = () => api.relations.list({ localOnly: true }); // never opens (nor locks) a linked file
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
 type Selection = { table: string } | { relation: string } | null;
 
@@ -60,8 +62,8 @@ export function RelationsView({ tab, readOnly, dispatch }: DocViewProps) {
   useEffect(() => {
     let stale = false;
     (async () => {
-      const [list, rs, saved] = await Promise.all([api.tables.list(), api.relations.list(), api.relations.layout()]);
-      const names = list.map((x) => x.name);
+      const [list, rs, saved] = await Promise.all([api.tables.list(), localRelations(), api.relations.layout()]);
+      const names = list.filter((x) => !x.link).map((x) => x.name); // C1 R11: local tables only
       // only the stored layout is shown, so a reload or a reopening shows the same window (Clear Layout lasts)
       const shown = Object.keys(saved.tables).filter((n) => names.includes(n));
       const ds = await withDesigns(shown, new Map());
@@ -111,13 +113,13 @@ export function RelationsView({ tab, readOnly, dispatch }: DocViewProps) {
     try {
       const res = await api.relations.delete(r.name);
       if (!res.ok) await modal.confirm({ titleKey: 'dialog.errorTitle', ...deleteRefusal(res, r.name), buttons: ['ok'] });
-      setRels(await api.relations.list());
+      setRels(await localRelations());
       setSel(null);
     } catch (e) { await showError(e); }
   };
   const saved = async (r: Relation) => {
     setEditing(null);
-    try { setRels(await api.relations.list()); } catch (e) { await showError(e); }
+    try { setRels(await localRelations()); } catch (e) { await showError(e); }
     await show([r.parentTable, r.childTable]);
     setSel({ relation: r.name });
   };

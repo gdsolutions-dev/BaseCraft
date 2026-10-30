@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BaseCraft — Access 방식의 데스크톱 데이터베이스</title>
+<meta name="description" content="BaseCraft는 Microsoft Access의 정신을 잇는 오픈 소스 데스크톱 데이터베이스 애플리케이션으로, Windows, macOS, Linux에서 실행됩니다.">
+<link rel="icon" type="image/png" sizes="32x32" href="../logo/png/icone-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../logo/png/icone-16.png">
+<link rel="apple-touch-icon" href="../logo/png/icone-256.png">
+<meta property="og:image" content="https://gdsolutions-dev.github.io/BaseCraft/logo/png/icone-512.png">
+<style>
+@font-face {
+  font-family: "Inter Variable";
+  src: url("../maquettes/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+/* gd solutions charter: orange #EF572C, navy #364554, white; Inter 800 for titles */
+:root {
+  --orange: #EF572C; --navy: #364554;
+  --bg: #f5f6f8; --surface: #ffffff; --text: #364554; --muted: #5d6b79;
+  --border: #e1e5ea; --link: #c8401a; --hero: #364554; --hero-text: #ffffff; --hero-muted: #c9d1d9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c242d; --surface: #26313c; --text: #e8ecf0; --muted: #a9b4bf;
+    --border: #364554; --link: #f58a6a; --hero: #141b22; --hero-text: #ffffff; --hero-muted: #a9b4bf;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 "Inter Variable", system-ui, sans-serif;
+}
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+.hero { background: var(--hero); color: var(--hero-text); padding: 28px 0 0; overflow: hidden; }
+.hero nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--hero-text); text-decoration: none; font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
+.brand span { color: var(--orange); }
+.hero nav a.gh { color: var(--hero-text); text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+.hero-body { padding: 56px 0 40px; }
+h1 { font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
+h1 span { color: var(--orange); }
+h2 { font-weight: 800; letter-spacing: -0.02em; font-size: 1.5rem; margin: 56px 0 16px; }
+.lead { font-size: 1.2rem; color: var(--hero-muted); max-width: 640px; margin: 0; }
+.badge {
+  display: inline-block; margin-bottom: 20px; padding: 2px 12px; border-radius: 99px;
+  background: rgba(239, 87, 44, 0.15); color: #ffb39c; font-size: 0.85rem; font-weight: 600;
+}
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.btn {
+  display: inline-block; padding: 11px 20px; border-radius: 6px; text-decoration: none; font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: var(--hero-text);
+}
+.btn.primary { background: var(--orange); border-color: var(--orange); }
+.btn:hover { filter: brightness(1.08); }
+.shot { display: block; width: 100%; height: auto; border-radius: 10px 10px 0 0; box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.35); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--orange); border-radius: 6px; padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; }
+.card p { margin: 0; color: var(--muted); }
+ol.roadmap { padding: 0; list-style: none; display: grid; gap: 12px; }
+ol.roadmap li { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 14px 20px; }
+ol.roadmap b { display: inline-block; min-width: 2em; color: var(--orange); font-weight: 800; }
+ol.roadmap .done { border-left: 4px solid var(--orange); }
+code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 20px 0 48px; color: var(--muted); font-size: 0.9rem; }
+a { color: var(--link); }
+.langs { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 16px; }
+.langs a[aria-current] { color: inherit; font-weight: 700; text-decoration: none; }
+</style>
+<link rel="alternate" hreflang="en" href="https://gdsolutions-dev.github.io/BaseCraft/">
+<link rel="alternate" hreflang="fr" href="https://gdsolutions-dev.github.io/BaseCraft/fr/">
+<link rel="alternate" hreflang="es" href="https://gdsolutions-dev.github.io/BaseCraft/es/">
+<link rel="alternate" hreflang="de" href="https://gdsolutions-dev.github.io/BaseCraft/de/">
+<link rel="alternate" hreflang="it" href="https://gdsolutions-dev.github.io/BaseCraft/it/">
+<link rel="alternate" hreflang="pt" href="https://gdsolutions-dev.github.io/BaseCraft/pt/">
+<link rel="alternate" hreflang="nl" href="https://gdsolutions-dev.github.io/BaseCraft/nl/">
+<link rel="alternate" hreflang="pl" href="https://gdsolutions-dev.github.io/BaseCraft/pl/">
+<link rel="alternate" hreflang="ja" href="https://gdsolutions-dev.github.io/BaseCraft/ja/">
+<link rel="alternate" hreflang="zh-Hans" href="https://gdsolutions-dev.github.io/BaseCraft/zh/">
+<link rel="alternate" hreflang="ko" href="https://gdsolutions-dev.github.io/BaseCraft/ko/">
+<link rel="alternate" hreflang="x-default" href="https://gdsolutions-dev.github.io/BaseCraft/">
+</head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="./"><img src="../logo/png/symbole-blanc-1024.png" alt="" width="40" height="40"><b>Base<span>Craft</span></b></a>
+      <a class="gh" href="https://github.com/gdsolutions-dev/BaseCraft">GitHub</a>
+    </nav>
+    <div class="hero-body">
+      <div class="badge">프리뷰 0.2.0 · 초기 개발 단계</div>
+      <h1>데스크톱 데이터베이스,<br><span>Access의 방식으로.</span></h1>
+      <p class="lead">BaseCraft는 Microsoft Access의 정신을 잇는 오픈 소스 데스크톱 데이터베이스 애플리케이션입니다. 테이블, 쿼리, 폼, 보고서, 매크로, 코드를 현대적인 인터페이스로 Windows, macOS, Linux에서 사용할 수 있습니다.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/gdsolutions-dev/BaseCraft/releases">프리뷰 다운로드</a>
+        <a class="btn" href="https://github.com/gdsolutions-dev/BaseCraft">GitHub에서 보기</a>
+        <a class="btn" href="../maquettes/">UI 목업 보기</a>
+      </div>
+    </div>
+    <img class="shot" src="../images/screenshot.png" alt="그룹화와 합계가 있는 BaseCraft 보고서 디자인 보기" width="1923" height="1203">
+  </div>
+</div>
+
+<main class="wrap">
+  <h2>BaseCraft를 쓰는 이유</h2>
+  <div class="grid">
+    <div class="card"><h3>익숙함</h3><p>모든 개체에 디자인 보기와 실행 보기가 있고, QBE 쿼리 그리드, 데이터시트, 속성 시트를 제공합니다. Access를 안다면 BaseCraft도 바로 쓸 수 있습니다.</p></div>
+    <div class="card"><h3>하나의 열린 파일</h3><p>데이터베이스 전체가 하나의 <code>.basecraft</code> 파일에 들어 있으며, 이 파일은 어떤 SQLite 도구로도 읽을 수 있는 일반 SQLite 데이터베이스입니다.</p></div>
+    <div class="card"><h3>크로스 플랫폼</h3><p>Windows, macOS, Linux에서 하나의 애플리케이션을 씁니다. 혼자 쓸 때는 서버도, 다른 설치도 필요 없습니다.</p></div>
+    <div class="card"><h3>기본적으로 안전</h3><p>충돌이 나도 데이터가 손실되지 않고, 컴퓨터 간 쓰기 잠금을 지원하며, 이메일로 받은 파일이 컴퓨터를 해칠 수 없습니다.</p></div>
+  </div>
+
+  <h2>로드맵</h2>
+  <ol class="roadmap">
+    <li class="done"><b>A</b> Excel 대체: 테이블, 관계와 식, 쿼리, 폼, 보고서, PDF 내보내기 ✓</li>
+    <li><b>B</b> 자동화와 배포: 이벤트, 매크로, BaseCraft Runtime</li>
+    <li><b>C</b> 함께 작업: PostgreSQL, SQL Server, Access 연결 테이블</li>
+    <li><b>D</b> VBA 대신 Python 코드</li>
+    <li><b>E</b> 기존 Access 데이터베이스 가져오기</li>
+  </ol>
+
+  <footer>
+  <nav class="langs" aria-label="Language"><a href="../" lang="en" hreflang="en" data-lang="en">English</a> <a href="../fr/" lang="fr" hreflang="fr" data-lang="fr">Français</a> <a href="../es/" lang="es" hreflang="es" data-lang="es">Español</a> <a href="../de/" lang="de" hreflang="de" data-lang="de">Deutsch</a> <a href="../it/" lang="it" hreflang="it" data-lang="it">Italiano</a> <a href="../pt/" lang="pt" hreflang="pt" data-lang="pt">Português</a> <a href="../nl/" lang="nl" hreflang="nl" data-lang="nl">Nederlands</a> <a href="../pl/" lang="pl" hreflang="pl" data-lang="pl">Polski</a> <a href="../ja/" lang="ja" hreflang="ja" data-lang="ja">日本語</a> <a href="../zh/" lang="zh-Hans" hreflang="zh-Hans" data-lang="zh">简体中文</a> <a href="./" lang="ko" hreflang="ko" data-lang="ko" aria-current="page">한국어</a></nav>
+  
+    BaseCraft는 <a href="https://github.com/gdsolutions-dev/BaseCraft/blob/main/LICENSE">AGPL-3.0</a> 라이선스로 배포되며 gd solutions가 개발합니다.
+    Microsoft Access는 Microsoft Corporation의 상표이며, BaseCraft는 Microsoft와 제휴하지 않았습니다.
+  </footer>
+</main>
+<script>
+document.querySelectorAll('.langs a').forEach(function (a) {
+  a.addEventListener('click', function () { try { localStorage.setItem('bc-lang', a.dataset.lang); } catch (e) {} });
+});
+</script>
+</body>
+</html>

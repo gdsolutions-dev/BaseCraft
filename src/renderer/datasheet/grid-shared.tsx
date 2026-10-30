@@ -72,9 +72,11 @@ export function usePalette() {
   return palette;
 }
 
+/** A cell editor is open (Glide's overlay; one in the window at a time, in the tab shown). */
+export const cellEditorOpen = (): boolean => document.querySelector('#portal .gdg-clip-region') !== null;
 /** An open cell editor keeps its text until it closes: a click outside closes it and keeps the text (Glide), so does this. */
 export function flushCellEditor(): void {
-  if (document.querySelector('#portal .gdg-clip-region')) document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  if (cellEditorOpen()) document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 }
 
 /** Brings a row into view. ponytail: Glide's scrollTo overshoots to the end for far rows (6.0.3), so its scroller (internal

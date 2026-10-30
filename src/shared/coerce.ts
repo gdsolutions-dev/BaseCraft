@@ -103,7 +103,7 @@ export function coerce(field: FieldDef, input: CellInput, info: LocaleInfo): Coe
 
 /** Value list items (Lookup) are stored as typed, except a Number's: in canonical form ('.' decimal, no grouping), so the
  *  list means the same in every region. As typed when it does not convert. */
-const CANON: LocaleInfo = { locale: 'en-US', decimalSep: '.', groupSep: '', dateOrder: 'YMD', dateSep: '-' }
+export const CANON: LocaleInfo = { locale: 'en-US', decimalSep: '.', groupSep: '', dateOrder: 'YMD', dateSep: '-' }
 export const listItemStored = (type: FieldType, text: string, info: LocaleInfo): string => (type === 'number' && toDecimal(text, info)) || text
 /** A stored item as shown and typed in the region. */
 export const listItemText = (type: FieldType, item: string, info: LocaleInfo): string =>

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import type { CellInput } from '../../shared/coerce';
 import { localeInfo } from '../../shared/locale-format';
 import type { SourceSaveRequest } from '../../shared/record-source';
@@ -184,4 +184,40 @@ it('two nested saved queries: the page rowid is the key table\'s, and a save wri
   expect(await session.saveSource(ref, { rowid: 4, values: { Qui: 'Durand SA', Montant: '98' } })).toEqual({ ok: true, rowid: 4, values: { Qui: 'Durand SA', Montant: 98 } });
   expect(row('Clients', 3)[1]).toBe('Durand SA');
   expect(row('Commandes', 4)[2]).toBe(98);
+});
+
+it('a join save reports the conflict of the one side and writes nothing', async () => { // C3 R8
+  const a = db;
+  const b = new DatabaseSync(path.join(dir, 'test.basecraft'));
+  const read = (x: DatabaseSync, sql: string): unknown => Object.values(x.prepare(sql).get() as object)[0];
+  try {
+    const bound = resolve(a, { kind: 'sql', sql: 'SELECT Commandes.[N°], Commandes.Client, Clients.Nom, Clients.Ville, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' });
+    b.prepare(`UPDATE Clients SET Ville = 'Brest' WHERE rowid = 1`).run();
+    expect(await saveSourceRow(a, bound, { rowid: 1, values: { Montant: '11', Ville: 'Lille' }, expected: { Montant: 10.1, Ville: 'Lyon', Nom: 'Dupont' } }, info))
+      .toMatchObject({ ok: false, conflict: 'changed', current: { Ville: 'Brest', Montant: 10.1 } });
+    expect(read(b, 'SELECT Montant FROM Commandes WHERE rowid = 1')).toBe(10.1);
+    // the key row gone: deleted; unchanged since read: saved
+    expect(await saveSourceRow(a, bound, { rowid: 1, values: { Montant: '11', Ville: 'Lille' }, expected: { Montant: 10.1, Ville: 'Brest', Nom: 'Dupont' } }, info))
+      .toMatchObject({ ok: true, values: { Montant: 11, Ville: 'Lille' } });
+    b.prepare('DELETE FROM Commandes WHERE rowid = 2').run();
+    expect(await saveSourceRow(a, bound, { rowid: 2, values: { Montant: '3' }, expected: { Montant: 0.1 } }, info)).toEqual({ ok: false, conflict: 'deleted' });
+  } finally { b.close(); }
+});
+
+it('only a "one" column edited: the key row is still compared first (R8, review fix 1)', async () => {
+  const b = new DatabaseSync(path.join(dir, 'test.basecraft'));
+  const read = (x: DatabaseSync, sql: string): unknown => Object.values(x.prepare(sql).get() as object)[0];
+  try {
+    const bound = resolve(db, { kind: 'sql', sql: 'SELECT Commandes.Client, Clients.Nom, Clients.Ville, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' });
+    // the key row deleted by another workstation: deleted, not noParent; nothing written
+    b.prepare('DELETE FROM Commandes WHERE rowid = 1').run();
+    expect(await saveSourceRow(db, bound, { rowid: 1, values: { Ville: 'Lille' }, expected: { Client: 1, Montant: 10.1, Nom: 'Dupont', Ville: 'Lyon' } }, info))
+      .toEqual({ ok: false, conflict: 'deleted' });
+    expect(read(b, 'SELECT Ville FROM Clients WHERE rowid = 1')).toBe('Lyon');
+    // the key row re-linked to another client whose own columns match the expected ones: changed, the new parent untouched
+    b.exec(`UPDATE Clients SET Nom = 'Martin', Ville = 'LYON' WHERE rowid = 3; UPDATE Commandes SET Client = 3 WHERE rowid = 3`);
+    expect(await saveSourceRow(db, bound, { rowid: 3, values: { Ville: 'Lille' }, expected: { Client: 2, Montant: 0.2, Nom: 'Martin', Ville: 'LYON' } }, info))
+      .toMatchObject({ ok: false, conflict: 'changed', current: { Client: 3, Nom: 'Martin', Ville: 'LYON' } });
+    expect([read(b, 'SELECT Ville FROM Clients WHERE rowid = 2'), read(b, 'SELECT Ville FROM Clients WHERE rowid = 3')]).toEqual(['LYON', 'LYON']);
+  } finally { b.close(); }
 });

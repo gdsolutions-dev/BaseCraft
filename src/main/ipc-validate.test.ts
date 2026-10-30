@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest,
+  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { DEFAULT_STARTUP } from '../shared/startup';
@@ -15,6 +15,11 @@ const INVALID = 'bc:invalidArgument';
 const abs = process.platform === 'win32' ? 'C:\\data\\x.basecraft' : '/data/x.basecraft';
 
 describe('ipc argument checks', () => {
+  it('relations list options (C1: local only)', () => {
+    expect(relationsListOptions(undefined)).toEqual({});
+    expect(relationsListOptions({ localOnly: true })).toEqual({ localOnly: true });
+    for (const v of [null, 1, { localOnly: 'yes' }, []]) expect(() => relationsListOptions(v)).toThrow(INVALID);
+  });
   it('objects', () => {
     expect(objectKind('form')).toBe('form');
     expect(description(null)).toBeNull();
@@ -203,19 +208,30 @@ describe('ipc argument checks', () => {
   it('startupOptions is strict', () => {
     expect(startupOptions({ ...DEFAULT_STARTUP, startupForm: 'FMenu' })).toEqual({ ...DEFAULT_STARTUP, startupForm: 'FMenu' });
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
-    const full = { appTitle: 'Gestion des ventes', appIcon: png, startupForm: 'FMenu', showNavPane: false, ribbon: 'simplified', runMode: true };
+    const full = {
+      appTitle: 'Gestion des ventes', appIcon: png, startupForm: 'FMenu', showNavPane: false, ribbon: 'simplified', runMode: true,
+      statusBar: false, documentTabs: false, specialKeys: false, compactOnClose: true, datasheetDesign: false, fullMenus: false, shortcutMenus: false, iconForForms: true, frontEnd: true, dataFile: true,
+    };
     expect(startupOptions(full)).toEqual(full);
     expect(startupOptions({ ...DEFAULT_STARTUP, appTitle: 'é'.repeat(255) }).appTitle).toHaveLength(255);
     const { runMode: _runMode, ...missing } = DEFAULT_STARTUP;
+    const { fullMenus: _fullMenus, ...thirteen } = DEFAULT_STARTUP;   // a base option missing: the sixteen keys are all required
     const gif = btoa('GIF89a\u0001\u0000\u0001\u0000');
+    // the eight switches added by O1: a boolean each, 'false' (a string) is not one
+    const notBoolean = (['statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms'] as const)
+      .flatMap((k) => [{ ...DEFAULT_STARTUP, [k]: 'false' }, { ...DEFAULT_STARTUP, [k]: 0 }, { ...DEFAULT_STARTUP, [k]: null }]);
+    // the __proto__ key must be the only reason: the same fourteen keys without it are taken
+    const fourteen = JSON.stringify(DEFAULT_STARTUP);
+    expect(startupOptions(JSON.parse(fourteen))).toEqual(DEFAULT_STARTUP);
     for (const v of [
+      ...notBoolean, thirteen,
       { ...DEFAULT_STARTUP, ribbon: 'custom' }, { ...DEFAULT_STARTUP, appTitle: 'a\u202Eb' }, { ...DEFAULT_STARTUP, runMode: 1 }, null, [], 'x',
       { ...DEFAULT_STARTUP, showNavPane: 'true' }, { ...DEFAULT_STARTUP, appTitle: 5 }, { ...DEFAULT_STARTUP, appTitle: ' x' }, { ...DEFAULT_STARTUP, appTitle: 'x\n' },
       { ...DEFAULT_STARTUP, appTitle: 'é'.repeat(256) }, { ...DEFAULT_STARTUP, appTitle: 'x'.repeat(1_000_000) },
       { ...DEFAULT_STARTUP, appIcon: 'AAAA' }, { ...DEFAULT_STARTUP, appIcon: gif }, { ...DEFAULT_STARTUP, appIcon: 3 },
       { ...DEFAULT_STARTUP, startupForm: 'a.b' }, { ...DEFAULT_STARTUP, startupForm: ' x' }, { ...DEFAULT_STARTUP, startupForm: 3 },
       missing, { ...DEFAULT_STARTUP, v: 2 },
-      JSON.parse('{"__proto__":{},"appTitle":"","appIcon":"","startupForm":"","showNavPane":true,"ribbon":"full","runMode":false}'),
+      JSON.parse(`{"__proto__":{},${fourteen.slice(1)}`),
     ]) expect(() => startupOptions(v)).toThrow(INVALID);
   });
 
@@ -309,6 +325,8 @@ describe('file errors for the renderer', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(bcError(new BaseFileError('notBasecraft')).message).toBe('bc:notBasecraft');
     expect(bcError(Object.assign(new Error('no such dir'), { code: 'ENOENT' })).message).toBe('bc:cannotOpen');
+    expect(bcError(new Error('bc:busy')).message).toBe('bc:busy'); // C3: a busy file, a data file in use, keep their code
+    expect(bcError(new Error('bc:dataFileInUse||paul (PC-2)')).message).toBe('bc:dataFileInUse||paul (PC-2)');
     expect(log).toHaveBeenCalledTimes(1);
     log.mockRestore();
   });
@@ -323,6 +341,40 @@ describe('import arguments', () => {
     for (const v of [join(__dirname, 'ipc.ts'), 'relative.csv', __dirname, __filename + '.missing', 1]) expect(() => importPath(v, chosen)).toThrow(INVALID);
     expect(() => importPath(__filename, chosen, 10)).toThrow('bc:fileTooLarge'); // the 2 GiB ceiling, lowered for the test
     expect(MAX_IMPORT_BYTES).toBe(2 * 1024 ** 3);
+  });
+  it('linkPath accepts only a picked path', () => { // C1: an existing file the link dialog returned, any size
+    expect(() => linkPath('/etc/x', new Set())).toThrow(INVALID);
+    const chosen = new Set([__filename, __dirname, 'relative.db']);
+    expect(linkPath(__filename, chosen)).toBe(__filename);
+    for (const v of [join(__dirname, 'ipc.ts'), 'relative.db', __dirname, 1]) expect(() => linkPath(v, chosen)).toThrow(INVALID);
+  });
+  it('splitPath accepts only a picked path, not there yet', () => { // C3 R13: a path the split's save dialog returned
+    const target = join(__dirname, 'Ventes_donnees.basecraft');
+    expect(() => splitPath(target, new Set())).toThrow(INVALID);
+    expect(splitPath(target, new Set([target]))).toBe(target);
+    expect(() => splitPath('relative.basecraft', new Set(['relative.basecraft']))).toThrow(INVALID);
+    expect(() => splitPath(1, new Set([target]))).toThrow(INVALID);
+  });
+  it('nameList: 1 to 1000 names', () => {
+    expect(nameList(['Clients', 'x'.repeat(1024)])).toEqual(['Clients', 'x'.repeat(1024)]);
+    for (const v of [[], 'Clients', [1], ['x'.repeat(1025)], Array(1001).fill('a'), [, 'a']]) expect(() => nameList(v)).toThrow(INVALID);
+  });
+  it('unlockPath: an absolute path of at most 32 767 UTF-16 units (C2 R7)', () => {
+    expect(unlockPath(__filename)).toBe(__filename);
+    const long = join(__dirname, 'x'.repeat(32767 - __dirname.length - 1));
+    expect(unlockPath(long)).toBe(long);
+    for (const v of [long + 'x', 'relative.accdb', '', 1, null, undefined, [__filename]]) expect(() => unlockPath(v)).toThrow(INVALID);
+  });
+
+  it('accessPassword: 1 to 256 UTF-16 units (C2 R7)', () => {
+    expect(accessPassword('Recette-C2!')).toBe('Recette-C2!');
+    expect(accessPassword('é'.repeat(256))).toBe('é'.repeat(256));
+    for (const v of ['', 'x'.repeat(257), 1, null, undefined, ['x']]) expect(() => accessPassword(v)).toThrow(INVALID);
+  });
+  it('linkKindOrUndefined: none or a source kind (C2 R10)', () => {
+    expect(linkKindOrUndefined(undefined)).toBeUndefined();
+    for (const k of ['basecraft', 'sqlite', 'access']) expect(linkKindOrUndefined(k)).toBe(k);
+    for (const v of ['mdb', null, 1]) expect(() => linkKindOrUndefined(v)).toThrow(INVALID);
   });
   it('spec: validated, unknown keys dropped', () => {
     expect(importSpecOrNull(null)).toBeNull();
@@ -363,10 +415,49 @@ describe('record sources through a join (B4)', () => {
     for (const rowid of [1.5, '1', undefined, 2 ** 53, -1]) expect(() => sourceSaveRequest(q, { rowid, values: {} })).toThrow(INVALID);
     for (const values of [['x'], { a: {} }, null]) expect(() => sourceSaveRequest(q, { rowid: 1, values })).toThrow(INVALID);
     expect(() => sourceSaveRequest(q, null)).toThrow(INVALID);
+    expect(sourceSaveRequest(q, { rowid: 3, values: { Nom: 'x' }, expected: { Nom: 'y', N: 1.5, V: null } }))
+      .toEqual([q, { rowid: 3, values: { Nom: 'x' }, expected: { Nom: 'y', N: 1.5, V: null } }]);
+    expect(() => sourceSaveRequest(q, { rowid: 3, values: {}, expected: { a: true } })).toThrow(INVALID);
+  });
+  it('expectedValues (C3 R8): undefined, or a plain object of at most 1000 lookup names to SqlValue', () => {
+    expect(expectedValues(undefined)).toBeUndefined();
+    expect(expectedValues({ 'N°': 3, Nom: 'Durand', Ville: null })).toEqual({ 'N°': 3, Nom: 'Durand', Ville: null });
+    expect(expectedValues(Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`f${i}`, i])))).toHaveProperty('f999', 999);
+    for (const v of [null, [], 'x', Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`f${i}`, i])), { a: true }, { a: NaN }, { a: Infinity },
+      { a: {} }, { a: undefined }, { a: new Uint16Array(1) }, { a: new Uint8Array(MAX_EXPECTED_BYTES + 1) },
+      { a: new Uint8Array(MAX_EXPECTED_BYTES / 2), b: new Uint8Array(MAX_EXPECTED_BYTES / 2 + 1) }, { ['x'.repeat(1025)]: 1 }, Object.create({ a: 1 })])
+      expect(() => expectedValues(v)).toThrow(INVALID);
+  });
+  it('expectedValues: a BLOB as readRows returns it (a linked SQLite table), at most MAX_EXPECTED_BYTES in all', () => {
+    const blob = new Uint8Array([1, 2, 3]);
+    expect(expectedValues({ id: 1, b: blob })).toEqual({ id: 1, b: blob });
+    expect(MAX_EXPECTED_BYTES).toBe(10 * 1024 * 1024);
+    expect(expectedValues({ a: new Uint8Array(MAX_EXPECTED_BYTES / 2), b: new Uint8Array(MAX_EXPECTED_BYTES / 2) })).toHaveProperty('b');
+  });
+  it('clipboardText (C3 R9): a string of at most 10 MB', () => {
+    expect(clipboardText('Ville\r\nLille')).toBe('Ville\r\nLille');
+    expect(clipboardText('x'.repeat(10 * 1024 * 1024))).toHaveLength(10 * 1024 * 1024);
+    for (const v of [null, undefined, 3, ['x'], 'x'.repeat(10 * 1024 * 1024 + 1)]) expect(() => clipboardText(v)).toThrow(INVALID);
   });
   it('autoLookupRequest: a query ref, cells', () => {
     expect(autoLookupRequest(q, { Client: '2' })).toEqual([q, { Client: '2' }]);
     expect(() => autoLookupRequest({ kind: 'table', name: 'T' }, {})).toThrow(INVALID);
     expect(() => autoLookupRequest(q, ['2'])).toThrow(INVALID);
   });
+
+  it('settingValue accepts the six keys only, with their exact type', () => {
+    expect(settingValue('recentCount', 25)).toEqual(['recentCount', 25]);
+    expect(settingValue('defaultFolder', '')).toEqual(['defaultFolder', '']);
+    expect(settingValue('confirmActionQueries', false)).toEqual(['confirmActionQueries', false]);
+    for (const [k, v] of [['recentCount', 51], ['openLast', 1], ['defaultFolder', 'relative'], ['locale', 'fr'], ['recentFiles', []], ['__proto__', true], [3, true]])
+      expect(() => settingValue(k, v)).toThrow(INVALID);
+  });
+
+describe('startup options, C3', () => {
+  it('take the sixteen keys', () => {
+    expect(startupOptions({ ...DEFAULT_STARTUP, frontEnd: false, dataFile: true }).dataFile).toBe(true);
+    const { dataFile: _, ...fifteen } = { ...DEFAULT_STARTUP, frontEnd: false, dataFile: true };
+    expect(() => startupOptions(fifteen)).toThrow('bc:invalidArgument');
+  });
+});
 });

@@ -4,7 +4,7 @@ import {
   ArrowLeftToLine, ArrowRightLeft, ArrowRightToLine, ArrowUp, ArrowUpAZ, ArrowUpNarrowWide, ArrowUpToLine, Asterisk, Baseline,
   BetweenHorizontalStart, BetweenVerticalStart, Blend, Bold, BookOpen, Box, Braces, BringToFront, Brush, Cable, CalendarClock, ChartBar,
   ChartColumn, ChartPie, ChevronsDown, ChevronsUp, ChevronsUpDown, CircleDot, CircleHelp, CirclePlus, ClipboardList, ClipboardPaste,
-  CloudUpload, Code, Columns2, Columns3, Combine, Copy, Cylinder, Database, DecimalsArrowLeft, DecimalsArrowRight, Ellipsis, Eraser, Euro,
+  CloudUpload, Code, Columns2, Columns3, Combine, Copy, Cylinder, Database, DatabaseZap, DecimalsArrowLeft, DecimalsArrowRight, Ellipsis, Eraser, Euro,
   Expand, ExternalLink, Eye, EyeOff, File, FileCode, FileCode2, FileCog, FilePen, FileSearch, FileSpreadsheet, FileText, FileType, Files,
   Fingerprint, FolderInput, FolderOutput, FoldVertical, Frame, Funnel, FunnelX, Gauge, GitCommitHorizontal, GitFork, Globe,
   GraduationCap, Grid2x2, Grid3x3, Group, Hash, Heading, Heading1, Highlighter, Image, ImagePlus, IndentDecrease, IndentIncrease, Italic,
@@ -35,6 +35,8 @@ export type CommandId =
   | 'sortDesc'
   | 'sortClear'
   | 'importText'
+  | 'linkBaseCraft'
+  | 'linkAccess'
   | 'refresh'
   | 'paste'
   | 'cut'
@@ -342,6 +344,8 @@ export function registerModeGuard(tabId: string, guard: ModeGuard): () => void {
 }
 export const modeGuard = (tabId: string): ModeGuard | undefined => modeGuards.get(tabId);
 
+/** The shell's own handler, for a document's handler that leaves the command to it (Clipboard outside the designer's surface). */
+export function runShellCommand(id: CommandId): void { void Promise.resolve(registry.get(SHELL_SCOPE)?.[id]?.()).catch(reportError); }
 export function isCommandAvailable(id: CommandId): boolean { return handler(id) !== undefined; }
 export function setActiveCommandTab(tabId: string | null): void { if (activeTab !== tabId) { activeTab = tabId; changed(); } }
 export function setCommandContext(ctx: RibbonContext): void {
@@ -349,9 +353,12 @@ export function setCommandContext(ctx: RibbonContext): void {
 }
 const entryIn = (tabs: RibbonTab[], id: CommandId) => tabs.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((c) => c.id === id);
 /** Has a handler and its ribbon entry is enabled in `ctx`. The entry is the one shown in `ctx`: the same id may be a placeholder
- *  in another context (Insert Rows is done in Table Design, planned for A3 in Query Design). */
+ *  in another context (Insert Rows is done in Table Design, planned for A3 in Query Design). Run mode (B3 R10, BaseCraft Runtime)
+ *  runs none whose entry its ribbon does not show (Create, Relationships, Table Fields…), whatever path asks. */
 export function commandEnabled(id: CommandId, ctx: RibbonContext): boolean {
-  const entry = entryIn(visibleTabs(ctx), id) ?? entryIn(RIBBON, id);
+  const shown = entryIn(visibleTabs(ctx), id);
+  if (ctx.runMode && !shown && entryIn(RIBBON, id)) return false;
+  const entry = shown ?? entryIn(RIBBON, id);
   return isCommandAvailable(id) && (!entry || entry.enabled(ctx)) && commandState(id)?.enabled !== false;
 }
 export function setCommandErrorHandler(fn: (e: unknown) => void): void { reportError = fn; }
@@ -373,9 +380,11 @@ export const commandState = (id: CommandId): CommandState | undefined => (active
 /** isNew: the active document is not saved yet. kind: the active document's kind (null: none).
  *  builder: the Query Builder's modal tab is in front (its query is the active document). embedded: an embedded macro (R16).
  *  ribbon, runMode (B3, the base's startup options, R10): the simplified ribbon (File, Home, Print Preview only), and run mode
- *  (no Design view). Both absent: the full ribbon with Design view (keeps the JSON compare of `setCommandContext` cheap). */
+ *  (no Design view). Both absent: the full ribbon with Design view (keeps the JSON compare of `setCommandContext` cheap).
+ *  datasheetDesign false (O1 R9): no Table Fields tab in a table's Datasheet view.
+ *  linked (C1 R8): the active document is a linked table's Design view, shown read-only (its structure belongs to its file). */
 export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean;
-  embedded?: boolean; ribbon?: 'simplified'; runMode?: true }
+  embedded?: boolean; ribbon?: 'simplified'; runMode?: true; datasheetDesign?: false; linked?: true }
 
 /**
  * Ruling C11: every Access command has its entry from now on. One not delivered yet carries `planned`, the batch or stage that
@@ -459,7 +468,7 @@ export function tabAfterContextChange(visible: RibbonTab[], s: { selected: Ribbo
 }
 
 const doc = (c: RibbonContext) => c.mode !== null;
-const writable = (c: RibbonContext) => c.mode !== null && !c.readOnly;
+const writable = (c: RibbonContext) => c.mode !== null && !c.readOnly && !c.linked;
 const hasBaseWritable = (c: RibbonContext) => c.hasBase && !c.readOnly;
 const sheet = (c: RibbonContext) => c.mode === 'datasheet';
 /** Records are shown: a datasheet, or a query (datasheet) or form in Run view. A report preview has no records to edit. */
@@ -467,7 +476,7 @@ const records = (c: RibbonContext) => sheet(c) || (c.mode === 'run' && (c.kind =
 const recordsWritable = (c: RibbonContext) => records(c) && !c.readOnly;
 /** The Relations window has no Design or Run view. */
 const switchable = (c: RibbonContext) => doc(c) && c.kind !== 'relations';
-const designWritable = (c: RibbonContext) => c.mode === 'design' && !c.readOnly;
+const designWritable = (c: RibbonContext) => c.mode === 'design' && !c.readOnly && !c.linked;
 const relationsWindow = (c: RibbonContext) => c.kind === 'relations';
 const off = () => false;
 
@@ -648,8 +657,11 @@ export const RIBBON: RibbonTab[] = [
       group('import',
         { id: 'importExcel', icon: FileSpreadsheet, labelKey: 'ribbon.cmd.importExcel', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly }, plan('later', 'importXml', FileCode),
         { id: 'importText', icon: FileText, labelKey: 'ribbon.cmd.importText', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
-        plan('E', 'importAccess', Database, 'lg'), plan('C', 'importSqlServer', Server), plan('C', 'importPostgreSql', Cylinder), plan('C', 'importOdbc', Cable),
-        plan('later', 'savedImports', FolderInput), plan('C', 'linkedTableManager', Link)),
+        { id: 'linkBaseCraft', icon: DatabaseZap, labelKey: 'ribbon.cmd.linkBaseCraft', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
+        { id: 'linkAccess', icon: Database, labelKey: 'ribbon.cmd.linkAccess', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
+        plan('E', 'importAccess', Database, 'lg'), plan('C', 'importSqlServer', Server), plan('C', 'importPostgreSql', Cylinder), plan('later', 'importOdbc', Cable),
+        plan('later', 'savedImports', FolderInput),
+        { id: 'linkedTableManager', icon: Link, labelKey: 'ribbon.cmd.linkedTableManager', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }),
       group('export', plan('later', 'savedExports', FolderOutput), exportExcel, exportText, exportPdf, plan('later', 'exportAccess', Database),
         plan('later', 'exportXml', FileCode), exportMore),
     ],
@@ -660,7 +672,9 @@ export const RIBBON: RibbonTab[] = [
       group('macro', resized(pythonEditor, 'lg'), { id: 'runMacro', icon: Play, labelKey: 'ribbon.cmd.runMacro', size: 'lg', enabled: (c) => c.hasBase }),
       relationshipsGroup,
       group('analyze', plan('later', 'databaseDocumenter', BookOpen), plan('later', 'analyzePerformance', Gauge), plan('later', 'analyzeTable', ScanSearch)),
-      group('moveData', plan('C', 'splitDatabase', Split), plan('C', 'moveToServer', CloudUpload)),
+      // C3: Split Database (Access labels it after the back-end's format); design only, absent from the Runtime
+      group('moveData', { id: 'splitDatabase', icon: Split, labelKey: 'ribbon.cmd.splitDatabase', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
+        plan('C', 'moveToServer', CloudUpload)),
     ],
   },
   {
@@ -676,7 +690,7 @@ export const RIBBON: RibbonTab[] = [
       group('tools',
         { id: 'primaryKey', icon: KeyRound, labelKey: 'ribbon.cmd.primaryKey', size: 'lg', enabled: designWritable },
         { id: 'builder', icon: Wand, labelKey: 'ribbon.cmd.builder', size: 'lg', enabled: designWritable },
-        { id: 'testValidationRules', icon: ShieldCheck, labelKey: 'ribbon.cmd.testValidationRules', size: 'sm', enabled: (c) => c.mode === 'design' },
+        { id: 'testValidationRules', icon: ShieldCheck, labelKey: 'ribbon.cmd.testValidationRules', size: 'sm', enabled: (c) => c.mode === 'design' && !c.linked },
         { id: 'insertRows', icon: BetweenHorizontalStart, labelKey: 'ribbon.cmd.insertRows', size: 'sm', enabled: designWritable },
         { id: 'deleteRows', icon: ListX, labelKey: 'ribbon.cmd.deleteRows', size: 'sm', enabled: designWritable },
         modifyLookups),
@@ -687,7 +701,7 @@ export const RIBBON: RibbonTab[] = [
     ],
   },
   {
-    id: 'tableFields', labelKey: 'ribbon.tab.tableFields', contextual: true, passive: true, visible: (c) => c.kind === 'table' && sheet(c), groups: [
+    id: 'tableFields', labelKey: 'ribbon.tab.tableFields', contextual: true, passive: true, visible: (c) => c.kind === 'table' && sheet(c) && c.datasheetDesign !== false, groups: [
       group('view', viewDesign),
       group('addDelete', fieldCmd('addShortText', Type, 'lg'), fieldCmd('addNumber', Hash, 'lg'), fieldCmd('addCurrency', Euro, 'lg'),
         fieldCmd('addDateTime', CalendarClock), fieldCmd('addYesNo', SquareCheck), { ...fieldCmd('moreFields', CirclePlus), popup: true }, fieldCmd('deleteField', Trash2)),

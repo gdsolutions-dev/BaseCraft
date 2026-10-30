@@ -4,16 +4,17 @@ import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import {
   MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type ObjectKind, type PageRequest, type PrintRequest, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
-  type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions,
+  type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions, SETTING_KEYS, type AppSettings, type SettingKey, type LinkFileInfo,
 } from '../shared/api';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
-import type { CellInput } from '../shared/coerce';
+import type { CellInput, SqlValue } from '../shared/coerce';
 import { validExportSpec, type ExportSource, type ExportTextSpec } from '../shared/exchange';
 import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-text';
 import { BaseFileError, FILE_EXTENSION } from './db/file-format';
 import { definitionJson, MAX_DEFINITION_CHARS } from './db/objects';
+import { SETTING_CHECKS } from './settings';
 
 export { MAX_DEFINITION_CHARS };
 
@@ -52,6 +53,31 @@ export function cells(v: unknown): Record<string, CellInput> {
   for (const k of Object.keys(v)) lookupName(k);
   return v as Record<string, CellInput>;
 }
+
+/** The BLOB bytes of one `expected` record, in all: the bound of clipboardText, the largest payload the renderer already sends
+ *  (a record whose BLOBs pass it is refused bc:invalidArgument, as before C3 any larger clipboard text). */
+export const MAX_EXPECTED_BYTES = 10 * 1024 * 1024;
+
+/** C3 R8, the record as read when editing began: undefined → undefined; else a plain object of at most 1000 own keys
+ *  (lookupName rule), values null | finite number | string (`SqlValue`) | Uint8Array (a BLOB, as readRows returns it: a linked
+ *  SQLite table's; compared with `IS` byte for byte), at most MAX_EXPECTED_BYTES of BLOBs in all. */
+export function expectedValues(v: unknown): Record<string, SqlValue> | undefined {
+  if (v === undefined) return undefined;
+  if (!isObj(v)) bad();
+  const keys = Object.keys(v);
+  if (keys.length > 1000) bad();
+  let bytes = 0;
+  for (const k of keys) {
+    lookupName(k);
+    const x = v[k];
+    if (x instanceof Uint8Array) { if ((bytes += x.byteLength) > MAX_EXPECTED_BYTES) bad(); continue; }
+    if (!(x === null || typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x)))) bad();
+  }
+  return v as Record<string, SqlValue>;
+}
+
+/** C3 R9: the text Write Conflict › Copy to Clipboard puts there, at most 10 MB (UTF-16 code units). */
+export const clipboardText = (v: unknown): string => (typeof v === 'string' && v.length <= 10 * 1024 * 1024 ? v : bad());
 
 export const strOrNull = (v: unknown): string | null => (v === null ? null : str(v));
 /** An object's description (Properties dialog): null or at most 255 characters, as in Access. */
@@ -144,17 +170,24 @@ export function relationsLayout(v: unknown): RelationsLayout {
   return { tables };
 }
 
-const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'showNavPane', 'ribbon', 'runMode'];
-/** The startup options to save: exactly the six keys, each of its exact type, and already in the form readStartup reads back
+const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile'] as const;
+const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', ...BOOLEAN_STARTUP_KEYS];
+/** The startup options to save: exactly the sixteen keys, each of its exact type, and already in the form readStartup reads back
  *  (a title that cleanTitle would change, an icon that is no PNG, a form that is no object name are refused, never repaired). */
 export function startupOptions(v: unknown): StartupOptions {
   if (!isObj(v) || Object.keys(v).length !== STARTUP_KEYS.length || !STARTUP_KEYS.every((k) => Object.hasOwn(v, k))) bad();
-  const { appTitle, appIcon, startupForm, showNavPane, ribbon, runMode } = v;
+  const { appTitle, appIcon, startupForm, ribbon } = v;
   if (typeof appTitle !== 'string' || appTitle.length > MAX_APP_TITLE * 2 || appTitle !== cleanTitle(appTitle)) bad(); // 255 code points never take more than 510 UTF-16 units
   if (typeof appIcon !== 'string' || (appIcon !== '' && !isValidIcon(appIcon))) bad();
   if (typeof startupForm !== 'string' || (startupForm !== '' && !isValidObjectName(startupForm))) bad();
-  if (typeof showNavPane !== 'boolean' || typeof runMode !== 'boolean' || (ribbon !== 'full' && ribbon !== 'simplified')) bad();
-  return { appTitle, appIcon, startupForm, showNavPane, ribbon, runMode };
+  if (ribbon !== 'full' && ribbon !== 'simplified') bad();
+  const flags = {} as Record<(typeof BOOLEAN_STARTUP_KEYS)[number], boolean>;
+  for (const k of BOOLEAN_STARTUP_KEYS) {
+    const b = v[k];
+    if (typeof b !== 'boolean') bad();
+    flags[k] = b;
+  }
+  return { appTitle, appIcon, startupForm, ribbon, ...flags };
 }
 
 /** The window icon the renderer re-encoded: null (BaseCraft's), or a Uint8Array of at most 1 MiB that starts as a PNG does (signature and IHDR chunk).
@@ -164,6 +197,12 @@ export function iconBytes(v: unknown): Uint8Array | null {
   if (v === null) return null;
   if (!(v instanceof Uint8Array) || v.byteLength > MAX_ICON_BYTES || pngSize(v) === null) bad();
   return v;
+}
+
+/** One workstation setting (app.setSetting): a key of SETTING_KEYS and a value that passes that key's own check (settings.ts). */
+export function settingValue(k: unknown, v: unknown): [SettingKey, AppSettings[SettingKey]] {
+  if (typeof k !== 'string' || !(SETTING_KEYS as readonly string[]).includes(k) || !SETTING_CHECKS[k as SettingKey](v)) bad();
+  return [k as SettingKey, v as AppSettings[SettingKey]];
 }
 
 const MAX_FIELDS = 255; // as in Access; checked before a list is read (a sparse array claims billions of slots)
@@ -221,6 +260,13 @@ export function sheetOrNull(v: unknown): string | null {
   if (typeof v !== 'string' || v === '' || [...v].length > 31) bad();
   return v;
 }
+/** relations.list's options (C1): none, or `localOnly` (no linked file opened). */
+export function relationsListOptions(v: unknown): { localOnly?: boolean } {
+  if (v === undefined) return {};
+  if (typeof v !== 'object' || v === null || Array.isArray(v) || Object.keys(v).some((k) => k !== 'localOnly')) bad();
+  const { localOnly } = v as { localOnly?: unknown };
+  return localOnly === undefined ? {} : { localOnly: bool(localOnly) };
+}
 export function boolOrNull(v: unknown): boolean | null {
   if (v !== null && typeof v !== 'boolean') bad();
   return v;
@@ -244,6 +290,21 @@ export function importPath(v: unknown, chosen: ReadonlySet<string>, maxBytes = M
   if (size > maxBytes) throw new Error('bc:fileTooLarge');
   return v;
 }
+/** A file to link (C1): as importPath (a path the link dialog returned, still an existing file), any size. The front-end itself
+ *  is refused by the session (realpath), which answers `self`. */
+export const linkPath = (v: unknown, chosen: ReadonlySet<string>): string => importPath(v, chosen, Infinity);
+/** The split's data file (C3 R13): as linkPath, a path its save dialog returned, absolute; it need not exist yet. */
+export const splitPath = (v: unknown, chosen: ReadonlySet<string>): string => (typeof v === 'string' && chosen.has(v) && isAbsolute(v) ? v : bad());
+/** The link dialog's first filter (C2 R10): none, or a source kind. */
+export const linkKindOrUndefined = (v: unknown): LinkFileInfo['kind'] | undefined =>
+  v === undefined ? undefined : v === 'basecraft' || v === 'sqlite' || v === 'access' ? v : bad();
+/** The Access file to unlock (C2 R7): an absolute path of at most 32 767 UTF-16 units (Windows' long-path limit); the session
+ *  then accepts only a source of the front-end or a picked file. */
+export const unlockPath = (v: unknown): string => (typeof v === 'string' && v.length <= 32767 && isAbsolute(v) ? v : bad());
+/** An Access password (C2 R7): 1 to 256 UTF-16 units. Never logged: a refusal names no value. */
+export const accessPassword = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 256 ? v : bad());
+/** Link names (C1): 1 to 1000 names that look up something that exists. */
+export const nameList = (v: unknown): string[] => (Array.isArray(v) && v.length >= 1 && v.length <= 1000 ? Array.from(v, lookupName) : bad());
 export const importSpec = (v: unknown): ImportSpec => validSpec(v) ?? bad();
 export const importSpecOrNull = (v: unknown): ImportSpec | null => (v === null ? null : importSpec(v));
 
@@ -275,6 +336,7 @@ export function printRequest(v: unknown): PrintRequest {
 /** Opening/creating a base: BaseFileError → `bc:<code>`; anything else (ENOENT, EACCES…) is logged → `bc:cannotOpen`. */
 export function bcError(e: unknown): Error {
   if (e instanceof BaseFileError) return new Error(`bc:${e.code}`);
+  if (e instanceof Error && e.message.startsWith('bc:')) return new Error(e.message); // bc:busy, bc:dataFileInUse|… (C3)
   console.error(e);
   return new Error('bc:cannotOpen');
 }
@@ -289,10 +351,11 @@ export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? 
 
 /** A3 action queries: a query or SQL ref (never a table), at most MAX_PARAMS parameter values, the run's two options. */
 export const queryRef = (v: unknown): QueryRef => { const r = sourceRef(v); return r.kind === 'table' ? bad() : r; };
-/** B4 sources.save: a query or SQL ref (never a table), a key rowid (null: a new record), values as cells(). */
+/** B4 sources.save: a query or SQL ref (never a table), a key rowid (null: a new record), values as cells(), expected values
+ *  (C3 R8) as expectedValues(). */
 export function sourceSaveRequest(r: unknown, q: unknown): [QueryRef, SourceSaveRequest] {
   if (!isObj(q)) bad();
-  return [queryRef(r), { rowid: q.rowid === null ? null : uint(q.rowid) /* as rows.update */, values: cells(q.values) }];
+  return [queryRef(r), { rowid: q.rowid === null ? null : uint(q.rowid) /* as rows.update */, values: cells(q.values), expected: expectedValues(q.expected) }];
 }
 /** B4 sources.autoLookup: a query or SQL ref (never a table), the link values as cells(). */
 export const autoLookupRequest = (r: unknown, v: unknown): [QueryRef, Record<string, CellInput>] => [queryRef(r), cells(v)];

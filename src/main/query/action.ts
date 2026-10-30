@@ -1,7 +1,6 @@
 // Requêtes action (A3) : Création de table, Ajout, Mise à jour et Suppression. Les lignes visées sont lues par un SELECT
 // compilé et autorisé (compileAction), puis écrites une à une par la couche d'écriture (règles, Null interdit, relations et
 // cascades, comme une saisie en feuille de données ; jamais les masques), dans une seule transaction.
-import type { DatabaseSync } from 'node:sqlite';
 import type { ActionResult, RowWriteResult, RunActionOptions } from '../../shared/api';
 import type { CellInput } from '../../shared/coerce';
 import { ExprRuntimeError } from '../../shared/expr/ast';
@@ -13,11 +12,12 @@ import type { BoundColumn } from '../../shared/query/bind';
 import { invalidQueryError } from '../../shared/query/definition';
 import { createTable, dataDesign, DesignValidationError, dropTable, isQueryName, listTables, NameExistsError, tableDesign } from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
+import { isLinkName } from '../links/store';
 import { deleteRows, insertRow, updateRow } from '../db/write-layer';
 import { compileAction } from './compile';
-import { paramValues, resolve, run, type QueryCtx, type QueryRef } from './source';
+import { paramValues, queryConn, resolve, run, type QueryCtx, type QueryDb, type QueryRef } from './source';
 
-type FieldError = Extract<RowWriteResult, { ok: false }>['errors'][number];
+type FieldError = Extract<RowWriteResult, { errors: unknown }>['errors'][number];
 type ByCause = Extract<ActionResult, { reason: 'rowErrors' }>['byCause'];
 /** Access's causes of a refused row: a key (duplicate, missing parent, related records), else a rule (Validation Rule,
  *  Required, an AutoNumber changed…). `conversion` counts only the FIELDS set to Null (a value the field cannot store, an
@@ -29,8 +29,8 @@ class Refused extends Error {
 }
 
 /** The bound action query of `ref` and its compiled rows (bc:invalidArgument for a select query; source.ts's errors). */
-function prepare(db: DatabaseSync, ref: QueryRef, params: Record<string, CellInput>, info: LocaleInfo) {
-  const b = resolve(db, ref, true);
+function prepare(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, info: LocaleInfo) {
+  const b = resolve(x, ref, true);
   try {
     return { b, ...compileAction(b, paramValues(b, params, info), { locale: info.locale }) };
   } catch (e) {
@@ -40,8 +40,9 @@ function prepare(db: DatabaseSync, ref: QueryRef, params: Record<string, CellInp
 
 /** The rows the query would write (distinct target rows for Update, Delete; else the rows read) and the table it writes
  *  (Make-Table: the existing table it would replace, as spelled now, else its INTO name). */
-export function actionCount(db: DatabaseSync, ref: QueryRef, params: Record<string, CellInput>, ctx: QueryCtx): { count: number; table: string } {
-  const { b, select, target } = prepare(db, ref, params, ctx.info);
+export function actionCount(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, ctx: QueryCtx): { count: number; table: string } {
+  const { b, select, target } = prepare(x, ref, params, ctx.info);
+  const db = queryConn(x).dbOf(b.source, false);
   const count = Number(run(db, `SELECT count(${select.hasRowid ? 'DISTINCT "bcx_rowid"' : '*'}) FROM (${select.sql})`, select.params)[0][0]);
   const table = b.query.body.k === 'select' ? listTables(db).find((x) => sameName(x.name, target))?.name ?? target : target;
   return { count, table };
@@ -79,13 +80,14 @@ function madeField(c: BoundColumn): FieldDef {
  * (key violations), or is refused as a whole (`related`) when they hold every row. Make-Table never replaces a query (`nameExists`), replaces an existing table only with `replaceTable`
  * (`tableExists`), after dropTable (`hasRelations`, `related`); a column name no field can take: `badColumnName`.
  */
-export async function runAction(db: DatabaseSync, ref: QueryRef, params: Record<string, CellInput>, opts: RunActionOptions, ctx: QueryCtx & { now: () => Date }): Promise<ActionResult> {
-  const { b, select, target } = prepare(db, ref, params, ctx.info);
+export async function runAction(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, opts: RunActionOptions, ctx: QueryCtx & { now: () => Date }): Promise<ActionResult> {
+  const { b, select, target } = prepare(x, ref, params, ctx.info);
+  const db = queryConn(x).dbOf(b.source, true); // a Make-Table's is the front-end (PF4)
   const body = b.query.body;
   const rows = run(db, select.sql, select.params) as unknown as SqlOut[][]; // read first: a query may read its own target
   const existing = body.k === 'select' ? listTables(db).find((x) => sameName(x.name, target))?.name : undefined; // Make-Table's
   if (body.k === 'select') {
-    if (isQueryName(db, target)) return { ok: false, reason: 'nameExists', table: target };
+    if (isQueryName(db, target) || isLinkName(db, target)) return { ok: false, reason: 'nameExists', table: target };
     if (existing && !opts.replaceTable) return { ok: false, reason: 'tableExists', table: existing };
   }
   const info = ctx.info;
@@ -105,6 +107,7 @@ export async function runAction(db: DatabaseSync, ref: QueryRef, params: Record<
       for (const e of nulled) if (errors.length < 5) errors.push(e);
       return;
     }
+    if (!('errors' in r)) throw new Error('unexpected write conflict'); // an action query sends no expected values (R8)
     failed++;
     byCause[causeOf(r.errors[0]!.code)]++;
     if (errors.length < 5) errors.push(r.errors[0]!);

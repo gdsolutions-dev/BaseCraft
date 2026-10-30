@@ -2,12 +2,13 @@
 import { ArrowLeft, Database, ExternalLink, FilePlus2, FolderClosed, FolderOpen, History, Info, Save, Settings2, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AppInfo, AppSettings, BasecraftApi, LicenseEntry } from '../../shared/api';
+import type { AppInfo, BasecraftApi, LicenseEntry } from '../../shared/api';
 import type { StartupOptions } from '../../shared/startup';
 import { api } from '../bridge';
-import { applyTheme } from '../i18n';
-import { CurrentDatabaseOptions } from './CurrentDatabaseOptions';
+import { PRODUCT_TITLE_KEY, RUNTIME } from '../../shared/product';
+import { design } from '../design/entry';
 import { trapFocus } from './Modal';
+import { OptionsPage, type OptionsCategory } from './OptionsPage';
 
 export type Settings = Awaited<ReturnType<BasecraftApi['app']['getSettings']>>;
 export type BackstageView = 'home' | 'options' | 'about';
@@ -29,8 +30,8 @@ function About() {
   ];
   return (
     <section className="bs-panel bs-about" data-testid="about">
-      <h1>{t('about.title')}</h1>
-      <p className="bs-about-product"><Database className="ic" aria-hidden /><span>{t('app.title')}</span>
+      <h1>{t(RUNTIME ? 'about.titleRuntime' : 'about.title')}</h1>
+      <p className="bs-about-product"><Database className="ic" aria-hidden /><span>{t(PRODUCT_TITLE_KEY)}</span>
         <span className="bs-about-version" data-testid="about-version">{t('about.version', { version: info.version })}</span></p>
       <p className="muted">{t('about.tagline')}</p>
       <p>{info.copyright}</p>
@@ -59,7 +60,7 @@ function About() {
 interface Props {
   view: BackstageView; onView(v: BackstageView): void;
   onBack: (() => void) | null; // null: no base open, the backstage cannot be left
-  hasBase: boolean; settings: Settings | null; onSettingsChanged(): void;
+  hasBase: boolean; settings: Settings | null;
   onNew(): void; onCloseBase(): void;
   /** shift: Shift held on the click or key that asked for it (the base's startup is bypassed, B3 R4). */
   onOpen(path?: string, shift?: boolean): void;
@@ -79,6 +80,7 @@ export function Backstage(p: Props) {
   const { t } = useTranslation();
   const first = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  const [cat, setCat] = useState<OptionsCategory>('general');   // kept while the Backstage stays open
   useEffect(() => { first.current?.focus(); }, []);
   const item = (testid: string, Icon: typeof FilePlus2, label: string, onClick: (e: MouseEvent) => void, extra: { disabled?: boolean; active?: boolean } = {}) => (
     <button data-testid={testid} className={`bs-item${extra.active ? ' is-active' : ''}`} disabled={extra.disabled} onClick={onClick}
@@ -96,12 +98,13 @@ export function Backstage(p: Props) {
         {p.onBack
           ? <button className="bs-back iconbtn" data-testid="bs-back" aria-label={t('backstage.back')} title={t('backstage.back')} onClick={p.onBack}><ArrowLeft className="ic" aria-hidden /></button>
           : <div className="bs-back-spacer" />}
-        <div className="bs-brand"><Database className="ic" aria-hidden />{t('app.title')}</div>
+        <div className="bs-brand" data-testid="bs-brand"><Database className="ic" aria-hidden />{t(PRODUCT_TITLE_KEY)}</div>
         {item('bs-recent', History, t('backstage.recent'), () => p.onView('home'), { active: p.view === 'home' })}
-        {item('bs-new', FilePlus2, t('backstage.new'), p.onNew)}
+        {!RUNTIME && item('bs-new', FilePlus2, t('backstage.new'), p.onNew)}
         {item('bs-open', FolderOpen, t('backstage.open'), (e) => p.onOpen(undefined, e.shiftKey))}
-        {item('bs-save-as', Save, t('backstage.saveAs'), p.onSaveAs, { disabled: !p.hasBase })}
-        {item('bs-compact', Wrench, t('backstage.compact'), p.onCompact, { disabled: !p.hasBase || p.readOnly })}
+        {/* BaseCraft Runtime creates and rewrites no base (B5 R4) */}
+        {!RUNTIME && item('bs-save-as', Save, t('backstage.saveAs'), p.onSaveAs, { disabled: !p.hasBase })}
+        {!RUNTIME && item('bs-compact', Wrench, t('backstage.compact'), p.onCompact, { disabled: !p.hasBase || p.readOnly })}
         {item('bs-close', FolderClosed, t('backstage.close'), p.onCloseBase, { disabled: !p.hasBase })}
         <div className="bs-sep" />
         {item('bs-options', Settings2, t('backstage.options'), () => p.onView(p.view === 'options' ? 'home' : 'options'), { active: p.view === 'options' })}
@@ -111,9 +114,9 @@ export function Backstage(p: Props) {
         {p.view === 'about' ? <About /> : p.view === 'home' ? (
           <section className="bs-panel">
             <h1>{t('backstage.recent')}</h1>
-            {p.settings?.recentFiles.length ? (
+            {p.settings?.recentFiles.length && p.settings.recentCount ? (
               <ul className="bs-recent">
-                {p.settings.recentFiles.map((f, i) => {
+                {p.settings.recentFiles.slice(0, p.settings.recentCount).map((f, i) => {
                   const { name, dir } = splitPath(f);
                   return (
                     <li key={f}>
@@ -128,33 +131,8 @@ export function Backstage(p: Props) {
             ) : <p className="muted">{t('backstage.noRecent')}</p>}
           </section>
         ) : (
-          <section className="bs-panel">
-            <h1>{t('backstage.optionsTitle')}</h1>
-            {p.settings && (
-              <div className="bs-options">
-                <label>
-                  <span>{t('app.language.label')}</span>
-                  <select data-testid="opt-lang" value={p.settings.locale}
-                    onChange={async (e) => { await api.app.setLocale(e.target.value as AppSettings['locale']); p.onSettingsChanged(); }}>
-                    {(['system', 'fr', 'en'] as const).map((l) => <option key={l} value={l}>{t(`app.language.${l}`)}</option>)}
-                  </select>
-                </label>
-                <label>
-                  <span>{t('app.theme.label')}</span>
-                  <select data-testid="opt-theme" value={p.settings.theme}
-                    onChange={async (e) => {
-                      const v = e.target.value as AppSettings['theme'];
-                      applyTheme(v); // at once, not after the round trip
-                      await api.app.setTheme(v);
-                      p.onSettingsChanged();
-                    }}>
-                    {(['system', 'light', 'dark'] as const).map((l) => <option key={l} value={l}>{t(`app.theme.${l}`)}</option>)}
-                  </select>
-                </label>
-              </div>
-            )}
-            {p.hasBase && !p.needsRecovery && <CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} />}
-          </section>
+          <OptionsPage settings={p.settings} cat={cat} onCat={setCat}
+            currentDb={design && p.hasBase && !p.needsRecovery ? <design.CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} /> : null} />
         )}
       </main>
     </div>

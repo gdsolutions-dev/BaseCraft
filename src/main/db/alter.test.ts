@@ -160,6 +160,13 @@ describe('alterTable (guards and edge cases)', () => {
     expect(snapshot()).toEqual(before);
   });
 
+  it('renaming onto a link name throws NameExistsError and touches nothing', async () => {
+    db.exec("INSERT INTO bc_links (name, source_id, remote_name) VALUES ('Lien', 's', 'Lien')");
+    const before = snapshot();
+    await expect(alterTable(db, 'T', t('LIEN', baseFields), same(baseNames), { allowDataLoss: false, info: fr })).rejects.toThrow(NameExistsError);
+    expect(snapshot()).toEqual(before);
+  });
+
   it('a yesNo field added gives 0 to existing rows', async () => {
     expect(await alter([...baseFields, f('Actif', 'yesNo')], [...same(baseNames), { name: 'Actif', sourceName: null }])).toEqual({ ok: true });
     expect(rowsOf(db, 'T').map((r) => r.Actif)).toEqual([0, 0, 0]);

@@ -17,9 +17,12 @@ export function deleteMessageKey(effects: CascadeChild['effect'][]): DeleteKey {
 // Read when called (the bridge is the window's: absent from unit tests, which pass their own).
 const bridge = (): BasecraftApi => (window as unknown as { basecraft: BasecraftApi }).basecraft;
 
-/** Asks before deleting `count` records of `table`, with the real keys' effects; a cascadeChildren that fails: asked without. */
+/** Asks before deleting `count` records of `table`, with the real keys' effects; a cascadeChildren that fails: asked without.
+ *  « Modifications des enregistrements » off (`enabled`, read now): yes without asking. A refusal (related records) is still shown by the caller. */
 export async function confirmDelete(modal: ModalApi, table: string, count: number,
-  relations: Pick<BasecraftApi['relations'], 'cascadeChildren'> = bridge().relations): Promise<boolean> {
+  relations: Pick<BasecraftApi['relations'], 'cascadeChildren'> = bridge().relations,
+  enabled: () => Promise<boolean> = async () => (await bridge().app.getSettings()).confirmRecordChanges): Promise<boolean> {
+  if (!(await enabled())) return true;
   let effects: CascadeChild['effect'][] = [];
   try { effects = (await relations.cascadeChildren(table)).map((c) => c.effect); } catch { /* asked without */ }
   const r = await modal.confirm({ titleKey: 'datasheet.deleteTitle', messageKey: deleteMessageKey(effects), params: { count }, buttons: ['yes', 'no'], defaultButton: 'no' });

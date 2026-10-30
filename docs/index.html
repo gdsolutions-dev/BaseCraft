@@ -67,7 +67,36 @@ ol.roadmap .done { border-left: 4px solid var(--orange); }
 code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 footer { border-top: 1px solid var(--border); margin-top: 64px; padding: 20px 0 48px; color: var(--muted); font-size: 0.9rem; }
 a { color: var(--link); }
+.langs { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 16px; }
+.langs a[aria-current] { color: inherit; font-weight: 700; text-decoration: none; }
 </style>
+<link rel="alternate" hreflang="en" href="https://gdsolutions-dev.github.io/BaseCraft/">
+<link rel="alternate" hreflang="fr" href="https://gdsolutions-dev.github.io/BaseCraft/fr/">
+<link rel="alternate" hreflang="es" href="https://gdsolutions-dev.github.io/BaseCraft/es/">
+<link rel="alternate" hreflang="de" href="https://gdsolutions-dev.github.io/BaseCraft/de/">
+<link rel="alternate" hreflang="it" href="https://gdsolutions-dev.github.io/BaseCraft/it/">
+<link rel="alternate" hreflang="pt" href="https://gdsolutions-dev.github.io/BaseCraft/pt/">
+<link rel="alternate" hreflang="nl" href="https://gdsolutions-dev.github.io/BaseCraft/nl/">
+<link rel="alternate" hreflang="pl" href="https://gdsolutions-dev.github.io/BaseCraft/pl/">
+<link rel="alternate" hreflang="ja" href="https://gdsolutions-dev.github.io/BaseCraft/ja/">
+<link rel="alternate" hreflang="zh-Hans" href="https://gdsolutions-dev.github.io/BaseCraft/zh/">
+<link rel="alternate" hreflang="ko" href="https://gdsolutions-dev.github.io/BaseCraft/ko/">
+<link rel="alternate" hreflang="x-default" href="https://gdsolutions-dev.github.io/BaseCraft/">
+<script>
+// First visit only: send a visitor whose browser prefers a translated language there. The choice made with the language links is remembered.
+(function () {
+  try {
+    var saved = localStorage.getItem('bc-lang');
+    if (saved) { if (saved !== 'en' && /^(fr|es|de|it|pt|nl|pl|ja|zh|ko)$/.test(saved)) location.replace(saved + '/'); return; }
+    var prefs = navigator.languages || [navigator.language || 'en'];
+    for (var i = 0; i < prefs.length; i++) {
+      var l = String(prefs[i]).toLowerCase().split('-')[0];
+      if (l === 'en') return;
+      if (/^(fr|es|de|it|pt|nl|pl|ja|zh|ko)$/.test(l)) { location.replace(l + '/'); return; }
+    }
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <div class="hero">
@@ -109,9 +138,16 @@ a { color: var(--link); }
   </ol>
 
   <footer>
+  <nav class="langs" aria-label="Language"><a href="./" lang="en" hreflang="en" data-lang="en" aria-current="page">English</a> <a href="fr/" lang="fr" hreflang="fr" data-lang="fr">Français</a> <a href="es/" lang="es" hreflang="es" data-lang="es">Español</a> <a href="de/" lang="de" hreflang="de" data-lang="de">Deutsch</a> <a href="it/" lang="it" hreflang="it" data-lang="it">Italiano</a> <a href="pt/" lang="pt" hreflang="pt" data-lang="pt">Português</a> <a href="nl/" lang="nl" hreflang="nl" data-lang="nl">Nederlands</a> <a href="pl/" lang="pl" hreflang="pl" data-lang="pl">Polski</a> <a href="ja/" lang="ja" hreflang="ja" data-lang="ja">日本語</a> <a href="zh/" lang="zh-Hans" hreflang="zh-Hans" data-lang="zh">简体中文</a> <a href="ko/" lang="ko" hreflang="ko" data-lang="ko">한국어</a></nav>
+  
     BaseCraft is licensed under the <a href="https://github.com/gdsolutions-dev/BaseCraft/blob/main/LICENSE">AGPL-3.0</a> and developed by gd solutions.
     Microsoft Access is a trademark of Microsoft Corporation; BaseCraft is not affiliated with Microsoft.
   </footer>
 </main>
+<script>
+document.querySelectorAll('.langs a').forEach(function (a) {
+  a.addEventListener('click', function () { try { localStorage.setItem('bc-lang', a.dataset.lang); } catch (e) {} });
+});
+</script>
 </body>
 </html>

@@ -1,14 +1,16 @@
 // Onglets de documents ; la vue de chacun vient du registre documentViews (type + mode).
 import { AppWindow, FileSearch, FileText, Network, Table, X, Zap, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { TableSummary } from '../../shared/api';
 import type { AppAction, AppState, DocKind, DocTab } from '../state/app-state';
 import { docTabId, showsKind } from './doc-tab-ids';
 import { DocumentView } from './document-views';
 import { inertRef, setModalTabSlot, useModalTab } from './modal-tab';
 import type { AppDispatch } from './nav-menu';
 
-/** designOpen: another tab has this table in Design view (Table Fields then refuses to edit its fields). */
-export interface DocViewProps { tab: DocTab; active: boolean; readOnly: boolean; dispatch: AppDispatch; designOpen?: boolean }
+/** designOpen: another tab has this table in Design view (Table Fields then refuses to edit its fields).
+ *  link: a linked table's Design view, its source (C1 R8): the view is read-only. */
+export interface DocViewProps { tab: DocTab; active: boolean; readOnly: boolean; dispatch: AppDispatch; designOpen?: boolean; link?: TableSummary['link'] }
 
 export const DOC_ICONS: Record<DocKind, LucideIcon> = {
   table: Table,
@@ -19,9 +21,11 @@ export const DOC_ICONS: Record<DocKind, LucideIcon> = {
   macro: Zap,
 };
 
-interface Props { state: AppState; readOnly: boolean; dispatch: AppDispatch; onClose(tab: DocTab): void }
+/** showTabs false (O1 R7): no strip of document tabs, but a Query Builder's own tab; the front document is shown alone.
+ *  formIcon: the base's icon on form and report tabs (a data URL, O1 R10); null: their own. */
+interface Props { state: AppState; readOnly: boolean; linkOf(tab: DocTab): TableSummary['link']; dispatch: AppDispatch; onClose(tab: DocTab): void; showTabs: boolean; formIcon: string | null }
 
-export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
+export function DocumentTabs({ state, readOnly, linkOf, dispatch, onClose, showTabs, formIcon }: Props) {
   const { t } = useTranslation();
   const modalTab = useModalTab();   // a Query Builder: its tab is the only one that answers until it closes
   const tabs = state.tabs.filter((x) => !x.dialog);   // a dialog form is shown by DialogHost (R12), not as a tab
@@ -31,8 +35,8 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
   }
   return (
     <main className="docs card">
-      <div className="dtabs" role="tablist">
-        {tabs.map((x) => {
+      {(showTabs || modalTab) && <div className="dtabs" role="tablist">
+        {showTabs && tabs.map((x) => {
           const active = !modalTab && x.id === front;
           const Icon = DOC_ICONS[x.kind];
           const kind = t(`tabs.kind.${x.kind}`);
@@ -44,7 +48,7 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
               onAuxClick={(e) => { if (e.button === 1) onClose(x); }}>
               <button role="tab" aria-selected={active} aria-controls={`doc-${x.id}`} data-testid={`doc-tab-${tid}`} className="dtab-btn"
                 onClick={() => dispatch({ type: 'activate', id: x.id })}>
-                <Icon className="ic" aria-hidden />{label}{showsKind(x.kind) && <span className="sr-only"> ({kind})</span>}
+                {formIcon && (x.kind === 'form' || x.kind === 'report') ? <img className="ic" src={formIcon} alt="" width={16} height={16} /> : <Icon className="ic" aria-hidden />}{label}{showsKind(x.kind) && <span className="sr-only"> ({kind})</span>}
                 {x.dirty && <><span className="dtab-dirty" aria-hidden>•</span><span className="sr-only">{t('tabs.unsaved')}</span></>}
               </button>
               <button className="x" data-testid={`doc-tab-close-${tid}`} aria-label={showsKind(x.kind) ? t('tabs.close', { name: label, kind }) : t('tabs.closeWindow', { name: label })}
@@ -65,19 +69,22 @@ export function DocumentTabs({ state, readOnly, dispatch, onClose }: Props) {
             </button>
           </div>
         )}
-      </div>
+      </div>}
       {modalTab && (
         // aria-modal: the designers' keys stand back, as for a dialog (the shell's shortcuts serve the tab: dialogInFront)
         <section ref={setModalTabSlot} id={`${modalTab.testId}-panel`} role="dialog" aria-modal="true" aria-labelledby={`${modalTab.testId}-tab`} className="doc modal-tab-panel" />
       )}
-      {tabs.map((x) => (
+      {tabs.map((x) => {
+        const link = linkOf(x);
         // every document stays mounted (pending edits survive a tab switch); only the active one is shown. Under a dialog its
         // opener stays active: its dialog closing is no coming back to it (no reading again under a macro's SetValue that follows)
-        <section key={x.id} id={`doc-${x.id}`} role="tabpanel" className="doc" hidden={!!modalTab || x.id !== front}>
-          <DocumentView tab={x} active={x.id === front} readOnly={readOnly} dispatch={dispatch}
-            designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
-        </section>
-      ))}
+        return (
+          <section key={x.id} id={`doc-${x.id}`} role={showTabs ? 'tabpanel' : undefined} className="doc" hidden={!!modalTab || x.id !== front}>
+            <DocumentView tab={x} active={x.id === front} readOnly={readOnly || !!link} link={link} dispatch={dispatch}
+              designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
+          </section>
+        );
+      })}
     </main>
   );
 }

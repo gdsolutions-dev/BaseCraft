@@ -1,37 +1,30 @@
 // Registre type de document + mode → vue. Chaque lot inscrit ses vues ici par registerDocumentView ; sans vue, « non disponible ».
+// Les vues des concepteurs (et la fenêtre Relations) s'inscrivent depuis design/entry.ts : absentes de BaseCraft Runtime (B5).
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatasheetView } from '../datasheet/DatasheetView';
-import { FormDesignView } from '../form/FormDesignView';
 import { FormRunView } from '../form/FormRunView';
 import type { DocTab } from '../state/app-state';
 import { QueryRunView } from '../query/QueryRunView';
-import { QueryDesignView } from '../query/QueryDesignView';
-import { RelationsView } from '../relations/RelationsView';
-import { TableDesignView } from '../table-design/TableDesignView';
 import type { DocViewProps } from './DocumentTabs';
 import { ReportPreviewView } from '../report/ReportPreviewView';
-import { ReportDesignView } from '../report/design/ReportDesignView';
-import { MacroDesignView } from '../macro/MacroDesignView';
 
 type ViewMode = 'design' | 'run';
-const views = new Map<string, ComponentType<DocViewProps>>();
+// `var`, créé au premier usage : design/entry.ts inscrit ses vues par un cycle d'imports (ce module → DatasheetView → design/entry)
+// qui peut l'évaluer avant le corps de ce module ; un `const` serait alors encore inaccessible (TDZ), quel que soit l'ordre des imports.
+var views: Map<string, ComponentType<DocViewProps>> | undefined;
 
 /** A table's Datasheet is its Run view. */
 export function registerDocumentView(kind: DocTab['kind'], mode: ViewMode, view: ComponentType<DocViewProps>): void {
-  views.set(`${kind}:${mode}`, view);
+  (views ??= new Map()).set(`${kind}:${mode}`, view);
 }
 
 /** A view is registered for `kind` in `mode` (the Navigation Pane's generic Open and Design View are enabled only then). */
-export function hasDocumentView(kind: DocTab['kind'], mode: ViewMode): boolean { return views.has(`${kind}:${mode}`); }
+export function hasDocumentView(kind: DocTab['kind'], mode: ViewMode): boolean { return !!views?.has(`${kind}:${mode}`); }
 
-registerDocumentView('table', 'design', TableDesignView);
 registerDocumentView('table', 'run', DatasheetView);
-registerDocumentView('relations', 'run', RelationsView);
-registerDocumentView('form', 'design', FormDesignView);
 registerDocumentView('form', 'run', FormRunView);
 registerDocumentView('query', 'run', QueryRunView);
-registerDocumentView('query', 'design', QueryDesignView);
 
 export function UnavailableView() {
   const { t } = useTranslation();
@@ -40,10 +33,8 @@ export function UnavailableView() {
 
 export function DocumentView(p: DocViewProps) {
   const mode: ViewMode = p.tab.mode === 'design' ? 'design' : 'run';
-  const View = views.get(`${p.tab.kind}:${mode}`) ?? UnavailableView;
+  const View = views?.get(`${p.tab.kind}:${mode}`) ?? UnavailableView;
   return <View {...p} />;
 }
 
 registerDocumentView('report', 'run', ReportPreviewView);
-registerDocumentView('report', 'design', ReportDesignView);
-registerDocumentView('macro', 'design', MacroDesignView);

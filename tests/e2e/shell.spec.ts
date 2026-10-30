@@ -103,6 +103,22 @@ test('opening a file that is not a base shows the translated error and keeps the
   }
 });
 
+test('a file that is not a base, given on the command line, shows the same translated error', async () => {
+  const notBase = join(mkdtempSync(join(tmpdir(), 'basecraft-shell-')), 'texte.basecraft');
+  writeFileSync(notBase, 'pas une base');
+  const { app, page } = await launchApp({ args: [notBase], waitOpen: false, env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.notBasecraft);
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect(page.getByTestId('backstage')).toBeVisible();
+    expect(await page.evaluate(() => (window as any).basecraft.base.state())).toBeNull();
+    expect(readFileSync(notBase, 'utf8')).toBe('pas une base');
+  } finally {
+    await app.close();
+  }
+});
+
 test('navigation pane: search, open, modes, F11, rename, delete, new table', async () => {
   const base = seedBase('nav', (db) => {
     createTable(db, clients);

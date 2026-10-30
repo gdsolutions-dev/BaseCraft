@@ -160,3 +160,54 @@ describe('macro menu (B1)', () => {
     expect(navMenuGroups(c).flat().filter((x) => x.run && !navItemEnabled(x, c)).map((x) => x.id)).toEqual(['rename', 'delete', 'cut', 'paste']);
   });
 });
+
+describe('linked table menu (C1)', () => {
+  const load = async () => {
+    vi.resetModules();
+    const nav = await import('./nav-menu');
+    await import('./nav-menu-items');
+    await import('../exchange/exchange-menu');
+    await import('../links/nav-menu-links');
+    return nav;
+  };
+  const link = { kind: 'basecraft', path: 'C:/data/Ventes-donnees.basecraft' };
+
+  it('a link: Design View (read-only, C1 R8), no Rename, Import or clipboard; Refresh Link and Convert to Local Table in the link group', async () => {
+    const { navMenuGroups } = await load();
+    expect(navMenuGroups(ctx({ kind: 'table', link })).map((g) => g.map((x) => x.id)))
+      .toEqual([['open', 'design'], ['export'], ['hide', 'delete'], ['refreshLink', 'convertToLocal'], ['properties']]);
+  });
+
+  // design/entry registers this item (it pulls in the designers and Glide, which need a DOM: the item itself is registered here)
+  it('with the designers, the Linked Table Manager leads the link group; never at runtime, never on a local table', async () => {
+    const { navMenuGroups, registerNavMenuItems: register } = await load();
+    register('table', [(await import('../links/LinkedTableManager')).linkedTableManagerItem]);
+    expect(navMenuGroups(ctx({ kind: 'table', link })).map((g) => g.map((x) => x.id)))
+      .toEqual([['open', 'design'], ['export'], ['hide', 'delete'], ['linkedTableManager', 'refreshLink', 'convertToLocal'], ['properties']]);
+    expect(navMenuGroups(ctx({ kind: 'table', link, runtime: true })).map((g) => g.map((x) => x.id)))
+      .toEqual([['open'], ['export'], ['hide'], ['refreshLink'], ['properties']]);
+    expect(navMenuGroups(ctx({ kind: 'table' })).flat().map((x) => x.id)).not.toContain('linkedTableManager');
+  });
+
+  it('a local table has no link items', async () => {
+    const { navMenuGroups } = await load();
+    const all = navMenuGroups(ctx({ kind: 'table' })).flat().map((x) => x.id);
+    expect(all).not.toContain('refreshLink');
+    expect(all).not.toContain('convertToLocal');
+    expect(all).toContain('design');
+  });
+
+  it('at runtime a link keeps Open, Export, Refresh Link and Properties (Hide stays a placeholder)', async () => {
+    const { navMenuGroups } = await load();
+    expect(navMenuGroups(ctx({ kind: 'table', link, runtime: true })).map((g) => g.map((x) => x.id)))
+      .toEqual([['open'], ['export'], ['hide'], ['refreshLink'], ['properties']]);
+  });
+
+  it('Convert to Local Table needs a writable base; Refresh Link does not', async () => {
+    const { navMenuGroups, navItemEnabled } = await load();
+    const c = ctx({ kind: 'table', link, readOnly: true });
+    const items = navMenuGroups(c).flat();
+    expect(navItemEnabled(items.find((x) => x.id === 'convertToLocal')!, c)).toBe(false);
+    expect(navItemEnabled(items.find((x) => x.id === 'refreshLink')!, c)).toBe(true);
+  });
+});

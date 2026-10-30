@@ -13,7 +13,20 @@ export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, So
 
 export interface LockInfo { user: string; host: string; pid: number; sessionId: string; heartbeatAt: string }
 export type LocationRisk = 'local' | 'network' | 'synced';
-export interface TableSummary { name: string; description?: string }
+export interface TableSummary { name: string; description?: string; link?: { kind: string; path: string /* resolved, R5 */ } }
+/** A linked file's state (C1): readOnly = readable, not writable (held by another session, read-only on disk, or a read-only front-end).
+ *  needsPassword (C2 R7): a protected Access file whose password this session was not given (links.unlock). */
+export type LinkState = 'ok' | 'readOnly' | 'missingFile' | 'missingTable' | 'needsMigration' | 'newerMajor' | 'cannotOpen' | 'unsupportedKind' | 'needsPassword'
+  | 'syncedFolder' | 'unsupportedClient'; // C3 R6: a data file refused shared mode, read-only
+/** A link in the Linked Table Manager (C1 R9): its source's path (resolved, R5), kind and state; holder and stale for readOnly;
+ *  shared: a data file written in shared mode (C3 R3). */
+export interface LinkInfo { name: string; sourceId: string; kind: string; path: string; state: LinkState; holder?: LockInfo; stale?: boolean; risk: LocationRisk; shared?: true }
+/** A file to link (R7): its kind and its linkable tables; `taken`: the front-end already uses that name (R2). An Access table (C2 R6):
+ *  `skipped`, its columns BaseCraft does not link (attachments, OLE objects, multivalued, binary, Date/Time Extended); `unsupported`, the DesignErrorCode that
+ *  keeps it from being linked. */
+export interface LinkFileInfo { kind: 'basecraft' | 'sqlite' | 'access'; tables: { name: string; taken: boolean; skipped?: string[]; unsupported?: string }[] }
+/** nameExists (R2) and missingTables (R9) list the names; self: the file is the front-end itself. */
+export type LinkResult = { ok: true } | { ok: false; reason: 'nameExists' | 'missingTables' | 'self' | 'readOnly'; names: string[] };
 export interface ReconcileReport {
   addedTables: string[];
   removedTables: string[];
@@ -49,24 +62,51 @@ export interface LookupRow { value: SqlValue; display: string[] }
 export interface LookupData { rows: LookupRow[]; widths: number[]; heads?: string[] }
 export type RowWriteResult =
   | { ok: true; rowid: number; values: SqlValue[]; nulled?: { field: string; code: FieldErrorCode }[] /* WriteOptions.nullOnConversion (A3) */ }
-  | { ok: false; errors: { field: string; code: FieldErrorCode; message?: string /* validationText */; table?: string }[] };
+  | { ok: false; errors: { field: string; code: FieldErrorCode; message?: string /* validationText */; table?: string }[] }
+  | WriteConflict<SqlValue[]>;
+/** An update whose record changed since editing began (C3 R8): `current` as `values` would be; deleted: the row is gone. */
+export type WriteConflict<V> = { ok: false; conflict: 'changed'; current: V } | { ok: false; conflict: 'deleted' };
 
 export interface AppSettings {
-  locale: 'system' | 'fr' | 'en';
+  locale: 'system' | UiLanguage;
   theme: 'system' | 'light' | 'dark';
   recentFiles: string[];
+  defaultFolder: string; // '' : the Documents folder; else absolute
+  recentCount: number; // how many recent files the Backstage lists, an integer 0..50
+  openLast: boolean; // open the last base at startup
+  confirmRecordChanges: boolean; confirmDocumentDeletions: boolean; confirmActionQueries: boolean;
+  /** Default open mode of a data file (C3 R11); applies at the next opening. */
+  openMode: 'shared' | 'exclusive';
+  /** Default record locking: only 'none' (G2, pessimistic locking later). */
+  recordLocking: 'none';
+  /** Seconds between data refreshes, 1..32766. */
+  refreshInterval: number;
+  /** Retries of a busy update, 0..10, and the pause between them in ms, 0..1000. */
+  updateRetries: number; updateRetryMs: number;
 }
+/** The workstation settings the renderer may write through app.setSetting (language and theme have their own channels, the recent list is the app's). */
+export const SETTING_KEYS = ['defaultFolder', 'recentCount', 'openLast', 'confirmRecordChanges', 'confirmDocumentDeletions', 'confirmActionQueries', 'openMode', 'recordLocking', 'refreshInterval', 'updateRetries', 'updateRetryMs'] as const;
+export type SettingKey = (typeof SETTING_KEYS)[number];
+/** What getSettings returns and settingsChanged carries: the settings and the language and region they resolve to. */
+export type SettingsView = AppSettings & { uiLanguage: UiLanguage; region: string };
 
 /** Compact and Repair (A6): sizes in bytes; `repaired`: the problems PRAGMA integrity_check found that the copy no longer has.
  *  `corrupt`: the base could not be copied, the original is untouched (its backup made first). */
 export type CompactResult = { ok: true; backupPath: string; sizeBefore: number; sizeAfter: number; repaired: string[] }
   | { ok: false; reason: 'corrupt'; problems: string[]; backupPath: string };
+/** Split Database (C3 R12): the tables moved to `dataFile`, the original's backup. `noTables`: no local table to move; `self`: the
+ *  data file chosen is the open base. */
+export type SplitResult = { ok: true; tables: string[]; dataFile: string; backupPath: string } | { ok: false; reason: 'noTables' | 'readOnly' | 'self' };
 
 export interface SessionState {
   path: string;
+  /** basename(origin ?? path). */
   fileName: string;
+  /** The Runtime opened a local copy (`path`) of this front-end on a share (C3 R14). */
+  origin?: string;
   readOnly: boolean;
-  readOnlyReason?: 'heldByOther' | 'lockLost' | 'fileReadOnly';
+  /** inUse: exclusive open mode on a data file others use; syncedFolder / unsupportedClient: shared mode refused (C3 R6). */
+  readOnlyReason?: 'heldByOther' | 'lockLost' | 'fileReadOnly' | 'inUse' | 'syncedFolder' | 'unsupportedClient';
   lockHolder?: LockInfo;
   lockStale?: boolean;
   locationRisk: LocationRisk;
@@ -75,6 +115,15 @@ export interface SessionState {
   needsRecovery?: boolean; // crashed base behind a stale lock: only takeOverLock (write open) can recover it
   /** Active content (spec 4.8): none, or disabled until enabled (trusted folder, approval, « Activer le contenu »). Absent: no base. */
   content?: ContentState;
+  /** Base paths whose lock this session holds for its links (C1 R4), and its presence entry when shared (C3 R2): the main
+   *  process beats them and releases them. */
+  linkedLocks?: string[];
+  /** The base is a data file (C3 R1): no network banner. */
+  dataFile?: true;
+  /** Open in shared mode (a presence entry, no exclusive lock). */
+  shared?: true;
+  /** inUse: those present. */
+  users?: LockInfo[];
 }
 /** Disabled: action queries, RunSQL and unsafe macro actions are refused (bc:contentDisabled). */
 export type ContentState = 'none' | 'disabled' | 'enabled';
@@ -99,7 +148,7 @@ export type QueryRef = Exclude<RecordSourceRef, { kind: 'table' }>;
  *  replaceTable), `related` (a delete or a replaced table refused by a related table; '' when it cannot be named),
  *  `nameExists` (Make-Table naming a query: never replaced); `hasRelations` (the table to replace has relations). */
 export type ActionResult = { ok: true; count: number }
-  | { ok: false; reason: 'rowErrors'; failed: number; total: number; errors: Extract<RowWriteResult, { ok: false }>['errors'];
+  | { ok: false; reason: 'rowErrors'; failed: number; total: number; errors: Extract<RowWriteResult, { errors: unknown }>['errors'];
     byCause: { conversion: number; key: number; lock: number; validation: number } }
   | { ok: false; reason: 'tableExists' | 'related' | 'nameExists'; table: string } | { ok: false; reason: 'hasRelations' | 'readOnly' }
   | { ok: false; reason: 'badColumnName'; column: string }; // Make-Table: a column name no field can take (T.F…): give it an alias
@@ -110,6 +159,7 @@ export interface RunActionOptions { skipFailures: boolean; replaceTable: boolean
 export interface Relation {
   name: string; parentTable: string; parentFields: string[]; childTable: string; childFields: string[];
   enforce: boolean; cascadeUpdate: boolean; cascadeDelete: boolean; joinType: 1 | 2 | 3;
+  linked?: true; // C1 R11: read from a linked file, between two of its linked tables; never saved
 }
 export type RelationResult = { ok: true; relation: Relation }
   | { ok: false; reason: 'fieldsMismatch' | 'typesMismatch' | 'parentNotUnique' | 'readOnly' | 'nameExists' | 'nameInvalid' | 'sameTable' }
@@ -121,7 +171,7 @@ export interface CascadeChild { table: string; effect: 'deleted' | 'modified' }
 export interface RelationsLayout { tables: Record<string, { x: number; y: number }> }
 
 // Errors cross IPC as rejections whose message contains `bc:<code>`:
-// bc:exists, bc:notBasecraft, bc:newerMajor, bc:needsMigration, bc:cannotOpen (base.create/open),
+// bc:exists, bc:notBasecraft, bc:newerMajor, bc:needsMigration, bc:needsDesigner (the Runtime never migrates), bc:cannotOpen (base.create/open),
 // bc:readOnly (rows writes, relations layout), bc:unsupportedTable (rows.*, sources.*), bc:notFound (objects.get, sources.* on a missing table; a query's missing table or query: bc:notFound|unknownSource|<name>),
 // bc:corruptObject (objects.get of a definition that is not a JSON object), bc:needsRecovery / bc:cannotOpen (data access without a
 // readable connection), bc:noBase, bc:invalidArgument, bc:badIcon (app.setWindowIcon; also thrown by the renderer's iconPng), bc:fontMissing / bc:writeFailed / bc:printFailed (reports.*).
@@ -131,12 +181,16 @@ export const CH = {
   getSettings: 'bc:app:getSettings',
   setLocale: 'bc:app:setLocale',
   setTheme: 'bc:app:setTheme',
+  setSetting: 'bc:app:setSetting', // one of SETTING_KEYS, validated key by key (bc:invalidArgument)
+  pickFolder: 'bc:app:pickFolder', // a folder chosen in the system dialog (null: cancelled)
+  settingsChanged: 'bc:app:settingsChanged', // main → renderer: every settings write, with the SettingsView
   appInfo: 'bc:app:info',
   appLicenses: 'bc:app:licenses',
   appSetIcon: 'bc:app:setIcon', // the window icon: a small PNG the renderer re-encoded, or null for BaseCraft's (bc:badIcon)
   openExternal: 'bc:app:openExternal', // only one of AppInfo.links, never a URL made up by the renderer
   edit: 'bc:app:edit', // cut / copy / paste on the focused element of the sender
   beep: 'bc:app:beep', // the system's beep (macros: Beep, MessageBox)
+  appWriteClipboard: 'bc:app:writeClipboard', // C3 R9: Write Conflict › Copy to Clipboard (a string of at most 10 MB)
   closeRequested: 'bc:app:closeRequested', // main → renderer: the window is asked to close
   closeAllowed: 'bc:app:closeAllowed', // renderer → main: every document agreed, close for real
   closeAck: 'bc:app:closeAck', // renderer → main: the close request arrived (the renderer is not hung)
@@ -147,6 +201,8 @@ export const CH = {
   baseTakeOverLock: 'bc:base:takeOverLock',
   baseStateChanged: 'bc:base:stateChanged',
   baseHostCrashed: 'bc:base:hostCrashed', // main → renderer: the data process ended on its own (A3)
+  baseDataChanged: 'bc:base:dataChanged', // main → renderer: another workstation wrote (C3 R10, the refresh interval)
+  baseOpenFailure: 'bc:base:openFailure', // the window's single question at startup: did the base the system gave open?
   tablesList: 'bc:tables:list',
   tablesDesign: 'bc:tables:design',
   tablesSave: 'bc:tables:save',
@@ -197,9 +253,19 @@ export const CH = {
   exchangeExportExcel: 'bc:exchange:exportExcel',
   baseSaveAs: 'bc:base:saveAs',
   baseCompact: 'bc:base:compact',
+  baseSplitPick: 'bc:base:splitPick',
+  baseSplit: 'bc:base:split',
   baseEnableContent: 'bc:base:enableContent',
   baseStartup: 'bc:base:startup',
   baseSaveStartup: 'bc:base:saveStartup',
+  linksPick: 'bc:links:pick',
+  linksInspect: 'bc:links:inspect',
+  linksCreate: 'bc:links:create',
+  linksList: 'bc:links:list',
+  linksRefresh: 'bc:links:refresh',
+  linksRelink: 'bc:links:relink',
+  linksConvert: 'bc:links:convert',
+  linksUnlock: 'bc:links:unlock',
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -221,9 +287,14 @@ export interface LicenseEntry { name: string; version: string; license: string }
 
 export interface BasecraftApi {
   app: {
-    getSettings(): Promise<AppSettings & { uiLanguage: UiLanguage; region: string }>;
+    getSettings(): Promise<SettingsView>;
     setLocale(l: AppSettings['locale']): Promise<void>;
     setTheme(t: AppSettings['theme']): Promise<void>;
+    setSetting<K extends SettingKey>(k: K, v: AppSettings[K]): Promise<void>;
+    /** A folder chosen in the system dialog, or null when cancelled. */
+    pickFolder(): Promise<string | null>;
+    /** Every settings write (language, theme, options, recent files) reaches the window with the new SettingsView. */
+    onSettingsChanged(cb: (s: SettingsView) => void): () => void;
     info(): Promise<AppInfo>;
     /** The third-party licence inventory shipped with the app (read by the main process, never a renderer path). */
     licenses(): Promise<LicenseEntry[]>;
@@ -235,6 +306,8 @@ export interface BasecraftApi {
     edit(cmd: 'cut' | 'copy' | 'paste'): Promise<void>;
     /** The system's beep (shell.beep): the macro actions Beep and MessageBox. */
     beep(): Promise<void>;
+    /** The system clipboard's text (C3 R9: the edited record of a Write Conflict). Rejects bc:invalidArgument beyond 10 MB. */
+    writeClipboard(text: string): Promise<void>;
     /** The window's close button (or the system) asks to close: the documents get their say, then confirmClose().
      *  Without a subscriber, the close is confirmed at once. */
     onCloseRequested(cb: () => void): () => void;
@@ -246,14 +319,25 @@ export interface BasecraftApi {
     close(): Promise<void>;
     state(): Promise<SessionState | null>;
     takeOverLock(): Promise<SessionState | null>;
+    /** The base the system gave this process (command line, file association) could not be opened: its `bc:<code>` error, once
+     *  (the window shows it as an Open's, in the error dialog); null: none was given, or it opened. Waits for that opening to end. */
+    openFailure(): Promise<string | null>;
     onStateChanged(cb: (s: SessionState | null) => void): () => void;
     /** The data process ended on its own: the base is closed (stateChanged null), the window says so once. */
     onHostCrashed(cb: () => void): () => void;
+    /** Another workstation (or connection) wrote to the base or its linked files since the last refresh interval (C3 R10). */
+    onDataChanged(cb: () => void): () => void;
     /** File › Save As (A6): a checked copy of the base at the path chosen in the save dialog, which then becomes the open base
      *  (recent files). null: cancelled. Rejects bc:sameFile (the open file), bc:targetInUse (open elsewhere), bc:copyCorrupt, bc:copyFailed. Allowed read-only. */
     saveAs(): Promise<SessionState | null>;
     /** Compact and Repair (A6): the renderer has closed every document first. Rejects bc:readOnly, bc:copyFailed, bc:reopenFailed (the base is then closed). */
     compact(): Promise<CompactResult>;
+    /** Split Database (C3 R13): the data file's path, chosen in the save dialog (the base's folder, `<name>_donnees.basecraft`
+     *  proposed); null: cancelled. */
+    splitPick(): Promise<string | null>;
+    /** Split Database (C3 R12) to `path` (a path splitPick returned): the renderer has closed every document first. Rejects
+     *  bc:targetInUse (as Save As), bc:copyCorrupt, bc:copyFailed. */
+    split(path: string): Promise<SplitResult>;
     /** « Activer le contenu »: approves the base's current active content (remembered for this file and content), enables it,
      *  broadcasts the state. Allowed read-only (the approval is local). */
     enableContent(): Promise<SessionState>;
@@ -281,7 +365,8 @@ export interface BasecraftApi {
     count(table: string, filter?: FieldFilter[]): Promise<number>;
     page(table: string, req: PageRequest): Promise<RowPage>;
     insert(table: string, values: Record<string, CellInput>): Promise<RowWriteResult>;
-    update(table: string, rowid: number, changes: Record<string, CellInput>): Promise<RowWriteResult>;
+    /** expected: the record as read when editing began, by field name (C3 R8); a change since is a conflict, nothing written. */
+    update(table: string, rowid: number, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
     delete(table: string, rowids: number[]): Promise<DeleteResult>;
     /** The list of a Lookup field: at most 5000 rows of a table source, sorted on the first visible column; of a SQL or saved
      *  query Row Source (A3), in the query's order; a value list in its order. No rows when the field has no lookup, its source
@@ -290,7 +375,8 @@ export interface BasecraftApi {
   };
   /** Relations (bc_relations); saves and deletes refused in read-only with reason readOnly, saveLayout with bc:readOnly. */
   relations: {
-    list(): Promise<Relation[]>;
+    /** localOnly (C1 R11, the Relationships window): the front-end's relations only, no linked file opened or locked. */
+    list(opts?: { localOnly?: boolean }): Promise<Relation[]>;
     save(rel: Relation, originalName: string | null): Promise<RelationResult>;
     delete(name: string): Promise<OpResult>;
     layout(): Promise<RelationsLayout>;
@@ -366,5 +452,22 @@ export interface BasecraftApi {
      *  before the save dialog. */
     exportExcel(src: ExportSource, defaultName: string): Promise<ExportResult>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
+  };
+  /** Linked tables (C1). pick: the link dialog's file (null: cancelled), the only path inspect, create and relink accept.
+   *  inspect rejects bc:linkUnavailable|<state>|<path> (not SQLite, newer BaseCraft…). refresh reopens the sources (a stale lock
+   *  is taken over, R4) and is the only one the Runtime has (R15). relink (R9): every name's table must be in the file. */
+  links: {
+    /** first (C2 R10): the file picker's filter shown first. */
+    pick(first?: LinkFileInfo['kind']): Promise<string | null>;
+    inspect(path: string): Promise<LinkFileInfo>;
+    create(path: string, names: string[]): Promise<LinkResult>;
+    list(): Promise<LinkInfo[]>;
+    refresh(names: string[]): Promise<LinkInfo[]>;
+    relink(names: string[], path: string): Promise<LinkResult>;
+    /** Convert to Local Table (R12): rows the local table refuses reject bc:unsupportedTable, nothing changed. */
+    convert(name: string): Promise<OpResult>;
+    /** C2 R7: the password of a protected Access file (a source of the open front-end, or the file the link dialog picked), kept
+     *  in the data process's memory for the session only; true when the file accepts it. Never written, never sent back. */
+    unlock(path: string, password: string): Promise<boolean>;
   };
 }

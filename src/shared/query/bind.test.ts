@@ -3,10 +3,10 @@ import type { Expr } from '../expr/ast';
 import { coerce } from '../coerce';
 import { localeInfo } from '../locale-format';
 import { f, t } from '../test-fixtures';
-import { defaultProps, type FieldProps, type TableDesign } from '../field-types';
+import { defaultProps, sameName, type FieldProps, type TableDesign } from '../field-types';
 import type { CrosstabQuery, SelectQuery } from './ast';
 import { inHeadings } from './crosstab';
-import { bindQuery, boundArgType, exprType, toSourceInfo, type BoundQuery, type QueryCatalog } from './bind';
+import { bindQuery, boundArgType, exprType, LOCAL_SOURCE, toSourceInfo, type BoundQuery, type QueryCatalog } from './bind';
 import { parseQueryDefinition, queryDependents } from './definition';
 import { parseSql } from './sql-parser';
 import { printSql } from './print';
@@ -450,4 +450,55 @@ it('a form reference in a criterion is a typed parameter', () => {
 it('LocalVars in a query is refused', () => {
   expect(() => b('SELECT * FROM Clients WHERE Nom = [LocalVars]![x];')).toThrow(expect.objectContaining({ code: 'memberNotAllowed' }));
   expect(() => b('SELECT [MacroError]![Number] FROM Clients;')).toThrow(expect.objectContaining({ code: 'memberNotAllowed', detail: '[MacroError]![Number]' }));
+});
+
+describe('one source per query (C1 R10)', () => {
+  // Clients and Commandes linked from source S1; Notes local; QLies a saved query over the links
+  const notes = t('Notes', [f('N°', 'autoNumber'), f('Texte', 'shortText')]);
+  const linked: QueryCatalog = {
+    table: (n) => (sameName(n, 'Notes') ? notes : cat.table(n)),
+    query: (n) => (sameName(n, 'QLies') ? 'SELECT Nom FROM Clients' : cat.query(n)),
+    sourceOf: (n) => (['Clients', 'Commandes'].some((x) => sameName(x, n)) ? 'S1' : LOCAL_SOURCE),
+  };
+  const bl = (sql: string) => bindQuery(parseSql(sql), linked);
+  const mixed = (sql: string, table?: string) => expect(() => bl(sql)).toThrow(table === undefined ? /\|mixedSources\|/ : `bc:queryBind|mixedSources|${table}`);
+
+  it('one source: tagged with it', () => {
+    expect(bl('SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client').source).toBe('S1');
+    expect(bl('SELECT * FROM QLies').source).toBe('S1');
+    expect(bl('INSERT INTO Clients (Nom) VALUES ("a")').source).toBe('S1');
+    expect(bl('UPDATE Clients SET Ville = "X" WHERE [N°] IN (SELECT Client FROM Commandes)').source).toBe('S1');
+    expect(bl('TRANSFORM Sum(Montant) SELECT Client FROM Commandes GROUP BY Client PIVOT Month(Le)').source).toBe('S1');
+    expect(bl('SELECT Texte FROM Notes').sources[0].source).toBe('local');
+    expect(bl('SELECT Nom FROM Clients').sources[0].source).toBe('S1');
+  });
+  it('no table: local', () => {
+    const q = parseSql('SELECT 1 AS x FROM Clients'); // SQL text always names a table: the tree without one
+    expect(bindQuery({ ...q, body: { ...(q.body as SelectQuery), from: [] } }, linked).source).toBe('local');
+    expect(b('SELECT * FROM Clients').source).toBe('local'); // a catalog without sourceOf: every table is local
+  });
+  it.each([
+    'SELECT Notes.Texte, Clients.Nom FROM Notes, Clients',
+    'SELECT Texte FROM Notes WHERE Texte IN (SELECT Nom FROM Clients)',
+    'SELECT Texte FROM Notes INNER JOIN QLies ON Notes.Texte = QLies.Nom',
+    'SELECT Texte FROM Notes UNION SELECT Nom FROM Clients',
+    'INSERT INTO Notes (Texte) SELECT Nom FROM Clients',
+    'SELECT Nom INTO Copie FROM Clients WHERE Nom IN (SELECT Texte FROM Notes)',
+    'SELECT Texte, (SELECT Count(*) FROM Commandes) AS n FROM Notes',
+    'SELECT Texte FROM Notes WHERE EXISTS (SELECT * FROM Clients WHERE Nom = Texte)',
+    'SELECT * FROM (SELECT Nom FROM Clients) AS D, Notes',
+    'UPDATE Notes SET Texte = "x" WHERE Texte IN (SELECT Nom FROM Clients)',
+    'DELETE FROM Clients WHERE Nom IN (SELECT Texte FROM Notes)',
+    'INSERT INTO Clients (Nom) VALUES ((SELECT First(Texte) FROM Notes))',
+    'TRANSFORM Count(*) SELECT Texte FROM Notes, Commandes GROUP BY Texte PIVOT Client',
+  ])('refused: %s', (sql) => mixed(sql)); // Review Focus 4
+  it('names the first table from another source', () => {
+    mixed('SELECT * FROM Notes, Clients', 'Clients');
+    mixed('SELECT * FROM Clients, Notes', 'Notes');
+    mixed('INSERT INTO Notes (Texte) SELECT Nom FROM Clients', 'Clients');
+  });
+  it('a Make-Table target is local: INTO over links is refused (PF4)', () => {
+    mixed('SELECT Nom INTO Copie FROM Clients', 'Copie');
+    expect(bl('SELECT Texte INTO Copie FROM Notes').source).toBe('local');
+  });
 });

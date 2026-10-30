@@ -34,6 +34,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Access dates are read as wall-clock UTC: the reader must not depend on the machine's time zone.
+      - name: Access reader in other time zones
+        if: runner.os == 'Linux'
+        run: |
+          TZ=America/New_York npx vitest run --configLoader runner src/main/links/access.test.ts
+          TZ=Asia/Tokyo npx vitest run --configLoader runner src/main/links/access.test.ts
       - name: Install xvfb
         if: runner.os == 'Linux'
         run: sudo apt-get install -y xvfb
@@ -72,6 +78,27 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+      # BaseCraft Runtime: second product, same sources (e2e above already built and ran it); when macOS returns, add its Runtime step here.
+      - run: npx electron-vite build --mode runtime
+      - name: Runtime installers (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --config electron-builder.runtime.cjs --win --x64 --publish never
+      # ponytail: same .deb limitation as the full application above.
+      - name: Runtime installers (Linux)
+        if: runner.os == 'Linux'
+        run: npx electron-builder --config electron-builder.runtime.cjs --linux AppImage tar.gz --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-installers-${{ runner.os }}
+          path: |
+            dist-runtime/*.exe
+            dist-runtime/*.dmg
+            dist-runtime/*.zip
+            dist-runtime/*.AppImage
+            dist-runtime/*.deb
+            dist-runtime/*.tar.gz
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4

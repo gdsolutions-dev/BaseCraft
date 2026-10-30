@@ -44,6 +44,13 @@ export function queryCatalog(db: DatabaseSync): QueryCatalog {
   };
 }
 
+/** Where queries bind and run (C1 R10): the front-end holds the saved queries, `catalog` finds tables (local or linked) and
+ *  their source, and a bound query runs on `dbOf(b.source, write)`. A bare DatabaseSync is all of these at once. */
+/** `writable`: false when the source is read-only (a link whose file another session holds); absent, every source is. */
+export interface QueryConn { front: DatabaseSync; catalog: QueryCatalog; dbOf(source: string, write: boolean): DatabaseSync; writable?(source: string): boolean }
+export type QueryDb = DatabaseSync | QueryConn;
+export const queryConn = (x: QueryDb): QueryConn => ('front' in x ? x : { front: x, catalog: queryCatalog(x), dbOf: () => x });
+
 /** A parse error as `bc:invalidQuery|<code>|<position>`. */
 function parse(sql: string): Query {
   try {
@@ -58,11 +65,12 @@ function parse(sql: string): Query {
  * names is missing: contract 1.2), bc:invalidQuery|…, bc:notSelectQuery, bc:queryBind|…. A key table without a real rowid
  * (WITHOUT ROWID, a field named rowid: adopted tables), or a joined table without one, makes the query read-only, as its table datasheet refuses it.
  */
-export function resolve(db: DatabaseSync, ref: QueryRef, action = false): BoundQuery {
+export function resolve(x: QueryDb, ref: QueryRef, action = false): BoundQuery {
+  const c = queryConn(x);
   let q: Query;
   let self: string | undefined;
   if (ref.kind === 'query') {
-    const o = getObject(db, 'query', ref.name);
+    const o = getObject(c.front, 'query', ref.name);
     if (!o) throw new Error('bc:notFound');
     self = o.name;
     q = parse(storedSql(o));
@@ -70,25 +78,28 @@ export function resolve(db: DatabaseSync, ref: QueryRef, action = false): BoundQ
   if (isSelectBody(q) === action) throw new Error(action ? 'bc:invalidArgument' : 'bc:notSelectQuery');
   let bound: BoundQuery;
   try {
-    bound = bindQuery(q, queryCatalog(db), self);
+    bound = bindQuery(q, c.catalog, self);
   } catch (e) {
     if (e instanceof Error && e.message.startsWith('bc:queryBind|unknownSource|')) throw new Error(e.message.replace('bc:queryBind', 'bc:notFound'), { cause: e });
     throw e;
   }
   // every table written (B4: the key table and the 'one' tables) is located by its rowid
   const written = bound.writePlan?.map((w) => w.table) ?? [bound.keyTable!];
-  if (bound.updatable && !written.every((t) => hasRealRowid(db, tableDesign(db, t)))) bound.updatable = false;
+  if (bound.updatable) {
+    const db = c.dbOf(bound.source, false); // where its tables are
+    if (!written.every((t) => hasRealRowid(db, tableDesign(db, t))) || c.writable?.(bound.source) === false) bound.updatable = false;
+  }
   return bound;
 }
 
 /** A crosstab (B4 R11): its IN headings; else those of the data, with `params` when it has parameters — without them, its
  *  row columns only and `crosstab.headings` 'needsParameters'. `params`: as a page's, converted in the region. */
-export function describeQuerySource(db: DatabaseSync, ref: QueryRef, info: LocaleInfo, params?: Record<string, CellInput>): SourceInfo {
-  const b = resolve(db, ref);
+export function describeQuerySource(x: QueryDb, ref: QueryRef, info: LocaleInfo, params?: Record<string, CellInput>): SourceInfo {
+  const b = resolve(x, ref);
   if (!b.crosstab) return toSourceInfo(b);
-  if (b.crosstab.headings === 'fixed') return toSourceInfo(expandCrosstab(db, b, {}, info)); // IN: no value needed
+  if (b.crosstab.headings === 'fixed') return toSourceInfo(expandCrosstab(x, b, {}, info)); // IN: no value needed
   if (b.params.length && !params) return { ...toSourceInfo(b), crosstab: { headings: 'needsParameters' } };
-  return toSourceInfo(expandCrosstab(db, b, paramValues(b, params ?? {}, info), info));
+  return toSourceInfo(expandCrosstab(x, b, paramValues(b, params ?? {}, info), info));
 }
 
 /** Each parameter's value, converted in the region as its type stores it. bc:missingParameter||<name>, bc:invalidParameter|<FieldErrorCode>|<name>. */
@@ -160,10 +171,11 @@ const MAX_TOTALS = 256;
  * table when the query is updatable. `total` counts the filtered rows, cached until the next write (never for a query or
  * filter calling Date(), Now() or Time()).
  */
-export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePageRequest, ctx: QueryCtx): SourcePage {
-  const resolved = resolve(db, ref);
+export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageRequest, ctx: QueryCtx): SourcePage {
+  const resolved = resolve(x, ref);
+  const db = queryConn(x).dbOf(resolved.source, false);
   const values = paramValues(resolved, req.params ?? {}, ctx.info);
-  const b = expandCrosstab(db, resolved, values, ctx.info); // a crosstab: its headings from these values (R11)
+  const b = expandCrosstab(x, resolved, values, ctx.info); // a crosstab: its headings from these values (R11)
   const columns = b.crosstab && { columns: b.columns.map((x) => x.name) }; // R14
   // a crosstab's heading gone (its last row deleted): its sort and criteria go, the page brings the columns to rebuild (R14)
   const shown = (field: string) => !b.crosstab || b.columns.some((c) => sameName(c.name, field));
@@ -205,10 +217,10 @@ export function pageQuerySource(db: DatabaseSync, ref: QueryRef, req: SourcePage
  * catalog where `name` already holds the new SQL, so a cycle through it is found (`QA → QB → QA`). Action queries are
  * checked too. Throws bc:invalidQuery|… or bc:queryBind|…; the caller writes nothing then.
  */
-export function checkQueryDefinition(db: DatabaseSync, name: string, definition: unknown): void {
+export function checkQueryDefinition(x: QueryDb, name: string, definition: unknown): void {
   const { sql } = parseQueryDefinition(definition);
-  const base = queryCatalog(db);
-  bindQuery(parseSql(sql), { table: base.table, query: (n) => (sameName(n, name) ? sql : base.query(n)) }, name);
+  const base = queryConn(x).catalog;
+  bindQuery(parseSql(sql), { ...base, query: (n) => (sameName(n, name) ? sql : base.query(n)) }, name);
 }
 
 /**

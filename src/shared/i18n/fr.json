@@ -1,11 +1,21 @@
 {
   "app": {
     "title": "BaseCraft",
+    "titleRuntime": "BaseCraft Runtime",
     "language": {
       "label": "Langue de l'interface",
       "system": "Langue du système",
       "fr": "Français",
-      "en": "English"
+      "en": "English",
+      "es": "Español",
+      "de": "Deutsch",
+      "it": "Italiano",
+      "pt": "Português",
+      "nl": "Nederlands",
+      "pl": "Polski",
+      "ja": "日本語",
+      "zh": "简体中文",
+      "ko": "한국어"
     },
     "theme": {
       "label": "Thème",
@@ -356,7 +366,9 @@
       "actionCatalog": "Catalogue d'actions",
       "showAllActions": "Afficher toutes les actions",
       "viewForm": "Mode Formulaire",
-      "viewPrintPreview": "Aperçu avant impression"
+      "viewPrintPreview": "Aperçu avant impression",
+      "linkBaseCraft": "Base BaseCraft ou SQLite",
+      "linkAccess": "Lier une base Access"
     },
     "scrollLeft": "Faire défiler le ruban vers la gauche",
     "scrollRight": "Faire défiler le ruban vers la droite",
@@ -422,7 +434,10 @@
       "sqlView": "Mode S&QL",
       "exportPdf": "&PDF",
       "print": "&Imprimer…",
-      "printPreview": "Aperçu a&vant impression"
+      "printPreview": "Aperçu a&vant impression",
+      "refreshLink": "Actualiser le lien",
+      "convertToLocal": "Convertir en table locale",
+      "linkedTableManager": "Gestionnaire de tables liées"
     },
     "renameTitle": "Renommer la table",
     "renameLabel": "Nouveau nom",
@@ -482,6 +497,9 @@
     "needsRecovery": "Cette base n'a pas été fermée correctement et doit être récupérée avant d'être consultée. Reprenez-la pour la réparer.",
     "lockLost": "Le verrou d'écriture a été perdu : la modification est désactivée.",
     "fileReadOnly": "Lecture seule : le fichier n'est pas modifiable.",
+    "inUse": "Ouvert en lecture seule : ce fichier de données est utilisé par {{users}}. Le mode exclusif n'est possible que si personne d'autre ne l'utilise.",
+    "syncedFolder": "Ouvert en lecture seule : un fichier de données partagé ne peut pas être utilisé dans un dossier synchronisé (OneDrive, Dropbox…). Placez-le sur un lecteur réseau, ou passez à un serveur.",
+    "unsupportedClient": "Ouvert en lecture seule : le mode partagé sur un lecteur réseau n'est pas pris en charge sur ce système. Utilisez un poste Windows, ou passez à un serveur.",
     "takeOver": "Reprendre",
     "contentDisabled": "Avertissement de sécurité : une partie du contenu actif de cette base (macros, requêtes action) a été désactivée.",
     "enableContent": "Activer le contenu",
@@ -497,6 +515,7 @@
   "dialog": {
     "newBaseName": "Base de données1",
     "copyName": "{{name}} copie",
+    "compactOnClose": "BaseCraft compacte la base de données avant de la fermer. Cela peut durer quelques instants : la fermeture se terminera d'elle-même.",
     "errorTitle": "BaseCraft",
     "button": {
       "ok": "OK",
@@ -505,9 +524,13 @@
       "cancel": "Annuler"
     },
     "error": {
+      "busy": "Le fichier de données est occupé par un autre poste. Réessayez dans un instant.",
+      "fileDamaged": "Le fichier de données n'a pas pu être lu correctement. Réessayez ; si le problème revient, faites vérifier le partage (verrous opportunistes désactivés) ou lancez Compacter et réparer depuis un poste qui l'ouvre seul.",
+      "dataFileInUse": "La structure ne peut pas être modifiée : le fichier de données est utilisé par {{detail}}. Demandez-leur de le fermer, puis réessayez.",
       "notBasecraft": "Ce fichier n'est pas une base BaseCraft.",
       "newerMajor": "Cette base a été créée par une version plus récente de BaseCraft. Mettez BaseCraft à jour pour l'ouvrir.",
       "needsMigration": "Cette base doit être mise à jour, ce qui est impossible tant qu'elle est en lecture seule.",
+      "needsDesigner": "Cette base a été enregistrée par une version précédente de BaseCraft. Ouvrez-la une fois avec BaseCraft (l'application complète) pour la mettre à jour.",
       "cannotOpen": "Impossible d'ouvrir ce fichier.",
       "exists": "Un fichier portant ce nom existe déjà.",
       "invalidArgument": "La demande n'est pas valide.",
@@ -535,6 +558,18 @@
       "copyFailed": "La copie de la base a échoué ; le fichier d'origine n'a pas été modifié. ({{detail}})",
       "targetInUse": "Ce fichier est ouvert par un autre utilisateur ou une autre instance de BaseCraft : il ne peut pas être remplacé. Choisissez un autre nom.",
       "reopenFailed": "La base a été compactée mais n'a pas pu être rouverte ; elle a été fermée. Rouvrez-la (une sauvegarde a été faite avant le compactage). ({{detail}})",
+      "linkedTable": "On ne peut pas modifier la structure d'une table liée. Ouvrez la base qui la contient pour la modifier.",
+      "linkUnavailable_missingFile": "Fichier de la table liée introuvable : {{detail}}. Indiquez son nouvel emplacement dans le Gestionnaire de tables liées.",
+      "linkUnavailable_missingTable": "Le fichier lié {{detail}} ne contient plus cette table.",
+      "linkUnavailable_needsMigration": "Le fichier lié {{detail}} a été enregistré par une version précédente de BaseCraft. Ouvrez-le une fois avec BaseCraft pour le mettre à jour.",
+      "linkUnavailable_newerMajor": "Le fichier lié {{detail}} a été créé par une version plus récente de BaseCraft.",
+      "linkUnavailable_cannotOpen": "Impossible d'ouvrir le fichier lié {{detail}}.",
+      "linkUnavailable_unsupportedKind": "Cette version de BaseCraft ne sait pas ouvrir cette source : {{detail}}.",
+      "linkUnavailable_readOnly": "Le fichier lié {{detail}} est ouvert par un autre utilisateur ou une autre fenêtre de BaseCraft : ses tables liées restent en lecture seule.",
+      "linkUnavailable_self": "{{detail}} est la base ouverte : une base ne peut pas être liée à elle-même.",
+      "linkUnavailable_needsPassword": "Cette base Access est protégée par un mot de passe : {{detail}}",
+      "linkUnavailable_syncedFolder": "Le fichier de données {{detail}} reste en lecture seule : un fichier de données partagé ne peut pas être utilisé dans un dossier synchronisé (OneDrive, Dropbox…). Placez-le sur un lecteur réseau, ou passez à un serveur.",
+      "linkUnavailable_unsupportedClient": "Le fichier de données {{detail}} reste en lecture seule : le mode partagé sur un lecteur réseau n'est pas pris en charge sur ce système. Utilisez un poste Windows, ou passez à un serveur.",
       "invalidQuery_subqueryRows": "Une sous-requête renvoie plus d'un enregistrement alors qu'une seule valeur est attendue.",
       "invalidQuery_tooComplex": "Cette requête est trop complexe (trop de tables, de colonnes ou d'imbrications).",
       "invalidQuery_storedQuery": "La requête « {{detail}} » est illisible : son SQL n'est pas valide.",
@@ -558,6 +593,7 @@
       "queryBind_pivotAggregate": "L'en-tête de colonne d'une requête Analyse croisée (PIVOT) ne peut pas contenir de fonction d'agrégat : {{detail}}.",
       "queryBind_tooManyColumns": "Cette requête Analyse croisée donnerait {{detail}} colonnes : 255 au plus, dont 254 en-têtes de colonne. Restreignez les données ou fixez les en-têtes de colonne (IN).",
       "queryBind_crosstabAsSource": "La requête Analyse croisée « {{detail}} » ne peut pas servir de source à une autre requête ni à une liste de choix.",
+      "queryBind_mixedSources": "Une requête ne porte que sur une seule source de données : « {{detail}} » ne vient pas de la même source que les autres tables de la requête.",
       "fontMissing": "Une police intégrée n'a pas pu être chargée : l'état n'a été ni imprimé ni exporté.",
       "printFailed": "L'impression a échoué.",
       "writeFailed": "Impossible d'enregistrer le fichier à cet emplacement.",
@@ -1662,6 +1698,7 @@
   },
   "about": {
     "title": "À propos de BaseCraft",
+    "titleRuntime": "À propos de BaseCraft Runtime",
     "version": "Version {{version}}",
     "tagline": "Base de données bureautique, dans l'esprit de Microsoft Access.",
     "licence": "Logiciel libre sous licence {{licence}}.",
@@ -1924,11 +1961,12 @@
       "where": "Où"
     },
     "showTable": {
-      "title": "Afficher la table",
+      "title": "Ajouter des tables",
       "tables": "Tables",
       "queries": "Requêtes",
       "both": "Les deux",
-      "add": "Ajouter",
+      "search": "Rechercher",
+      "add": "Ajouter les tables sélectionnées",
       "close": "Fermer",
       "none": "Aucun objet."
     },
@@ -2090,6 +2128,15 @@
     "repaired": "Base compactée : {{before}} → {{after}}. Sauvegarde : {{backup}}\n{{count}} problème(s) détecté(s) par le contrôle d'intégrité ont été réparés :\n{{problems}}",
     "corrupt": "La base est endommagée et n'a pas pu être réparée. Le fichier d'origine n'a pas été modifié.\nProblèmes détectés :\n{{problems}}\nSauvegarde : {{backup}}",
     "more": "… et {{count}} autre(s)"
+  },
+  "split": {
+    "title": "Fractionnement de base de données",
+    "intro": "Cet Assistant déplace les tables de la base de données active vers un nouveau fichier de données, placé de préférence sur un lecteur réseau partagé. La base actuelle devient une application frontale liée à ces tables : chaque poste peut alors utiliser sa propre copie de l'application frontale. Une copie de sauvegarde de la base est faite avant le fractionnement.",
+    "ok": "Fractionner la base de données",
+    "defaultName": "{{name}}_donnees",
+    "done": "La base de données a été fractionnée. Fichier de données : {{path}}. Copie de sauvegarde : {{backup}}.",
+    "noTables": "Cette base ne contient aucune table locale à déplacer.",
+    "self": "Le fichier de données ne peut pas être la base ouverte. Choisissez un autre nom ou un autre dossier."
   },
   "macro": {
     "embedded": {
@@ -2287,8 +2334,57 @@
     }
   },
   "options": {
+    "cat": {
+      "general": "Générales",
+      "currentDb": "Base de données active",
+      "client": "Paramètres du client"
+    },
+    "general": {
+      "header": "Options générales d'utilisation de {{product}}.",
+      "ui": "Options de l'interface utilisateur",
+      "creation": "Création de bases de données",
+      "defaultFolder": "Dossier de base de données par défaut :",
+      "browse": "Parcourir…"
+    },
+    "client": {
+      "header": "Paramètres qui modifient le comportement du client.",
+      "editing": "Édition",
+      "confirm": "Confirmer",
+      "confirmRecords": "Modifications des enregistrements",
+      "confirmDeletions": "Suppressions de documents",
+      "confirmActions": "Requêtes action",
+      "display": "Affichage",
+      "recentCount": "Afficher le nombre de bases de données récentes suivant :",
+      "advanced": "Avancé",
+      "openLast": "Ouvrir la dernière base de données utilisée au démarrage de {{product}}",
+      "openMode": "Mode d'ouverture par défaut",
+      "openModeShared": "Partagé",
+      "openModeExclusive": "Exclusif",
+      "recordLocking": "Verrouillage par défaut des enregistrements",
+      "lockNone": "Aucun",
+      "lockAll": "Tous les enregistrements",
+      "lockEdited": "Enregistrement modifié",
+      "refreshInterval": "Intervalle d'actualisation (s)",
+      "updateRetries": "Nombre de tentatives de mise à jour",
+      "updateRetryMs": "Intervalle entre les tentatives de mise à jour (ms)"
+    },
     "db": {
-      "title": "Base de données active",
+      "header": "Options de la base de données active.",
+      "application": "Options de l'application",
+      "docWindow": "Options de la fenêtre Document",
+      "statusBar": "Afficher la barre d'état",
+      "documentTabs": "Afficher les onglets des documents",
+      "specialKeys": "Utiliser les touches spéciales",
+      "specialKeysHelp": "F11 : afficher ou masquer le volet de navigation.",
+      "compactOnClose": "Compacter lors de la fermeture",
+      "frontEnd": "Application frontale (ses tables locales ne servent que de référence)",
+      "dataFile": "Fichier de données partagé (ouvert en mode partagé par plusieurs postes)",
+      "datasheetDesign": "Autoriser les modifications de structure des tables en mode Feuille de données",
+      "navigation": "Navigation",
+      "ribbonSection": "Options de la barre d'outils et du ruban",
+      "fullMenus": "Autoriser les menus complets",
+      "shortcutMenus": "Autoriser les menus contextuels par défaut",
+      "iconForForms": "Utiliser comme icône de formulaire et d'état",
       "appTitle": "Titre de l'application",
       "appIcon": "Icône de l'application",
       "iconBrowse": "Parcourir…",
@@ -2307,5 +2403,66 @@
   },
   "startup": {
     "formNotFound": "Le formulaire de démarrage « {{name}} » est introuvable."
+  },
+  "link": {
+    "filterBasecraft": "Bases BaseCraft",
+    "filterSqlite": "Fichiers SQLite",
+    "filterAccess": "Bases Access",
+    "title": "Lier des tables",
+    "ok": "Lier",
+    "taken": "Nom déjà utilisé dans cette base",
+    "refreshed": "Lien actualisé.",
+    "confirmConvert": "Convertir « {{name}} » en table locale ? Les données sont copiées dans cette base et le lien est supprimé.",
+    "confirmDelete": "Supprimer le lien vers « {{name}} » ? La table reste dans {{path}}.",
+    "source": "Source : {{path}}",
+    "designTitle": "Table liée",
+    "designWarning": "La table « {{name}} » est une table liée : sa structure appartient au fichier source et ne peut pas être modifiée ici. Voulez-vous l'ouvrir quand même, en lecture seule ?",
+    "designBanner": "Table liée, en lecture seule : sa structure appartient à {{path}}.",
+    "kind": { "basecraft": "Base BaseCraft", "sqlite": "Fichier SQLite", "access": "Base Access" },
+    "tables": "Tables",
+    "selectAll": "Sélectionner tout",
+    "noTables": "Ce fichier ne contient aucune table.",
+    "skipped": "Colonnes non liées, d'un type que BaseCraft ne lit pas (pièce jointe, objet OLE, champ à plusieurs valeurs, binaire, Date/Heure étendue) : {{names}}",
+    "unsupported": "Table non prise en charge : {{reason}}",
+    "password": { "title": "Mot de passe de la base", "label": "Mot de passe de {{path}} :", "wrong": "Mot de passe incorrect." },
+    "error": {
+      "nameExists": "Ces noms sont déjà utilisés dans cette base : {{names}}.",
+      "missingTables": "Ces tables ne sont plus dans le fichier : {{names}}.",
+      "self": "Une base ne peut pas être liée à elle-même.",
+      "readOnly": "La base est ouverte en lecture seule."
+    }
+  },
+  "ltm": {
+    "title": "Gestionnaire de tables liées",
+    "col": { "name": "Table", "kind": "Type", "path": "Fichier", "state": "État" },
+    "state": {
+      "ok": "OK",
+      "readOnly": "Lecture seule : ouvert par {{user}} sur {{host}}",
+      "readOnlyFile": "Lecture seule",
+      "stale": "Verrou abandonné — Actualiser pour le reprendre",
+      "missingFile": "Fichier introuvable",
+      "missingTable": "Table absente du fichier",
+      "needsMigration": "Version précédente de BaseCraft",
+      "newerMajor": "Version plus récente de BaseCraft",
+      "cannotOpen": "Fichier illisible",
+      "unsupportedKind": "Source non prise en charge",
+      "needsPassword": "Mot de passe requis",
+      "syncedFolder": "Dossier synchronisé : lecture seule",
+      "unsupportedClient": "Mode partagé non pris en charge sur ce système : lecture seule"
+    },
+    "risk": { "network": "Emplacement réseau", "synced": "Dossier synchronisé" },
+    "shared": "Fichier de données partagé",
+    "refresh": "Actualiser",
+    "relink": "Changer la source…",
+    "close": "Fermer",
+    "missingTables": "Le fichier choisi ne contient pas : {{names}}. Rien n'a été modifié."
+  },
+  "wc": {
+    "title": "Conflit d'écriture",
+    "message": "Cet enregistrement a été modifié par un autre utilisateur depuis que vous avez commencé à le modifier. Si vous l'enregistrez, vous remplacerez les modifications de l'autre utilisateur. Si vous copiez vos modifications dans le Presse-papiers, vous pourrez consulter les valeurs qu'il a saisies, puis recoller les vôtres.",
+    "save": "Enregistrer l'enregistrement",
+    "copy": "Copier dans le Presse-papiers",
+    "drop": "Abandonner les modifications",
+    "deleted": "Cet enregistrement a été supprimé par un autre utilisateur. Vos modifications ne peuvent pas être enregistrées."
   }
 }

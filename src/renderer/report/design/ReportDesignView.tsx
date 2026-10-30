@@ -1,6 +1,6 @@
 // État en mode Création : le concepteur générique (A4) avec l'hôte des états, la Feuille de propriétés, la Liste des champs,
 // la mise en page du ruban ; chargement par loadReportDoc, enregistrement par api.objects (genre 'report').
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ControlKind, DesignDoc } from '../../../shared/design/model';
 import type { DisplayContext } from '../../../shared/expr/localize';
@@ -11,6 +11,7 @@ import { uniqueReportName } from '../../../shared/report/instant';
 import { readReport, type PageSetup } from '../../../shared/report/model';
 import { api } from '../../bridge';
 import { ArrangePopup, Designer, FormatPopup, type ToolState } from '../../designer/Designer';
+import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../../designer/designer-commands';
 import { formatCommands, type FormatPopupId } from '../../designer/format-commands';
 import { designerReducer, findControl, initDesigner, sectionBottomLimit, type DesignerAction } from '../../designer/designer-model';
@@ -103,6 +104,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
 
   const live = useRef({ state, readOnly, tab, phase, totalTarget });
   live.current = { state, readOnly, tab, phase, totalTarget };
+  const liveHost = useRef(host);   // à part : `host` lit `live` (la feuille)
+  liveHost.current = host;
 
   // la définition : à l'ouverture, puis à chaque enregistrement venu d'ailleurs tant que rien n'est modifié ici
   useEffect(() => {
@@ -295,6 +298,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
+      ...clipboardCommands(() => live.current.state, guarded, () => clipContext(liveHost.current, t)),
       ...tools,
       save: async () => { await cmds.current.save(); },
       addExistingFields: () => setFieldList((v) => !v),
@@ -317,7 +321,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }, [tab.id, selected, guarded, totalKey]);   // setup ne lit que guarded
 
   // boutons enfoncés : orientation, volet Regrouper, trier et total affiché, Détail masqué
-  const states = JSON.stringify(reportDesignStates(state.doc, grouping));
+  const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));   // Coller grisé sinon
+  const states = JSON.stringify({ ...reportDesignStates(state.doc, grouping), paste: { enabled: pasteable } });
   useEffect(() => registerCommandStates(tab.id, JSON.parse(states)), [tab.id, states]);
 
   // un champ de la Liste des champs : au point de dépôt, ou sous le contrôle le plus bas du Détail

@@ -10,13 +10,15 @@ import { lookupFor, writableColumn, type RecordSourceRef, type SortSpec, type So
 import { applyLookup, Lookups } from '../datasheet/row-buffer';
 import { selectionCriteria } from '../datasheet/filter-model';
 import { PageCache } from '../datasheet/page-cache';
+import type { ConflictChoice } from '../shell/WriteConflictDialog';
 import type { OpenArgs } from '../state/app-state';
 
 export interface FormDataApi {
   describe(ref: RecordSourceRef): Promise<SourceInfo>;
   page(ref: RecordSourceRef, req: SourcePageRequest): Promise<SourcePage>;
   insert(table: string, values: Record<string, CellInput>): Promise<RowWriteResult>;
-  update(table: string, rowid: number, changes: Record<string, CellInput>): Promise<RowWriteResult>;
+  /** expected (C3 R8): the record as read when editing began, by field name; changed since: a conflict, nothing written. */
+  update(table: string, rowid: number, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
   delete(table: string, rowids: number[]): Promise<DeleteResult>;
   save(ref: QueryRef, req: SourceSaveRequest): Promise<SourceSaveResult>;   // query and sql sources; tables keep insert/update
   autoLookup(ref: QueryRef, values: Record<string, CellInput>): Promise<Record<string, SqlValue>>;
@@ -40,6 +42,12 @@ export interface FormRecordOptions {
   dataMode?: OpenArgs['dataMode'];                               // R9 : 'add' ouvre sur le nouvel enregistrement, 'readOnly' en lecture seule
   now?: () => Date;
   events?: RecordEvents;
+  /** C3 R9: the record changed since editing began (Write Conflict). `save`: written again over the current values; `copy`
+   *  (the view put the edited record on the clipboard) and `drop`: the changes go, the record shows `current`. Without it: drop.
+   *  A rejection leaves the record dirty, as a failed write. */
+  onConflict?(c: { current: SqlValue[] }): Promise<ConflictChoice>;
+  /** C3 R9: the record was deleted by another user: the view says so, then the changes go and the records are read again. */
+  onDeleted?(): Promise<void>;
 }
 export type RecordError = { field: string; code: FieldErrorCode | 'controlValidation' | 'noMaster'; message?: string; table?: string };
 export interface RecordSnapshot {
@@ -89,6 +97,7 @@ export class FormRecords {
   private isNew = false;
   private rowid = NaN;
   private values: SqlValue[] = [];
+  private original: SqlValue[] | null = null;   // C3 R8: `values` at the record's first edit (then the saved values), what an update expects
   private looked = Object.create(null) as Record<string, SqlValue>;   // AutoLookup's values (R4): shown over `values`, never written
   private shown: SqlValue[] | null = null;  // `values` with `looked` over them (null: none), one array until either changes
   private readonly lookups = new Lookups();   // AutoLookups by link: a save waits for them, a failure stops it
@@ -174,6 +183,7 @@ export class FormRecords {
     if (!f || !this.info || !this.editable || f.type === 'autoNumber' || !writableField(f, this.info)) return false;
     const before = this.opts.events?.beforeInsert;
     const first = this.isNew && !this.dirty && !opts?.silent && before;
+    if (!Object.keys(this.pending).length) this.original = this.values;
     this.pending[f.name] = input;
     this.refusedByEvent = false;
     this.emit();
@@ -609,30 +619,52 @@ export class FormRecords {
     this.writeError = undefined;
     const look = this.lookups.asked;
     let r: RowWriteResult | SourceSaveResult;
-    try {
-      r = ref.kind !== 'table' ? await this.api.save(ref, { rowid: isNew ? null : rowid, values })
-        : isNew ? await this.api.insert(ref.name, values) : await this.api.update(ref.name, rowid, values);
-    } catch (e) {
-      if (rec === this.record) this.rejected(e); // not on a record that is no longer current
-      return false;
+    for (;;) {   // again after Write Conflict › Save Record (R9)
+      const orig = isNew ? null : this.original;
+      const expected = orig ? Object.fromEntries(info.fields.map((f, i) => [f.name, orig[i] ?? null])) : undefined;
+      try {
+        r = ref.kind !== 'table' ? await this.api.save(ref, { rowid: isNew ? null : rowid, values, ...(expected && { expected }) })
+          : isNew ? await this.api.insert(ref.name, values) : await this.api.update(ref.name, rowid, values, expected);
+      } catch (e) {
+        if (rec === this.record) this.rejected(e); // not on a record that is no longer current
+        return false;
+      }
+      if (rec !== this.record) { if (r.ok) this.done(isNew); this.invalidate(); return r.ok; }
+      if (r.ok || 'errors' in r) break;
+      if (r.conflict === 'deleted') {   // the message, then the changes go and the form moves on (its records read again)
+        await this.opts.onDeleted?.().catch(() => undefined);
+        if (rec !== this.record) return false;
+        this.pending = Object.create(null) as Record<string, CellInput>;
+        this.unlook();
+        this.rebuild();
+        await this.place(this.index, true);
+        return false;
+      }
+      const current = this.readBack(r.current);
+      let choice: ConflictChoice;
+      try { choice = (await this.opts.onConflict?.({ current })) ?? 'drop'; } catch (e) { if (rec === this.record) this.rejected(e); return false; }
+      if (rec !== this.record) return false;
+      if (choice === 'save') { this.original = current; continue; }   // last writer wins; a new conflict asks again
+      this.pending = Object.create(null) as Record<string, CellInput>;   // copy, drop: the record as the other user left it
+      this.unlook();
+      this.errors = [];
+      this.values = current;
+      this.cache?.set(this.index, { rowid, values: current });
+      this.emit();
+      return true;
     }
-    if (rec !== this.record) { if (r.ok) this.done(isNew); this.invalidate(); return r.ok; }
     if (!r.ok) {
       this.errors = r.errors; // by the source's fields: a table's own, a query's output columns (sources.save)
       this.emit();
       return false;
     }
-    // A query's values read back (its tables' columns, by output column) over the current ones: a computed column keeps its own.
-    const got = r.values, now = this.shown ?? this.values;
-    const back = Array.isArray(got) ? got : info.fields.map((f, i) => {
-      const k = Object.keys(got).find((x) => sameName(x, f.name));
-      return k === undefined ? now[i] ?? null : got[k];
-    });
+    const back = this.readBack(r.values);
     // Changes typed during the save stay pending, against the record that now exists.
     for (const k of Object.keys(sent)) if (Object.is(this.pending[k], sent[k])) delete this.pending[k];
     this.errors = [];
     this.rowid = r.rowid;
     this.values = back;
+    this.original = back;   // what changes still pending now expect (never a conflict with this form's own write)
     if (look === this.lookups.asked) this.looked = Object.create(null) as Record<string, SqlValue>; // else a lookup since: still shown
     this.reshow();
     if (isNew) { this.total++; this.isNew = false; } // at the end of the list, as in Access, until the next sort
@@ -642,6 +674,16 @@ export class FormRecords {
     this.emit();
     this.saved = { isNew, rec };
     return true;
+  }
+
+  /** Values read back (a query's: its tables' columns, by output column) over the current ones: a computed column keeps its own. */
+  private readBack(got: SqlValue[] | Record<string, SqlValue>): SqlValue[] {
+    if (Array.isArray(got)) return got;
+    const now = this.shown ?? this.values;
+    return (this.info?.fields ?? []).map((f, i) => {
+      const k = Object.keys(got).find((x) => sameName(x, f.name));
+      return k === undefined ? now[i] ?? null : got[k]!;
+    });
   }
 
   /** A Before event awaited: a failure counts as a refusal (R7). */

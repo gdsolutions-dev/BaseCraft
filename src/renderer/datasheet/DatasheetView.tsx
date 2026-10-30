@@ -22,16 +22,16 @@ import { bcErrorCode, useErrorDialog, useModal } from '../shell/Modal';
 import { exportSource } from '../exchange/export';
 import { registerCommands, registerCommandStates, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { RibbonPopup } from '../designer/RibbonPopup';
-import { FIELD_TYPES } from '../table-design/FieldPropertiesPanel';
-import { addMoreField, editValidation, moreFieldsFor, setDataType, setFormat, tableFieldsCommands, type TableFieldsEnv, type ValidationItem } from '../table-fields/table-fields-commands';
-import { defaultValues, editText, fromEdit, inputCell, lookupList, pasteAllowed, toCell, type LookupList } from './datasheet-cells';
+import { design } from '../design/entry';
+import { currentUi } from '../shell/startup';
+import type { TableFieldsEnv, ValidationItem } from '../table-fields/table-fields-commands';
+import { defaultValues, editText, fromEdit, inputCell, lookupList, pasteAllowed, texts, toCell, type LookupList } from './datasheet-cells';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from './filter-model';
 import { installEditorCommitFix } from './glide-keyboard';
 import {
-  cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, ROW_HEIGHT, rowOf, RowPencil, scrollGridToRow,
+  cellEditorOpen, cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, ROW_HEIGHT, rowOf, RowPencil, scrollGridToRow,
   useColumnWidths, useNonAsciiTyping, usePalette, useRowPencil,
 } from './grid-shared';
-import { EditListDialog } from './EditListDialog';
 import { findCommands, goToRow, type GoTo } from './find-commands';
 import { FilterMenu, type FilterMenuState } from './FilterMenu';
 import { hasLookupEditor, lookupEditor } from './LookupEditor';
@@ -39,14 +39,17 @@ import { maskedEditor } from './MaskedEditor';
 import { NavigationBar } from './NavigationBar';
 import { MAX_LOADED_ROWS, PageCache } from './page-cache';
 import { confirmDelete, fieldErrorParams, showRelatedRefusal } from './record-messages';
-import { RowBuffer } from './row-buffer';
+import { RowBuffer, type CommitOutcome } from './row-buffer';
+import { askWriteConflict, recordText, showRecordDeleted } from '../shell/WriteConflictDialog';
+import { onDataRefresh } from '../shell/data-refresh';
 import './datasheet.css';
 
 installEditorCommitFix();
 
 /** A query's datasheet: its columns (`editable`: writableColumn, B4 R2). */
 type SourceShape = { info: SourceInfo; editable: boolean[] };
-type Shape = { design: TableDesign; locale: string; cache: PageCache; defaults: SqlValue[] /* shown on the new record's row */; src?: SourceShape };
+type Shape = { design: TableDesign; locale: string; cache: PageCache; defaults: SqlValue[] /* shown on the new record's row */; src?: SourceShape;
+  /** C1 R7: a linked table its file does not let us write (WITHOUT ROWID, or held by another session). */ fixed?: true };
 type Sort = { field: string; dir: 'asc' | 'desc' } | null;
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
 /** Lookup fields' lists, by field name (a field whose list is empty or gone is shown and edited as a plain field). */
@@ -58,8 +61,8 @@ const WIDTH: Record<FieldType, number> = { autoNumber: 80, shortText: 170, longT
 
 
 /** The lists of the design's Lookup fields, read once per view (and again on a reload or when the tab comes back). `editList`:
- *  « Edit List Items » of a value list that allows it. */
-async function loadLookups(read: (fd: FieldDef) => Promise<LookupData> | null, design: TableDesign, locale: string, editList: { open(field: string): void; disabled(): boolean }): Promise<Lookups> {
+ *  « Edit List Items » of a value list that allows it (null: none, BaseCraft Runtime). */
+async function loadLookups(read: (fd: FieldDef) => Promise<LookupData> | null, design: TableDesign, locale: string, editList: { open(field: string): void; disabled(): boolean } | null): Promise<Lookups> {
   const fields = design.fields.filter((fd) => lookupOf(fd));
   // A list that cannot be read is no list (raw values shown): one bad source never blocks the datasheet.
   const got = await Promise.all(fields.map(async (fd) => [fd, await (read(fd) ?? Promise.resolve(null)).catch(() => null)] as const));
@@ -72,7 +75,7 @@ async function loadLookups(read: (fd: FieldDef) => Promise<LookupData> | null, d
       list,
       editor: lookupEditor(list, {
         label: fd.props.caption || fd.name, edit: (v) => editText(fd, v, locale), listRows: l.listRows, listWidth: l.listWidth,
-        ...(l.kind === 'values' && l.allowValueListEdits ? { editList: { open: () => editList.open(fd.name), disabled: editList.disabled } } : {}),
+        ...(l.kind === 'values' && l.allowValueListEdits && editList ? { editList: { open: () => editList.open(fd.name), disabled: editList.disabled } } : {}),
       }),
     });
   }
@@ -105,7 +108,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   // Table Fields commands waiting for the structure to be read again, and the column to select then.
   const reloading = useRef<{ select: string | null; waiters: (() => void)[] }>({ select: null, waiters: [] });
   const [listEdit, setListEdit] = useState<string | null>(null); // the field whose « Edit List Items » box is open
-  const editList = { open: setListEdit, disabled: () => live.current.ro };
+  // no Edit List Items without the designers (B5 R7) nor with table design off in Datasheet view (O1 R9)
+  const editList = design && currentUi().datasheetDesign ? { open: setListEdit, disabled: () => live.current.ro } : null;
   const [sort, setSort] = useState<Sort>(null);
   const [filter, setFilter] = useState<FilterState>(NO_FILTER);
   const [menu, setMenu] = useState<FilterMenuState | null>(null);
@@ -129,10 +133,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const alive = useRef(true); // a page that fails after the tab closed shows nothing
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { if (!readOnly) setRefused(false); }, [readOnly]); // writable again (lock taken over)
-  const notUpdatable = !!shape?.src && !shape.src.info.updatable; // a multi-table (or grouped…) query
+  const notUpdatable = (!!shape?.src && !shape.src.info.updatable) || !!shape?.fixed; // a multi-table (or grouped…) query, a read-only link
   const ro = readOnly || refused || notUpdatable;
-  const live = useRef({ tab, shape, sort, filter, selection, ro, lookups, source, params });
-  live.current = { tab, shape, sort, filter, selection, ro, lookups, source, params };
+  const live = useRef({ tab, active, shape, sort, filter, selection, ro, lookups, source, params });
+  live.current = { tab, active, shape, sort, filter, selection, ro, lookups, source, params };
   /** The order and filter of every page request (set in `live` before React renders: read right after an await). */
   const query = () => {
     const { sort: s, filter: f } = live.current;
@@ -179,23 +183,28 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
   /** A query's row, saved by its output columns in one transaction (sources.save, B4 R3); the columns read back replace the
    *  row's, the others (computed) stay until its page is read again. */
-  const writeSource = async (src: SourceShape, ref: QueryRef, rowid: number | null, changes: Record<string, CellInput>): Promise<RowWriteResult> => {
-    const r = await api.sources.save(ref, { rowid, values: changes });
-    if (!r.ok) return r; // errors already name output columns
+  const writeSource = async (src: SourceShape, ref: QueryRef, rowid: number | null, changes: Record<string, CellInput>,
+    expected: Record<string, SqlValue> | undefined): Promise<RowWriteResult> => {
+    const r = await api.sources.save(ref, { rowid, values: changes, ...(expected && { expected }) });
+    if (!r.ok && !('current' in r)) return r; // errors already name output columns; a record deleted (C3 R8)
     const s = live.current.shape;
     const at = buffer.pending?.rowIndex;
     const before = rowid === null ? s?.defaults : at === undefined ? undefined : s?.cache.get(at)?.values;
-    return { ok: true, rowid: r.rowid, values: src.info.fields.map((f, k) => (Object.hasOwn(r.values, f.name) ? r.values[f.name]! : before?.[k] ?? null)) };
+    const got = r.ok ? r.values : r.current;
+    const values = src.info.fields.map((f, k) => (Object.hasOwn(got, f.name) ? got[f.name]! : before?.[k] ?? null));
+    return r.ok ? { ok: true, rowid: r.rowid, values } : { ok: false, conflict: 'changed', current: values };
   };
 
   /** Also in `live` at once: a save that ends before React renders reads the selection the user just moved to. */
   const setSelection = (sel: GridSelection) => { live.current.selection = sel; setSelectionState(sel); };
-  const [buffer] = useState(() => new RowBuffer((rowid, changes) => {
-    const src = live.current.shape?.src;
+  const [buffer] = useState(() => new RowBuffer((rowid, changes, original) => {
+    const s = live.current.shape;
+    // C3 R8: the row as it was when its editing began, by the view's fields (a table's, a query's output columns)
+    const expected = original && s ? Object.fromEntries(s.design.fields.map((f, k) => [f.name, original[k] ?? null])) : undefined;
     const ref = live.current.source;
-    if (src && ref) return writeSource(src, ref, rowid, changes);
+    if (s?.src && ref) return writeSource(s.src, ref, rowid, changes, expected);
     const name = live.current.tab.name; // renamed meanwhile: the row goes to the table under its new name
-    return rowid === null ? api.rows.insert(name, changes) : api.rows.update(name, rowid, changes);
+    return rowid === null ? api.rows.insert(name, changes) : api.rows.update(name, rowid, changes, expected);
   }));
   const setRows = (patch: Partial<typeof rows.current>) => { Object.assign(rows.current, patch); bump(); };
 
@@ -245,6 +254,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
           const out = await buffer.commit();
           // The box is part of the attempt: a save asked while it is open shares this one (never a second box).
           if (out.status === 'failed') { await showFailure(p.rowIndex, out.errors); return false; }
+          if (out.status === 'conflict') { await resolveConflict(p.rowIndex, p.rowid!, out); continue; }
           if (out.status === 'saved') {
             const cache = live.current.shape?.cache;
             cache?.set(p.rowIndex, { rowid: out.rowid, values: out.values });
@@ -287,6 +297,33 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return promise;
   };
 
+  /** C3 R9: the row changed since its editing began, or was deleted. Save Record: the next save expects the row as it is now
+   *  (a new conflict asks again); Copy to Clipboard: the row as shown goes there, then as Drop Changes: the changes go and the
+   *  row shows the other user's values. Deleted: said, the changes go, the rows are read again. A failed copy drops nothing. */
+  const resolveConflict = async (rowIndex: number, rowid: number, out: Extract<CommitOutcome, { status: 'conflict' }>) => {
+    if (out.conflict === 'deleted') {
+      await showRecordDeleted(modal);
+      buffer.discard();
+      setError(null);
+      reloadRows();
+      return;
+    }
+    const choice = await askWriteConflict(modal);
+    if (choice === 'save') { buffer.setOriginal(out.current); return; }
+    const s = live.current.shape;
+    if (choice === 'copy' && s) {
+      const text = (col: number) => {
+        const cell = cellAt.current([col, rowIndex]);
+        return cell.kind === GridCellKind.Text ? cell.displayData
+          : cell.kind === GridCellKind.Boolean ? texts(s.design.fields[col]!, cell.data ? -1 : 0, { locale: s.locale })[0] : '';
+      };
+      await api.app.writeClipboard(recordText(s.design.fields.map((f) => f.name), s.design.fields.map((_f, col) => text(col))));
+    }
+    buffer.discard();
+    s?.cache.set(rowIndex, { rowid, values: out.current });
+    setError(null);
+  };
+
   const discardRow = () => {
     if (busyRef.current) return;
     buffer.discard();
@@ -308,7 +345,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       try {
         const name = tab.name;
         let src: SourceShape | undefined;
-        const [table, settings] = await Promise.all([source ? null : api.tables.design(name), api.app.getSettings()]);
+        const [table, settings, tableInfo] = await Promise.all([source ? null : api.tables.design(name), api.app.getSettings(),
+          source ? null : api.sources.describe({ kind: 'table', name }).catch(() => null)]); // only a link says it is not updatable
         if (source) {
           const info = await api.sources.describe(source, live.current.params); // a crosstab's headings need them (B4 R11)
           src = { info, editable: info.fields.map((f) => writableColumn(info, f.name)) };
@@ -345,7 +383,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         setUnsupported(false);
         rows.current = { count, adding: false };
         pendingHeadings.current = null;
-        setShape({ design, locale: settings.region, cache, defaults, ...(src ? { src } : {}) });
+        setShape({ design, locale: settings.region, cache, defaults, ...(src ? { src } : {}), ...(tableInfo && !tableInfo.updatable ? { fixed: true as const } : {}) });
         setLookups(lists);
       } catch (e) {
         if (current) dataError(e);
@@ -368,7 +406,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       setRows({ count });
     }, dataError);
   };
-  useEffect(() => { if (tab.dataToken) reloadRows(); }, [tab.dataToken]);
+  // A sheet that never loaded (its link's file missing, C1) loads in full: relinked or refreshed meanwhile.
+  useEffect(() => { if (tab.dataToken) { if (live.current.shape) reloadRows(); else bumpRestructure(); } }, [tab.dataToken]);
 
   // Back on this tab: the lists and the rows are read again (a delete cascading from a parent table's datasheet, its key
   // changed, a list's source table edited meanwhile).
@@ -383,6 +422,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   }, [active]);
 
   const dirty = buffer.pending !== null;
+  const missedRefresh = useRef(false); // C3 R10: a refresh signal came while a row was being edited
+  const refreshIfMissed = (editorOpen: boolean) => {
+    if (!missedRefresh.current || buffer.pending !== null || editorOpen || !live.current.shape) return;
+    missedRefresh.current = false;
+    reloadRows();
+  };
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty }); }, [dirty, tab.id, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);
 
@@ -451,7 +496,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // a query's computed column, a join field, a row without its key record (R5)
     if (rowid === undefined || Number.isNaN(rowid) || (s.src && !s.src.editable[col])) return;
     const field = s.design.fields[col];
-    buffer.edit(row, rowid, field.name, fromEdit(field, cell));
+    buffer.edit(row, rowid, field.name, fromEdit(field, cell), rowid === null ? null : s.cache.get(row)?.values ?? null);
     bump();
     if (s.src) lookUp(row, field.name);
   };
@@ -713,11 +758,11 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     }),
     displayContext: () => (live.current.shape ? { lang: i18n.language.startsWith('fr') ? 'fr' : 'en', region: localeInfo(live.current.shape.locale) } : null),
   }).current;
-  const fieldHandlers = useMemo(() => tableFieldsCommands(fieldsEnv), [fieldsEnv]);
+  const fieldHandlers = useMemo(() => (currentUi().datasheetDesign ? design?.tableFieldsCommands(fieldsEnv) : undefined), [fieldsEnv]);   // O1 R9: read at mount
   commitRowRef.current = commitRow;
   selectedFieldRef.current = selectedField;
-  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, filterField, filterSelection, toggleFilter, menuAt, exportData });
-  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, filterField, filterSelection, toggleFilter, menuAt, exportData };
+  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterField, filterSelection, toggleFilter, menuAt, exportData });
+  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterField, filterSelection, toggleFilter, menuAt, exportData };
   const hasFilter = filter.items.length > 0;
   useEffect(() => {
     // Read-only (also a refused write before the session says so): the ribbon offers no record command.
@@ -731,7 +776,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       filterAdvanced: () => setMenu({ kind: 'advanced', ...cmds.current.menuAt('filterAdvanced') }),
       ...(hasFilter ? { filterToggle: () => cmds.current.toggleFilter() } : {}),
       save: () => cmds.current.save(),
-      ...(tab.kind === 'table' && !source ? {
+      ...(tab.kind === 'table' && !source && fieldHandlers ? {
         ...fieldHandlers, moreFields: () => setPopup('moreFields'), dataType: () => setPopup('dataType'), format: () => setPopup('format'), validation: () => setPopup('validation'),
       } : {}),
       ...(tab.kind === 'table' || tab.kind === 'query' ? findCommands({ openSearch: () => setSearching(true), openMenu: (m) => setPopup(m) }) : {}),
@@ -757,6 +802,16 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     });
   }, [tab.id, tab.kind, source, picked]);
   useEffect(() => registerModeGuard(tab.id, () => cmds.current.leave()), [tab.id]);
+  // C3 R10: another workstation wrote: the rows are read again, unless a row is being edited (pending, or a cell editor open
+  // in this sheet): the pending row is placed by its index, which another workstation's insert, delete or sorted key would
+  // move onto another record. A refresh skipped so is run once the editing ends (saved, dropped, the editor closed).
+  useEffect(() => onDataRefresh(() => {
+    const l = live.current;
+    if (!l.shape) return;
+    missedRefresh.current = true;
+    cmds.current.refreshIfMissed(l.active && cellEditorOpen());
+  }), []);
+  useEffect(() => { if (!dirty) cmds.current.refreshIfMissed(live.current.active && cellEditorOpen()); }, [dirty]);
 
   const getCellContent = useCallback(([col, row]: Item): GridCell => {
     if (!shape) return LOADING;
@@ -847,7 +902,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         onPointerDownCapture={() => { appendClick.current = false; }}>
         <DataEditor ref={editor} theme={palette.theme} columns={columns} rows={count + (adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
-          gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited}
+          gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited} onFinishedEditing={() => refreshIfMissed(false)}
           onRowAppended={ro ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
           onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false }} showSearch={searching} onSearchClose={() => setSearching(false)}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={ROW_HEIGHT} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
@@ -865,44 +920,44 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
               ))}
           </RibbonPopup>
         )}
-        {popup === 'moreFields' && (
+        {popup === 'moreFields' && design && (
           <RibbonPopup anchor="moreFields" testId="more-fields-menu" labelKey="ribbon.cmd.moreFields" onClose={() => setPopup(null)}>
-            {moreFieldsFor(shape.design).map((m) => (
+            {design.moreFieldsFor(shape.design).map((m) => (
               <button key={`${m.type}-${m.numberSize ?? ''}`} type="button" role="menuitem" data-testid={`more-fields-${m.numberSize ?? m.type}`}
-                onClick={() => { setPopup(null); void addMoreField(fieldsEnv, m); }}>
+                onClick={() => { setPopup(null); void design?.addMoreField(fieldsEnv, m); }}>
                 {m.numberSize ? `${t('fieldType.number')} — ${t(`fieldProp.numberSizes.${m.numberSize}`)}` : t(`fieldType.${m.type}`)}
               </button>
             ))}
           </RibbonPopup>
         )}
-        {popup === 'dataType' && picked && (
+        {popup === 'dataType' && picked && design && (
           <RibbonPopup anchor="dataType" testId="data-type-menu" labelKey="ribbon.cmd.dataType" onClose={() => setPopup(null)}>
-            {FIELD_TYPES.filter((x) => x !== 'autoNumber' || x === picked.type || moreFieldsFor(shape.design).some((m) => m.type === 'autoNumber')).map((x) => (
+            {design.FIELD_TYPES.filter((x) => x !== 'autoNumber' || x === picked.type || design?.moreFieldsFor(shape.design).some((m) => m.type === 'autoNumber')).map((x) => (
               <button key={x} type="button" role="menuitemradio" aria-checked={x === picked.type} data-testid={`data-type-${x}`}
-                onClick={() => { setPopup(null); void setDataType(fieldsEnv, x); }}>{t(`fieldType.${x}`)}</button>
+                onClick={() => { setPopup(null); void design?.setDataType(fieldsEnv, x); }}>{t(`fieldType.${x}`)}</button>
             ))}
           </RibbonPopup>
         )}
-        {popup === 'format' && picked && (
+        {popup === 'format' && picked && design && (
           <RibbonPopup anchor="format" testId="format-menu" labelKey="ribbon.cmd.format" onClose={() => setPopup(null)}>
-            <button type="button" role="menuitem" data-testid="format-none" onClick={() => { setPopup(null); void setFormat(fieldsEnv, null); }}>{t('tableFields.formatNone')}</button>
+            <button type="button" role="menuitem" data-testid="format-none" onClick={() => { setPopup(null); void design?.setFormat(fieldsEnv, null); }}>{t('tableFields.formatNone')}</button>
             {FORMATS_BY_TYPE[picked.type].map((x) => (
-              <button key={x} type="button" role="menuitem" data-testid={`format-${x}`} onClick={() => { setPopup(null); void setFormat(fieldsEnv, x); }}>{t(`format.${x}`)}</button>
+              <button key={x} type="button" role="menuitem" data-testid={`format-${x}`} onClick={() => { setPopup(null); void design?.setFormat(fieldsEnv, x); }}>{t(`format.${x}`)}</button>
             ))}
           </RibbonPopup>
         )}
-        {popup === 'validation' && (
+        {popup === 'validation' && design && (
           <RibbonPopup anchor="validation" testId="validation-menu" labelKey="ribbon.cmd.validation" onClose={() => setPopup(null)}>
             {(['fieldRule', 'fieldText', 'recordRule', 'recordText'] as ValidationItem[]).map((x) => (
               <button key={x} type="button" role="menuitem" data-testid={`validation-${x}`} disabled={x.startsWith('field') && !picked}
-                onClick={() => { setPopup(null); void editValidation(fieldsEnv, x); }}>{t(`tableFields.validation.${x}`)}</button>
+                onClick={() => { setPopup(null); void design?.editValidation(fieldsEnv, x); }}>{t(`tableFields.validation.${x}`)}</button>
             ))}
           </RibbonPopup>
         )}
         {pencil && <RowPencil at={pencil} background={palette.pending} title={t('datasheet.pending')} />}
-        {listEdit !== null && shape && (
+        {listEdit !== null && shape && design && (
           // Saved: the structure changed, so the datasheet reads design, rows and lists again (tableSaved).
-          <EditListDialog {...listTarget(listEdit)} locale={shape.locale} readOnly={ro}
+          <design.EditListDialog {...listTarget(listEdit)} locale={shape.locale} readOnly={ro}
             onClose={(saved) => {
               setListEdit(null);
               if (!saved) return;

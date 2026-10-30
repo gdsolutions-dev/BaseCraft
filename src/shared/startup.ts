@@ -13,10 +13,32 @@ export interface StartupOptions {
   showNavPane: boolean;
   ribbon: 'full' | 'simplified';
   runMode: boolean;
+  /** Display the status bar. */
+  statusBar: boolean;
+  /** Display the document tabs. */
+  documentTabs: boolean;
+  /** Use the special keys (F11 shows or hides the Navigation Pane). */
+  specialKeys: boolean;
+  /** Compact the base when it closes (read by the main process at close). */
+  compactOnClose: boolean;
+  /** Table design changes in Datasheet view. */
+  datasheetDesign: boolean;
+  /** Off: run mode without the pane rule (R4). */
+  fullMenus: boolean;
+  /** Off: the Navigation Pane opens no shortcut menu. */
+  shortcutMenus: boolean;
+  /** The application icon is the icon of forms and reports (needs appIcon). */
+  iconForForms: boolean;
+  /** A front-end application: its local tables are reference only (C3 R1). */
+  frontEnd: boolean;
+  /** A shared data file: opened in shared mode by several workstations (C3 R1). */
+  dataFile: boolean;
 }
 
 export const DEFAULT_STARTUP: StartupOptions = Object.freeze({
   appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
+  statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false,
+  frontEnd: false, dataFile: false,
 });
 
 /** Access's limit for a text property, in code points. */
@@ -59,12 +81,24 @@ export function readStartup(raw: unknown): StartupOptions {
     showNavPane: typeof o.showNavPane === 'boolean' ? o.showNavPane : DEFAULT_STARTUP.showNavPane,
     ribbon: o.ribbon === 'simplified' ? 'simplified' : DEFAULT_STARTUP.ribbon,
     runMode: typeof o.runMode === 'boolean' ? o.runMode : DEFAULT_STARTUP.runMode,
+    statusBar: typeof o.statusBar === 'boolean' ? o.statusBar : DEFAULT_STARTUP.statusBar,
+    documentTabs: typeof o.documentTabs === 'boolean' ? o.documentTabs : DEFAULT_STARTUP.documentTabs,
+    specialKeys: typeof o.specialKeys === 'boolean' ? o.specialKeys : DEFAULT_STARTUP.specialKeys,
+    compactOnClose: typeof o.compactOnClose === 'boolean' ? o.compactOnClose : DEFAULT_STARTUP.compactOnClose,
+    datasheetDesign: typeof o.datasheetDesign === 'boolean' ? o.datasheetDesign : DEFAULT_STARTUP.datasheetDesign,
+    fullMenus: typeof o.fullMenus === 'boolean' ? o.fullMenus : DEFAULT_STARTUP.fullMenus,
+    shortcutMenus: typeof o.shortcutMenus === 'boolean' ? o.shortcutMenus : DEFAULT_STARTUP.shortcutMenus,
+    iconForForms: typeof o.iconForForms === 'boolean' ? o.iconForForms : DEFAULT_STARTUP.iconForForms,
+    frontEnd: typeof o.frontEnd === 'boolean' ? o.frontEnd : DEFAULT_STARTUP.frontEnd,
+    dataFile: typeof o.dataFile === 'boolean' ? o.dataFile : DEFAULT_STARTUP.dataFile,
   };
 }
 
-/** Whether the options hide or open something Shift can bypass (the title and the icon hide nothing: they always apply). */
+/** Whether the options hide or open something Shift can bypass (the title, the icon, the icon for forms and compact on close
+ *  hide nothing: they always apply, R2). */
 export function startupHides(o: StartupOptions): boolean {
-  return o.startupForm !== '' || !o.showNavPane || o.ribbon === 'simplified' || o.runMode;
+  return o.startupForm !== '' || !o.showNavPane || o.ribbon === 'simplified' || o.runMode
+    || !o.statusBar || !o.documentTabs || !o.specialKeys || !o.datasheetDesign || !o.fullMenus || !o.shortcutMenus;
 }
 
 /** Something Shift can bypass: options that hide or open something, or an AutoExec macro. */

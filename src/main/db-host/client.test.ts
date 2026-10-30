@@ -18,7 +18,7 @@ function fakeChild() {
   const answered = new Set<number>();
   return child;
 }
-const opened = { path: 'x.basecraft', create: false, appVersion: '0', region: 'fr-FR', sessionId: 's' };
+const opened = { path: 'x.basecraft', create: false, appVersion: '0', region: 'fr-FR', sessionId: 's', shared: { openMode: 'shared' as const, updateRetries: 2, updateRetryMs: 250 } };
 const tick = () => new Promise((r) => setImmediate(r));
 
 it('Stop targets the query call: a row write executing before it finishes first, and is never cancelled', async () => {

@@ -225,14 +225,23 @@ button:disabled { opacity: .45; }
 .bs-about-links .btn { display: inline-flex; align-items: center; gap: 6px; }
 .bs-options { display: flex; flex-direction: column; gap: var(--bc-space-4); }
 .bs-options label { display: flex; flex-direction: column; gap: 6px; max-width: 320px; font-weight: 500; }
-.bs-dbopts { margin-top: var(--bc-space-5); }
-.bs-dbopts h2 { margin: 0 0 var(--bc-space-3); font-size: 14px; font-weight: 650; }
-.bs-dbopts input[type="text"] { height: 32px; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); font-weight: 400; outline: 0; }
-.bs-dbopts input[type="text"]:focus-visible { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.bs-dbopts .bs-field { display: flex; flex-direction: column; gap: 6px; max-width: 420px; font-weight: 500; }
-.bs-dbopts .bs-field > .muted { font-weight: 400; font-size: 12px; }
-.bs-dbopts .bs-options label.bs-check { flex-direction: row; align-items: center; gap: var(--bc-space-2); max-width: none; }
-.bs-dbopts input[type="checkbox"] { margin: 0; accent-color: var(--bc-accent); }
+/* Options (O1): the categories on the left, the chosen one on the right; one column when the window is narrow */
+.bs-optpage { max-width: 960px; }
+.bs-optbody { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--bc-space-5); }
+.bs-optcats { flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; }
+.bs-optpanel { flex: 1 1 300px; min-width: 0; }
+.bs-opthead { margin: 0 0 var(--bc-space-4); font-size: 15px; }
+.bs-optpanel h2 { margin: var(--bc-space-5) 0 var(--bc-space-3); padding-bottom: 6px; border-bottom: 1px solid var(--bc-border); font-size: 14px; font-weight: 650; }
+.bs-optpanel input:is([type="text"], [type="number"]) { height: 32px; min-width: 0; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); font-weight: 400; outline: 0; }
+.bs-optpanel input:is([type="text"], [type="number"]):focus-visible { border-color: var(--bc-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.bs-optpanel .bs-field { display: flex; flex-direction: column; gap: 6px; max-width: 520px; font-weight: 500; }
+.bs-optpanel .bs-field > .muted { font-weight: 400; font-size: 12px; }
+.bs-optpanel label.bs-check { flex-direction: row; align-items: center; gap: var(--bc-space-2); max-width: none; font-weight: 400; }
+.bs-optpanel label.bs-inline { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--bc-space-2); max-width: none; font-weight: 400; }
+.bs-optpanel label.bs-inline input { width: 80px; }
+.bs-optpanel input[type="checkbox"] { margin: 0; accent-color: var(--bc-accent); }
+.bs-optpanel .bs-icon-row input[type="text"] { flex: 1; }
+.bs-indent { display: flex; flex-direction: column; gap: var(--bc-space-2); padding-left: var(--bc-space-5); }
 .bs-icon-row { display: flex; align-items: center; gap: var(--bc-space-2); }
 .bs-icon-preview { width: 32px; height: 32px; object-fit: contain; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); }
 select {
@@ -244,7 +253,7 @@ select:focus-visible { outline: none; border-color: var(--bc-accent); box-shadow
 
 /* Boîtes de dialogue */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--bc-space-4); background: color-mix(in srgb, #000 32%, transparent); }
-.modal { width: min(440px, 100%); padding: var(--bc-space-4) 20px; box-shadow: var(--shadow-pop); }
+.modal { width: min(440px, 100%); max-height: 100%; overflow-y: auto; padding: var(--bc-space-4) 20px; box-shadow: var(--shadow-pop); }
 .modal-title { margin: 0 0 var(--bc-space-2); font-size: 15px; font-weight: 650; }
 .modal-message { margin: 0 0 var(--bc-space-4); white-space: pre-wrap; overflow-wrap: anywhere; }
 .modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--bc-space-4); }
@@ -256,6 +265,12 @@ select:focus-visible { outline: none; border-color: var(--bc-accent); box-shadow
 .modal-field:has(> input:is([type="radio"], [type="checkbox"])), .modal-field label:has(> input:is([type="radio"], [type="checkbox"])) { flex-direction: row; display: inline-flex; align-items: center; gap: 6px; }
 fieldset.modal-field { min-inline-size: 0; margin-inline: 0; border: 0; padding: 0; }
 fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
+.modal:has(.ltm-dialog) { width: min(760px, 100%); }
+/* the table list scrolls, the buttons stay in view (an Access file can hold hundreds of tables) */
+.link-list { max-height: min(50vh, 420px); overflow-y: auto; }
+.ltm-table { border-collapse: collapse; margin-bottom: var(--bc-space-4); }
+.ltm-table :is(th, td) { padding: 4px 8px; text-align: start; vertical-align: top; }
+.ltm-path { word-break: break-all; }
 /* B1 macros: MessageBox (its type's icon beside the text) and the Action Failed dialog */
 .macro-msgbox-body { display: flex; gap: var(--bc-space-3); align-items: flex-start; }
 .macro-msgbox-critical { color: var(--bc-danger); }

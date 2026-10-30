@@ -16,6 +16,7 @@
   --bc-space-2: 8px;
   --bc-space-3: 12px;
   --bc-space-4: 16px;
+  --bc-space-5: 24px;
   --bc-font: "Inter Variable", "Inter", system-ui, sans-serif;
 }
 [data-theme="dark"] {

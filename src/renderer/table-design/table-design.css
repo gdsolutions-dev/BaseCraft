@@ -60,6 +60,7 @@
 /* The table's Property Sheet (F4), on the right of the grid and the field properties. */
 .tdesign { flex: 1; min-height: 0; display: flex; }
 .tdesign > .designer { min-width: 0; }
+.tdesign-link { flex: none; margin: var(--bc-space-2) var(--bc-space-2) 0; }
 .tprops { flex: none; width: 320px; display: flex; flex-direction: column; border-left: 1px solid var(--bc-border); }
 .tprops .plist { flex: 1; overflow: auto; }
 

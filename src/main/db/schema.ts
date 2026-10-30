@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { inTransaction } from './tx';
 import { readOptions, updateOptions } from './file-format';
+import { isLinkName } from '../links/store';
 import type { CascadeChild, OpResult, ReconcileReport, Relation, TableSummary } from '../../shared/api';
 export type { ReconcileReport, TableSummary };
 import {
@@ -190,7 +191,7 @@ function metaOf(db: DatabaseSync, live: readonly string[], table: string): { tab
 /** A live table answers to `name` (sameName). */
 export const isTableName = (db: DatabaseSync, name: string): boolean => findTable(db, name) !== undefined;
 
-/** Tables and queries share one namespace, as in Access. */
+/** Tables, queries and links share one namespace, as in Access (a link: isLinkName, links/store.ts). */
 export function isQueryName(db: DatabaseSync, name: string): boolean {
   // typeof: a BLOB name written by an external tool is skipped, as objects.ts does
   return (db.prepare("SELECT name FROM bc_objects WHERE kind = 'query' AND typeof(name) = 'text'").all() as { name: string }[]).some((r) => sameName(r.name, name));
@@ -569,7 +570,7 @@ export function createTable(db: DatabaseSync, design: TableDesign): void {
   const errors = validateDesign(design);
   if (errors.length > 0) throw new DesignValidationError(errors);
   inTransaction(db, () => {
-    if (findTable(db, design.name) || isQueryName(db, design.name)) throw new NameExistsError(design.name);
+    if (findTable(db, design.name) || isQueryName(db, design.name) || isLinkName(db, design.name)) throw new NameExistsError(design.name);
     refuseDangling(db, design.name);
     for (const fd of design.fields) if (!usableProps(fd.props)) throw new Error(`invalid field properties: ${fd.name}`);
     purgeMetadata(db, design.name);
@@ -610,7 +611,7 @@ export function renameTable(db: DatabaseSync, oldName: string, newName: string):
     if (!cur) throw new Error(`unknown table: ${oldName}`);
     if (cur === newName) return;
     const clash = findTable(db, newName);
-    if ((clash && clash !== cur) || (!sameName(cur, newName) && isQueryName(db, newName))) throw new NameExistsError(newName);
+    if ((clash && clash !== cur) || (!sameName(cur, newName) && (isQueryName(db, newName) || isLinkName(db, newName)))) throw new NameExistsError(newName);
     if (!sqliteSameName(cur, newName)) refuseDangling(db, newName);
     const live = liveTableNames(db);
     const prefix = `bcx_${cur}.`;
@@ -682,12 +683,22 @@ export function dropTable(db: DatabaseSync, name: string): OpResult {
     if (relationsOf(db, cur).length > 0) return { ok: false, reason: 'hasRelations' };
     const k = foreignKeys(db).find((x) => x.child !== cur && parentOf(live, x) === cur);
     if (k) return { ok: false, reason: 'referenced', table: k.child };
+    removeTable(db, cur);
+    return { ok: true };
+  });
+}
+
+/** DROP TABLE, with its bc_fields and bc_tables rows and its Relations-window box; no checks (dropTable's, or the split's). */
+export function removeTable(db: DatabaseSync, name: string): void {
+  inTransaction(db, () => {
+    const live = liveTableNames(db);
+    const cur = pickName(live, name);
+    if (!cur) throw new Error(`unknown table: ${name}`);
     const meta = metaOf(db, live, cur);
     db.exec(`DROP TABLE ${quoteIdent(cur)}`);
     if (meta.fields !== undefined) db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(meta.fields);
     if (meta.table !== undefined) db.prepare('DELETE FROM bc_tables WHERE name = ?').run(meta.table);
     moveInLayout(db, cur, undefined);
-    return { ok: true };
   });
 }
 

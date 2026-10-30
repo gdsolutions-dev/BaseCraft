@@ -1,29 +1,32 @@
 // Gestionnaires ipcMain de l'API window.basecraft : émetteur vérifié, arguments vérifiés, une session à la fois.
-import { app, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
+import { app, clipboard, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
-import { CH, type AppInfo, type ContentState, type LicenseEntry, type OpResult, type RelationResult, type SaveTableResult, type SessionState } from '../shared/api';
+import { readFileSync, realpathSync, rmSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import { CH, type AppInfo, type ContentState, type LicenseEntry, type LinkResult, type OpResult, type RelationResult, type SaveTableResult, type SessionState, type SettingsView } from '../shared/api';
 import { MAX_EXCEL_ROWS } from '../shared/exchange';
 import { sheetName } from '../shared/export-format';
-import { resolveUiLanguage } from '../shared/i18n';
-import en from '../shared/i18n/en.json';
-import fr from '../shared/i18n/fr.json';
+import { isUiLanguage, resolveUiLanguage } from '../shared/i18n';
+import { catalogs } from '../shared/i18n/catalogs';
 import { regionTag } from '../shared/locale-format';
+import { RUNTIME } from '../shared/product';
 import { FILE_EXTENSION } from './db/file-format';
-import { keepAlive, releaseIfOurs } from './db/lock';
+import { HEARTBEAT_MS, keepAlive, releaseIfOurs } from './db/lock';
+import { isDesignChannel } from './design-channels';
 import { DbHost, type AsyncSession } from './db-host/client';
-import type { HostEvent } from './db-host/protocol';
-import { pickExcelPath, pickExportPath, pickImportPath, pickOpenPath, pickPdfPath, pickSavePath } from './dialogs';
+import type { HostEvent, HostOpen } from './db-host/protocol';
+import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickSavePath, showNotice } from './dialogs';
+import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, autoLookupRequest, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes,
+  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
-import { addRecentFile, loadSettings, saveSettings, type AppSettings } from './settings';
+import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
 import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, type TrustConfig } from './trust';
 
 let mainWindow: () => BrowserWindow | null = () => null;
@@ -32,6 +35,14 @@ let settings: AppSettings;
 /** The open base: its data process (db-host). The main process never opens SQLite itself. */
 let host: DbHost | null = null;
 let closing: Promise<void> = Promise.resolve();
+/** Linked-file locks (C1 R4) a stopped data process held under this opening: its restart adopts them on first use (same session
+ *  id), and until then (or if it never uses them) this process beats and releases them. */
+const carried = new WeakMap<DbHost, string[]>();
+const linkedLocks = (h: DbHost): string[] => [...new Set([...(carried.get(h) ?? []), ...(h.state.linkedLocks ?? [])])];
+/** Removes every lock of this opening a killed or closed data process may have left: the base's and its linked files'. */
+const releaseLocks = (h: DbHost): void => {
+  for (const p of [h.state.path, ...linkedLocks(h)]) releaseIfOurs(p, h.opened.sessionId); // state.path: the Runtime's local copy (C3 R14)
+};
 export const closeVeto = new CloseVeto();
 /** This user's approvals and the administrator's trusted folders (trust.ts), set up once in registerIpc. */
 let approvals: ApprovalStore;
@@ -39,7 +50,7 @@ let trustConfig: TrustConfig = { trustedFolders: [] };
 
 const region = () => regionTag(process.env.BASECRAFT_REGION ?? app.getSystemLocale());
 const uiLanguage = () => resolveUiLanguage(settings.locale, region());
-const catalog = () => (uiLanguage() === 'fr' ? fr : en);
+const catalog = () => catalogs[uiLanguage()];
 /** What an import writes into the base, in the interface language (as Access does). */
 const importTexts = (): ImportTexts => {
   const c = catalog();
@@ -48,6 +59,10 @@ const importTexts = (): ImportTexts => {
 let importing = false;
 /** Files the user chose in the main-side open dialog: the only ones the import may read (never a path made up by the renderer). */
 const chosenImports = new Set<string>();
+/** Files the user chose in the link dialog (C1): the only ones inspect, create and relink accept. */
+const chosenLinks = new Set<string>();
+/** Data files the user chose in the split's save dialog (C3 R13): the only targets base.split accepts. */
+const chosenSplit = new Set<string>();
 
 const HOMEPAGE = 'https://github.com/gdsolutions-dev/BaseCraft';
 function appInfo(): AppInfo {
@@ -65,6 +80,13 @@ function broadcast(s: SessionState | null): void {
   if (w && !w.isDestroyed()) w.webContents.send(CH.baseStateChanged, s);
 }
 
+const settingsView = (): SettingsView => ({ ...settings, uiLanguage: uiLanguage(), region: region() });
+/** Every settings write reaches the window: it never asks again (the one refresh per write). */
+function broadcastSettings(): void {
+  const w = mainWindow();
+  if (w && !w.isDestroyed()) w.webContents.send(CH.settingsChanged, settingsView());
+}
+
 /** One opening, start or restart of a base at a time (two quick opens of the same file must not race for its lock). Every
  *  IPC handler waits for them too. ponytail: an open that hangs (a data process that never answers) blocks every handler;
  *  add a timeout on DbHost.start if that is ever seen. */
@@ -74,16 +96,59 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
   baseOps = r.catch(() => {});
   return r;
 }
+/** What became of the base the system gave this process (command line, file association): null, or the `bc:<code>` error of its
+ *  opening, which the window asks for once at startup (base.openFailure) and shows as an Open's. A base given after the window
+ *  is up (macOS open-file) is not re-asked: ponytail: that one stays in the log; push an event if macOS is taken up again. */
+let systemOpen: Promise<string | null> = Promise.resolve(null);
+function fromSystem(opened: Promise<unknown>): Promise<void> {
+  systemOpen = opened.then(() => null, (e) => (e instanceof Error ? e.message : String(e)));
+  return opened.then(() => {});
+}
+export const openFromSystem = (path: string): Promise<void> => fromSystem(openBase(path));
+
+/** Startup with no base from the command line or the system (« Ouvrir la dernière base »): opens the most recent base if its
+ *  path is valid and its file is there. The check is asynchronous (a base on a share that does not answer must not freeze the
+ *  window); a missing file opens nothing, silently, and a base opened meanwhile from the Backstage wins. An existing file that
+ *  fails to open is told like a command-line one (base.openFailure, which waits for this). */
+export const openLastBase = (): Promise<void> =>
+  fromSystem(lastBaseToOpen(settings, async (p) => (await stat(p)).isFile()).then((p) => (p && !hasBase() ? openBase(p) : undefined)));
+
+const DIR_CHECK_MS = 2000;
+/** Where New, Open and Save As start (the default folder is read from a file a user may edit: it must be a folder now). Checked
+ *  asynchronously and for 2 s at most: a default folder on a share that does not answer falls back to Documents. */
+const startDir = (): Promise<string> => dialogDir(settings, app.getPath('documents'), (p) => {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([stat(p).then((st) => st.isDirectory()), new Promise<boolean>((r) => { timer = setTimeout(r, DIR_CHECK_MS, false); })])
+    .finally(() => clearTimeout(timer));
+});
+
 /** Settles once no opening or restart (Stop) is in progress: quitting waits for it, so the new process's lock is released. */
 export const whenIdle = (): Promise<void> => baseOps.then(() => {});
 
-/** Closes the base after the calls already queued (3 s at most), then removes its lock if a killed process left it. */
+const COMPACT_NOTICE_MS = 1500;
+/** What « Compacter lors de la fermeture » asks of the base being closed: the compact keeps its lock alive and, if it takes long,
+ *  says so (a close that waits must not look hung). */
+const compactingSession = (h: DbHost) => ({
+  startup: () => h.session.startup(),
+  compact: () => whileCompacting(h.session.compact(), {
+    beat: () => { for (const p of [h.state.path, ...linkedLocks(h)]) keepAlive(p, h.opened.sessionId); }, every: HEARTBEAT_MS, // its linked files' too (C1)
+    notice: () => showNotice(catalog().dialog.compactOnClose, catalog().dialog.button.ok), after: COMPACT_NOTICE_MS,
+  }),
+});
+
+/** Compacts the base if its options ask (compact-on-close.ts), closes it after the calls already queued (3 s at most), then
+ *  removes its locks (and its linked files') if a killed process left them. The wait before the compact is bounded (compactOnClose reads the options for 3 s
+ *  at most, as long as the close). ponytail: no ceiling on the compact itself (a large base on a slow share takes minutes, with
+ *  the notice up and the lock beaten); a data process hung inside it holds the lock until someone kills it. Add a timeout that
+ *  kills the data process if that is ever seen — the original stays intact either way. */
 export function closeBase(): Promise<void> {
   const h = host;
   if (!h) return closing;
   host = null;
+  stamped = null; // R10: the next data process's first stamp is a baseline again
   const before = closing;
-  closing = h.close().catch(console.error).finally(() => releaseIfOurs(h.opened.path, h.opened.sessionId)).then(() => before);
+  closing = compactOnClose(compactingSession(h), h.state, (p) => rmSync(p, { force: true }))
+    .then(() => h.close()).catch(console.error).finally(() => releaseLocks(h)).then(() => before);
   broadcast(null);
   return closing;
 }
@@ -94,8 +159,9 @@ export function abandonBase(): void {
   const h = host;
   if (!h) return;
   host = null;
+  stamped = null;
   void h.kill();
-  releaseIfOurs(h.opened.path, h.opened.sessionId);
+  releaseLocks(h);
 }
 
 /** The data process ended on its own: the base is closed, and the window says so once (the calls it had pending reject
@@ -103,10 +169,27 @@ export function abandonBase(): void {
 function hostCrashed(h: DbHost): void {
   if (host !== h) return;
   host = null;
-  releaseIfOurs(h.opened.path, h.opened.sessionId);
+  stamped = null;
+  releaseLocks(h);
   broadcast(null);
   const w = mainWindow();
   if (w && !w.isDestroyed()) w.webContents.send(CH.baseHostCrashed);
+}
+
+/** The workstation's shared-data options for the data process; the settle wait is only shortened by the e2e seam (never packaged). */
+function sharedOptions(): HostOpen['shared'] {
+  const { openMode, updateRetries, updateRetryMs } = settings;
+  const settleMs = process.env.BASECRAFT_E2E === '1' && !app.isPackaged && process.env.BASECRAFT_E2E_SETTLE_MS !== undefined
+    ? Number(process.env.BASECRAFT_E2E_SETTLE_MS) : undefined;
+  return { openMode, updateRetries, updateRetryMs, ...(settleMs !== undefined && Number.isFinite(settleMs) ? { settleMs } : {}) };
+}
+
+/** The Runtime's local copies of front-ends on a share (C3 R14); the e2e seam names a local folder that counts as a share for
+ *  the copy alone (never packaged). */
+function frontEndCopies(): Pick<HostOpen, 'frontEndCache' | 'frontEndNetworkDirs'> {
+  if (!RUNTIME) return {};
+  const share = process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? process.env.BASECRAFT_E2E_NETWORK_DIR : undefined;
+  return { frontEndCache: join(dir, 'front-ends'), ...(share ? { frontEndNetworkDirs: [share] } : {}) };
 }
 
 async function startHost(path: string, create: boolean, sessionId: string): Promise<DbHost> {
@@ -118,7 +201,8 @@ async function startHost(path: string, create: boolean, sessionId: string): Prom
     else if (w && !w.isDestroyed()) w.webContents.send(CH.importProgress, { done: e.done, total: e.total });
   };
   try {
-    const { host: h } = await DbHost.start({ path, create, appVersion: app.getVersion(), region: region(), sessionId }, onEvent, () => { if (me) hostCrashed(me); });
+    const { host: h } = await DbHost.start({ path, create, appVersion: app.getVersion(), region: region(), sessionId, shared: sharedOptions(),
+      ...frontEndCopies() }, onEvent, () => { if (me) hostCrashed(me); });
     me = h;
     return h;
   } catch (e) {
@@ -169,7 +253,7 @@ async function contentRefused<T>(fn: () => Promise<T>): Promise<T> {
  *  stays disabled. One at a time, so that one write's "before" is never another's "after". ponytail: a write by another
  *  connection between the "before" read and this write is approved with it; closing that needs both in one data-process call. */
 let objectWrites: Promise<unknown> = Promise.resolve();
-function objectWrite(fn: () => Promise<OpResult>): Promise<OpResult | SaveTableResult | RelationResult> {
+function objectWrite(fn: () => Promise<OpResult>): Promise<TableOpResult> {
   const run = async () => {
     const h = host;
     const enabled = h ? enabledFor.get(h) ?? null : null;
@@ -219,9 +303,11 @@ export function openBase(path: string, create = false): Promise<SessionState> {
     await decideContent(h);
     await closeBase();
     host = h;
+    refreshTick(); // the baseline
     try {
       settings = addRecentFile(settings, path, process.platform);
       saveSettings(dir, settings);
+      broadcastSettings();
     } catch (e) {
       console.error(e); // recent files are a convenience: never fail an open that succeeded
     }
@@ -242,10 +328,36 @@ export const hasBase = (): boolean => host !== null || opening > 0;
 export function heartbeat(): void {
   const h = host;
   if (!h) return;
-  if (!h.state.readOnly) keepAlive(h.opened.path, h.opened.sessionId);
+  if (!h.state.readOnly) keepAlive(h.state.path, h.opened.sessionId);
+  for (const p of linkedLocks(h)) keepAlive(p, h.opened.sessionId); // only while still ours
   if (tickPending) return;
   tickPending = true;
   h.session.tick().catch(console.error).finally(() => { tickPending = false; });
+}
+
+/**
+ * C3 R10 Refresh interval: every « Intervalle d'actualisation » seconds, one queued dataStamp at most. The first answer from a
+ * data process (an open, a restart: asked at once) is the baseline; a different one tells the window another workstation wrote.
+ */
+let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let stampPending: DbHost | null = null;
+let stamped: { h: DbHost; stamp: string } | null = null;
+function refreshTick(): void {
+  const h = host;
+  if (!h || stampPending === h) return;
+  stampPending = h;
+  h.session.dataStamp().then((stamp) => {
+    const changed = stamped?.h === h && stamped.stamp !== stamp;
+    stamped = { h, stamp };
+    const w = mainWindow();
+    if (changed && host === h && w && !w.isDestroyed()) w.webContents.send(CH.baseDataChanged);
+  }).catch((e: unknown) => { if (!(e instanceof Error && e.message === 'bc:cancelled')) console.error(e); }) // Stop's kill
+    .finally(() => { if (stampPending === h) stampPending = null; });
+}
+/** Started in registerIpc; a changed interval restarts it at once. */
+function restartRefresh(): void {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(refreshTick, settings.refreshInterval * 1000);
 }
 
 /** The calls Stop may end: reads of a query or table, and action queries (one transaction, rolled back). Never a row write,
@@ -272,13 +384,15 @@ async function cancelCall(): Promise<void> {
     await h.kill();
     try {
       const n = await startHost(h.opened.path, false, h.opened.sessionId);
+      carried.set(n, linkedLocks(h));
       await decideContent(n);
       if (host !== h) { await n.close(); return; } // closed meanwhile
       host = n;
+      refreshTick(); // the baseline
       broadcast(n.state);
     } catch (e) {
       if (host === h) host = null;
-      releaseIfOurs(h.opened.path, h.opened.sessionId);
+      releaseLocks(h);
       broadcast(null);
       throw e;
     }
@@ -291,8 +405,10 @@ function need(): AsyncSession {
 }
 // The data process recreates its errors with their name.
 const isReadOnly = (e: unknown) => e instanceof Error && e.name === 'ReadOnlyError';
-const tableOp = async (fn: () => Promise<OpResult | SaveTableResult | RelationResult>): Promise<OpResult | SaveTableResult | RelationResult> => {
-  try { return await fn(); } catch (e) { if (isReadOnly(e)) return { ok: false, reason: 'readOnly' }; throw e; }
+type TableOpResult = OpResult | SaveTableResult | RelationResult | LinkResult;
+/** A design write: a read-only base resolves readOnly (`names` empty: LinkResult's, PF10). */
+const tableOp = async (fn: () => Promise<TableOpResult>): Promise<TableOpResult> => {
+  try { return await fn(); } catch (e) { if (isReadOnly(e)) return { ok: false, reason: 'readOnly', names: [] }; throw e; }
 };
 const rowWrite = async <T>(fn: () => Promise<T>): Promise<T> => {
   try { return await fn(); } catch (e) { throw isReadOnly(e) ? new Error('bc:readOnly') : e; }
@@ -337,18 +453,21 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   trustConfig = readTrustConfig(e2eTrust || systemTrustPath(process.platform, process.env));
   // The native popups (<select> lists, menus, scroll bars) follow the app's theme, not Windows'.
   nativeTheme.themeSource = settings.theme;
-  const handle = (ch: string, fn: (...args: unknown[]) => unknown) =>
+  const handle = (ch: string, fn: (...args: unknown[]) => unknown) => {
+    if (RUNTIME && isDesignChannel(ch)) return; // BaseCraft Runtime cannot design: no handler, so a call rejects (R5)
     ipcMain.handle(ch, (e, ...args) => {
       const w = mainWindow();
       if (!w || e.sender !== w.webContents) throw new Error('Unauthorized IPC sender');
       // after an opening or a restart (Stop) in progress: the command-line base, a call issued just after Stop
       return baseOps.then(() => fn(...args));
     });
-  const update = (patch: Partial<AppSettings>) => { settings = { ...settings, ...patch }; saveSettings(dir, settings); };
+  };
+  // kept in memory only once written: a failed save leaves getSettings as the file is
+  const update = (patch: Partial<AppSettings>) => { const next = { ...settings, ...patch }; saveSettings(dir, next); settings = next; broadcastSettings(); };
 
-  handle(CH.getSettings, () => ({ ...settings, uiLanguage: uiLanguage(), region: region() }));
+  handle(CH.getSettings, settingsView);
   handle(CH.setLocale, (l) => {
-    if (!['system', 'fr', 'en'].includes(l as string)) throw new Error('Invalid locale');
+    if (l !== 'system' && !isUiLanguage(l)) throw new Error('Invalid locale');
     update({ locale: l as AppSettings['locale'] });
   });
   handle(CH.setTheme, (t) => {
@@ -356,6 +475,13 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     update({ theme: t as AppSettings['theme'] });
     nativeTheme.themeSource = settings.theme;
   });
+  handle(CH.setSetting, (k, v) => {
+    const [key, val] = settingValue(k, v);
+    update({ [key]: val });
+    if (key === 'refreshInterval') restartRefresh();
+  });
+  restartRefresh();
+  handle(CH.pickFolder, () => startDir().then(pickFolder));
   handle(CH.appInfo, (): AppInfo => appInfo());
   // Packaged: resources/licenses.json (extraResources); unpackaged: out/licenses.json (npm run licenses).
   handle(CH.appLicenses, (): LicenseEntry[] => {
@@ -369,6 +495,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     e.sender[cmd as 'cut' | 'copy' | 'paste']();
   });
   handle(CH.beep, () => { shell.beep(); });
+  handle(CH.appWriteClipboard, (text) => { clipboard.writeText(clipboardText(text)); });
   handle(CH.appSetIcon, (png) => {
     const bytes = iconBytes(png);
     const w = mainWindow();
@@ -387,20 +514,21 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.closeAllowed, () => { setImmediate(() => { const w = mainWindow(); if (w && !w.isDestroyed()) w.destroy(); }); });
 
   handle(CH.baseCreate, async () => {
-    const p = await pickSavePath((uiLanguage() === 'fr' ? fr : en).dialog.newBaseName + FILE_EXTENSION);
+    const p = await pickSavePath(catalog().dialog.newBaseName + FILE_EXTENSION, await startDir());
     return p === null ? null : openBase(p, true);
   });
   handle(CH.baseOpen, async (p) => {
-    const path = p === undefined ? await pickOpenPath() : basePath(p);
+    const path = p === undefined ? await pickOpenPath(await startDir()) : basePath(p);
     return path === null ? null : openBase(path);
   });
   handle(CH.baseClose, () => closeBase());
   handle(CH.baseState, () => host?.state ?? null);
+  handle(CH.baseOpenFailure, () => { const r = systemOpen; systemOpen = Promise.resolve(null); return r; }); // once; after the opening in progress (handle)
   // File › Save As (A6): a checked copy (VACUUM INTO), which then becomes the open base. Reads only: allowed read-only.
   handle(CH.baseSaveAs, async () => {
     need();
     const current = host!.opened.path;
-    const p = await pickSavePath(catalog().dialog.copyName.replace('{{name}}', basename(current, FILE_EXTENSION)) + FILE_EXTENSION);
+    const p = await pickSavePath(catalog().dialog.copyName.replace('{{name}}', basename(current, FILE_EXTENSION)) + FILE_EXTENSION, await startDir());
     if (p === null) return null;
     if (sameFile(p, current)) throw new Error('bc:sameFile');
     await whenIdle();
@@ -416,6 +544,19 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
       if (e instanceof Error && e.name === 'BaseLostError') await closeBase(); // no connection left: the base is closed
       throw e;
     }
+  });
+  // Split Database (C3 R12, R13): the data file proposed beside the base, `<name>_donnees`; the renderer has closed every document.
+  handle(CH.baseSplitPick, async () => {
+    need();
+    const current = host!.opened.path;
+    const p = await pickSavePath(catalog().split.defaultName.replace('{{name}}', basename(current, FILE_EXTENSION)) + FILE_EXTENSION, dirname(current));
+    if (p !== null) chosenSplit.add(p);
+    return p;
+  });
+  handle(CH.baseSplit, async (p) => {
+    const path = splitPath(p, chosenSplit);
+    await whenIdle();
+    return need().splitDatabase(path);
   });
   // Reopening in write mode, unlinking the lock (bcError in the data process); the content is decided again (a crashed base
   // could not be read before).
@@ -447,7 +588,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.rowsCount, (t, f) => need().count(lookupName(t), fieldFilters(f)));
   handle(CH.rowsPage, (t, r) => need().page(lookupName(t), pageRequest(r)));
   handle(CH.rowsInsert, (t, v) => rowWrite(() => need().insert(lookupName(t), cells(v))));
-  handle(CH.rowsUpdate, (t, id, c) => rowWrite(() => need().update(lookupName(t), uint(id), cells(c))));
+  handle(CH.rowsUpdate, (t, id, c, x) => rowWrite(() => need().update(lookupName(t), uint(id), cells(c), expectedValues(x))));
   handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), uints(ids))));
   handle(CH.rowsLookup, (t, fd) => need().lookup(lookupName(t), lookupName(fd)));
 
@@ -455,7 +596,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.baseStartup, () => need().startup());
   handle(CH.baseSaveStartup, (o) => rowWrite(() => need().saveStartup(startupOptions(o))));
 
-  handle(CH.relationsList, () => need().listRelations());
+  handle(CH.relationsList, (o) => need().listRelations(relationsListOptions(o)));
   handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), o === null ? null : lookupName(o))));
   handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(lookupName(n))));
   handle(CH.relationsLayout, () => need().relationsLayout());
@@ -483,6 +624,22 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.importSpecs, () => need().importSpecs());
   handle(CH.importSaveSpec, (n, s) => rowWrite(() => need().saveImportSpec(nameArg(n), importSpec(s))));
   handle(CH.importDeleteSpec, (n) => rowWrite(() => need().deleteImportSpec(lookupName(n))));
+
+  // Linked tables (C1). Design (absent from the Runtime) but refresh (R15). The session refuses the front-end itself (self).
+  handle(CH.linksPick, async (k) => {
+    const c = catalog().link;
+    const p = await pickLinkPath({ basecraft: c.filterBasecraft, sqlite: c.filterSqlite, access: c.filterAccess, all: catalog().importText.filterAll }, linkKindOrUndefined(k));
+    if (p !== null) chosenLinks.add(p);
+    return p;
+  });
+  handle(CH.linksInspect, (p) => need().inspectLinkFile(linkPath(p, chosenLinks)));
+  handle(CH.linksCreate, (p, n) => { const path = linkPath(p, chosenLinks); const names = nameList(n); return tableOp(() => need().createLinks(path, names)); });
+  handle(CH.linksList, () => need().listLinks());
+  handle(CH.linksRefresh, (n) => need().refreshLinks(nameList(n)));
+  handle(CH.linksRelink, (n, p) => { const names = nameList(n); const path = linkPath(p, chosenLinks); return tableOp(() => need().relink(names, path)); });
+  handle(CH.linksConvert, (n) => tableOp(() => need().convertLink(lookupName(n))));
+  // C2 R7: data (the Runtime unlocks too); the session accepts a source of the front-end or the picked file only.
+  handle(CH.linksUnlock, (p, pw) => { const path = unlockPath(p); return need().unlockAccess(path, accessPassword(pw), chosenLinks.has(path)); });
 
   handle(CH.tablesCopy, (a, b, m) => {
     if (m !== undefined && m !== 'structure' && m !== 'data') throw new TypeError('bc:invalidArgument');

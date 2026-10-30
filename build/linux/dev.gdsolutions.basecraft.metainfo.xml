@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.gdsolutions.basecraft</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>BaseCraft</name>
+  <summary>Desktop database application in the spirit of Microsoft Access</summary>
+  <summary xml:lang="fr">Base de données de bureau dans l'esprit de Microsoft Access</summary>
+  <summary xml:lang="es">Aplicación de base de datos de escritorio al estilo de Microsoft Access</summary>
+  <summary xml:lang="de">Desktop-Datenbankanwendung im Geiste von Microsoft Access</summary>
+  <summary xml:lang="it">Applicazione desktop per database nello spirito di Microsoft Access</summary>
+  <summary xml:lang="pt">Aplicativo de banco de dados para desktop no espírito do Microsoft Access</summary>
+  <summary xml:lang="nl">Desktopdatabasetoepassing in de geest van Microsoft Access</summary>
+  <summary xml:lang="pl">Pulpitowa aplikacja bazodanowa w duchu Microsoft Access</summary>
+  <summary xml:lang="ja">Microsoft Access の精神を受け継ぐデスクトップ データベース アプリケーション</summary>
+  <summary xml:lang="zh">秉承 Microsoft Access 精神的桌面数据库应用程序</summary>
+  <summary xml:lang="ko">Microsoft Access의 정신을 잇는 데스크톱 데이터베이스 애플리케이션</summary>
+  <developer id="dev.gdsolutions">
+    <name>gd solutions</name>
+  </developer>
+  <description>
+    <p>BaseCraft brings back the Access way of building small data applications: tables, queries, forms, reports, macros and code, with a modern interface, on Windows, macOS and Linux.</p>
+    <p>A whole database lives in a single .basecraft file, which is an ordinary SQLite database that any SQLite tool can read. No account, no telemetry, nothing else to install for solo use.</p>
+    <p xml:lang="fr">BaseCraft retrouve la manière Access de construire de petites applications de données : tables, requêtes, formulaires, états, macros et code, avec une interface moderne, sous Windows, macOS et Linux.</p>
+    <p xml:lang="fr">Toute la base tient dans un seul fichier .basecraft, une base SQLite ordinaire lisible par n'importe quel outil SQLite. Aucun compte, aucune télémétrie, rien d'autre à installer pour un usage solo.</p>
+    <p>Preview release: keep backups of important data.</p>
+    <p xml:lang="fr">Version préliminaire : gardez des sauvegardes de vos données importantes.</p>
+  </description>
+  <launchable type="desktop-id">basecraft.desktop</launchable>
+  <icon type="stock">basecraft</icon>
+  <url type="homepage">https://gdsolutions-dev.github.io/BaseCraft/</url>
+  <url type="bugtracker">https://github.com/gdsolutions-dev/BaseCraft/issues</url>
+  <url type="vcs-browser">https://github.com/gdsolutions-dev/BaseCraft</url>
+  <categories>
+    <category>Office</category>
+    <category>Database</category>
+  </categories>
+  <keywords>
+    <keyword>database</keyword>
+    <keyword>access</keyword>
+    <keyword>sqlite</keyword>
+    <keyword>forms</keyword>
+    <keyword>reports</keyword>
+    <keyword>base de données</keyword>
+  </keywords>
+  <provides>
+    <mediatype>application/x-basecraft</mediatype>
+  </provides>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Report Design view with grouping and totals</caption>
+      <image type="source" width="1923" height="1203">https://gdsolutions-dev.github.io/BaseCraft/images/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">1024</display_length>
+  </requires>
+  <releases>
+    <release version="0.3.1" date="2026-10-30"/>
+    <release version="0.3.0" date="2026-10-30"/>
+  </releases>
+</component>

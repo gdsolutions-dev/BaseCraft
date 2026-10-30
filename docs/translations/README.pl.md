@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft przywraca sposób budowania małych aplikacji danych znany z Accessa — tabele, kwerendy, formularze, raporty, makra i kod — we współczesnym interfejsie i bez przywiązania do Windows. Wszystko, co zawiera baza danych, mieści się w **jednym pliku**, który jest zwykłą bazą SQLite, nadal możliwą do otwarcia w dowolnym narzędziu SQLite.
 
-> **Status: wczesny etap rozwoju.** Etap A (tabele, relacje, kwerendy, formularze, raporty, import i eksport) jest ukończony w wersji zapoznawczej 0.3.0. Przed wersją 1.0 spodziewaj się zmian łamiących zgodność.
+> **Status: wczesny etap rozwoju.** Etap A (tabele, relacje, kwerendy, formularze, raporty, import i eksport) jest ukończony w wersji zapoznawczej 0.3.1. Przed wersją 1.0 spodziewaj się zmian łamiących zgodność.
 
 ## Dlaczego
 

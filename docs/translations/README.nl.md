@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft brengt de Access-manier van kleine gegevenstoepassingen bouwen terug — tabellen, query's, formulieren, rapporten, macro's en code — met een moderne interface en zonder aan Windows gebonden te zijn. Alles wat een database bevat, staat in **één bestand**, een gewone SQLite-database die elk SQLite-hulpmiddel nog kan openen.
 
-> **Status: vroege ontwikkeling.** Fase A (tabellen, relaties, query's, formulieren, rapporten, import en export) is voltooid in preview 0.3.0. Verwacht brekende wijzigingen vóór 1.0.
+> **Status: vroege ontwikkeling.** Fase A (tabellen, relaties, query's, formulieren, rapporten, import en export) is voltooid in preview 0.3.1. Verwacht brekende wijzigingen vóór 1.0.
 
 ## Waarom
 

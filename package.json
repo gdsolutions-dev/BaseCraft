@@ -1,9 +1,11 @@
 {
   "name": "basecraft",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Desktop database application in the spirit of Microsoft Access",
   "author": "SARL IN SET <info@in-set.com>",
+  "license": "AGPL-3.0-only",
+  "desktopName": "basecraft.desktop",
   "homepage": "https://gdsolutions-dev.github.io/BaseCraft/",
   "main": "out/main/index.js",
   "build": {
@@ -17,7 +19,28 @@
     "win": { "target": ["nsis", "zip"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
     "mac": { "target": [{ "target": "dmg", "arch": ["arm64"] }, { "target": "zip", "arch": ["arm64"] }], "category": "public.app-category.productivity" },
-    "linux": { "target": ["AppImage", "deb", "tar.gz"], "category": "Office", "mimeTypes": ["application/x-basecraft"] }
+    "linux": {
+      "target": ["AppImage", "deb", "tar.gz"],
+      "category": "Office;Database",
+      "syncDesktopName": true,
+      "maintainer": "SARL IN SET <info@in-set.com>",
+      "vendor": "gd solutions",
+      "synopsis": "Desktop database application in the spirit of Microsoft Access",
+      "description": "Tables, queries, forms, reports and macros, in a single .basecraft file that is an ordinary SQLite database.",
+      "desktop": {
+        "entry": {
+          "Name": "BaseCraft",
+          "Comment[fr]": "Tables, requêtes, formulaires, états et macros, dans un seul fichier .basecraft qui est une base SQLite ordinaire.",
+          "Keywords": "database;access;sqlite;forms;reports;base de données;",
+          "StartupWMClass": "BaseCraft"
+        }
+      }
+    },
+    "deb": {
+      "priority": "optional",
+      "packageCategory": "database",
+      "fpm": ["build/linux/dev.gdsolutions.basecraft.metainfo.xml=/usr/share/metainfo/dev.gdsolutions.basecraft.metainfo.xml"]
+    }
   },
   "scripts": {
     "dev": "electron-vite dev",

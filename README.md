@@ -133,6 +133,31 @@ Database Tools › Split Database (« Fractionner la base de données ») moves 
 - **One front-end per workstation with the full application.** BaseCraft (the full application) opens a front-end in place, with its exclusive lock: give each workstation its own copy of the front-end (on its own disk, or its own file on the share). Two people who open the same front-end file with the full application get it the way any base works: the second one reads only, its links to the data file included.
 - **BaseCraft Runtime** opens a front-end from a share through a local copy (in its user data folder), copied again when the original changes: only the Runtime does this copy for you. Republish the front-end on the share and each workstation takes the new version at its next opening.
 
+### Reading a `.basecraft` file from Power Query
+
+A `.basecraft` file is an ordinary SQLite database, so Excel and Power BI can read its tables through an ODBC driver. Power Query has no built-in SQLite connector.
+
+1. Install a SQLite ODBC driver (for example the [SQLite ODBC Driver](http://www.ch-werner.de/sqliteodbc/)), in the same bitness (32 or 64 bit) as Excel or Power BI.
+2. In Power Query, open the Advanced Editor and use:
+
+```m
+let
+    // Path of the SQLite file
+    Path = "file.basecraft",
+
+    // Connection string (driver name exactly as listed in the ODBC administrator)
+    Connection = "Driver={SQLite3 ODBC Driver};Database=" & Path & ";",
+
+    // Source: navigator of tables and views
+    Source = Odbc.DataSource(Connection, [HierarchicalNavigation = true])
+in
+    Source
+```
+
+- Use the full path of the file, and add `ReadOnly=1;` to the connection string if BaseCraft has the file open.
+- SQLite stores dates as text or numbers: convert the columns in Power Query.
+- Power BI Service needs an on-premises data gateway with the driver installed.
+
 ## Build from source
 
 Requirements: [Node.js](https://nodejs.org/) 24 or later (BaseCraft uses the built-in `node:sqlite`).

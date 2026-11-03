@@ -293,6 +293,7 @@ test('C3: a report on a parameterized query asks first (Open, Design view › Pr
     await expect(doc.getByTestId('preview-page-of')).toBeHidden();
     await expect(doc.locator('.bc-page').first()).toContainText('Durand');
     await pickView(page, 'viewLayout');
+    await answer('Durand'); // Page mode reads the rows itself: it asks the parameter (Layout view's own e2e, report-layout-view.spec.ts)
     await expect(doc.getByTestId('designer')).toBeVisible();
     await page.getByTestId('doc-tab-close-report-Par client').click();
 

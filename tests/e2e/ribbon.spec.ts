@@ -136,6 +136,7 @@ test('C10: a contextual tab is selected when its context opens; leaving gives ba
     await page.getByTestId('cmd-createTableDesign').click();
     await selected(page, 'design');
     await page.locator('[data-testid^="doc-tab-close-"]').click();
+    await page.getByTestId('modal-btn-no').click(); // a new table always asks, even unmodified (de0fc6e, as Access): No drops it
     await selected(page, 'create');
   } finally {
     await app.close();
@@ -193,7 +194,12 @@ async function layoutProblems(page: Page): Promise<string[]> {
         if (getComputedStyle(s).display === 'none') continue; // small buttons drop their label below 1100 px (named by title / tooltip)
         if (!inside(box(s), box(b))) out.push(`${tab}: ${id} label or icon clipped`);
       }
-      for (const c of buttons.slice(i + 1)) if (meet(box(b), box(c))) out.push(`${tab}: ${id} overlaps ${c.getAttribute('data-testid')}`);
+      for (const c of buttons.slice(i + 1)) {
+        // Affichage's split button (1b44f72, as Access): the caret sits in the main button's corner, over neither its icon nor its label
+        const caret = id === 'cmd-view' && c.getAttribute('data-testid') === 'cmd-viewMenu';
+        if (caret && inside(box(c), box(b)) && ![...b.querySelectorAll('span, svg')].some((s) => meet(box(s), box(c)))) continue;
+        if (meet(box(b), box(c))) out.push(`${tab}: ${id} overlaps ${c.getAttribute('data-testid')}`);
+      }
     });
     const groups = [...document.querySelectorAll('.rbody [data-testid^="ribbon-group-"]')];
     groups.forEach((g, i) => {
@@ -251,17 +257,18 @@ test('the ribbon stays usable at 900 px and 1280 px: no overlap, no clipped labe
     }
     expect(problems).toEqual([]);
 
-    // at 900 px Home does not fit: an arrow scrolls it, the other arrow comes back
+    // at 900 px Create does not fit (Home does, since Affichage became a split button, 1b44f72): an arrow scrolls it, the other comes back
     await resize(app, page, 900);
-    await page.getByTestId('ribbon-tab-home').click();
+    await page.getByTestId('ribbon-tab-create').click();
     await expect(page.getByTestId('ribbon-scroll-left')).toHaveCount(0);
     await page.getByTestId('ribbon-scroll-right').click();
     await expect.poll(() => page.locator('.rbody').evaluate((e) => e.scrollLeft)).toBeGreaterThan(0);
     await expect(page.getByTestId('ribbon-scroll-left')).toBeVisible();
     // keyboard focus brings a hidden command into view
-    await page.getByTestId('cmd-zoom').focus();
-    const [zoom, body] = await Promise.all([page.getByTestId('cmd-zoom').boundingBox(), page.locator('.rbody').boundingBox()]);
-    expect(zoom!.x + zoom!.width).toBeLessThanOrEqual(body!.x + body!.width + 1);
+    const last = page.locator('.rbody [data-testid^="cmd-"]').last();
+    await last.focus();
+    const [lastBox, body] = await Promise.all([last.boundingBox(), page.locator('.rbody').boundingBox()]);
+    expect(lastBox!.x + lastBox!.width).toBeLessThanOrEqual(body!.x + body!.width + 1);
   } finally {
     await app.close();
   }

@@ -393,7 +393,8 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
   // the builder's grid: the fields of its sources
   useEffect(() => { if (startDesign) void ensure(startDesign.tables.map((x) => x.name)).catch(() => {}); }, []);
 
-  useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: model.dirty }); }, [model.dirty, tab.id, dispatch]);
+  // `tab.mode`: back from the unsaved run's datasheet (this view stays mounted behind it), whose unmount cleared the tab's flag
+  useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: model.dirty }); }, [model.dirty, tab.id, tab.mode, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);
 
   const message = (messageKey: string, params?: object) => modal.confirm({ titleKey: 'dialog.errorTitle', messageKey, params, buttons: ['ok'] });

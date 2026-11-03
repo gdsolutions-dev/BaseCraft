@@ -23,7 +23,7 @@ async function shown(page: Page, rows: number): Promise<string[][]> {
   }
   return out;
 }
-const doc = (page: Page) => page.locator('section[role=tabpanel]:not([hidden]), .doc:not([hidden])').first();
+const doc = (page: Page) => page.locator('section[role=tabpanel]:not([hidden])');
 
 const REGIONS = ['North', 'South', 'East', 'West', 'Central', 'Northeast', 'Southwest', 'Pacific'];
 const CATEGORIES = ['Audio', 'Computers', 'Accessories', 'Phones', 'Home'];

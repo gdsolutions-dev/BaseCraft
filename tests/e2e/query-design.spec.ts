@@ -90,16 +90,23 @@ test('Query Design: Show Table, relation join, fields, sort, criteria, save, tot
     await page.getByTestId('join-kind-left').check();
     await page.getByTestId('join-ok').click();
     await expect(doc(page).getByTestId('qbe-join-0')).toHaveAttribute('data-kind', 'left');
-    // a change of mode asks for the save first (as for a table)
+    // a modified saved query runs as it stands in Datasheet view, no "save first" (fa290d1, as Access)
     await page.getByTestId('status-view-datasheet').click();
-    await expect(page.getByTestId('modal')).toContainText(fr.query.mustSaveFirst.replace('{{name}}', 'Grosses commandes'));
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
+
+    // closing the tab asks to save the change; saved, the query opens with the outer join's row (no total for Éric)
+    await page.getByTestId('doc-tab-close-query-Grosses commandes').click();
+    await expect(page.getByTestId('modal')).toBeVisible();
     await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('doc-tab-query-Grosses commandes')).toHaveCount(0);
+    await page.getByTestId('nav-item-query-Grosses commandes').dblclick();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
     await expect(cell(page, 0, 3)).toHaveText('Éric');
     await expect(cell(page, 1, 3)).toHaveText('');
+    await page.getByTestId('doc-tab-close-query-Grosses commandes').click();
 
     // Navigation Pane: Open then Design View first; Design View opens the grid
-    await page.getByTestId('doc-tab-close-query-Grosses commandes').click();
     await page.getByTestId('nav-item-query-Grosses commandes').click({ button: 'right' });
     const items = page.getByTestId('nav-menu').getByRole('menuitem');
     await expect(items.nth(0)).toHaveAttribute('data-testid', 'nav-menu-open');
@@ -390,15 +397,19 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(doc(page).getByTestId('qbe-cell-criteria0-2')).toHaveValue('>= [Date début :]');
     await expect(page.getByTestId('doc-tab-query-Grosses commandes')).toContainText('•'); // still to be saved
     await page.getByTestId('status-view-datasheet').click();
-    await page.getByTestId('modal-btn-yes').click(); // save first
-    await expect(page.getByTestId('modal')).toContainText('Date début :');
-    expect(await sqlOf(page, 'Grosses commandes')).toContain('WHERE [Commandes].[Montant] > 0.5 And [Commandes].[Le] >= [Date début :]');
+    await expect(page.getByTestId('modal')).toContainText('Date début :'); // runs as it stands, unsaved (fa290d1): the parameter is asked, no "save first"
+    expect(await sqlOf(page, 'Grosses commandes')).not.toContain('Date début');
     await page.getByTestId('modal-input').fill('01/01/2000');
     await page.getByTestId('modal-btn-ok').click();
     await expect(doc(page).getByTestId('nav-record-count')).toBeVisible();
+    await page.getByTestId('status-view-design').click();
+    await expect(page.getByTestId('doc-tab-query-Grosses commandes')).toContainText('•'); // back from the run, still to be saved
+    await page.getByTestId('doc-tab-close-query-Grosses commandes').click(); // closing asks to save it
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('doc-tab-query-Grosses commandes')).toHaveCount(0);
+    expect(await sqlOf(page, 'Grosses commandes')).toContain('WHERE [Commandes].[Montant] > 0.5 And [Commandes].[Le] >= [Date début :]');
 
     // Navigation Pane: Open, Design View, SQL View first; SQL View opens the tab on the grid's SQL (the saved text)
-    await page.getByTestId('doc-tab-close-query-Grosses commandes').click();
     await page.getByTestId('nav-item-query-Grosses commandes').click({ button: 'right' });
     const items = page.getByTestId('nav-menu').getByRole('menuitem');
     for (const [i, id] of ['open', 'design', 'sqlView'].entries()) await expect(items.nth(i)).toHaveAttribute('data-testid', `nav-menu-${id}`);

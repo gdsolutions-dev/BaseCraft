@@ -148,6 +148,12 @@ test('navigation pane: search, open, modes, F11, rename, delete, new table', asy
     await page.keyboard.press('F11');
     await expect(page.getByTestId('nav-pane')).toBeVisible();
 
+    // an open object keeps its name (5a98fa5, as Access): Rename is greyed while its tab is open
+    await page.getByTestId('nav-item-Clients').click({ button: 'right' });
+    await expect(page.getByTestId('nav-menu-rename')).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('doc-tab-close-Clients').click();
+    await expect(page.getByTestId('doc-tab-Clients')).toHaveCount(0);
     await page.getByTestId('nav-item-Clients').click({ button: 'right' });
     await page.getByTestId('nav-menu-rename').click();
     await page.getByTestId('modal-input').fill('Mauvais.nom');
@@ -156,6 +162,7 @@ test('navigation pane: search, open, modes, F11, rename, delete, new table', asy
     await page.getByTestId('modal-input').fill('Contacts');
     await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('nav-item-Contacts')).toBeVisible();
+    await page.getByTestId('nav-item-Contacts').dblclick();
     await expect(page.getByTestId('doc-tab-Contacts')).toBeVisible();
 
     await page.getByTestId('nav-item-Contacts').click({ button: 'right' });
@@ -174,6 +181,10 @@ test('navigation pane: search, open, modes, F11, rename, delete, new table', asy
     // a table not saved yet has no datasheet
     await checkView(page, 'viewDatasheet', (v) => expect(v).toBeDisabled());
     await expect(page.getByTestId('status-view-datasheet')).toBeDisabled();
+    // closing the window would ask to save the new table (de0fc6e, as Access): drop it first
+    await page.getByTestId('doc-tab-close-Table1').click();
+    await page.getByTestId('modal-btn-no').click();
+    await expect(page.getByTestId('doc-tab-Table1')).toHaveCount(0);
   } finally {
     await app.close();
   }

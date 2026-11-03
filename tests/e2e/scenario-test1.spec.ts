@@ -12,7 +12,7 @@ const OUT = join(tmpdir(), 'basecraft-scenarios', 'test1');
 const PDF_PATH = join(OUT, 'export.pdf');
 const EN = { BASECRAFT_REGION: 'en-US' };
 type Win = { basecraft: BasecraftApi };
-const doc = (page: Page) => page.locator('section[role=tabpanel]:not([hidden]), .doc:not([hidden])').first();
+const doc = (page: Page) => page.locator('section[role=tabpanel]:not([hidden])');
 const count = (page: Page, t: string) => page.evaluate((n) => (window as unknown as Win).basecraft.rows.count(n), t);
 
 const TABLES: [string, [string, string][]][] = [

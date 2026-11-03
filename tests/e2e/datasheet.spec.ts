@@ -365,7 +365,7 @@ test('late animation frames (a busy or hidden window): a click focuses the cell,
   }
 });
 
-test('renaming the table keeps an invalid pending row and its error', async () => {
+test('an open table cannot be renamed (5a98fa5, as Access): an invalid pending row and its error stay, and are fixed under the same name', async () => {
   const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('renommer')], env: FR });
   try {
     await openSheet(page);
@@ -376,10 +376,9 @@ test('renaming the table keeps an invalid pending row and its error', async () =
     await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('datasheet-error')).toBeVisible();
     await page.getByTestId('nav-item-Clients').click({ button: 'right' });
-    await page.getByTestId('nav-menu-rename').click();
-    await page.getByTestId('modal-input').fill('Clients2');
-    await page.getByTestId('modal-btn-ok').click();
-    await expect(page.getByTestId('doc-tab-Clients2')).toContainText('•');
+    await expect(page.getByTestId('nav-menu-rename')).toBeDisabled(); // an open object keeps its name
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('doc-tab-Clients')).toContainText('•');
     await expect(page.getByTestId('datasheet-error')).toBeVisible();
     await expect(page.getByTestId('modal')).toHaveCount(0);
     const b = await canvas(page);
@@ -388,10 +387,10 @@ test('renaming the table keeps an invalid pending row and its error', async () =
     await page.keyboard.press('ArrowLeft');
     await expect(cell(page, 1, 0)).toHaveAttribute('aria-selected', 'true');
     await typeIntoCell(page, 'Durand');
-    await closeEditor(page, 'Enter'); // fixed: saved, under the new name
+    await closeEditor(page, 'Enter'); // fixed: saved
     await expect(page.getByTestId('nav-record-count')).toHaveText('1');
     await expect(page.getByTestId('datasheet-error')).toHaveCount(0);
-    expect((await rowsOf(page, 'Clients2'))[0].values.slice(1, 3)).toEqual(['Durand', 7]);
+    expect((await rowsOf(page, 'Clients'))[0].values.slice(1, 3)).toEqual(['Durand', 7]);
   } finally {
     await app.close();
   }

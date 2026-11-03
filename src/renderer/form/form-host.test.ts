@@ -1,7 +1,10 @@
+import { createElement, Fragment } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ControlDef } from '../../shared/design/model';
+import { localeInfo } from '../../shared/locale-format';
 import { emptyFormDoc, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
-import { FORM_TOOLS, formSectionMenu, newFormControls } from './form-host';
+import { FORM_TOOLS, formSectionMenu, newFormControls, preview } from './form-host';
 
 const labels: FormLabels = { prefix: (k) => ({ label: 'Étiquette', textBox: 'Texte', checkBox: 'Case', optionGroup: 'Cadre', tabControl: 'OngletCtl' } as Record<string, string>)[k] ?? k,
   tabPage: (n) => `Page${n}` };
@@ -41,6 +44,17 @@ describe('form host', () => {
     expect(formSectionMenu(2, shown)[0].confirmKey).toBeUndefined();   // shown but empty
     const filled = { ...shown, sections: shown.sections.map((s, i) => (i === 2 ? { ...s, controls: [{ kind: 'label' as const, name: 'P', left: 0, top: 0, width: 10, height: 10, props: {} }] } : s)) };
     expect(formSectionMenu(0, filled)[0].confirmKey).toBe('form.headerFooterConfirm');
+  });
+  it('preview: a live text replaces the source, a live tick marks the box (Layout view)', () => {
+    const display = { lang: 'fr' as const, region: localeInfo('fr-FR') };
+    const box: ControlDef = { kind: 'textBox', name: 'T', left: 0, top: 0, width: 10, height: 10, props: { ControlSource: 'Nom' } };
+    const html = (n: ReturnType<typeof preview>) => renderToStaticMarkup(createElement(Fragment, null, n));
+    expect(html(preview(box, display, 'Indépendant'))).toContain('Nom');
+    expect(html(preview(box, display, 'Indépendant', { text: 'Dupont' }))).toMatch(/>Dupont</);
+    expect(html(preview({ ...box, props: {} }, display, 'Indépendant', { text: '' }))).not.toContain('Indépendant');
+    const check: ControlDef = { ...box, kind: 'checkBox' };
+    expect(html(preview(check, display, ''))).not.toContain('is-on');
+    expect(html(preview(check, display, '', { checked: true }))).toContain('is-on');
   });
   it('header hidden, footer shown with controls: the item shows both, without asking (the same rule as toggleHeaderFooter)', () => {
     const d = emptyFormDoc(null);

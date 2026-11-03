@@ -248,7 +248,7 @@ test('focus: Tab into the subform, Tab past its last column and Ctrl+Tab back to
   }
 });
 
-test('a recursive subform and a renamed Source Object show a frame with their message; the master stays usable', async () => {
+test('a recursive subform and a deleted Source Object show a frame with their message; the master stays usable', async () => {
   const { app, page } = await launchApp({ args: [base()], env: FR });
   try {
     await page.getByTestId('nav-item-form-Boucle').dblclick();
@@ -260,7 +260,7 @@ test('a recursive subform and a renamed Source Object show a frame with their me
     await expect(nom).toHaveValue('Martin');
     expect((await rows(page, 'Clients'))[0][1]).toBe('Dupond');
 
-    expect(await page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.objects.rename('form', 'Copie des commandes', 'Copie renommée')))
+    expect(await page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.objects.delete('form', 'Copie des commandes')))   // O4: a renamed form is followed by its subform controls; a deleted one is not
       .toMatchObject({ ok: true });
     await page.getByTestId('nav-item-form-Fiche orpheline').dblclick();
     const frame = page.locator('[data-testid="form-ctl-Commandes"]:visible');

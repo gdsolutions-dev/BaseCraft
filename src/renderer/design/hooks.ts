@@ -13,7 +13,7 @@ import type { addMoreField, editValidation, moreFieldsFor, setDataType, setForma
 
 export interface DesignHooks {
   /** The shell's design commands, moved verbatim from App's registerCommands(SHELL_SCOPE): createTableDesign, createTable,
-   *  importText, importExcel, linkBaseCraft (C1), linkAccess (C2), splitDatabase (C3), relationships, createFormDesign, createBlankForm, createForm, createQueryDesign, createSqlQuery,
+   *  importText, importExcel, linkBaseCraft (C1), linkAccess (C2), linkPostgreSql (C4), linkSqlServer (C5), importPostgreSql and importSqlServer (C7), splitDatabase (C3), moveToServer (C7), relationships, createFormDesign, createBlankForm, createForm, createQueryDesign, createSqlQuery,
    *  viewSql, createReport, createReportDesign, createBlankReport, createMacro. */
   shellCommands(env: DesignShellEnv): Partial<Record<CommandId, () => void | Promise<void>>>;
   requestFieldList(kind: 'form' | 'report', name: string): void;

@@ -9,13 +9,14 @@ const runAction = vi.fn();
 const tablesList = vi.fn(async () => [{ name: 'Commandes' }]);
 const cascadeChildren = vi.fn(async (_t: string): Promise<{ table: string; effect: 'deleted' | 'modified' }[]> => []);
 const relationsList = vi.fn(async (): Promise<object[]> => []);
+const objectsGet = vi.fn();
 const baseState = vi.fn(async () => ({ readOnly: false }));
 const getSettings = vi.fn(async () => ({ confirmActionQueries: true }));
 const describe = vi.fn(async ({ name }: { name: string }) => name === 'QV' // a join (B4): Commandes, and Clients through it
   ? { fields: [], updatable: true, keyTable: 'Commandes', parameters: [], tables: [{ table: 'Commandes', role: 'key', readOnly: [], lookupBy: [] }, { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }] }
   : { fields: [], updatable: true, keyTable: name === 'QCommandes' ? 'Commandes' : 'Clients', parameters: [] });
 (globalThis as unknown as { window: { basecraft: Partial<BasecraftApi> } }).window = {
-  basecraft: { queries: { actionCount, runAction }, tables: { list: tablesList } as unknown as BasecraftApi['tables'],
+  basecraft: { queries: { actionCount, runAction }, objects: { get: objectsGet } as unknown as BasecraftApi['objects'], tables: { list: tablesList } as unknown as BasecraftApi['tables'],
     sources: { describe } as unknown as BasecraftApi['sources'], base: { state: baseState } as unknown as BasecraftApi['base'],
     relations: { cascadeChildren, list: relationsList } as unknown as BasecraftApi['relations'],
     app: { getSettings } as unknown as BasecraftApi['app'] },
@@ -340,4 +341,45 @@ it('a dirty datasheet of a join query holds every table it writes (B4): an Updat
   } finally {
     setOpenTabs(() => []);
   }
+});
+
+const P = { host: 'h', port: 5432, database: 'd', user: 'u', tls: 'require', timeout: 60 };
+const pt = (returnsRecords: boolean) => ({ name: 'U', definition: { formatVersion: '2.0', sql: 'UPDATE x', passThrough: { kind: 'postgresql', params: P, returnsRecords } } });
+
+it('a pass-through without records runs at once: no count, no question', async () => {
+  baseState.mockResolvedValue({ readOnly: true }); // R11: allowed on a read-only front-end
+  objectsGet.mockResolvedValue(pt(false));
+  actionCount.mockReset();
+  tablesList.mockReset().mockResolvedValue([{ name: 'Commandes' }]);
+  runAction.mockReset().mockResolvedValue({ ok: true, count: 3 });
+  const m = fakeModal([]);
+  const d = deps(m.modal);
+  expect(await runActionFlow({ kind: 'query', name: 'U' }, d)).toBe('done');
+  expect(actionCount).not.toHaveBeenCalled();
+  expect(m.asked).toEqual([]);
+  expect(runAction).toHaveBeenCalledWith({ kind: 'query', name: 'U' }, {}, { skipFailures: false, replaceTable: false });
+  expect(d.dispatch).toHaveBeenCalledWith({ type: 'tableDataChanged', name: 'Commandes' });
+  expect(d.dispatch).toHaveBeenCalledWith({ type: 'queryDataChanged' });
+  baseState.mockResolvedValue({ readOnly: false });
+});
+
+it('a pass-through with records is no action query', async () => {
+  objectsGet.mockResolvedValue(pt(true));
+  runAction.mockReset();
+  const d = deps(fakeModal([]).modal);
+  expect(await runActionFlow({ kind: 'query', name: 'U' }, d)).toBe('failed');
+  expect(d.showError).toHaveBeenCalledWith(new Error('bc:notSelectQuery'));
+  expect(runAction).not.toHaveBeenCalled();
+});
+
+it('blocked: the bar comes back, its message once', async () => {
+  objectsGet.mockResolvedValue(pt(false));
+  runAction.mockReset().mockRejectedValue(new Error("Error invoking remote method 'bc:queries:runAction': Error: bc:contentDisabled"));
+  const m = fakeModal([]);
+  let bar = 0;
+  const off = onContentBlocked(() => { bar++; });
+  expect(await runActionFlow({ kind: 'query', name: 'U' }, deps(m.modal))).toBe('blocked');
+  off();
+  expect(bar).toBe(1);
+  expect(m.asked.map((x) => x.messageKey)).toEqual(['query.action.contentDisabled']);
 });

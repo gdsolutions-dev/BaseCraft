@@ -24,7 +24,7 @@ let db: DatabaseSync;
 // Task 1's queries: Commandes (key) ⋈ Clients; three levels Lignes ⋈ Commandes ⋈ Clients
 const QV = 'SELECT Commandes.[N°], Commandes.Client, Clients.[N°], Clients.Nom, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client';
 const L3 = 'SELECT Lignes.Commande, Lignes.Qté, Commandes.Montant, Clients.Nom FROM (Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client) INNER JOIN Lignes ON Commandes.[N°] = Lignes.Commande';
-const save = (sql: string, req: SourceSaveRequest) => saveSourceRow(db, resolve(db, { kind: 'sql', sql }), req, info);
+const save = (sql: string, req: Parameters<typeof saveSourceRow>[2]) => saveSourceRow(db, resolve(db, { kind: 'sql', sql }), req, info);
 const lookup = (sql: string, values: Record<string, CellInput>) => autoLookup(db, resolve(db, { kind: 'sql', sql }), values, info);
 const row = (table: string, rowid: number): unknown[] => {
   const s = db.prepare(`SELECT * FROM "${table}" WHERE rowid = ?`);
@@ -50,7 +50,7 @@ it('a "one" field goes to the row\'s client', async () => {
   expect(row('Clients', 2)).toEqual([2, 'Martin SA', 'LYON']);
   // the session's entry points (sources.save / sources.autoLookup)
   expect(await session.saveSource({ kind: 'sql', sql: QV }, { rowid: 3, values: { Nom: 'Martin' } })).toMatchObject({ ok: true, values: { Nom: 'Martin' } });
-  expect(session.autoLookup({ kind: 'sql', sql: QV }, { Client: '1' })).toEqual({ 'Clients.N°': 1, Nom: 'Dupont' });
+  expect(await session.autoLookup({ kind: 'sql', sql: QV }, { Client: '1' })).toEqual({ 'Clients.N°': 1, Nom: 'Dupont' });
 });
 
 it('link and "one" field together: the new parent is written (R3)', async () => { // Review Focus 1
@@ -91,6 +91,14 @@ it('a new record goes to the key table', async () => {
   expect(await save(QV, { rowid: null, values: { Client: '99', Montant: '1' } })).toMatchObject({ ok: false, errors: [{ field: 'Client', code: 'noParent' }] });
   expect(await save(QV, { rowid: null, values: { Montant: '1', Nom: 'X' } })).toMatchObject({ ok: false, errors: [{ field: 'Nom', code: 'noParent', table: 'Clients' }] });
   expect(count('Commandes')).toBe(6);
+});
+
+it('a new record with its client field: the client found from the key typed gets it (final review 7)', async () => {
+  const QVV = 'SELECT Commandes.[N°], Commandes.Client, Commandes.Montant, Clients.Nom, Clients.Ville FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client';
+  expect(await save(QVV, { rowid: null, values: { Client: '3', Montant: '7', Ville: 'Paris' } }))
+    .toMatchObject({ ok: true, rowid: 6, values: { Client: 3, Montant: 7, Nom: 'Durand', Ville: 'Paris' } });
+  expect(row('Commandes', 6).slice(1, 3)).toEqual([3, 7]);
+  expect(row('Clients', 3)).toEqual([3, 'Durand', 'Paris']);
 });
 
 it('a parent the join finds twice is never written', async () => { // Review Focus 2 (P10: real tables)
@@ -180,7 +188,7 @@ it('two nested saved queries: the page rowid is the key table\'s, and a save wri
   expect(session.saveObject('query', 'QV', { formatVersion: '1.0', sql: QV }, null)).toEqual({ ok: true });
   expect(session.saveObject('query', 'QV2', { formatVersion: '1.0', sql: 'SELECT Nom, Montant FROM QV' }, null)).toEqual({ ok: true });
   const ref = { kind: 'sql', sql: 'SELECT Nom AS Qui, Montant FROM QV2' } as const;
-  expect(session.pageSource(ref, { offset: 0, limit: 10 }).rowids).toEqual([1, 2, 3, 4, 5]);
+  expect((await session.pageSource(ref, { offset: 0, limit: 10 })).rowids).toEqual([1, 2, 3, 4, 5]);
   expect(await session.saveSource(ref, { rowid: 4, values: { Qui: 'Durand SA', Montant: '98' } })).toEqual({ ok: true, rowid: 4, values: { Qui: 'Durand SA', Montant: 98 } });
   expect(row('Clients', 3)[1]).toBe('Durand SA');
   expect(row('Commandes', 4)[2]).toBe(98);

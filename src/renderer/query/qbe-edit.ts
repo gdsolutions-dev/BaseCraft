@@ -2,16 +2,18 @@
 // défaut tirées des relations, contrôles faits avant l'enregistrement. Les cellules gardent la forme canonique.
 import type { Relation } from '../../shared/api';
 import { bracket } from '../../shared/expr/lexer';
-import { sameName } from '../../shared/field-types';
+import { sameName, type FieldProps } from '../../shared/field-types';
 import type { JoinKind, ParamDecl } from '../../shared/query/ast';
 import type { Expr } from '../../shared/expr/ast';
 import { listSeparator, toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { hasAggregate, parseCanonical } from '../../shared/expr/parser';
 import { named, splitAlias, type QbeColumn, type QbeCrosstab, type QbeDesign, type QbeJoin, type QbeKind, type QbeTotal } from '../../shared/query/qbe';
 import { isHeadingLiteral, QUERY_PARSE } from '../../shared/query/sql-parser';
+import type { PaneBox } from './TablePane';
 
 export type QbeAction =
-  | { type: 'addTable'; name: string; relations: Relation[] }          // automatic alias « Clients_1 » when already present; default joins
+  // automatic alias « Clients_1 » when already present; default joins (`autoJoin`: a source's fields, AutoJoin on, O3 R6)
+  | { type: 'addTable'; name: string; relations: Relation[]; autoJoin?: (source: string) => PaneBox['fields'] }
   | { type: 'removeTable'; alias: string } | { type: 'addJoin'; join: QbeDesign['joins'][number] } | { type: 'setJoinKind'; index: number; kind: JoinKind }
   | { type: 'removeJoin'; index: number } | { type: 'addField'; table: string; field: string; at?: number }
   | { type: 'setCell'; col: number; row: QbeRow; value: string | boolean } | { type: 'insertColumn'; at: number } | { type: 'deleteColumn'; at: number }
@@ -29,9 +31,17 @@ export const ROWS_MIN = 3;
 export const emptyQbe = (): QbeDesign => ({ kind: 'select', tables: [], joins: [], totals: false, distinct: false, params: [], columns: [] });
 const aliasOf = (t: { name: string; alias?: string }): string => t.alias ?? t.name;
 
+/** The type two fields must share to be auto-joined (O3 R6): AutoNumber is a Long Integer. */
+export function joinKey(p: FieldProps): string {
+  return p.type === 'autoNumber' ? 'number:longInteger' : p.type === 'number' ? `number:${p.numberSize ?? 'longInteger'}` : p.type;
+}
+
 /** One join per field pair of each relation between the added table (`alias`, `added` by default) and a box already there:
- *  the parent is `l`; joinType 1 inner, 2 left (every parent row), 3 right (every child row). No AutoJoin on equal names. */
-export function defaultJoins(tables: QbeDesign['tables'], added: string, relations: Relation[], alias = added): QbeDesign['joins'] {
+ *  the parent is `l`; joinType 1 inner, 2 left (every parent row), 3 right (every child row). Then AutoJoin (O3 R6, when
+ *  `autoJoin` gives the sources' fields), with each box of another source no relation links it to: an inner join per pair of
+ *  fields of the same name and join key, one side a key, the key side left (both: the box already there). */
+export function defaultJoins(tables: QbeDesign['tables'], added: string, relations: Relation[], alias = added,
+  autoJoin?: (source: string) => PaneBox['fields']): QbeDesign['joins'] {
   const kind = (r: Relation): JoinKind => (r.joinType === 2 ? 'left' : r.joinType === 3 ? 'right' : 'inner');
   const out: QbeJoin[] = [];
   for (const r of relations) {
@@ -44,6 +54,17 @@ export function defaultJoins(tables: QbeDesign['tables'], added: string, relatio
       } else if (sameName(r.childTable, added) && sameName(r.parentTable, b.name)) {
         for (const [p, c] of pairs) out.push({ l: other, lField: p, r: alias, rField: c, kind: kind(r) });
       }
+    }
+  }
+  if (!autoJoin) return out;
+  const mine = autoJoin(added);
+  for (const b of tables) {
+    const other = aliasOf(b);
+    if (sameName(b.name, added) || sameName(other, alias) || out.some((j) => sameName(j.l, other) || sameName(j.r, other))) continue;
+    for (const g of autoJoin(b.name)) {
+      const f = mine.find((x) => sameName(x.name, g.name));
+      if (!f || !f.join || f.join !== g.join || !(f.key || g.key)) continue;
+      out.push(g.key ? { l: other, lField: g.name, r: alias, rField: f.name, kind: 'inner' } : { l: alias, lField: f.name, r: other, rField: g.name, kind: 'inner' });
     }
   }
   return out;
@@ -103,7 +124,7 @@ export function qbeReducer(d: QbeDesign, a: QbeAction): QbeDesign {
       let alias = a.name, n = 0;
       while (d.tables.some((t) => sameName(aliasOf(t), alias))) alias = `${a.name}_${++n}`;
       const table = alias === a.name ? { name: a.name } : { name: a.name, alias };
-      return { ...d, tables: [...d.tables, table], joins: [...d.joins, ...defaultJoins(d.tables, a.name, a.relations, alias)] };
+      return { ...d, tables: [...d.tables, table], joins: [...d.joins, ...defaultJoins(d.tables, a.name, a.relations, alias, a.autoJoin)] };
     }
     case 'removeTable':
       return {

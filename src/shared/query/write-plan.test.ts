@@ -35,6 +35,13 @@ it('one-to-many: Commandes is the key table, Clients is looked up by Client', ()
     { table: 'Clients', role: 'one', readOnly: ['N°'], lookupBy: ['Client'] }]);
   expect(['Commandes.N°', 'Client', 'Clients.N°', 'Nom', 'Montant'].map((n) => writableColumn(toSourceInfo(q), n))).toEqual([true, true, false, true, true]);
 });
+it('a column a server computes (a connector-specific prop: pgGenerated) is read-only in the key table and a looked-up one (C4 M2)', () => {
+  const gen = (d: TableDesign, field: string): TableDesign => ({ ...d, fields: d.fields.map((x) => (x.name === field ? { ...x, props: { ...x.props, pgGenerated: true } } : x)) });
+  const c2: QueryCatalog = { ...cat, table: (n) => (n === 'Commandes' ? gen(design('Commandes'), 'Montant') : n === 'Clients' ? gen(design('Clients'), 'Ville') : cat.table(n)) };
+  const info = toSourceInfo(bindQuery(parseSql(`${V.replace('Clients.Nom', 'Clients.Nom, Clients.Ville')}`), c2));
+  expect(info.tables!.map((x) => x.readOnly)).toEqual([['Montant'], ['N°', 'Ville']]);
+  expect(['Montant', 'Ville', 'Nom'].map((n) => writableColumn(info, n))).toEqual([false, false, true]);
+});
 it('three levels: Lignes is the key; Clients chains through Commandes', () => {
   const q = b('SELECT Lignes.Commande, Lignes.Qté, Commandes.Montant, Clients.Nom FROM (Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client) INNER JOIN Lignes ON Commandes.[N°] = Lignes.Commande');
   expect(toSourceInfo(q).tables!.map((x) => [x.table, x.role, x.lookupBy])).toEqual([['Lignes', 'key', []], ['Commandes', 'one', ['Commande']], ['Clients', 'one', ['Commande']]]);

@@ -34,11 +34,24 @@ describe('loadReportData', () => {
     expect(api.calls.every((c) => c.limit === DATA_PAGE)).toBe(true);
   });
 
+  it("a report's first page is fresh (C6 R7), later pages are not", async () => {
+    const api = fakeSources(DATA_PAGE + 5);
+    await loadReportData(api, { kind: 'table', name: 'T' });
+    expect(api.calls.map((c) => c.fresh)).toEqual([true, undefined]);
+  });
+
   it('passes the parameters and stops on an empty source', async () => {
     const api = fakeSources(0);
     const d = await loadReportData(api, { kind: 'table', name: 'T' }, { P: 1 });
     expect(d.rows).toEqual([]);
-    expect(api.calls).toEqual([{ offset: 0, limit: DATA_PAGE, params: { P: 1 } }]);
+    expect(api.calls).toEqual([{ offset: 0, limit: DATA_PAGE, params: { P: 1 }, fresh: true }]);
+  });
+
+  it('`max` caps the rows read, across pages (Layout view)', async () => {
+    const api = fakeSources(2 * DATA_PAGE + 203);
+    const d = await loadReportData(api, { kind: 'table', name: 'T' }, undefined, undefined, undefined, DATA_PAGE + 5);
+    expect(d.rows).toHaveLength(DATA_PAGE + 5);
+    expect(api.calls.map((c) => c.limit)).toEqual([DATA_PAGE, 5]);
   });
 
   it('stops when aborted', async () => {

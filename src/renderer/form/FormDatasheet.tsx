@@ -12,13 +12,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import { useTranslation } from 'react-i18next';
 import type { ControlDef } from '../../shared/design/model';
 import { bool, truthy } from '../../shared/expr/library';
-import { editText, toCell, type LookupCell } from '../datasheet/datasheet-cells';
+import { editText, measureIn, toCell, truncateNumber, type LookupCell } from '../datasheet/datasheet-cells';
 import { installEditorCommitFix } from '../datasheet/glide-keyboard';
 import {
-  cellSelection, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, ROW_HEIGHT, rowOf, RowPencil, scrollGridToRow, useColumnWidths,
-  useNonAsciiTyping, usePalette, useRowPencil,
+  cellEditorOpen, cellSelection, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, ROW_HEIGHT, rowOf, RowPencil, scrollGridToRow, useColumnWidths,
+  useEditKeys, usePalette, useRowPencil, type EditKeysEnv,
 } from '../datasheet/grid-shared';
 import { pasteAllowed } from '../datasheet/datasheet-cells';
+import { currentBaseOptions } from '../shell/startup';
 import { sameName } from '../../shared/field-types';
 import { useModal } from '../shell/Modal';
 import { lookupEditor } from '../datasheet/LookupEditor';
@@ -52,7 +53,7 @@ export interface FormDatasheetProps extends Omit<SingleFormProps, 'doc'> {
   onDeleteRecord(): void;                                        // the current record's row selected, then Delete
   error: string | null;                                         // the first error (a field no control shows included)
   name: string;
-  onTabOut?(dir: 1 | -1): boolean;                              // a subform: Tab past the last column (or before the first) leaves it at its end
+  onTabOut?(dir: 1 | -1): boolean;                              // a subform: Tab, Enter or an arrow past the last cell (or before the first) leaves it at its end
 }
 
 export function FormDatasheet(p: FormDatasheetProps) {
@@ -61,6 +62,8 @@ export function FormDatasheet(p: FormDatasheetProps) {
   const palette = usePalette();
   const modal = useModal();
   const [widths, onColumnResize] = useColumnWidths();
+  const checkTruncated = useMemo(() => currentBaseOptions().checkTruncatedNumbers, []); // read when the view opens (R13)
+  const measure = useMemo(() => measureIn(`${palette.theme.baseFontStyle} ${palette.theme.fontFamily}`), [palette]);
   const [, scrolled] = useState(0);
   const editor = useRef<DataEditorRef>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -105,10 +108,11 @@ export function FormDatasheet(p: FormDatasheetProps) {
       // the selected cell), unless a dialog has taken the focus meanwhile
       const focus = () => { if (!document.querySelector('[aria-modal="true"]')) editor.current?.focus(); };
       focus();
-      // again once drawn, unless the focus has gone meanwhile to another form's control (Ctrl+Tab out of a subform)
+      // again once drawn, unless the focus has gone meanwhile to another form's control (Ctrl+Tab out of a subform) or a click
+      // has opened an editor
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const a = document.activeElement;
-        if (!a?.closest('.frun') || wrap.current?.contains(a)) focus();
+        if ((!a?.closest('.frun') || wrap.current?.contains(a)) && !cellEditorOpen()) focus();
       }));
       return true;
     };
@@ -140,7 +144,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
     }
     if (isList(c)) {
       const list = rx.lists[c.name];
-      if (b && b.pending === undefined && list) return toCell(b.f, b.stored, { locale, lang, readOnly: readonly, lookup: list.data });
+      if (b && b.pending === undefined && list) return toCell(b.f, b.stored, { locale, lang, ...(rx.display.fourDigitYear ? { fourDigitYear: true } : {}), readOnly: readonly, lookup: list.data });
       const { row, text: shown } = listCurrent(c, rx);   // typed, unbound
       const cell: LookupCell = { kind: GridCellKind.Text, data: shown, displayData: shown, allowOverlay: true, readonly, bound: row >= 0 ? (list ?? NO_LIST).data.rows[row].value : null };
       return cell;
@@ -165,9 +169,11 @@ export function FormDatasheet(p: FormDatasheetProps) {
     const isCurrent = row === current;
     const rx = isCurrent ? x : rowCtx(row);
     if (rx.snap.status !== 'ready' && !isUnbound(c)) return LOADING;
-    const cell = cellOf(c, rx, isCurrent);
+    let cell = cellOf(c, rx, isCurrent);
+    const b = fieldOf(c, rx);
+    if (checkTruncated && b && b.pending === undefined && !isList(c) && !isUnbound(c) && !isCalc(c)) cell = truncateNumber(b.f, cell, widths[columns[col].control] ?? columns[col].width, measure);
     return isCurrent && x.errors[c.name] !== undefined ? { ...cell, themeOverride: { bgCell: palette.error } } : cell;
-  }, [columns, byName, x, rowCtx, current, palette, ro, locale, lang, t]);   // x changes with each record change or entry: Glide redraws
+  }, [columns, byName, x, rowCtx, current, palette, ro, locale, lang, t, checkTruncated, measure, widths]);   // x changes with each record change or entry: Glide redraws
   const cellAt = useRef(getCellContent);
   cellAt.current = getCellContent;
 
@@ -194,11 +200,6 @@ export function FormDatasheet(p: FormDatasheetProps) {
 
   const onKeyDown = (e: GridKeyEventArgs) => {
     const col = live.current.sel.current?.cell[0];
-    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey && col === (e.shiftKey ? 0 : columns.length - 1) && p.onTabOut?.(e.shiftKey ? -1 : 1)) {
-      e.cancel();
-      e.preventDefault();   // the browser's own Tab would then move the focus once more
-      return;
-    }
     if (e.key !== 'Escape') return;   // outside a cell editor (which handles its own): the cell's change, then the record
     const c = col === undefined ? undefined : columns[col] && byName.get(columns[col].control);
     if (!c) return;
@@ -206,7 +207,13 @@ export function FormDatasheet(p: FormDatasheetProps) {
     p.onEscape(c);
   };
 
-  useNonAsciiTyping(wrap, cellAt, () => live.current.sel.current?.cell);   // « é » opens the editor too (as DatasheetView)
+  // Access's keys (O2), as DatasheetView's; a subform leaves past its last cell (or before its first) as Tab does
+  const keysEnv = useRef<EditKeysEnv>(null!);
+  keysEnv.current = {
+    cellAt: (item) => cellAt.current(item), selected: () => live.current.sel.current,
+    cols: () => columns.length, rows: () => count, moveTo: ([col, row]) => select(cellSelection(col, row)), pastEnd: p.onTabOut,
+  };
+  useEditKeys(wrap, keysEnv);
 
   const provideEditor = useCallback<ProvideEditorCallback<GridCell>>((cell) => {
     const col = live.current.sel.current?.cell[0];
@@ -254,7 +261,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
         <DataEditor ref={editor} theme={palette.theme} columns={gridColumns} rows={count} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection
           gridSelection={sel} onGridSelectionChange={select} onCellEdited={onCellEdited} onKeyDown={onKeyDown}
-          onDelete={onDelete} onPaste={onPaste} keybindings={{ search: false }} onColumnResize={onColumnResize}
+          onDelete={onDelete} onPaste={onPaste} keybindings={{ search: false, activateCell: ' |shift+Enter' }} onColumnResize={onColumnResize}
           onVisibleRegionChanged={() => { if (snap.dirty) scrolled((n) => n + 1); }}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={ROW_HEIGHT} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
           width="100%" height="100%" />

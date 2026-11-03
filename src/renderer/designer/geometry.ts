@@ -17,3 +17,7 @@ export function resizeRect(r: Rect, h: Handle, dx: number, dy: number, min: numb
 /** Recouvrement strict : deux rectangles qui se touchent seulement par un bord ne se coupent pas (un trait de hauteur 0 compte s'il est à l'intérieur). */
 export const intersects = (a: Rect, b: Rect): boolean =>
   a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
+/** `inner` tient entièrement dans `outer`, bords compris (mode « Entièrement entouré »). */
+export const contains = (outer: Rect, inner: Rect): boolean =>
+  inner.left >= outer.left && inner.top >= outer.top && inner.left + inner.width <= outer.left + outer.width && inner.top + inner.height <= outer.top + outer.height;

@@ -21,8 +21,10 @@ import { shellDesignCommands } from './shell-design-commands';
 registerDocumentView('table', 'design', TableDesignView);
 registerDocumentView('relations', 'run', RelationsView);
 registerDocumentView('form', 'design', FormDesignView);
+registerDocumentView('form', 'layout', FormDesignView);   // L2: the same component, Design <-> Layout never remounts (state, undo kept)
 registerDocumentView('query', 'design', QueryDesignView);
 registerDocumentView('report', 'design', ReportDesignView);
+registerDocumentView('report', 'layout', ReportDesignView);   // L3: likewise for a report
 registerDocumentView('macro', 'design', MacroDesignView);
 
 registerNavMenuItems('query', [

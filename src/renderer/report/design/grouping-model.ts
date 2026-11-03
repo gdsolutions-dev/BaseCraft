@@ -1,5 +1,6 @@
 // Regroupement, tri et totaux d'un état (pur) : les niveaux de props.grouping et leurs sections d'en-tête et de pied de groupe
 // restent cohérents après chaque opération (une section par drapeau, groupLevel dans l'ordre de grouping, sections rangées).
+import { remapSections } from '../../../shared/design/layout-edit';
 import { flattenControls, type DesignDoc, type SectionDef } from '../../../shared/design/model';
 import { sameName } from '../../../shared/field-types';
 import type { SourceField } from '../../../shared/record-source';
@@ -12,15 +13,26 @@ export const groupLevels = (doc: DesignDoc): GroupLevel[] => (Array.isArray(doc.
 const isGroupSection = (s: SectionDef) => s.kind === 'groupHeader' || s.kind === 'groupFooter';
 
 /** `next` devient props.grouping ; `from[ancien niveau]` = son nouveau niveau, ou null s'il disparaît. Chaque section de groupe suit
- *  son niveau (avec ses contrôles) ; celles qu'un drapeau ne demande plus partent, celles qu'il demande sont créées vides. */
+ *  son niveau (avec ses contrôles et les lignes de disposition qui la nomment) ; celles qu'un drapeau ne demande plus partent, celles
+ *  qu'il demande sont créées vides. */
 function regroup(doc: DesignDoc, next: GroupLevel[], from: (number | null)[]): DesignDoc {
+  const levelOf = (kind: string, level: number): number | null => {
+    const l = from[level];
+    return l === null || l === undefined || !next[l]![kind === 'groupHeader' ? 'header' : 'footer'] ? null : l;
+  };
   const kept = doc.sections.flatMap((s): SectionDef[] => {
     if (!isGroupSection(s)) return [s];
-    const l = from[s.groupLevel ?? -1];
-    if (l === null || l === undefined || !next[l]![s.kind === 'groupHeader' ? 'header' : 'footer']) return [];
+    const l = levelOf(s.kind, s.groupLevel ?? -1);
+    if (l === null) return [];
     return [l === s.groupLevel ? s : { ...s, groupLevel: l }];
   });
-  let out: DesignDoc = { ...doc, props: { ...doc.props, grouping: next }, sections: kept };
+  const remapped = remapSections(doc, (ref) => {   // a layout names its sections by kind:groupLevel (sectionRef)
+    const [kind, level] = ref.split(':');
+    if (level === undefined) return ref;
+    const l = levelOf(kind!, Number(level));
+    return l === null ? null : `${kind}:${l}`;
+  });
+  let out: DesignDoc = { ...remapped, props: { ...remapped.props, grouping: next }, sections: kept };
   next.forEach((g, l) => {
     out = withSections(out, [...(g.header ? ['groupHeader' as const] : []), ...(g.footer ? ['groupFooter' as const] : [])], l);
   });

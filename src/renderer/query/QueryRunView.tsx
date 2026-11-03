@@ -47,7 +47,7 @@ export function QueryRunView(p: DocViewProps & { sql?: string }) {
         if (info === null) return close();
         const values = await runParameters(modal, info, region, (v) => api.sources.describe(source, v));
         if (values === null) return close();
-        await api.sources.page(source, { offset: 0, limit: 0, params: values });
+        await api.sources.page(source, { offset: 0, limit: 0, params: values, fresh: true });
         if (started.current === token) setParams({ values, token });
       } catch (e) {
         if (started.current !== token) return;

@@ -119,7 +119,7 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
     switch (c.kind) {
       case 'label': case 'textBox': case 'comboBox': {
         const text = c.kind === 'label' ? c.caption
-          : has ? formatValue(v, c.format ?? defaultFormat(c.source, data), { locale: env.locale, lang: env.lang, decimalPlaces: c.decimalPlaces ?? 'auto' })
+          : has ? formatValue(v, c.format ?? defaultFormat(c.source, data), { locale: env.locale, lang: env.lang, decimalPlaces: c.decimalPlaces ?? 'auto', ...(env.fourDigitYear ? { fourDigitYear: true } : {}) })
           : failed.get(c.name) ?? '';
         const item = textItem(c, text, c.kind !== 'label' && has && (v?.t === 'num' || v?.t === 'date'), issues);
         if (c.canShrink && text === '') box.shrunk = true;

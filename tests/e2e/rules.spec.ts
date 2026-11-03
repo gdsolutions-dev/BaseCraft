@@ -32,7 +32,7 @@ async function closeEditor(page: Page, key: 'Enter' | 'Tab') {
 
 test('default value, validation rule and message: designer, datasheet, other language', async () => {
   const base = seedBase('regles', (db) => createTable(db, stock));
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Stock').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -107,7 +107,7 @@ test('expression builder: the rule of Qté built from the lists, a refusal with 
     createTable(db, stock);
     await insertRow(db, stock, { Article: 'Vis', Qté: -2 }, localeInfo('fr-FR')); // breaks the rule built below
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const text = page.getByTestId('xb-text');
   const selected = () => text.evaluate((el: HTMLTextAreaElement) => el.value.slice(el.selectionStart, el.selectionEnd));
   try {

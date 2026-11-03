@@ -9,7 +9,9 @@ import { tempVars } from '../macro/temp-vars';
 
 export type RecordTarget = 'previous' | 'next' | 'first' | 'last' | 'goTo' | 'new';
 export type SettableProperty = 'enabled' | 'visible' | 'locked' | 'left' | 'top' | 'width' | 'height' | 'foreColor' | 'backColor' | 'caption' | 'value';
-export interface FindOptions { what: string; match: 'anywhere' | 'whole' | 'start'; matchCase: boolean; search: 'up' | 'down' | 'all'; onlyCurrentField: boolean; findFirst: boolean }
+/** `asFormatted` (the Find dialog's « Rechercher les champs mis en forme », O2 R10): the text shown, else the stored value's text. */
+export interface FindOptions { what: string; match: 'anywhere' | 'whole' | 'start'; matchCase: boolean; search: 'up' | 'down' | 'all'; onlyCurrentField: boolean; findFirst: boolean;
+  asFormatted?: boolean }
 export interface FormInstance {
   name: string; tabId: string;
   /** R11: the control (with the value being typed), else the source field, of the current record; else ExprRuntimeError('unknownField'). */

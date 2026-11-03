@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTable } from '../../src/main/db/schema';
 import { clients } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -166,7 +166,7 @@ test('read-only base: the designer cannot change or save anything', async () => 
     // Ctrl+S must not reach tables.save
     const saves = await spyIpc(b.app, 'bc:tables:save');
     await p.keyboard.press('Control+s');
-    await p.getByTestId('cmd-viewDatasheet').click(); // a command that runs: Ctrl+S had its chance to act first
+    await pickView(p, 'viewDatasheet'); // a command that runs: Ctrl+S had its chance to act first
     await expect(p.getByTestId('status-mode')).toHaveText(fr.status.mode.datasheet);
     expect(await saves()).toHaveLength(0);
     await expect(p.getByTestId('modal')).toHaveCount(0);

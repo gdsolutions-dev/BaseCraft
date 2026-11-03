@@ -13,7 +13,7 @@ import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import type { MacroItem } from '../../src/shared/macro/model';
 import { DEFAULT_STARTUP } from '../../src/shared/startup';
 import { SHIFT_GRACE_MS } from '../../src/renderer/shell/shift-key';
-import { launchApp, openDbOptions, seedBase, seedForm, seedReportsE2E } from './helpers';
+import { launchApp, openDbOptions, seedBase, seedForm, seedReportsE2E, pickView , checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -117,7 +117,7 @@ test('recette B3: AutoExec opens a menu whose buttons open forms, filter and pri
     await expect(page.getByTestId('nav-pane')).toHaveCount(0);
     await expect(page.getByTestId('nav-show')).toHaveCount(0);
     expect(await ribbonTabs(page)).toEqual(['ribbon-tab-file', 'ribbon-tab-home']);
-    await expect(page.getByTestId('cmd-viewDesign')).toHaveCount(0);
+    await checkView(page, 'viewDesign', (v) => expect(v).toHaveCount(0));
     await expect(page.getByTestId('status-view-design')).toHaveCount(0);
 
     // 3. the menu's buttons: every client, Lyon's, every order, the report printed without a preview
@@ -170,12 +170,12 @@ test('recette B3: AutoExec opens a menu whose buttons open forms, filter and pri
     await expect(docTabs(page)).toHaveCount(0);
     await page.getByTestId('nav-item-form-FMenu').dblclick();
     await expect(page.getByTestId('doc-tab-form-FMenu')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('cmd-viewDesign')).toBeVisible();
-    await page.getByTestId('cmd-viewDesign').click();
+    await checkView(page, 'viewDesign', (v) => expect(v).toBeVisible());
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('form-design')).toBeVisible();
 
     // 7. back to Form view, « Quitter »: the app exits
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(vis(page, 'form-run')).toBeVisible();
     const closed = app.waitForEvent('close');
     await vis(page, 'form-ctl-cmdQuitter').click();

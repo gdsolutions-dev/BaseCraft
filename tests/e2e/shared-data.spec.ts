@@ -61,8 +61,8 @@ const open = async (page: Page, item: string) => { await page.getByTestId(item).
 
 test('two front-ends, one record: Write Conflict in the datasheet — Drop Changes, Copy to Clipboard, Save Record', async () => {
   const { data, a: feA, b: feB } = layout();
-  const a = await launchApp({ args: [feA], env: ENV });
-  const b = await launchApp({ args: [feB], env: ENV });
+  const a = await launchApp({ enterMovesDown: true, args: [feA], env: ENV });
+  const b = await launchApp({ enterMovesDown: true, args: [feB], env: ENV });
   try {
     for (const p of [a.page, b.page]) { await open(p, 'nav-item-Clients'); await expect(cell(p, 2, 2)).toHaveText('Paris'); }
 
@@ -107,8 +107,8 @@ test('two front-ends, one record: Write Conflict in the datasheet — Drop Chang
 
 test('a form against a datasheet of another front-end: Save Record writes only the form’s change; a record deleted meanwhile', async () => {
   const { data, a: feA, b: feB } = layout();
-  const a = await launchApp({ args: [feA], env: ENV });
-  const b = await launchApp({ args: [feB], env: ENV });
+  const a = await launchApp({ enterMovesDown: true, args: [feA], env: ENV });
+  const b = await launchApp({ enterMovesDown: true, args: [feB], env: ENV });
   const ctl = (n: string) => a.page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
   try {
     await open(a.page, 'nav-item-form-FClients');
@@ -147,7 +147,7 @@ test('a form against a datasheet of another front-end: Save Record writes only t
 // G3: one workstation, a form and a datasheet on the same record
 test('one instance: a form and a datasheet on the same record get the Write Conflict dialog (G3)', async () => {
   const { data, a: feA } = layout();
-  const a = await launchApp({ args: [feA], env: ENV });
+  const a = await launchApp({ enterMovesDown: true, args: [feA], env: ENV });
   const martin = () => inFile<{ Ville: string }>(data, `SELECT "Ville" FROM "Clients" WHERE "N°" = 2`)[0]?.Ville;
   const ctl = (n: string) => a.page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
   try {
@@ -179,8 +179,8 @@ test('the refresh interval: a datasheet and a form show the other workstation’
   const userData = () => { const d = mkdtempSync(join(tmpdir(), 'basecraft-')); writeFileSync(join(d, 'settings.json'), JSON.stringify({ refreshInterval: 1 })); return d; };
   const dirA = userData();
   const interval = () => JSON.parse(readFileSync(join(dirA, 'settings.json'), 'utf8')).refreshInterval;
-  const a = await launchApp({ args: [feA], env: ENV, userDataDir: dirA });
-  const b = await launchApp({ args: [feB], env: ENV, userDataDir: userData() });
+  const a = await launchApp({ enterMovesDown: true, args: [feA], env: ENV, userDataDir: dirA });
+  const b = await launchApp({ enterMovesDown: true, args: [feB], env: ENV, userDataDir: userData() });
   const ctl = (n: string) => a.page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
   const count = (p: Page) => p.getByTestId('nav-record-count').filter({ visible: true });
   // B types only once its view shows the file's value (A's last save, after B's refresh): typed over an older value, B's save
@@ -221,7 +221,7 @@ test('the refresh interval: a datasheet and a form show the other workstation’
     // other write (B's one signal came while it was open)
     await a.page.mouse.click(bb.x + 44 + 80 + 170 + 30, bb.y + 34 + 2 * 30 + 15);   // Durand's Ville
     await expect(cell(a.page, 2, 2)).toBeFocused();
-    await a.page.keyboard.press('Enter');
+    await a.page.keyboard.press('F2');
     await expect(a.page.getByTestId('grid-editor-portal').locator('textarea')).toBeFocused();
     await bWrites('Nantes');
     await a.page.waitForTimeout(2500); // two refresh intervals and more

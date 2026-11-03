@@ -13,7 +13,8 @@ import { isLinkName } from '../links/store';
 export type { AlterResult, FieldMapping };
 export { isExternal, sqlTokens } from './schema';
 
-interface AlterOptions { allowDataLoss: boolean; info: LocaleInfo; acceptExistingViolations?: boolean }
+/** beforeCommit (O4 R1): more writes in the alteration's transaction, awaited once it succeeded; a throw rolls all back. */
+interface AlterOptions { allowDataLoss: boolean; info: LocaleInfo; acceptExistingViolations?: boolean; beforeCommit?: (db: DatabaseSync) => Promise<void> }
 
 /** The fields form the primary key, or are one field with a "no duplicates" index: what a foreign key needs in its parent. */
 export function uniqueKey(design: TableDesign, fields: string[]): boolean {
@@ -179,6 +180,7 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
     if (view !== undefined) r = { ok: false, reason: 'viewBroken', view };
     if (r.ok) {
       checkForeignKeys(db, keyedTables(db, design.name));
+      await opts.beforeCommit?.(db);
       db.exec('COMMIT');
     } else db.exec('ROLLBACK');
     return r;

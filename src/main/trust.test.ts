@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
-import { ApprovalStore, contentState, enabledAfterOwnWrite, inTrustedFolder, readTrustConfig, systemTrustPath } from './trust';
+import { ApprovalStore, contentState, enabledAfterOwnWrite, inTrustedFolder, readTrustConfig, systemTrustPath, trustsFile } from './trust';
 
 let root: string;
 beforeEach(() => {
@@ -68,6 +68,17 @@ it('content state', () => {
   expect(contentState(present, 'u', file, deps)).toBe('enabled');
   expect(contentState({ ...present, fingerprint: 'b'.repeat(64) }, 'u', file, deps)).toBe('disabled'); // a change asks again
   expect(contentState(present, 'u', file, { ...deps, store: new ApprovalStore(join(root, 'other.json')), cfg: { trustedFolders: [{ path: join(root, 'sub'), subfolders: false }] } })).toBe('enabled');
+});
+
+it('C6 Task 8: a file is trusted (its pass-throughs use a stored password) when its content is enabled or it is in a trusted location', () => {
+  const file = join(root, 'sub', 'a.basecraft');
+  const none = { trustedFolders: [] };
+  const sub = { trustedFolders: [{ path: join(root, 'sub'), subfolders: false }] };
+  expect(trustsFile('enabled', file, none, process.platform)).toBe(true);
+  expect(trustsFile('disabled', file, none, process.platform)).toBe(false);
+  expect(trustsFile('none', file, none, process.platform)).toBe(false); // no active content: not trusted
+  expect(trustsFile('none', file, sub, process.platform)).toBe(true);
+  expect(trustsFile('disabled', file, sub, process.platform)).toBe(false); // content changed elsewhere since enabled: asks again
 });
 
 it('R5: an own write keeps the content enabled only if nothing changed it elsewhere first', () => {

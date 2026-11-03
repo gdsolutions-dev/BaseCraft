@@ -8,10 +8,15 @@ import { Session } from '../session';
 import { localeInfo } from '../../shared/locale-format';
 import { printSql } from '../../shared/query/print';
 import { parseSql } from '../../shared/query/sql-parser';
-import { describeQuerySource, pageQuerySource, rowSourceRef, sourceHasValue, type QueryRef } from './source';
+import { checkQueryDefinition, describeQuerySource, pageQuerySource, rowSourceRef, sourceHasValue, sourceLookupRows, type QueryRef } from './source';
 import { seedSales, seedSalesRelation } from './test-db';
 import { createTable } from '../db/schema';
 import { f, t } from '../../shared/test-fixtures';
+import { saveObject } from '../db/objects';
+import { postgresql } from '../connectors/postgres';
+
+const P = { host: 'db.example.com', port: 5432, database: 'compta', user: 'bob', tls: 'verify-full', timeout: 60 };
+const PT = { formatVersion: '2.0', sql: "SELECT string_agg(nom, ', ') FROM clients;", passThrough: { kind: 'postgresql', params: P, returnsRecords: true } };
 
 const probe: RiskProbe = { platform: 'win32', env: {}, homedir: 'C:\\Users\\x', windowsDriveType: () => 3 };
 let dir: string;
@@ -138,7 +143,7 @@ it('filter on an updatable query keeps its rowids; output names that look like i
   }
 });
 
-it('pages a query and a table with where and filter', () => {
+it('pages a query and a table with where and filter', async () => {
   saveQ('QClientsLyon', 'SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon"');
   const q = { kind: 'query', name: 'QClientsLyon' } as const;
   expect(pageQuerySource(db, q, { offset: 0, limit: 10 }, ctx).total).toBe(2);
@@ -147,11 +152,11 @@ it('pages a query and a table with where and filter', () => {
     .toEqual({ rows: [['Dupont', 'Lyon']], rowids: [1], total: 1 });
   expect(pageQuerySource(db, q, { offset: 0, limit: 10, where: '[Nom] Like "Z*"' }, ctx).total).toBe(0); // part of the totals key
   const t = { kind: 'table', name: 'Clients' } as const;
-  expect(session.pageSource(t, { offset: 0, limit: 10, where: '[Nom] Like "M*"' })).toEqual({ rows: [[2, 'Martin', 'LYON']], rowids: [2], total: 1 });
-  expect(session.pageSource(t, { offset: 0, limit: 10, where: '[Ville] = "Lyon"', filter: [{ field: 'Nom', criteria: 'Like "M*"' }] }).total).toBe(1);
+  expect(await session.pageSource(t, { offset: 0, limit: 10, where: '[Nom] Like "M*"' })).toEqual({ rows: [[2, 'Martin', 'LYON']], rowids: [2], total: 1 });
+  expect((await session.pageSource(t, { offset: 0, limit: 10, where: '[Ville] = "Lyon"', filter: [{ field: 'Nom', criteria: 'Like "M*"' }] })).total).toBe(1);
   for (const where of ['[TempVars]![v] = 1', '[Absent] = 1', '[Nom] =']) {
     expect(() => pageQuerySource(db, q, { offset: 0, limit: 1, where }, ctx)).toThrow(/^bc:invalidArgument$/);
-    expect(() => session.pageSource(t, { offset: 0, limit: 1, where })).toThrow(/^bc:invalidArgument$/);
+    await expect(session.pageSource(t, { offset: 0, limit: 1, where })).rejects.toThrow(/^bc:invalidArgument$/);
   }
 });
 
@@ -200,14 +205,14 @@ it('total is cached until a write', () => {
 
 it("the session's sequence moves on each write, and on another connection's commit", async () => {
   const info = { kind: 'sql', sql: 'SELECT * FROM Clients' } as const;
-  const total = () => session.pageSource(info, { offset: 0, limit: 0 }).total;
-  expect(total()).toBe(4);
+  const total = async () => (await session.pageSource(info, { offset: 0, limit: 0 })).total;
+  expect(await total()).toBe(4);
   await session.insert('Clients', { Nom: 'Petit' });
-  expect(total()).toBe(5);
+  expect(await total()).toBe(5);
   const other = new DatabaseSync(file);
   other.prepare(`INSERT INTO "Clients" ("Nom") VALUES ('Grand')`).run();
   other.close();
-  expect(total()).toBe(6);
+  expect(await total()).toBe(6);
 });
 
 it('limit 0 returns only the total', () =>
@@ -222,12 +227,13 @@ it.each([
   [{ kind: 'sql', sql: 'SELECT * FROM Zzz' }, /^bc:notFound\|unknownSource\|Zzz$/], // contract 1.2: a missing table
 ])('errors %#', (ref, re) => expect(() => describeQuerySource(db, ref as QueryRef, ctx.info)).toThrow(re));
 
-it('broken after a table rename', () => {
+it('broken after a table rename (Name AutoCorrect off, O4)', async () => {
   saveQ('QC', 'SELECT * FROM Clients');
-  expect(session.renameTable('Clients', 'Contacts')).toEqual({ ok: true });
+  session.saveStartup({ ...session.startup(), trackNameAutoCorrect: false });
+  expect(await session.renameTable('Clients', 'Contacts')).toEqual({ ok: true });
   expect(() => describeQuerySource(db, { kind: 'query', name: 'QC' }, ctx.info)).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
-  expect(() => session.describeSource({ kind: 'sql', sql: 'SELECT * FROM QC' })).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
-  expect(() => session.pageSource({ kind: 'query', name: 'QC' }, { offset: 0, limit: 1 })).toThrow(/^bc:notFound\|unknownSource\|Clients$/);
+  await expect(session.describeSource({ kind: 'sql', sql: 'SELECT * FROM QC' })).rejects.toThrow(/^bc:notFound\|unknownSource\|Clients$/);
+  await expect(session.pageSource({ kind: 'query', name: 'QC' }, { offset: 0, limit: 1 })).rejects.toThrow(/^bc:notFound\|unknownSource\|Clients$/);
 });
 
 it('a stored query whose definition no longer reads is named', () => {
@@ -294,4 +300,16 @@ it('a virtual table of another tool parses and binds, but the authorizer refuses
   const r = { kind: 'sql', sql: 'SELECT * FROM Notes' } as const;
   expect(describeQuerySource(db, r, ctx.info).fields.map((x) => x.name)).toEqual(['Texte']);
   expect(() => pageQuerySource(db, r, { offset: 0, limit: 10 }, ctx)).toThrow(/^bc:invalidQuery$/);
+});
+
+it('a pass-through is no source of another query', () => {
+  saveObject(db, 'query', 'P', PT, null);
+  expect(() => checkQueryDefinition(db, 'Q', { formatVersion: '1.0', sql: 'SELECT * FROM P' })).toThrow('bc:queryBind|passThroughAsSource|P');
+  expect(() => sourceLookupRows(db, { kind: 'query', name: 'P' }, 10, ctx.info)).toThrow('bc:queryBind|passThroughAsSource|P');
+});
+it('saving a pass-through checks its connector and params, binds nothing', () => {
+  expect(() => checkQueryDefinition(db, 'P', PT)).not.toThrow();
+  expect(() => checkQueryDefinition(db, 'P', { ...PT, passThrough: { ...PT.passThrough, params: { host: '' } } })).toThrow('bc:invalidArgument');
+  expect(() => checkQueryDefinition(db, 'P', PT, { postgresql: { ...postgresql, capabilities: { ...postgresql.capabilities, passThrough: false } } }))
+    .toThrow('bc:serverNotSupported|passThrough|postgresql');
 });

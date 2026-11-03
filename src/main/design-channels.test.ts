@@ -17,7 +17,7 @@ const DATA_CHANNELS: string[] = [
   CH.sourcesDescribe, CH.sourcesPage, CH.sourcesSave, CH.sourcesAutoLookup,
   CH.queriesActionCount, CH.queriesRunAction, CH.queriesCancel,
   CH.reportsExportPdf, CH.reportsPrint, CH.exchangeExportText, CH.exchangeExportExcel,
-  CH.linksRefresh, CH.linksUnlock,
+  CH.linksRefresh, CH.linksUnlock, CH.linksLogin, CH.linksLoginInfo, // C4 R10: the Runtime logs in
 ];
 
 describe('design channels', () => {
@@ -31,8 +31,13 @@ describe('design channels', () => {
       expect(isDesignChannel(ch)).toBe(true);
   });
   it('link design channels are design, refresh is not', () => { // R15
-    for (const ch of [CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert]) expect(isDesignChannel(ch)).toBe(true);
+    for (const ch of [CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
+      CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember]) expect(isDesignChannel(ch)).toBe(true);
     expect(isDesignChannel(CH.linksRefresh)).toBe(false);
     expect(isDesignChannel(CH.linksUnlock)).toBe(false); // C2 R7: Runtime users unlock too
+  });
+  it('the server migration is a design channel (C7 R1: absent from the Runtime)', () => {
+    expect(isDesignChannel(CH.migrateRun)).toBe(true);
+    expect(isDesignChannel(CH.migrateImport)).toBe(true); // R17
   });
 });

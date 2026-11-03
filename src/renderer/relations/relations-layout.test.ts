@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { f, t } from '../../shared/test-fixtures';
-import { BOX_W, HEAD, MAX_ROWS, PAD, ROW, autoLayout, boxHeight, deleteRefusal, linePath, linkSides, relationFields, type Box } from './relations-layout';
+import { BOX_W, HEAD, MAX_ROWS, PAD, ROW, autoLayout, boxHeight, deleteRefusal, linePath, linkSides, relationFields, rowFor, type Box } from './relations-layout';
 
 const SLOT_H = boxHeight(MAX_ROWS);
 const overlap = (p: { x: number; y: number }, q: { x: number; y: number }) =>
@@ -112,5 +112,16 @@ describe('a refused relation delete', () => {
   it('other refusals use the Navigation Pane texts', () => {
     expect(deleteRefusal({ ok: false, reason: 'readOnly' }, 'R')).toEqual({ messageKey: 'dialog.op.readOnly', params: { name: 'R', table: '', view: '' } });
     expect(deleteRefusal({ ok: false, reason: 'viewBroken', view: 'V' }, 'R')).toEqual({ messageKey: 'dialog.op.viewBroken', params: { name: 'R', table: '', view: 'V' } });
+  });
+});
+
+describe('rows that grow with the query design font (O3 R7)', () => {
+  it('keeps ROW at 8 pt and grows above it', () => {
+    expect(rowFor(8)).toBe(ROW);
+    expect(rowFor(16)).toBe(40);
+  });
+  it('anchors a line on the middle of the grown row', () => {
+    const a: Box = { x: 0, y: 0, w: BOX_W, h: boxHeight(5, 40), row: 40 }, b: Box = { x: 400, y: 0, w: BOX_W, h: boxHeight(5, 40), row: 40 };
+    expect(linePath(a, 2, b, 0).d.startsWith(`M ${BOX_W} ${HEAD + PAD + 2.5 * 40} `)).toBe(true);
   });
 });

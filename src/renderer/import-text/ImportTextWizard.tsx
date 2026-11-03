@@ -6,8 +6,10 @@ import type { TableSummary } from '../../shared/api';
 import { EXCEL_SPEC, type ExcelPreview } from '../../shared/exchange';
 import type { TableDesign } from '../../shared/field-types';
 import { IMPORT_TYPES, type ImportField, type ImportProgress, type ImportResult, type ImportSpec, type PrimaryKeyChoice, type TextPreview } from '../../shared/import-text';
+import { autoIndexed, withAutoIndex } from '../../shared/auto-index';
 import { api } from '../bridge';
 import { bcErrorCode, trapFocus, useErrorDialog } from '../shell/Modal';
+import { autoIndexList } from '../settings-store';
 import { nameErrorKey } from '../shell/NavPane';
 import { AdvancedDialog } from './AdvancedDialog';
 import { FixedRuler } from './FixedRuler';
@@ -34,6 +36,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
   const ref = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const seq = useRef(0); // only the latest preview request counts
+  const touched = useRef(new Set<number>()); // columns whose Indexed the user chose: AutoIndex leaves them alone
   const [path, setPath] = useState('');
   const [loaded, setLoaded] = useState<string | null>(null);
   const [pv, setPv] = useState<TextPreview | null>(null);
@@ -72,7 +75,9 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
     try {
       const p = await api.importText.preview(loaded, next);
       if (n !== seq.current) return;
-      const fields = keepFields && next.fields.length === p.columns ? next.fields : p.inferred;
+      const keep = keepFields && next.fields.length === p.columns;
+      if (!keep) touched.current.clear();
+      const fields = keep ? next.fields : withAutoIndex(p.inferred, autoIndexList());
       setPv(p);
       setSpec({ ...p.spec, fields });
       setCol((c) => Math.min(c, p.columns - 1));
@@ -85,11 +90,13 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
   };
   /** An Excel preview as the wizard's text preview: the Fields, Key and Finish steps are shared with the text import. */
   const adoptSheet = (x: ExcelPreview) => {
-    const s: ImportSpec = { ...EXCEL_SPEC, hasHeader: x.hasHeader, fields: x.fields };
+    const fields = withAutoIndex(x.fields, autoIndexList());
+    const s: ImportSpec = { ...EXCEL_SPEC, hasHeader: x.hasHeader, fields };
+    touched.current.clear();
     setXl(x); setSpec(s); setCol(0);
     setPv({ encoding: 'utf-8', spec: s, inferred: x.fields, lines: [], header: x.header, rows: x.rows, columns: x.columns, assumedDecimal: false });
     setTable(defaultTableName(x.sheet, [...all.map((y) => y.name), ...queries], t('designer.newTableName', { n: 1 })));
-    if (appendDesign) setMapping(mapByName(x.fields.map((f) => f.name), appendDesign));
+    if (appendDesign) setMapping(mapByName(fields.map((f) => f.name), appendDesign));
   };
   const reparseExcel = async (sheet: string | null, hasHeader: boolean | null) => {
     if (!loaded) return;
@@ -109,9 +116,18 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
     const next = { ...spec, ...patch };
     void reparse(next, !structuralChange(spec, next));
   };
-  const setField = (i: number, patch: Partial<ImportField>) => {
+  const setField = (i: number, patch: Partial<ImportField>, commit = false) => {
     setError(null);
-    setSpec((s) => (s ? { ...s, fields: s.fields.map((f, j) => (j === i ? { ...f, ...patch } : f)) } : s));
+    if (patch.indexed !== undefined) touched.current.add(i);
+    setSpec((s) => (s ? {
+      ...s,
+      fields: s.fields.map((f, j) => {
+        if (j !== i) return f;
+        const g = { ...f, ...patch };
+        // name committed (blur) to a name of the AutoIndex list: indexed once, never per keystroke, unless the user chose the Indexed value
+        return commit && g.indexed === 'no' && !touched.current.has(i) && autoIndexed(g.name, autoIndexList()) ? { ...g, indexed: 'yesDuplicates' } : g;
+      }),
+    } : s));
   };
 
   /** Leaving the first step: the file is analysed (once per path), the destination table read. */
@@ -124,7 +140,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
         const x = await api.importExcel.preview(p, null, null);
         setLoaded(p);
         adoptSheet(x);
-        fields = x.fields;
+        fields = withAutoIndex(x.fields, autoIndexList());
       } catch (e) {
         const code = bcErrorCode(e);
         if (code === 'invalidArgument') setError(t('importText.error.fileNotFound'));
@@ -135,8 +151,11 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
     } else if (p !== loaded) {
       try {
         const r = await api.importText.preview(p, null);
-        setPv(r); setSpec(r.spec); setLoaded(p); setCol(0);
-        fields = r.spec.fields;
+        // a saved specification (fields differing from the deduced ones) is kept as it is
+        const fresh = JSON.stringify(r.spec.fields) === JSON.stringify(r.inferred);
+        fields = fresh ? withAutoIndex(r.spec.fields, autoIndexList()) : r.spec.fields;
+        touched.current.clear();
+        setPv(r); setSpec({ ...r.spec, fields }); setLoaded(p); setCol(0);
         setTable(defaultTableName(p, [...all.map((x) => x.name), ...queries], t('designer.newTableName', { n: 1 })));
       } catch (e) {
         const code = bcErrorCode(e);
@@ -374,7 +393,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
             {f && (
               <div className="iw-options iw-field-opts">
                 <label className="iw-row"><span>{t('importText.fields.name')}</span>
-                  <input className="iw-input" data-testid="import-field-name" value={f.name} onChange={(e) => setField(col, { name: e.target.value })} /></label>
+                  <input className="iw-input" data-testid="import-field-name" value={f.name} onChange={(e) => setField(col, { name: e.target.value })} onBlur={(e) => setField(col, { name: e.target.value }, true)} /></label>
                 <label className="iw-row"><span>{t('importText.fields.type')}</span>
                   <select className="iw-input" data-testid="import-field-type" value={f.type} onChange={(e) => setField(col, { type: e.target.value as ImportField['type'] })}>
                     {IMPORT_TYPES.map((x) => <option key={x} value={x}>{t(`importText.type.${x}`)}</option>)}

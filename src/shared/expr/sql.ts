@@ -56,13 +56,17 @@ type Tagged = { t: 'date'; v: number } | { t: 'bool'; v: boolean } | { t: 'empty
 const utf8 = new TextEncoder();
 const utf8d = new TextDecoder();
 const blob = (x: Tagged): Uint8Array => utf8.encode(JSON.stringify(x));
-const enc = (v: Value): SqlOut => (v === null ? null : v.t === 'num' || v.t === 'str' ? v.v : blob(v));
+/** True and False, encoded once: every predicate (comparison, Like, In…) returns one a row, and bc_truth reads it back. */
+const TRUE = blob({ t: 'bool', v: true }), FALSE = blob({ t: 'bool', v: false });
+const enc = (v: Value): SqlOut => (v === null ? null : v.t === 'num' || v.t === 'str' ? v.v : v.t === 'bool' ? (v.v ? TRUE : FALSE) : blob(v));
 /** Valeur reçue d'un autre appel bc_* (ou d'un paramètre littéral) ; une erreur encodée est relancée. */
 function dec(x: unknown): Value {
   if (x === null || x === undefined) return null;
   if (typeof x === 'number') return num(x);
   if (typeof x === 'bigint') return num(Number(x));
   if (typeof x === 'string') return str(x);
+  if (sameBytes(x as Uint8Array, TRUE)) return bool(true);
+  if (sameBytes(x as Uint8Array, FALSE)) return bool(false);
   const o = JSON.parse(utf8d.decode(x as Uint8Array)) as Tagged;
   return o.t === 'err' ? fail(o.code) : o;
 }
@@ -107,6 +111,29 @@ const tagOf = (x: Uint8Array): Tagged | undefined => {
 };
 /** Encoded list of `bc_list` (JSON): Values, and errors kept in place. */
 type ListItem = Value | { t: 'err'; code: ExprRuntimeErrorCode };
+/** The last list `bc_insub` read, decoded, and its answers by text tested (a text against the same list, the same answer:
+ *  compare depends on nothing else). Another list (bytes), region or Not starts it again.
+ *  ponytail: one list remembered; two In subqueries in one statement take turns decoding. */
+let lastList: { bytes: Uint8Array | null; l: unknown; not: unknown; items: (() => Value)[]; byText: Map<string, Value> } | null = null;
+function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function inSub(l: unknown, not: unknown, v: unknown, list: Uint8Array | null): Value {
+  if (!lastList || lastList.l !== l || lastList.not !== not || !sameBytes(lastList.bytes, list)) {
+    const items = list === null ? [] : JSON.parse(utf8d.decode(list)) as ListItem[];
+    lastList = { bytes: list, l, not, items: items.map((item) => () => (item !== null && item.t === 'err' ? fail(item.code) : item)), byText: new Map() };
+  }
+  if (typeof v !== 'string') return inItems(l, not, v, lastList.items); // a number, a date… : no cache (rarely a column of In)
+  const known = lastList.byText.get(v);
+  if (known !== undefined) return known;
+  const r = inItems(l, not, v, lastList.items); // an error item throws (udf encodes it): never cached
+  if (lastList.byText.size >= 10_000) lastList.byText.clear(); // ponytail: a column of many distinct texts recomputes past 10,000
+  lastList.byText.set(v, r);
+  return r;
+}
 
 export const SQL_FUNCTIONS: Record<string, { deterministic: boolean; fn: (...a: unknown[]) => SqlOut }> = {
   bc_val: det((type, x) => fromStored({ name: '', props: defaultProps(type as FieldType) }, x as SqlValue)),
@@ -117,11 +144,9 @@ export const SQL_FUNCTIONS: Record<string, { deterministic: boolean; fn: (...a: 
   bc_between: det((l, not, v, lo, hi) => between(dec(v), dec(lo), dec(hi), on(not), info(l))),
   // Même boucle que l'In de l'évaluateur : arrêt au premier élément égal, les suivants ne sont pas lus (ni leurs erreurs).
   bc_in: det((l, not, v, ...items) => inItems(l, not, v, items.map((item) => () => dec(item)))),
-  /** `x In (SELECT …)`: the same loop over the list built by `bc_list`. */
-  bc_insub: det((l, not, v, list) => {
-    const items = list === null ? [] : JSON.parse(utf8d.decode(list as Uint8Array)) as ListItem[];
-    return inItems(l, not, v, items.map((item) => () => (item !== null && item.t === 'err' ? fail(item.code) : item)));
-  }),
+  /** `x In (SELECT …)`: the same loop over the list built by `bc_list`. The list is the same for every row of an
+   *  uncorrelated subquery: decoded once, and the answer kept per text tested (see inSub). */
+  bc_insub: det((l, not, v, list) => inSub(l, not, v, list as Uint8Array | null)),
   /** Encoded value -> stored form (a computed column, Task 4): number, text, date 'YYYY-MM-DD HH:MM:SS', Yes/No 1/0, Null.
    *  ponytail: Empty and an error give Null (Access shows #Error); add a marker when SourcePage gets cell flags. */
   bc_out: {
@@ -146,15 +171,15 @@ export const SQL_FUNCTIONS: Record<string, { deterministic: boolean; fn: (...a: 
       return x instanceof Uint8Array && tagOf(x)?.t === 'empty' ? '' : x as SqlOut;
     },
   },
-  /** Sort key of an encoded value, as the table sort: a text folded (bc_fold), a date its serial number, Yes/No 1/0, a
-   *  number itself; Empty and an error Null. `bc_out` of the value breaks the ties. */
+  /** Sort key of an encoded value, as the table sort: a text folded (bc_fold), a date its serial number, Yes/No -1/0 (Yes
+   *  first ascending, as Access), a number itself; Empty and an error Null. `bc_out` of the value breaks the ties. */
   bc_skey: {
     deterministic: true,
     fn: (x) => {
       if (typeof x === 'string') return fold(x);
       if (!(x instanceof Uint8Array)) return x as SqlOut;
       const t = tagOf(x);
-      return t?.t === 'date' ? t.v : t?.t === 'bool' ? (t.v ? 1 : 0) : null;
+      return t?.t === 'date' ? t.v : t?.t === 'bool' ? (t.v ? -1 : 0) : null;
     },
   },
   bc_isnull: det((not, v) => bool((dec(v) === null) !== (on(not)))),
@@ -177,6 +202,21 @@ export const SQL_FUNCTIONS: Record<string, { deterministic: boolean; fn: (...a: 
       try {
         const b = truthy(dec(x), info(l));
         return b === null ? null : b ? 1 : 0;
+      } catch (e) {
+        if (e instanceof ExprRuntimeError && onError !== 'throw') return null;
+        throw e;
+      }
+    },
+  },
+  /** `bc_truth(bc_op(op, a, b))` in one call, for a comparison of two simple operands (compileSql): each a stored value read
+   *  as its type (bc_val) or, type NULL, an encoded value as is. The same library calls, in the same order: same result. */
+  bc_cmp: {
+    deterministic: true,
+    fn: (onError, l, op, ta, a, tb, b) => {
+      try {
+        const side = (t: unknown, x: unknown): Value => (t === null ? dec(x) : fromStored({ name: '', props: defaultProps(t as FieldType) }, x as SqlValue));
+        const r = truthy(binary(op as BinOp, side(ta, a), side(tb, b), info(l)), info(l));
+        return r === null ? null : r ? 1 : 0;
       } catch (e) {
         if (e instanceof ExprRuntimeError && onError !== 'throw') return null;
         throw e;
@@ -368,8 +408,31 @@ export function compileValue(e: Expr, ctx: SqlCompileCtx): SqlFragment {
   return { sql, params };
 }
 
-/** Expression -> condition SQLite paramétrée (1/0/NULL) : `bc_truth(compileValue)`. Mêmes erreurs que compileValue. */
+const COMPARISONS = new Set<BinOp>(['=', '<>', '<', '<=', '>', '>=']);
+/** An operand bc_cmp reads itself: `?, <value>` (its type, or NULL for an encoded value) for a column, a parameter or a text
+ *  or number literal; null otherwise (compileValue then compiles it, with its errors). */
+function simpleOperand(x: Expr, ctx: SqlCompileCtx): SqlFragment | null {
+  if (x.k === 'str') return { sql: '?, ?', params: [null, x.v] };
+  if (x.k === 'num') return { sql: '?, ?', params: [null, Number(x.v)] };
+  if (x.k === 'subject') {
+    const f = ctx.subject === undefined ? undefined : ctx.fields.find((y) => sameName(y.name, ctx.subject!));
+    return f ? { sql: `?, ${quoteIdent(f.name)}`, params: [f.type] } : null;
+  }
+  if (x.k !== 'id') return null;
+  const ref = ctx.ref?.(x);
+  if (ref) return { sql: `?, ${ref.sql}`, params: [ref.type, ...ref.params] };
+  if (x.table !== undefined) return null;
+  const f = ctx.fields.find((y) => sameName(y.name, x.name));
+  return f ? { sql: `?, ${quoteIdent(f.name)}`, params: [f.type] } : null;
+}
+
+/** Expression -> condition SQLite paramétrée (1/0/NULL) : `bc_truth(compileValue)`, or `bc_cmp` for a comparison of two
+ *  simple operands (one call a row instead of three). Mêmes erreurs que compileValue. */
 export function compileSql(e: Expr, ctx: SqlCompileCtx, opts: SqlCompileOptions = {}): SqlFragment {
+  if (e.k === 'bin' && COMPARISONS.has(e.op)) {
+    const a = simpleOperand(e.l, ctx), b = simpleOperand(e.r, ctx);
+    if (a && b) return { sql: `bc_cmp(?, ?, ?, ${a.sql}, ${b.sql})`, params: [opts.onError ?? 'null', ctx.locale, e.op, ...a.params, ...b.params] };
+  }
   const v = compileValue(e, ctx);
   return { sql: `bc_truth(?, ?, ${v.sql})`, params: [opts.onError ?? 'null', ctx.locale, ...v.params] };
 }

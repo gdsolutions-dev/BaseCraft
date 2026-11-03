@@ -11,7 +11,11 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   CH.relationsSave, CH.relationsDelete, CH.relationsSaveLayout,
   CH.importPick, CH.importPreview, CH.importRun, CH.importExcelPick, CH.importExcelPreview, CH.importExcelRun, CH.importSaveSpec, CH.importDeleteSpec,
   CH.objectsSave, CH.objectsRename, CH.objectsDelete, CH.objectsCopy, CH.objectsSetDescription,
+  CH.autoCorrectDependents, // O4 R10: asked before a rename only
+  CH.autoCorrectApplyProperties, // O4 R12: writes forms and reports
   CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
+  CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember, // C4: the server link dialog
+  CH.migrateRun, CH.migrateImport, // C7 R1, R17
 ]);
 
 export const isDesignChannel = (ch: string): boolean => DESIGN_CHANNELS.has(ch);

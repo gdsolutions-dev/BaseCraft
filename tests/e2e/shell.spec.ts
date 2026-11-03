@@ -4,7 +4,7 @@ import os, { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { createTable } from '../../src/main/db/schema';
 import { clients, f, t as table } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, pickView , checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 
@@ -135,7 +135,7 @@ test('navigation pane: search, open, modes, F11, rename, delete, new table', asy
     await page.getByTestId('nav-item-Clients').dblclick();
     await expect(page.getByTestId('doc-tab-Clients')).toBeVisible();
     await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.datasheet);
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.design);
     await expect(page.getByTestId('ribbon-tab-design')).toBeVisible();
     await page.getByTestId('status-view-datasheet').click();
@@ -172,7 +172,7 @@ test('navigation pane: search, open, modes, F11, rename, delete, new table', asy
     await expect(page.getByTestId('doc-tab-Table1')).toBeVisible();
     await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.design);
     // a table not saved yet has no datasheet
-    await expect(page.getByTestId('cmd-viewDatasheet')).toBeDisabled();
+    await checkView(page, 'viewDatasheet', (v) => expect(v).toBeDisabled());
     await expect(page.getByTestId('status-view-datasheet')).toBeDisabled();
   } finally {
     await app.close();

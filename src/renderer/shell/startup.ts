@@ -1,7 +1,7 @@
 // La séquence de démarrage d'une base (B3 R3) : l'interface que demandent ses options, son formulaire de démarrage, puis AutoExec.
 // Sans E/S : App fournit ce qu'elle touche (StartupDeps).
 import { RUNTIME } from '../../shared/product';
-import type { StartupOptions } from '../../shared/startup';
+import { DEFAULT_STARTUP, type StartupOptions } from '../../shared/startup';
 import type { RunOutcome } from '../macro/engine';
 
 export interface StartupUi {
@@ -37,6 +37,11 @@ let current = baseUi();
 /** The UI App shows now, for code that is not under App (a datasheet): App publishes it wherever it sets its own. */
 export function currentUi(): StartupUi { return current; }
 export function publishUi(ui: StartupUi): void { current = ui; }
+
+let base: StartupOptions = DEFAULT_STARTUP;
+/** The open base's options (O2: four-digit year, truncated numbers, filter lists), for code that is not under App; DEFAULT_STARTUP between openings. */
+export function currentBaseOptions(): StartupOptions { return base; }
+export function publishBaseOptions(o: StartupOptions): void { base = o; }
 
 export interface StartupDeps {
   setUi(ui: StartupUi): void;

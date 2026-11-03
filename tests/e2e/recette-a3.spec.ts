@@ -8,15 +8,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
-import { launchApp } from './helpers';
+import { launchApp, pickView, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const en = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/en.json'), 'utf8'));
 type Win = { basecraft: BasecraftApi };
 // DatasheetView: row selector width, header and row heights; left edge of each column (AutoNumber 80, Number 110,
 // Currency 120, Short Text 170).
-const MARKER = 44, HEADER = 34, ROW = 30;
-const LEFT: Record<string, number[]> = { Clients: [0, 80, 250], Commandes: [0, 80, 190, 310], 'Nom, Montant': [0, 170, 290] };
+const HEADER = 34, ROW = 30;
 const NBSP = '\u00a0';
 
 /** The shown document (every tab stays mounted, hidden). */
@@ -42,10 +41,10 @@ async function shown(page: Page, rows: number, cols: number): Promise<string[][]
 
 async function clickCell(page: Page, table: string, col: number, row: number) {
   const b = (await doc(page).getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + LEFT[table]![col]! + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + row * ROW + ROW / 2);
 }
 /** The text a cell shows, in its format (the painted text: Currency « 0,10 € »), as Home › Selection quotes it; the menu is
- *  closed again. `layout`: the columns' left edges (LEFT). */
+ *  closed again. `layout`: the columns' left edges. */
 async function painted(page: Page, layout: string, col: number, row: number): Promise<string> {
   await page.getByTestId('ribbon-tab-home').click();
   await clickCell(page, layout, col, row);
@@ -133,7 +132,7 @@ test('recette A3', async () => {
   writeFileSync(join(userDataDir, 'settings.json'), JSON.stringify({ locale: 'fr' }));
   let lastRows: string[][] = [];
 
-  let { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_SAVE_PATH: base }, userDataDir });
+  let { app, page } = await launchApp({ enterMovesDown: true, env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_SAVE_PATH: base }, userDataDir });
   try {
     // 1. a new base: Clients and Commandes as in the test base (src/main/query/test-db.ts), the relation, the data
     await page.getByTestId('bs-new').click();
@@ -237,7 +236,7 @@ test('recette A3', async () => {
     await expect(doc(page).getByTestId('qbe-cell-sort-1')).toHaveValue('desc');
     await expect(doc(page).getByTestId('qbe-cell-sort-2')).toHaveValue('');
     await expect(doc(page).getByTestId('qbe-cell-criteria0-2')).toHaveValue('>= [Date début :]');
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(sqlBox).toHaveValue(DEPUIS_DESC);
     await page.keyboard.press('Control+s');
     await expect(page.getByTestId('doc-tab-query-Commandes depuis')).not.toContainText('•');
@@ -339,14 +338,14 @@ test('recette A3', async () => {
 
   // 8. reopened with the interface in English (en-US region): the grid, the SQL and the rows are the same
   writeFileSync(join(userDataDir, 'settings.json'), JSON.stringify({ locale: 'en' }));
-  ({ app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'en-US' }, userDataDir }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [base], env: { BASECRAFT_REGION: 'en-US' }, userDataDir }));
   try {
     await expect(page.getByTestId('ribbon-tab-create')).toHaveText(en.ribbon.tab.create);
     await page.getByTestId('nav-item-query-Commandes depuis').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
     await expect(doc(page).getByTestId('qbe-cell-criteria0-2')).toHaveValue('>= [Date début :]');
     await expect(doc(page).getByTestId('qbe-cell-sort-1')).toHaveValue('desc');
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(doc(page).getByTestId('query-sql')).toHaveValue(DEPUIS_DESC);
     await page.getByTestId('status-view-datasheet').click();
     await expect(page.getByTestId('modal')).toContainText(en.query.param.title);

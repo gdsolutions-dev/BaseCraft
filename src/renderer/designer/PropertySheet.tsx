@@ -25,12 +25,12 @@ import { ComboBox } from '../shell/ComboBox';
 import { useModal } from '../shell/Modal';
 import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
+import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
   MIXED, readProp, sheetRows, targetKind, targetsOf, toSourceRef, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
 
-const TABS: SheetTab[] = ['format', 'data', 'event', 'other', 'all'];
 const PICTURE_MAX = 1024 * 1024;
 const descOf = (name: string): PropertyDescriptor => PROPERTY_CATALOG.find((d) => d.name === name)!;
 type Parsed = { value: unknown } | { error: string };
@@ -38,15 +38,20 @@ type Parsed = { value: unknown } | { error: string };
 interface Lost { label: string; msg: string }
 
 export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAction): void; docKind: 'form' | 'report'; ctx: PropertySheetContext; readOnly: boolean;
-  onClose?(): void; sectionLabel?(s: SectionDef, index: number): string }) {
+  onClose?(): void; sectionLabel?(s: SectionDef, index: number): string; restrict?: DesignerRestrict }) {
   const { state, dispatch, docKind, ctx, readOnly } = p;
   const { t } = useTranslation();
   const uid = useId();
-  const [tab, setTab] = useState<SheetTab>('all');
+  const shownTabs = restrictedTabs(p.restrict);
+  const tabs: SheetTab[] = [...shownTabs, 'all'];
+  const [picked, setTab] = useState<SheetTab>('all');
+  // l'onglet choisi peut disparaître (Création -> Page garde la feuille, sans Événement) : Toutes à sa place
+  const tab = tabs.includes(picked) ? picked : 'all';
   const [lost, setLost] = useState<Lost | null>(null);
   const { doc } = state;
   const targets = useMemo(() => targetsOf(state.selection), [state.selection]);
-  const rows = useMemo(() => sheetRows(doc, docKind, targets, tab, readOnly), [doc, docKind, targets, tab, readOnly]);
+  const allRows = useMemo(() => sheetRows(doc, docKind, targets, tab, readOnly), [doc, docKind, targets, tab, readOnly]);
+  const rows = p.restrict?.events ? allRows.filter((r) => shownTabs.includes(r.d.tab)) : allRows;   // Toutes aussi, sans les événements
   const selKey = JSON.stringify(targets);   // une autre sélection, un autre onglet : de nouveaux éditeurs (un brouillon en cours est validé)
   const [macros, setMacros] = useState<string[]>([]);   // la liste d'une propriété d'événement : les macros et leurs sous-macros
   useEffect(() => {
@@ -89,9 +94,9 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 
   /** Onglets ARIA : un seul arrêt de tabulation, Gauche/Droite/Début/Fin passent d'un onglet à l'autre. */
   const tabKey = (e: KeyboardEvent) => {
-    const i = TABS.indexOf(tab);
-    const next = e.key === 'ArrowRight' ? TABS[(i + 1) % TABS.length] : e.key === 'ArrowLeft' ? TABS[(i + TABS.length - 1) % TABS.length]
-      : e.key === 'Home' ? TABS[0] : e.key === 'End' ? TABS[TABS.length - 1] : null;
+    const i = tabs.indexOf(tab);
+    const next = e.key === 'ArrowRight' ? tabs[(i + 1) % tabs.length] : e.key === 'ArrowLeft' ? tabs[(i + tabs.length - 1) % tabs.length]
+      : e.key === 'Home' ? tabs[0] : e.key === 'End' ? tabs[tabs.length - 1] : null;
     if (!next) return;
     e.preventDefault();
     setTab(next);
@@ -116,7 +121,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
         {doc.sections.flatMap((s) => flattenControls(s.controls)).map((c) => <option key={`c:${c.name}`} value={`c:${c.name}`}>{c.name}</option>)}
       </select>
       <div className="dz-props-tabs" role="tablist" aria-label={t('sheet.title')} onKeyDown={tabKey}>
-        {TABS.map((x) => (
+        {tabs.map((x) => (
           <button key={x} type="button" role="tab" id={`${uid}-tab-${x}`} aria-selected={tab === x} aria-controls={`${uid}-panel`} tabIndex={tab === x ? 0 : -1}
             data-testid={`sheet-tab-${x}`} className={`dz-props-tab${tab === x ? ' is-active' : ''}`} onClick={() => setTab(x)}>{t(`sheet.tab.${x}`)}</button>
         ))}

@@ -4,6 +4,9 @@ import { i18n } from '../i18n';
 import type { SaveTableRequest, SaveTableResult } from '../../shared/api';
 import { api } from '../bridge';
 import type { ModalApi } from '../shell/Modal';
+import type { AppAction, DocTab } from '../state/app-state';
+import { saveTableChanges } from '../../shared/autocorrect/sql';
+import { afterRename, guardRename, offerPropertyUpdates } from '../shell/autocorrect';
 
 const t = (k: string, o?: Record<string, unknown>) => i18n.t(k, o) as string;
 const message = (modal: ModalApi, messageKey: string, params?: object) => modal.confirm({ titleKey: 'dialog.errorTitle', messageKey, params, buttons: ['ok'] });
@@ -38,15 +41,18 @@ async function explain(modal: ModalApi, r: Exclude<SaveTableResult, { ok: true }
 /** The save loop: asks the questions and retries; the request that went through, or null (refused or cancelled).
  *  `askName` is the Design view's: another table name after a clash (without it a clash cannot happen). */
 export async function runSave(
-  modal: ModalApi, build: (name: string, flags: { allowDataLoss: boolean; acceptExistingViolations?: boolean }) => SaveTableRequest,
+  modal: ModalApi, tabs: DocTab[], dispatch: (a: AppAction) => void, build: (name: string, flags: { allowDataLoss: boolean; acceptExistingViolations?: boolean }) => SaveTableRequest,
   name: string, askName?: (current: string) => Promise<string | null>,
 ): Promise<{ req: SaveTableRequest; name: string } | null> {
   let allowDataLoss = false;
   let acceptExistingViolations = false;
+  const first = build(name, { allowDataLoss });
+  // R10 (Task 7's rule): the renames of the request, asked once; a clash's other name is a new table's, not a rename
+  if (first.originalName !== null && !(await guardRename(modal, tabs, saveTableChanges(first), { kind: 'table', name: first.originalName }))) return null;
   for (;;) {
     const req = build(name, { allowDataLoss, ...(acceptExistingViolations ? { acceptExistingViolations } : {}) });
     const r = await api.tables.save(req);
-    if (r.ok) return { req, name };
+    if (r.ok) { await afterRename(modal, dispatch, r.autoCorrect); await offerPropertyUpdates(modal, tabs, dispatch, r.propertyUpdates); return { req, name }; }
     if (r.reason === 'nameExists' || r.reason === 'danglingKey') {
       await (r.reason === 'danglingKey' ? message(modal, 'designer.danglingKey', { table: r.table, newName: name }) : message(modal, 'dialog.op.nameExists'));
       const next = askName ? await askName(name) : null;
@@ -61,6 +67,6 @@ export async function runSave(
 }
 
 /** Saves an existing table's new design; true = saved. Errors from the data process are thrown to the caller. */
-export async function saveTableInteractive(modal: ModalApi, req: SaveTableRequest): Promise<boolean> {
-  return (await runSave(modal, (_n, f) => ({ ...req, allowDataLoss: f.allowDataLoss, ...(f.acceptExistingViolations ? { acceptExistingViolations: true } : {}) }), req.design.name)) !== null;
+export async function saveTableInteractive(modal: ModalApi, tabs: DocTab[], dispatch: (a: AppAction) => void, req: SaveTableRequest): Promise<boolean> {
+  return (await runSave(modal, tabs, dispatch, (_n, f) => ({ ...req, allowDataLoss: f.allowDataLoss, ...(f.acceptExistingViolations ? { acceptExistingViolations: true } : {}) }), req.design.name)) !== null;
 }

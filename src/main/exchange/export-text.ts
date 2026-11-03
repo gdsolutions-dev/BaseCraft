@@ -11,7 +11,7 @@ export const EXPORT_PAGE = 5000;
 export interface TextExport {
   fields: SourceField[];
   /** The rows [offset, offset + limit) of the source, in its order. */
-  page(offset: number, limit: number): SourcePage;
+  page(offset: number, limit: number): Promise<SourcePage>;
   spec: ExportTextSpec;
   path: string;
   texts: CellTexts;
@@ -41,7 +41,7 @@ export async function writeTextExport(x: TextExport): Promise<ExportResult> {
       } else await put('');
       let rows = 0, total = 0;
       for (;;) {
-        const page = x.page(rows, EXPORT_PAGE);
+        const page = await x.page(rows, EXPORT_PAGE);
         if (rows === 0) total = page.total;
         let text = '';
         for (const row of page.rows) {

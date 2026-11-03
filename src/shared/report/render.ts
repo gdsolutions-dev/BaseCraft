@@ -81,6 +81,17 @@ export function renderPageHtml(page: LaidOutPage, report: LaidOutReport, looks?:
   return `<div class="bc-page"${data(looks, { page: n(page.number) })} style="width:${pt(report.width)};height:${pt(report.height)}${last ? '' : ';break-after:page'}">${bands.join('')}</div>`;
 }
 
+/** Space under the content of a flow page, standing in for the bottom margin (twips; the layout's height excludes it). */
+const FLOW_BOTTOM = 567;
+
+/** The single page of a flow report (Layout view): same classes and CSS as renderPageHtml, but every item carries its
+ *  control name (`data-name`) and every band its section and geometry, whatever `looks`; the height adds FLOW_BOTTOM. */
+export function renderFlowHtml(report: LaidOutReport): string {
+  const bands = (report.pages[0]?.bands ?? []).map((b) => `<div class="bc-band" data-section="${esc(b.section)}" data-top="${n(b.top)}" data-height="${n(b.height)}" `
+    + `style="${box(b.left, b.top, b.width, b.height)}${back(b.back)}">${b.items.map((i) => item(i).replace(/^<(div|svg|img) /, `<$1 data-name="${esc(i.name)}" `)).join('')}</div>`);
+  return `<div class="bc-page" data-page="1" style="width:${pt(report.width)};height:${pt(report.height + FLOW_BOTTOM)}">${bands.join('')}</div>`;
+}
+
 /** @font-face of the faces the report uses (a non-portable font draws in Liberation Sans, as measured) and the .bc-* rules. */
 export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
   const faces = report.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => i.kind === 'text' ? [{ family: i.font.name, bold: i.font.bold, italic: i.font.italic }] : [])));

@@ -6,6 +6,7 @@ import type { DisplayContext } from '../../shared/expr/localize';
 import type { FieldType } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { api } from '../bridge';
+import { autoIndexList, fieldDefaults } from '../settings-store';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { useErrorDialog, useModal } from '../shell/Modal';
 import { nameErrorKey } from '../shell/NavPane';
@@ -21,14 +22,14 @@ import './table-design.css';
 
 type Expression = 'prop-defaultValue' | 'prop-validationRule' | 'table-prop-validationRule'; // the test id of an expression field
 type ViewAction = DesignAction | { type: 'load'; model: DesignModel };
-const viewReducer = (m: DesignModel, a: ViewAction): DesignModel => (a.type === 'load' ? a.model : designReducer(m, a));
+const viewReducer = (m: DesignModel, a: ViewAction): DesignModel => (a.type === 'load' ? a.model : designReducer(m, a, fieldDefaults()));
 const SPLIT_KEY = 'basecraft.design.splitRatio'; // grid height / available height, per user
 const BAR = 6; // splitter thickness (px)
 const GRID_MIN = 34 + 3 * 30; // header + 3 rows
 const PROPS_MIN = 128; // heading + tab bar + 2 rows
 const CELL = /^design-row-(\d+)-(key|name|type|desc)$/;
 
-export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps) {
+export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocViewProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -133,7 +134,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps)
     try {
       await flush(); // before the view locks: a disabled input is never left (no blur)
       setSaving(true);
-      let m = live.current.model;
+      let m = live.current.model.rows.reduce((x, _, i) => designReducer(x, { type: 'commitName', index: i, autoIndex: autoIndexList() }), live.current.model); // Ctrl+S in a name: no blur yet
       if (Object.keys(m.invalid).length) {
         await message('designer.invalidExpressions', { detail: invalidLines(m).join('\n') });
         return false;
@@ -153,7 +154,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps)
         if (r === 'cancel') return false;
         if (r === 'yes') { m = withDefaultPrimaryKey(m, t('designer.defaultIdName')); set({ type: 'load', model: m }); }
       }
-      const done = await runSave(modal, (n, f) => ({ ...toSaveRequest(m, n, f.allowDataLoss), ...(f.acceptExistingViolations ? { acceptExistingViolations: true } : {}) }), name, askName);
+      const done = await runSave(modal, tabs ?? [], dispatch, (n, f) => ({ ...toSaveRequest(m, n, f.allowDataLoss), ...(f.acceptExistingViolations ? { acceptExistingViolations: true } : {}) }), name, askName);
       if (!done) return false;
       const { req } = done;
       name = done.name;
@@ -205,7 +206,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps)
     if (busy.current) return false;
     await flush();
     const { model: m, tab: doc } = live.current;
-    if (!m.dirty) return true;
+    if (!m.dirty && m.originalName !== null) return true; // a new table always asks (Access)
     if (reason === 'mode') {
       const r = await modal.confirm({ titleKey: 'designer.saveFirstTitle', messageKey: 'designer.mustSaveFirst', params: { name: doc.name }, buttons: ['yes', 'no'] });
       return r === 'yes' && (await save());
@@ -343,7 +344,8 @@ export function TableDesignView({ tab, readOnly, dispatch, link }: DocViewProps)
                   <td>
                     <input data-testid={`design-row-${i}-name`} aria-label={t('designer.cellName', { n })} disabled={locked} spellCheck={false}
                       aria-invalid={!!r && fieldNameTooLong(r)} aria-describedby={r && fieldNameTooLong(r) ? `design-row-${i}-name-error` : undefined}
-                      value={r?.name ?? ''} onChange={(e) => edit(i, { type: 'setName', index: i, name: e.target.value })} />
+                      value={r?.name ?? ''} onChange={(e) => edit(i, { type: 'setName', index: i, name: e.target.value })}
+                      onBlur={() => set({ type: 'commitName', index: i, autoIndex: autoIndexList() })} />
                     {r && fieldNameTooLong(r) && (
                       <span id={`design-row-${i}-name-error`} className="field-error" role="alert" data-testid={`design-row-${i}-name-error`}>{t('designError.nameTooLong')}</span>
                     )}

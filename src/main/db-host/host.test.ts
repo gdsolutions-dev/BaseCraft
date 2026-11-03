@@ -68,6 +68,27 @@ it('the default allowlist names every session method the main process calls', as
   expect(HOST_METHODS.has('close')).toBe(true);
 });
 
+describe('R12: interrupt, out of the queue', () => {
+  it('interrupt is answered while a call runs, and the call then settles', async () => {
+    let fail!: (e: Error) => void;
+    const target = { page: () => new Promise((_, r) => { fail = r; }), interrupt: vi.fn(async () => { fail(new Error('bc:cancelled')); return true; }) };
+    const { d, out, ready } = opened(target);
+    await ready;
+    const page = d(req(1, 'page'));
+    await d(req(2, 'interrupt'));
+    expect(reply(out, 2)).toEqual({ id: 2, ok: true, value: true });
+    await page;
+    expect(reply(out, 1)).toMatchObject({ ok: false, message: 'bc:cancelled' });
+  });
+  it('interrupt with nothing remote running is false', async () => {
+    const { d, out, ready } = opened({ interrupt: vi.fn(async () => false) });
+    await ready;
+    await d(req(1, 'interrupt'));
+    expect(reply(out, 1)).toEqual({ id: 1, ok: true, value: false });
+  });
+  it('the default allowlist has interrupt', () => { expect(HOST_METHODS.has('interrupt')).toBe(true); });
+});
+
 it('a reply that cannot be cloned rejects instead of hanging', async () => {
   const out: (HostReply | HostEvent)[] = [];
   const d = createDispatcher(() => ({ f: () => () => 1 }), (m) => { structuredClone(m); out.push(m); }, new Set(['f']));

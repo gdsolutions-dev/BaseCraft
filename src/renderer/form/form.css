@@ -13,6 +13,7 @@
 .fz-list { padding: 2px 4px; }
 .fz-check { border: 1.5px solid var(--bc-border); border-radius: 3px; background: var(--bc-surface); width: min(100%, 16px); height: min(100%, 16px); }
 .fz-radio { border-radius: 50%; }
+.fz-check.is-on { background: var(--bc-text); box-shadow: inset 0 0 0 3px var(--bc-surface); }   /* mode Page : case cochée */
 .fz-group { margin: 0; padding: 0 6px; min-inline-size: 0; }
 .fz-group legend { padding: 0 4px; font-size: 12px; }
 .fz-button { justify-content: center; border-radius: var(--bc-radius); font-weight: 500; }

@@ -64,7 +64,7 @@ Het doel: een goede Excel-gebruiker bouwt zonder code te schrijven in een middag
 - Gekoppelde tabellen: koppel de tabellen van een ander BaseCraft-bestand of een SQLite-bestand, Beheer gekoppelde tabellen
 - Opslaan als, Comprimeren en herstellen; bestandskoppeling voor `.basecraft`
 - Lint, navigatiedeelvenster, tabbladen, lichte en donkere thema's
-- Bestand › Opties: instellingen per werkplek (bevestigingen, recente databases, laatste database bij het opstarten, standaardmap) en database-opties (menu's, snelmenu's, speciale toetsen, statusbalk, tabbladen, comprimeren bij afsluiten)
+- Bestand › Opties: instellingen per werkplek (bevestigingen, recente databases, laatste database bij het opstarten, standaardmap) en database-opties (menu's, snelmenu's, speciale toetsen, statusbalk, tabbladen, comprimeren bij afsluiten), plus de Enter- en pijltoetsen, rasterlijnen, breedte en lettertype van gegevensbladen, jaartallen met vier cijfers en de standaardwaarden van Zoeken, de standaardwaarden van de objectontwerpers (type en grootte van nieuwe velden, AutoIndex, AutoJoin, lettertypen van de ontwerpers, selectiegedrag) en de standaard afdrukmarges, automatische naamcorrectie (bijhouden, uitvoeren en loggen van naamswijzigingen) en de opties voor het bijwerken van eigenschappen
 
 ## Roadmap
 

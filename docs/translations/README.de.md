@@ -64,7 +64,7 @@ Das Ziel: Ein versierter Excel-Anwender baut ohne Programmierung an einem Nachmi
 - Verknüpfte Tabellen: Tabellen einer anderen BaseCraft-Datei oder einer SQLite-Datei verknüpfen, Verknüpfte-Tabellen-Manager
 - Speichern unter, Komprimieren und Reparieren; Dateizuordnung für `.basecraft`
 - Menüband, Navigationsbereich, Registerkarten, helle und dunkle Designs
-- Datei › Optionen: Einstellungen für den Arbeitsplatz (Bestätigungen, zuletzt verwendete Datenbanken, letzte Datenbank beim Start, Standardordner) und Datenbankoptionen (Menüs, Kontextmenüs, Sondertasten, Statusleiste, Registerkarten, Komprimieren beim Schließen)
+- Datei › Optionen: Einstellungen für den Arbeitsplatz (Bestätigungen, zuletzt verwendete Datenbanken, letzte Datenbank beim Start, Standardordner) und Datenbankoptionen (Menüs, Kontextmenüs, Sondertasten, Statusleiste, Registerkarten, Komprimieren beim Schließen), außerdem Eingabe- und Pfeiltasten, Gitternetzlinien, Breite und Schriftart der Datenblätter, vierstellige Jahreszahlen und Standardwerte für Suchen, Standardwerte der Objekt-Designer (Typ und Größe neuer Felder, AutoIndex, AutoJoin, Designer-Schriftarten, Auswahlverhalten) und Standardseitenränder beim Drucken, die automatische Namenskorrektur (Nachverfolgen, Durchführen und Protokollieren von Umbenennungen) und die Optionen zur Aktualisierung von Eigenschaften
 
 ## Roadmap
 

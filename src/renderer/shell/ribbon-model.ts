@@ -18,7 +18,7 @@ import {
   UnfoldVertical, Ungroup, Wallpaper, Wand, WandSparkles, Wrench, X, Zap, ZoomIn, type LucideIcon,
 } from 'lucide-react';
 import type { ObjectKind } from '../../shared/api';
-import type { DocKind, DocMode } from '../state/app-state';
+import { sameView, type DocKind, type DocMode } from '../state/app-state';
 
 // One member per line (C4): each batch appends its own line.
 export type CommandId =
@@ -37,6 +37,8 @@ export type CommandId =
   | 'importText'
   | 'linkBaseCraft'
   | 'linkAccess'
+  | 'linkPostgreSql'
+  | 'linkSqlServer'
   | 'refresh'
   | 'paste'
   | 'cut'
@@ -288,6 +290,9 @@ export type CommandId =
   | 'saveAs'
   | 'builderSaveAs'
   | 'builderClose'
+  | 'viewLayout'
+  | 'viewMenu'
+  | 'viewState'
 
 export type CommandHandlers = Partial<Record<CommandId, () => void | Promise<void>>>;
 
@@ -335,14 +340,24 @@ export function runCommand(id: CommandId): boolean {
 
 /** A document's say before its view goes: a change of mode (ribbon, status bar, navigation pane), closing its tab, closing
  *  or switching the base, closing the window. Resolves false to stay (a pending row that cannot be saved, a design kept).
- *  `reason` tells a change of mode (the document stays open) from a close (the document goes). */
-export type ModeGuard = (reason: 'mode' | 'close') => Promise<boolean>;
-const modeGuards = new Map<string, ModeGuard>();
+ *  `reason` tells a change of mode (the document stays open) from a close (the document goes); `target`: the mode a change of
+ *  mode goes to (a form's Design <-> Layout views are one editor: its guard lets that switch through without asking, L2). */
+export type ModeGuard = (reason: 'mode' | 'close', target?: DocMode) => boolean | Promise<boolean>;
+const modeGuards = new Map<string, ModeGuard[]>();
+/** Several guards on one tab (a new query's datasheet over its design) all have their say, the latest first. */
 export function registerModeGuard(tabId: string, guard: ModeGuard): () => void {
-  modeGuards.set(tabId, guard);
-  return () => { if (modeGuards.get(tabId) === guard) modeGuards.delete(tabId); };
+  modeGuards.set(tabId, [guard, ...(modeGuards.get(tabId) ?? [])]);
+  return () => {
+    const rest = (modeGuards.get(tabId) ?? []).filter((g) => g !== guard);
+    if (rest.length) modeGuards.set(tabId, rest); else modeGuards.delete(tabId);
+  };
 }
-export const modeGuard = (tabId: string): ModeGuard | undefined => modeGuards.get(tabId);
+export const modeGuard = (tabId: string): ModeGuard | undefined => {
+  const list = modeGuards.get(tabId);
+  if (!list) return undefined;
+  if (list.length === 1) return list[0];
+  return async (reason, target) => { for (const g of list) if (!(await g(reason, target))) return false; return true; };
+};
 
 /** The shell's own handler, for a document's handler that leaves the command to it (Clipboard outside the designer's surface). */
 export function runShellCommand(id: CommandId): void { void Promise.resolve(registry.get(SHELL_SCOPE)?.[id]?.()).catch(reportError); }
@@ -375,6 +390,8 @@ export function registerCommandStates(tabId: string, s: Partial<Record<CommandId
   return () => { if (states.get(tabId) === own) { states.delete(tabId); changed(); } };
 }
 export const commandState = (id: CommandId): CommandState | undefined => (activeTab !== null ? states.get(activeTab)?.[id] : undefined);
+/** The state `tabId`'s view gave a command, active or not (the navigation pane asks an open document). */
+export const tabCommandState = (tabId: string, id: CommandId): CommandState | undefined => states.get(tabId)?.[id];
 
 // ---------- Ruban ----------
 /** isNew: the active document is not saved yet. kind: the active document's kind (null: none).
@@ -423,7 +440,8 @@ export interface RibbonCommand {
   planned?: PlannedIn;
   popup?: true | 'dialog';   // opens a menu, or a dialog (a field, colour choices) (aria-haspopup; aria-expanded while it is open, see setOpenPopup)
 }
-export interface RibbonGroup { id: string; labelKey: string; commands: RibbonCommand[]; visible?(ctx: RibbonContext): boolean }
+/** split: its views show as Affichage (Access's split button) when two or more are shown, see viewPair. */
+export interface RibbonGroup { id: string; labelKey: string; commands: RibbonCommand[]; visible?(ctx: RibbonContext): boolean; split?: true }
 export type RibbonTabId =
   | 'home'
   | 'create'
@@ -467,6 +485,11 @@ export function tabAfterContextChange(visible: RibbonTab[], s: { selected: Ribbo
   return { selected: visible.some((t) => t.id === s.before) ? s.before : 'home', before: s.before };
 }
 
+/** C10: the context whose change brings a contextual tab forward. A form's or report's Design and Layout views are one editor (L2, L3): switching
+ *  between them keeps the tab selected (Arrange, Format). */
+export const ribbonContextKey = (c: Pick<RibbonContext, 'kind' | 'mode'>): string =>
+  `${c.kind}|${c.mode && sameView(c.mode, 'design') ? 'design' : c.mode}`;
+
 const doc = (c: RibbonContext) => c.mode !== null;
 const writable = (c: RibbonContext) => c.mode !== null && !c.readOnly && !c.linked;
 const hasBaseWritable = (c: RibbonContext) => c.hasBase && !c.readOnly;
@@ -487,10 +510,14 @@ const plan = (planned: PlannedIn, id: CommandId, icon: LucideIcon, size: RibbonC
 const fieldCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm'): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: (c) => c.kind === 'table' && sheet(c) && !c.readOnly });
 const group = (id: string, ...commands: RibbonCommand[]): RibbonGroup => ({ id, labelKey: `ribbon.group.${id}`, commands });
+const viewGroup = (...commands: RibbonCommand[]): RibbonGroup => ({ ...group('view', ...commands), split: true });
+/** Affichage's main part (Access): switches between the object's data view and its layout or design view; its menu lists every view. */
+export const viewPair = (kind: RibbonContext['kind']): [CommandId, CommandId] =>
+  kind === 'form' ? ['viewForm', 'viewLayout'] : kind === 'report' ? ['viewState', 'viewLayout'] : ['viewDatasheet', 'viewDesign'];
 const resized = (c: RibbonCommand, size: RibbonCommand['size']): RibbonCommand => ({ ...c, size });
 
 const viewDatasheet: RibbonCommand = {
-  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && !c.isNew && c.kind !== 'macro',
+  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && (!c.isNew || c.kind === 'query') && c.kind !== 'macro', // a new query: the mode guard asks to save first (as Run does)
   visible: (c) => c.kind !== 'report' && c.kind !== 'macro', // a report or a macro has no datasheet (Access)
   // an object's Run view; a form's Datasheet view is its datasheet mode (M10); a report's Run view is its Print Preview
   active: (c) => sheet(c) || (c.mode === 'run' && c.kind !== 'form' && c.kind !== 'report'),
@@ -507,9 +534,24 @@ const viewPrintPreview: RibbonCommand = {
   visible: (c) => c.kind === 'report',
   active: (c) => c.kind === 'report' && c.mode === 'run',
 };
+// Mode État (Access's Report view): the report's data, every page under the other; a saved report, as the print preview
+const viewState: RibbonCommand = {
+  id: 'viewState', icon: ScrollText, labelKey: 'ribbon.cmd.viewState', size: 'lg', enabled: (c) => c.kind === 'report' && switchable(c) && !c.isNew,
+  visible: (c) => c.kind === 'report', active: (c) => c.kind === 'report' && c.mode === 'state',
+};
+// L2 (formulaires), L3 (états) : le mode Page d'un objet enregistré ; sa vue l'éteint quand son AllowLayoutView vaut false (état de commande).
+const hasLayout = (c: RibbonContext) => c.kind === 'form' || c.kind === 'report';
+const viewLayout: RibbonCommand = {
+  id: 'viewLayout', icon: LayoutTemplate, labelKey: 'ribbon.cmd.viewLayout', size: 'lg', enabled: (c) => hasLayout(c) && switchable(c) && !c.isNew,
+  visible: (c) => hasLayout(c) && !c.runMode,   // le mode Exécution n'a pas non plus de mode Page (R10)
+  active: (c) => hasLayout(c) && c.mode === 'layout',
+};
 const viewDesign: RibbonCommand = { id: 'viewDesign', icon: PencilRuler, labelKey: 'ribbon.cmd.viewDesign', size: 'lg', enabled: switchable, visible: (c) => !c.runMode, active: (c) => c.mode === 'design' };
 // Shift+F9 (Access's Requery): the active document reads its data again; enabled only when it registered a handler.
 const refresh: RibbonCommand = { id: 'refresh', icon: RefreshCw, labelKey: 'ribbon.cmd.refresh', size: 'sm', enabled: (c) => c.mode === 'datasheet' || c.mode === 'run' };
+
+// SQL View of a query (Home > Views and the Query Design tab: same id = same entry)
+const viewSql: RibbonCommand = { id: 'viewSql', icon: Code, labelKey: 'ribbon.cmd.viewSql', size: 'lg', enabled: (c) => c.kind === 'query' && (c.mode === 'design' || c.mode === 'run'), visible: (c) => c.kind === 'query', active: off };
 
 // Entries shown in several tabs (same id in one context = same entry).
 const formatPainter = plan('later', 'formatPainter', Paintbrush);
@@ -564,11 +606,17 @@ const queryKind = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'])
 const macroCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm'): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designOf('macro') });
 const namedMacro = (c: RibbonContext) => designOf('macro')(c) && !c.embedded;
-const formOrReportDesign = (c: RibbonContext) => c.mode === 'design' && (c.kind === 'form' || c.kind === 'report');
+/** Un formulaire (L2) ou un état (L3) en mode Création ou Page : un seul éditeur, les mêmes onglets contextuels. */
+const editorOf = (kind: RibbonContext['kind']) => (c: RibbonContext) => c.kind === kind && (c.mode === 'design' || c.mode === 'layout');
+const formEditor = editorOf('form');
+const reportEditor = editorOf('report');
+const formOrReportDesign = (c: RibbonContext) => formEditor(c) || reportEditor(c);
 const designerWritable = (c: RibbonContext) => formOrReportDesign(c) && !c.readOnly;
 const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.readOnly;
-/** A5 Task 12: the report's controls gallery — the tools of the band designer; the controls the engine does not draw stay for later. */
-const reportControl = (id: CommandId, icon: LucideIcon): RibbonCommand => ({ id, icon, labelKey: `ribbon.cmd.${id}`, size: 'xs', enabled: reportDesignWritable });
+/** Les éléments d'en-tête et de pied (L3c) : les sections du document, donc aussi en mode Page. */
+const reportHeaderWritable = (c: RibbonContext) => reportEditor(c) && !c.readOnly;
+/** A5 Task 12: the report's controls gallery — the tools of the band designer, in Design and Layout view (L3b); the controls the engine does not draw stay for later. */
+const reportControl = (id: CommandId, icon: LucideIcon): RibbonCommand => ({ id, icon, labelKey: `ribbon.cmd.${id}`, size: 'xs', enabled: reportHeaderWritable });
 const REPORT_CONTROLS: Delivered = {
   select: reportControl('select', MousePointer2), textBox: reportControl('textBox', TextCursorInput), label: reportControl('label', LetterText),
   insertPageBreak: reportControl('insertPageBreak', SeparatorHorizontal), comboBox: reportControl('comboBox', ChevronsUpDown), line: reportControl('line', Minus),
@@ -577,6 +625,10 @@ const REPORT_CONTROLS: Delivered = {
   button: plan('later', 'button', RectangleHorizontal, 'xs'), tabControl: plan('later', 'tabControl', PanelTop, 'xs'), optionGroup: plan('later', 'optionGroup', Group, 'xs'),
   listBox: plan('later', 'listBox', List, 'xs'), subform: plan('later', 'subform', AppWindow, 'xs'),
 };
+/** Arrange › layout commands (dispositions): handlers exist only when applicable, so a missing handler greys the command. */
+const layoutCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand =>
+  ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designerWritable });
+
 /** Arrange › Sizing & Ordering (A4): the designer's handlers come from `designerCommands`. `sizeSpace` is always registered (Snap to Grid
  *  works without a selection); `align`, `bringToFront` and `sendToBack` only with a selection. */
 const arrangeCmd = (id: CommandId, icon: LucideIcon, popup?: true): RibbonCommand =>
@@ -585,7 +637,7 @@ const arrangeCmd = (id: CommandId, icon: LucideIcon, popup?: true): RibbonComman
  *  forms (A4) and reports (A5, docKind 'report': the report's defaults) register them. */
 const formatCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] = 'sm', popup?: RibbonCommand['popup'], enabled = designerWritable): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled, ...(popup ? { popup } : {}) });
-const formDesignWritable = (c: RibbonContext) => designOf('form')(c) && !c.readOnly;
+const formEditorWritable = (c: RibbonContext) => formEditor(c) && !c.readOnly;   // dont la galerie : Création et Page (L2b)
 /** A gallery's own placeholders, delivered in place (same id, icon and size): `planned` removed, the real enable rule. */
 const delivered = (placeholders: RibbonCommand[], ids: CommandId[], enabled: RibbonCommand['enabled']): Delivered =>
   Object.fromEntries(placeholders.filter((c) => ids.includes(c.id)).map(({ planned: _planned, ...c }) => [c.id, { ...c, enabled }]));
@@ -596,7 +648,7 @@ const FORM_CONTROLS: CommandId[] = ['select', 'textBox', 'label', 'button', 'tab
 export const RIBBON: RibbonTab[] = [
   {
     id: 'home', labelKey: 'ribbon.tab.home', groups: [
-      group('view', viewForm, viewPrintPreview, viewDatasheet, viewDesign),
+      viewGroup(viewForm, viewState, viewPrintPreview, viewDatasheet, viewLayout, viewSql, viewDesign),
       group('clipboard', { id: 'paste', icon: ClipboardPaste, labelKey: 'ribbon.cmd.paste', size: 'lg', enabled: hasBaseWritable },
         { id: 'cut', icon: Scissors, labelKey: 'ribbon.cmd.cut', size: 'sm', enabled: hasBaseWritable },
         { id: 'copy', icon: Copy, labelKey: 'ribbon.cmd.copy', size: 'sm', enabled: (c) => c.hasBase }, formatPainter,
@@ -659,7 +711,12 @@ export const RIBBON: RibbonTab[] = [
         { id: 'importText', icon: FileText, labelKey: 'ribbon.cmd.importText', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
         { id: 'linkBaseCraft', icon: DatabaseZap, labelKey: 'ribbon.cmd.linkBaseCraft', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
         { id: 'linkAccess', icon: Database, labelKey: 'ribbon.cmd.linkAccess', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
-        plan('E', 'importAccess', Database, 'lg'), plan('C', 'importSqlServer', Server), plan('C', 'importPostgreSql', Cylinder), plan('later', 'importOdbc', Cable),
+        { id: 'linkPostgreSql', icon: Cylinder, labelKey: 'ribbon.cmd.linkPostgreSql', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly }, // C4 R18
+        { id: 'linkSqlServer', icon: Server, labelKey: 'ribbon.cmd.linkSqlServer', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly }, // C5 R17
+        plan('E', 'importAccess', Database, 'lg'),
+        { id: 'importSqlServer', icon: Server, labelKey: 'ribbon.cmd.importSqlServer', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }, // C7 R17
+        { id: 'importPostgreSql', icon: Cylinder, labelKey: 'ribbon.cmd.importPostgreSql', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly },
+        plan('later', 'importOdbc', Cable),
         plan('later', 'savedImports', FolderInput),
         { id: 'linkedTableManager', icon: Link, labelKey: 'ribbon.cmd.linkedTableManager', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }),
       group('export', plan('later', 'savedExports', FolderOutput), exportExcel, exportText, exportPdf, plan('later', 'exportAccess', Database),
@@ -672,9 +729,9 @@ export const RIBBON: RibbonTab[] = [
       group('macro', resized(pythonEditor, 'lg'), { id: 'runMacro', icon: Play, labelKey: 'ribbon.cmd.runMacro', size: 'lg', enabled: (c) => c.hasBase }),
       relationshipsGroup,
       group('analyze', plan('later', 'databaseDocumenter', BookOpen), plan('later', 'analyzePerformance', Gauge), plan('later', 'analyzeTable', ScanSearch)),
-      // C3: Split Database (Access labels it after the back-end's format); design only, absent from the Runtime
+      // C3: Split Database (Access labels it after the back-end's format), C7: To a Server; design only, absent from the Runtime
       group('moveData', { id: 'splitDatabase', icon: Split, labelKey: 'ribbon.cmd.splitDatabase', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
-        plan('C', 'moveToServer', CloudUpload)),
+        { id: 'moveToServer', icon: CloudUpload, labelKey: 'ribbon.cmd.moveToServer', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }),
     ],
   },
   {
@@ -686,7 +743,7 @@ export const RIBBON: RibbonTab[] = [
   {
     // Table Design (Création de tableau): the id stays `design`, its test id `ribbon-tab-design`.
     id: 'design', labelKey: 'ribbon.tab.design', contextual: true, visible: designOf('table'), groups: [
-      group('view', viewDatasheet),
+      viewGroup(viewDatasheet),
       group('tools',
         { id: 'primaryKey', icon: KeyRound, labelKey: 'ribbon.cmd.primaryKey', size: 'lg', enabled: designWritable },
         { id: 'builder', icon: Wand, labelKey: 'ribbon.cmd.builder', size: 'lg', enabled: designWritable },
@@ -702,7 +759,7 @@ export const RIBBON: RibbonTab[] = [
   },
   {
     id: 'tableFields', labelKey: 'ribbon.tab.tableFields', contextual: true, passive: true, visible: (c) => c.kind === 'table' && sheet(c) && c.datasheetDesign !== false, groups: [
-      group('view', viewDesign),
+      viewGroup(viewDesign),
       group('addDelete', fieldCmd('addShortText', Type, 'lg'), fieldCmd('addNumber', Hash, 'lg'), fieldCmd('addCurrency', Euro, 'lg'),
         fieldCmd('addDateTime', CalendarClock), fieldCmd('addYesNo', SquareCheck), { ...fieldCmd('moreFields', CirclePlus), popup: true }, fieldCmd('deleteField', Trash2)),
       group('properties', fieldCmd('nameCaption', Tag), fieldCmd('defaultValue', TextCursorInput), fieldCmd('fieldSize', Ruler), modifyLookups,
@@ -746,11 +803,11 @@ export const RIBBON: RibbonTab[] = [
       // A3 Task 8 (the grid); Run: a select query's datasheet, an action query's run (Task 10). Task 9: SQL View
       // (pressed in SQL view; from the datasheet too, by the status bar), Union (switches to SQL view), the criteria rows, Top Values, Parameters, the property sheet and
       // Table Names (the Table row, a view option: also on a read-only base); the grid commands are registered in the grid only.
-      group('results', viewDatasheet, { id: 'viewSql', icon: Code, labelKey: 'ribbon.cmd.viewSql', size: 'lg', enabled: (c) => c.kind === 'query' && (c.mode === 'design' || c.mode === 'run'), active: off },
+      group('results', viewDatasheet, viewSql,
         { id: 'runQuery', icon: Play, labelKey: 'ribbon.cmd.runQuery', size: 'lg', enabled: designOf('query') }),
       group('queryType', queryKind('selectQuery', Table2, 'lg'), queryKind('makeTableQuery', Table, 'lg'), queryKind('appendQuery', ListPlus, 'lg'),
         queryKind('updateQuery', PenLine, 'lg'), queryKind('crosstabQuery', Grid2x2, 'lg'), queryKind('deleteQuery', ListX, 'lg'),
-        grid('unionQuery', Combine, 'sm'), plan('C', 'passThroughQuery', ArrowRightLeft)),
+        grid('unionQuery', Combine, 'sm'), queryKind('passThroughQuery', ArrowRightLeft, 'sm')),
       group('querySetup', grid('addTables', SquarePlus, 'lg'), grid('insertRows', BetweenHorizontalStart, 'sm'), grid('deleteRows', ListX, 'sm'),
         grid('builder', Wand, 'sm'), grid('insertColumns', BetweenVerticalStart, 'sm'), grid('deleteColumns', Columns3, 'sm'),
         grid('returnValues', ArrowUpNarrowWide, 'sm')),
@@ -762,21 +819,23 @@ export const RIBBON: RibbonTab[] = [
     ],
   },
   {
-    id: 'formDesign', labelKey: 'ribbon.tab.formDesign', contextual: true, visible: designOf('form'), groups: [
-      group('view', viewForm, viewDatasheet),
+    id: 'formDesign', labelKey: 'ribbon.tab.formDesign', contextual: true, visible: formEditor, groups: [
+      viewGroup(viewForm, viewDatasheet, viewLayout, viewDesign),
       themesGroup,
-      controls('A4', false, delivered(controls('A4', false).commands, FORM_CONTROLS, formDesignWritable)),
-      group('headerFooter', ...headerFooter('A4', delivered(headerFooter('A4'), ['logo', 'title', 'dateTime'], formDesignWritable))),
+      controls('A4', false, delivered(controls('A4', false).commands, FORM_CONTROLS, formEditorWritable)),
+      group('headerFooter', ...headerFooter('A4', delivered(headerFooter('A4'), ['logo', 'title', 'dateTime'], formEditorWritable))),
       // in a read-only base they open read-only (the view's sheet, Field List and Tab Order dialog refuse the changes)
-      group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: designOf('form') },
-        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: designOf('form') },
+      // en mode Page : pas d'Ordre de tabulation (L2)
+      group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: formEditor },
+        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: formEditor },
         { id: 'tabOrder', icon: ArrowDown, labelKey: 'ribbon.cmd.tabOrder', size: 'sm', enabled: designOf('form') },
         plan('later', 'chartSettings', ChartPie), plan('later', 'subformInNewWindow', ExternalLink), plan('D', 'viewCode', Code)),
     ],
   },
   {
-    id: 'reportDesign', labelKey: 'ribbon.tab.reportDesign', contextual: true, visible: designOf('report'), groups: [
-      group('view', viewPrintPreview),
+    // en mode Page : galerie (L3b) et éléments d'en-tête (L3c), mais ni regroupement ni Liste des champs
+    id: 'reportDesign', labelKey: 'ribbon.tab.reportDesign', contextual: true, visible: reportEditor, groups: [
+      viewGroup(viewState, viewPrintPreview, viewLayout, viewDesign),
       themesGroup,
       // A5 Task 13: Group & Sort shows or hides the pane (read-only: shown disabled); Totals needs one bound text box of the Detail selected;
       // Group & Sort and Hide Details pressed: the pane shown, the Detail hidden (registerCommandStates)
@@ -784,27 +843,27 @@ export const RIBBON: RibbonTab[] = [
         { id: 'reportTotals', icon: Sigma, labelKey: 'ribbon.cmd.reportTotals', size: 'sm', popup: true, enabled: reportDesignWritable },
         { id: 'hideDetails', icon: EyeOff, labelKey: 'ribbon.cmd.hideDetails', size: 'sm', enabled: reportDesignWritable, active: off }),
       controls('A5', true, REPORT_CONTROLS),
-      group('headerFooter', { id: 'pageNumbers', icon: Hash, labelKey: 'ribbon.cmd.pageNumbers', size: 'lg', enabled: reportDesignWritable }, ...headerFooter('A5', {
-        logo: { id: 'logo', icon: Image, labelKey: 'ribbon.cmd.logo', size: 'sm', enabled: reportDesignWritable },
-        title: { id: 'title', icon: Heading1, labelKey: 'ribbon.cmd.title', size: 'sm', enabled: reportDesignWritable },
-        dateTime: { id: 'dateTime', icon: CalendarClock, labelKey: 'ribbon.cmd.dateTime', size: 'sm', enabled: reportDesignWritable },
+      group('headerFooter', { id: 'pageNumbers', icon: Hash, labelKey: 'ribbon.cmd.pageNumbers', size: 'lg', enabled: reportHeaderWritable }, ...headerFooter('A5', {
+        logo: { id: 'logo', icon: Image, labelKey: 'ribbon.cmd.logo', size: 'sm', enabled: reportHeaderWritable },
+        title: { id: 'title', icon: Heading1, labelKey: 'ribbon.cmd.title', size: 'sm', enabled: reportHeaderWritable },
+        dateTime: { id: 'dateTime', icon: CalendarClock, labelKey: 'ribbon.cmd.dateTime', size: 'sm', enabled: reportHeaderWritable },
       })),
       // in a read-only base they open read-only (the designer refuses the changes)
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: designOf('report') },
-        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: designOf('report') }, plan('later', 'chartSettings', ChartPie),
+        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: reportEditor }, plan('later', 'chartSettings', ChartPie),
         plan('later', 'subreportInNewWindow', ExternalLink), plan('D', 'viewCode', Code)),
     ],
   },
   {
     // Arrange and Format: the generic designer of A4 (Task 3), reused by A5's reports.
     id: 'arrange', labelKey: 'ribbon.tab.arrange', contextual: true, visible: formOrReportDesign, groups: [
-      group('layoutTable', plan('later', 'layoutGridlines', Grid3x3, 'lg'), plan('later', 'stacked', Rows3, 'lg'), plan('later', 'tabular', Columns3, 'lg'),
-        plan('later', 'removeLayout', Ungroup, 'lg')),
-      group('rowsColumns', plan('later', 'insertAbove', ArrowUpToLine, 'lg'), plan('later', 'insertBelow', ArrowDownToLine, 'lg'),
-        plan('later', 'insertLeft', ArrowLeftToLine, 'lg'), plan('later', 'insertRight', ArrowRightToLine, 'lg'),
-        plan('later', 'selectLayout', SquareDashedMousePointer), plan('later', 'selectColumn', Columns2), plan('later', 'selectRow', Rows2)),
+      group('layoutTable', plan('later', 'layoutGridlines', Grid3x3, 'lg'), layoutCmd('stacked', Rows3, 'lg'), layoutCmd('tabular', Columns3, 'lg'),
+        layoutCmd('removeLayout', Ungroup, 'lg')),
+      group('rowsColumns', layoutCmd('insertAbove', ArrowUpToLine, 'lg'), layoutCmd('insertBelow', ArrowDownToLine, 'lg'),
+        layoutCmd('insertLeft', ArrowLeftToLine, 'lg'), layoutCmd('insertRight', ArrowRightToLine, 'lg'),
+        layoutCmd('selectLayout', SquareDashedMousePointer, 'sm'), layoutCmd('selectColumn', Columns2, 'sm'), layoutCmd('selectRow', Rows2, 'sm')),
       group('mergeSplit', plan('later', 'merge', Merge), plan('later', 'splitVertically', SquareSplitVertical), plan('later', 'splitHorizontally', SquareSplitHorizontal)),
-      group('move', plan('later', 'moveUp', ArrowUp, 'lg'), plan('later', 'moveDown', ArrowDown, 'lg')),
+      group('move', layoutCmd('moveUp', ArrowUp, 'lg'), layoutCmd('moveDown', ArrowDown, 'lg')),
       group('position', plan('later', 'controlMargins', Scan, 'lg'), plan('later', 'controlPadding', Expand, 'lg'), plan('later', 'anchoring', Anchor, 'lg')),
       group('sizingOrdering', arrangeCmd('sizeSpace', Scaling, true), arrangeCmd('align', AlignStartVertical, true), arrangeCmd('bringToFront', BringToFront),
         arrangeCmd('sendToBack', SendToBack)),
@@ -825,13 +884,15 @@ export const RIBBON: RibbonTab[] = [
     ],
   },
   {
-    id: 'pageSetup', labelKey: 'ribbon.tab.pageSetup', contextual: true, visible: designOf('report'), groups: [
+    id: 'pageSetup', labelKey: 'ribbon.tab.pageSetup', contextual: true, visible: reportEditor, groups: [
       group('pageSize', pageSize, margins, plan('later', 'showMargins', SquareDashed), printDataOnly),
       pageLayoutGroup,
     ],
   },
   {
     id: 'printPreview', labelKey: 'ribbon.tab.printPreview', contextual: true, visible: (c) => c.kind === 'report' && c.mode === 'run', groups: [
+      // Affichage (Etat ↔ Page): the report's Page view is reachable from its preview, as the form's from its Form view
+      viewGroup(viewState, viewPrintPreview, viewLayout, viewDesign),
       group('print', { id: 'print', icon: Printer, labelKey: 'ribbon.cmd.print', size: 'lg', enabled: doc }),
       group('pageSize', pageSize, margins, printDataOnly),
       pageLayoutGroup,

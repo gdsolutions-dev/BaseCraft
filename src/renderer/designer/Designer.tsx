@@ -12,6 +12,7 @@ import { ComboBox } from '../shell/ComboBox';
 import type { Rect } from './geometry';
 import { DesignCanvas } from './DesignCanvas';
 import { ARRANGE_MENUS, arrangeItemEnabled, selectedCount, type ArrangeMenu } from './designer-commands';
+import type { DesignerRestrict } from './designer-restrict';
 import type { DesignerAction, DesignerState, Selection } from './designer-model';
 import { currentValue, fillAction, outlineAction, selectionSet, type FormatPopupId } from './format-commands';
 import { fontWarning } from './property-sheet-model';
@@ -19,6 +20,7 @@ import { RibbonPopup } from './RibbonPopup';
 import { ColorChoices, PropertySheet } from './PropertySheet';
 import type { PropertySheetContext } from './sheet-types';
 import { Toolbox } from './Toolbox';
+import { FONT_SIZES } from './units';
 import './designer.css';
 
 export interface ToolDef { kind: ControlKind; icon: LucideIcon; labelKey: string }
@@ -35,17 +37,27 @@ export interface DesignerHost {
    *  quand elle supprime des contrôles (En-tête/pied de formulaire, d'état, de page). */
   sectionMenu?(index: number, doc: DesignDoc): { id: string; labelKey: string; action: DesignerAction; confirmKey?: string }[];
   sheet: PropertySheetContext;
+  /** Mode Page d'un formulaire continu : `count` copies en lecture seule du corps du Détail sous celui qu'on modifie ; `row` = 1…count,
+   *  l'écart avec l'enregistrement courant. Absent (mode Création, formulaire simple) : rien de plus n'est dessiné. */
+  extraDetailRows?: { count: number; render(c: ControlDef, s: SectionDef, row: number): ReactNode };
 }
+
+/** Ce que reçoit une surface fournie par l'hôte (`canvas`) : l'état et le réducteur du concepteur. */
+export interface CanvasProps { state: DesignerState; dispatch: (a: DesignerAction) => void; readOnly: boolean; host: DesignerHost; tool: ToolState; onTool(t: ToolState): void }
 
 export function Designer(p: { state: DesignerState; dispatch: (a: DesignerAction) => void; host: DesignerHost; readOnly: boolean;
   tool: ToolState; onTool(t: ToolState): void; sheetVisible: boolean; side?: ReactNode /* volet de l'hôte : liste des champs */;
-  onSheetClose?(): void /* bouton Fermer de la feuille (l'hôte remet sheetVisible à faux) */ }) {
+  onSheetClose?(): void /* bouton Fermer de la feuille (l'hôte remet sheetVisible à faux) */;
+  restrict?: DesignerRestrict /* Mode Page : gestes restreints ; absent, le concepteur est entier */;
+  canvas?: ReactNode | ((c: CanvasProps) => ReactNode) /* Mode Page d'un état : remplace la surface de création ; absent, DesignCanvas */ }) {
   return (
     <div className="dz" data-testid="designer">
-      <Toolbox tools={p.host.tools} tool={p.tool} onTool={p.onTool} readOnly={p.readOnly} />
-      <DesignCanvas state={p.state} dispatch={p.dispatch} host={p.host} readOnly={p.readOnly} tool={p.tool} onTool={p.onTool} />
+      {!p.restrict?.toolbox && <Toolbox tools={p.host.tools} tool={p.tool} onTool={p.onTool} readOnly={p.readOnly} />}
+      {p.canvas === undefined
+        ? <DesignCanvas state={p.state} dispatch={p.dispatch} host={p.host} readOnly={p.readOnly} tool={p.tool} onTool={p.onTool} restrict={p.restrict} />
+        : typeof p.canvas === 'function' ? p.canvas({ state: p.state, dispatch: p.dispatch, readOnly: p.readOnly, host: p.host, tool: p.tool, onTool: p.onTool }) : p.canvas}
       {p.sheetVisible && <PropertySheet state={p.state} dispatch={p.dispatch} docKind={p.host.target} ctx={p.host.sheet} readOnly={p.readOnly}
-        onClose={p.onSheetClose} sectionLabel={p.host.sectionLabel} />}
+        onClose={p.onSheetClose} sectionLabel={p.host.sectionLabel} restrict={p.restrict} />}
       {p.side}
     </div>
   );
@@ -76,7 +88,6 @@ export function ArrangePopup(p: { menu: ArrangeMenu; state: DesignerState; dispa
   );
 }
 
-const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const NAMED_FORMATS = [...FORMATS_BY_TYPE.number, ...FORMATS_BY_TYPE.dateTime];
 const COLOR_PROP: Partial<Record<FormatPopupId, string>> = { fontColor: 'ForeColor', backColor: 'BackColor', shapeFill: 'BackColor', shapeOutline: 'BorderColor' };
 

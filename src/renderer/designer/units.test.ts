@@ -43,3 +43,7 @@ describe('designer units', () => {
     expect(snap(220, 142)).toBe(284);
   });
 });
+
+describe('formatCm digits', () => {
+  it('formatCm with three digits', () => { expect(formatCm(360, fr, 3)).toBe('0,635 cm'); expect(formatCm(360, fr)).toBe('0,63 cm'); });
+});

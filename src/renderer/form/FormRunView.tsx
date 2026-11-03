@@ -11,22 +11,28 @@ import { effectiveProp } from '../../shared/design/properties';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { sameName, type FieldDef } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
+import { passThroughOf } from '../../shared/query/definition';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
 import { promptParameters } from '../query/prompt-parameters';
 import { i18n } from '../i18n';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from '../datasheet/filter-model';
-import { FilterMenu, type FilterMenuState } from '../datasheet/FilterMenu';
+import { FilterMenu, type BuiltList, type FilterMenuState } from '../datasheet/FilterMenu';
+import { fieldMenu } from '../datasheet/filter-menu-data';
+import { FindDialog } from '../datasheet/FindDialog';
+import { matchText } from '../datasheet/find-commands';
 import { editText, lookupList } from '../datasheet/datasheet-cells';
 import { onDataRefresh } from '../shell/data-refresh';
 import { confirmDelete, fieldErrorParams, showRelatedRefusal } from '../datasheet/record-messages';
 import { flushCellEditor } from '../datasheet/grid-shared';
+import { editKey, entryCaret } from '../datasheet/edit-keys';
+import { currentSettings, fourDigitYear } from '../settings-store';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { OpenArgs } from '../state/app-state';
-import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
+import { bcErrorCode, errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { askWriteConflict, recordText, showRecordDeleted, type ConflictChoice } from '../shell/WriteConflictDialog';
-import { registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
+import { registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { flashStatus } from '../shell/StatusBar';
 import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
 import { fromStored, toStored } from '../../shared/expr/evaluate';
@@ -37,15 +43,15 @@ import { boundField, controlTexts, isUnbound } from './control-values';
 import type { ListState, RunCtx, RunnerApi, SubformHost, UnboundValue } from './controls/run-ctx';
 import { parseFormDoc } from './form-def';
 import { FormEvents, withOverrides } from './form-events';
-import { formCancelled, formReady, memberValue, registerForm, type FormInstance } from './form-instances';
+import { formCancelled, formReady, memberValue, registerForm, type FindOptions, type FormInstance } from './form-instances';
 import './form-nav-menu';
 import { FormRecords, type FormDataApi, type RecordError, type RecordEvents, type RecordSnapshot } from './record-controller';
 import { listOptions, loadRowSource, outOfList, rowOfText } from './row-source';
-import { errorsByControl, prop, tabSequence } from './run-model';
+import { errorsByControl, layoutLabels, prop, tabSequence } from './run-model';
 import { SingleFormView } from './SingleFormView';
 import { ContinuousFormView } from './ContinuousFormView';
 import { FormDatasheet } from './FormDatasheet';
-import { datasheetColumns, firstRun, initialView, openingMode, runViewFor } from './views';
+import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor } from './views';
 import './form.css';
 
 const dataApi: FormDataApi = {
@@ -147,6 +153,10 @@ export function FormRunView(p: DocViewProps) {
     return () => { current = false; cancel(); release(); };
   }, [tab.reloadToken, region, readOnly]);
 
+  // L2 : mode Page éteint quand AllowLayoutView vaut false
+  const layoutOk = !loaded || 'error' in loaded || allowsLayout(loaded.doc);
+  useEffect(() => registerCommandStates(tab.id, { viewLayout: { enabled: layoutOk } }), [tab.id, layoutOk]);
+
   if (loaded && 'error' in loaded) return <div className="doc-empty muted" role="alert" data-testid="form-run-error">{t(loaded.error.key, loaded.error.params)}</div>;
   if (!loaded || region === null) return <div className="frun" aria-busy />;
   return <FormRunner key={loaded.key} doc={loaded.doc} records={loaded.records} hub={loaded.hub} region={region} readOnly={readOnly} active={p.active} name={tab.name}
@@ -158,13 +168,14 @@ export function FormRunView(p: DocViewProps) {
 function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, modal: ModalApi, childFields?: string[], args?: OpenArgs, events?: RecordEvents): FormRecords {
   const all = doc.sections.flatMap((s) => flattenControls(s.controls));
   const allow = (n: string) => effectiveProp(doc.props, n, 'form') !== false;
+  const year4 = fourDigitYear();   // read when the form opens, as its controls' (O2 R1)
   /** Write Conflict (C3 R9); Copy to Clipboard: the bound controls' field names and texts, as the form shows them. */
   const onConflict = async (): Promise<ConflictChoice> => {
     const choice = await askWriteConflict(modal);
     const s = records.snapshot;
     if (choice === 'copy' && s.info) {
       const bound = all.flatMap((c) => { const f = boundField(c, s.info!); return f ? [{ c, f, i: s.info!.fields.indexOf(f) }] : []; });
-      const ctx = { locale: region, lang: langOf() };
+      const ctx = { locale: region, lang: langOf(), ...(year4 ? { fourDigitYear: true } : {}) };
       await api.app.writeClipboard(recordText(bound.map((b) => b.f.name), bound.map((b) => controlTexts(b.c, b.f, s.values[b.i] ?? null, s.pending[b.f.name], ctx).display)));
     }
     return choice;
@@ -255,12 +266,18 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const [filter, setFilterState] = useState<FilterState>(NO_FILTER);
   const filterRef = useRef(filter);
   const [menu, setMenu] = useState<FilterMenuState | null>(null);
+  const built = useRef(new Map<string, BuiltList>()); // what each field's list last set (R14)
+  const [finding, setFinding] = useState(0);   // Home › Find: the Find dialog is open (O2 R10; its key: each opening starts it again)
+  const foundIn = useRef<string | null>(null);   // the control whose value the last find matched
   const latest = useRef(new Latest());
   const checks = useRef<Promise<void>>(Promise.resolve());
   const shownError = useRef<unknown>(undefined);
   const subs = useRef(new Map<string, RunnerApi>());   // the subform controls' forms, by control name
   const typedIn = useRef(new Set<string>());           // text boxes and combos typed in since they got the focus (their update events)
+  const editMode = useRef<string | null>(null);        // R3: the control in edit mode (typed into, clicked into, F2); none: navigation
   const entered = useRef<string | null>(null);         // the control whose Enter has fired and whose Exit has not
+  const blurred = useRef<EventTarget | null>(null);    // the element the focus last left
+  const givenBack = useRef<string | null>(null);       // the control the focus was just given back to (a box, the ribbon): its selection kept
   const away = useRef<string | null>(null);            // that control, when the focus left the form from it (no Exit then)
   const leaving = useRef<Promise<boolean> | null>(null);   // the last control left: its events (false: it kept the focus)
   const updating = useRef(new Set<string>());          // controls whose update events are running (a save asked there raises them not again)
@@ -268,8 +285,9 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
 
   const all = useMemo(() => doc.sections.flatMap((s) => flattenControls(s.controls)), [doc]);
   const byName = useMemo(() => new Map(all.map((c) => [c.name, c])), [all]);
-  const display = useMemo(() => ({ locale: region, lang }), [region, lang]);
-  const base = useMemo(() => ({ locale: region, lang, now: () => new Date(), member: memberValue }), [region, lang]);   // [Forms]!, [TempVars]! (R11)
+  const [year4] = useState(fourDigitYear);   // read once when the form opens (O2 R1)
+  const display = useMemo(() => ({ locale: region, lang, ...(year4 ? { fourDigitYear: true } : {}) }), [region, lang, year4]);
+  const base = useMemo(() => ({ locale: region, lang, ...(year4 ? { fourDigitYear: true } : {}), now: () => new Date(), member: memberValue }), [region, lang, year4]);   // [Forms]!, [TempVars]! (R11)
   // the design as shown: with its runtime properties (SetProperty, R9), for the views and the tab order
   useEffect(() => { hub.didShow(); }, [hub]);   // its form actions are set (hub.form): On Load may run
   const overrides = useSyncExternalStore(useCallback((cb) => hub.subscribe(cb), [hub]), () => hub.overrides);
@@ -286,6 +304,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   }, [shown, pages]);
   const tabRank = (n: string) => { const i = [...sequences.keys()].indexOf(n); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   const stops = useMemo(() => new Set(sequences.keys()), [sequences]);
+  const labels = useMemo(() => layoutLabels(doc), [doc]);   // layout labels stay linked to their control
   const ro = readOnly || snap.refused;
 
   // the new record shows its default values at once (sent only on insert: newRecordValues)
@@ -355,7 +374,11 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
         tables = ts.map((x) => x.name);
         queries = os.filter((o) => o.kind === 'query').map((o) => o.name);
       } catch { /* every table source then says it is unknown */ }
-      const ctx = { ...display, tables, queries };
+      // the pass-throughs a list names (C6 R9: refused, their text never runs for a list)
+      const named = queries.filter((q) => listCtls.some((c) => sameName(String(prop(c, 'RowSource') ?? '').trim(), q)));
+      const passThroughs = (await Promise.all(named.map((q) => api.objects.get('query', q).then((o) => passThroughOf(o.definition) ? q : null, () => null))))
+        .filter((q) => q !== null);
+      const ctx = { ...display, tables, queries, passThroughs };
       // a list's parameters: asked on its first read only (its later reads reuse the answer, Cancel included)
       const ask = (c: ControlDef) => (ps: SourceInfo['parameters']) => {
         let v = listParams.current.get(c.name);
@@ -579,6 +602,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   /** Typed in a text box or a combo: its On Change now, its update events when it is left (or the record saved). */
   const input = (c: ControlDef) => {
     typedIn.current.add(c.name);
+    editMode.current = c.name;
     void raiseCtl('OnChange', c.name);
   };
   /** A value chosen at once (check box, option group, list box, a combo's pick): Before Update (cancelled: the value before
@@ -620,8 +644,17 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     while (r?.parentElement?.closest('.frun')) r = r.parentElement.closest('.frun');
     return r ?? null;
   };
+  /** R5: the focused text entry (a record move keeping the control) gets the caret of Behavior entering field. */
+  const enterCaret = () => {
+    const el = document.activeElement;
+    if ((el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === 'text')) && own(el)) el.setSelectionRange(...entryCaret(el.value.length, currentSettings().enterFieldBehavior));
+  };
   const events = (c: ControlDef) => ({
+    // clicked into a text entry: edit mode (R3), set before its focus; a press on a surface that takes no focus (a frame) changes nothing
+    onMouseDown: (e: { target: EventTarget | null }) => { if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) editMode.current = c.name; },
     onFocus: () => {
+      givenBack.current = entered.current === c.name && document.activeElement === blurred.current ? c.name : null;
+      if (editMode.current !== c.name) editMode.current = null;   // reached by the keyboard (or a program): navigation
       onFocusOf(c.name);
       const from = away.current;
       away.current = null;
@@ -640,6 +673,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       });
     },
     onBlur: (e: FocusEvent) => {
+      blurred.current = e.target;
       if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;   // inside the same option group
       setFocused((v) => (v === c.name ? null : v));
       const check = queue(() => checkRule(c));
@@ -668,7 +702,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
         undo(c);
       } else if ((e.key === 'PageDown' || e.key === 'PageUp') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();   // Access: the next or previous record, the focus staying in this control
-        void userAttempt(() => (e.key === 'PageDown' ? records.next() : records.previous()));
+        void userAttempt(() => (e.key === 'PageDown' ? records.next() : records.previous())).then((ok) => { if (ok) requestAnimationFrame(enterCaret); });
       } else if ((e.key === 'Home' || e.key === 'End') && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
         e.preventDefault();   // Access: the first field of the first record, the last field of the last record
         const first = e.key === 'Home';
@@ -678,13 +712,34 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
         void userAttempt(() => (first ? records.first() : records.last())).then((ok) => { if (ok && n) requestAnimationFrame(() => focusCtl(n)); });
       } else if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        void attempt(() => records.save());
+        void attempt(() => records.save(true)); // Save Record: sent again after a lost save too (C4 I1)
       } else if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (tabFrom(c.name, e.shiftKey ? -1 : 1)) e.preventDefault();   // not a tab stop: the browser's order
-      } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
-        && (c.kind === 'textBox' || c.kind === 'checkBox' || c.kind === 'optionButton') && e.target instanceof HTMLInputElement) {
-        // Access (Arrow key behavior: Next field): the next or previous field; a multi-line text box (textarea) keeps its caret
-        if (tabFrom(c.name, e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault();
+      } else if (!e.defaultPrevented && !(c.kind === 'commandButton' && e.key === 'Enter') && !(c.kind === 'listBox' && e.key.startsWith('Arrow'))) {
+        // Access's keys (O2 R3–R9): Enter, F2, the arrows; the keys a control owns (an option group's or a tab strip's arrows,
+        // an open combo list, a list box's arrows, a button's Enter) never come here
+        const el = e.target;
+        const text = el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === 'text') ? el : null;
+        const m = editKey({
+          key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey, composing: e.nativeEvent.isComposing || e.keyCode === 229,
+          caret: text && { start: text.selectionStart ?? 0, end: text.selectionEnd ?? 0, length: text.value.length },
+          editing: editMode.current === c.name, grid: false, continuous: view === 'continuous', multiline: el instanceof HTMLTextAreaElement,
+        }, currentSettings());
+        if (m.to === 'pass') return;
+        if (m.to === 'field') { if (tabFrom(c.name, m.dir, { stop: m.stopAtEnds })) e.preventDefault(); return; }
+        e.preventDefault();
+        if (m.to === 'record') {
+          // the same control on the next (past the last: the new one, when additions are allowed) or previous record; refused: the box, the focus stays
+          void userAttempt(() => (m.dir < 0 ? records.previous() : records.snapshot.isNew ? records.newRecord() : records.next())).then((ok) => {
+            if (!ok) return;
+            editMode.current = null;   // reached by the keyboard: navigation
+            requestAnimationFrame(() => { focusCtl(c.name); enterCaret(); });
+          });
+        } else if (m.to === 'caret' && text) {
+          const n = text.value.length;
+          text.setSelectionRange(m.at === 'end' ? n : 0, m.at === 'start' ? 0 : n);
+          if (e.key === 'F2') editMode.current = editMode.current === c.name ? null : c.name;
+        }
       }
     },
   });
@@ -700,8 +755,9 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     return true;
   };
   /** Tab from the stop `name`: the next stop that takes the focus (one that cannot is passed over); past the Detail's last, the
-   *  next record (the new record saved first goes to another new record), or out of a subform at its end. False: not a stop. */
-  const tabFrom = (name: string, dir: 1 | -1): boolean => {
+   *  next record (the new record saved first goes to another new record), or out of a subform at its end. False: not a stop.
+   *  `stop` (an arrow with Cursor stops at first/last field, R8): past the Detail's first or last stop, nothing. */
+  const tabFrom = (name: string, dir: 1 | -1, { stop = false } = {}): boolean => {
     const at = sequences.get(name);
     if (!at) return false;
     const from = document.activeElement;
@@ -711,7 +767,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     if (tryFrom(ahead)) return true;
     const around = dir > 0 ? at.seq.slice(0, k) : at.seq.slice(k + 1).reverse();
     if (!at.detail) { tryFrom(around); return true; }
-    if (tabOut(dir)) return true;
+    if (stop || tabOut(dir)) return true;
     void userAttempt(() => (dir < 0 ? records.previous() : records.snapshot.isNew ? records.newRecord() : records.next())).then((ok) => {
       if (ok) requestAnimationFrame(() => tryFrom(dir > 0 ? at.seq : [...at.seq].reverse()));
     });
@@ -838,6 +894,18 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     ), { titleKey: 'datasheet.filter.fieldTitle' });
     if (criteria !== null) await setCriteria(at.f.name, criteria);
   };
+  /** Home › Filter on the focused bound control: the column menu with its field's list (R14), under the form's other criteria. */
+  const filterMenu = async () => {
+    const at = focusedField();
+    const ref = doc.recordSource;
+    if (!at || !ref || !(await attempt(() => records.save()))) return;
+    const info = records.snapshot.info;
+    if (!info) return;
+    const read = records.valuesReader(at.f.name) ?? (() => Promise.reject(new Error('bc:noRecords'))); // no records read: no list
+    setMenu(await fieldMenu(fd(at.f), menuAt('filter'), { ref, info, col: info.fields.indexOf(at.f), read,
+      shown: (v) => controlTexts(at.c, at.f, v, undefined, display).display,
+      criteria: filterRef.current.items.find((x) => sameName(x.field, at.f.name))?.criteria, built: built.current.get(at.f.name) }));
+  };
   const toggleFilter = () => { const f = filterRef.current; if (f.items.length || f.applied) void applyFilter({ ...f, active: !f.active }); };
 
   const sortBy = async (dir: 'asc' | 'desc' | null) => {
@@ -908,10 +976,10 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
 
   // the record commands (ribbon, Shift+F9), on this form; `run` sends them to the subform that has the focus (Access)
   const handlers: Record<string, () => unknown> = {
-    newRecord, deleteRecord: () => deleteRecord(), save: () => attempt(() => records.save()),
+    newRecord, deleteRecord: () => deleteRecord(), save: () => attempt(() => records.save(true)),
     sortAsc: () => sortBy('asc'), sortDesc: () => sortBy('desc'), sortClear: () => sortBy(null),
-    filter: filterField, filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
-    refresh: () => refresh(true),
+    filter: filterMenu, filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
+    refresh: () => refresh(true), find: () => setFinding((k) => k + 1),
   };
   /** Requery: saves first; lists read again (once: a save made by the requery has already read them). `ask` (Shift+F9, on this
    *  form or its master): the source's parameters asked again first, here then in each subform (Cancel keeps the records).
@@ -986,25 +1054,31 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       const info = s.info;
       if (!info) return false;
       const at = focusedField();
-      const bound = [...new Set(all.map((c) => boundField(c, info)).filter((f): f is SourceField => !!f))];
-      const idx = (o.onlyCurrentField && at ? [at.f] : bound).map((f) => info.fields.indexOf(f));
-      // R13: the value's text in the region; case ignored unless Match Case, accents kept
+      const seen = new Set<SourceField>();   // each bound field once, through its first control
+      const bound = all.flatMap((c) => { const f = boundField(c, info); if (!f || seen.has(f)) return []; seen.add(f); return [{ c, f }]; });
+      const look = (o.onlyCurrentField && at ? [at] : bound).map((b) => ({ ...b, k: info.fields.indexOf(b.f) }));
+      // R13: the value's text in the region; O2 R10 As Formatted (the Find dialog): the control's shown text (its Format, else
+      // the field's). Case ignored unless Match Case, accents kept (matchText).
       const loc = infoOf(region);
-      const norm = (x: string) => (o.matchCase ? x : x.toLocaleLowerCase(region));
-      const what = norm(o.what);
-      const test = (row: SqlValue[]) => idx.some((k) => {
+      foundIn.current = null;
+      const test = (row: SqlValue[]) => look.some(({ c, f, k }) => {
         const v = row[k];
         if (v === null || v === undefined) return false;
         let text: string;
-        try { const val = fromStored(info.fields[k]!, v); if (val === null) return false; text = norm(toText(val, loc)); } catch { return false; }
-        return o.match === 'whole' ? text === what : o.match === 'start' ? text.startsWith(what) : text.includes(what);
+        try {
+          if (o.asFormatted) text = controlTexts(c, f, v, undefined, display).display;
+          else { const val = fromStored(f, v); if (val === null) return false; text = toText(val, loc); }
+        } catch { return false; }
+        if (!matchText(text, o.what, o.match, o.matchCase, region)) return false;
+        foundIn.current = c.name;
+        return true;
       });
       // the controller's `from`: excluded going up or down, included for All (from the record after the current one)
       const here = s.isNew ? s.total : s.index;
       const from = o.findFirst ? (o.search === 'up' ? s.total : o.search === 'down' ? -1 : 0) : o.search === 'all' ? here + 1 : here;
       const i = await records.find(test, { from, dir: o.search });
       if (i === null) return false;
-      await hub.goToRecord('goTo', i + 1);
+      if (i !== here) await hub.goToRecord('goTo', i + 1);   // saved first; found in the current record: nothing saved (Access)
       return true;
     },
     requery: async (n) => {
@@ -1032,6 +1106,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     return registerCommands(tabId, {
       // read-only (also a refused write before the session says so): no record command
       ...(ro ? {} : { newRecord: on('newRecord'), deleteRecord: on('deleteRecord'), save: on('save') }),
+      find: on('find'),   // the form that has the focus: this one or the subform it is in (run)
       sortAsc: on('sortAsc'), sortDesc: on('sortDesc'), sortClear: on('sortClear'), filter: on('filter'), filterSelection: on('filterSelection'),
       filterAdvanced: on('filterAdvanced'), ...(focusedFilter ? { filterToggle: on('filterToggle') } : {}), refresh: on('refresh'),
     });
@@ -1108,12 +1183,13 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
         target = document.activeElement;
       }
       if (!isText(target) || !own(target) || target.readOnly || target.disabled) { dropped(); return; }
-      // the whole field replaced, as Access selects it on entering (Behavior Entering Field: Select Entire Field, not yet a property);
-      // through the control's own onChange (AutoExpand, typed text…)
-      const value = text;
+      // where Behavior entering field puts them (O2 R5: the whole field replaced, or inserted at its start or end); through the
+      // control's own onChange (AutoExpand, typed text…)
+      const [a, b] = entryCaret(target.value.length, currentSettings().enterFieldBehavior);
+      const value = target.value.slice(0, a) + text + target.value.slice(b);
       Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')!.set!.call(target, value);
       target.dispatchEvent(new Event('input', { bubbles: true }));
-      target.setSelectionRange(value.length, value.length);
+      target.setSelectionRange(a + text.length, a + text.length);
     };
     records.setTypeAheadHandler(({ text, applied }) => {
       if (!applied) { dropped(); return; }
@@ -1208,7 +1284,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       </div>
     );
   }
-  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, pages, setPage, lists, typed: typedTexts, setTyped, sub,
+  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, labels, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, givenBack: (n) => givenBack.current === n, pages, setPage, lists, typed: typedTexts, setTyped, sub,
     raise: raiseCtl, input, update };
   /** Another record, made current; then the focus on `n` there (the control clicked: already focused), else on the last control. */
   const goRow = (i: number, n?: string) => void userAttempt(() => records.goTo(i)).then((ok) => {
@@ -1227,6 +1303,20 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       events: (c) => ({ onFocus: () => goRow(i, c.name), onBlur: () => {}, onKeyDown: () => {} }),
     };
   };
+  /** The Find dialog's search (O2 R10): the form's find, which makes the record found current, the record being edited saved
+   *  first when it moves (refused: its message, and the search stops). « Document actif »: the control matched becomes the
+   *  form's (the dialog keeps the focus; closed, it goes there). */
+  const findHere = async (o: FindOptions): Promise<boolean> => {
+    try {
+      if (!(await hub.form!.find(o))) return false;
+    } catch (e) {
+      if (bcErrorCode(e) !== 'cantGoToRecord') throw e;
+      await showRefusal();
+      throw new Error('bc:saveRefused');
+    }
+    if (!o.onlyCurrentField && foundIn.current) lastFocused.current = lastOwn.current = foundIn.current;
+    return true;
+  };
   const filterState = !hasFilter ? 'none' : filter.active ? 'on' : 'off';
   const onGo = (row: number) => void userAttempt(() => records.goTo(row));
   const nav = { messages, filter: filterState, onGo, onNew: () => void newRecord(), onToggleFilter: toggleFilter } as const;
@@ -1239,11 +1329,21 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
           ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf}
           onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined} />
       )}
+      {finding > 0 && <FindDialog key={finding} find={findHere} close={() => { setFinding(0); back(); }} />}
       {menu && (
-        <FilterMenu menu={menu} hasFilter={hasFilter}
+        <FilterMenu menu={menu} hasFilter={menu.kind === 'field' ? filter.items.some((x) => sameName(x.field, menu.field.name)) : hasFilter}
           onPick={(kind: SelectionFilter) => { if (menu.kind !== 'selection') return; setMenu(null); void setCriteria(menu.field.name, selectionCriteria(kind, menu.field, menu.value)); }}
           onClear={() => { setMenu(null); void applyFilter(NO_FILTER); }}
-          onClose={(escaped) => { setMenu(null); if (escaped) back(); }} />
+          onClose={(escaped) => { setMenu(null); if (escaped) back(); }}
+          onSort={(dir) => { setMenu(null); void sortBy(dir); }}
+          onClearField={() => { setMenu(null); if (menu.kind === 'field') void setCriteria(menu.field.name, ''); }}
+          onTyped={() => { setMenu(null); void filterField(); }}
+          onValues={(b) => {
+            setMenu(null);
+            if (menu.kind !== 'field') return;
+            if (b) built.current.set(menu.field.name, b);
+            void setCriteria(menu.field.name, b?.criteria ?? '');
+          }} />
       )}
     </>
   );

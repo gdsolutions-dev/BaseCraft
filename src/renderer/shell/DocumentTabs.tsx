@@ -10,7 +10,7 @@ import type { AppDispatch } from './nav-menu';
 
 /** designOpen: another tab has this table in Design view (Table Fields then refuses to edit its fields).
  *  link: a linked table's Design view, its source (C1 R8): the view is read-only. */
-export interface DocViewProps { tab: DocTab; active: boolean; readOnly: boolean; dispatch: AppDispatch; designOpen?: boolean; link?: TableSummary['link'] }
+export interface DocViewProps { tab: DocTab; active: boolean; readOnly: boolean; dispatch: AppDispatch; designOpen?: boolean; tabs?: DocTab[]; link?: TableSummary['link'] }
 
 export const DOC_ICONS: Record<DocKind, LucideIcon> = {
   table: Table,
@@ -80,7 +80,7 @@ export function DocumentTabs({ state, readOnly, linkOf, dispatch, onClose, showT
         // opener stays active: its dialog closing is no coming back to it (no reading again under a macro's SetValue that follows)
         return (
           <section key={x.id} id={`doc-${x.id}`} role={showTabs ? 'tabpanel' : undefined} className="doc" hidden={!!modalTab || x.id !== front}>
-            <DocumentView tab={x} active={x.id === front} readOnly={readOnly || !!link} link={link} dispatch={dispatch}
+            <DocumentView tab={x} active={x.id === front} readOnly={readOnly || !!link} link={link} dispatch={dispatch} tabs={state.tabs}
               designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
           </section>
         );

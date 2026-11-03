@@ -42,19 +42,19 @@ afterEach(() => {
 });
 
 describe('Access sources in the session (C2 Task 3)', () => {
-  it('an Access file is linked, read, filtered and totalled', () => {
+  it('an Access file is linked, read, filtered and totalled', async () => {
     const info = s.inspectLinkFile(access);
     expect(info.kind).toBe('access');
     expect(info.tables).toEqual([
       { name: 'Clients', taken: false, skipped: ['Photo'] }, { name: 'Commandes', taken: false }, { name: 'Divers', taken: false }]);
     link();
     expect(s.listTables().find((x) => x.name === 'Clients')!.link).toEqual({ kind: 'access', path: access });
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
     // R11: Access's text semantics on the copy (case-insensitive, accent-sensitive): Lyon and LYON, not Lyôn
-    expect(s.page('Clients', { offset: 0, limit: 10, filter: [{ field: 'Ville', criteria: '"Lyon"' }] }).rows.map((r) => r.values[1])).toEqual(['Dupont', 'Martin']);
-    expect(s.pageSource({ kind: 'sql', sql: 'SELECT Client, Sum(Montant) AS Total, Count(*) AS Nb FROM Commandes GROUP BY Client' }, { offset: 0, limit: 10 }).rows)
+    expect((await s.page('Clients', { offset: 0, limit: 10, filter: [{ field: 'Ville', criteria: '"Lyon"' }] })).rows.map((r) => r.values[1])).toEqual(['Dupont', 'Martin']);
+    expect((await s.pageSource({ kind: 'sql', sql: 'SELECT Client, Sum(Montant) AS Total, Count(*) AS Nb FROM Commandes GROUP BY Client' }, { offset: 0, limit: 10 })).rows)
       .toEqual([[1, 10.2, 2], [2, 0.3, 2], [3, 99.99, 1]]);
-    expect(s.describeSource({ kind: 'table', name: 'Clients' }).updatable).toBe(false);
+    expect((await s.describeSource({ kind: 'table', name: 'Clients' })).updatable).toBe(false);
     expect(s.listLinks().map((l) => [l.name, l.kind, l.state])).toEqual([['Clients', 'access', 'ok'], ['Commandes', 'access', 'ok']]);
     expect(s.listRelations()).toEqual([]);
   });
@@ -72,17 +72,17 @@ describe('Access sources in the session (C2 Task 3)', () => {
     expect(readdirSync(dir).filter((x) => x.endsWith('.laccdb') || x.endsWith('.ldb'))).toEqual([]);
   });
 
-  it('a changed file is reread and totals follow', () => { // R4, Review Focus 4
+  it('a changed file is reread and totals follow', async () => { // R4, Review Focus 4
     link();
-    const q = () => s.pageSource({ kind: 'sql', sql: 'SELECT Sum(Montant) FROM Commandes' }, { offset: 0, limit: 1 }).rows[0][0];
-    expect(q()).toBe(110.49);
+    const q = async () => (await s.pageSource({ kind: 'sql', sql: 'SELECT Sum(Montant) FROM Commandes' }, { offset: 0, limit: 1 })).rows[0][0];
+    expect(await q()).toBe(110.49);
     copyFileSync(fixture('Ventes-modifie.accdb'), access);
     utimesSync(access, new Date(), new Date(Date.now() + 2000));
-    expect(q()).toBe(115.49);
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows[2].values).toContain('Marseille');
+    expect(await q()).toBe(115.49);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows[2].values).toContain('Marseille');
   });
 
-  it('Refresh Link rebuilds the copy even when size and time are kept', () => {
+  it('Refresh Link rebuilds the copy even when size and time are kept', async () => {
     const modified = readFileSync(fixture('Ventes-modifie.accdb'));
     const padded = Buffer.alloc(modified.length); // Ventes.accdb with zero pages up to the modified file's size
     readFileSync(fixture('Ventes.accdb')).copy(padded);
@@ -90,53 +90,53 @@ describe('Access sources in the session (C2 Task 3)', () => {
     writeFileSync(access, padded);
     utimesSync(access, when, when);
     link();
-    expect(s.count('Commandes')).toBe(5);
+    expect(await s.count('Commandes')).toBe(5);
     writeFileSync(access, modified);
     utimesSync(access, when, when);
-    expect(s.count('Commandes')).toBe(5); // same size and time: the copy is kept (R4's limit)
-    expect(s.refreshLinks(['Commandes']).map((l) => l.state)).toEqual(['ok']);
-    expect(s.count('Commandes')).toBe(6);
+    expect(await s.count('Commandes')).toBe(5); // same size and time: the copy is kept (R4's limit)
+    expect((await s.refreshLinks(['Commandes'])).map((l) => l.state)).toEqual(['ok']);
+    expect(await s.count('Commandes')).toBe(6);
   });
 
-  it('a half-written file fails once, then reads again', () => { // R4, Review Focus 1
+  it('a half-written file fails once, then reads again', async () => { // R4, Review Focus 1
     link();
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
     writeFileSync(access, readFileSync(fixture('Ventes.accdb')).subarray(0, 8192));
-    expect(() => s.page('Clients', { offset: 0, limit: 1 })).toThrow('|cannotOpen|');
+    await expect(s.page('Clients', { offset: 0, limit: 1 })).rejects.toThrow('|cannotOpen|');
     copyFileSync(fixture('Ventes.accdb'), access);
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
-    expect(s.page('Notes', { offset: 0, limit: 1 }).rows).toEqual([]);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
+    expect((await s.page('Notes', { offset: 0, limit: 1 })).rows).toEqual([]);
   });
 
-  it('a table gone from the file is missingTable, the others still read', () => {
+  it('a table gone from the file is missingTable, the others still read', async () => {
     expect(s.createLinks(access, ['Clients', 'Divers'])).toEqual({ ok: true });
     s.close();
     const db = openBaseFile(fe, 'write', '0.0.0').db;
     db.prepare(`UPDATE bc_links SET remote_name = 'Absente' WHERE name = 'Divers'`).run();
     db.close();
     s = open(fe);
-    expect(() => s.page('Divers', { offset: 0, limit: 1 })).toThrow(`bc:linkUnavailable|missingTable|${access}`);
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
+    await expect(s.page('Divers', { offset: 0, limit: 1 })).rejects.toThrow(`bc:linkUnavailable|missingTable|${access}`);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
   });
 
-  it('a protected file asks for its password, which is kept in memory only', () => { // R7, Review Focus 2
+  it('a protected file asks for its password, which is kept in memory only', async () => { // R7, Review Focus 2
     expect(() => s.inspectLinkFile(protectedCopy)).toThrow(`bc:linkUnavailable|needsPassword|${protectedCopy}`);
     expect(s.unlockAccess(protectedCopy, 'faux', true)).toBe(false);
     expect(() => s.inspectLinkFile(protectedCopy)).toThrow('|needsPassword|');
     expect(s.unlockAccess(protectedCopy, ACCESS_PASSWORD, true)).toBe(true);
     expect(s.inspectLinkFile(protectedCopy).tables.map((x) => x.name)).toEqual(['Clients', 'Commandes', 'Divers']);
     expect(s.createLinks(protectedCopy, ['Divers'])).toEqual({ ok: true });
-    expect(s.page('Divers', { offset: 0, limit: 1 }).rows).toHaveLength(1);
+    expect((await s.page('Divers', { offset: 0, limit: 1 })).rows).toHaveLength(1);
     s.close();
     expect(readFileSync(fe).includes(Buffer.from(ACCESS_PASSWORD, 'utf8'))).toBe(false);
     expect(readFileSync(fe).includes(Buffer.from(ACCESS_PASSWORD, 'utf16le'))).toBe(false);
     s = open(fe);
     let err = '';
-    try { s.page('Divers', { offset: 0, limit: 1 }); } catch (e) { err = (e as Error).message; }
+    try { await s.page('Divers', { offset: 0, limit: 1 }); } catch (e) { err = (e as Error).message; }
     expect(err).toBe(`bc:linkUnavailable|needsPassword|${protectedCopy}`);
     expect(s.listLinks().map((l) => l.state)).toEqual(['needsPassword']);
     expect(s.unlockAccess(protectedCopy, ACCESS_PASSWORD, false)).toBe(true); // a source of the front-end: no pick needed
-    expect(s.page('Divers', { offset: 0, limit: 1 }).rows).toHaveLength(1);
+    expect((await s.page('Divers', { offset: 0, limit: 1 })).rows).toHaveLength(1);
   });
 
   it('unlock refuses a path that is neither a source nor picked', () => {
@@ -144,16 +144,16 @@ describe('Access sources in the session (C2 Task 3)', () => {
     expect(() => s.unlockAccess(protectedCopy, 'x', false)).toThrow('bc:invalidArgument');
   });
 
-  it('convert to a local table copies the Access rows', () => { // R8
+  it('convert to a local table copies the Access rows', async () => { // R8
     link();
     expect(s.convertLink('Commandes')).toEqual({ ok: true });
     expect(s.listTables().find((x) => x.name === 'Commandes')!.link).toBeUndefined();
-    expect(s.page('Commandes', { offset: 0, limit: 10 }).rows).toHaveLength(5);
+    expect((await s.page('Commandes', { offset: 0, limit: 10 })).rows).toHaveLength(5);
     expect(s.tableDesign('Commandes').fields.find((x) => x.name === 'Montant')!.props.type).toBe('currency');
   });
 
-  it('a query joining an Access link and a local table is refused', () => {
+  it('a query joining an Access link and a local table is refused', async () => {
     link();
-    expect(() => s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' })).toThrow(/\|mixedSources\|Clients/);
+    await expect(s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' })).rejects.toThrow(/\|mixedSources\|Clients/);
   });
 });

@@ -104,8 +104,8 @@ it('long text is cut and counted', async () => {
 
 it('too many rows: refused, nothing written', async () => {
   createTable(db, t('V', [f('A', 'shortText')]));
-  expect(session.exportRowCount({ ref: { kind: 'table', name: 'V' } })).toBe(0);
-  const page = vi.fn(() => ({ rows: [], rowids: [], total: 1_048_576 }));
+  expect(await session.exportRowCount({ ref: { kind: 'table', name: 'V' } })).toBe(0);
+  const page = vi.fn(async () => ({ rows: [], rowids: [], total: 1_048_576 }));
   const r = await writeExcelExport({ fields: [], page, path: out(), sheet: 'S', info: localeInfo('fr-FR') });
   expect(r).toEqual({ ok: false, reason: 'tooManyRows', limit: 1_048_575 });
   expect(fs.existsSync(out())).toBe(false);
@@ -134,7 +134,7 @@ it('an empty source still gives a sheet with its header', async () => {
 it.each([[1, 12], [3, 12_000]])('stream failing on write %i of a %i-row export: rejected, temp removed, old file kept', async (failOn, count) => {
   fs.writeFileSync(out(), 'old');
   const field = { name: 'A', type: 'shortText', props: {} } as never;
-  const page = (offset: number, limit: number) => ({
+  const page = async (offset: number, limit: number) => ({
     rows: Array.from({ length: Math.max(0, Math.min(limit, count - offset)) }, (_, i) => ['v' + (offset + i)]), rowids: [], total: count,
   });
   const openStream = (tmp: string) => {

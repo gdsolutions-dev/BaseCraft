@@ -24,7 +24,10 @@ export interface LaidOutBand { section: SectionKind; groupLevel?: number; top: n
 export interface LaidOutPage { number: number; bands: LaidOutBand[] }
 export interface LaidOutReport { width: number; height: number; pages: LaidOutPage[]; issues: ReportIssue[] }
 export interface ReportData { fields: SourceField[]; rows: SqlValue[][] }
-export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; now(): Date; errorText: { error: string; name: string };
+/** `flow`: one unbounded page (Layout view): no page breaks, Keep Together or Force New Page; the Page Header once after the
+ *  Report Header, the Page Footer once after the Report Footer; [Page] and [Pages] read 1; the height is the content's. */
+export interface LayoutOpts { flow?: boolean }
+export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean; now(): Date; errorText: { error: string; name: string };
   hooks?: LayoutHooks; signal?: AbortSignal; tick?(): Promise<void>;
   /** [Forms]! / [Reports]! / [TempVars]! in the report's own expressions (absent: unknownField, #Nom?). */
   member?(path: string[]): Value | Promise<Value>;

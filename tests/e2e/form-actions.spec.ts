@@ -46,6 +46,8 @@ const base = () => seedBase('form-actions', (db) => {
     button('cmdFiltrer', 2500, act('ApplyFilter', { WhereCondition: '[Ville] = "Paris"' })),
     button('cmdTous', 2900, act('ShowAllRecords')),
     button('cmdChercher', 3300, act('FindRecord', { FindWhat: 'Durand', Match: 'whole', MatchCase: 'no', Search: 'all', OnlyCurrentField: 'no', FindFirst: 'yes' })),
+    // B2 R13: case ignored, accents kept — Lyon is not Lyôn
+    button('cmdLyon', 5700, act('FindRecord', { FindWhat: 'Lyon', Match: 'whole', MatchCase: 'no', Search: 'down', OnlyCurrentField: 'no', FindFirst: 'no' })),
     button('cmdEnreg', 3700, act('SaveRecord')),
     button('cmdAnnuler', 4100, act('UndoRecord')),
     button('cmdSuppr', 4500, act('SetWarnings', { WarningsOn: 'no' }), act('DeleteRecord')),
@@ -184,6 +186,10 @@ test('form actions from buttons: records, controls, properties, filters, find, s
 
     // FindRecord, every field: Durand current
     await ctl('cmdChercher').click();
+    await expect(ctl('Nom')).toHaveValue('Durand');
+    // FindRecord down from Durand: Éric's Lyôn is not Lyon (accents kept, B2 R13)
+    await ctl('cmdLyon').click();
+    await msgbox(page, fr.macro.findRecord.notFound);
     await expect(ctl('Nom')).toHaveValue('Durand');
     // a combo's Row Source reading [Forms]! gets its parameter again on Requery
     await ctl('cmdRequery').click();

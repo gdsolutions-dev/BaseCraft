@@ -6,12 +6,17 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flattenControls, TWIPS_PER_CM, type ControlDef, type SectionDef } from '../../shared/design/model';
+import { readLayouts } from '../../shared/design/layout';
+import { selectionOf } from '../../shared/design/layout-edit';
 import { sameName } from '../../shared/field-types';
 import type { DesignerHost, ToolState } from './Designer';
 import { clipboardAction, clipContext } from './designer-clipboard';
+import { gestureAllowed, type DesignerRestrict } from './designer-restrict';
 import { CONTAINER_KINDS, designerReducer, docWidth, documentKind, findControl, type DesignerAction, type DesignerState } from './designer-model';
 import type { Handle } from './geometry';
+import { layoutOutlines } from './layout-outline';
 import { gestureEnd, keyAction, placeRect, type Gesture } from './pointer';
+import { currentSettings } from '../settings-store';
 import { fieldDrop } from './FieldList';
 import { PopupMenu } from './RibbonPopup';
 import { useModal } from '../shell/Modal';
@@ -49,8 +54,32 @@ const CanvasControl = memo(function CanvasControl({ c, s, sel, label, render, on
 }, (a, b) => a.c === b.c && a.sel === b.sel && a.label === b.label && a.render === b.render && a.onFocusCtl === b.onFocusCtl
   && a.s.kind === b.s.kind && a.s.props === b.s.props);
 
-export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerAction): void; host: DesignerHost; readOnly: boolean; tool: ToolState; onTool(t: ToolState): void }) {
-  const { state, dispatch, host, readOnly, tool } = p;
+/** Copies du Détail d'un formulaire continu en mode Page : autant que d'enregistrements lus (`rows`, le courant compris, au plus
+ *  `cap`), moins le Détail modifiable, et pas plus que la fenêtre n'en montre (`detailHeight`, `viewport` en px). */
+export function extraRowCount(rows: number, detailHeight: number, viewport: number, cap: number): number {
+  if (detailHeight <= 0) return 0;
+  return Math.max(0, Math.min(cap - 1, rows - 1, Math.ceil(viewport / detailHeight)));
+}
+
+type ExtraRows = NonNullable<DesignerHost['extraDetailRows']>;
+/** Les copies en lecture seule sous le Détail : ni data-ctl, ni data-section-body, ni poignée, ni pointeur ; les gestes les ignorent.
+ *  Elles dessinent le même document : modifier le Détail les met à jour. */
+export const DetailCopies = memo(function DetailCopies({ s, count, render }: { s: SectionDef; count: number; render: ExtraRows['render'] }) {
+  const controls = flattenControls(s.controls);
+  return <>{Array.from({ length: count }, (_, k) => (
+    <div key={k} className="dz-body dz-copy" aria-hidden style={{ height: px(s.height), pointerEvents: 'none', backgroundImage: 'none' }}>
+      {controls.map((c) => (
+        <div key={c.name} className="dz-ctl" style={{ left: px(c.left), top: px(c.top), width: px(c.width), height: px(c.height) }}>{render(c, s, k + 1)}</div>
+      ))}
+    </div>
+  ))}</>;
+});
+
+export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerAction): void; host: DesignerHost; readOnly: boolean; tool: ToolState; onTool(t: ToolState): void;
+  restrict?: DesignerRestrict }) {
+  const { state, dispatch, host, readOnly, tool, restrict } = p;
+  const placing = !readOnly && !!tool.kind && gestureAllowed(restrict, 'place');   // Mode Page d'un état : pas de placement d'outil (restrict.toolbox)
+  const sizable = gestureAllowed(restrict, 'sectionHeight');   // Mode Page : la hauteur des sections ne se tire pas
   const { t } = useTranslation();
   const modal = useModal();
   const root = useRef<HTMLDivElement>(null);
@@ -62,11 +91,21 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const pointing = useRef(false);   // un clic donne le focus : il ne doit pas réduire une multi-sélection
 
   // Aperçu du geste en cours : le relâchement, appliqué sans être enregistré.
-  const shown = useMemo(() => (drag ? gestureEnd(drag.g, drag.at, drag) : []).reduce(designerReducer, state), [drag, state]);
+  const shown = useMemo(() => (drag ? gestureEnd(drag.g, drag.at, { ...drag, enclosed: currentSettings().selectionBehavior === 'full' }) : []).reduce(designerReducer, state), [drag, state]);
   const doc = shown.doc;
+  // contours des dispositions, recalculés seulement quand le document affiché change
+  const outlines = useMemo(() => doc.sections.map((_, i) => layoutOutlines(doc, i)), [doc]);
+  const selectLayout = (id: string) => {
+    const first = readLayouts(state.doc).find((l) => l.id === id)?.cells.find((c) => c.control !== null)?.control;
+    if (first) dispatch({ type: 'select', selection: { kind: 'controls', names: selectionOf(state.doc, first, 'layout') } });
+  };
   const kind = documentKind(state);
   const width = docWidth(doc, kind);
   const step = twipsToPx(gridStep(doc));
+  const extra = host.extraDetailRows;
+  const detailAt = doc.sections.findIndex((s) => s.kind === 'detail');
+  // ponytail: la hauteur de la fenêtre borne la hauteur de la surface ; quelques copies de trop au pire (au plus count)
+  const copies = extra && detailAt >= 0 ? extraRowCount(extra.count + 1, twipsToPx(doc.sections[detailAt].height), window.innerHeight, Infinity) : 0;
   const names = shown.selection.kind === 'controls' ? shown.selection.names : [];   // un rectangle de sélection sélectionne en direct
   const isSel = (name: string) => names.some((n) => sameName(n, name));
   const typeLabel = (k: ControlDef['kind']) => { const d = host.tools.find((x) => x.kind === k); return d ? t(d.labelKey) : k; };
@@ -108,6 +147,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0 || drag) return;
     const el = e.target as HTMLElement;
+    if (el.closest('[data-layout-handle]')) return;   // la poignée d'une disposition sélectionne au clic : ni glisser ni rectangle
     const at = pt(e);
     measure();
     const handle = el.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined;
@@ -116,10 +156,10 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     const body = el.closest<HTMLElement>('[data-section-body]')?.dataset.sectionBody;
     if (!readOnly && handle) {
       start(e, { g: { kind: 'resize', handle, origin: at }, toAt: (q) => ({ ...q, section: 0 }) }, at);
-    } else if (!readOnly && bar !== undefined) {
+    } else if (!readOnly && sizable && bar !== undefined) {
       const index = Number(bar);
       start(e, { g: { kind: 'sectionHeight', index, origin: { y: at.y }, start: doc.sections[index].height }, toAt: (q) => ({ ...q, section: index }) }, at);
-    } else if (!readOnly && tool.kind && body !== undefined) {
+    } else if (placing && tool.kind && body !== undefined) {
       const section = Number(body);
       const c = ctl ? findControl(doc, ctl)?.control : undefined;
       const toAt = local(section);
@@ -173,10 +213,11 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
       const { section, rect } = placeRect(d.g, at);
       if (state.snap && !e.altKey) { const g = gridStep(state.doc); rect.left = snap(rect.left, g); rect.top = snap(rect.top, g); }   // comme Access : le coin s'aimante
       const controls = host.newControls(d.g.tool, rect, section, state.doc);
-      if (controls.length) dispatch({ type: 'insert', section, controls, ...(d.parent ? { parent: d.parent } : {}) });
+      // le centre du rectangle posé : sur une disposition, le contrôle en devient membre
+      if (controls.length) dispatch({ type: 'insert', section, controls, at: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, ...(d.parent ? { parent: d.parent } : {}) });
       if (!tool.locked) p.onTool({ kind: null, locked: false });
     } else {
-      const actions = gestureEnd(d.g, at, { alt: e.altKey, shift: d.shift });
+      const actions = gestureEnd(d.g, at, { alt: e.altKey, shift: d.shift, enclosed: currentSettings().selectionBehavior === 'full' });
       for (const a of actions) dispatch(a);
       // un clic sans glisser sur un contrôle d'une multi-sélection ne garde que lui
       if (d.g.kind === 'move' && !actions.length && d.focus && names.length > 1) dispatch({ type: 'select', selection: { kind: 'controls', names: [d.focus] } });
@@ -197,7 +238,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     if (!el) return;
     if (hScale.current) hScale.current.style.left = `${el.offsetLeft + el.clientLeft}px`;
     vScales.current.forEach((v, i) => { if (v) v.style.top = `${el.offsetTop + el.clientTop + (bodies.current[i]?.offsetTop ?? 0)}px`; });
-  }, [heights]);
+  }, [heights, copies]);   // les copies du Détail décalent les sections suivantes
   const followScroll = () => {
     const c = root.current;
     if (!c) return;
@@ -272,7 +313,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     </div>
     <div ref={root} className="dz-canvas" role="region" aria-label={t('designer.canvas')} data-testid="design-canvas" tabIndex={-1} onKeyDown={onKeyDown}
       onScroll={followScroll} onFocus={(e) => { lastFocus.current = e.target as HTMLElement; }}>
-      <div ref={sheet} className={`dz-sheet${tool.kind && !readOnly ? ' is-placing' : ''}`} style={{ width: px(width) }}
+      <div ref={sheet} className={`dz-sheet${placing ? ' is-placing' : ''}`} style={{ width: px(width) }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancel} onLostPointerCapture={() => drag && cancel()}
         onDragStart={(e) => e.preventDefault()} onDragOver={onDragOver} onDrop={onDrop}>   {/* une image d'un aperçu ne part pas en glisser-déposer natif */}
         {doc.sections.map((s: SectionDef, i) => (
@@ -284,6 +325,14 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
             </button>
             <div ref={(el) => { bodies.current[i] = el; }} className="dz-body" data-section-body={i}
               style={{ height: px(s.height), backgroundSize: `${step}px ${step}px` }}>
+              {outlines[i].map(({ id, rect }) => (   // avant les contrôles : dessiné dessous ; la poignée au coin haut gauche, au-dessus
+                <div key={id} className="dz-layout" aria-hidden style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }} />
+              ))}
+              {outlines[i].map(({ id, rect }) => (
+                <button key={id} type="button" className="dz-layout-handle" data-layout-handle={id} data-testid={`layout-handle-${id}`}
+                  aria-label={t('designer.layoutHandle', { id })} title={t('designer.layoutHandle', { id })}
+                  style={{ left: Math.max(0, twipsToPx(rect.left) - 14), top: Math.max(0, twipsToPx(rect.top) - 14) }} onClick={() => selectLayout(id)} />
+              ))}
               {flattenControls(s.controls).map((c) => (   // un parent sous ses enfants
                 <CanvasControl key={c.name} c={c} s={s} sel={isSel(c.name)} label={typeLabel(c.kind)} render={host.renderControl} onFocusCtl={onFocusCtl} />
               ))}
@@ -292,7 +341,8 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                   width: Math.abs(rubber.at.x - rubber.o.x), height: Math.abs(rubber.at.y - rubber.o.y) }} />
               )}
             </div>
-            <div className="dz-sresize" data-section-resize={i} data-testid={`section-resize-${i}`} role="separator" aria-orientation="horizontal"
+            {i === detailAt && copies > 0 && <DetailCopies s={s} count={copies} render={extra!.render} />}
+            {!sizable ? <div className="dz-sresize is-fixed" aria-hidden /> /* même place, sans poignée ni clavier */ : <div className="dz-sresize" data-section-resize={i} data-testid={`section-resize-${i}`} role="separator" aria-orientation="horizontal"
               aria-label={host.sectionLabel(s, i)} tabIndex={readOnly ? undefined : 0} aria-valuemin={0} aria-valuemax={MAX_TWIPS} aria-valuenow={s.height}
               aria-valuetext={formatCm(s.height, host.sheet.display.region)}
               onKeyDown={(e) => {   // Haut / Bas : la hauteur d'un pas de grille (le réducteur ne descend pas sous le contrôle le plus bas)
@@ -300,7 +350,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                 if (readOnly || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
                 e.preventDefault();
                 dispatch({ type: 'setSectionHeight', index: i, height: Math.max(0, s.height + (e.key === 'ArrowDown' ? 1 : -1) * gridStep(state.doc)) });
-              }} />
+              }} />}
           </div>
         ))}
       </div>

@@ -117,6 +117,7 @@ const api: BasecraftApi = {
     copy: (kind, name, newName) => ipcRenderer.invoke(CH.objectsCopy, kind, name, newName),
     setDescription: (kind, name, description) => ipcRenderer.invoke(CH.objectsSetDescription, kind, name, description),
   },
+  autoCorrect: { dependents: (changes) => ipcRenderer.invoke(CH.autoCorrectDependents, changes), applyProperties: (items) => ipcRenderer.invoke(CH.autoCorrectApplyProperties, items) },
   sources: {
     describe: (ref, params) => ipcRenderer.invoke(CH.sourcesDescribe, ref, params),
     page: (ref, req) => ipcRenderer.invoke(CH.sourcesPage, ref, req),
@@ -150,6 +151,21 @@ const api: BasecraftApi = {
     relink: (names, path) => ipcRenderer.invoke(CH.linksRelink, names, path),
     convert: (name) => ipcRenderer.invoke(CH.linksConvert, name),
     unlock: (path, password) => ipcRenderer.invoke(CH.linksUnlock, path, password),
+    login: (key, user, password, remember) => ipcRenderer.invoke(CH.linksLogin, key, user, password, remember),
+    loginInfo: (key) => ipcRenderer.invoke(CH.linksLoginInfo, key),
+    inspectServer: (kind, params, password, remember) => ipcRenderer.invoke(CH.linksInspectServer, kind, params, password, remember),
+    createServer: (kind, params, names) => ipcRenderer.invoke(CH.linksCreateServer, kind, params, names),
+    relinkServer: (names, kind, params) => ipcRenderer.invoke(CH.linksRelinkServer, names, kind, params),
+    canRemember: () => ipcRenderer.invoke(CH.linksCanRemember),
+  },
+  migrate: {
+    run: (req) => ipcRenderer.invoke(CH.migrateRun, req),
+    importTables: (kind, params, names) => ipcRenderer.invoke(CH.migrateImport, kind, params, names),
+    onProgress: (cb) => {
+      const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
+      ipcRenderer.on(CH.importProgress, listener);
+      return () => { ipcRenderer.removeListener(CH.importProgress, listener); };
+    },
   },
 };
 

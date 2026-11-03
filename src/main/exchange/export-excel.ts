@@ -16,7 +16,7 @@ const MAX_WIDTH = 50;
 
 export interface ExcelExport {
   fields: SourceField[];
-  page(offset: number, limit: number): SourcePage;
+  page(offset: number, limit: number): Promise<SourcePage>;
   path: string;
   sheet: string;
   info: LocaleInfo;
@@ -58,7 +58,7 @@ function excelCell(v: SqlValue, f: SourceField, fmt: { currency: string; date: s
 }
 
 export async function writeExcelExport(x: ExcelExport): Promise<ExportResult> {
-  const total = x.page(0, 0).total;
+  const total = (await x.page(0, 0)).total;
   if (total > MAX_EXCEL_ROWS) return { ok: false, reason: 'tooManyRows', limit: MAX_EXCEL_ROWS };
   const fmt = { currency: excelCurrencyFormat(x.info), date: excelDateFormat(x.info, false), dateTime: excelDateFormat(x.info, true), info: x.info };
   return viaTemp(x.path, async (tmp) => {
@@ -72,7 +72,7 @@ export async function writeExcelExport(x: ExcelExport): Promise<ExportResult> {
       if (x.fields.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: x.fields.length } };
       let rows = 0, truncated = 0;
       for (let first = true; ; first = false) {
-        const page = x.page(rows, EXPORT_PAGE);
+        const page = await x.page(rows, EXPORT_PAGE);
         const cells = page.rows.map((row) => x.fields.map((f, i) => excelCell(row[i] ?? null, f, fmt)));
         if (first) {
           // the columns are written with the sheet's first row: widths come from the header and the first rows

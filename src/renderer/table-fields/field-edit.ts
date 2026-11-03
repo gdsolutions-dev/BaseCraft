@@ -2,7 +2,7 @@
 // rule and indexes are left alone: the save (alterTable) follows renames and drops deleted fields from them by the mapping.
 import type { FieldMapping } from '../../shared/api';
 import type { NamedFormat } from '../../shared/expr/format';
-import { changeType, defaultProps, sameName, type FieldDef, type FieldProps, type FieldType, type NumberSize, type TableDesign } from '../../shared/field-types';
+import { changeType, DESIGN_DEFAULTS, newFieldProps, sameName, type FieldDefaults, type FieldDef, type FieldProps, type FieldType, type NumberSize, type TableDesign } from '../../shared/field-types';
 
 export interface FieldEdit { design: TableDesign; mapping: FieldMapping[] }
 
@@ -10,11 +10,11 @@ const same = (d: TableDesign): FieldMapping[] => d.fields.map((f) => ({ name: f.
 const find = (d: TableDesign, field: string) => d.fields.findIndex((f) => sameName(f.name, field));
 
 /** A new field after `after` (the end without it), named `${base}${n}` with the smallest free n ≥ 1. */
-export function addField(d: TableDesign, after: string | null, type: FieldType, opts: { numberSize?: NumberSize; base: string }): FieldEdit {
+export function addField(d: TableDesign, after: string | null, type: FieldType, opts: { numberSize?: NumberSize; base: string; defaults?: FieldDefaults }): FieldEdit {
   let n = 1;
   while (d.fields.some((f) => sameName(f.name, `${opts.base}${n}`))) n++;
   const name = `${opts.base}${n}`;
-  const props: FieldProps = { ...defaultProps(type), ...(opts.numberSize ? { numberSize: opts.numberSize } : {}) };
+  const props: FieldProps = { ...newFieldProps(type, opts.defaults ?? DESIGN_DEFAULTS), ...(opts.numberSize ? { numberSize: opts.numberSize } : {}) };
   const at = after === null ? d.fields.length : find(d, after) + 1 || d.fields.length;
   const fields: FieldDef[] = [...d.fields.slice(0, at), { name, props }, ...d.fields.slice(at)];
   return { design: { ...d, fields }, mapping: fields.map((f) => ({ name: f.name, sourceName: f === fields[at] ? null : f.name })) };

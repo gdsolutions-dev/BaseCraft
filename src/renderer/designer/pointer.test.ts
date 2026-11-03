@@ -44,3 +44,10 @@ describe('pointer gestures', () => {
     expect(keyAction('a', none, 142)).toBeNull(); expect(keyAction('Delete', { ctrl: true, shift: false }, 142)).toBeNull();
   });
 });
+
+describe('gestureEnd enclosed', () => {
+  it('carries enclosed into selectRect only when true', () => {
+    expect(gestureEnd({ kind: 'band', section: 1, origin: { x: 0, y: 0 } }, { x: 100, y: 30, section: 1 }, { alt: false, shift: false, enclosed: true }))
+      .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 0, width: 1500, height: 450 }, add: false, enclosed: true }]);
+  });
+});

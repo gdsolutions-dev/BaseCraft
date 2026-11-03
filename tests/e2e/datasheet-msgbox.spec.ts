@@ -7,7 +7,7 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { clients, f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -17,7 +17,7 @@ const commandes = t('Commandes', [
   f('Montant', 'currency', { validationRule: '>10', validationText: 'Sup à 10 !' }),
 ]);
 // DatasheetView: row selector width, header and row heights, AutoNumber column width.
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80;
+const MARKER = 44, HEADER = 34, ROW = 30;
 
 const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-cell-${col + 1}-${row}`);
 const cellEditor = (page: Page) => page.getByTestId('grid-editor-portal').locator('textarea');
@@ -27,7 +27,7 @@ const rowsOf = async (page: Page) =>
 /** Clicks the trailing row's Client cell: a new record starts and its editor opens. */
 async function newRecordAt(page: Page, row: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cellEditor(page)).toBeFocused();
 }
 async function typeIntoCell(page: Page, text: string) {
@@ -64,7 +64,7 @@ test('a refused row shows its first error in a message box; OK goes back to the 
     saveRelation(db, { name: '', parentTable: 'Clients', parentFields: ['N°'], childTable: 'Commandes', childFields: ['Client'],
       enforce: true, cascadeUpdate: false, cascadeDelete: false, joinType: 1 }, null, localeInfo('fr-FR'));
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Commandes').dblclick();
     await expect(page.getByTestId('datasheet').getByTestId('data-grid-canvas')).toBeVisible();
@@ -99,7 +99,7 @@ test('a refused row shows its first error in a message box; OK goes back to the 
     await expect(page.getByTestId('doc-tab-Commandes')).toContainText('•');
     await expect(cell(page, 2, 0)).toHaveText('5');
     const grid = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-    await page.mouse.click(grid.x + MARKER + AUTONUMBER + 30, grid.y + HEADER + ROW / 2); // back to the row, on Client
+    await page.mouse.click(grid.x + colLeft(1) + 30, grid.y + HEADER + ROW / 2); // back to the row, on Client
     await expect(cell(page, 1, 0)).toBeFocused();
     await page.keyboard.press('Tab');
 

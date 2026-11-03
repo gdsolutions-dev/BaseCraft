@@ -5,7 +5,7 @@ import { fromStored } from '../../shared/expr/evaluate';
 import { toText } from '../../shared/expr/library';
 import type { LookupData } from '../../shared/api';
 import {
-  accessColumns, DEFAULT_COLUMN_WIDTH, lookupOf, sameName, shownColumns, valueListRows, type FieldDef, type LookupProps, type TableDesign, type TableLookup,
+  accessColumns, DEFAULT_COLUMN_WIDTH, lookupOf, sameName, shownColumns, valueListRows, type FieldDef, type FieldProps, type LookupProps, type TableDesign, type TableLookup,
 } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { compileFilter } from './filter';
@@ -43,6 +43,7 @@ function orderBy(design: TableDesign, sorts: readonly SortSpec[], tie = 'rowid')
       ? `bc_fold(${c}) ${dir} ${nulls}, bc_gkey(${c}) ${dir}` // ties as Access compares: "zoe" before "Zoé"
       // ponytail: CAST AS REAL perd la précision au-delà de ~15-17 chiffres significatifs ; ces valeurs sont à égalité et retombent sur l'ordre rowid.
       : p.type === 'number' && p.numberSize === 'decimal' ? `CAST(${c} AS REAL) ${dir} ${nulls}`
+      : p.type === 'yesNo' ? `-abs(${c}) ${dir} ${nulls}` // stored 1/0 (another tool: -1), sorted as Access's -1/0: Yes first ascending
       : `${c} ${dir} ${nulls}`;
   });
   return `${keys.join(', ')}, ${tie} ${sorts.at(-1)!.dir === 'desc' ? 'DESC' : 'ASC'}`;
@@ -139,8 +140,25 @@ function textOf(fd: FieldDef, v: SqlValue, info: LocaleInfo): string {
   }
 }
 
-const NO_LIST: LookupData = { rows: [], widths: [] };
+export const NO_LIST: LookupData = { rows: [], widths: [] };
 const widthsOf = (l: LookupProps, shown: number[]) => shown.map((i) => l.columnWidths?.[i] ?? DEFAULT_COLUMN_WIDTH);
+
+/** A Field List's list: the names of its table's fields (`names` undefined: the table is gone, no list). */
+export const fieldListRows = (l: LookupProps, names: string[] | undefined): LookupData =>
+  names === undefined ? NO_LIST : { rows: names.map((n) => ({ value: n, display: [n] })), widths: widthsOf(l, [0]) };
+
+/** A query or SQL Row Source's list (A2-R18) from its output columns `fields` and its `rows`: Access columns over them (C7
+ *  R12: a server link's lookup too). */
+export function sourceListRows(l: TableLookup, fields: { name: string; props: FieldProps }[], rows: SqlValue[][], info: LocaleInfo): LookupData {
+  const b = (l.boundColumn ?? 1) - 1;
+  const columns = fields.slice(0, l.columnCount ?? 1);
+  if (!fields[b] || !columns.length) return NO_LIST;
+  const shown = shownColumns(l.columnWidths, columns.length);
+  return {
+    rows: rows.map((r) => ({ value: r[b] ?? null, display: shown.map((i) => textOf(columns[i]!, r[i] ?? null, info)) })),
+    widths: widthsOf(l, shown), ...(l.columnHeads ? { heads: shown.map((i) => columns[i]!.props.caption || columns[i]!.name) } : {}),
+  };
+}
 
 /**
  * The list of `field`'s lookup, its visible columns only (a width of 0 hides one; the first visible one is the text shown).
@@ -168,21 +186,13 @@ export function lookupRows(db: DatabaseSync, design: TableDesign, field: string,
   }
   if (l.kind === 'fieldList') {
     const table = pickName(listTables(db).map((x) => x.name), l.table);
-    if (table === undefined) return NO_LIST;
-    return { rows: tableDesign(db, table).fields.map((x) => ({ value: x.name, display: [x.name] })), widths: widthsOf(l, [0]) };
+    return fieldListRows(l, table === undefined ? undefined : tableDesign(db, table).fields.map((x) => x.name));
   }
   const query = queryRowSource(db, l);
   if (query) {
     return degraded(() => {
       const { fields, rows } = sourceLookupRows(db, query, LOOKUP_MAX, info);
-      const b = (l.boundColumn ?? 1) - 1;
-      const columns = fields.slice(0, l.columnCount ?? 1);
-      if (!fields[b] || !columns.length) return NO_LIST;
-      const shown = shownColumns(l.columnWidths, columns.length);
-      return {
-        rows: rows.map((r) => ({ value: r[b] ?? null, display: shown.map((i) => textOf(columns[i]!, r[i] ?? null, info)) })),
-        widths: widthsOf(l, shown), ...(l.columnHeads ? { heads: shown.map((i) => columns[i]!.props.caption || columns[i]!.name) } : {}),
-      };
+      return sourceListRows(l, fields, rows, info);
     }, NO_LIST);
   }
   const src = lookupSource(db, l);

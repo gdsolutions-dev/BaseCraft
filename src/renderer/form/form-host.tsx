@@ -92,16 +92,18 @@ function boxStyle(c: ControlDef): CSSProperties {
   return st;
 }
 
-function preview(c: ControlDef, display: PropertySheetContext['display'], unbound: string): ReactNode {
+/** L'aperçu d'un contrôle ; `live` (mode Page) : le texte de l'enregistrement courant au lieu de la source, l'état de la case. */
+export function preview(c: ControlDef, display: PropertySheetContext['display'], unbound: string, live?: { text?: string; checked?: boolean }): ReactNode {
   const st = boxStyle(c);
-  const source = () => controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound;
+  const source = () => live?.text ?? (controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound);
+  const on = live?.checked ? ' is-on' : '';
   switch (c.kind) {
     case 'label': return <div className="fz fz-text" style={st}>{String(prop(c, 'Caption') ?? '')}</div>;
     case 'textBox': return <div className="fz fz-text" style={st}><span className="fz-clip">{source()}</span></div>;
     case 'comboBox': return <div className="fz fz-text fz-combo" style={st}><span className="fz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
     case 'listBox': return <div className="fz fz-list" style={st}><span className="fz-clip">{source()}</span></div>;
-    case 'checkBox': return <div className="fz fz-check" style={{ borderColor: color(c, 'BorderColor') }} />;
-    case 'optionButton': return <div className="fz fz-check fz-radio" />;
+    case 'checkBox': return <div className={`fz fz-check${on}`} style={{ borderColor: color(c, 'BorderColor') }} />;
+    case 'optionButton': return <div className={`fz fz-check fz-radio${on}`} />;
     case 'optionGroup': return <fieldset className="fz fz-group" style={st}><legend>{String(prop(c, 'Caption') ?? '')}</legend></fieldset>;
     case 'commandButton': return <div className="fz fz-text fz-button" style={st}>{String(prop(c, 'Caption') ?? '')}</div>;
     case 'subform': return <div className="fz fz-subform" style={st}><span className="fz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;

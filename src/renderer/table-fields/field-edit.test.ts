@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultProps, type FieldProps, type TableDesign } from '../../shared/field-types';
+import { defaultProps, type FieldDefaults, type FieldProps, type TableDesign } from '../../shared/field-types';
 import { addField, namedFormatPatch, patchField, patchTable, removeField, renameField, stepDecimals, toggleIndex } from './field-edit';
 
 const d = (names: string[]): TableDesign => ({ name: 'T', validationRule: '[A]>0', fields: names.map((name) => ({ name, props: { ...defaultProps('shortText'), size: 40, caption: `c-${name}` } })) });
@@ -60,5 +60,14 @@ describe('patchTable', () => {
     const b = patchTable(a.design, { validationRule: '' });
     expect('validationRule' in b.design).toBe(false);
     expect(b.design.validationText).toBe('non');
+  });
+});
+
+describe('addField defaults', () => {
+  const D: FieldDefaults = { type: 'number', textSize: 50, numberSize: 'integer' };
+  const design: TableDesign = { name: 'T', fields: [{ name: 'Nom', props: defaultProps('shortText') }] };
+  it('uses the defaults unless a size is named', () => {
+    expect(addField(design, null, 'shortText', { base: 'Champ', defaults: D }).design.fields.at(-1)!.props).toMatchObject({ size: 50 });
+    expect(addField(design, null, 'number', { base: 'Champ', numberSize: 'double', defaults: D }).design.fields.at(-1)!.props).toMatchObject({ numberSize: 'double' });
   });
 });

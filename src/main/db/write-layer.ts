@@ -1,7 +1,7 @@
 // Couche d'écriture unique : toute écriture de données passe ici (conversion, validation, transaction).
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, listItemValue, type CellInput, type FieldErrorCode, type SqlValue } from '../../shared/coerce';
-import { lookupOf, MASK_TYPES, sameName, valueListRows, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { lookupOf, MASK_TYPES, sameName, valueListRows, type FieldDef, type LookupProps, type TableDesign } from '../../shared/field-types';
 import { checkMasked, parseMask } from '../../shared/expr/input-mask';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { foreignKeys, listTables, parentOf, pickName, quoteIdent, refColumns, sqliteSameName, tableDesign } from './schema';
@@ -12,6 +12,8 @@ import { inTransaction } from './tx';
 
 import type { DeleteResult, RowWriteResult, WriteConflict } from '../../shared/api';
 export type { DeleteResult, RowWriteResult };
+/** What the local write layer returns: the row's reference is its rowid (a number). */
+export type LocalWriteResult = (Omit<Extract<RowWriteResult, { ok: true }>, 'rowid'> & { rowid: number }) | Exclude<RowWriteResult, { ok: true }>;
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
 
 const CHUNK = 500;
@@ -191,25 +193,35 @@ function applyMasks(design: TableDesign, values: Record<string, CellInput>): { v
 
 const storedOf = (cols: { fd: FieldDef; value: SqlValue }[]): Record<string, SqlValue> => Object.fromEntries(cols.map((c) => [c.fd.name, c.value]));
 
+/** Limit To List of a value list (its bound items converted as the field stores them) or a Field List (`names`: the names of
+ *  its table's fields, undefined when it is gone: checks nothing); undefined for a table, SQL or query Row Source, which the
+ *  caller reads (C7 R12: the server write path too). */
+export function inList(fd: FieldDef, l: LookupProps, value: SqlValue, names: (table: string) => string[] | undefined): boolean | undefined {
+  if (l.kind === 'values') {
+    const b = (l.boundColumn ?? 1) - 1;
+    return valueListRows(l).rows.some((r) => r[b] !== undefined && listItemValue(fd, r[b]!) === value);
+  }
+  if (l.kind !== 'fieldList') return undefined;
+  const n = names(l.table);
+  return n === undefined || n.includes(value as string);
+}
+
 /**
- * Limit To List: a value of a lookup field must be in its list, compared as stored: a value list's bound items converted as
- * the field stores them, a Field List's names, else a row of the source table (`SELECT 1 … WHERE bound = ?`), or of the SQL
- * or saved query's bound column (A2-R18). Empty passes (Required decides); a source table or field that is gone, or a query
- * that does not run, checks nothing.
+ * Limit To List: a value of a lookup field must be in its list, compared as stored: a value list or a Field List (inList),
+ * else a row of the source table (`SELECT 1 … WHERE bound = ?`), or of the SQL or saved query's bound column (A2-R18). Empty
+ * passes (Required decides); a source table or field that is gone, or a query that does not run, checks nothing.
  */
 function notInList(db: DatabaseSync, cols: { fd: FieldDef; value: SqlValue }[], info: LocaleInfo): FieldError[] {
   const errors: FieldError[] = [];
+  const names = (t: string) => {
+    const table = pickName(listTables(db).map((x) => x.name), t);
+    return table === undefined ? undefined : tableDesign(db, table).fields.map((x) => x.name);
+  };
   for (const { fd, value } of cols) {
     const l = lookupOf(fd);
     if (!l?.limitToList || value === null) continue;
-    let found: boolean;
-    if (l.kind === 'values') {
-      const b = (l.boundColumn ?? 1) - 1;
-      found = valueListRows(l).rows.some((r) => r[b] !== undefined && listItemValue(fd, r[b]!) === value);
-    } else if (l.kind === 'fieldList') {
-      const table = pickName(listTables(db).map((x) => x.name), l.table);
-      found = table === undefined || tableDesign(db, table).fields.some((x) => x.name === value);
-    } else {
+    let found = inList(fd, l, value, names);
+    if (found === undefined && l.kind === 'table') {
       const query = queryRowSource(db, l);
       const src = query ? undefined : lookupSource(db, l);
       found = query ? degraded(() => sourceHasValue(db, query, (l.boundColumn ?? 1) - 1, value, info), true)
@@ -220,26 +232,37 @@ function notInList(db: DatabaseSync, cols: { fd: FieldDef; value: SqlValue }[], 
   return errors;
 }
 
-/** Absent fields get their default value (converted like an input); every field's rule is then checked. Never a conflict
- *  (R8: inserts are not checked). */
-export async function insertRow(db: DatabaseSync, design: TableDesign, values: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<Exclude<RowWriteResult, { conflict: unknown }>> {
+export type PreparedWrite = { ok: true; values: Record<string, SqlValue> /* converted, by field name */; cols: { fd: FieldDef; value: SqlValue }[]; nulled: { field: string; code: FieldErrorCode }[] }
+  | { ok: false; errors: FieldError[] };
+/** The checks every write runs before its first read of storage: masks (enforceMask), defaults (insert), conversion. Pure.
+ *  insertRow / updateRow then run notInList, the Yes/No filler (insert), checkRules and the record rule in today's order (R7). */
+export async function prepareWrite(kind: 'insert' | 'update', design: TableDesign, input: Record<string, CellInput>, info: LocaleInfo, now: () => Date, opts: WriteOptions): Promise<PreparedWrite> {
+  let values = input;
   if (opts.enforceMask) {
     const m = applyMasks(design, values);
     if (m.errors.length > 0) return { ok: false, errors: m.errors };
     values = m.values;
   }
-  let filled: Record<string, CellInput>;
-  try {
-    filled = await applyDefaults(design, values, info, now);
-  } catch (e) {
-    if (e instanceof DefaultValueError) return { ok: false, errors: [{ field: e.field, code: 'expressionError' }] };
-    throw e;
+  if (kind === 'insert') {
+    try {
+      values = await applyDefaults(design, values, info, now);
+    } catch (e) {
+      if (e instanceof DefaultValueError) return { ok: false, errors: [{ field: e.field, code: 'expressionError' }] };
+      throw e;
+    }
   }
-  const { errors, cols, nulled } = convert(design, filled, info, true, opts);
-  if (errors.length > 0) return { ok: false, errors };
+  const { errors, cols, nulled } = convert(design, values, info, kind === 'insert', opts);
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, values: storedOf(cols), cols, nulled };
+}
+
+/** Absent fields get their default value (converted like an input); every field's rule is then checked. Never a conflict
+ *  (R8: inserts are not checked). */
+export async function insertRow(db: DatabaseSync, design: TableDesign, values: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<Exclude<LocalWriteResult, { conflict: unknown }>> {
+  const p = await prepareWrite('insert', design, values, info, now, opts);
+  if (!p.ok) return p;
+  const { cols, nulled, values: stored } = p;
   const unlisted = opts.enforceMask ? notInList(db, cols.filter((c) => Object.hasOwn(values, c.fd.name)), info) : [];
   if (unlisted.length > 0) return { ok: false, errors: unlisted };
-  const stored = storedOf(cols);
   for (const fd of design.fields) if (fd.props.type === 'yesNo' && !Object.hasOwn(stored, fd.name)) stored[fd.name] = 0; // DEFAULT 0
   const broken = await checkRules(design, stored, design.fields.map((fd) => fd.name), now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
@@ -267,7 +290,7 @@ export async function insertRow(db: DatabaseSync, design: TableDesign, values: R
 }
 
 /** The AutoNumber SQLite gives the next row of `table`: past its largest rowid and, with AUTOINCREMENT, past its sequence. */
-function nextAutoNumber(db: DatabaseSync, table: string): number {
+export function nextAutoNumber(db: DatabaseSync, table: string): number {
   const max = (db.prepare(`SELECT coalesce(max(rowid), 0) AS n FROM ${quoteIdent(table)}`).get() as { n: number }).n;
   const sequence = db.prepare(`SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'`).get()
     ? (db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').get(table) as { seq: number } | undefined)?.seq ?? 0 : 0;
@@ -282,14 +305,10 @@ function referencedField(db: DatabaseSync, table: string, changed: string[]): st
 
 /** Only the changed fields' rules are checked (a row that broke a later rule stays editable). With `opts.expected` (R8): the
  *  row changed since editing began → `{ conflict: 'changed', current }` (as `values` would be), gone → `'deleted'`. */
-export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: number, changes: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<RowWriteResult> {
-  if (opts.enforceMask) {
-    const m = applyMasks(design, changes);
-    if (m.errors.length > 0) return { ok: false, errors: m.errors };
-    changes = m.values;
-  }
-  const { errors, cols, nulled } = convert(design, changes, info, false, opts);
-  if (errors.length > 0) return { ok: false, errors };
+export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: number, changes: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<LocalWriteResult> {
+  const p = await prepareWrite('update', design, changes, info, now, opts);
+  if (!p.ok) return p;
+  const { cols, nulled } = p;
   const unlisted = opts.enforceMask ? notInList(db, cols, info) : [];
   if (unlisted.length > 0) return { ok: false, errors: unlisted };
   const broken = await checkRules(design, storedOf(cols), Object.keys(changes), now, info);
@@ -305,7 +324,7 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
     if (record) return { ok: false, errors: [record] };
   }
   try {
-    return inTransaction(db, (): RowWriteResult => {
+    return inTransaction(db, (): LocalWriteResult => {
       const c = opts.expected && expectedConflict(db, design, rowid, opts.expected);
       if (c) return c;
       if (cols.length > 0) {

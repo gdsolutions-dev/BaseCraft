@@ -1,6 +1,6 @@
 import { GridCellKind, type EditableGridCell } from '@glideapps/glide-data-grid';
 import { f, t } from '../../shared/test-fixtures';
-import { defaultValues, editText, fromEdit, hasLookupEditor, inputCell, lookupList, pasteAllowed, toCell } from './datasheet-cells';
+import { defaultValues, editText, fitNumber, truncateNumber, fromEdit, hasLookupEditor, inputCell, lookupList, pasteAllowed, toCell } from './datasheet-cells';
 
 const NBSP = String.fromCharCode(0xa0); // no-break space (currency)
 const NNBSP = String.fromCharCode(0x202f); // narrow no-break space (fr-FR groups)
@@ -124,5 +124,31 @@ describe('hasLookupEditor', () => {
     expect(hasLookupEditor(values, 0)).toBe(false);
     expect(hasLookupEditor({ ...values, allowValueListEdits: true }, 0)).toBe(true);
     expect(hasLookupEditor({ kind: 'table', table: 'SELECT 1', allowValueListEdits: true, limitToList: false }, 0)).toBe(false);
+  });
+});
+
+describe('truncated numbers (R13)', () => {
+  const m = (s: string) => s.length * 8;
+  it('fitNumber', () => {
+    expect(fitNumber('123', 60, m)).toBe('123');
+    expect(fitNumber('1 234 567,89 €', 60, m)).toBe('#####');
+    expect(fitNumber('12', 20, m)).toBe('#');
+  });
+  it('truncateNumber: numbers only, copy keeps the text', () => {
+    const num = f('N', 'number');
+    const c = truncateNumber(num, toCell(num, 12345678, { locale: 'fr-FR', readOnly: false }), 60, m);
+    expect(c).toMatchObject({ displayData: '#####', copyData: expect.stringMatching(/^12.345.678$/) });
+    const txt = f('T', 'shortText');
+    const tc = toCell(txt, 'abcdefghijkl', { locale: 'fr-FR', readOnly: false });
+    expect(truncateNumber(txt, tc, 60, m)).toBe(tc);
+  });
+  it('truncateNumber: a number Lookup (list text) and the (New) label stay as they are', () => {
+    const num = f('N', 'number');
+    const list = lookupList({ rows: [{ value: 5, display: ['Jean-Christophe Dupont'] }], columns: [] } as never);
+    const lc = toCell(num, 5, { locale: 'fr-FR', readOnly: false, lookup: list });
+    expect(truncateNumber(num, lc, 60, m)).toBe(lc);
+    const auto = f('Id', 'autoNumber');
+    const nl = { kind: GridCellKind.Text, data: '', displayData: '(New) (Nouveau)', allowOverlay: false, readonly: true } as const;
+    expect(truncateNumber(auto, nl, 60, m)).toBe(nl);
   });
 });

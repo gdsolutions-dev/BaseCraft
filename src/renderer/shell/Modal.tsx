@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { i18n } from '../i18n';
+import { contentBlocked } from './Banners';
 
 export type ModalButton = 'yes' | 'no' | 'cancel' | 'ok';
 /** defaultButton: focused and highlighted (default: the first); destructive questions put it on 'no'. */
@@ -16,14 +17,16 @@ export interface ModalApi {
   confirm(opts: ConfirmOptions): Promise<ModalButton>;
   prompt(opts: PromptOptions): Promise<string | null>;
   /** A dialog with its own content, in the same queue (A2 Task 13 signature). `close(null)` and Escape cancel.
-   *  `titleParams`: the title's interpolation values (B1: a macro's MessageBox title, never read as a key). */
-  custom<T>(render: (close: (v: T | null) => void) => ReactNode, opts: CustomOptions): Promise<T | null>;
+   *  `titleParams`: the title's interpolation values (B1: a macro's MessageBox title, never read as a key). `retitle(key)`: content
+   *  that changes shows another title (null: back to `titleKey`; C4: the Linked Table Manager's relink form). */
+  custom<T>(render: (close: (v: T | null) => void, retitle: (titleKey: string | null) => void) => ReactNode, opts: CustomOptions): Promise<T | null>;
 }
 
 type Request =
   | { id: number; kind: 'confirm'; opts: ConfirmOptions; resolve: (v: ModalButton) => void }
   | { id: number; kind: 'prompt'; opts: PromptOptions; resolve: (v: string | null) => void }
-  | { id: number; kind: 'custom'; opts: CustomOptions; render: (close: (v: unknown) => void) => ReactNode; resolve: (v: unknown) => void };
+  | { id: number; kind: 'custom'; opts: CustomOptions; render: (close: (v: unknown) => void, retitle: (titleKey: string | null) => void) => ReactNode;
+      resolve: (v: unknown) => void };
 
 const ModalContext = createContext<ModalApi | null>(null);
 let nextId = 0;
@@ -33,8 +36,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const api = useMemo<ModalApi>(() => ({
     confirm: (opts) => new Promise((resolve) => setQueue((q) => [...q, { id: ++nextId, kind: 'confirm', opts, resolve }])),
     prompt: (opts) => new Promise((resolve) => setQueue((q) => [...q, { id: ++nextId, kind: 'prompt', opts, resolve }])),
-    custom: <T,>(render: (close: (v: T | null) => void) => ReactNode, opts: CustomOptions) => new Promise<T | null>((resolve) =>
-      setQueue((q) => [...q, { id: ++nextId, kind: 'custom', opts, render: render as (close: (v: unknown) => void) => ReactNode, resolve: resolve as (v: unknown) => void }])),
+    custom: <T,>(render: (close: (v: T | null) => void, retitle: (titleKey: string | null) => void) => ReactNode, opts: CustomOptions) => new Promise<T | null>((resolve) =>
+      setQueue((q) => [...q, { id: ++nextId, kind: 'custom', opts, render: render as Extract<Request, { kind: 'custom' }>['render'], resolve: resolve as (v: unknown) => void }])),
   }), []);
   const current = queue[0];
   const done = (v: unknown) => {
@@ -63,18 +66,24 @@ export function bcErrorCode(e: unknown): string | null {
   return all.length ? all[all.length - 1][1] : null;
 }
 
+/** A server kind (C4) as its product is named in messages. */
+export const SERVER_PRODUCTS = new Map([['postgresql', 'PostgreSQL'], ['sqlserver', 'SQL Server']]);
+
 /**
  * Message of an error (shared by useErrorDialog and the Properties dialog): `dialog.error.<code>_<sub-code>`, else
- * `dialog.error.<code>`, else `dialog.error.unknown`. Params: `detail` (the part after the sub-code, or the whole message
- * without Electron's prefix) and `reason` (the sub-code's `expr.error.*` text when there is one: a parse error's cause).
+ * `dialog.error.<code>`, else `dialog.error.unknown`. Params: `name` (the sub-code: a function's name in
+ * `bc:serverFunction|<name>|<kind>`), `detail` (the part after the sub-code, or the whole message without Electron's prefix;
+ * a server kind reads as its product's name) and `reason` (the sub-code's `expr.error.*` text when there is one: a parse
+ * error's cause).
  */
-export function errorMessage(e: unknown): { key: string; params: { detail: string; reason: string } } {
+export function errorMessage(e: unknown): { key: string; params: { name: string; detail: string; reason: string } } {
   const msg = (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']*': (\w*Error: )?/, '');
   const code = bcErrorCode(e);
   const [, sub = '', ...rest] = msg.split('|');
   const key = [code && sub && `dialog.error.${code}_${sub}`, code && `dialog.error.${code}`].find((k) => k && i18n.exists(k)) || 'dialog.error.unknown';
   const reason = sub && i18n.exists(`expr.error.${sub}`) ? i18n.t(`expr.error.${sub}`) : '';
-  return { key, params: { detail: msg.includes('|') ? rest.join('|') : msg, reason } };
+  const detail = msg.includes('|') ? rest.join('|') : msg;
+  return { key, params: { name: sub, detail: SERVER_PRODUCTS.get(detail) ?? detail, reason } };
 }
 
 /** One Stop ends the query and the calls queued behind it (a row save, a refresh): one « cancelled » message for all. */
@@ -86,6 +95,7 @@ export function useErrorDialog(): (e: unknown) => Promise<void> {
   return useCallback(async (e: unknown) => {
     const code = bcErrorCode(e);
     if (code === 'hostCrashed') return; // the shell's single notice says it (App: onHostCrashed)
+    if (code === 'contentDisabled') contentBlocked(); // the message points at the security bar: a dismissed one comes back
     if (code === 'cancelled' && cancelledShown) return cancelledShown;
     const m = errorMessage(e);
     const shown = modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: m.key, params: m.params, buttons: ['ok'] }).then(() => {});
@@ -96,6 +106,17 @@ export function useErrorDialog(): (e: unknown) => Promise<void> {
 }
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+/** A ref whose element's first control takes the focus, at its mount and when `key` changes, when the focus was lost (its control
+ *  removed): a dialog whose content replaces itself. At a dialog's open, Modal focuses (and remembers what had the focus). */
+export function useFocusFirst<T extends HTMLElement>(key?: unknown) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (document.activeElement && document.activeElement !== document.body) return;
+    ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+  }, [key]);
+  return ref;
+}
 
 /** Keeps Tab / Shift+Tab inside `root` (modal dialogs, backstage). */
 export function trapFocus(e: KeyboardEvent, root: HTMLElement | null): void {
@@ -113,6 +134,7 @@ function Dialog({ req, onDone }: { req: Request; onDone: (v: unknown) => void })
   const ref = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(req.kind === 'prompt' ? req.opts.initial : '');
   const [error, setError] = useState<string | null>(req.kind === 'prompt' ? req.opts.error ?? null : null);
+  const [retitled, setRetitled] = useState<string | null>(null);
   const buttons: ModalButton[] = req.kind === 'confirm' ? req.opts.buttons : ['ok', 'cancel'];
   const def = (req.kind === 'confirm' && req.opts.defaultButton) || buttons[0];
 
@@ -146,8 +168,8 @@ function Dialog({ req, onDone }: { req: Request; onDone: (v: unknown) => void })
   return (
     <div className="modal-backdrop">
       <div ref={ref} className="modal card" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="modal" onKeyDown={onKeyDown}>
-        <h2 id={titleId} className="modal-title">{t(req.opts.titleKey, req.kind === 'custom' ? { ...req.opts.titleParams } : undefined)}</h2>
-        {req.kind === 'custom' ? req.render(onDone) : req.kind === 'confirm' ? (
+        <h2 id={titleId} className="modal-title">{retitled ? t(retitled) : t(req.opts.titleKey, req.kind === 'custom' ? { ...req.opts.titleParams } : undefined)}</h2>
+        {req.kind === 'custom' ? req.render(onDone, setRetitled) : req.kind === 'confirm' ? (
           <p className="modal-message">{t(req.opts.messageKey, { ...req.opts.params })}</p>
         ) : (
           <label className="modal-field">

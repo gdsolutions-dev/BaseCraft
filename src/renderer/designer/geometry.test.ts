@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { intersects, resizeRect, type Rect } from './geometry';
+import { contains, intersects, resizeRect, type Rect } from './geometry';
 
 const r: Rect = { left: 1000, top: 500, width: 2000, height: 400 };
 
@@ -34,5 +34,13 @@ describe('intersects', () => {
     expect(intersects(r, { left: 3000, top: 500, width: 100, height: 400 })).toBe(false);
     expect(intersects(r, { left: 0, top: 0, width: 100, height: 100 })).toBe(false);
     expect(intersects(r, { left: 1500, top: 600, width: 500, height: 0 })).toBe(true);
+  });
+});
+
+describe('contains', () => {
+  it('edges included', () => {
+    const o = { left: 0, top: 0, width: 100, height: 100 };
+    expect(contains(o, o)).toBe(true);
+    expect(contains(o, { left: 50, top: 50, width: 51, height: 10 })).toBe(false);
   });
 });

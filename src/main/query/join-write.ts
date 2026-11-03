@@ -37,6 +37,37 @@ export function locateRow(db: DatabaseSync, level: BoundQuery, keyRowid: number,
 }
 
 /**
+ * A save request of updatable `b` split by its plan's tables (R2, R8; the server save's too, C5 R16): `refused`, the request's
+ * columns that are not writable (readOnly, nothing written); `valuesOf(i)` and `expectedOf(i)`, plan table i's values and
+ * expected values by its field (expected: none for a new record, an insert is never checked); `first(i)`, table i's first
+ * output column in the request; `mapped(i, errors)`, a write layer error under the output column of its field (the request's
+ * first, else the query's, else the field), `table` set for a "one" table.
+ */
+export function planRequest(b: BoundQuery, req: { rowid: unknown; values: Record<string, CellInput>; expected?: Record<string, SqlValue> }) {
+  const plan = b.writePlan!, src = toSourceInfo(b);
+  const names = Object.keys(req.values);
+  const refused = names.filter((n) => !writableColumn(src, n));
+  // the request's columns in output order, with the plan table and field each writes
+  const cols = b.columns.flatMap((c) => {
+    const n = names.find((x) => sameName(x, c.name));
+    return n === undefined || !c.origin ? [] : [{ name: n, at: plan.findIndex((w) => sameOrigin(c.origin, w.table)), field: c.origin.field }]; // no origin: refused
+  }).filter((c, i, all) => all.findIndex((x) => x.name === c.name) === i);
+  const valuesOf = (i: number): Record<string, CellInput> =>
+    Object.fromEntries(cols.filter((c) => c.at === i).map((c) => [c.field, req.values[c.name]])); // fromEntries: a field named __proto__ stays a key
+  const mapped = (i: number, errors: FieldError[]): FieldError[] => errors.map((e) => {
+    const field = cols.find((c) => c.at === i && sameName(c.field, e.field))?.name
+      ?? b.columns.find((c) => sameOrigin(c.origin, plan[i].table, e.field))?.name ?? e.field;
+    return { ...e, field, ...(plan[i].role === 'one' && e.table === undefined && { table: plan[i].table }) };
+  });
+  const expectedOf = (i: number): Record<string, SqlValue> | undefined => req.rowid === null || !req.expected ? undefined : Object.fromEntries(b.columns.flatMap((c) => {
+    const k = Object.keys(req.expected!).find((x) => sameName(x, c.name));
+    return k === undefined || plan.findIndex((w) => sameOrigin(c.origin, w.table)) !== i ? [] : [[c.origin!.field, req.expected![k]]];
+  }));
+  const first = (i: number): string => cols.find((c) => c.at === i)!.name;
+  return { refused, valuesOf, mapped, expectedOf, first };
+}
+
+/**
  * Saves one record of an updatable query (R2, R3): every value's output column must be writable (writableColumn), else
  * readOnly on it and nothing written; a source that is not updatable: readOnly on its first column. Then, in one
  * transaction: the key table (insert when `req.rowid` is null, update when it has values), then each "one" table with
@@ -45,30 +76,11 @@ export function locateRow(db: DatabaseSync, level: BoundQuery, keyRowid: number,
  * compared first, even when only "one" tables are written; then each table's update on its own fields. The first conflict
  * rolls everything back, `current` read back after it.
  */
-export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: SourceSaveRequest, info: LocaleInfo): Promise<SourceSaveResult> {
+export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: Omit<SourceSaveRequest, 'rowid'> & { rowid: number | null }, info: LocaleInfo): Promise<SourceSaveResult> {
   if (!b.updatable || !b.writePlan || !b.writeLevel) return { ok: false, errors: [{ field: b.columns[0]?.name ?? '', code: 'readOnly' }] };
-  const plan = b.writePlan, level = b.writeLevel, src = toSourceInfo(b);
-  const names = Object.keys(req.values);
-  const refused = names.filter((n) => !writableColumn(src, n));
+  const plan = b.writePlan, level = b.writeLevel;
+  const { refused, valuesOf, mapped, expectedOf, first } = planRequest(b, req);
   if (refused.length) return { ok: false, errors: refused.map((field) => ({ field, code: 'readOnly' as const })) };
-  // the request's columns in output order, with the plan table and field each writes
-  const cols = b.columns.flatMap((c) => {
-    const n = names.find((x) => sameName(x, c.name));
-    return n === undefined ? [] : [{ name: n, at: plan.findIndex((w) => sameOrigin(c.origin, w.table)), field: c.origin!.field }];
-  }).filter((c, i, all) => all.findIndex((x) => x.name === c.name) === i);
-  const valuesOf = (i: number): Record<string, CellInput> =>
-    Object.fromEntries(cols.filter((c) => c.at === i).map((c) => [c.field, req.values[c.name]])); // fromEntries: a field named __proto__ stays a key
-  /** A write layer error under the output column of its field (the request's first, else the query's, else the field). */
-  const mapped = (i: number, errors: FieldError[]): FieldError[] => errors.map((e) => {
-    const field = cols.find((c) => c.at === i && sameName(c.field, e.field))?.name
-      ?? b.columns.find((c) => sameOrigin(c.origin, plan[i].table, e.field))?.name ?? e.field;
-    return { ...e, field, ...(plan[i].role === 'one' && e.table === undefined && { table: plan[i].table }) };
-  });
-  /** The expected values of plan table `i`, by its field (R8); a new record is an insert, never checked. */
-  const expectedOf = (i: number): Record<string, SqlValue> | undefined => req.rowid === null || !req.expected ? undefined : Object.fromEntries(b.columns.flatMap((c) => {
-    const k = Object.keys(req.expected!).find((x) => sameName(x, c.name));
-    return k === undefined || plan.findIndex((w) => sameOrigin(c.origin, w.table)) !== i ? [] : [[c.origin!.field, req.expected![k]]];
-  }));
   const update = async (i: number, d: TableDesign, id: number, values: Record<string, CellInput>) => {
     const r = await updateRow(db, d, id, values, info, undefined, { enforceMask: true /* datasheet and form entry */, expected: expectedOf(i) });
     if ('conflict' in r) throw new Conflict(r.conflict);
@@ -111,10 +123,9 @@ export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: Source
       for (let i = 1; i < plan.length; i++) {
         const values = valuesOf(i);
         if (!Object.keys(values).length) continue;
-        const first = cols.find((c) => c.at === i)!.name;
         const at = locateRow(db, level, rowid, info); // again for each table: a chain's link may have just changed
-        if (at === 'ambiguous') throw new Refused([{ field: first, code: 'readOnly', table: plan[i].table }]);
-        if (at[i] === null) throw new Refused([{ field: first, code: 'noParent', table: plan[i].table }]);
+        if (at === 'ambiguous') throw new Refused([{ field: first(i), code: 'readOnly', table: plan[i].table }]);
+        if (at[i] === null) throw new Refused([{ field: first(i), code: 'noParent', table: plan[i].table }]);
         await update(i, designOf(level, plan[i]), at[i]!, values);
       }
       return { ok: true as const, rowid, values: readValues(rowid) };
@@ -124,6 +135,27 @@ export async function saveSourceRow(db: DatabaseSync, b: BoundQuery, req: Source
     if (e instanceof Conflict) return e.conflict === 'deleted' ? { ok: false, conflict: 'deleted' } : { ok: false, conflict: 'changed', current: readValues(req.rowid!) };
     throw e;
   }
+}
+
+/** R4: the child values of "one" table `w`'s link, in pair order: the field of the table looked up before it (`found`, by alias:
+ *  a chain's new parent wins over the request's stale value), else a value of `values` (by output column, converted as the
+ *  child field stores it); undefined when one is not there (not looked up). Shared with the server's AutoLookup (C5 R16). */
+export function linkValues(b: BoundQuery, w: WriteTable, values: Record<string, CellInput>, info: LocaleInfo, found: Map<string, Record<string, SqlValue> | null>): SqlValue[] | undefined {
+  const via = b.writePlan!.find((x) => x.alias === w.parent!.via)!;
+  const vd = designOf(b.writeLevel!, via);
+  const child = w.parent!.pairs.map((p): SqlValue | undefined => {
+    // a parent just looked up wins: the request's value of its field is the old parent's (R4 drops it)
+    if (found.has(via.alias)) return found.get(via.alias)?.[fieldOf(vd, p.child).name] ?? null;
+    const col = b.columns.find((c) => sameOrigin(c.origin, via.table, p.child) && Object.keys(values).some((k) => sameName(k, c.name)));
+    if (col) {
+      const input = values[Object.keys(values).find((k) => sameName(k, col.name))!];
+      const fd = fieldOf(vd, p.child);
+      const r = coerce(fd.props.type === 'autoNumber' ? { name: fd.name, props: { ...fd.props, type: 'number', numberSize: 'longInteger' } } : fd, input, info);
+      return r.ok ? r.value : null;
+    }
+    return undefined;
+  });
+  return child.some((v) => v === undefined) ? undefined : (child as SqlValue[]);
 }
 
 /**
@@ -141,19 +173,8 @@ export function autoLookup(db: DatabaseSync, b: BoundQuery, values: Record<strin
   for (const w of plan.slice(1)) {
     const via = plan.find((x) => x.alias === w.parent!.via)!;
     const vd = designOf(level, via), od = designOf(level, w);
-    const child = w.parent!.pairs.map((p): SqlValue | undefined => {
-      // a parent just looked up wins: the request's value of its field is the old parent's (R4 drops it)
-      if (found.has(via.alias)) return found.get(via.alias)?.[fieldOf(vd, p.child).name] ?? null;
-      const col = b.columns.find((c) => sameOrigin(c.origin, via.table, p.child) && Object.keys(values).some((k) => sameName(k, c.name)));
-      if (col) {
-        const input = values[Object.keys(values).find((k) => sameName(k, col.name))!];
-        const fd = fieldOf(vd, p.child);
-        const r = coerce(fd.props.type === 'autoNumber' ? { name: fd.name, props: { ...fd.props, type: 'number', numberSize: 'longInteger' } } : fd, input, info);
-        return r.ok ? r.value : null;
-      }
-      return undefined;
-    });
-    if (child.some((v) => v === undefined)) continue;
+    const child = linkValues(b, w, values, info, found);
+    if (!child) continue;
     // the ON's equalities, the child side bound
     const refs = new Map<object, SqlRef>();
     const eq = w.parent!.pairs.map((p, k): Expr => {

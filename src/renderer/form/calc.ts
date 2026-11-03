@@ -17,7 +17,7 @@ export type CalcResult = { ok: true; value: Value; text: string } | { ok: false;
 /** The value of a field whose typed text does not convert, or of a calculated control in error: #Erreur wherever it is used. */
 export const FAILED: unique symbol = Symbol('failed');
 export type CalcValue = Value | typeof FAILED;
-export interface CalcEnv { fields: Record<string, CalcValue>; controls: Record<string, CalcValue>; locale: string; lang: 'fr' | 'en'; now(): Date;
+export interface CalcEnv { fields: Record<string, CalcValue>; controls: Record<string, CalcValue>; locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean; now(): Date;
   /** [Forms]! / [TempVars]! (B2 R11; absent: unknownField). */
   member?(path: string[]): Value | Promise<Value> }
 type BaseEnv = Omit<CalcEnv, 'fields' | 'controls'>;
@@ -66,7 +66,7 @@ export async function evalControlSource(c: ControlDef, env: CalcEnv): Promise<Ca
     return { ok: false, code: e instanceof ExprSyntaxError || (e instanceof ExprRuntimeError && e.code === 'unknownField') ? 'name' : 'error' };
   }
   const format = prop(c, 'Format') || (value?.t === 'bool' ? 'trueFalse' : '');
-  const text = format ? formatValue(value, format, { locale: env.locale, lang: env.lang, decimalPlaces: dp(c.props.DecimalPlaces) })
+  const text = format ? formatValue(value, format, { locale: env.locale, lang: env.lang, decimalPlaces: dp(c.props.DecimalPlaces), ...(env.fourDigitYear ? { fourDigitYear: true } : {}) })
     : value === null ? '' : toText(value, infoOf(env.locale));
   return { ok: true, value, text };
 }

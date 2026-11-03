@@ -2,12 +2,12 @@
 // nouvel enregistrement, écritures par rows.* sur une table, par sources.save sur une requête (contrat A3/A4/A5, section 1.2 ;
 // B4 : une requête multitable, recherche automatique du côté un).
 // Les trois vues (formulaire unique, continu, feuille de données) partagent ce contrôleur.
-import type { DeleteResult, FieldFilter, QueryRef, RowPage, RowWriteResult } from '../../shared/api';
+import type { DeleteResult, FieldFilter, QueryRef, RowPage, RowRef, RowWriteResult } from '../../shared/api';
 import type { CellInput, FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { defaultProps, sameName } from '../../shared/field-types';
 import { lookupFor, writableColumn, type RecordSourceRef, type SortSpec, type SourceField, type SourceInfo, type SourcePage, type SourcePageRequest,
   type SourceSaveRequest, type SourceSaveResult } from '../../shared/record-source';
-import { applyLookup, Lookups } from '../datasheet/row-buffer';
+import { applyLookup, Lookups, unsureSave } from '../datasheet/row-buffer';
 import { selectionCriteria } from '../datasheet/filter-model';
 import { PageCache } from '../datasheet/page-cache';
 import type { ConflictChoice } from '../shell/WriteConflictDialog';
@@ -18,8 +18,8 @@ export interface FormDataApi {
   page(ref: RecordSourceRef, req: SourcePageRequest): Promise<SourcePage>;
   insert(table: string, values: Record<string, CellInput>): Promise<RowWriteResult>;
   /** expected (C3 R8): the record as read when editing began, by field name; changed since: a conflict, nothing written. */
-  update(table: string, rowid: number, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
-  delete(table: string, rowids: number[]): Promise<DeleteResult>;
+  update(table: string, rowid: RowRef, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
+  delete(table: string, rowids: RowRef[]): Promise<DeleteResult>;
   save(ref: QueryRef, req: SourceSaveRequest): Promise<SourceSaveResult>;   // query and sql sources; tables keep insert/update
   autoLookup(ref: QueryRef, values: Record<string, CellInput>): Promise<Record<string, SqlValue>>;
 }
@@ -95,7 +95,7 @@ export class FormRecords {
   private waiters: { ok: () => void; ko: (e: unknown) => void }[] = [];
   private index = 0;
   private isNew = false;
-  private rowid = NaN;
+  private rowid: RowRef = NaN;
   private values: SqlValue[] = [];
   private original: SqlValue[] | null = null;   // C3 R8: `values` at the record's first edit (then the saved values), what an update expects
   private looked = Object.create(null) as Record<string, SqlValue>;   // AutoLookup's values (R4): shown over `values`, never written
@@ -120,6 +120,8 @@ export class FormRecords {
   private listeners = new Set<() => void>();
   private snap: RecordSnapshot | null = null;
   private saving: Promise<boolean> | null = null;
+  /** C4 I1: the current record's last save lost its connection (it may have committed): sent again only by Save Record. */
+  private unsure: { e: unknown; rec: number } | null = null;
   private writes = 0;                     // inserts and deletes done: a page counted before one has an old total
   private moving = 0;                     // moves under way (place, delete): edits are refused meanwhile
   private nav = 0;                        // the latest move: an earlier one that ends after it changes nothing
@@ -143,7 +145,7 @@ export class FormRecords {
       const values = await ask(this.info.parameters);
       if (values) this.params = values; else this.declined = true;
     }
-    this.rebuild();
+    this.rebuild(true);
     await this.place(0);
     if (this.opts.dataMode === 'add' && !this.declined) { await this.last(); await this.newRecord(); }
     return !this.declined;
@@ -208,6 +210,7 @@ export class FormRecords {
   }
 
   undoRecord(): void {
+    this.unsure = null;
     this.pending = Object.create(null) as Record<string, CellInput>;
     this.unlook();
     this.refusedByEvent = false;
@@ -269,10 +272,17 @@ export class FormRecords {
 
   /** One save at a time: a call made while one is in flight gets its outcome (never a second insert). After Update and After
    *  Insert run once that save is over (their macros may requery, move or delete), for the caller that started it.
-   *  Rejects bc:saveDuringEvent from inside BeforeInsert / BeforeUpdate (that save waits for the event: a deadlock). */
-  save(): Promise<boolean> {
+   *  Rejects bc:saveDuringEvent from inside BeforeInsert / BeforeUpdate (that save waits for the event: a deadlock). A record
+   *  whose save lost its connection (C4 I1) is sent again only with `resend` (Save Record asked): otherwise false, its error
+   *  shown again (a move, a requery, closing). */
+  save(resend = false): Promise<boolean> {
     if (this.beforeDepth) return Promise.reject(new Error('bc:saveDuringEvent'));
     if (this.saving) return this.saving;
+    const u = this.unsure;
+    if (u && u.rec === this.record && !resend && this.dirty) {
+      this.rejected(u.e instanceof Error ? new Error(u.e.message, { cause: u.e }) : u.e);
+      return Promise.resolve(false);
+    }
     const run = this.write().finally(() => { this.saving = null; });
     this.saving = run;
     const ev = this.opts.events;
@@ -345,7 +355,7 @@ export class FormRecords {
   }
   /** Saves first, then reads again from the start; `params`: new parameter values (kept from then on). */
   requery(params?: Record<string, CellInput>): Promise<boolean> {
-    return this.reread(() => { if (params) { this.params = params; this.declined = false; } });
+    return this.reread(() => { if (params) { this.params = params; this.declined = false; } }, true);
   }
 
   /** The rows read again where the form stands (back on its tab): nothing is saved. A record being edited stays current as it
@@ -421,15 +431,15 @@ export class FormRecords {
     return true;
   }
 
-  private async reread(change: () => void): Promise<boolean> {
+  private async reread(change: () => void, fresh = false): Promise<boolean> {
     if (!(await this.leave())) return false;
     change();
-    this.rebuild();
+    this.rebuild(fresh);
     return this.place(0);
   }
 
   /** A new page cache for the current source, sort, filter and link (none for an empty master). */
-  private rebuild(): void {
+  private rebuild(fresh = false): void {
     this.flush(); // waiters look again, at the new cache
     this.cache = null;
     this.pageError = undefined;
@@ -439,15 +449,17 @@ export class FormRecords {
     const info = this.info;
     if (!ref || !info) return;
     if (this.link?.values === null || this.declined) { this.counted = true; return; }
-    const children = this.link?.childFields.map((n) => this.field(n) ?? { name: n, type: 'shortText' as const, props: defaultProps('shortText') }) ?? [];
-    const filter = [...this.filter, ...(this.link?.values ? linkFilter(children, this.link.values) : [])];
+    const filter = [...this.filter, ...this.linked()];
     const sort = this.sort;
     const params = this.params;
     const where = andWhere(this.opts.where, this.applied);
+    let first = fresh; // C6 R7: the first page of an open or a Requery runs a pass-through again
     const cache: PageCache = new PageCache(async (offset, limit) => {
       const writes = this.writes;
+      const again = first;
+      first = false;
       const p = await this.api.page(ref, { offset, limit, sort: sort.length ? sort : undefined, filter: filter.length ? filter : undefined, ...(params && { params }),
-        ...(where !== undefined && { where }) });
+        ...(where !== undefined && { where }), ...(again && { fresh: true }) });
       // A count made before an insert or a delete is out of date: the local one stands until a later reply.
       if (cache === this.cache && writes === this.writes) { this.total = p.total; this.counted = true; }
       // A row with no key-table rowid (A3) is carried with NaN: it is read-only.
@@ -460,6 +472,23 @@ export class FormRecords {
       this.flush(e); this.emit();
     });
     this.cache = cache;
+  }
+
+  /** The criteria of the master's values on Link Child Fields (none when not linked). */
+  private linked(): FieldFilter[] {
+    const children = this.link?.childFields.map((n) => this.field(n) ?? { name: n, type: 'shortText' as const, props: defaultProps('shortText') }) ?? [];
+    return this.link?.values ? linkFilter(children, this.link.values) : [];
+  }
+
+  /** O2 R14: the source's records under the form's filter but `field`'s criterion (link, Where Conditions and parameters kept),
+   *  sorted by `field`, for its filter list; null when the form reads none (an empty master, parameters declined). */
+  valuesReader(field: string): ((offset: number, limit: number) => Promise<SourcePage>) | null {
+    const ref = this.opts.ref;
+    if (!ref || !this.info || this.link?.values === null || this.declined) return null;
+    const filter = [...this.filter.filter((x) => !sameName(x.field, field)), ...this.linked()];
+    const where = andWhere(this.opts.where, this.applied);
+    const params = this.params;
+    return (offset, limit) => this.api.page(ref, { offset, limit, sort: [{ field, dir: 'asc' }], ...(filter.length && { filter }), ...(params && { params }), ...(where !== undefined && { where }) });
   }
 
   /** Pages read again on demand, a failed one included (PageCache keeps a failed page until invalidate). */
@@ -594,7 +623,8 @@ export class FormRecords {
     if (before) {   // before the values sent are taken: a SetValue it runs is saved too
       const ok = await this.beforeEvent(before);
       if (rec !== this.record) return false;
-      if (!ok) { this.refusedByEvent = true; this.emit(); return false; }
+      // the macro gave its own message: an earlier save's errors are stale (a refusal box would show them again)
+      if (!ok) { this.refusedByEvent = true; this.errors = []; this.emit(); return false; }
       if (!this.dirty) return true;
     }
     if (this.lookups.busy) await this.lookups.settled(); // again: a link set by BeforeUpdate (SetValue) is looked up before `sent` (R4)
@@ -606,7 +636,8 @@ export class FormRecords {
       return false;
     }
     const sent = { ...this.pending };
-    const { isNew, rowid } = this;
+    const { isNew } = this;
+    let { rowid } = this;
     let values = sent;
     if (isNew) {
       const link = this.link?.values ? Object.fromEntries(this.link.childFields.map((n, i) => [n, this.link!.values![i] ?? null])) : {};
@@ -617,6 +648,7 @@ export class FormRecords {
     const ref = this.opts.ref;
     if (!ref || rec !== this.record) return false;
     this.writeError = undefined;
+    this.unsure = null;
     const look = this.lookups.asked;
     let r: RowWriteResult | SourceSaveResult;
     for (;;) {   // again after Write Conflict › Save Record (R9)
@@ -626,7 +658,10 @@ export class FormRecords {
         r = ref.kind !== 'table' ? await this.api.save(ref, { rowid: isNew ? null : rowid, values, ...(expected && { expected }) })
           : isNew ? await this.api.insert(ref.name, values) : await this.api.update(ref.name, rowid, values, expected);
       } catch (e) {
-        if (rec === this.record) this.rejected(e); // not on a record that is no longer current
+        if (rec === this.record) { // not on a record that is no longer current
+          this.unsure = unsureSave(e) ? { e, rec } : null;
+          this.rejected(e);
+        }
         return false;
       }
       if (rec !== this.record) { if (r.ok) this.done(isNew); this.invalidate(); return r.ok; }
@@ -640,6 +675,7 @@ export class FormRecords {
         await this.place(this.index, true);
         return false;
       }
+      rowid = this.rowid = r.rowid ?? rowid;   // C4 R8: the record's current reference, for Save Record's write and the cache
       const current = this.readBack(r.current);
       let choice: ConflictChoice;
       try { choice = (await this.opts.onConflict?.({ current })) ?? 'drop'; } catch (e) { if (rec === this.record) this.rejected(e); return false; }

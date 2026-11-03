@@ -15,14 +15,14 @@ import type { MacroItem } from '../../src/shared/macro/model';
 import { DEFAULT_STARTUP, type StartupOptions } from '../../src/shared/startup';
 import { f, t } from '../../src/shared/test-fixtures';
 import { SHIFT_GRACE_MS } from '../../src/renderer/shell/shift-key';
-import { launchApp, openDbOptions, seedBase, seedForm, seedReportsE2E } from './helpers';
+import { launchApp, openDbOptions, seedBase, seedForm, seedReportsE2E, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 const REPORT = 'Factures par client';
 const ICON = readFileSync(join(__dirname, '../../build/icon.png')).toString('base64');
 // DatasheetView: row selector width, header and row heights, an AutoNumber column's width.
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80;
+const MARKER = 44, HEADER = 34, ROW = 30;
 const fill = (s: string, p: Record<string, string>) => s.replace(/\{\{(\w+)\}\}/g, (_, k: string) => p[k]!);
 const act = (action: string, args: Record<string, string> = {}): MacroItem => ({ k: 'action', action, args });
 const embedded = (...items: MacroItem[]) => ({ embedded: { formatVersion: '1.0' as const, items } });
@@ -67,7 +67,7 @@ const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-c
 /** Clicks the second column's cell of a row (after an AutoNumber), and waits until Glide has focused it. */
 const clickCell = async (page: Page, row: number) => {
   const b = (await cur(page).getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cell(page, 1, row)).toBeFocused();
 };
 const openSheet = async (page: Page, table: string) => {
@@ -222,7 +222,7 @@ test('table design in Datasheet view off: no Table Fields tab, no Edit List Item
 
     await openSheet(page, 'Tickets');
     await clickCell(page, 0);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(page.getByTestId('lookup-editor')).toBeFocused();
     await expect(page.getByTestId('lookup-edit-list')).toHaveCount(0);
     await page.keyboard.press('F2');

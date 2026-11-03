@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { formatValue } from '../../src/shared/expr/format';
 import { num } from '../../src/shared/expr/library';
-import { launchApp, layoutFromDom, seedBase, seedReportsE2E } from './helpers';
+import { launchApp, layoutFromDom, seedBase, seedReportsE2E, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const ENV = { BASECRAFT_REGION: 'fr-FR' };
@@ -40,7 +40,7 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     await expect(page.getByTestId('doc-tab-report-Factures')).toHaveAttribute('aria-selected', 'true');
     await expect(pageOf(page)).toHaveText(/^Page 1 sur \d+$/);
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(cur(page).getByTestId('designer')).toBeVisible();
 
     // Group & Sort: a group on Client, with a header and a footer
@@ -79,7 +79,7 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     await page.getByTestId('cmd-save').click();
     await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(pageOf(page)).toHaveText(/^Page 1 sur \d+$/);
     const model = await layoutFromDom(page);
     const texts = (section: string) => model.pages.flatMap((p) => p.bands.filter((b) => b.section === section).flatMap((b) => b.lines.map((l) => loose(l[0]))));
@@ -116,7 +116,7 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     await page.getByTestId('page-numbers-position-bottom').check();
     await page.getByTestId('modal-btn-ok').click();
     await expect(body(page, 'pageFooter').getByTestId('ctl-Numéro_Page1')).toBeVisible();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(page.getByTestId('modal')).toContainText(fr.report.saveFirst.replace('{{name}}', 'Factures'));
     await page.getByTestId('modal-btn-yes').click();
     await expect(pageOf(page)).toHaveText(/^Page 1 sur \d+$/);

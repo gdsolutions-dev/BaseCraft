@@ -1,14 +1,14 @@
 // Write plan of an updatable SELECT (B4 R1, R2): the key table written, the "one" tables looked up through the joins, and
 // their read-only join fields. Pure module.
 import type { Expr } from '../expr/ast';
-import { sameName, type TableDesign } from '../field-types';
+import { sameName, serverComputed, type TableDesign } from '../field-types';
 import type { FromItem } from './ast';
 import type { BoundSource, ResolvedRef } from './bind';
 
 export interface WriteTable {
   table: string; alias: string;            // alias in the join level
   role: 'key' | 'one';
-  readOnly: string[];                      // 'one': its join fields (R2); 'key': []
+  readOnly: string[];                      // 'one': its join fields (R2); both: the columns its server computes (C4 M2)
   parent?: { via: string /* child alias */; pairs: { child: string; field: string }[] };   // 'one': the ON equalities, child field -> own field
 }
 
@@ -63,8 +63,10 @@ export function writePlan(sources: BoundSource[], from: FromItem[], refs: Map<Ex
   if (order.length !== sources.length) return null;
   return order.map((i) => {
     const s = sources[i], p = parentOf.get(i);
-    if (!p) return { table: s.design!.name, alias: s.alias, role: 'key', readOnly: [] };
-    const readOnly = p.fields.filter((x, j) => p.fields.findIndex((y) => sameName(x, y)) === j);
+    const computed = s.design!.fields.filter((x) => serverComputed(x.props)).map((x) => x.name);
+    if (!p) return { table: s.design!.name, alias: s.alias, role: 'key', readOnly: computed };
+    const joined = p.fields.filter((x, j) => p.fields.findIndex((y) => sameName(x, y)) === j);
+    const readOnly = [...joined, ...computed.filter((x) => !joined.some((y) => sameName(x, y)))];
     return { table: s.design!.name, alias: s.alias, role: 'one', readOnly, parent: { via: p.via, pairs: p.pairs } };
   });
 }

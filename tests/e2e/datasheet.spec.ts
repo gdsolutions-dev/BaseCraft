@@ -7,12 +7,12 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { clients } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 // DatasheetView: row selector width, header and row heights, widths of Clients' first columns (AutoNumber, short text).
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80, WIDTH_NOM = 170;
+const MARKER = 44, HEADER = 34, ROW = 30;
 
 const clientsBase = (name: string, ...noms: string[]) => seedBase(name, async (db) => {
   createTable(db, clients);
@@ -29,13 +29,13 @@ async function canvas(page: Page) {
 /** Clicks the Nom cell (second column) of a row, and waits until Glide has selected and focused it. */
 async function clickNom(page: Page, row: number) {
   const b = await canvas(page);
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cell(page, 1, row)).toBeFocused();
 }
 /** Clicks the trailing row's Nom cell: a new record starts; Glide opens the cell editor once the row exists. */
 async function newRecordAt(page: Page, row: number) {
   const b = await canvas(page);
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cellEditor(page)).toBeFocused();
 }
 const cellEditor = (page: Page) => page.getByTestId('grid-editor-portal').locator('textarea');
@@ -86,7 +86,7 @@ function nomsInFile(base: string): unknown[] {
 }
 
 test('enter, validate, cancel, sort, delete', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('saisie')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('saisie')], env: FR });
   try {
     await openSheet(page);
     await expect(page.getByTestId('nav-record-count')).toHaveText('0');
@@ -139,7 +139,7 @@ test('enter, validate, cancel, sort, delete', async () => {
 });
 
 test('closing a tab saves a valid pending row', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('onglet')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('onglet')], env: FR });
   try {
     await openSheet(page);
     await newRecordAt(page, 0);
@@ -156,7 +156,7 @@ test('closing a tab saves a valid pending row', async () => {
 
 test('closing the window saves a valid pending row, and the base is released', async () => {
   const base = await clientsBase('fenetre');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await openSheet(page);
     await newRecordAt(page, 0);
@@ -173,7 +173,7 @@ test('closing the window saves a valid pending row, and the base is released', a
 
 test('closing the window with an invalid pending row asks; No keeps the window, Yes discards and closes', async () => {
   const base = await clientsBase('invalide');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await openSheet(page);
     await newRecordAt(page, 0);
@@ -203,8 +203,8 @@ test('closing the window with an invalid pending row asks; No keeps the window, 
 
 test('read-only datasheet: no new record row, nothing can be changed', async () => {
   const base = await clientsBase('lecture', 'Dupont');
-  const a = await launchApp({ args: [base] });
-  const b = await launchApp({ args: [base], env: FR });
+  const a = await launchApp({ enterMovesDown: true, args: [base] });
+  const b = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     const p = b.page;
     await expect(p.getByTestId('banner-readonly')).toBeVisible();
@@ -231,7 +231,7 @@ test('read-only datasheet: no new record row, nothing can be changed', async () 
 
 test('a write refused because the lock was lost: after "Take over", the sheet is editable again', async () => {
   const base = await clientsBase('reprise', 'Dupont');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const rowcount = page.getByTestId('datasheet').locator('table[role=grid]');
   try {
     await openSheet(page);
@@ -262,7 +262,7 @@ test('a write refused because the lock was lost: after "Take over", the sheet is
 });
 
 test('design change while datasheet open reloads columns', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('structure', 'Dupont')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('structure', 'Dupont')], env: FR });
   try {
     await openSheet(page);
     const headers = page.getByTestId('datasheet').locator('th[role=columnheader]'); // Glide's accessible copy of the canvas
@@ -287,7 +287,7 @@ test('design change while datasheet open reloads columns', async () => {
 });
 
 test('a value typed and entered with no delay is saved (scanner, text expander)', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('rafale', 'Dupont')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('rafale', 'Dupont')], env: FR });
   try {
     await openSheet(page);
     await clickNom(page, 0);
@@ -309,7 +309,7 @@ test('a value typed and entered with no delay is saved (scanner, text expander)'
 });
 
 test('typing fast on a slow machine: the first key, which opens the editor, is kept', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('premiere-touche', 'Dupont')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('premiere-touche', 'Dupont')], env: FR });
   try {
     await openSheet(page);
     await clickNom(page, 0);
@@ -324,7 +324,7 @@ test('typing fast on a slow machine: the first key, which opens the editor, is k
 });
 
 test('accented first letters open the editor (é, ç, ê from a dead key)', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('accents')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('accents')], env: FR });
   try {
     await openSheet(page);
     await newRecordAt(page, 0);
@@ -348,7 +348,7 @@ test('accented first letters open the editor (é, ç, ê from a dead key)', asyn
 });
 
 test('late animation frames (a busy or hidden window): a click focuses the cell, an accented first key is kept', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('images-tardives', 'Dupont')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('images-tardives', 'Dupont')], env: FR });
   try {
     await openSheet(page);
     // Every frame 400 ms late: after Glide renders its accessible cells (200 ms after the click), after the keys typed next.
@@ -366,7 +366,7 @@ test('late animation frames (a busy or hidden window): a click focuses the cell,
 });
 
 test('renaming the table keeps an invalid pending row and its error', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('renommer')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('renommer')], env: FR });
   try {
     await openSheet(page);
     await newRecordAt(page, 0);
@@ -383,7 +383,7 @@ test('renaming the table keeps an invalid pending row and its error', async () =
     await expect(page.getByTestId('datasheet-error')).toBeVisible();
     await expect(page.getByTestId('modal')).toHaveCount(0);
     const b = await canvas(page);
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + WIDTH_NOM + 30, b.y + HEADER + ROW / 2); // Âge, same row
+    await page.mouse.click(b.x + colLeft(2) + 30, b.y + HEADER + ROW / 2); // Âge, same row
     await expect(cell(page, 2, 0)).toBeFocused();
     await page.keyboard.press('ArrowLeft');
     await expect(cell(page, 1, 0)).toHaveAttribute('aria-selected', 'true');
@@ -398,7 +398,7 @@ test('renaming the table keeps an invalid pending row and its error', async () =
 });
 
 test('with a sort, a saved row takes its sorted place', async () => {
-  const { app, page } = await launchApp({ args: [await clientsBase('triee', 'Bernard', 'Durand')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('triee', 'Bernard', 'Durand')], env: FR });
   try {
     await openSheet(page);
     await clickNom(page, 0);
@@ -418,7 +418,7 @@ test('with a sort, a saved row takes its sorted place', async () => {
 
 test('after deleting a row beyond the first page, editing a later row updates that record', async () => {
   const noms = Array.from({ length: 250 }, (_, i) => `R${String(i).padStart(3, '0')}`);
-  const { app, page } = await launchApp({ args: [await clientsBase('longue', ...noms)], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await clientsBase('longue', ...noms)], env: FR });
   const goTo = async (n: number) => {
     await page.getByTestId('nav-record-input').fill(String(n));
     await page.getByTestId('nav-record-input').press('Enter');
@@ -450,7 +450,7 @@ test('after deleting a row beyond the first page, editing a later row updates th
 
 test('a hung renderer does not keep the window open: a second close after 5 s closes it', async () => {
   const base = await clientsBase('fige');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await openSheet(page);
     await page.evaluate(() => { setTimeout(() => { const end = Date.now() + 60000; while (Date.now() < end); }, 0); });
@@ -477,7 +477,7 @@ test("another tool's keys: the delete question warns of SET NULL, refusals name 
     db.exec(`CREATE TABLE "Ghost" ("id" INTEGER PRIMARY KEY); CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id"))`);
     db.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Ghost"; PRAGMA foreign_keys=ON');
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const fill = (s: string, p: Record<string, string>) => Object.entries(p).reduce((x, [k, v]) => x.replace(`{{${k}}}`, v), s);
   try {
     await page.getByTestId('nav-item-Clients').click({ button: 'right' });

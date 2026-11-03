@@ -13,7 +13,9 @@ export type DocKind =
   | 'relations'
   | 'macro'
 
-export type DocMode = 'design' | 'datasheet' | 'run';
+/** layout: a form's Layout view (L2), the Design view's editor over live records. */
+/** state: a report's Mode État (Access's Report view: the data, every page under the other, read-only). */
+export type DocMode = 'design' | 'datasheet' | 'run' | 'layout' | 'state';
 /** isNew: table not saved yet; `name` is then only a provisional label (Table1…), never matched against real tables. */
 /** reloadToken: structure saved (everything is read again); dataToken: rows changed elsewhere (a datasheet re-reads them). */
 /** description: a table's description last set from the Properties dialog; an open design adopts it (its save keeps it). */
@@ -56,8 +58,13 @@ export const isDoc = (t: DocTab, kind: DocKind | ObjectKind, name: string): bool
 const isTable = (t: DocTab, name: string) => isDoc(t, 'table', name);
 /** The mode an Open asks of a tab already open: a form shown in its Datasheet view stays in it (Open only activates its tab, Access). */
 export const reopenMode = (t: DocTab, mode: DocMode): DocMode => (t.kind === 'form' && t.mode === 'datasheet' && mode === 'run' ? 'datasheet' : mode);
-/** OpenForm in Dialog mode of a form already open only activates it (R12), unless it is in Design view: no form runs there. */
-export const dialogActivates = (t: DocTab, args: OpenArgs | undefined): boolean => args?.windowMode === 'dialog' && t.mode !== 'design';
+const editsDesign = (m: DocMode | undefined): boolean => m === 'design' || m === 'layout';
+/** Design and Layout views are one editor (L2): a switch between them keeps the design as it is (no save asked, embedded macros stay). */
+export const sameView = (a: DocMode, b: DocMode | undefined): boolean => a === b || (editsDesign(a) && editsDesign(b));
+/** A form in its Form or Datasheet view (none runs in Design or Layout view). */
+export const isRunningForm = (t: DocTab): boolean => t.kind === 'form' && !editsDesign(t.mode);
+/** OpenForm in Dialog mode of a form already open only activates it (R12), unless it is in Design or Layout view: no form runs there. */
+export const dialogActivates = (t: DocTab, args: OpenArgs | undefined): boolean => args?.windowMode === 'dialog' && !editsDesign(t.mode);
 /** The Relations window shows every table: any change of structure reloads it. */
 const relationsReload = (s: AppState): AppState =>
   ({ ...s, tabs: s.tabs.map((t) => (t.kind === 'relations' ? { ...t, reloadToken: t.reloadToken + 1 } : t)) });
@@ -79,9 +86,9 @@ function remove(s: AppState, goes: (t: DocTab) => boolean): AppState {
   return { ...s, tabs, activeId };
 }
 
-/** Another view of a design (setMode, or an Open in another mode) closes its embedded macros (R16). */
+/** Another view of a design (setMode, or an Open in another mode) closes its embedded macros (R16); Design <-> Layout keeps them. */
 const withoutEmbeddedOf = (s: AppState, owner: DocTab, mode: DocMode): AppState =>
-  (owner.mode === mode ? s : remove(s, (t) => !!t.embedded && t.openerId === owner.id));
+  (sameView(owner.mode, mode) ? s : remove(s, (t) => !!t.embedded && t.openerId === owner.id));
 
 export function appReducer(s: AppState, a: AppAction): AppState {
   switch (a.type) {

@@ -10,7 +10,7 @@ import ExcelJS from 'exceljs';
 import type { BasecraftApi } from '../../src/shared/api';
 import { formatValue } from '../../src/shared/expr/format';
 import { num } from '../../src/shared/expr/library';
-import { formGrid, launchApp, layoutFromDom } from './helpers';
+import { formGrid, launchApp, layoutFromDom, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const fill = (s: string, p: Record<string, string | number>) => s.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => String(p[k]));
@@ -100,7 +100,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
   const reportTotal = orders.reduce((a, o) => a + amount(o), 0);
   const lyon = [['Dupont', 3, 'Lyon'], ['Dupont', 2, 'Lyon']];   // the parameter query's rows for Lyon
 
-  let { app, page } = await launchApp({ env, userDataDir });
+  let { app, page } = await launchApp({ enterMovesDown: true, env, userDataDir });
   try {
     // 1. a new base; Clients, Produits and Commandes in Design view
     await page.getByTestId('bs-new').click();
@@ -196,7 +196,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     const ctl = (n: string) => vis(page, `form-ctl-${n}`);
     const s = formGrid(page, vis(page, 'form-ctl-Commandes'), [1701, 1701, 1701, 1701].map((tw) => tw / 15));
     const nav = vis(page, 'form-run').first().locator(':scope > .recnav');
-    await vis(page, 'cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     for (const [c, nom, ville] of clients as [number, string, string][]) {
       if (c > 1) await nav.getByTestId('nav-new').click();
       await expect(ctl('Nom')).toHaveValue('');   // the new record is shown: a fill made before is lost when it appears
@@ -247,7 +247,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     const cur = page.locator('.doc:not([hidden])');
     await expect(cur.getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(cur.getByTestId('designer')).toBeVisible();
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await page.getByTestId('cmd-groupSort').click();
@@ -265,7 +265,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     await page.getByTestId('cmd-save').click();
     await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(cur.getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);
     const model = await layoutFromDom(page);
     const texts = (section: string) => model.pages.flatMap((p) => p.bands.filter((b) => b.section === section).flatMap((b) => b.lines.map((l) => loose(l[0]))));
@@ -331,7 +331,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
   }
 
   // 7. reopened: every table, query, form, report and row is intact; the form and the report still work
-  ({ app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' }, userDataDir }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [base], env: { BASECRAFT_REGION: 'fr-FR' }, userDataDir }));
   try {
     for (const id of ['Clients', 'Produits', 'Commandes', 'Lyon', `query-${PARAM}`, 'query-Factures', 'form-Clients', 'form-Commandes', 'report-Factures']) {
       await expect(page.getByTestId(`nav-item-${id}`)).toBeVisible();

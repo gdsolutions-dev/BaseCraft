@@ -7,6 +7,7 @@ import type { ExprErrorCode } from '../../shared/expr/ast';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { sameName } from '../../shared/field-types';
 import type { ArgDef } from '../../shared/macro/catalog';
+import { passThroughOf } from '../../shared/query/definition';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { api } from '../bridge';
 import { ExpressionField } from '../expr/ExpressionField';
@@ -33,7 +34,12 @@ function useTargetFields(kind: 'form' | 'report', name: string, exists: boolean)
     if (!exists) { setFields([]); return; }
     let current = true;
     api.objects.get(kind, name)
-      .then((r) => { const src = (r.definition as { recordSource?: RecordSourceRef | null }).recordSource; return src ? api.sources.describe(src) : null; })
+      .then(async (r) => {
+        const src = (r.definition as { recordSource?: RecordSourceRef | null }).recordSource;
+        // A pass-through's describe would run its text: no field list for it (C6).
+        if (!src || (src.kind === 'query' && passThroughOf((await api.objects.get('query', src.name)).definition))) return null;
+        return api.sources.describe(src);
+      })
       .then((info) => { if (current) setFields(info ? info.fields.map((f) => f.name) : []); }, () => { if (current) setFields([]); });
     return () => { current = false; };
   }, [kind, name, exists]);

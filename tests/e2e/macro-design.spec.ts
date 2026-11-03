@@ -10,7 +10,7 @@ import { seedSales } from '../../src/main/query/test-db';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import type { MacroDef, MacroItem } from '../../src/shared/macro/model';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, seedBase, seedForm, checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -155,8 +155,8 @@ test('Read-only base: the designer and Save are disabled; a macro offers no Data
     await expect(page.getByTestId('macro-item-2')).toHaveCount(0);
     await page.getByTestId('ribbon-tab-home').click();
     await expect(page.getByTestId('cmd-save')).toBeDisabled();
-    await expect(page.getByTestId('cmd-viewDatasheet')).toHaveCount(0);
-    await expect(page.getByTestId('cmd-viewDesign')).toBeVisible();
+    await checkView(page, 'viewDatasheet', (v) => expect(v).toHaveCount(0));
+    await checkView(page, 'viewDesign', (v) => expect(v).toBeVisible());
   } finally {
     await b.app.close();
     await a.app.close();

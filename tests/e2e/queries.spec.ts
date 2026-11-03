@@ -2,12 +2,14 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
-import { launchApp, seedSalesE2E, seedSlow } from './helpers';
+import { saveObject } from '../../src/main/db/objects';
+import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
+import { launchApp, seedBase, seedSalesE2E, seedSlow, colLeft, SALES_QUERIES } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 // DatasheetView: row selector width, header and row heights, AutoNumber column width.
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80;
+const MARKER = 44, HEADER = 34, ROW = 30;
 /** The page's API (`basecraft`), inside page.evaluate. */
 type Win = { basecraft: BasecraftApi };
 
@@ -33,7 +35,7 @@ async function openQuery(page: Page, name: string) {
 const rowcount = (page: Page) => doc(page).getByTestId('datasheet').locator('table[role=grid]');
 
 test('a parameter query asks its value first (Access), then shows its rows; Escape closes the tab', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('param')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('param')], env: FR });
   try {
     await page.getByTestId('nav-item-query-QDepuis').dblclick();
     await expect(page.getByTestId('modal')).toContainText(fr.query.param.title);
@@ -59,10 +61,14 @@ test('a parameter query asks its value first (Access), then shows its rows; Esca
 });
 
 test('a query that cannot run shows why, then its tab closes (a renamed table); an action query asks to run, no datasheet', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('erreurs')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedBase('erreurs', (db) => {   // O4: Effectuer off, so the rename leaves the queries on the old name
+    seedSales(db); seedSalesRelation(db);
+    for (const [q, sql] of SALES_QUERIES) saveObject(db, 'query', q, { formatVersion: '1.0', sql }, null);
+    db.prepare("INSERT OR REPLACE INTO bc_meta (key, value) VALUES ('options', ?)").run(JSON.stringify({ startup: { performNameAutoCorrect: false } }));
+  })], env: FR });
   try {
     expect(await page.evaluate(() => (window as unknown as Win).basecraft.objects.save('query', 'QSuppr', { formatVersion: '1.0', sql: 'DELETE FROM Commandes WHERE Montant > 1000;' }, null))).toEqual({ ok: true });
-    expect(await page.evaluate(() => (window as unknown as Win).basecraft.tables.rename('Clients', 'Contacts'))).toEqual({ ok: true });
+    expect(await page.evaluate(() => (window as unknown as Win).basecraft.tables.rename('Clients', 'Contacts'))).toMatchObject({ ok: true });
     await page.reload();
     await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
     for (const [name, message, button] of [['QSuppr', fr.query.action.confirm_delete_one.replace('{{count}}', '0'), 'no'],
@@ -78,12 +84,12 @@ test('a query that cannot run shows why, then its tab closes (a renamed table); 
 });
 
 test('a one-table query is updatable: an edit and a new record reach the Clients table', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('saisie-requete')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-requete')], env: FR });
   try {
     await openQuery(page, 'QClientsLyon');
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('2');
     await expect(doc(page).getByTestId('nav-readonly')).toHaveCount(0);
-    await clickCell(page, AUTONUMBER + 30, 0, 1); // Dupont's Nom
+    await clickCell(page, colLeft(1) - 44 + 30, 0, 1); // Dupont's Nom
     await page.keyboard.press('D'); // the first key opens the editor, replacing the text
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.type('upond');
@@ -94,7 +100,7 @@ test('a one-table query is updatable: an edit and a new record reach the Clients
 
     // a new record: the trailing row's Nom, then Ville
     const b = await grid(page);
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + 2 * ROW + ROW / 2);
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 2 * ROW + ROW / 2);
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.type('Petit');
     await page.keyboard.press('Tab');
@@ -120,7 +126,7 @@ test('a one-table query is updatable: an edit and a new record reach the Clients
 const QVENTES_VIRGULE = 'SELECT Clients.Nom, Commandes.Montant, Commandes.Le FROM Clients, Commandes WHERE Clients.[N°] = Commandes.Client;';
 
 test('a join is read-only (a cross product, B4 R7): no new record row, cells not editable, the reason in the navigation bar; sorting works', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('jointure')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('jointure')], env: FR });
   try {
     expect(await page.evaluate((sql) => (window as unknown as Win).basecraft.objects.save('query', 'QVentesVirgule', { formatVersion: '1.0', sql }, null), QVENTES_VIRGULE)).toEqual({ ok: true });
     await page.reload();
@@ -148,7 +154,7 @@ test('a join is read-only (a cross product, B4 R7): no new record row, cells not
 });
 
 test('B4 R7: a one-to-many join (QVentes) is updatable: no read-only note, a new record row', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('jointure-r7')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('jointure-r7')], env: FR });
   try {
     await openQuery(page, 'QVentes');
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('5');
@@ -161,20 +167,20 @@ test('B4 R7: a one-to-many join (QVentes) is updatable: no read-only note, a new
 });
 
 test('the Clients table datasheet still sorts, filters by selection, takes entries and deletes (A1/A2)', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('table')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('table')], env: FR });
   try {
     await page.getByTestId('nav-item-Clients').dblclick();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
-    await clickCell(page, AUTONUMBER + 30, 0, 1);
+    await clickCell(page, colLeft(1) - 44 + 30, 0, 1);
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-sortDesc').click();
     await expect(cell(page, 1, 0)).toHaveText('Martin');
-    await clickCell(page, AUTONUMBER + 170 + 30, 1, 2); // Éric's Ville (Martin, Éric, Durand, Dupont); Éric has no orders
+    await clickCell(page, colLeft(2) - 44 + 30, 1, 2); // Éric's Ville (Martin, Éric, Durand, Dupont); Éric has no orders
     await expect(cell(page, 2, 1)).toHaveText('Lyôn');
     await page.getByTestId('cmd-filterSelection').click();
     await page.getByTestId('filter-menu-equals').click();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('1'); // accents count, as in Access
-    await clickCell(page, AUTONUMBER + 30, 0, 1);
+    await clickCell(page, colLeft(1) - 44 + 30, 0, 1);
     await page.keyboard.press('Z');
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.press('Enter');
@@ -193,7 +199,7 @@ test('the Clients table datasheet still sorts, filters by selection, takes entri
 });
 
 test('Shift+F9 reads the query again with the same parameter values: a row added elsewhere appears', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('requery')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('requery')], env: FR });
   try {
     await openQuery(page, 'QClientsLyon');
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('2');
@@ -221,7 +227,7 @@ const menuLayout = (page: Page) => page.getByTestId('nav-menu').evaluate((m) =>
   [...m.children].map((e) => (e.getAttribute('role') === 'separator' ? '|' : (e.querySelector('[role="menuitem"]') ?? e).getAttribute('data-testid')!.replace('nav-menu-', ''))));
 
 test('Navigation Pane menu of a query: Open runs it (parameters first); Delete names the objects that use it', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('menu-requete')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('menu-requete')], env: FR });
   try {
     await page.getByTestId('nav-item-query-QDepuis').click({ button: 'right' });
     expect(await menuLayout(page)).toEqual(['open', 'design', 'sqlView', '|', 'export', '|', 'rename', 'hide', 'delete', '|', 'cut', 'copy', 'paste', '|', 'properties']);
@@ -252,13 +258,13 @@ test('Navigation Pane menu of a query: Open runs it (parameters first); Delete n
 });
 
 test('SQL View from a datasheet whose pending row stays (mode guard refused): the next Design View is the grid', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('sql-refuse')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('sql-refuse')], env: FR });
   try {
     await openQuery(page, 'QClientsLyon');
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('2');
     // a new record without its required Nom
     const b = await grid(page);
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + 2 * ROW + ROW / 2);
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 2 * ROW + ROW / 2);
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(cellEditor(page)).toHaveCount(0);
@@ -282,7 +288,7 @@ test('SQL View from a datasheet whose pending row stays (mode guard refused): th
 
 test('a slow query shows « Exécution… » with Stop: the run is cancelled, the base stays open and writable (lock adopted)', async () => {
   const base = seedSlow('lente');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-query-QLente').dblclick();
     await expect(page.getByTestId('running-notice')).toContainText(fr.query.run.running);
@@ -296,7 +302,7 @@ test('a slow query shows « Exécution… » with Stop: the run is cancelled, th
     await page.getByTestId('nav-item-Clients').dblclick();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
     const b = await grid(page);
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + 4 * ROW + ROW / 2); // the new record row's Nom
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 4 * ROW + ROW / 2); // the new record row's Nom
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.type('Zoe');
     await page.keyboard.press('Tab');
@@ -315,7 +321,7 @@ test('a slow query shows « Exécution… » with Stop: the run is cancelled, th
 
 test('a datasheet row saved behind a slow query: Ctrl+Break stops the query, the row stays to be saved, then saves', async () => {
   const base = seedSlow('file');
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Clients').dblclick();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
@@ -323,7 +329,7 @@ test('a datasheet row saved behind a slow query: Ctrl+Break stops the query, the
     await expect(page.getByTestId('running-notice')).toBeVisible();
     await page.getByTestId('doc-tab-Clients').click();
     const b = await grid(page);
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + 4 * ROW + ROW / 2); // the new record row's Nom
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 4 * ROW + ROW / 2); // the new record row's Nom
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.type('Zoe');
     await page.keyboard.press('Enter'); // leaves the cell
@@ -347,7 +353,7 @@ test('a datasheet row saved behind a slow query: Ctrl+Break stops the query, the
 });
 
 test('a slow action query shows the same Stop: its count is cancelled, nothing is written', async () => {
-  const { app, page } = await launchApp({ args: [seedSlow('action')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSlow('action')], env: FR });
   try {
     await page.getByTestId('nav-item-query-QLenteAction').dblclick();
     await expect(page.getByTestId('running-notice')).toContainText(fr.query.run.running);
@@ -362,7 +368,7 @@ test('a slow action query shows the same Stop: its count is cancelled, nothing i
 });
 
 test('during a slow query the ribbon stays responsive', async () => {
-  const { app, page } = await launchApp({ args: [seedSlow('ruban')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSlow('ruban')], env: FR });
   try {
     await page.getByTestId('nav-item-query-QLente').dblclick();
     await expect(page.getByTestId('query-cancel')).toBeVisible();

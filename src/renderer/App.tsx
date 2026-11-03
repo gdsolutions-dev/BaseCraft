@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { ObjectSummary, SessionState, TableSummary } from '../shared/api';
 import { sameName } from '../shared/field-types';
 import { formulaLang } from '../shared/i18n';
-import { hasStartup, type StartupOptions } from '../shared/startup';
-import { api, setPasswordPrompt } from './bridge';
+import { DEFAULT_STARTUP, hasStartup, type StartupOptions } from '../shared/startup';
+import { api, setLoginPrompt, setPasswordPrompt } from './bridge';
 import { applyUi } from './i18n';
 import { design } from './design/entry';
 import { hasPendingRow } from './import-text/wizard-model';
@@ -16,6 +16,7 @@ import { emitDataRefresh } from './shell/data-refresh';
 import { Banners } from './shell/Banners';
 import { DialogHost } from './shell/DialogHost';
 import { DocumentTabs } from './shell/DocumentTabs';
+import { askLogin } from './shell/LoginDialog';
 import { ModalProvider, useErrorDialog, useModal } from './shell/Modal';
 import { NavPane } from './shell/NavPane';
 import { setNavImportText } from './shell/nav-menu-items';
@@ -28,7 +29,8 @@ import { closeEmbeddedOf } from './macro/embedded';
 import { formCancelled, whenFormOpened } from './form/form-instances';
 import { base64ToBytes, bytesToBase64, storedIconPng } from './shell/app-icon';
 import { SHIFT_GRACE_MS, shiftHeld } from './shell/shift-key';
-import { baseUi, publishUi, runStartup, type StartupUi } from './shell/startup';
+import { publishSettings } from './settings-store';
+import { baseUi, publishBaseOptions, publishUi, runStartup, type StartupUi } from './shell/startup';
 import { reportShown } from './report/report-events';
 import { askMacroToRun } from './macro/RunMacroDialog';
 import { localeInfo } from '../shared/locale-format';
@@ -49,7 +51,7 @@ import {
 import { StatusBar } from './shell/StatusBar';
 import { pickSource, setSourceHint } from './shell/SourcePicker';
 import { selectedSource, sourceHint } from './shell/source-picker-model';
-import { appReducer, initialAppState, dialogActivates, isDoc, reopenMode, type AppAction, type DocTab } from './state/app-state';
+import { appReducer, initialAppState, dialogActivates, isDoc, reopenMode, sameView, type AppAction, type DocTab } from './state/app-state';
 import './shell/shell.css';
 
 export function App() {
@@ -95,9 +97,15 @@ function Shell() {
   const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui });
   live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui };
 
+  /** Bumped by each read and each settingsChanged broadcast: a read overtaken meanwhile is older, dropped. */
+  const settingsGen = useRef(0);
   const refreshSettings = useCallback(async () => {
+    const gen = ++settingsGen.current;
     const s = await api.app.getSettings();
+    if (gen !== settingsGen.current) return;
     await applyUi(s.theme, s.uiLanguage);
+    if (gen !== settingsGen.current) return;
+    publishSettings(s);
     setSettings(s);
   }, []);
 
@@ -146,11 +154,13 @@ function Shell() {
       // in Dialog mode an open form is only activated (R12)
       const reload = a.type === 'open' && !!a.args;
       const activateOnly = a.type === 'open' && !!tab && dialogActivates(tab, a.args);
-      const modeChanges = !!tab && !activateOnly && tab.mode !== (a.type === 'open' ? reopenMode(tab, a.mode) : a.mode);
+      const target = a.type === 'open' && tab ? reopenMode(tab, a.mode) : a.mode;
+      const modeChanges = !!tab && !activateOnly && tab.mode !== target;
       const guard = tab && !activateOnly && (reload || modeChanges) ? modeGuard(tab.id) : undefined;
-      const owns = modeChanges && closeEmbeddedOf(tab.id).length > 0;
+      // a form's Design <-> Layout views are one editor (L2): its embedded macros stay, its guard lets the switch through
+      const owns = modeChanges && !sameView(tab.mode, target) && closeEmbeddedOf(tab.id).length > 0;
       if (guard || owns) { // A3: the promise tells whether the document let the change happen (openSqlView drops a refused request)
-        return (async () => (!owns || await leaveEmbedded(tab!)) && (!guard || await guard('mode')))()
+        return (async () => (!owns || await leaveEmbedded(tab!)) && (!guard || await guard('mode', target)))()
           .then((ok) => { if (ok) rawDispatch(a); return ok; }, (e) => { void showError(e); return false; });
       }
     }
@@ -160,8 +170,8 @@ function Shell() {
   }, [refreshTables, refreshObjects, showError]);
 
   const dispatch = useCallback((a: AppAction) => {
-    // R10: run mode has no Design view. Refused like a document that stays: nothing happens, and a macro's OpenForm fails (actionCancelled).
-    if (live.current.ui.runMode && (a.type === 'open' || a.type === 'setMode') && a.mode === 'design') return Promise.resolve(false);
+    // R10: run mode has no Design view (nor Layout view, L2). Refused like a document that stays: nothing happens, and a macro's OpenForm fails (actionCancelled).
+    if (live.current.ui.runMode && (a.type === 'open' || a.type === 'setMode') && (a.mode === 'design' || a.mode === 'layout')) return Promise.resolve(false);
     // C1 R8 (as Access): a linked table's structure belongs to its file: its Design view opens read-only, after a warning (No:
     // nothing happens), once its source answers (missing, password: told as its Datasheet tells it)
     if ((a.type === 'open' || a.type === 'setMode') && a.mode === 'design') {
@@ -196,7 +206,7 @@ function Shell() {
   // C3 R10: another workstation wrote: the open datasheets and forms read again
   useEffect(() => api.base.onDataChanged(emitDataRefresh), []);
   // every settings write (language, theme, options, recent files) comes here: the one refresh per write
-  useEffect(() => api.app.onSettingsChanged((s) => { void applyUi(s.theme, s.uiLanguage); setSettings(s); }), []);
+  useEffect(() => api.app.onSettingsChanged((s) => { settingsGen.current++; void applyUi(s.theme, s.uiLanguage); publishSettings(s); setSettings(s); }), []);
 
   // A different base: its documents start empty and the backstage gives way.
   const path = session?.path ?? null;
@@ -210,6 +220,7 @@ function Shell() {
     startedFor.current = null;
     blockedAutoExec.current = null;
     publishUi(baseUi());
+    publishBaseOptions(DEFAULT_STARTUP);
     setUi(baseUi());
     rawDispatch({ type: 'setNav', visible: true, strip: true });
     setAppTitle('');
@@ -228,6 +239,7 @@ function Shell() {
     void (async () => {
       const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro')]);
       if (!stillCurrent()) return;
+      publishBaseOptions(o);
       const autoExec = macros.find((m) => sameName(m.name, 'AutoExec'))?.name ?? null;
       // (1) title and icon, also when bypassed (they hide nothing); a stored icon that cannot be used leaves BaseCraft's, silently
       setAppTitle(o.appTitle);
@@ -293,6 +305,8 @@ function Shell() {
       validate: (v) => (v.length < 1 || v.length > 256 ? t('link.password.wrong') : null),
     }));
   }, [modal, t]);
+  // C4 R10: a server source without a working login asks it at the first read (bridge.ts); a refused one asks again
+  useEffect(() => { setLoginPrompt((key, wrong, untrusted) => askLogin(modal, key, wrong, untrusted)); }, [modal]);
   useEffect(() => { if (design) setNavImportText((table) => setImporting({ appendTo: table })); }, []);   // no import without the designers (B5)
   useEffect(() => { if (design) setNavImportExcel((table) => setImporting({ appendTo: table, source: 'excel' })); }, []);
   useEffect(() => setOpenTabs(() => live.current.state.tabs), []);
@@ -371,9 +385,18 @@ function Shell() {
       const name = await askMacroToRun(modal, await macroNamesWithSubs());
       if (name) await runMacroByName(name);
     },
+    viewState: () => {
+      const id = live.current.state.activeId; // gated: a saved report
+      if (id) dispatch({ type: 'setMode', id, mode: 'state' });
+    },
     viewPrintPreview: () => {
       const id = live.current.state.activeId; // gated: a saved report
       if (id) dispatch({ type: 'setMode', id, mode: 'run' });
+    },
+    // L2 : le mode Page (filtré : un formulaire enregistré dont AllowLayoutView n'est pas false)
+    viewLayout: () => {
+      const id = live.current.state.activeId;
+      if (id) dispatch({ type: 'setMode', id, mode: 'layout' });
     },
   }), [t, i18n, modal, dispatch, newReportName, newMacroName]);
   /** A3: Requête1…, free among tables, queries and open tabs. */
@@ -550,6 +573,7 @@ function Shell() {
   const onStartupApplied = (o: StartupOptions) => {
     const stillCurrent = () => live.current.session?.path === opened;
     if (!stillCurrent()) return;
+    publishBaseOptions(o);
     setAppTitle(o.appTitle);
     void applyIcon(o.appIcon, stillCurrent).then((url) => { if (stillCurrent()) setFormIcon(o.iconForForms ? url : null); });
   };
@@ -569,7 +593,8 @@ function Shell() {
         {session && (
           <div className="contents" ref={inertRef(!!modalTab)}>
             <NavPane tables={tables} objects={objects} readOnly={readOnly} active={active && !active.isNew ? active : null}
-              visible={state.navVisible} strip={state.navStrip} runtime={ui.runMode} shortcutMenus={ui.shortcutMenus} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection} />
+              visible={state.navVisible} strip={state.navStrip} runtime={ui.runMode} shortcutMenus={ui.shortcutMenus} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection}
+              tabs={state.tabs} openTabOf={(k, n) => state.tabs.find((x) => !x.embedded && isDoc(x, k, n))?.id} />
           </div>
         )}
         <DocumentTabs state={state} readOnly={readOnly} linkOf={linkedDesign} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} showTabs={ui.documentTabs} formIcon={formIcon} />
@@ -583,7 +608,7 @@ function Shell() {
         <Backstage view={backstage ?? 'home'} onView={setBackstage} onBack={session ? () => setBackstage(null) : null}
           hasBase={!!session} settings={settings}
           onNew={() => void switchBase(api.base.create)} onOpen={(p, shift) => void switchBase(() => api.base.open(p), shift)}
-          onCloseBase={() => void closeBase()} readOnly={readOnly} needsRecovery={!!session?.needsRecovery}
+          onCloseBase={() => void closeBase()} readOnly={readOnly} needsRecovery={!!session?.needsRecovery} basePath={session?.path ?? null}
           forms={objects.filter((x) => x.kind === 'form').map((x) => x.name)} onStartupApplied={onStartupApplied}
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />
       )}

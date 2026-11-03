@@ -17,6 +17,7 @@ import {
   type FieldType,
   readableIndex,
   type IndexDef,
+  type LookupProps,
   type NumberSize,
   type TableDesign,
 } from '../../shared/field-types';
@@ -308,6 +309,17 @@ export function setTableDescription(db: DatabaseSync, name: string, description:
   if (row) db.prepare('UPDATE bc_tables SET props = ? WHERE name = ?').run(props, row.name);
   else db.prepare('INSERT INTO bc_tables (name, props) VALUES (?, ?)').run(cur, props);
   return true;
+}
+
+/** Name AutoCorrect (O4 R4): a field's Lookup in its bc_fields row (found as tableDesign finds it); its other keys are kept. */
+export function setFieldLookup(db: DatabaseSync, table: string, field: string, lookup: LookupProps): void {
+  const live = liveTableNames(db);
+  const cur = pickName(live, table);
+  const meta = cur === undefined ? undefined : metaOf(db, live, cur).fields;
+  const rows = meta === undefined ? [] : db.prepare('SELECT field_name, props FROM bc_fields WHERE table_name = ?').all(meta) as { field_name: string; props: string }[];
+  const row = rows.find((r) => sameName(r.field_name, field));
+  if (!row) throw new Error(`unknown field: ${table}.${field}`);
+  db.prepare('UPDATE bc_fields SET props = ? WHERE table_name = ? AND field_name = ?').run(JSON.stringify({ ...parseObject(row.props), lookup }), meta!, row.field_name);
 }
 
 // ---------- relations (bc_relations: name, props JSON) ----------

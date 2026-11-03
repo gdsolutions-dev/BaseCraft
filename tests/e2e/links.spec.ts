@@ -7,7 +7,7 @@ import { createTable } from '../../src/main/db/schema';
 import { addLinks } from '../../src/main/links/store';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import { f, t } from '../../src/shared/test-fixtures';
-import { inFile, launchApp, seedBase } from './helpers';
+import { inFile, launchApp, seedBase, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 // DatasheetView: row selector width, header and row heights.
@@ -36,7 +36,7 @@ async function openSheet(page: Page, name: string) {
 test('C1: link tables of a BaseCraft file, edit them, a read-only Design view, Convert to Local Table, delete a link', async () => {
   const data = seedBase('Ventes-donnees', (db) => { seedSales(db); seedSalesRelation(db); });
   const front = seedBase('Ventes', (db) => createTable(db, t('Notes', [f('N°', 'autoNumber'), f('Texte', 'shortText')])));
-  const { app, page } = await launchApp({ args: [front], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: data } });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [front], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: data } });
   try {
     // 1. External Data › BaseCraft or SQLite Database: the file's tables, both linked
     await page.getByTestId('ribbon-tab-externalData').click();
@@ -88,7 +88,7 @@ test('C1: link tables of a BaseCraft file, edit them, a read-only Design view, C
     await expect(page.getByTestId('datasheet')).toBeVisible();
     await expect(page.getByTestId('ribbon-tab-design')).toHaveCount(0);
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('modal')).toContainText(warning);
     await page.getByTestId('modal-btn-yes').click();
     await expect(page.getByTestId('design-link-banner')).toHaveText(fr.link.designBanner.replace('{{path}}', data));
@@ -184,7 +184,7 @@ test('C1: a SQLite WITHOUT ROWID table links read-only — its rows, no new reco
   raw.exec("CREATE TABLE W (k TEXT PRIMARY KEY, v INTEGER) WITHOUT ROWID; INSERT INTO W VALUES ('a', 1), ('b', 2);");
   raw.close();
   const front = seedBase('Mesures');
-  const { app, page } = await launchApp({ args: [front], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: plain } });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [front], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: plain } });
   try {
     await page.getByTestId('ribbon-tab-externalData').click();
     await page.getByTestId('cmd-linkBaseCraft').click();
@@ -219,7 +219,7 @@ test('C1: Linked Table Manager — a moved data file relinked, a file without th
 
   // 1. Clients and Commandes linked, the app closed, the data file moved to archive/
   const oldPath = realpathSync.native(data);
-  let { app, page } = await launchApp({ args: [front], env: { ...FR, BASECRAFT_E2E_LINK_PATH: data } });
+  let { app, page } = await launchApp({ enterMovesDown: true, args: [front], env: { ...FR, BASECRAFT_E2E_LINK_PATH: data } });
   try {
     await page.getByTestId('ribbon-tab-externalData').click();
     await page.getByTestId('cmd-linkBaseCraft').click();
@@ -235,7 +235,7 @@ test('C1: Linked Table Manager — a moved data file relinked, a file without th
   renameSync(data, moved);
   const movedPath = realpathSync.native(moved);
 
-  ({ app, page } = await launchApp({ args: [front], env: { ...FR, BASECRAFT_E2E_LINK_PATH: moved } }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [front], env: { ...FR, BASECRAFT_E2E_LINK_PATH: moved } }));
   try {
     // 2. the moved file's link names the old path (Review Focus 1)
     await page.getByTestId('nav-item-Clients').dblclick();
@@ -284,7 +284,7 @@ test('C1: Linked Table Manager — a moved data file relinked, a file without th
     await page.getByTestId('ltm-close').click();
 
     // 5. a second instance opens the front-end read-only (its lock held): the link's datasheet is read-only
-    const second = await launchApp({ args: [front], env: FR });
+    const second = await launchApp({ enterMovesDown: true, args: [front], env: FR });
     try {
       await openSheet(second.page, 'Clients');
       await expect(second.page.getByTestId('nav-record-count')).toHaveText('4');
@@ -296,7 +296,7 @@ test('C1: Linked Table Manager — a moved data file relinked, a file without th
     const other = seedBase('Autre');
     const raw = new DatabaseSync(other);
     try { addLinks(raw, other, 'basecraft', moved, ['Clients']); } finally { raw.close(); }
-    const third = await launchApp({ args: [other], env: FR });
+    const third = await launchApp({ enterMovesDown: true, args: [other], env: FR });
     try {
       await third.page.getByTestId('ribbon-tab-externalData').click();
       await third.page.getByTestId('cmd-linkedTableManager').click();
@@ -315,7 +315,7 @@ test('C1: Linked Table Manager — a moved data file relinked, a file without th
   copyFileSync(front, join(archive2, 'Ventes.basecraft'));
   copyFileSync(moved, join(archive2, 'archive', 'Ventes-donnees.basecraft'));
   rmSync(moved); // the absolute path no longer leads anywhere
-  ({ app, page } = await launchApp({ args: [join(archive2, 'Ventes.basecraft')], env: FR }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [join(archive2, 'Ventes.basecraft')], env: FR }));
   try {
     await openSheet(page, 'Clients');
     await expect(page.getByTestId('nav-record-count')).toHaveText('4');

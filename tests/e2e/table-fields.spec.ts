@@ -3,12 +3,12 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { colLeft, launchApp, seedBase } from './helpers';
 
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 const clients = t('Clients', [f('N°', 'autoNumber'), f('Nom', 'shortText'), f('Ville', 'shortText')]);
 // DatasheetView: row selector width, header and row heights, column widths (AutoNumber, Short Text).
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80, TEXT = 170;
+const HEADER = 34, ROW = 30;
 const design = (page: Page) => page.evaluate(() => (window as any).basecraft.tables.design('Clients'));
 const names = async (page: Page): Promise<string[]> => (await design(page)).fields.map((x: { name: string }) => x.name);
 /** The datasheet's column titles (Glide's accessible copy of the canvas): once they show a change, its reload is done and the
@@ -17,7 +17,7 @@ const headers = (page: Page) => page.getByTestId('datasheet').locator('th[role=c
 /** Selects the cell of column `col` (0 = N°) in the first row. */
 async function pick(page: Page, col: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  const x = col === 0 ? MARKER + 30 : MARKER + AUTONUMBER + (col - 1) * TEXT + 30;
+  const x = colLeft(col) + 30;
   await page.mouse.click(b.x + x, b.y + HEADER + ROW / 2);
 }
 
@@ -106,7 +106,7 @@ const adesign = (page: Page) => page.evaluate(() => (window as any).basecraft.ta
 const prop = async (page: Page, field: string) => (await adesign(page)).fields.find((x: { name: string }) => x.name === field).props;
 async function pickArticle(page: Page, col: number, row = 0) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  const x = col === 0 ? MARKER + 30 : col === 1 ? MARKER + AUTONUMBER + 30 : MARKER + AUTONUMBER + TEXT + (col - 2) * 110 + 30;
+  const x = colLeft(col) + 30;
   await page.mouse.click(b.x + x, b.y + HEADER + row * ROW + ROW / 2);
 }
 
@@ -192,15 +192,15 @@ test('Table Fields: formatting, field and record validation; Home › Find, Go T
     await page.getByTestId('data-type-shortText').click();
     await expect.poll(async () => (await prop(page, 'Qté')).type).toBe('shortText');
 
-    // Home › Find: Ctrl+F opens the search bar and finds a value
+    // Home › Find: Ctrl+F opens « Rechercher et remplacer » (O2 R10) and finds a value in the selected column
     await page.getByTestId('ribbon-tab-home').click();
     await pickArticle(page, 1);
     await page.keyboard.press('Control+f');
-    await expect(page.getByTestId('search-input')).toBeVisible();
-    await page.getByTestId('search-input').fill('Cahier');
+    await expect(page.getByTestId('find-dialog')).toBeVisible();
+    await page.getByTestId('find-what').fill('Cahier');
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('search-result-area')).toContainText('1');
-    await page.getByTestId('search-close-button').click();
+    await expect(page.getByTestId('nav-record-input')).toHaveValue('2');
+    await page.getByTestId('find-cancel').click();
     // Go To › Last, First; Select All
     await page.getByTestId('cmd-goTo').click();
     await page.getByTestId('goto-last').click();
@@ -247,10 +247,11 @@ test('Find: a value in a row beyond the pages already loaded is found', async ()
     await page.getByTestId('nav-item-Journal').dblclick();
     await expect(page.getByTestId('nav-record-count')).toHaveText('650');
     const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-    await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + ROW / 2);
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + ROW / 2);
     await page.keyboard.press('Control+f');
-    await page.getByTestId('search-input').fill('Zeta-unique');
-    await expect(page.getByTestId('search-result-area')).toContainText('1');
+    await page.getByTestId('find-what').fill('Zeta-unique');
+    await page.getByTestId('find-next').click();
+    await expect(page.getByTestId('nav-record-input')).toHaveValue('641');
   } finally {
     await app.close();
   }

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
 import { saveObject } from '../../src/main/db/objects';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
-import { launchApp, seedBase, seedSalesE2E } from './helpers';
+import { launchApp, seedBase, seedSalesE2E, pickView , checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -346,6 +346,22 @@ const seedGrosses = (name: string) => seedBase(name, (db) => {
 });
 const sqlBox = (page: Page) => doc(page).getByTestId('query-sql');
 
+test('SQL view: a Query Type button goes back to the grid and sets the kind', async () => {
+  const { app, page } = await launchApp({ args: [seedGrosses('qsqlkind')], env: FR });
+  try {
+    await page.getByTestId('nav-item-query-Grosses commandes').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await pickView(page, 'viewSql');
+    await expect(sqlBox(page)).toHaveValue(GROSSES);
+    await expect(page.getByTestId('cmd-updateQuery')).toBeEnabled();
+    await page.getByTestId('cmd-updateQuery').click();
+    await expect(doc(page).getByTestId('qbe-cell-updateTo-0')).toBeVisible();
+    await expect(page.getByTestId('cmd-updateQuery')).toHaveAttribute('aria-pressed', 'true');
+  } finally {
+    await app.close();
+  }
+});
+
 test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Parameters, Navigation Pane SQL View', async () => {
   const { app, page } = await launchApp({ args: [seedGrosses('qsql')], env: FR });
   try {
@@ -353,10 +369,10 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await page.getByTestId('nav-menu-design').click();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('Nom');
     // grid -> SQL: the canonical text, never translated (0.5, not 0,5)
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(sqlBox(page)).toHaveValue(GROSSES);
     await expect(sqlBox(page)).toHaveValue(/WHERE \[Commandes\]\.\[Montant\] > 0\.5/);
-    await expect(page.getByTestId('cmd-viewSql')).toHaveAttribute('aria-pressed', 'true');
+    await checkView(page, 'viewSql', (v) => expect(v).toHaveAttribute('aria-pressed', 'true'));
     await expect(page.getByTestId('status-view-sql')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('status-view-design')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.sql);
@@ -440,7 +456,7 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(page.getByTestId('query-params-name-0')).toHaveValue('Mini');
     await expect(page.getByTestId('query-params-type-0')).toHaveValue('currency');
     await page.getByTestId('query-params-cancel').click();
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(sqlBox(page)).toHaveValue(/^PARAMETERS \[Mini\] Currency;/);
   } finally {
     await app.close();
@@ -496,9 +512,8 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await page.getByTestId('query-props-description').fill('Clients de Paris ou Lyon');
     await page.getByTestId('query-props-outputAll').check();
     await page.getByTestId('query-props-distinct').check();
-    await page.getByTestId('query-props-ok').click();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('*');
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(sqlBox(page)).toHaveValue('SELECT DISTINCT TOP 25 PERCENT *, [Clients].[Nom], [Clients].[Ville]\nFROM [Clients]\nWHERE [Clients].[Ville] = "Paris" Or [Clients].[Ville] = "Lyon";');
     await page.keyboard.press('Control+s');
     await page.getByTestId('modal-input').fill('QParisLyon');
@@ -531,7 +546,6 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await page.getByTestId('status-view-design').click();
     await page.getByTestId('cmd-propertySheet').click();
     await page.getByTestId('query-props-description').fill('Autre');
-    await page.getByTestId('query-props-ok').click();
     await page.keyboard.press('Control+s');
     await expect(page.getByTestId('modal')).toContainText(fr.dialog.op.notFound);
     await page.getByTestId('modal-btn-ok').click();

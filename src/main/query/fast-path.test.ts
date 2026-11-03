@@ -80,12 +80,18 @@ const CASES: [string, 'native' | 'bc', Record<string, SqlValue>?][] = [
   ['SELECT * FROM A, B WHERE A.n = B.aid AND (B.x = 1 Or B.x Is Null)', 'native'],
   ['SELECT aid, Count(*) FROM B GROUP BY aid HAVING aid = 7 AND Count(*) > 0', 'native'],
   ['SELECT * FROM A WHERE Exists (SELECT * FROM B WHERE B.aid = A.id AND B.x <> 1)', 'native' /* the inner WHERE */],
-  ['SELECT * FROM A INNER JOIN (SELECT aid FROM B) AS D ON A.id = D.aid', 'bc' /* a derived table's column */],
+  ['SELECT * FROM A INNER JOIN (SELECT aid FROM B) AS D ON A.id = D.aid', 'native' /* a derived table's column: a field passed through */],
+  ['SELECT * FROM A INNER JOIN (SELECT aid + 0 AS k FROM B) AS D ON A.id = D.k', 'bc' /* a derived table's expression */],
   ['SELECT * FROM B RIGHT JOIN A ON A.id = B.aid', 'native'],
   ['SELECT * FROM A LEFT JOIN B ON A.id = B.aid WHERE B.x = 1', 'native'],
   ['SELECT * FROM A LEFT JOIN B ON A.id = B.aid WHERE B.aid Is Null', 'native'],
   ['SELECT * FROM B WHERE aid = 7.5', 'bc' /* not an integer literal; B.aid holds REALs */],
   ['SELECT * FROM A INNER JOIN B ON A.id = B.aid WHERE B.aid <> 7', 'native'],
+  // several bc conjuncts, each its own condition: Null, and errors (text in X.extInt read as a number) exclude the row
+  ['SELECT * FROM A WHERE txt = "a" AND n > 0', 'bc'],
+  ['SELECT * FROM A WHERE txt <> "b" AND n Is Not Null AND txt Like "a*"', 'bc'],
+  ['SELECT * FROM X WHERE t = "a" AND extInt > 5', 'bc'],
+  ['SELECT * FROM X WHERE extInt * 2 > 10 AND t Is Not Null', 'bc'],
 ];
 it.each(CASES)('same rows with and without fast path: %s (%s)', (sql, path, values) => {
   expect(/ = /.test(compiled(sql, true, values).sql)).toBe(path === 'native');
@@ -102,7 +108,7 @@ it('a scalar subquery that can fail the statement keeps the whole condition in b
 it('native SQL is emitted only under the invariant', () => {
   expect(compiled('SELECT * FROM A INNER JOIN B ON A.id = B.aid').sql).toMatch(/ON "a0"\."id" = "a1"\."aid"/);
   expect(compiled('SELECT * FROM A WHERE txt = "x"').sql).not.toMatch(/"txt" = /);
-  expect(compiled('SELECT * FROM X INNER JOIN B ON X.extInt = B.aid').sql).toMatch(/bc_truth/);
+  expect(compiled('SELECT * FROM X INNER JOIN B ON X.extInt = B.aid').sql).toMatch(/ON bc_(truth|cmp)\(/);
   expect(compiled('SELECT * FROM A WHERE id = 7 Or id = 9').sql).not.toMatch(/"id" = \?/); // Or: no split
   // beyond the brief
   expect(compiled('SELECT * FROM A WHERE id = 7 AND txt Like "a*"').sql).toMatch(/WHERE "a0"\."id" = \? AND bc_truth\(/);

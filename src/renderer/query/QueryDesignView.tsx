@@ -4,16 +4,17 @@
 // (RowSourceBuilder : Contenu d'une liste de choix, Source d'un formulaire ou d'un état), qui rend un SQL au lieu d'enregistrer une requête. Le mode SQL fait partie du
 // Mode Création (DocMode inchangé) : la grille s'y écrit en SQL, le texte revient dans la grille s'il se lit et si elle peut le
 // montrer (sinon, comme dans Access, la requête reste en mode SQL), et l'enregistrement y garde le texte normalisé.
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Dispatch } from 'react';
+// Une requête SQL direct (C6 R10) n'a que le mode SQL : son texte, jamais lu, est enregistré tel que tapé, avec sa connexion.
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { Relation } from '../../shared/api';
+import { isServerKind, type Relation } from '../../shared/api';
 import { ExprSyntaxError, type ExprErrorCode, type Span } from '../../shared/expr/ast';
 import type { DisplayContext } from '../../shared/expr/localize';
 import { sameName } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { isSelectBody, type ParamDecl, type Query } from '../../shared/query/ast';
-import { invalidQueryError } from '../../shared/query/definition';
+import { invalidQueryError, passThroughOf } from '../../shared/query/definition';
 import { printSql } from '../../shared/query/print';
 import { fromQbe, oneLine, toQbe, type IsField, type QbeDesign, type QbeKind } from '../../shared/query/qbe';
 import { parseSql } from '../../shared/query/sql-parser';
@@ -21,18 +22,21 @@ import { api } from '../bridge';
 import { autoLayout, type Point } from '../relations/relations-layout';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { AppDispatch } from '../shell/nav-menu';
-import type { DocTab } from '../state/app-state';
+import type { DocMode, DocTab } from '../state/app-state';
 import { useErrorDialog, useModal } from '../shell/Modal';
 import { ModalTab, shellDispatch } from '../shell/modal-tab';
+import { currentSettings } from '../settings-store';
 import { nameErrorKey } from '../shell/NavPane';
 import { MODAL_SCOPE, modeGuard, registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { Splitter } from '../shell/Splitter';
 import { SPLIT_DEFAULT, loadRatio, pxToRatio, ratioToPx, saveRatio } from '../shell/splitter-model';
+import { unsavedRunSql } from './unsaved-run';
 import { JoinDialog } from './JoinDialog';
 import { QbeGrid } from './QbeGrid';
-import { designProblem, editable, pruneInvalid, emptyQbe, fieldEntry, outputAll, qbeReducer, type GridColumn, type QbeAction } from './qbe-edit';
+import { designProblem, editable, pruneInvalid, emptyQbe, fieldEntry, joinKey, outputAll, qbeReducer, type GridColumn, type QbeAction } from './qbe-edit';
 import { ParametersDialog } from './ParametersDialog';
-import { QueryPropertiesDialog, TopValuesDialog, type QueryProps } from './QueryProperties';
+import { serverLabel, type Server } from './pass-through-servers';
+import { PassThroughPropertiesDialog, QueryPropertiesPanel, TopValuesDialog, type PassThroughDraft } from './QueryProperties';
 import { QueryRunView } from './QueryRunView';
 import { runActionFlow } from './run-action';
 import { SqlView } from './SqlView';
@@ -43,13 +47,23 @@ import './query-design.css';
 // ---------- The catalog: tables, queries, relations, and the fields of each source shown ----------
 
 type Fields = PaneBox['fields'];
-interface Catalog { tables: string[]; queries: string[]; relations: Relation[]; fields: Map<string, Fields> }
+/** `queries`: the saved queries but the pass-throughs (`passThroughs`: never a source, R9; describing one would run it). */
+interface Catalog { tables: string[]; queries: string[]; passThroughs: string[]; relations: Relation[]; fields: Map<string, Fields> }
 
-/** A source's fields: a table's design (its key marked), else a saved query's output; none when it cannot be read. */
-async function readFields(name: string, tables: string[]): Promise<Fields> {
+/** The pass-throughs among `names` (one definition read each; an unreadable one is not). */
+async function passThroughNames(names: string[]): Promise<string[]> {
+  const pt = await Promise.all(names.map((n) => api.objects.get('query', n).then((o) => passThroughOf(o.definition) !== null, () => false)));
+  return names.filter((_, i) => pt[i]);
+}
+
+/** A source's fields: a table's design (its key marked), else a saved query's output (never a key); each with its join key
+ *  (AutoJoin, O3 R6); none when it cannot be read, or for a pass-through (its text is never sent from Design view; the save
+ *  names the refusal). */
+async function readFields(name: string, tables: string[], passThroughs: string[]): Promise<Fields> {
   try {
-    if (tables.some((n) => sameName(n, name))) return (await api.tables.design(name)).fields.map((f) => ({ name: f.name, key: !!f.props.primaryKey }));
-    return (await api.sources.describe({ kind: 'query', name })).fields.map((f) => ({ name: f.name, key: false }));
+    if (tables.some((n) => sameName(n, name))) return (await api.tables.design(name)).fields.map((f) => ({ name: f.name, key: !!f.props.primaryKey, join: joinKey(f.props) }));
+    if (passThroughs.some((n) => sameName(n, name))) return [];
+    return (await api.sources.describe({ kind: 'query', name })).fields.map((f) => ({ name: f.name, key: false, ...(f.props && { join: joinKey(f.props) }) }));
   } catch {
     return []; // a missing source: its box is empty, saving or running the query names it
   }
@@ -57,10 +71,13 @@ async function readFields(name: string, tables: string[]): Promise<Fields> {
 
 /** Lists read again with `token`; `ensure` reads the fields of new sources (and resolves once they are known). */
 function useCatalog(token: number) {
-  const [catalog, setCatalog] = useState<Catalog>({ tables: [], queries: [], relations: [], fields: new Map() });
+  const [catalog, setCatalog] = useState<Catalog>({ tables: [], queries: [], passThroughs: [], relations: [], fields: new Map() });
   const cache = useRef({ lists: null as Promise<Omit<Catalog, 'fields'>> | null, fields: new Map<string, Fields>() });
   const lists = () => (cache.current.lists ??= Promise.all([api.tables.list(), api.objects.list('query'), api.relations.list()])
-    .then(([t, q, r]) => ({ tables: t.map((x) => x.name), queries: q.map((x) => x.name), relations: r })));
+    .then(async ([t, q, r]) => {
+      const passThroughs = await passThroughNames(q.map((x) => x.name));
+      return { tables: t.map((x) => x.name), queries: q.map((x) => x.name).filter((n) => !passThroughs.includes(n)), passThroughs, relations: r };
+    }));
   // A new token (a save, a change elsewhere): the lists and the fields already shown are read again; until then the
   // previous ones stay (the boxes never go empty, the Table row and the parameter rule keep working).
   useEffect(() => {
@@ -72,12 +89,17 @@ function useCatalog(token: number) {
     const c = cache.current;
     const l = await lists();
     const missing = [...new Set(names)].filter((n) => !c.fields.has(n));
-    for (const [n, f] of await Promise.all(missing.map(async (n) => [n, await readFields(n, l.tables)] as const))) c.fields.set(n, f);
+    for (const [n, f] of await Promise.all(missing.map(async (n) => [n, await readFields(n, l.tables, l.passThroughs)] as const))) c.fields.set(n, f);
     if ((missing.length || refresh) && c === cache.current) setCatalog({ ...l, fields: new Map(c.fields) });
     return c.fields;
   };
   return { catalog, ensure };
 }
+
+/** A source's fields in `fields`, its name matched as Access does (none when unknown). */
+const fieldsIn = (fields: Map<string, Fields>, name: string): Fields => fields.get(name) ?? [...fields].find(([n]) => sameName(n, name))?.[1] ?? [];
+/** A new query's grid (O3 R5): Output All Fields from the Options. */
+const newQbe = (): QbeDesign => (currentSettings().outputAllFields ? qbeReducer(emptyQbe(), { type: 'setProps', outputAll: true }) : emptyQbe());
 
 const isFieldOf = (fields: Map<string, Fields>): IsField => (source, field) => {
   const f = fields.get(source);
@@ -136,7 +158,7 @@ function gridSql(m: Model, isField: IsField): { sql: string; q: Query } | { erro
 // ---------- The editor: table pane, splitter, grid, Show Table and Join Properties ----------
 
 interface EditorProps {
-  model: Model; set: Dispatch<ModelAction>; catalog: Catalog; ensure(names: string[]): Promise<unknown>; readOnly: boolean; ctx: DisplayContext;
+  model: Model; set: Dispatch<ModelAction>; catalog: Catalog; ensure(names: string[]): Promise<Map<string, Fields>>; readOnly: boolean; ctx: DisplayContext;
   /** The query being designed (left out of Show Table's queries: a query cannot use itself). */
   self: string | null;
   showTable: boolean; setShowTable(on: boolean): void; selected: number; setSelected(col: number): void;
@@ -144,14 +166,16 @@ interface EditorProps {
   tableRow?: boolean;
   /** The pane's height in px, null for its CSS default (the Query Builder dialog). */
   split: { px: number; set(px: number): void; reset(): void; min: number; max: number; total: number } | null;
+  /** The query's property sheet, on the right of the grid (null: hidden). */
+  sheet?: ReactNode;
 }
 
-function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable, setShowTable, selected, setSelected, split, tableRow = true }: EditorProps) {
+function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable, setShowTable, selected, setSelected, split, tableRow = true, sheet }: EditorProps) {
   const { t } = useTranslation();
   const pane = useRef<HTMLDivElement>(null);
   const [joinEdit, setJoinEdit] = useState<number | null>(null);
   const d = model.design;
-  const fieldsOf = (name: string): Fields => catalog.fields.get(name) ?? [...catalog.fields].find(([n]) => sameName(n, name))?.[1] ?? [];
+  const fieldsOf = (name: string): Fields => fieldsIn(catalog.fields, name);
   const boxes: PaneBox[] = d.tables.map((x) => ({ alias: aliasOf(x), fields: fieldsOf(x.name) }));
 
   // New boxes take a free place; the fields of new sources (and of an Append's target) are read.
@@ -164,7 +188,18 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
     void ensure([...d.tables.map((x) => x.name), ...(d.kind === 'append' && d.target ? [d.target] : [])]);
   }, [d.tables, d.kind, d.target]);
 
-  const add = (names: string[]) => { for (const name of names) set({ type: 'addTable', name, relations: catalog.relations }); };
+  /** Show Table's Add: the fields known first (AutoJoin, at each table added: O3 R1, R6). */
+  const addChain = useRef<Promise<void>>(Promise.resolve()); // quick Adds apply in click order
+  const added = useRef<string[]>([]); // tables added by earlier Adds, possibly not yet in d.tables
+  const add = (names: string[]) => {
+    addChain.current = addChain.current.then(async () => {
+      const fields = await ensure([...d.tables.map((x) => x.name), ...added.current, ...names]).catch(() => new Map<string, Fields>());
+      const autoJoin = currentSettings().autoJoin ? (n: string) => fieldsIn(fields, n) : undefined;
+      for (const name of names) set({ type: 'addTable', name, relations: catalog.relations, autoJoin });
+      added.current.push(...names);
+    });
+    return addChain.current;
+  };
   /** As Access fills the Table row from the Field cell (an expression has none). */
   const onField = (col: number, canonical: string) => {
     const e = canonical ? fieldEntry(canonical, boxes.map((b) => ({ alias: b.alias, fields: b.fields.map((f) => f.name) })), d.columns[col]?.table) : { field: '' };
@@ -194,9 +229,10 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
         onDropField={(col, alias, field) => set({ type: 'addField', table: alias, field, at: col })}
         onMoveColumn={(from, to) => { set({ type: 'moveColumn', from, to }); setSelected(to); }} />
       </div>
+      {sheet}
       {showTable && (
         <ShowTableDialog tables={catalog.tables} queries={catalog.queries.filter((n) => self === null || !sameName(n, self))}
-          onAdd={add} onClose={() => setShowTable(false)} />
+          onAdd={(names) => void add(names)} onClose={() => setShowTable(false)} />
       )}
       {join && (
         <JoinDialog join={join} onCancel={() => setJoinEdit(null)}
@@ -275,14 +311,18 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
   const showError = useErrorDialog();
   const ctx = useDisplayContext();
   const startDesign = builder?.start.design;
-  const [model, set] = useReducer(modelReducer, undefined, () => emptyModel(startDesign ? editable(startDesign) : undefined));
+  const [model, set] = useReducer(modelReducer, undefined, () => emptyModel(startDesign ? editable(startDesign)
+    : tab.isNew && !builder && sqlRequested(tab.name) < 0 ? newQbe() : undefined));
   const { catalog, ensure } = useCatalog(tab.reloadToken);
   const [state, setState] = useState<{ original: string | null; extra: Record<string, unknown> } | null>(
     tab.isNew ? { original: null, extra: {} } : null);
   const [view, setView] = useState<'grid' | 'sql'>(builder && !startDesign ? 'sql' : 'grid');
   const [sql, setSql] = useState(builder && !startDesign ? builder.start.sql : '');
   const [sqlError, setSqlError] = useState<SqlError | null>(null);
-  const [tableRow, setTableRow] = useState(true);
+  const [sheet, setSheet] = useState(false); // the query's property sheet, on the right of the grid (F4)
+  /** A pass-through (C6 R10): its properties; SQL view only, its text never read. */
+  const [passThrough, setPassThrough] = useState<PassThroughDraft | null>(null);
+  const [tableRow, setTableRow] = useState(() => currentSettings().showTableNames); // O3 R5, at each opening
   // as in Access, on a new query (not one opened in SQL view); the builder, on an empty Record Source
   const [showTable, setShowTable] = useState(() => builder ? !!startDesign && !startDesign.tables.length
     : !!tab.isNew && !readOnly && sqlRequested(tab.name) < 0);
@@ -308,13 +348,13 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     return () => ro.disconnect();
   }, [state === null, view]);
   const { parsed, gridless } = useMemo(() => {
-    const r = view === 'sql' ? readSql(sql) : null;
+    const r = view === 'sql' && !passThrough ? readSql(sql) : null;
     const q = r && 'q' in r ? r.q : null;
     // only SQL view can show this text (UNION, a derived table…): Design View is off, as in Access
     return { parsed: q, gridless: q !== null && toQbe(q) === null };
-  }, [view, sql]);
-  const live = useRef({ model, state, tab, readOnly, catalog, view, sql });
-  live.current = { model, state, tab, readOnly, catalog, view, sql };
+  }, [view, sql, passThrough]);
+  const live = useRef({ model, state, tab, readOnly, catalog, view, sql, passThrough });
+  live.current = { model, state, tab, readOnly, catalog, view, sql, passThrough };
 
   // Opening: the stored SQL read back into the grid, with the catalog (a parameter shown as a column stays bare); what the
   // grid cannot show opens in SQL view.
@@ -331,14 +371,16 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     (async () => {
       const got = await api.objects.get('query', tab.name);
       const def = got.definition as { sql: string; layout?: { tables: Record<string, Point> } } & Record<string, unknown>;
-      const { formatVersion: _v, sql: text, layout, ...extra } = def;
-      const r = readSql(text);
+      const { formatVersion: _v, sql: text, layout, passThrough: _pt, ...extra } = def;
+      const pt = passThroughOf(def);
+      const r = pt ? null : readSql(text);
       const first = r && 'q' in r ? toQbe(r.q) : null;
       const fields = first ? await ensure(first.tables.map((x) => x.name)) : new Map();
       const d = first && r && 'q' in r ? toQbe(r.q, isFieldOf(fields)) : null;
       if (!current) return;
       set({ type: 'load', model: emptyModel(d ? editable(d) : emptyQbe(), { ...layout?.tables }) });
       setState({ original: got.name, extra });
+      setPassThrough(pt);
       if (!d || live.current.view === 'sql') { // stored SQL the grid cannot show (or that no longer parses: written elsewhere)
         setSql(text);
         setSqlError(r && 'error' in r ? r.error : null);
@@ -366,10 +408,15 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     await new Promise((r) => setTimeout(r));
   };
 
-  /** The text the save stores: the grid's SQL, or in SQL view the normalised text (printSql(parseSql(text))); null when it
-   *  cannot be saved (the reason is shown). */
+  /** The text the save stores: the grid's SQL, or in SQL view the normalised text (printSql(parseSql(text))), a pass-through's as
+   *  typed; null when it cannot be saved (the reason is shown). */
   const savedSql = async (): Promise<string | null> => {
-    const { model: m, catalog: cat, view: v, sql: text } = live.current;
+    const { model: m, catalog: cat, view: v, sql: text, passThrough: pt } = live.current;
+    if (pt) {
+      if (!text.trim()) { await message('query.passThrough.empty'); return null; }
+      if (!pt.params) { await message('query.passThrough.noConnection'); return null; }
+      return text;
+    }
     if (v === 'sql') {
       const r = readSql(text);
       if (!r || 'error' in r) { setSqlError({ ...(r ? r.error : EMPTY) }); return null; }
@@ -429,7 +476,9 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
       const isNew = s.original === null;
       let name = s.original ?? (await askName(doc.name));
       if (name === null) return false;
-      const definition = { ...s.extra, formatVersion: '1.0', sql: text, layout: { tables: m.positions } };
+      const pt = live.current.passThrough;
+      const definition = pt ? { ...s.extra, formatVersion: '2.0', sql: text, passThrough: pt }
+        : { ...s.extra, formatVersion: '1.0', sql: text, layout: { tables: m.positions } };
       for (;;) {
         const res = await api.objects.save('query', name, definition, s.original);
         if (res.ok) break;
@@ -465,16 +514,26 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
   };
 
   /** Before the view goes (Access): a change of mode needs the save; a close offers to drop the edits. */
-  const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
+  const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
     if (busy.current) return false;
     await flush();
     const { model: m, tab: doc, readOnly: ro } = live.current;
+    if (!builder && reason === 'mode' && !live.current.passThrough) { // a new or modified query runs as it stands, unsaved (Access); its design stays behind (DocumentView)
+      if (target === 'design') return true;
+      unsavedRunSql.delete(doc.id);
+      if (doc.isNew || m.dirty) {
+        const text = await savedSql();
+        if (text === null) return false;
+        unsavedRunSql.set(doc.id, text);
+      }
+      return true;
+    }
     if (builder) { // its run needs no save; closing it changed asks to update the property (Access)
       if (reason === 'mode' || !m.dirty) return true;
       const r = await modal.confirm({ titleKey: 'fieldProp.queryBuilder', messageKey: 'query.builderSave', buttons: ['yes', 'no', 'cancel'] });
       return r === 'no' || (r === 'yes' && (await save()));
     }
-    if (ro || (!m.dirty && !(reason === 'mode' && doc.isNew))) return true;
+    if (ro || (!m.dirty && !doc.isNew)) return true; // a new query always asks (Access)
     if (reason === 'mode') {
       const r = await modal.confirm({ titleKey: 'query.saveFirstTitle', messageKey: 'query.mustSaveFirst', params: { name: doc.name }, buttons: ['yes', 'no'] });
       return r === 'yes' && (await save());
@@ -498,38 +557,73 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
     set({ type: 'setKind', kind, target });
   };
 
-  /** Grid -> SQL view: printSql(fromQbe(design)); an empty grid gives an empty text. A grid that cannot be saved stays. */
-  const toSql = async () => {
-    if (live.current.view === 'sql' || busy.current) return;
+  /** Grid -> SQL view: printSql(fromQbe(design)); an empty grid gives an empty text. A grid that cannot be saved stays (false). */
+  const toSql = async (): Promise<boolean> => {
+    if (live.current.view === 'sql') return true;
+    if (busy.current) return false;
     await flush();
     const { model: m, catalog: cat } = live.current;
-    if (Object.keys(m.invalid).length) { await message('query.invalidCells', { detail: invalidLines(m, t).join('\n') }); return; }
+    if (Object.keys(m.invalid).length) { await message('query.invalidCells', { detail: invalidLines(m, t).join('\n') }); return false; }
     let text = '';
     if (m.design.tables.length || m.design.columns.some((c) => c.field.trim())) {
       const r = gridSql(m, isFieldOf(cat.fields));
-      if ('error' in r) { await showError(r.error); return; }
+      if ('error' in r) { await showError(r.error); return false; }
       text = r.sql;
     }
     setShowTable(false);
     setSql(text);
     setSqlError(null);
     setView('sql');
+    return true;
+  };
+
+  /** Query Type › SQL direct (C6 R10): the grid's SQL or the SQL view's text becomes a pass-through's, kept as text; its connection
+   *  the first linked server's (Access's default timeout), else none; Returns Records Yes. Its property sheet opens at once. */
+  const toPassThrough = async () => {
+    if (live.current.passThrough || !(await toSql())) return;
+    const link = (await api.links.list()).find((l) => l.params && isServerKind(l.kind));
+    const pt: PassThroughDraft = link?.params && isServerKind(link.kind)
+      ? { kind: link.kind, params: { ...link.params, timeout: 60 }, returnsRecords: true } : { kind: 'postgresql', params: null, returnsRecords: true };
+    setPassThrough(pt);
+    setSqlError(null);
+    set({ type: 'touch' });
+    await passThroughSheet(pt);
+  };
+  /** Query Type › Select from a pass-through: only when its text reads as Access SQL (else its error, it stays a pass-through). */
+  const fromPassThrough = () => {
+    const r = readSql(live.current.sql);
+    if (!r || 'error' in r) { setSqlError({ ...(r ? r.error : EMPTY) }); return; }
+    setPassThrough(null);
+    set({ type: 'touch' });
   };
 
   /** SQL view -> grid: a text that does not parse shows its error (its range selected) and stays; one the grid cannot show
    *  stays too (Design View is off). The boxes keep their places. */
-  const toGrid = async () => {
+  const toGrid = async (): Promise<boolean> => {
     const { view: v, sql: text, model: m } = live.current;
-    if (v !== 'sql') return;
+    if (v !== 'sql') return false;
     const r = readSql(text);
-    if (r && 'error' in r) { setSqlError({ ...r.error }); return; }
+    if (r && 'error' in r) { setSqlError({ ...r.error }); return false; }
     const first = r ? toQbe(r.q) : emptyQbe();
-    if (!first) return;
+    if (!first) return false;
     const d = r ? toQbe(r.q, isFieldOf(await ensure(first.tables.map((x) => x.name)))) ?? first : first;
     set({ type: 'load', model: { ...emptyModel(editable(d), m.positions), dirty: m.dirty } });
     setSqlError(null);
     setView('grid');
+    return true;
   };
+  /** Query Type from SQL view (as Access): back to the grid, then the kind once the grid is there (an effect, the state is async). */
+  const pendingKind = useRef<QbeKind | null>(null);
+  const kindFromSql = async (k: QbeKind) => {
+    pendingKind.current = k; // before the switch: the effect may run as soon as the view changes
+    if (!(await toGrid())) pendingKind.current = null;
+  };
+  useEffect(() => {
+    const k = pendingKind.current;
+    if (view !== 'grid' || !k) return;
+    pendingKind.current = null;
+    void cmds.current.setKind(k);
+  }, [view]);
 
   /** Query Parameters: the grid's declarations, or in SQL view the PARAMETERS clause of the text (which must parse). */
   const parameters = async () => {
@@ -551,23 +645,32 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
       { titleKey: 'query.props.top' });
     if (got) set({ type: 'setProps', top: got.top });
   };
-  const propertySheet = async () => {
-    const { state: s, model: m } = live.current;
+  /** The description, read when first shown. */
+  const readDescription = async () => {
+    const s = live.current.state;
     if (!description.current) {
       const o = s?.original ? (await api.objects.list('query')).find((x) => sameName(x.name, s.original!)) : undefined;
       description.current = { stored: o?.description ?? '', value: o?.description ?? '' };
     }
-    const desc = description.current;
-    const d = m.design;
-    const got = await modal.custom<QueryProps>((close) => (
-      <QueryPropertiesDialog kind={d.kind} ctx={ctx!} initial={{ description: desc.value, outputAll: outputAll(d), distinct: d.distinct, top: d.top ?? null, headings: d.headings ?? [] }} onClose={close} />
+    return description.current;
+  };
+  /** A pass-through's property sheet (C6 R10) on `draft`; the servers offered: the front-end's server links' (serverOptions). */
+  const passThroughSheet = async (draft: PassThroughDraft) => {
+    const desc = await readDescription();
+    const servers = (await api.links.list()).flatMap((l): Server[] => (l.params && isServerKind(l.kind) ? [{ kind: l.kind, params: l.params }] : []));
+    const got = await modal.custom<{ description: string; passThrough: PassThroughDraft }>((close, retitle) => (
+      <PassThroughPropertiesDialog initial={{ description: desc.value, passThrough: draft }} servers={servers} retitle={retitle} onClose={close} />
     ), { titleKey: 'query.props.title' });
     if (!got) return;
     if (got.description !== desc.value) { desc.value = got.description; set({ type: 'touch' }); }
-    if (JSON.stringify([got.outputAll, got.distinct, got.top]) !== JSON.stringify([outputAll(d), d.distinct, d.top ?? null])) {
-      set({ type: 'setProps', top: got.top, distinct: got.distinct, outputAll: got.outputAll });
-    }
-    if (JSON.stringify(got.headings) !== JSON.stringify(d.headings ?? [])) set({ type: 'setProps', headings: got.headings });
+    if (JSON.stringify(got.passThrough) !== JSON.stringify(draft)) { setPassThrough(got.passThrough); set({ type: 'touch' }); }
+  };
+  /** The property sheet (F4): a pass-through's in its dialog (C6 R10), a query's on the right of the grid, as in Access. */
+  const propertySheet = async () => {
+    const { passThrough: pt } = live.current;
+    if (pt) return passThroughSheet(pt);
+    if (!sheet) await readDescription(); // the panel shows the stored description when it opens
+    setSheet((v) => !v);
   };
 
   /** Run of an action query (Task 10): the grid's SQL, or the SQL view's text, as it stands (Access runs the design, saved
@@ -595,19 +698,36 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
   }, [requests, state === null, tab.name]);
 
   const kind = model.design.kind;
-  // a crosstab has a datasheet (read-only, B4 R9), never an action query's run
-  const runnable = view === 'sql'
+  const isPassThrough = passThrough !== null;
+  // a crosstab has a datasheet (read-only, B4 R9), never an action query's run; a pass-through runs as saved (R10): its Run view
+  // (QueryRunView) runs Returns Records No as an action
+  const runnable = isPassThrough || (view === 'sql'
     ? parsed !== null && isSelectBody(parsed)
-    : kind === 'select' || kind === 'crosstab';
-  const action = view === 'sql' ? parsed !== null && !runnable : !runnable;
+    : kind === 'select' || kind === 'crosstab');
+  const action = !isPassThrough && (view === 'sql' ? parsed !== null && !runnable : !runnable);
   const topKind = ['select', 'makeTable', 'append'].includes(kind);
-  const cmds = useRef({ save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun });
-  cmds.current = { save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun };
+  const cmds = useRef({ kindFromSql, save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun, toPassThrough, fromPassThrough });
+  cmds.current = { kindFromSql, save, leave, setKind, toSql, toGrid, parameters, returnValues, propertySheet, runAction, builderSaveAs, builderRun, toPassThrough, fromPassThrough };
   useEffect(() => {
     const writable = (fn: () => unknown) => () => {
       if (!live.current.readOnly && live.current.state && !busy.current) void fn();
     };
     const col = () => Math.min(selected, live.current.model.design.columns.length);
+    if (isPassThrough) { // SQL view only (R10): Select back, the property sheet, Run (and Datasheet, the shell's) of the saved query, Save
+      const offCommands = registerCommands(tab.id, {
+        save: writable(() => cmds.current.save()),
+        runQuery: () => { void dispatch({ type: 'setMode', id: tab.id, mode: 'run' }); },
+        viewSql: () => {},
+        passThroughQuery: () => {},
+        selectQuery: writable(() => cmds.current.fromPassThrough()),
+        propertySheet: writable(() => cmds.current.propertySheet()),
+      });
+      const offStates = registerCommandStates(tab.id, {
+        viewSql: { active: true }, viewDesign: { active: false, enabled: false }, passThroughQuery: { active: true }, selectQuery: { active: false },
+      });
+      const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
+      return () => { offCommands(); offStates(); offGuard(); };
+    }
     const grid = view === 'grid' ? {
       // a Row Source or Record Source is never a crosstab's grid (B4 R12)
       ...Object.fromEntries(KIND_COMMANDS.filter(([, k]) => !builder || k !== 'crosstab').map(([id, k]) => [id, writable(() => cmds.current.setKind(k))])),
@@ -626,6 +746,9 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
       unionQuery: writable(() => cmds.current.toSql()),
       // the Expression Builder of the expression cell last focused, else the selected column's Field
       builder: writable(() => root.current?.querySelector<HTMLButtonElement>(`[data-testid="${lastExpr.current ?? `qbe-cell-field-${col()}`}-build"]`)?.click()),
+    } : view === 'sql' && !gridless && !builder ? {
+      // SQL view: a Query Type button goes back to the grid (the text must parse) and sets the kind there
+      ...Object.fromEntries(KIND_COMMANDS.map(([id, k]) => [id, writable(() => cmds.current.kindFromSql(k))])),
     } : {};
     const offCommands = registerCommands(tab.id, {
       save: writable(() => cmds.current.save()),
@@ -639,26 +762,36 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
       },
       ...(view === 'sql' ? { viewDesign: () => { if (live.current.state && !busy.current) void cmds.current.toGrid(); } } : {}),
       parameters: writable(() => cmds.current.parameters()),
+      ...(builder ? {} : { passThroughQuery: writable(() => cmds.current.toPassThrough()) }),
       ...grid,
     });
     const offStates = registerCommandStates(tab.id, view === 'sql'
       ? { viewSql: { active: true }, viewDesign: { active: false, enabled: !gridless } }
       : { tableNames: { active: tableRow }, ...Object.fromEntries(KIND_COMMANDS.map(([id, k]) => [id, { active: k === kind }])) });
-    const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
+    const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { offCommands(); offStates(); offGuard(); };
-  }, [tab.id, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind]);
+  }, [tab.id, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind, isPassThrough]);
 
   if (!state || !ctx) return <div className="qd" ref={root} aria-busy />;
   if (view === 'sql') {
     return (
       <div className="qd" ref={root} aria-busy={saving}>
-        <SqlView sql={sql} error={sqlError} readOnly={readOnly || saving} notice={gridless ? t('query.sqlOnly') : null}
+        <SqlView sql={sql} error={sqlError} readOnly={readOnly || saving}
+          notice={passThrough ? (passThrough.params ? t('query.passThrough.notice', { label: serverLabel(passThrough.params) }) : t('query.passThrough.noticeNoServer'))
+            : gridless ? t('query.sqlOnly') : null}
           onChange={(text) => { setSql(text); setSqlError(null); set({ type: 'touch' }); }} />
       </div>
     );
   }
   const panePx = ratioToPx(1 - ratio, avail, PANE_MIN, GRID_MIN); // the stored ratio is the grid's share (default 0.6: tables 40 %)
   const setPane = (px: number) => { const r = 1 - pxToRatio(px, avail); setRatio(r); saveRatio(SPLIT_KEY, r); };
+  const d = model.design;
+  const propsPanel = sheet ? (
+    <QueryPropertiesPanel kind={d.kind} ctx={ctx} description={description.current?.value ?? ''} disabled={readOnly || saving}
+      props={{ outputAll: outputAll(d), distinct: d.distinct, top: d.top ?? null, headings: d.headings ?? [] }}
+      onDescription={(v) => { description.current = { stored: description.current?.stored ?? '', value: v }; set({ type: 'touch' }); }}
+      onProps={(p) => set({ type: 'setProps', ...p })} />
+  ) : null;
   return (
     <div className="qd" ref={root} aria-busy={saving}
       onFocus={(e) => {
@@ -668,7 +801,7 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
         if (row) lastRow.current = Number(row[1]);
       }}>
       <QbeEditor model={model} set={set} catalog={catalog} ensure={ensure} readOnly={readOnly || saving} ctx={ctx} self={state.original}
-        showTable={showTable} setShowTable={setShowTable} selected={selected} setSelected={setSelected} tableRow={tableRow}
+        showTable={showTable} setShowTable={setShowTable} selected={selected} setSelected={setSelected} tableRow={tableRow} sheet={propsPanel}
         split={avail > 0 ? { px: panePx, set: setPane, reset: () => { setRatio(SPLIT_DEFAULT); saveRatio(SPLIT_KEY, SPLIT_DEFAULT); }, min: PANE_MIN, max: avail - GRID_MIN, total: avail } : null} />
     </div>
   );
@@ -681,7 +814,8 @@ const BUILDER_RUN_SCOPE = `${MODAL_SCOPE}builder-run`;
 
 /** The design the builder opens on: an empty one, the table named, or the SQL read back (null when the grid cannot show it). */
 async function builderDesign(text: string, table: string | undefined, ensure: (names: string[]) => Promise<Map<string, Fields>>): Promise<QbeDesign | null> {
-  if (!text.trim() || table) return { ...emptyQbe(), tables: table ? [{ name: table }] : [] };
+  if (!text.trim()) return newQbe();
+  if (table) return { ...emptyQbe(), tables: [{ name: table }] };
   const r = readSql(text);
   // a crosstab is no Row Source (B4 R12): SQL view only, where running or using it says why
   const first = r && 'q' in r && r.q.body.k !== 'crosstab' ? toQbe(r.q) : null;

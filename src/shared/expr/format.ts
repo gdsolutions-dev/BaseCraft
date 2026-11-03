@@ -30,7 +30,7 @@ export function namedFormatId(f: string): NamedFormat | undefined {
   return [...NUMBERS, ...DATES, ...BOOLS].find((n) => n.toLowerCase() === key);
 }
 
-export interface FormatCtx { locale: string; lang: 'fr' | 'en'; decimalPlaces?: 'auto' | number }
+export interface FormatCtx { locale: string; lang: 'fr' | 'en'; decimalPlaces?: 'auto' | number; fourDigitYear?: boolean }
 
 // ---- Analyse d'un format personnalisé : sections séparées par ';', littéraux "…" et \x ----
 
@@ -110,7 +110,7 @@ function dateParts(serial: number) {
 }
 const two = (n: number): string => String(n).padStart(2, '0');
 
-function customDate(serial: number, sec: Tok[], locale: string): string {
+function customDate(serial: number, sec: Tok[], locale: string, year4 = false): string {
   const p = dateParts(serial);
   // Jetons (lettres identiques consécutives) et littéraux ; une longueur inconnue (y, yyy, ddddd) est refusée.
   const items: ({ tok: string } | { lit: string })[] = [];
@@ -136,7 +136,7 @@ function customDate(serial: number, sec: Tok[], locale: string): string {
     return ({
       d: String(p.d), dd: two(p.d), ddd: p.intl(locale, { weekday: 'short' }), dddd: p.intl(locale, { weekday: 'long' }),
       m: String(p.mo), mm: two(p.mo), mmm: p.intl(locale, { month: 'short' }), mmmm: p.intl(locale, { month: 'long' }),
-      yy: two(p.y % 100), yyyy: String(p.y).padStart(4, '0'),
+      yy: year4 ? String(p.y).padStart(4, '0') : two(p.y % 100), yyyy: String(p.y).padStart(4, '0'),
       h: String(p.h), hh: two(p.h), n: String(p.mi), nn: two(p.mi), s: String(p.s), ss: two(p.s),
     } as Record<string, string>)[tok];
   }).join('');
@@ -206,7 +206,7 @@ function format(v: Value, f: string | undefined, ctx: FormatCtx): string {
   if (v.t === 'empty' && !digits) return '';
   if (v.t === 'date' ? hasDateTokens(secs[0]) && !hasDigits(secs[0]) : !digits && hasDateTokens(secs[0])) {
     checkLetters(secs.slice(0, 1), /[dmyhns]/i);
-    return customDate(n, secs[0], ctx.locale);
+    return customDate(n, secs[0], ctx.locale, ctx.fourDigitYear);
   }
   if (!digits) return plain(v, ctx);
   checkLetters(secs, NO_LETTER);

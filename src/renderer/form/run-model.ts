@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import type { SqlValue } from '../../shared/coerce';
 import { colorCss, type ColorValue } from '../../shared/design/colors';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
+import { ownLabel } from '../../shared/design/layout';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
 import { sameName } from '../../shared/field-types';
 import { EMBEDDED_FONTS, resolveFont } from '../../shared/fonts';
@@ -31,6 +32,12 @@ export function tabSequence(section: SectionDef, pages: Record<string, number> =
   const ordered = (list: ControlDef[]): string[] => list.map((c, i) => ({ c, i })).filter((x) => stops(x.c)).sort((a, b) => key(a.c) - key(b.c) || a.i - b.i)
     .flatMap(({ c }) => (c.kind === 'tabControl' ? [c.name, ...ordered((c.children ?? []).filter((k) => pageOf(k) === (pages[c.name] ?? 0)))] : [c.name]));
   return ordered(section.controls);
+}
+
+/** The labels a layout detached from their control, in the same section (Stacked), by label name -> control name: each stays linked
+ *  to its control (its accessible name, a click focuses it) and is hidden with it. Tabular header labels sit in another section. */
+export function layoutLabels(doc: DesignDoc): Record<string, string> {   // fromEntries: own keys only, even for a label named __proto__
+  return Object.fromEntries(doc.sections.flatMap((s) => s.controls.flatMap((c) => { const l = ownLabel(doc, c.name); return l ? [[l.name, c.name]] : []; })));
 }
 
 /** Each error under the first control bound to its field (never an unbound control of that name: its own errors are the

@@ -64,7 +64,7 @@ O objetivo: um bom usuário de Excel, sem escrever código, monta em uma tarde u
 - Tabelas vinculadas: vincule as tabelas de outro arquivo BaseCraft ou de um arquivo SQLite, Gerenciador de Tabelas Vinculadas
 - Salvar Como, Compactar e Reparar; associação do arquivo `.basecraft`
 - Faixa de opções, painel de navegação, guias, temas claro e escuro
-- Arquivo › Opções: configurações da estação de trabalho (confirmações, bancos recentes, último banco na inicialização, pasta padrão) e opções do banco de dados (menus, menus de atalho, teclas especiais, barra de status, guias, compactar ao fechar)
+- Arquivo › Opções: configurações da estação de trabalho (confirmações, bancos recentes, último banco na inicialização, pasta padrão) e opções do banco de dados (menus, menus de atalho, teclas especiais, barra de status, guias, compactar ao fechar), além das teclas Enter e de direção, das linhas de grade, da largura e da fonte das folhas de dados, dos anos com quatro dígitos e dos valores padrão de Localizar, os valores padrão dos designers de objetos (tipo e tamanho dos novos campos, AutoIndex, AutoJoin, fontes dos designers, comportamento de seleção) e as margens de impressão padrão, a autocorreção de nomes (rastreamento, execução e registro das renomeações) e as opções de atualização de propriedades
 
 ## Roteiro
 

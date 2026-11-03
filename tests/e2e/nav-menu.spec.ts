@@ -128,7 +128,7 @@ test('C6: a query has its Open, Design View and SQL View (A3), a form gets its i
 
     const item = page.getByTestId('nav-item-form-Saisie');
     await item.click({ button: 'right' });
-    await expect(page.getByTestId('nav-menu-layout')).toHaveAttribute('title', fr.ribbon.planned.later); // Layout View: later (C11)
+    await expect(page.getByTestId('nav-menu-layout')).toBeEnabled(); // Layout View: delivered (L2)
     await expect(page.getByTestId('nav-menu-layout')).toHaveText('Mode Page');
     expect(await menuLayout(page)).toEqual(['open', 'layout', 'design', '|', 'export', '|', 'rename', 'hide', 'delete', '|', 'cut', 'copy', 'paste', '|', 'properties']);
     await expect(page.getByTestId('nav-menu-open')).toBeEnabled();

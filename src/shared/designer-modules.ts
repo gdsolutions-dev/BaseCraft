@@ -4,7 +4,7 @@ const R = 'src/renderer/';
 export const DESIGNER_MODULES: readonly string[] = [
   ...['Designer', 'DesignCanvas', 'PropertySheet', 'Toolbox', 'FieldList'].map((m) => `${R}designer/${m}.tsx`),
   ...['designer-commands', 'designer-clipboard', 'format-commands', 'pointer'].map((m) => `${R}designer/${m}.ts`),
-  ...['FormDesignView', 'TabOrderDialog', 'form-host'].map((m) => `${R}form/${m}.tsx`),
+  ...['FormDesignView', 'TabOrderDialog', 'form-host', 'layout-host', 'LayoutRecordBar'].map((m) => `${R}form/${m}.tsx`),
   `${R}form/form-ribbon.ts`,
   ...['ReportDesignView', 'GroupingPane', 'PageNumbersDialog', 'report-host'].map((m) => `${R}report/design/${m}.tsx`),
   ...['grouping-model', 'header-items', 'report-sections'].map((m) => `${R}report/design/${m}.ts`),
@@ -20,6 +20,7 @@ export const DESIGNER_MODULES: readonly string[] = [
   ...['ImportTextWizard', 'AdvancedDialog', 'FixedRuler', 'PreviewGrid'].map((m) => `${R}import-text/${m}.tsx`),
   `${R}datasheet/EditListDialog.tsx`,
   `${R}shell/CurrentDatabaseOptions.tsx`,
-  `${R}links/LinkDialog.tsx`, `${R}links/LinkedTableManager.tsx`, `${R}links/SplitDialog.tsx`,
+  `${R}links/LinkDialog.tsx`, `${R}links/LinkedTableManager.tsx`, `${R}links/SplitDialog.tsx`, `${R}links/ServerLinkDialog.tsx`,
+  `${R}links/MigrateWizard.tsx`, `${R}links/migrate-report.ts`,
   `${R}design/entry.ts`, `${R}design/shell-design-commands.ts`,
 ];

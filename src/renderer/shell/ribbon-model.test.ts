@@ -4,7 +4,7 @@ import en from '../../shared/i18n/en.json';
 import {
   MODAL_SCOPE, RIBBON, SHELL_SCOPE, commandEnabled, commandState, commandsVersion, isCommandAvailable, openPopupOf, registerCommandStates, registerCommands, runCommand,
   setActiveCommandTab, setOpenPopup,
-  setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
+  ribbonContextKey, setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
 import { parseSql } from '../../shared/query/sql-parser';
 
@@ -176,6 +176,7 @@ describe('ribbon model', () => {
     expect(cmd('viewDesign').enabled(ctx({ mode: null }))).toBe(false);
     expect(cmd('viewDatasheet').enabled(ctx({ mode: 'design' }))).toBe(true);
     expect(cmd('viewDatasheet').enabled(ctx({ mode: 'design', isNew: true }))).toBe(false); // a table not saved yet has no data
+    expect(cmd('viewDatasheet').enabled(ctx({ mode: 'design', kind: 'query', isNew: true }))).toBe(true); // a new query: the guard asks to save first
   });
 
   it("a linked table's Design view is read-only (C1 R8): its tools are off, the base's commands stay", () => {
@@ -246,13 +247,32 @@ const GALLERY_DONE = ['select', 'textBox', 'label', 'button', 'tabControl', 'opt
   'checkBox', 'optionButton', 'subform', 'image'] as const;
 const HEADER_DONE = ['logo', 'title', 'dateTime'] as const;
 
+describe('Arrange layout commands (L1 dispositions)', () => {
+  const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
+  const arrange = RIBBON.find((t) => t.id === 'arrange')!.groups.flatMap((g) => g.commands);
+  const delivered = ['stacked', 'tabular', 'removeLayout', 'insertAbove', 'insertBelow', 'insertLeft', 'insertRight', 'selectLayout', 'selectColumn', 'selectRow', 'moveUp', 'moveDown'];
+  it('the 12 delivered commands are real and follow designerWritable', () => {
+    for (const id of delivered) {
+      const c = arrange.find((x) => x.id === id)!;
+      expect(c, id).toBeDefined();
+      expect(c.planned, id).toBeUndefined();
+      expect(c.enabled(ctx({})), id).toBe(true);
+      expect(c.enabled(ctx({ readOnly: true })), id).toBe(false);
+      expect(c.enabled(ctx({ mode: 'datasheet' })), id).toBe(false);
+    }
+  });
+  it('the L4 commands stay planned', () => {
+    for (const id of ['layoutGridlines', 'merge', 'splitVertically', 'splitHorizontally', 'controlMargins', 'controlPadding', 'anchoring']) expect(arrange.find((x) => x.id === id)!.planned, id).toBe('later');
+  });
+});
+
 describe('ribbon catalog (C11: every Access tab, group and command; placeholders name their batch)', () => {
   const PLANNED: PlannedIn[] = ['A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'C', 'D', 'E', 'later']; // A2 is merged: nothing waits for it
   const get = (o: unknown, k: string) => k.split('.').reduce<unknown>((a, p) => (a as Record<string, unknown> | undefined)?.[p], o);
   const commands = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
   const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: null, isNew: false, kind: null, ...o });
   const kinds = [null, 'table', 'query', 'form', 'report', 'relations', 'macro'] as const;
-  const modes = [null, 'design', 'datasheet', 'run'] as const;
+  const modes = [null, 'design', 'datasheet', 'run', 'layout'] as const;
   const contexts = kinds.flatMap((kind) => modes.map((mode) => ctx({ kind, mode })));
 
   it('A6 leaves no A6 placeholder', () => {
@@ -286,11 +306,48 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commands.filter((c) => c.planned === 'B5').map((c) => c.id)).toEqual([]);
   });
 
-  it('C1 delivers the linked-table placeholders, C3 the Split Database; the other C commands stay, ODBC is for later (G1)', () => {
+  it('C1 delivers the linked-table placeholders, C3 the Split Database, C7 the server imports; ODBC is for later (G1)', () => {
     expect(commands.find((c) => c.id === 'linkedTableManager')?.planned).toBeUndefined();
     expect(commands.find((c) => c.id === 'splitDatabase')?.planned).toBeUndefined(); // C3
-    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id).sort()).toEqual(['importPostgreSql', 'importSqlServer', 'moveToServer', 'passThroughQuery']);
+    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id)).toEqual([]);
     expect(commands.find((c) => c.id === 'importOdbc')?.planned).toBe('later');
+    expect(commands.find((c) => c.id === 'passThroughQuery')).toMatchObject({ labelKey: 'ribbon.cmd.passThroughQuery', size: 'sm' }); // C6 R10
+    expect(commands.find((c) => c.id === 'passThroughQuery')?.planned).toBeUndefined();
+  });
+
+  it('moveToServer is a design command; no planned C id is left', () => { // C7 R1
+    const cmd = commands.find((c) => c.id === 'moveToServer')!;
+    expect(cmd).toMatchObject({ labelKey: 'ribbon.cmd.moveToServer', size: 'sm' });
+    expect(cmd.planned).toBeUndefined();
+    expect(cmd.enabled(ctx({}))).toBe(true);
+    expect(cmd.enabled(ctx({ readOnly: true }))).toBe(false);
+    expect(cmd.enabled(ctx({ hasBase: false }))).toBe(false);
+    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id)).toEqual([]);
+  });
+
+  it('PostgreSQL links from External Data; the import is real (C7 R17)', () => { // C4 R18
+    const cmd = (id: CommandId) => commands.find((c) => c.id === id)!;
+    for (const id of ['importPostgreSql', 'importSqlServer'] as const) {
+      expect(cmd(id)).toMatchObject({ labelKey: `ribbon.cmd.${id}`, size: 'sm' });
+      expect(cmd(id).planned).toBeUndefined();
+      expect(cmd(id).enabled(ctx({ readOnly: true }))).toBe(false);
+      expect(cmd(id).enabled(ctx({ hasBase: false }))).toBe(false);
+      expect(cmd(id).enabled(ctx({}))).toBe(true);
+    }
+    expect(cmd('linkPostgreSql').planned).toBeUndefined();
+    expect(cmd('linkPostgreSql').enabled(ctx({ readOnly: true }))).toBe(false);
+    expect(cmd('linkPostgreSql').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('linkPostgreSql')).toMatchObject({ labelKey: 'ribbon.cmd.linkPostgreSql', size: 'lg' });
+    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id)).toEqual([]);
+  });
+
+  it('SQL Server links from External Data; the import is real (C7 R17)', () => { // C5 R17
+    const cmd = (id: CommandId) => commands.find((c) => c.id === id)!;
+    expect(cmd('linkSqlServer').planned).toBeUndefined();
+    expect(cmd('linkSqlServer').enabled(ctx({ readOnly: true }))).toBe(false);
+    expect(cmd('linkSqlServer').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('linkSqlServer')).toMatchObject({ labelKey: 'ribbon.cmd.linkSqlServer', size: 'lg' });
+    expect(commands.filter((c) => c.planned === 'C').map((c) => c.id)).toEqual([]);
   });
 
   it('A3\'s refusal of TRANSFORM is gone', () => expect(() => parseSql('TRANSFORM Count(*) SELECT a FROM T GROUP BY a PIVOT b')).not.toThrow());
@@ -315,7 +372,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThan(130);
+    expect(planned.length).toBeGreaterThan(110); // 12 Arrange layout commands delivered (dispositions L1)
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -342,7 +399,9 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       // A6 Task 8
       'dataType', 'validation', 'required', 'unique', 'indexed', 'find', 'goTo', 'selectMenu',
       // B1 Task 9
-      'createMacro'];
+      'createMacro',
+      // L2 Task 3
+      'viewLayout'];
 
     // the same ids stay other batches' placeholders in their own tabs (A6 Table Design and Table Fields, A3 Query Design, A5 Report Design)
     const elsewhere: Record<string, RibbonTabId[]> = { propertySheet: ['design', 'queryDesign', 'reportDesign'], addExistingFields: ['reportDesign'],
@@ -562,13 +621,112 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   it('Home › View shows the views of the active object only (Access): Form View only for a form, Print Preview only for a report', () => {
     const view = RIBBON.find((t) => t.id === 'home')!.groups[0]!.commands;
     const shown = (o: Partial<RibbonContext>) => view.filter((c) => !c.visible || c.visible(ctx(o))).map((c) => c.id);
-    expect(shown({ kind: 'form', mode: 'run' })).toEqual(['viewForm', 'viewDatasheet', 'viewDesign']);
+    expect(shown({ kind: 'form', mode: 'run' })).toEqual(['viewForm', 'viewDatasheet', 'viewLayout', 'viewDesign']);
     expect(shown({ kind: 'table', mode: 'datasheet' })).toEqual(['viewDatasheet', 'viewDesign']);
-    expect(shown({ kind: 'query', mode: 'design' })).toEqual(['viewDatasheet', 'viewDesign']);
+    expect(shown({ kind: 'query', mode: 'design' })).toEqual(['viewDatasheet', 'viewSql', 'viewDesign']);
     expect(shown({})).toEqual(['viewDatasheet', 'viewDesign']);   // no document: disabled
-    expect(shown({ kind: 'report', mode: 'run' })).toEqual(['viewPrintPreview', 'viewDesign']);   // a report has no datasheet
+    expect(shown({ kind: 'report', mode: 'run' })).toEqual(['viewState', 'viewPrintPreview', 'viewLayout', 'viewDesign']);   // a report has no datasheet (Access's order, L3)
     expect(shown({ kind: 'macro', mode: 'design' })).toEqual(['viewDesign']);   // nor a macro
     expect(view.find((c) => c.id === 'viewDatasheet')!.enabled(ctx({ kind: 'macro', mode: 'design' }))).toBe(false);
+  });
+
+  it('L2: View › Layout View, a saved form only, pressed in Layout view; Design View stays enabled there', () => {
+    const view = RIBBON.find((t) => t.id === 'home')!.groups[0]!.commands;
+    const v = view.find((c) => c.id === 'viewLayout')!;
+    const d = view.find((c) => c.id === 'viewDesign')!;
+    const state = (o: Partial<RibbonContext>) => [!v.visible || v.visible(ctx(o)), v.enabled(ctx(o)), v.active!(ctx(o))];
+    expect(state({ kind: 'form', mode: 'design' })).toEqual([true, true, false]);
+    expect(state({ kind: 'form', mode: 'layout' })).toEqual([true, true, true]);
+    expect(state({ kind: 'form', mode: 'run' })).toEqual([true, true, false]);
+    expect(state({ kind: 'form', mode: 'datasheet' })).toEqual([true, true, false]);
+    expect(state({ kind: 'form', mode: 'design', readOnly: true })).toEqual([true, true, false]);   // opens read-only
+    expect(state({ kind: 'form', mode: 'design', isNew: true })).toEqual([true, false, false]);     // saved first
+    expect(state({ kind: 'report', mode: 'design' })).toEqual([true, true, false]);                 // reports: L3
+    expect(state({ kind: 'report', mode: 'layout' })).toEqual([true, true, true]);
+    expect(state({ kind: 'report', mode: 'run' })).toEqual([true, true, false]);
+    expect(state({ kind: 'report', mode: 'design', isNew: true })).toEqual([true, false, false]);
+    expect(state({ kind: 'report', mode: 'run', runMode: true })[0]).toBe(false);
+    for (const kind of ['table', 'query', 'macro'] as const) expect(state({ kind, mode: 'design' }), kind).toEqual([false, false, false]);
+    expect(state({ kind: 'form', mode: 'run', runMode: true })[0]).toBe(false);                     // run mode: no Layout view
+    expect([d.enabled(ctx({ kind: 'form', mode: 'layout' })), d.active!(ctx({ kind: 'form', mode: 'layout' }))]).toEqual([true, false]);
+    const fd = RIBBON.find((t) => t.id === 'formDesign')!.groups[0]!.commands.map((c) => c.id);
+    expect(fd).toEqual(['viewForm', 'viewDatasheet', 'viewLayout', 'viewDesign']);
+  });
+
+  it('L2: Layout View needs its handler and the form\'s leave (AllowLayoutView: the view\'s command state)', () => {
+    const x = ctx({ kind: 'form', mode: 'design' });
+    setCommandContext(x);
+    setActiveCommandTab('f1');
+    expect(commandEnabled('viewLayout', x)).toBe(false);   // no handler
+    reg(SHELL_SCOPE, { viewLayout: vi.fn() });
+    expect(commandEnabled('viewLayout', x)).toBe(true);
+    cleanups.push(registerCommandStates('f1', { viewLayout: { enabled: false } }));
+    expect(commandEnabled('viewLayout', x)).toBe(false);
+  });
+
+  it('L2/L2b: a form in Layout view keeps the design tabs and the gallery; no Tab Order nor code there', () => {
+    const tabs = (mode: RibbonContext['mode']) => visibleTabs(ctx({ kind: 'form', mode })).map((t) => t.id);
+    expect(tabs('layout')).toEqual(tabs('design'));
+    const lay = ctx({ kind: 'form', mode: 'layout' });
+    const fd = RIBBON.find((t) => t.id === 'formDesign')!.groups.flatMap((g) => g.commands);
+    const on = (id: CommandId, c = lay) => fd.find((x) => x.id === id)!.enabled(c);
+    // L2b: the 15 gallery controls are placed in Layout view as in Design view (Access), never in a read-only base
+    for (const id of ['select', 'textBox', 'label', 'button', 'tabControl', 'optionGroup', 'insertPageBreak', 'comboBox', 'line', 'listBox',
+      'rectangle', 'checkBox', 'optionButton', 'subform', 'image'] as const) {
+      expect(on(id), id).toBe(true);
+      expect(on(id, ctx({ kind: 'form', mode: 'design' })), id).toBe(true);
+      expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
+      expect(on(id, ctx({ kind: 'form', mode: 'design', readOnly: true })), id).toBe(false);
+      expect(on(id, ctx({ kind: 'form', mode: 'run' })), id).toBe(false);
+    }
+    expect(on('tabOrder')).toBe(false);
+    expect(on('tabOrder', ctx({ kind: 'form', mode: 'design' }))).toBe(true);
+    expect(on('viewCode')).toBe(false);
+    for (const id of ['addExistingFields', 'propertySheet', 'logo', 'title', 'dateTime'] as const) expect(on(id), id).toBe(true);
+    const all = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
+    for (const id of ['bold', 'selectAll', 'stacked', 'tabular'] as const) expect(all.find((c) => c.id === id)!.enabled(lay), id).toBe(true);
+    expect(all.find((c) => c.id === 'bold')!.enabled({ ...lay, readOnly: true })).toBe(false);
+    // Design <-> Layout is no change of context: the tab chosen (Arrange, Format) stays; Form view is one
+    expect(ribbonContextKey(lay)).toBe(ribbonContextKey(ctx({ kind: 'form', mode: 'design' })));
+    expect(ribbonContextKey(lay)).not.toBe(ribbonContextKey(ctx({ kind: 'form', mode: 'run' })));
+    expect(ribbonContextKey(ctx({ kind: 'report', mode: 'design' }))).not.toBe(ribbonContextKey(lay));
+  });
+
+  it('L3: a report in Layout view keeps its design tabs and the tab chosen; the gallery there; no grouping nor field list', () => {
+    const tabs = (mode: RibbonContext['mode']) => visibleTabs(ctx({ kind: 'report', mode })).map((t) => t.id);
+    expect(tabs('layout')).toEqual(tabs('design'));
+    expect(RIBBON.find((t) => t.id === 'reportDesign')!.groups[0]!.commands.map((c) => c.id)).toEqual(['viewState', 'viewPrintPreview', 'viewLayout', 'viewDesign']);
+    const lay = ctx({ kind: 'report', mode: 'layout' }), design = ctx({ kind: 'report', mode: 'design' });
+    const rd = RIBBON.find((t) => t.id === 'reportDesign')!.groups.flatMap((g) => g.commands);
+    const on = (id: CommandId, c = lay) => rd.find((x) => x.id === id)!.enabled(c);
+    // la galerie de contrôles : aussi en mode Page, jamais en lecture seule ni hors éditeur
+    for (const id of ['select', 'textBox', 'label', 'insertPageBreak', 'comboBox', 'line', 'rectangle', 'checkBox', 'optionButton', 'image'] as const) {
+      expect(on(id), id).toBe(true);
+      expect(on(id, design), id).toBe(true);
+      expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
+      expect(on(id, { ...lay, mode: 'run' }), id).toBe(false);
+    }
+    for (const id of ['groupSort', 'reportTotals', 'hideDetails', 'addExistingFields', 'viewCode'] as const) {
+      expect(on(id), id).toBe(false);
+      if (id !== 'viewCode') expect(on(id, design), id).toBe(true);
+    }
+    // L3c : les éléments d'en-tête et de pied modifient les sections du document, pas le canevas : aussi en mode Page
+    for (const id of ['pageNumbers', 'logo', 'title', 'dateTime'] as const) {
+      expect(on(id), id).toBe(true);
+      expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
+      expect(on(id, { ...lay, mode: 'run' }), id).toBe(false);
+      expect(on(id, ctx({ kind: 'form', mode: 'layout' })), id).toBe(false);
+    }
+    expect(on('propertySheet')).toBe(true);
+    expect(on('propertySheet', { ...lay, readOnly: true })).toBe(true);   // shown read-only
+    const all = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
+    for (const id of ['bold', 'selectAll', 'stacked', 'tabular', 'moveUp', 'sizeSpace', 'pageSize', 'margins', 'portrait'] as const) {
+      expect(all.find((c) => c.id === id)!.enabled(lay), id).toBe(true);
+    }
+    expect(all.find((c) => c.id === 'bold')!.enabled({ ...lay, readOnly: true })).toBe(false);
+    expect(ribbonContextKey(lay)).toBe(ribbonContextKey(design));
+    expect(ribbonContextKey(lay)).not.toBe(ribbonContextKey(ctx({ kind: 'report', mode: 'run' })));
+    expect(ribbonContextKey(lay)).not.toBe(ribbonContextKey(ctx({ kind: 'form', mode: 'layout' })));
   });
 
   it('Create › Form is delivered (A4)', () => {
@@ -636,6 +794,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(shown('form', 'design')).toEqual(['formDesign', 'arrange', 'format']);
     expect(shown('form', 'run')).toEqual([]);
     expect(shown('report', 'design')).toEqual(['reportDesign', 'arrange', 'format', 'pageSetup']);
+    expect(shown('report', 'layout')).toEqual(['reportDesign', 'arrange', 'format', 'pageSetup']);
     expect(shown('report', 'run')).toEqual(['printPreview']);
     expect(shown('macro', 'design')).toEqual(['macroDesign']);
   });
@@ -663,7 +822,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   it('run mode hides Design View', () => {
     const home = (c: RibbonContext) => visibleTabs(c).find((t) => t.id === 'home')!.groups[0]!.commands.filter((x) => !x.visible || x.visible(c)).map((x) => x.id);
     expect(home({ hasBase: true, readOnly: false, mode: 'run', isNew: false, kind: 'form', ribbon: 'simplified', runMode: true })).toEqual(['viewForm', 'viewDatasheet']);
-    expect(home({ hasBase: true, readOnly: false, mode: 'run', isNew: false, kind: 'form' })).toEqual(['viewForm', 'viewDatasheet', 'viewDesign']);   // full: unchanged
+    expect(home({ hasBase: true, readOnly: false, mode: 'run', isNew: false, kind: 'form' })).toEqual(['viewForm', 'viewDatasheet', 'viewLayout', 'viewDesign']);   // full: unchanged
   });
 
   it('C10: entering a context selects its first contextual tab, leaving restores the tab selected before', () => {
@@ -827,11 +986,11 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "relationships: relationships objectDependencies",
         ],
         "externalData": [
-          "import: importExcel importXml importText linkBaseCraft linkAccess importAccess importSqlServer importPostgreSql importOdbc savedImports linkedTableManager",
+          "import: importExcel importXml importText linkBaseCraft linkAccess linkPostgreSql linkSqlServer importAccess importSqlServer importPostgreSql importOdbc savedImports linkedTableManager",
           "export: savedExports exportExcel exportText exportPdf exportAccess exportXml exportMore",
         ],
         "formDesign": [
-          "view: viewForm viewDatasheet",
+          "view: viewForm viewDatasheet viewLayout viewDesign",
           "themes: themes themeColors themeFonts",
           "controls: select textBox label button tabControl hyperlink navigationControl optionGroup insertPageBreak comboBox line toggleButton listBox rectangle checkBox unboundObjectFrame attachment optionButton subform boundObjectFrame image webBrowser chart insertImage insertModernChart",
           "headerFooter: logo title dateTime",
@@ -848,7 +1007,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "help: help contactSupport feedback showTraining whatsNew",
         ],
         "home": [
-          "view: viewForm viewPrintPreview viewDatasheet viewDesign",
+          "view: viewForm viewState viewPrintPreview viewDatasheet viewLayout viewSql viewDesign",
           "clipboard: paste cut copy formatPainter showClipboard",
           "sort: filter sortAsc sortDesc sortClear filterSelection filterAdvanced filterToggle",
           "records: refresh newRecord save deleteRecord recordsTotals spelling moreRecords",
@@ -866,6 +1025,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "pageLayout: portrait landscape columns pageSetupDialog",
         ],
         "printPreview": [
+          "view: viewState viewPrintPreview viewLayout viewDesign",
           "print: print",
           "pageSize: pageSize margins printDataOnly",
           "pageLayout: portrait landscape columns pageSetupDialog",
@@ -885,7 +1045,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "relationships: addTables hideTable directRelationships allRelationships closeRelationships",
         ],
         "reportDesign": [
-          "view: viewPrintPreview",
+          "view: viewState viewPrintPreview viewLayout viewDesign",
           "themes: themes themeColors themeFonts",
           "groupingTotals: groupSort reportTotals hideDetails",
           "controls: select textBox label button tabControl hyperlink optionGroup insertPageBreak comboBox line toggleButton listBox rectangle checkBox unboundObjectFrame attachment optionButton subform boundObjectFrame image webBrowser chart insertImage insertModernChart",

@@ -1,16 +1,22 @@
 // Ligne en cours de saisie, enregistrée en entier quand on la quitte (comme Access). Une seule ligne à la fois.
-import type { RowWriteResult } from '../../shared/api';
+import type { RowRef, RowWriteResult } from '../../shared/api';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 
 export type CommitOutcome =
   | { status: 'none' }
-  | { status: 'saved'; rowid: number; values: SqlValue[] }
+  | { status: 'saved'; rowid: RowRef; values: SqlValue[] }
   | { status: 'failed'; errors: Extract<RowWriteResult, { errors: unknown }>['errors'] }
-  | { status: 'conflict'; conflict: 'changed'; current: SqlValue[] } | { status: 'conflict'; conflict: 'deleted' };   // C3 R8
-type Pending = { rowIndex: number; rowid: number | null; changes: Record<string, CellInput>; looked: Record<string, SqlValue> /* AutoLookup (B4 R4): shown, never written */
+  | { status: 'conflict'; conflict: 'changed'; current: SqlValue[]; rowid?: RowRef /* the current row's reference (C4 R8) */ }
+  | { status: 'conflict'; conflict: 'deleted' };   // C3 R8
+type Pending = { rowIndex: number; rowid: RowRef | null; changes: Record<string, CellInput>; looked: Record<string, SqlValue> /* AutoLookup (B4 R4): shown, never written */
   /** C3 R8: the row's values at its first edit (null: a new row), what its save expects to find; after a save that leaves typed
    *  changes pending, the saved row's values. */
-  original: SqlValue[] | null };
+  original: SqlValue[] | null
+  /** C4 I1: the last save lost its connection (unsureSave): it may have committed, so it is never sent again by itself. */
+  unsure?: unknown };
+
+/** A save whose connection to the server was lost on the way (C4 I1, bc:serverError|connection|…): it may have committed. */
+export const unsureSave = (e: unknown): boolean => /\bbc:serverError\|connection\|/.test(e instanceof Error ? e.message : String(e));
 
 export class RowBuffer {
   private row: Pending | null = null;
@@ -18,7 +24,7 @@ export class RowBuffer {
   /** The pending row's AutoLookups (R4): reset with the row. */
   readonly lookups = new Lookups();
 
-  constructor(private readonly save: (rowid: number | null, changes: Record<string, CellInput>, original: SqlValue[] | null) => Promise<RowWriteResult>) {}
+  constructor(private readonly save: (rowid: RowRef | null, changes: Record<string, CellInput>, original: SqlValue[] | null) => Promise<RowWriteResult>) {}
 
   /** Every unsaved change of the row, including those of a save in flight. */
   get pending(): Omit<Pending, 'looked' | 'original'> | null {
@@ -31,16 +37,19 @@ export class RowBuffer {
   }
 
   /** `original`: the row's values as shown, kept from the first edit of the row (a refresh meanwhile changes nothing, R8). */
-  edit(rowIndex: number, rowid: number | null, field: string, input: CellInput, original: SqlValue[] | null = null): void {
+  edit(rowIndex: number, rowid: RowRef | null, field: string, input: CellInput, original: SqlValue[] | null = null): void {
     if (this.row && this.row.rowIndex !== rowIndex) throw new Error(`row ${this.row.rowIndex} is pending: leave it before editing row ${rowIndex}`);
     // No prototype: a field may be named __proto__, constructor… (copies made by spreading keep them as own keys).
     this.row ??= { rowIndex, rowid, changes: Object.create(null) as Record<string, CellInput>, looked: Object.create(null) as Record<string, SqlValue>, original };
     this.row.changes[field] = input;
   }
 
-  /** Write Conflict › Save Record (R9): the next save expects `values` (the record as it is now: last writer wins). */
-  setOriginal(values: SqlValue[]): void {
-    if (this.row) this.row.original = values;
+  /** Write Conflict › Save Record (R9): the next save expects `values` (the record as it is now: last writer wins), on the row's
+   *  current reference `rowid` when the conflict gave one (C4 R8: a server row's version moved). */
+  setOriginal(values: SqlValue[], rowid?: RowRef): void {
+    if (!this.row) return;
+    this.row.original = values;
+    if (rowid !== undefined) this.row.rowid = rowid;
   }
 
   /** A parent's values found by AutoLookup for the pending row: shown, not pending; what was typed in those fields goes (R4),
@@ -56,18 +65,28 @@ export class RowBuffer {
     return this.commit();
   }
 
-  /** One save at a time: a call made while a save is in flight gets that save's outcome (never a second insert). */
-  commit(): Promise<CommitOutcome> {
+  /** One save at a time: a call made while a save is in flight gets that save's outcome (never a second insert). A row whose
+   *  last save lost its connection rejects with that error again, nothing sent, unless `resend` (Save Record asked: C4 I1). */
+  commit(resend = false): Promise<CommitOutcome> {
     if (this.inflight) return this.inflight;
     const row = this.row;
     if (!row) return Promise.resolve({ status: 'none' });
+    if (row.unsure !== undefined && !resend) return Promise.reject(row.unsure);
     const sent = { ...row.changes };
     this.inflight = (async (): Promise<CommitOutcome> => {
       try {
-        const r = await this.save(row.rowid, sent, row.original);
+        let r: RowWriteResult;
+        try {
+          r = await this.save(row.rowid, sent, row.original);
+          row.unsure = undefined;
+        } catch (e) {
+          row.unsure = unsureSave(e) ? e : undefined;
+          throw e;
+        }
         if (!r.ok) {
           if ('errors' in r) return { status: 'failed', errors: r.errors };
-          return r.conflict === 'changed' ? { status: 'conflict', conflict: 'changed', current: r.current } : { status: 'conflict', conflict: 'deleted' };
+          if (r.conflict === 'deleted') return { status: 'conflict', conflict: 'deleted' };
+          return { status: 'conflict', conflict: 'changed', current: r.current, ...(r.rowid !== undefined && { rowid: r.rowid }) };
         }
         if (this.row === row) {
           // Changes typed during the save stay pending, against the row that now exists.

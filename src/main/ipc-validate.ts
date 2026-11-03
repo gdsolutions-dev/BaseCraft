@@ -3,10 +3,11 @@
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import {
-  MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type ObjectKind, type PageRequest, type PrintRequest, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
+  MAX_CRITERIA_CHARS, MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type NameChange, type ObjectKind, type PropertyItem, type PageRequest, type PrintRequest, type RowRef, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
   type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions, SETTING_KEYS, type AppSettings, type SettingKey, type LinkFileInfo,
 } from '../shared/api';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
+import { PROPERTY_CATALOG } from '../shared/design/properties';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
 import type { CellInput, SqlValue } from '../shared/coerce';
@@ -15,6 +16,9 @@ import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-te
 import { BaseFileError, FILE_EXTENSION } from './db/file-format';
 import { definitionJson, MAX_DEFINITION_CHARS } from './db/objects';
 import { SETTING_CHECKS } from './settings';
+import { CONNECTORS, isServerKind } from './connectors/registry';
+import type { ServerKind } from './connectors/connector';
+import type { MigrateRequest } from '../shared/migrate';
 
 export { MAX_DEFINITION_CHARS };
 
@@ -42,8 +46,10 @@ export const nameArg = (v: unknown): string => boundedName(v, MAX_NAME_CHARS);
  *  1024 characters, so a table an external tool created with a long name stays readable (C8). */
 export const lookupName = (v: unknown): string => boundedName(v, MAX_LOOKUP_CHARS);
 export const uint = (v: unknown): number => (Number.isSafeInteger(v) && (v as number) >= 0 ? (v as number) : bad());
-// Array.from visits holes as undefined, so a sparse array is rejected.
-export const uints = (v: unknown): number[] => (Array.isArray(v) ? Array.from(v, uint) : bad());
+/** A row reference (C4 R4): a safe integer >= 0, or a connector token of 1..4096 characters. */
+export const rowRef = (v: unknown): RowRef => (typeof v === 'string' && v.length >= 1 && v.length <= 4096 ? v : uint(v));
+/** No length cap: a large local delete stays allowed. Array.from visits holes as undefined, so a sparse array is rejected. */
+export const rowRefs = (v: unknown): RowRef[] => (Array.isArray(v) ? Array.from(v, rowRef) : bad());
 
 export const basePath = (v: unknown): string =>
   typeof v === 'string' && isAbsolute(v) && v.toLowerCase().endsWith(FILE_EXTENSION) ? v : bad();
@@ -102,7 +108,6 @@ export function sourceRef(v: unknown): RecordSourceRef {
 
 export const MAX_PAGE_ROWS = 10_000;
 const MAX_SQL_CHARS = 1_048_576; // a query definition's SQL (definition.ts); Access stops at 64 000 characters
-export const MAX_CRITERIA_CHARS = 2000;
 export const MAX_SORT_KEYS = 8;
 const MAX_PARAMS = 100;
 export const MAX_WHERE_CHARS = 65_536;
@@ -120,6 +125,7 @@ export function sourcePageRequest(v: unknown): SourcePageRequest {
   if (v.filter !== undefined) r.filter = fieldFilters(v.filter);
   if (v.params !== undefined) r.params = queryParams(v.params);
   if (v.where !== undefined) r.where = typeof v.where === 'string' && v.where.length <= MAX_WHERE_CHARS ? v.where : bad();
+  if (v.fresh !== undefined) r.fresh = typeof v.fresh === 'boolean' ? v.fresh : bad();
   return r;
 }
 
@@ -145,7 +151,7 @@ export function fieldFilters(v: unknown): FieldFilter[] | undefined {
 
 const fields = (v: unknown): string[] =>
   (Array.isArray(v) && v.length >= 1 && v.length <= 10 ? Array.from(v, lookupName) : bad());
-const bool = (v: unknown): boolean => (typeof v === 'boolean' ? v : bad());
+export const bool = (v: unknown): boolean => (typeof v === 'boolean' ? v : bad());
 
 /** A relation, field by field (only the known fields cross); saveRelation checks the names against the base. Its name creates
  *  or renames (nameArg; '' asks for a generated one); tables and fields are looked up (lookupName). */
@@ -170,9 +176,9 @@ export function relationsLayout(v: unknown): RelationsLayout {
   return { tables };
 }
 
-const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile'] as const;
-const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', ...BOOLEAN_STARTUP_KEYS];
-/** The startup options to save: exactly the sixteen keys, each of its exact type, and already in the form readStartup reads back
+const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile', 'fourDigitYear', 'checkTruncatedNumbers', 'filterListIndexed', 'filterListNonIndexed', 'trackNameAutoCorrect', 'performNameAutoCorrect', 'logNameAutoCorrect'] as const;
+const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', 'filterListMax', ...BOOLEAN_STARTUP_KEYS];
+/** The startup options to save: exactly the twenty-four keys, each of its exact type, and already in the form readStartup reads back
  *  (a title that cleanTitle would change, an icon that is no PNG, a form that is no object name are refused, never repaired). */
 export function startupOptions(v: unknown): StartupOptions {
   if (!isObj(v) || Object.keys(v).length !== STARTUP_KEYS.length || !STARTUP_KEYS.every((k) => Object.hasOwn(v, k))) bad();
@@ -181,13 +187,15 @@ export function startupOptions(v: unknown): StartupOptions {
   if (typeof appIcon !== 'string' || (appIcon !== '' && !isValidIcon(appIcon))) bad();
   if (typeof startupForm !== 'string' || (startupForm !== '' && !isValidObjectName(startupForm))) bad();
   if (ribbon !== 'full' && ribbon !== 'simplified') bad();
+  const filterListMax = v.filterListMax;
+  if (typeof filterListMax !== 'number' || !Number.isInteger(filterListMax) || filterListMax < 0 || filterListMax > 32766) bad();
   const flags = {} as Record<(typeof BOOLEAN_STARTUP_KEYS)[number], boolean>;
   for (const k of BOOLEAN_STARTUP_KEYS) {
     const b = v[k];
     if (typeof b !== 'boolean') bad();
     flags[k] = b;
   }
-  return { appTitle, appIcon, startupForm, ribbon, ...flags };
+  return { appTitle, appIcon, startupForm, ribbon, filterListMax, ...flags };
 }
 
 /** The window icon the renderer re-encoded: null (BaseCraft's), or a Uint8Array of at most 1 MiB that starts as a PNG does (signature and IHDR chunk).
@@ -254,6 +262,32 @@ export function saveRequest(v: unknown): SaveTableRequest {
   return v as unknown as SaveTableRequest;
 }
 
+const CHANGE_KINDS: readonly string[] = [...OBJECT_KINDS, 'table'];
+const fieldRename = (v: unknown) => (isObj(v) ? { from: lookupName(v.from), to: nameArg(v.to) } : bad());
+/** Name AutoCorrect's renames (O4 R10): at most 255 changes of at most 255 field renames each (a table save's fields). */
+export function nameChanges(v: unknown): NameChange[] {
+  if (!Array.isArray(v) || v.length > MAX_FIELDS) bad();
+  return Array.from(v, (c): NameChange => {
+    if (!isObj(c)) bad();
+    if (c.k === 'object' && typeof c.kind === 'string' && CHANGE_KINDS.includes(c.kind)) {
+      return { k: 'object', kind: c.kind as ObjectKind | 'table', from: lookupName(c.from), to: nameArg(c.to) };
+    }
+    if (c.k === 'fields' && Array.isArray(c.renames) && c.renames.length <= MAX_FIELDS) return { k: 'fields', table: lookupName(c.table), renames: Array.from(c.renames, fieldRename) };
+    return bad();
+  });
+}
+
+const DECIMAL_PLACES = PROPERTY_CATALOG.find((d) => d.name === 'DecimalPlaces')!.options!;   // 'auto', '0'…'15'
+/** Property update options' items (O4 R12): at most 5000 controls to write; Decimal Places one of the control's values. */
+export function propertyTargetsArg(v: unknown): PropertyItem[] {
+  if (!Array.isArray(v) || v.length > 5000) bad();
+  return Array.from(v, (x): PropertyItem => {
+    if (!isObj(x) || (x.kind !== 'form' && x.kind !== 'report') || (x.prop !== 'Format' && x.prop !== 'DecimalPlaces')) return bad();
+    if (x.prop === 'DecimalPlaces' && !DECIMAL_PLACES.includes(x.value as string)) return bad();
+    return { kind: x.kind, name: lookupName(x.name), control: lookupName(x.control), prop: x.prop, value: boundedName(x.value, 255) };
+  });
+}
+
 /** Sheet name of a workbook (Excel: 31 characters; a longer name is refused) or null. */
 export function sheetOrNull(v: unknown): string | null {
   if (v === null) return null;
@@ -303,6 +337,23 @@ export const linkKindOrUndefined = (v: unknown): LinkFileInfo['kind'] | undefine
 export const unlockPath = (v: unknown): string => (typeof v === 'string' && v.length <= 32767 && isAbsolute(v) ? v : bad());
 /** An Access password (C2 R7): 1 to 256 UTF-16 units. Never logged: a refusal names no value. */
 export const accessPassword = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 256 ? v : bad());
+/** A server's credential key (C4 R10, `connector.key`): 1 to 1024 characters, `<scheme>://…`. Its password: accessPassword. */
+export const serverKey = (v: unknown): string => (typeof v === 'string' && v.length <= 1024 && /^[a-z]+:\/\//.test(v) ? v : bad());
+/** A server kind this BaseCraft has a connector for (C4 R1). */
+export const serverKind = (v: unknown): ServerKind => (typeof v === 'string' && isServerKind(v) && CONNECTORS[v] ? v : bad());
+/** A server's params as its connector reads them (`Connector.params`: never a password; bc:invalidArgument). */
+export const serverParams = (kind: ServerKind, v: unknown): unknown => CONNECTORS[kind]!.params(v);
+/** C7 R1: the migration wizard's run: a kind with a connector, its params as the connector reads them, a schema of 1 to 128
+ *  characters (no other key). */
+export function migrateRequest(v: unknown): MigrateRequest {
+  if (v === null || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => !['kind', 'params', 'schema'].includes(k))) return bad();
+  const { kind, params, schema } = v as Record<string, unknown>;
+  const k = serverKind(kind);
+  if (typeof schema !== 'string' || schema.length < 1 || schema.length > 128) return bad();
+  return { kind: k, params: serverParams(k, params), schema };
+}
+/** A server login's user name (C4 R10): 1 to 256 UTF-16 units. */
+export const loginUser = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 256 ? v : bad());
 /** Link names (C1): 1 to 1000 names that look up something that exists. */
 export const nameList = (v: unknown): string[] => (Array.isArray(v) && v.length >= 1 && v.length <= 1000 ? Array.from(v, lookupName) : bad());
 export const importSpec = (v: unknown): ImportSpec => validSpec(v) ?? bad();
@@ -355,7 +406,7 @@ export const queryRef = (v: unknown): QueryRef => { const r = sourceRef(v); retu
  *  (C3 R8) as expectedValues(). */
 export function sourceSaveRequest(r: unknown, q: unknown): [QueryRef, SourceSaveRequest] {
   if (!isObj(q)) bad();
-  return [queryRef(r), { rowid: q.rowid === null ? null : uint(q.rowid) /* as rows.update */, values: cells(q.values), expected: expectedValues(q.expected) }];
+  return [queryRef(r), { rowid: q.rowid === null ? null : rowRef(q.rowid) /* as rows.update */, values: cells(q.values), expected: expectedValues(q.expected) }];
 }
 /** B4 sources.autoLookup: a query or SQL ref (never a table), the link values as cells(). */
 export const autoLookupRequest = (r: unknown, v: unknown): [QueryRef, Record<string, CellInput>] => [queryRef(r), cells(v)];

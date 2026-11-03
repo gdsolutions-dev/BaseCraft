@@ -8,7 +8,7 @@ import { toStored } from '../../shared/expr/evaluate';
 import { decodeValue, type SqlOut } from '../../shared/expr/sql';
 import { defaultProps, sameName, type FieldDef, type FieldProps, type TableDesign } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
-import type { BoundColumn } from '../../shared/query/bind';
+import type { BoundColumn, BoundQuery } from '../../shared/query/bind';
 import { invalidQueryError } from '../../shared/query/definition';
 import { createTable, dataDesign, DesignValidationError, dropTable, isQueryName, listTables, NameExistsError, tableDesign } from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
@@ -22,15 +22,14 @@ type ByCause = Extract<ActionResult, { reason: 'rowErrors' }>['byCause'];
 /** Access's causes of a refused row: a key (duplicate, missing parent, related records), else a rule (Validation Rule,
  *  Required, an AutoNumber changed…). `conversion` counts only the FIELDS set to Null (a value the field cannot store, an
  *  error value), as Access counts them. BaseCraft takes no record locks. */
-const causeOf = (code: FieldError['code']): 'key' | 'validation' => (['duplicate', 'noParent', 'related'].includes(code) ? 'key' : 'validation');
+export const causeOf = (code: FieldError['code']): 'key' | 'validation' => (['duplicate', 'noParent', 'related'].includes(code) ? 'key' : 'validation');
 /** A refusal that rolls the whole run back. */
-class Refused extends Error {
+export class Refused extends Error {
   constructor(readonly result: ActionResult) { super('refused'); }
 }
 
 /** The bound action query of `ref` and its compiled rows (bc:invalidArgument for a select query; source.ts's errors). */
-function prepare(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, info: LocaleInfo) {
-  const b = resolve(x, ref, true);
+function prepare(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, info: LocaleInfo, b = resolve(x, ref, true)) {
   try {
     return { b, ...compileAction(b, paramValues(b, params, info), { locale: info.locale }) };
   } catch (e) {
@@ -40,8 +39,8 @@ function prepare(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, i
 
 /** The rows the query would write (distinct target rows for Update, Delete; else the rows read) and the table it writes
  *  (Make-Table: the existing table it would replace, as spelled now, else its INTO name). */
-export function actionCount(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, ctx: QueryCtx): { count: number; table: string } {
-  const { b, select, target } = prepare(x, ref, params, ctx.info);
+export function actionCount(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, ctx: QueryCtx, resolved?: BoundQuery): { count: number; table: string } {
+  const { b, select, target } = prepare(x, ref, params, ctx.info, resolved);
   const db = queryConn(x).dbOf(b.source, false);
   const count = Number(run(db, `SELECT count(${select.hasRowid ? 'DISTINCT "bcx_rowid"' : '*'}) FROM (${select.sql})`, select.params)[0][0]);
   const table = b.query.body.k === 'select' ? listTables(db).find((x) => sameName(x.name, target))?.name ?? target : target;
@@ -80,8 +79,8 @@ function madeField(c: BoundColumn): FieldDef {
  * (key violations), or is refused as a whole (`related`) when they hold every row. Make-Table never replaces a query (`nameExists`), replaces an existing table only with `replaceTable`
  * (`tableExists`), after dropTable (`hasRelations`, `related`); a column name no field can take: `badColumnName`.
  */
-export async function runAction(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, opts: RunActionOptions, ctx: QueryCtx & { now: () => Date }): Promise<ActionResult> {
-  const { b, select, target } = prepare(x, ref, params, ctx.info);
+export async function runAction(x: QueryDb, ref: QueryRef, params: Record<string, CellInput>, opts: RunActionOptions, ctx: QueryCtx & { now: () => Date }, resolved?: BoundQuery): Promise<ActionResult> {
+  const { b, select, target } = prepare(x, ref, params, ctx.info, resolved);
   const db = queryConn(x).dbOf(b.source, true); // a Make-Table's is the front-end (PF4)
   const body = b.query.body;
   const rows = run(db, select.sql, select.params) as unknown as SqlOut[][]; // read first: a query may read its own target

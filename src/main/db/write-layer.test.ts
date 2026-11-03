@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, openBaseFile } from './file-format';
 import { createTable, dropTable, renameTable } from './schema';
 import { tableDesign } from './schema';
-import { copyRows, deleteRows, insertRow, updateRow } from './write-layer';
+import { copyRows, deleteRows, insertRow, prepareWrite, updateRow } from './write-layer';
 import { countRows } from './rows';
 import { f, t, clients } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
@@ -46,6 +46,13 @@ describe('write layer (brief)', () => {
   it('delete returns count', async () => {
     await insertRow(db, clients, { Nom: 'a' }, fr); await insertRow(db, clients, { Nom: 'b' }, fr);
     expect(deleteRows(db, 'Clients', [1, 2, 99])).toEqual({ ok: true, count: 2 });
+  });
+  it('prepareWrite gives the converted values and the field errors, touching nothing', async () => { // C4 R7
+    const now = () => new Date(0);
+    expect(await prepareWrite('update', clients, { Nom: 'x'.repeat(60) }, fr, now, {})).toEqual({ ok: false, errors: [{ field: 'Nom', code: 'tooLong' }] });
+    expect(await prepareWrite('insert', clients, { Solde: '1,5' }, fr, now, {})).toEqual({ ok: false, errors: [{ field: 'Nom', code: 'required' }] });
+    expect(await prepareWrite('insert', clients, { Nom: 'A', Solde: '1,5' }, fr, now, {})).toMatchObject({ ok: true, values: { Nom: 'A', Solde: 1.5 }, nulled: [] });
+    expect(countRows(db, 'Clients')).toBe(0);
   });
 });
 

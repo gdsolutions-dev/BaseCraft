@@ -13,6 +13,9 @@ import { seedSales } from '../query/test-db';
 import { parseCanonical, serialize } from '../../shared/expr/parser';
 import { f, t } from '../../shared/test-fixtures';
 import { localeInfo } from '../../shared/locale-format';
+import { compareText } from '../../shared/expr/library';
+import type { SqlValue } from '../../shared/coerce';
+import { filterValues, listCriteria, valuesCriteria } from '../../renderer/datasheet/filter-model';
 
 const FR = 'fr-FR';
 const fr = localeInfo(FR);
@@ -128,5 +131,54 @@ describe('Where Condition (B1)', () => {
     expect(countRows(sales, 'Clients', [{ field: 'Nom', criteria: 'Like "M*"' }], FR, '[Ville] = "Lyon"')).toBe(1);
     expect(readRows(sales, d, { offset: 0, limit: 10, where: '[Ville] = "Lyon"' }, FR, [{ field: 'Nom', dir: 'desc' }], 0).rows.map((r) => r.values[1]))
       .toEqual(['Martin', 'Dupont']);
+  });
+});
+
+describe('filter lists put back into criteria (O2 R14, Review Focus 5)', () => {
+  const L = t('L', [f('id', 'autoNumber'), f('txt', 'shortText'), f('d', 'dateTime'), f('x', 'number', { numberSize: 'double' }), f('m', 'currency')]);
+  const TEXTS = ["O'Brien", 'say "hi"', '50*', '#1', '[a', 'a Or b', 'Lyon', 'LYON', 'Élan', 'élan', 'elan', '', null];
+  beforeEach(() => {
+    createTable(db, L);
+    const ins = db.prepare('INSERT INTO "L" ("txt", "d", "x", "m") VALUES (?, ?, ?, ?)');
+    TEXTS.forEach((v, i) => ins.run(v, i % 3 ? `2026-10-2${i % 3} 00:00:00` : i % 2 ? '2026-10-21 13:05:00' : null, i % 4 ? 12.5 * (i % 4) : null, i % 2 ? 0.1 : 1500.25));
+  });
+  const rule = { indexed: true, local: true, listIndexed: true, listNonIndexed: true, max: 1000 };
+  const all = () => readRows(db, L, { offset: 0, limit: 100 }, FR).rows;
+  const rowids = (field: string, criteria: string) => readRows(db, L, { offset: 0, limit: 100, filter: [{ field, criteria }] }, FR).rows.map((r) => r.rowid);
+  const blank = (v: SqlValue) => (v === '' ? null : v); // the list holds the zero-length string within the blanks
+  const same = (a: SqlValue, b: SqlValue) => ((a = blank(a)) === null || (b = blank(b)) === null ? a === b : typeof a === 'string' && typeof b === 'string' ? compareText(a, b) === 0 : a === b);
+  const listOf = (field: string) => filterValues(async (offset, limit) => ({
+    rows: limit ? readRows(db, L, { offset, limit, sort: { field, dir: 'asc' } }, FR).rows.map((r) => r.values) : [], total: countRows(db, 'L', [], FR),
+  }), L.fields.findIndex((x) => x.name === field), rule);
+
+  it('each value of a list alone, and every value but one, give exactly their records (French region)', async () => {
+    for (const field of ['txt', 'd', 'x', 'm']) {
+      const fd = L.fields.find((x) => x.name === field)!;
+      const col = L.fields.indexOf(fd);
+      const list = (await listOf(field))!;
+      expect(list.length, field).toBeGreaterThan(1);
+      for (const v of list) {
+        const want = all().filter((r) => same(r.values[col] ?? null, v)).map((r) => r.rowid);
+        expect(rowids(field, valuesCriteria(fd, [v], v === null)), `${field} = ${String(v)}`).toEqual(want);
+        const but = listCriteria(fd, list, list.filter((x) => x !== v))!;
+        expect(rowids(field, but.criteria), `${field} but ${String(v)}`).toEqual(all().filter((r) => !same(r.values[col] ?? null, v)).map((r) => r.rowid));
+      }
+    }
+    expect(await listOf('txt')).toEqual([null, '#1', '50*', '[a', 'a Or b', 'elan', 'Élan', 'Lyon', "O'Brien", 'say "hi"']);
+  });
+  it('a long list: the ticked values, and the values left out (past the length limit), run in SQLite', async () => {
+    const ins = db.prepare('INSERT INTO "L" ("txt") VALUES (?)');
+    db.exec('BEGIN');
+    for (let i = 0; i < 300; i++) ins.run(`ville ${i}`);
+    db.exec('COMMIT'); // one write to disk
+    const fd = L.fields[1]!;
+    const list = (await listOf('txt'))!;
+    const n = (c: string) => countRows(db, 'L', [{ field: 'txt', criteria: c }], FR);
+    const most = listCriteria(fd, list, list.filter((v) => v !== 'ville 7'))!;
+    expect(n(most.criteria)).toBe(countRows(db, 'L', [], FR) - 1);
+    expect(n('<> "ville 7" And <> "ville 8" And <> ""')).toBe(countRows(db, 'L', [{ field: 'txt', criteria: 'Is Not Null And <> ""' }], FR) - 2); // the values-left-out form, in SQLite
+    const many = listCriteria(fd, list, list.filter((v) => typeof v === 'string' && /^ville \d\d?$/.test(v)))!; // 100 values Or'ed
+    expect(many.not).toBe(false);
+    expect(n(many.criteria)).toBe(100);
   });
 });

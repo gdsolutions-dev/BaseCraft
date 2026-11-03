@@ -7,7 +7,7 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -15,7 +15,7 @@ const clients = t('Clients', [f('N°', 'autoNumber'), f('Nom', 'shortText')]);
 const commandes = t('Commandes', [f('N°', 'autoNumber'), f('Client', 'number', { numberSize: 'longInteger' }), f('Statut', 'shortText'),
   f('Qté', 'number', { numberSize: 'double' })]);
 // DatasheetView: row selector width, header and row heights; AutoNumber and number column widths.
-const MARKER = 44, HEADER = 34, ROW = 30, LEFT = [0, 80, 80 + 110];
+const HEADER = 34, ROW = 30;
 
 const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-cell-${col + 1}-${row}`);
 const editor = (page: Page) => page.getByTestId('lookup-editor');
@@ -23,7 +23,7 @@ const rowsOf = async (page: Page) =>
   (await page.evaluate(() => (window as any).basecraft.rows.page('Commandes', { offset: 0, limit: 100 }))).rows as { values: unknown[] }[];
 async function clickCell(page: Page, col: number, row: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + LEFT[col]! + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cell(page, col, row)).toBeFocused(); // Glide focuses the cell after a render
 }
 
@@ -34,7 +34,7 @@ test('lookup fields: Lookup tab, list text in the datasheet, keyboard choice, Li
     for (const Nom of ['Dupont', 'Martin', 'Arnaud']) await insertRow(db, clients, { Nom }, localeInfo('fr-FR'));
     await insertRow(db, commandes, { Client: 1 }, localeInfo('fr-FR')); // Dupont
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Commandes').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -85,7 +85,7 @@ test('lookup fields: Lookup tab, list text in the datasheet, keyboard choice, Li
 
     // the drop-down list, sorted on Nom, starts on the stored value; the arrows choose, Enter saves the bound value
     await clickCell(page, 1, 0);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(editor(page)).toBeFocused();
     await expect(editor(page)).toHaveValue('Dupont');
     await expect(page.getByTestId('lookup-list').getByRole('option')).toHaveText(['Arnaud', 'Dupont', 'Martin']);
@@ -141,7 +141,7 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
   const labels = (page: Page) => page.locator('.fprops .plist .prow > label');
   const ALL = [P.displayControl, P.rowSourceType, P.rowSource, P.boundColumn, P.columnCount, P.columnHeads, P.columnWidths, P.listRows, P.listWidth,
     P.limitToList, P.allowMultipleValues, P.allowValueListEdits, P.listItemsEditForm, P.showOnlyRowSourceValues];
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Commandes').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -206,14 +206,13 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
     await page.getByTestId('status-view-datasheet').click();
     await expect(cell(page, 1, 0)).toHaveText('Dupont');
     await expect(cell(page, 3, 0)).toHaveText('xyz'); // SQL: a value not in its list shows as stored
-    const at = [0, 80, 190, 360];
     const click = async (col: number) => {
       const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-      await page.mouse.click(b.x + MARKER + at[col]! + 30, b.y + HEADER + ROW / 2);
+      await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + ROW / 2);
       await expect(cell(page, col, 0)).toBeFocused();
     };
     await click(1);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(editor(page)).toHaveValue('Dupont');
     await expect(page.getByTestId('lookup-heads')).toHaveText('NomVille');
     const options = page.getByTestId('lookup-list').getByRole('option');
@@ -224,15 +223,16 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
     expect(shown).toBe(2 * 24);
     await expect(page.getByTestId('lookup-edit-list')).toHaveCount(0); // a table source: no Edit List Items
     await page.keyboard.press('Escape');
+    await expect(editor(page)).toHaveCount(0);   // the list no longer covers the column to click next
     await click(3);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(options).toHaveCount(3); // SQL (A3): the query's rows, in its order
     await expect(options.first()).toHaveAccessibleName('Arnaud');
     await page.keyboard.press('Escape');
 
     // Edit List Items: one item per line and the Default Value, saved as the field's design
     await click(2);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(page.getByRole('option')).toHaveText(['Ouverte', 'Fermée']);
     await page.getByTestId('lookup-edit-list').click();
     await expect(editor(page)).toHaveCount(0);
@@ -244,7 +244,7 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
     await expect.poll(async () => (await page.evaluate(() => (window as any).basecraft.tables.design('Commandes'))).fields[2].props)
       .toMatchObject({ defaultValue: '"En attente"', lookup: { kind: 'values', values: ['Ouverte', 'Fermée', 'En attente'], allowValueListEdits: true } });
     await click(2);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(page.getByRole('option')).toHaveText(['Ouverte', 'Fermée', 'En attente']);
     await page.keyboard.press('Escape');
   } finally {
@@ -264,7 +264,7 @@ test('Lookup fix round: hidden rows drop their errors, Row Source kept across ty
   });
   const P = fr.fieldProp;
   const design = (page: Page) => page.evaluate(() => (window as any).basecraft.tables.design('Tickets'));
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Tickets').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -290,15 +290,14 @@ test('Lookup fix round: hidden rows drop their errors, Row Source kept across ty
     expect((await design(page)).fields[1].props.lookup.displayControl).toBe('listBox');
 
     await page.getByTestId('status-view-datasheet').click();
-    const at = [0, 80, 250, 420];
     const open = async (col: number) => {
       // a saved list reloads the datasheet (its selection is reset): click again until the cell keeps the focus
       await expect(async () => {
         const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-        await page.mouse.click(b.x + MARKER + at[col]! + 30, b.y + HEADER + ROW / 2);
+        await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + ROW / 2);
         await expect(cell(page, col, 0)).toBeFocused({ timeout: 1000 });
       }).toPass();
-      await page.keyboard.press('Enter');
+      await page.keyboard.press('F2');
       await expect(editor(page)).toBeFocused();
     };
     // Statut: an empty list still opens, and F2 opens Edit List Items

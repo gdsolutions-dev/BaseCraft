@@ -16,17 +16,18 @@ const aborted = () => Object.assign(new Error('Report loading aborted'), { name:
 export const reportCancelled = () => Object.assign(new Error('bc:actionCancelled'), { name: 'AbortError' });
 
 /** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted.
- *  `where`: the opening's Where Condition (OpenReport, R8): only the rows it keeps. */
+ *  `where`: the opening's Where Condition (OpenReport, R8): only the rows it keeps. `max`: at most that many rows (Layout view). */
 export async function loadReportData(api: Pick<BasecraftApi, 'sources'>, ref: RecordSourceRef, params?: Record<string, CellInput>,
-  signal?: AbortSignal, where?: string): Promise<ReportData> {
+  signal?: AbortSignal, where?: string, max = Infinity): Promise<ReportData> {
   const { fields } = await api.sources.describe(ref);
   const rows: ReportData['rows'] = [];
   for (let offset = 0; ; offset += DATA_PAGE) {
     if (signal?.aborted) throw aborted();
-    const p = await api.sources.page(ref, { offset, limit: DATA_PAGE, ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
+    const p = await api.sources.page(ref, { offset, limit: Math.min(DATA_PAGE, max - offset), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}), ...(offset === 0 ? { fresh: true } : {}) });
     if (signal?.aborted) throw aborted();
     rows.push(...p.rows);
-    if (!p.rows.length || offset + DATA_PAGE >= p.total) return { fields, rows };
+    if (rows.length > max) rows.length = max;
+    if (!p.rows.length || offset + DATA_PAGE >= p.total || rows.length >= max) return { fields, rows };
   }
 }
 
@@ -55,11 +56,11 @@ export async function docParameters(api: Pick<BasecraftApi, 'sources'>, doc: Des
 }
 
 /** Step 3: every row of the record source (none without one), with the parameter values (docParameters) and the Where
- *  Condition on every page read. */
+ *  Condition on every page read; `max`: at most that many rows. */
 export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: DesignDoc, params?: Record<string, CellInput>, signal?: AbortSignal,
-  where?: string): Promise<ReportData> {
+  where?: string, max?: number): Promise<ReportData> {
   if (!doc.recordSource) return { fields: [], rows: [] };
-  return loadReportData(api, doc.recordSource, params, signal, where);
+  return loadReportData(api, doc.recordSource, params, signal, where, max);
 }
 
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.

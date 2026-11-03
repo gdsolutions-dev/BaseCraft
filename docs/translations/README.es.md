@@ -64,7 +64,7 @@ El objetivo: que un buen usuario de Excel, sin escribir código, construya en un
 - Tablas vinculadas: vincula las tablas de otro archivo BaseCraft o de un archivo SQLite, Administrador de tablas vinculadas
 - Guardar como, Compactar y reparar; asociación de archivos `.basecraft`
 - Cinta de opciones, panel de navegación, pestañas, temas claro y oscuro
-- Archivo › Opciones: ajustes del equipo (confirmaciones, bases de datos recientes, última base de datos al iniciar, carpeta predeterminada) y opciones de la base de datos (menús, menús contextuales, teclas especiales, barra de estado, pestañas, compactar al cerrar)
+- Archivo › Opciones: ajustes del equipo (confirmaciones, bases de datos recientes, última base de datos al iniciar, carpeta predeterminada) y opciones de la base de datos (menús, menús contextuales, teclas especiales, barra de estado, pestañas, compactar al cerrar), además de las teclas Entrar y de dirección, las líneas de cuadrícula, el ancho y la fuente de las hojas de datos, los años de cuatro dígitos y los valores predeterminados de Buscar, los valores predeterminados de los diseñadores de objetos (tipo y tamaño de los campos nuevos, AutoIndex, AutoJoin, fuentes de los diseñadores, comportamiento de selección) y los márgenes de impresión predeterminados, la corrección automática de nombres (seguimiento, aplicación y registro de los cambios de nombre) y las opciones de actualización de propiedades
 
 ## Hoja de ruta
 

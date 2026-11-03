@@ -5,7 +5,8 @@ import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from './fixtures/fact
 import { instantReport } from './instant';
 import { layoutReport } from './layout';
 import { readReport } from './model';
-import { renderDocumentHtml, renderPageHtml, reportCss } from './render';
+import { itemAt, occurrences } from './flow';
+import { renderDocumentHtml, renderFlowHtml, renderPageHtml, reportCss } from './render';
 import { lineHeight } from './text';
 import type { FontSpec, LaidOutBand, LaidOutItem, LaidOutPage, LaidOutReport } from './types';
 
@@ -154,5 +155,37 @@ describe('the print document (final review I3)', () => {
     const rule = new RegExp(`\.${used[0]}\{([^}]*)\}`).exec(html)![1];
     expect(rule).toContain('border:0.75pt solid #ff0000'); expect(rule).toContain('color:#123456'); expect(rule).toContain('font-family:"BC Liberation Sans"');
     expect(renderPageHtml(r.pages[0]!, r)).toContain('data-x="0"');   // l'aperçu garde son modèle
+  });
+});
+
+describe('flow rendering and item lookup (L3)', () => {
+  const BEFORE = '<div class="bc-page" data-page="1" style="width:595.3pt;height:841.9pt"><div class="bc-band" data-section="detail" data-top="567" data-height="1000" style="left:28.35pt;top:28.35pt;width:538.6pt;height:50pt"><div class="bc-text" style="left:28.35pt;top:1pt;width:150pt;height:15pt;color:#000000;font-family:&quot;BC Liberation Sans&quot;;font-size:10pt;font-weight:400;font-style:normal"><span class="bc-line" data-x="0" data-y="0" data-w="120" style="left:0pt;top:0pt;line-height:11.5pt">a</span></div></div></div>';
+  const T = (name: string, o = {}) => textItem('x', { name, ...o });
+  const flowRep = (): LaidOutReport => ({ width: 11906, height: 3000, issues: [], pages: [{ number: 1, bands: [
+    band([T('Total', { left: 100, top: 50 }), T('Multi', { left: 0, top: 400, width: 2000, height: 600, lines: [{ text: 'a', x: 0, y: 0, width: 5 }, { text: 'b', x: 0, y: 200, width: 5 }] })], { section: 'reportHeader', top: 0, left: 567, height: 1000 }),
+    band([T('Total', { left: 100, top: 0 }), { kind: 'line', name: 'L', x1: 3000, y1: 250, x2: 2000, y2: 100, border: { width: 15, color: '#000000', style: 'solid' } }], { top: 1000, left: 567, height: 300 }),
+    band([T('Total', { left: 100, top: 0 })], { top: 1300, left: 567, height: 300 }),
+  ] }] });
+  it('renderPageHtml is unchanged', () => {
+    // captured before the change, from the unmodified renderPageHtml
+    expect(renderPageHtml(pageWithText('a', { left: 567, top: 20 }), rep)).toBe(BEFORE);
+  });
+  it('renderFlowHtml: one data-name per occurrence, band data, bottom space', () => {
+    const html = renderFlowHtml(flowRep());
+    expect(html.match(/data-name="Total"/g)).toHaveLength(3); expect(html).toContain('data-section="detail" data-top="1000" data-height="300"');
+    expect(html).toContain('<svg data-name="L" class="bc-rule"'); expect(html).toContain(`height:${(3000 + 567) / 20}pt`);
+  });
+  it('renderFlowHtml escapes the control name', () => {
+    const r = flowRep(); r.pages[0]!.bands[0]!.items.push(T('a"b<&'));
+    expect(renderFlowHtml(r)).toContain('data-name="a&quot;b&lt;&amp;"');
+  });
+  it('occurrences: absolute twips, one per record, multi-line is one', () => {
+    expect(occurrences(flowRep(), 'Total').map((o) => [o.left, o.top, o.section, o.row])).toEqual([[667, 50, 'reportHeader', 0], [667, 1000, 'detail', 0], [667, 1300, 'detail', 1]]);
+    expect(occurrences(flowRep(), 'Multi')).toEqual([{ left: 567, top: 400, width: 2000, height: 600, section: 'reportHeader', row: 0 }]);
+    expect(occurrences(flowRep(), 'L')[0]).toMatchObject({ left: 2567, top: 1100, width: 1000, height: 150 });
+  });
+  it('itemAt: null in gaps, topmost on overlap', () => {
+    const r = flowRep(); expect(itemAt(r, 5000, 5000)).toBeNull(); expect(itemAt(r, 700, 100)).toBe('Total');
+    r.pages[0]!.bands[0]!.items.push(T('Over', { left: 100, top: 50 })); expect(itemAt(r, 700, 100)).toBe('Over');
   });
 });

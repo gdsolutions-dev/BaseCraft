@@ -6,13 +6,14 @@ import { defaultProps, sameName } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { isSelectBody, type Query } from '../../shared/query/ast';
+import { isActionDefinition, passThroughOf } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import { contentBlocked } from '../shell/Banners';
 import { bcErrorCode, type ModalApi, type ModalButton } from '../shell/Modal';
 import type { AppDispatch } from '../shell/nav-menu';
-import type { DocTab } from '../state/app-state';
+import { isRunningForm, type DocTab } from '../state/app-state';
 import { promptParameters } from './prompt-parameters';
 
 export type ActionOutcome = 'done' | 'cancelled' | 'blocked' | 'failed';
@@ -41,7 +42,7 @@ async function inUse(table: string, makeTable: boolean): Promise<boolean> {
     if (!x.dirty || x.isNew) continue;
     if (x.kind === 'table' && x.name === table && (x.mode === 'datasheet' || makeTable)) return true;
     if (x.kind === 'query' && x.mode === 'run' && await writes({ kind: 'query', name: x.name })) return true;
-    if (x.kind === 'form' && x.mode !== 'design') {
+    if (isRunningForm(x)) {
       // the sources whose record is being edited, the form's own or a subform's, as the form publishes them with its tab
       for (const src of x.dirtySources ?? []) if (src.kind === 'table' ? sameName(src.name, table) : await writes(src)) return true;
     }
@@ -76,6 +77,14 @@ const parameterError = (e: unknown) => {
   return m ? { missing: m[1] === 'missingParameter', name: m[2]! } : null;
 };
 
+/** After a run: the lists, every table's data and the queries read again. */
+async function refreshAfterRun(dispatch: AppDispatch | undefined, tables?: { name: string }[]): Promise<void> {
+  if (!dispatch) return;
+  void dispatch({ type: 'listsChanged' });
+  for (const t of tables ?? await api.tables.list()) void dispatch({ type: 'tableDataChanged', name: t.name });
+  void dispatch({ type: 'queryDataChanged' });
+}
+
 /**
  * Runs the action query `ref` (on a read-only base: refused at once, `dialog.op.readOnly`): its parameters asked in order (each one actionCount says is missing, with its PARAMETERS type
  * when declared; a value the main process cannot convert is shown, then asked again), the count confirmed
@@ -96,7 +105,14 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
     : modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['yes', 'no'], defaultButton: 'no' });
   const message = (messageKey: string, params: object = {}) => modal.confirm({ titleKey: 'query.action.title', messageKey, params, buttons: ['ok'] });
   try {
-    const sql = ref.kind === 'sql' ? ref.sql : ((await api.objects.get('query', ref.name)).definition as { sql: string }).sql;
+    const def = ref.kind === 'sql' ? null : (await api.objects.get('query', ref.name)).definition;
+    if (passThroughOf(def)) { // C6 R11: Returns Records No runs at once: no parameter, count, question or in-use check (it writes no local table)
+      if (!isActionDefinition(def)) throw new Error('bc:notSelectQuery');
+      await api.queries.runAction(ref, {}, { skipFailures: false, replaceTable: false });
+      await refreshAfterRun(deps.dispatch);
+      return 'done';
+    }
+    const sql = ref.kind === 'sql' ? ref.sql : (def as { sql: string }).sql;
     const q = parse(sql);
     const kind = q && kindOf(q);
     if (!q || !kind) throw new Error('bc:notSelectQuery'); // a select query that cannot run: a saved query it reads became an action query
@@ -172,9 +188,7 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
         if (before !== undefined && before !== made) void dispatch({ type: 'tableRenamed', from: before, to: made });
         void dispatch({ type: 'tableSaved', name: made });
       }
-      void dispatch({ type: 'listsChanged' });
-      for (const t of tables) void dispatch({ type: 'tableDataChanged', name: t.name });
-      void dispatch({ type: 'queryDataChanged' });
+      await refreshAfterRun(dispatch, tables);
     }
     return 'done';
   } catch (e) {

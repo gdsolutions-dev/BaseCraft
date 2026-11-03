@@ -5,14 +5,16 @@ import type { TableDesign } from '../../shared/field-types';
 
 export interface Point { x: number; y: number }
 /** A table box on the canvas; `scroll`: how far its field list is scrolled. */
-export interface Box { x: number; y: number; w: number; h: number; scroll?: number }
+export interface Box { x: number; y: number; w: number; h: number; scroll?: number; row?: number }
 
 /** Box width, title height, field row height, list padding, rows shown before the list scrolls (RelationsView's CSS uses them). */
 export const BOX_W = 200, HEAD = 34, ROW = 24, PAD = 4, MAX_ROWS = 8;
 const GAP = 48, MARGIN = 24, STUB = 24; // between boxes, around the drawing, straight run out of a box
 
 /** Its 1 px borders included (the title and field rows sit 1 px lower than the anchors say: not visible). */
-export const boxHeight = (fields: number): number => 2 + HEAD + 2 * PAD + Math.min(Math.max(fields, 1), MAX_ROWS) * ROW;
+export const boxHeight = (fields: number, row = ROW): number => 2 + HEAD + 2 * PAD + Math.min(Math.max(fields, 1), MAX_ROWS) * row;
+/** Field row height of the query design font (pt): the Access 8 pt default keeps ROW, a bigger font grows it (O3 R7). */
+export const rowFor = (pt: number): number => Math.max(ROW, Math.ceil(pt * 2 + 8));
 const SLOT_H = boxHeight(MAX_ROWS);
 
 /** Positions of `tables`: an existing one keeps its place; the others fill a grid, left to right, as wide as `size` allows,
@@ -37,7 +39,7 @@ export function autoLayout(tables: string[], existing: RelationsLayout, size: { 
 }
 
 /** Height of field `i` on its box's edge; a field scrolled out of view sticks to the top or bottom of the list. */
-const anchorY = (b: Box, i: number) => Math.min(Math.max(b.y + HEAD + PAD + i * ROW + ROW / 2 - (b.scroll ?? 0), b.y + HEAD), b.y + b.h);
+const anchorY = (b: Box, i: number) => Math.min(Math.max(b.y + HEAD + PAD + (i + 0.5) * (b.row ?? ROW) - (b.scroll ?? 0), b.y + HEAD), b.y + b.h);
 
 /** The line from field `aField` of the parent box `a` to field `bField` of the child box `b`: straight runs out of facing sides
  *  (both on the right when the boxes are one above the other). `oneEnd` and `manyEnd`: where "1" and "∞" go, just outside

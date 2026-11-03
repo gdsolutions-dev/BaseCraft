@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { cssFamily, resolveFont } from '../../shared/fonts';
 import { layoutReport } from '../../shared/report/layout';
+import { fourDigitYear } from '../settings-store';
 import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
 import { renderPageHtml, reportCss } from '../../shared/report/render';
 import type { LaidOutPage, LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
@@ -13,6 +14,8 @@ import { RUNTIME } from '../../shared/product';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
+import type { DocMode } from '../state/app-state';
+import { allowsLayout } from '../form/views';
 import { errorMessage as dialogError, useModal, type ModalApi } from '../shell/Modal';
 import { RibbonPopup } from '../designer/RibbonPopup';
 import { exportSource } from '../exchange/export';
@@ -27,9 +30,17 @@ import { PageSetupDialog, PageSetupMenu } from './PageSetupDialog';
 import { formulaLang } from '../../shared/i18n';
 import './preview.css';
 
-/** Tabs whose preview was entered from Design view (the designer adds its tab when it lets the change of mode through):
- *  Close Preview goes back to Design view for them, and closes the tab otherwise (spec contextual tabs 4.6). */
-export const previewFromDesign = new Set<string>();
+/** Tabs whose preview was entered from the designer, with the view it was in (Design or Layout, L3): the designer records its
+ *  tab when it lets the change of mode through. Close Preview goes back to that view, and closes the tab otherwise (spec
+ *  contextual tabs 4.6). */
+export const previewFromDesign = new Map<string, DocMode>();
+/** The view to go back to on Close Preview, read once; undefined when the preview was not entered from the designer. Layout
+ *  view no longer allowed (`layoutAllowed` false: the saved AllowLayoutView = false): Design view instead. */
+export function takePreviewReturn(id: string, layoutAllowed = true): DocMode | undefined {
+  const mode = previewFromDesign.get(id);
+  previewFromDesign.delete(id);
+  return mode === 'layout' && !layoutAllowed ? 'design' : mode;
+}
 type PerView = 1 | 2 | 4 | 8 | 12;
 const MORE_PAGES = [4, 8, 12] as const;
 
@@ -57,7 +68,7 @@ const PX_PER_TWIP = 1 / 15; // 96 px per inch, 1440 twips per inch
 const GAP = 16; // px between two pages and around them
 
 /** The CSS font shorthand of every face the pages draw, for document.fonts.load (a non-portable font draws Liberation Sans). */
-const faces = (r: LaidOutReport) => new Set(r.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => {
+export const faces = (r: LaidOutReport) => new Set(r.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => {
   if (i.kind !== 'text') return [];
   const f = resolveFont(i.font.name);
   return [`${i.font.italic ? 'italic ' : ''}${i.font.bold ? 700 : 400} 12px "${cssFamily(f.portable ? f.family : 'Liberation Sans')}"`];
@@ -67,7 +78,7 @@ const faces = (r: LaidOutReport) => new Set(r.pages.flatMap((p) => p.bands.flatM
 export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
-    locale: s.region, lang: formulaLang(s.uiLanguage), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
+    locale: s.region, lang: formulaLang(s.uiLanguage), fourDigitYear: fourDigitYear(), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue,   // [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }
@@ -163,6 +174,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const [zoom, setZoom] = useState<'fitPage' | 'actual'>('fitPage');
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [draft, setDraft] = useState<string | null>(null); // the page number being typed; null: the current page's
+  const [layoutAllowed, setLayoutAllowed] = useState<boolean | null>(null); // L3: AllowLayoutView of the definition read; null: none read
   const doc = useRef<DesignDoc | null>(null);
   const data = useRef<ReportData | null>(null);
   const ctl = useRef<AbortController | null>(null);
@@ -191,10 +203,12 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       setFontsReady(false);
       if (from === 'object' || !doc.current) {
         doc.current = null; // a definition that can no longer be read is never saved back by Page Setup
+        setLayoutAllowed(null);
         data.current = null;
         const def = await loadReportDoc(api, tab.name);
         if (!live()) return;
         doc.current = def;
+        setLayoutAllowed(allowsLayout(def, 'report'));   // at once: neither the layout nor its failure is waited for
         await events.current?.close();   // read again (its design saved): closed, then opened again
         if (!live()) return;
         const ev = events.current = reportEvents(def, tab.name);
@@ -242,10 +256,10 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     } finally { release?.(); }
   };
 
-  /** Back to Design view when entered from it, else the tab closes. */
+  /** Back to the view it was entered from (Design or Layout), else the tab closes. */
   const closePreview = () => {
-    if (previewFromDesign.delete(tab.id)) dispatch({ type: 'setMode', id: tab.id, mode: 'design' });
-    else dispatch({ type: 'close', id: tab.id });
+    const back = takePreviewReturn(tab.id, !doc.current || allowsLayout(doc.current, 'report'));
+    dispatch(back ? { type: 'setMode', id: tab.id, mode: back } : { type: 'close', id: tab.id });
   };
 
   /** Page Setup dialog, Margins, Size, Portrait, Landscape: saved into the definition, then laid out again. BaseCraft Runtime
@@ -315,7 +329,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   // Portrait / Landscape pressed as the definition's page setup says (the rule of Design view); none while loading
   const laid = phase.k === 'ready' ? phase.report : null;
   const orientation = useMemo(() => (laid && doc.current ? readReport(doc.current, []).page.orientation : null), [laid]);   // doc.current is set before each layout
-  useEffect(() => (orientation ? registerCommandStates(tab.id, orientationStates(orientation)) : undefined), [tab.id, orientation]);
+  // L3: Layout view off as soon as the definition read says AllowLayoutView = false (as Design view does), loading or not
+  const states = JSON.stringify({ ...(orientation ? orientationStates(orientation) : {}), ...(layoutAllowed === null ? {} : { viewLayout: { enabled: layoutAllowed } }) });
+  useEffect(() => registerCommandStates(tab.id, JSON.parse(states)), [tab.id, states]);
 
   useLayoutEffect(() => {
     const el = viewport.current;
@@ -328,7 +344,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const report = phase.k === 'ready' ? phase.report : null;
   const count = report?.pages.length ?? 0;
   const step = perView;
-  const shown = useMemo(() => (report ? report.pages.slice(first, first + step) : []), [report, first, step]);
+  // Mode État: every page under the other, fitted to the width, no page bar (every page is in the DOM: a very long report wants a window)
+  const continuous = tab.mode === 'state';
+  const shown = useMemo(() => (report ? (continuous ? report.pages : report.pages.slice(first, first + step)) : []), [report, first, step, continuous]);
   // the pages drawn only: thousands of pages, shown as they are laid out, are never all scanned at each update
   const drawn = useMemo(() => (report ? { ...report, pages: shown } : null), [report, shown]);
   const css = useMemo(() => (drawn ? reportCss(drawn, 'fonts/') : ''), [drawn]);
@@ -348,11 +366,12 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
 
   useEffect(() => { if (active && report && fontsReady) viewport.current?.focus({ preventScroll: true }); }, [active, report, fontsReady]);
 
-  const cols = perView <= 2 ? perView : perView / 2; // Access: 4, 8 and 12 pages on two rows
+  const cols = continuous ? 1 : perView <= 2 ? perView : perView / 2; // Access: 4, 8 and 12 pages on two rows
   const go = (i: number) => { const to = Math.max(0, Math.min(i, count - 1)); setFirst(to); setDraft(null); };
   const pw = (report?.width ?? 0) * PX_PER_TWIP, ph = (report?.height ?? 0) * PX_PER_TWIP;
   const across = Math.min(shown.length, cols), down = Math.ceil(shown.length / cols) || 1;
-  const z = zoomFor(zoom, { w: across * pw + (across - 1) * GAP, h: down * ph + (down - 1) * GAP }, { w: size.w - 2 * GAP, h: size.h - 2 * GAP });
+  const z = continuous ? (pw > 0 ? (size.w - 2 * GAP) / pw : 1)
+    : zoomFor(zoom, { w: across * pw + (across - 1) * GAP, h: down * ph + (down - 1) * GAP }, { w: size.w - 2 * GAP, h: size.h - 2 * GAP });
 
   const navBtn = (key: string, Icon: LucideIcon, to: number, disabled: boolean) => (
     <button className="iconbtn" data-testid={`preview-nav-${key}`} aria-label={t(`report.nav.${key}`)} title={t(`report.nav.${key}`)}
@@ -388,7 +407,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
           </div>
         )}
       </div>
-      <div className="recnav rp-nav" role="group" aria-label={t('report.nav.page')}>
+      <div className="recnav rp-nav" role="group" aria-label={t('report.nav.page')} style={continuous ? { display: 'none' } : undefined}>
         {navBtn('first', ChevronFirst, 0, first === 0)}
         {navBtn('prev', ChevronLeft, first - step, first === 0)}
         <span className="recpos">

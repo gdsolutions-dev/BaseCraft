@@ -6,7 +6,7 @@ import { f, t } from '../test-fixtures';
 import { defaultProps, sameName, type FieldProps, type TableDesign } from '../field-types';
 import type { CrosstabQuery, SelectQuery } from './ast';
 import { inHeadings } from './crosstab';
-import { bindQuery, boundArgType, exprType, LOCAL_SOURCE, toSourceInfo, type BoundQuery, type QueryCatalog } from './bind';
+import { bindQuery, boundArgType, exprType, LOCAL_SOURCE, toSourceInfo, type BoundQuery, type QueryCatalog, type ResolvedRef } from './bind';
 import { parseQueryDefinition, queryDependents } from './definition';
 import { parseSql } from './sql-parser';
 import { printSql } from './print';
@@ -186,6 +186,15 @@ describe('resolving identifiers', () => {
     expect(b('SELECT Nom, Nom FROM Clients AS C').columns.map((c) => c.name)).toEqual(['Nom', 'C.Nom']);
     expect(bindErr('SELECT Nom, Nom, Nom FROM Clients')).toEqual(['duplicateOutput', 'Clients.Nom']); // still the same name
     expect(bindErr('SELECT Nom, Ville AS [Clients.Nom], Nom FROM Clients')).toEqual(['duplicateOutput', 'Clients.Nom']);
+  });
+  it('a column ref carries its source (O4): a table, a saved query, a derived table, and those * expands to', () => {
+    const q = b('SELECT C.Nom, Q1.Ville, D.Montant, D.* FROM Clients AS C, Q1, (SELECT Montant FROM Commandes) AS D');
+    const src = (e: Expr) => (q.refs.get(e) as Extract<ResolvedRef, { kind: 'column' }>).src;
+    const items = (q.query.body as SelectQuery).items.flatMap((i) => ('e' in i ? [i.e] : []));
+    expect(items.map(src)).toMatchObject([{ alias: 'C', name: 'Clients', kind: 'table' }, { alias: 'Q1', name: 'Q1', kind: 'query' },
+      { alias: 'D', name: 'D', kind: 'derived' }]);
+    items.forEach((e, i) => expect(src(e)).toBe(q.sources[i])); // the level's own BoundSource
+    expect(src(q.columns[3].expr)).toBe(q.sources[2]);
   });
 });
 

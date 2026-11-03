@@ -7,11 +7,11 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { clients } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80; // DatasheetView's geometry (datasheet.spec.ts)
+const MARKER = 44, HEADER = 34, ROW = 30; // DatasheetView's geometry (datasheet.spec.ts)
 
 const clientsBase = (name: string, ...noms: string[]) => seedBase(name, async (db) => {
   createTable(db, clients);
@@ -30,7 +30,7 @@ async function invalidPendingRow(page: Page) {
   const grid = page.getByTestId('datasheet').getByTestId('data-grid-canvas');
   await expect(grid).toBeVisible();
   const b = (await grid.boundingBox())!;
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + 30, b.y + HEADER + 1 * ROW + ROW / 2); // the trailing row's Nom
+  await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 1 * ROW + ROW / 2); // the trailing row's Nom
   await expect(cellEditor(page)).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(cellEditor(page)).toHaveCount(0);

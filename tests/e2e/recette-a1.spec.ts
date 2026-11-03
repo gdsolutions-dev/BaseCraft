@@ -3,11 +3,10 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launchApp } from './helpers';
+import { launchApp, colLeft } from './helpers';
 
 // DatasheetView: row selector width, header and row heights, column widths of the table below (AutoNumber, short text ×2, date, yes/no, currency).
-const MARKER = 44, HEADER = 34, ROW = 30;
-const WIDTHS = [80, 170, 170, 150, 80, 120];
+const HEADER = 34, ROW = 30;
 
 async function canvas(page: Page) {
   return (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
@@ -17,7 +16,7 @@ const cellEditor = (page: Page) => page.getByTestId('grid-editor-portal').locato
 /** Clicks a cell of the grid (column index, row index; the trailing row comes after the last record). */
 async function clickCell(page: Page, col: number, row: number) {
   const b = await canvas(page);
-  const x = MARKER + WIDTHS.slice(0, col).reduce((a, w) => a + w, 0) + 30;
+  const x = colLeft(col) + 30;
   await page.mouse.click(b.x + x, b.y + HEADER + row * ROW + ROW / 2);
 }
 /** Enter / Tab in an open editor keeps the text and moves; waits until the editor is gone and no row is being saved. */
@@ -69,7 +68,7 @@ test('recette A1', async () => {
   const env = { BASECRAFT_REGION: 'fr-FR' };
 
   // 1-2. new base, table Clients
-  let { app, page } = await launchApp({ env: { ...env, BASECRAFT_E2E_SAVE_PATH: base } });
+  let { app, page } = await launchApp({ enterMovesDown: true, env: { ...env, BASECRAFT_E2E_SAVE_PATH: base } });
   const apps = [app];
   try {
     await page.getByTestId('bs-new').click();
@@ -121,7 +120,7 @@ test('recette A1', async () => {
 
   // 5-6. relaunch on the file: three records, display formats; start-up time
   const t0 = Date.now();
-  ({ app, page } = await launchApp({ args: [base], env }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [base], env }));
   apps.push(app);
   try {
     await expect(page.getByTestId('nav-pane')).toBeVisible();
@@ -157,7 +156,7 @@ test('recette A1', async () => {
     ]);
 
     // 8. a second instance on the same file: read-only
-    const second = await launchApp({ args: [base], env });
+    const second = await launchApp({ enterMovesDown: true, args: [base], env });
     apps.push(second.app);
     const p = second.page;
     await expect(p.getByTestId('banner-readonly')).toBeVisible();

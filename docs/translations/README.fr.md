@@ -64,7 +64,7 @@ L'objectif : un bon utilisateur d'Excel, sans écrire de code, construit en un a
 - Tables liées : lier les tables d'un autre fichier BaseCraft ou d'un fichier SQLite, Gestionnaire de tables liées
 - Enregistrer sous, Compacter et réparer ; association du type de fichier `.basecraft`
 - Ruban, volet de navigation, onglets, thèmes clair et sombre
-- Fichier › Options : paramètres du poste de travail (confirmations, bases récentes, dernière base au démarrage, dossier par défaut) et options de la base (menus, menus contextuels, touches spéciales, barre d'état, onglets, compactage à la fermeture)
+- Fichier › Options : paramètres du poste de travail (confirmations, bases récentes, dernière base au démarrage, dossier par défaut) et options de la base (menus, menus contextuels, touches spéciales, barre d'état, onglets, compactage à la fermeture), ainsi que les touches Entrée et de direction, le quadrillage, la largeur et la police des feuilles de données, les années sur quatre chiffres et les valeurs par défaut de Rechercher, les valeurs par défaut des concepteurs d'objets (type et taille des nouveaux champs, index automatique, jointure automatique, polices des concepteurs, mode de sélection) et les marges d'impression par défaut, la correction automatique de nom (suivi, exécution et historique des renommages) et les options de mise à jour des propriétés
 
 ## Feuille de route
 

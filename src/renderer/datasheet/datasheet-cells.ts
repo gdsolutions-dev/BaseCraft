@@ -21,14 +21,14 @@ const STORED_DATE = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/;
 
 /** [display, edit text]. Numbers: grouped display, edit text in the regional form without grouping and with every digit;
  *  dates: the time is left out at midnight, and the edit text keeps a 24 h time that parseDateTime reads back. */
-export function texts(field: FieldDef, v: SqlValue, ctx: { locale: string; lang?: 'fr' | 'en' }): [string, string] {
+export function texts(field: FieldDef, v: SqlValue, ctx: { locale: string; lang?: 'fr' | 'en'; fourDigitYear?: boolean }): [string, string] {
   const [shown, edit] = plainTexts(field, v, ctx.locale);
   const p = field.props;
   if (!p.format) return [p.type === 'shortText' && p.inputMask && typeof v === 'string' ? throughMask(p.inputMask, v) : shown, edit];
   const value = formatable(v, p.type);
   if (value === undefined) return [shown, edit]; // stored by another tool as something else: shown as stored
   const lang = ctx.lang ?? (ctx.locale.toLowerCase().startsWith('fr') ? 'fr' : 'en');
-  return [formatValue(value, p.format, { locale: ctx.locale, lang, decimalPlaces: p.decimalPlaces }), edit];
+  return [formatValue(value, p.format, { locale: ctx.locale, lang, decimalPlaces: p.decimalPlaces, ...(ctx.fourDigitYear ? { fourDigitYear: true } : {}) }), edit];
 }
 
 /** A text stored without its literals is shown with them, as Access does; one that does not match (or a bad mask): as stored. */
@@ -100,7 +100,7 @@ const lookupCell = (shown: string, bound: SqlValue, readonly: boolean): LookupCe
   ({ kind: GridCellKind.Text, data: shown, displayData: shown, allowOverlay: true, readonly, bound });
 
 /** `lookup`: the field's list (given only for a Lookup field): the cell shows the list text, or the raw value when absent. */
-export function toCell(field: FieldDef, value: SqlValue, ctx: { locale: string; lang?: 'fr' | 'en'; readOnly: boolean; lookup?: LookupList }): GridCell {
+export function toCell(field: FieldDef, value: SqlValue, ctx: { locale: string; lang?: 'fr' | 'en'; fourDigitYear?: boolean; readOnly: boolean; lookup?: LookupList }): GridCell {
   const readonly = ctx.readOnly || field.props.type === 'autoNumber';
   if (ctx.lookup) return lookupCell(value === null ? '' : ctx.lookup.text.get(value) ?? texts(field, value, ctx)[0], value, readonly);
   if (field.props.type === 'yesNo') {
@@ -109,6 +109,37 @@ export function toCell(field: FieldDef, value: SqlValue, ctx: { locale: string; 
   const [displayData, data] = texts(field, value, ctx);
   const numeric = ['autoNumber', 'number', 'currency'].includes(field.props.type);
   return { kind: GridCellKind.Text, data, displayData, allowOverlay: true, readonly, ...(numeric ? { contentAlign: 'right' as const } : {}) };
+}
+
+/** R13: the text if it fits `width` (padding 10 px each side), else as many '#' as fit (at least one). */
+export function fitNumber(text: string, width: number, measure: (s: string) => number): string {
+  if (measure(text) + 20 <= width) return text;
+  return '#'.repeat(Math.max(1, Math.floor((width - 20) / measure('#'))));
+}
+
+/** Text width in the grid's cell font, from one offscreen canvas; cached per font and text. */
+const measureCache = new Map<string, number>();
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+export const measureIn = (font: string) => (s: string): number => {
+  const k = `${font}|${s}`;
+  let w = measureCache.get(k);
+  if (w === undefined) {
+    measureCtx ??= document.createElement('canvas').getContext('2d');
+    if (!measureCtx) return 0;
+    measureCtx.font = font;
+    w = measureCtx.measureText(s).width;
+    if (measureCache.size > 5000) measureCache.clear();
+    measureCache.set(k, w);
+  }
+  return w;
+};
+
+/** « Vérifier les champs numériques tronqués »: a Number, Currency or AutoNumber Text cell too wide for its column shows ####;
+ *  a copy still gives the shown value. Only right-aligned cells (those showing a number): a Lookup's list text and the (New) label stay. */
+export function truncateNumber(field: FieldDef, cell: GridCell, width: number, measure: (s: string) => number): GridCell {
+  if (cell.kind !== GridCellKind.Text || cell.contentAlign !== 'right' || !['autoNumber', 'number', 'currency'].includes(field.props.type) || !cell.displayData) return cell;
+  const shown = fitNumber(cell.displayData, width, measure);
+  return shown === cell.displayData ? cell : { ...cell, displayData: shown, copyData: cell.displayData };
 }
 
 /** Stored value of each field's default (null without one, or when it cannot be computed: the save reports it),

@@ -3,21 +3,20 @@ import { isAbsolute, join } from 'node:path';
 
 import type { AppSettings } from '../shared/api';
 import { isUiLanguage } from '../shared/i18n';
+import { DEFAULT_SETTINGS } from '../shared/settings-defaults';
 import { basePath } from './ipc-validate';
 export type { AppSettings };
 
 const file = (dir: string) => join(dir, 'settings.json');
 
 export const MAX_RECENT = 50;
-export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
-  locale: 'system', theme: 'system', recentFiles: [],
-  defaultFolder: '', recentCount: 10, openLast: false,
-  confirmRecordChanges: true, confirmDocumentDeletions: true, confirmActionQueries: true,
-  openMode: 'shared', recordLocking: 'none', refreshInterval: 60, updateRetries: 2, updateRetryMs: 250,
-};
+export { DEFAULT_SETTINGS };
 
 const bool = (v: unknown): v is boolean => typeof v === 'boolean';
+const oneOf = <T extends string>(...ok: T[]) => (v: unknown): v is T => ok.includes(v as T);
 const intIn = (lo: number, hi: number) => (v: unknown): v is number => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
 /** One check per key: a value that fails it is read as the key's default. */
 export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is AppSettings[K] } = {
   locale: (v): v is AppSettings['locale'] => v === 'system' || isUiLanguage(v),
@@ -29,6 +28,23 @@ export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is Ap
   openMode: (v): v is AppSettings['openMode'] => v === 'shared' || v === 'exclusive',
   recordLocking: (v): v is 'none' => v === 'none',
   refreshInterval: intIn(1, 32766), updateRetries: intIn(0, 10), updateRetryMs: intIn(0, 1000),
+  moveAfterEnter: oneOf('none', 'nextField', 'nextRecord'), enterFieldBehavior: oneOf('selectAll', 'start', 'end'),
+  arrowKeyBehavior: oneOf('nextField', 'nextCharacter'), continuousArrowKeys: oneOf('none', 'upDown', 'leftRight'),
+  findReplaceDefault: oneOf('fast', 'general', 'startOfField'),
+  cursorStopsAtEnds: bool, fourDigitYearAll: bool, gridlinesHorizontal: bool, gridlinesVertical: bool, datasheetFontUnderline: bool, datasheetFontItalic: bool,
+  columnWidth: intIn(300, 31680), datasheetFontSize: intIn(1, 127),
+  propertySheetFontSize: (v): v is AppSettings['propertySheetFontSize'] => [8, 9, 10, 11, 12, 14].includes(v as number),
+  defaultFieldType: oneOf('shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink'),
+  defaultTextSize: intIn(1, 255), defaultNumberSize: oneOf('byte', 'integer', 'longInteger', 'single', 'double', 'decimal'),
+  // No control character: the list is shown in an input and split on ';'.
+  autoIndex: (v): v is string | null => v === null || (typeof v === 'string' && v.length <= 255 && !CONTROL.test(v)),
+  propertyUpdateOptions: bool,
+  showTableNames: bool, outputAllFields: bool, autoJoin: bool,
+  // The name goes into a CSS font-family: nothing that could close the string or the rule.
+  queryFontName: (v): v is string => typeof v === 'string' && v.length >= 1 && v.length <= 64 && !/["\\;{}<>]/.test(v) && !CONTROL.test(v),
+  queryFontSize: intIn(1, 127), selectionBehavior: oneOf('partial', 'full'),
+  printMarginLeft: intIn(0, 5670), printMarginRight: intIn(0, 5670), printMarginTop: intIn(0, 5670), printMarginBottom: intIn(0, 5670),
+  datasheetFontWeight: (v): v is number => intIn(100, 900)(v) && (v as number) % 100 === 0,
 };
 
 /** Key by key, never throws: an absent, unknown or wrong value gives the key's default (the recent list drops its non-string entries). */

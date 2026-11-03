@@ -155,7 +155,9 @@ test('the Runtime rejects every design call and writes nothing, and keeps data e
     await expect(page.evaluate(() => (window as unknown as Win).basecraft.base.compact())).rejects.toThrow(noHandler);
     await expect(page.evaluate(() => (window as unknown as Win).basecraft.base.saveStartup(
       { appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
-        statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false }))).rejects.toThrow(noHandler);
+        statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false,
+        fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000,
+        trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false }))).rejects.toThrow(noHandler);
     expect(await inventory()).toEqual(before);
     expect(await state(page)).toMatchObject({ path: base, readOnly: false }); // still open
 

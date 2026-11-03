@@ -33,12 +33,22 @@ export interface StartupOptions {
   frontEnd: boolean;
   /** A shared data file: opened in shared mode by several workstations (C3 R1). */
   dataFile: boolean;
+  /** Four-digit year in custom date formats (O2 R11); the workstation's own switch is fourDigitYearAll. */
+  fourDigitYear: boolean;
+  /** Number cells too narrow for their text show #### (O2 R13). */
+  checkTruncatedNumbers: boolean;
+  /** Filter menu value lists of local indexed / non-indexed fields, and their record limit 0..32766 (O2 R14). */
+  filterListIndexed: boolean; filterListNonIndexed: boolean; filterListMax: number;
+  /** Name AutoCorrect (O4 R2): find the objects that use a renamed name; rewrite them; log each change. Effectuer needs Suivi, Historique needs Effectuer. */
+  trackNameAutoCorrect: boolean; performNameAutoCorrect: boolean; logNameAutoCorrect: boolean;
 }
 
 export const DEFAULT_STARTUP: StartupOptions = Object.freeze({
   appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
   statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false,
   frontEnd: false, dataFile: false,
+  fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000,
+  trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false,
 });
 
 /** Access's limit for a text property, in code points. */
@@ -91,6 +101,14 @@ export function readStartup(raw: unknown): StartupOptions {
     iconForForms: typeof o.iconForForms === 'boolean' ? o.iconForForms : DEFAULT_STARTUP.iconForForms,
     frontEnd: typeof o.frontEnd === 'boolean' ? o.frontEnd : DEFAULT_STARTUP.frontEnd,
     dataFile: typeof o.dataFile === 'boolean' ? o.dataFile : DEFAULT_STARTUP.dataFile,
+    fourDigitYear: typeof o.fourDigitYear === 'boolean' ? o.fourDigitYear : DEFAULT_STARTUP.fourDigitYear,
+    checkTruncatedNumbers: typeof o.checkTruncatedNumbers === 'boolean' ? o.checkTruncatedNumbers : DEFAULT_STARTUP.checkTruncatedNumbers,
+    filterListIndexed: typeof o.filterListIndexed === 'boolean' ? o.filterListIndexed : DEFAULT_STARTUP.filterListIndexed,
+    filterListNonIndexed: typeof o.filterListNonIndexed === 'boolean' ? o.filterListNonIndexed : DEFAULT_STARTUP.filterListNonIndexed,
+    filterListMax: Number.isInteger(o.filterListMax) && (o.filterListMax as number) >= 0 && (o.filterListMax as number) <= 32766 ? (o.filterListMax as number) : DEFAULT_STARTUP.filterListMax,
+    trackNameAutoCorrect: typeof o.trackNameAutoCorrect === 'boolean' ? o.trackNameAutoCorrect : DEFAULT_STARTUP.trackNameAutoCorrect,
+    performNameAutoCorrect: typeof o.performNameAutoCorrect === 'boolean' ? o.performNameAutoCorrect : DEFAULT_STARTUP.performNameAutoCorrect,
+    logNameAutoCorrect: typeof o.logNameAutoCorrect === 'boolean' ? o.logNameAutoCorrect : DEFAULT_STARTUP.logNameAutoCorrect,
   };
 }
 

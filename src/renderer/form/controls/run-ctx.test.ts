@@ -5,7 +5,7 @@ import { defaultProps, type FieldProps } from '../../../shared/field-types';
 import type { SourceInfo } from '../../../shared/record-source';
 import { lookupList } from '../../datasheet/datasheet-cells';
 import type { RecordSnapshot } from '../record-controller';
-import { listChoose, listCurrent, type RunCtx } from './run-ctx';
+import { ctlAttrs, hasLabel, labelTarget, listChoose, listCurrent, type RunCtx } from './run-ctx';
 
 const info: SourceInfo = { fields: [{ name: 'Client', type: 'number', props: { ...defaultProps('number'), numberSize: 'longInteger' } as FieldProps, origin: { table: 'Commandes', field: 'Client' } }],
   updatable: true, keyTable: 'Commandes', parameters: [] };
@@ -40,5 +40,23 @@ describe('combo and list box value', () => {
     listChoose(combo, c.x, -1, '2');
     expect(c.edits[1]).toEqual(['Client', '2']);
     expect(c.typed).toEqual({ Client: '2' });
+  });
+});
+
+describe('a layout label names its control', () => {
+  const x = { errors: {}, lists: {}, stops: new Set(), id: (n: string) => `v-${n}`, events: () => ({}), labels: { LClient: 'Client' } } as unknown as RunCtx;
+  it('a control with a layout label (or an attached one) takes its name from it, not from its own name', () => {
+    expect(hasLabel(combo, x)).toBe(true);
+    expect(ctlAttrs(combo, x)).not.toHaveProperty('aria-label');
+    const other = { ...combo, name: 'Autre' };
+    expect(ctlAttrs(other, x)['aria-label']).toBe('Autre');
+    expect(hasLabel({ ...other, children: [{ ...other, kind: 'label', name: 'LAutre' }] }, x)).toBe(true);
+  });
+  it('the label of a control finds it in its section, to link to it and hide with it', () => {
+    const label: ControlDef = { ...combo, kind: 'label', name: 'LClient' };
+    const section = { kind: 'detail' as const, height: 1000, props: {}, controls: [label, combo] };
+    expect(labelTarget(label, section, x)).toBe(combo);
+    expect(labelTarget(combo, section, x)).toBeUndefined();
+    expect(labelTarget(label, { ...section, controls: [label] }, x)).toBeUndefined();
   });
 });

@@ -7,7 +7,7 @@ import { saveObject } from '../../src/main/db/objects';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
-import { launchApp, SALES_QUERIES, seedBase, seedForm } from './helpers';
+import { launchApp, SALES_QUERIES, seedBase, seedForm, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -87,7 +87,7 @@ test('Query Design › Crosstab: the Crosstab row, a read-only datasheet, Column
 
     // 3. SQL view, then back to the grid: the canonical order (row headings, Column Heading, Value)
     await page.getByTestId('status-view-design').click();
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     const sql = doc(page).getByTestId('query-sql');
     await expect(sql).toHaveValue(/^TRANSFORM Sum\(\[Commandes\]\.\[Montant\]\)\n/);
     // an expression column keeps its names as typed (A3): [Le] stays unqualified
@@ -107,7 +107,8 @@ test('Query Design › Crosstab: the Crosstab row, a read-only datasheet, Column
     await expect(page.getByTestId('query-props-distinct')).toHaveCount(0);
     await expect(page.getByTestId('query-props-outputAll')).toHaveCount(0);
     await page.getByTestId('query-props-headings').fill('10;9;11');
-    await page.getByTestId('query-props-ok').click();
+    await page.getByTestId('query-props-headings').press('Enter');
+    await expect(page.getByTestId('query-props-headings')).toHaveValue('10;9;11'); // committed before the save reads the grid
     await save(page);
     expect(await sqlOf(page, 'QVentesMois')).toMatch(/\nPIVOT Month\(\[Le\]\) AS \[Mois\] IN \(10, 9, 11\);$/);
     await page.getByTestId('status-view-datasheet').click();
@@ -116,12 +117,12 @@ test('Query Design › Crosstab: the Crosstab row, a read-only datasheet, Column
     await page.getByTestId('cmd-propertySheet').click();
     await expect(page.getByTestId('query-props-headings')).toHaveValue('10;9;11');
     await page.getByTestId('query-props-headings').fill('[x]');
-    await page.getByTestId('query-props-ok').click();
+    await page.getByTestId('query-props-headings').press('Enter');
     await expect(page.getByTestId('query-props-headings-error')).toHaveText(fr.query.props.badHeadings);
 
     // 5. Column Headings cleared; a Where column on [Formulaires]! (Review Focus 4)
     await page.getByTestId('query-props-headings').fill('');
-    await page.getByTestId('query-props-ok').click();
+    await page.getByTestId('query-props-headings').press('Enter');
     await doc(page).getByTestId('qbe-field-Commandes-Le').dblclick();
     await doc(page).getByTestId('qbe-cell-total-4').selectOption({ label: fr.query.total.where });
     await doc(page).getByTestId('qbe-cell-crosstab-4').selectOption({ label: fr.query.crosstab.none });

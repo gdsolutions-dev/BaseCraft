@@ -5,7 +5,9 @@
 import { ChevronDown } from 'lucide-react';
 import { useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { entryCaret } from '../../datasheet/edit-keys';
 import { lookupColumns } from '../../datasheet/LookupEditor';
+import { currentSettings } from '../../settings-store';
 import { CLOSED, comboKey, placeList, prefixMatch, typed, visibleOptions, type ComboOption, type ComboState } from '../../shell/combobox-model';
 import { controlEnabled } from '../run-model';
 import { LIST_MAX, rowOfText } from '../row-source';
@@ -28,6 +30,8 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
   const popup = useRef<HTMLDivElement>(null);
   const down = useRef<boolean | null>(null);
   const tail = useRef<number | null>(null);   // AutoExpand: the length typed, the rest of the completed text selected
+  const clicked = useRef(false);   // the focus came from a click (on the text or the button): the caret stays where it landed
+  const focused = x.focused === c.name;
   const shown = visibleOptions(options, s.filter);
   const open = s.open && !locked && (shown.length > 0 || list.truncated);
   const id = x.id(c.name);
@@ -35,7 +39,14 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
   const optId = (o: ComboOption) => `${id}-opt-${o.id}`;
   const active = open ? shown[s.active] : undefined;
   const ev = x.events(c);
+  const attrs = ctlAttrs(c, x);
 
+  // entered by the keyboard: the selection of Behavior entering field (O2 R5), as a text box
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (focused && !clicked.current && !x.givenBack(c.name) && el && el === document.activeElement) el.setSelectionRange(...entryCaret(el.value.length, currentSettings().enterFieldBehavior));
+    clicked.current = false;
+  }, [focused]);
   useLayoutEffect(() => {
     const el = input.current;
     if (tail.current !== null && el && document.activeElement === el) el.setSelectionRange(tail.current, el.value.length);
@@ -89,13 +100,13 @@ export function ComboBoxCtl({ c, x, style }: CtlProps) {
 
   return (
     <div ref={box} className="frun-combo" style={style}>
-      <input ref={input} {...ctlAttrs(c, x)} className="frun-text" value={text} disabled={disabled} readOnly={readOnly}
+      <input ref={input} {...attrs} onMouseDown={(e) => { clicked.current = true; attrs.onMouseDown?.(e); }} className="frun-text" value={text} disabled={disabled} readOnly={readOnly}
         spellCheck={false} autoComplete="off" role="combobox" aria-autocomplete="both" aria-expanded={open} aria-controls={listId}
         aria-activedescendant={active ? optId(active) : undefined}
         onChange={onChange} onKeyDown={onKeyDown} onBlur={(e) => { setS(CLOSED); ev.onBlur(e); }} />
       <button type="button" className="frun-combo-toggle" tabIndex={-1} disabled={locked} data-testid={`form-ctl-${c.name}-toggle`}
         aria-label={x.t('app.showList')} aria-expanded={open} aria-controls={listId}
-        onMouseDown={(e) => e.preventDefault()} onClick={() => { input.current?.focus({ preventScroll: true }); toggle(); }}>
+        onMouseDown={(e) => e.preventDefault()} onClick={() => { clicked.current = document.activeElement !== input.current; input.current?.focus({ preventScroll: true }); toggle(); }}>
         <ChevronDown className="ic-sm" aria-hidden />
       </button>
       {open && createPortal(

@@ -26,7 +26,7 @@
 .dgrid tr.is-current td.gutter { box-shadow: inset 3px 0 0 var(--bc-accent); color: var(--bc-accent); }
 .dgrid tr.is-picked td { background: var(--accent-soft); }
 
-.fprops { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fprops { --bc-sheet-font: 12px; /* O3 R7: the Property Sheet font does not apply here */ flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .fprops-head { padding: var(--bc-space-2) var(--bc-space-3) 2px; font-weight: 600; }
 .fprops .ptabs { display: flex; padding: 0 6px; border-bottom: 1px solid var(--bc-border); }
 .fprops .ptab { position: relative; padding: 8px 10px; font-size: 12px; color: var(--bc-text-muted); white-space: nowrap; }
@@ -34,13 +34,13 @@
 .fprops .ptab.is-active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--bc-accent); }
 .fprops .plist { flex: 1; overflow: auto; max-width: 560px; }
 .fprops-empty { margin: var(--bc-space-3); font-size: 12px; }
-.prow { display: grid; grid-template-columns: 44% 1fr; min-height: 30px; align-items: stretch; border-bottom: 1px solid var(--grid-line); font-size: 12px; }
+.prow { display: grid; grid-template-columns: 44% 1fr; min-height: max(30px, calc(var(--bc-sheet-font, 12px) * 1.5 + 8px)); align-items: stretch; border-bottom: 1px solid var(--grid-line); font-size: var(--bc-sheet-font, 12px); }
 .prow > label { display: flex; align-items: center; padding: 0 var(--bc-space-2) 0 var(--bc-space-3); color: var(--bc-text-muted); }
 .pval { display: flex; align-items: center; min-width: 0; padding: 0 4px 0 var(--bc-space-2); border-left: 1px solid var(--grid-line); }
 .pval:hover { background: var(--hover); }
 .pval:focus-within { box-shadow: inset 0 0 0 2px var(--bc-accent); }
 .pval input:not([type="checkbox"]), .pval select {
-  flex: 1; min-width: 0; height: 28px; padding: 0 2px; border: 0; border-radius: 0; background: transparent; outline: 0; font-size: 12px;
+  flex: 1; min-width: 0; height: max(28px, calc(var(--bc-sheet-font, 12px) * 1.5 + 6px)); padding: 0 2px; border: 0; border-radius: 0; background: transparent; outline: 0; font-size: var(--bc-sheet-font, 12px);
 }
 .pval select:focus-visible { box-shadow: none; }
 .pval input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--bc-accent); }

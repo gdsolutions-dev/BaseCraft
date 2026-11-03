@@ -4,6 +4,9 @@ import { FACTURES_FIELDS } from '../../../shared/report/fixtures/factures';
 import { readReport } from '../../../shared/report/model';
 import { addGroup, addSort, addTotal, moveGroup, orderKind, removeGroup, setGroup } from './grouping-model';
 import { blankReport, removesControls, sectionOrder } from './report-sections';
+import { readLayouts } from '../../../shared/design/layout';
+import { createLayout, membersOf } from '../../../shared/design/layout-edit';
+import { designerReducer, initDesigner } from '../../designer/designer-model';
 
 const blank = blankReport();
 const groupSections = (d: DesignDoc) => d.sections.filter((s) => s.kind === 'groupHeader' || s.kind === 'groupFooter').map((s) => [s.kind, s.groupLevel]);
@@ -80,5 +83,35 @@ describe('grouping model (Group, Sort and Total pane)', () => {
     const [a, b] = footer.controls;
     expect(b!.top).toBeGreaterThanOrEqual(a!.top + a!.height);
     expect(footer.height).toBeGreaterThanOrEqual(b!.top + b!.height);
+  });
+});
+
+describe('a layout in a group section follows its group', () => {
+  // Région > Ville ; Ville et Code (chacun avec son étiquette) en Empilé dans l'en-tête de groupe Ville
+  const field = (name: string, top: number): ControlDef => ({ kind: 'textBox', name, left: 1500, top, width: 2000, height: 300, props: {},
+    children: [{ kind: 'label', name: `L${name}`, left: 0, top, width: 1000, height: 300, props: { Caption: `${name}:` } }] });
+  const grouped = (): DesignDoc => {
+    const d = addGroup(addGroup(blank, 'Région'), 'Ville');
+    const g = { ...d, sections: d.sections.map((s) => (s.kind === 'groupHeader' && s.groupLevel === 1 ? { ...s, height: 2000, controls: [field('Ville', 0), field('Code', 500)] } : s)) };
+    return createLayout(g, membersOf(g, ['Ville', 'Code']), 'stacked', { headerSection: 'pageHeader' });
+  };
+  const flat = (d: DesignDoc) => d.sections.flatMap((s) => s.controls.map((c) => [s.kind, s.groupLevel, c.name, c.left, c.top, c.props.LayoutID]));
+  it('deleting the outer group keeps the layout, its members and their coordinates (one level up)', () => {
+    const d0 = grouped();
+    const s = designerReducer(initDesigner(d0, 'report'), { type: 'edit', apply: (d) => removeGroup(d, 0) });
+    const [l] = readLayouts(s.doc);
+    expect(readLayouts(d0)[0].rows.map((r) => r.section)).toEqual(['groupHeader:1', 'groupHeader:1']);
+    expect(l).toEqual({ ...readLayouts(d0)[0], tops: { 'groupHeader:0': readLayouts(d0)[0].tops['groupHeader:1'] },
+      rows: readLayouts(d0)[0].rows.map((r) => ({ ...r, section: 'groupHeader:0' })) });
+    expect(flat(s.doc)).toEqual(flat(d0).filter((x) => x[0] === 'groupHeader').map((x) => [x[0], 0, ...x.slice(2)]));
+  });
+  it('swapping the groups moves the layout with its section', () => {
+    const d = moveGroup(grouped(), 1, 0);
+    expect(readLayouts(d)[0].rows.map((r) => r.section)).toEqual(['groupHeader:0', 'groupHeader:0']);
+    expect(Object.keys(readLayouts(d)[0].tops)).toEqual(['groupHeader:0']);
+  });
+  it('a group section removed takes its layout away', () => {
+    const s = designerReducer(initDesigner(grouped(), 'report'), { type: 'edit', apply: (d) => removeGroup(d, 1) });
+    expect(readLayouts(s.doc)).toEqual([]);
   });
 });

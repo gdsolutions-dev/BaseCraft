@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { validateDesignDoc, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { MAX_TWIPS } from './units';
-import { CONTAINER_KINDS, controlRect, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, uniqueName,
-  type DesignerAction, type DesignerState } from './designer-model';
+import { ROW_GAP, readLayouts } from '../../shared/design/layout';
+import { createLayout, insertCells, membersOf, selectionOf } from '../../shared/design/layout-edit';
+import { CONTAINER_KINDS, controlRect, coreReducer, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, syncLayouts,
+  uniqueName, type DesignerAction, type DesignerState } from './designer-model';
 
 const ctl = (kind: ControlKind, name: string, left = 0, top = 0, width = 2268, height = 340, children?: ControlDef[]): ControlDef =>
   ({ kind, name, left, top, width, height, props: {}, ...(children ? { children } : {}) });
@@ -148,6 +150,16 @@ describe('designer model', () => {
     expect(band(false, { left: 0, top: 0, width: 5000, height: 2000 })).toEqual({ kind: 'controls', names: ['Nom', 'Étiquette_Nom', 'Ville'] });
     expect(band(false, { left: 5000, top: 1500, width: 10, height: 10 })).toEqual({ kind: 'section', index: 1 });
     expect(band(true, { left: 1200, top: 500, width: 100, height: 100 }, sel('Nom'))).toEqual({ kind: 'controls', names: ['Nom', 'Ville'] }); });
+  it('rubber band enclosed keeps whole controls only; Shift adds; no hit falls back to the section', () => {
+    const d = fixture(); d.sections[1].controls = [ctl('textBox', 'A', 0, 0, 1000, 300), ctl('textBox', 'B', 900, 0, 1000, 300)];
+    const s0 = initDesigner(d);
+    const rect = { left: 0, top: 0, width: 1500, height: 400 };
+    const names = (s: typeof init) => (s.selection as { names: string[] }).names;
+    expect(names(act(s0, { type: 'selectRect', section: 1, rect, add: false }))).toEqual(['A', 'B']);
+    expect(names(act(s0, { type: 'selectRect', section: 1, rect, add: false, enclosed: true }))).toEqual(['A']);
+    const withB = act(s0, { type: 'select', selection: { kind: 'controls', names: ['B'] } });
+    expect(names(act(withB, { type: 'selectRect', section: 1, rect, add: true, enclosed: true }))).toEqual(['B', 'A']);
+    expect(act(s0, { type: 'selectRect', section: 1, rect: { ...rect, height: 0 }, add: false, enclosed: true }).selection).toEqual({ kind: 'section', index: 1 }); });
   it('edit applies a host operation', () => { const s = act(init, { type: 'edit', apply: (d) => ({ ...d, props: { ...d.props, Caption: 'Z' } }) });
     expect(s.doc.props.Caption).toBe('Z'); expect(s.dirty).toBe(true); expect(s.past).toHaveLength(1); });
   it('helpers', () => {
@@ -235,4 +247,217 @@ describe('fix round 1', () => {
     const s0 = sel('Ville'); const s = act(s0, { type: 'changeSection', to: 0, top: 0 });
     expect(findControl(s.doc, 'Nom')!.control).toBe(findControl(s0.doc, 'Nom')!.control);
     expect(s.doc.sections[2]).toBe(s0.doc.sections[2]); });
+});
+
+describe('layouts stay in step with coordinates', () => {
+  // Nom et Ville, chacun avec son étiquette, mis en disposition Empilé ou Tabulaire ; Width posé : fit n'écrit rien
+  const base = (): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props: { Width: 20000 }, sections: [
+    section('formHeader', 567, []),
+    section('detail', 3000, [ctl('textBox', 'Nom', 1134, 0, 2268, 340, [ctl('label', 'Étiquette_Nom', 0, 0, 1000, 340)]),
+      ctl('textBox', 'Ville', 1134, 567, 2268, 340, [ctl('label', 'Étiquette_Ville', 0, 567, 1000, 340)])]),
+    section('formFooter', 0, []),
+  ] });
+  const laid = (kind: 'stacked' | 'tabular'): DesignDoc => createLayout(base(), membersOf(base(), ['Nom', 'Ville']), kind, { headerSection: 'formHeader' });
+  const stack = laid('stacked');
+  const grid = (s: DesignerState) => readLayouts(s.doc)[0];
+
+  it('resizing a data control widens the whole data column', () => {
+    const s = act(selIn(stack, 'Nom'), { type: 'resize', handle: 'e', dx: 300, dy: 0, free: true });
+    expect([rect(s, 'Nom').width, rect(s, 'Ville').width]).toEqual([2568, 2568]);
+    expect(grid(s).cols).toEqual([1000, 2568]);
+    expect(rect(s, 'Ville').left).toBe(rect(s, 'Nom').left);
+  });
+  it('setProp Width / Height of a member sets its column / row', () => {
+    const s = act(selIn(stack, 'Ville'), { type: 'setProp', targets: [{ kind: 'control', name: 'Ville' }], name: 'Width', value: 3000 },
+      { type: 'setProp', targets: [{ kind: 'control', name: 'Nom' }], name: 'Height', value: 500 });
+    expect(rect(s, 'Nom').width).toBe(3000);
+    expect(rect(s, 'Étiquette_Nom').height).toBe(500);
+    expect(rect(s, 'Ville').top).toBe(rect(s, 'Nom').top + 500 + ROW_GAP);
+  });
+  it('resizing a header label grows the header row of a tabular layout', () => {
+    const tab = laid('tabular');
+    const s = act(selIn(tab, 'Étiquette_Nom'), { type: 'resize', handle: 's', dx: 0, dy: 200, free: true });
+    expect([rect(s, 'Étiquette_Nom').height, rect(s, 'Étiquette_Ville').height]).toEqual([540, 540]);
+    expect(grid(s).rows[0].height).toBe(540);
+  });
+  it('a free move of a member does nothing: the same state comes back', () => {
+    const s0 = selIn(stack, 'Nom');
+    expect(act(s0, { type: 'moveBy', dx: 284, dy: 142, free: true })).toBe(s0);
+    expect(act(s0, { type: 'setProp', targets: [{ kind: 'control', name: 'Nom' }], name: 'Left', value: 5000 })).toBe(s0);
+  });
+  it('the whole layout selected moves as a block: members, left and tops shift by the same delta, one undo', () => {
+    for (const d of [stack, laid('tabular')]) {
+      const s0 = selIn(d, ...selectionOf(d, 'Nom', 'layout'));
+      const s = act(s0, { type: 'moveBy', dx: 284, dy: 142, free: true });
+      const names = selectionOf(d, 'Nom', 'layout');
+      expect(names.map((n) => rect(s, n))).toEqual(names.map((n) => { const r = rect(s0, n); return { ...r, left: r.left + 284, top: r.top + 142 }; }));
+      const l0 = grid(s0);
+      expect(grid(s)).toEqual({ ...l0, left: l0.left + 284, tops: Object.fromEntries(Object.entries(l0.tops).map(([k, t]) => [k, t + 142])) });
+      expect(s.past).toHaveLength(1); expect(act(s, { type: 'undo' }).doc).toBe(d);
+    }
+  });
+  it('a non-member moves, members stay put', () => {
+    const d = structuredClone(stack); d.sections[1].controls.push(ctl('textBox', 'Libre', 5000, 0));
+    const s = act(selIn(d, 'Nom', 'Libre'), { type: 'moveBy', dx: 284, dy: 0, free: true });
+    expect(rect(s, 'Libre').left).toBe(5284); expect(rect(s, 'Nom')).toEqual(controlRect(findControl(d, 'Nom')!.control));
+  });
+  it('deleting a member deletes its label, leaves empty cells, keeps the layout, one undo', () => {
+    const s = act(selIn(stack, 'Nom'), { type: 'deleteSelection' });
+    expect(findControl(s.doc, 'Étiquette_Nom')).toBeNull();
+    expect(grid(s).cells.filter((c) => c.row === 0).map((c) => c.control)).toEqual([null, null]);
+    expect(rect(s, 'Ville')).toEqual(controlRect(findControl(stack, 'Ville')!.control));
+    expect(s.past).toHaveLength(1); expect(act(s, { type: 'undo' }).doc).toBe(stack);
+  });
+  it('deleting every member removes Layouts', () => {
+    const s = act(selIn(stack, 'Nom', 'Ville'), { type: 'deleteSelection' });
+    expect(s.doc.props).not.toHaveProperty('Layouts');
+    expect(s.doc.sections[1].controls).toEqual([]);
+  });
+  it('one undo after a resize restores coordinates and Layouts', () => {
+    const s0 = selIn(stack, 'Nom');
+    const s = act(s0, { type: 'resize', handle: 'e', dx: 300, dy: 0, free: true });
+    expect(s.past).toHaveLength(1);
+    expect(act(s, { type: 'undo' }).doc).toBe(s0.doc);
+  });
+  it('renaming a member renames its cell', () => {
+    const s = act(selIn(stack, 'Nom'), { type: 'setProp', targets: [{ kind: 'control', name: 'Nom' }], name: 'Name', value: 'NomClient' });
+    expect(grid(s).cells.map((c) => c.control)).toContain('NomClient');
+    expect(findControl(s.doc, 'NomClient')!.control.props.LayoutID).toBe(grid(s).id);
+  });
+  it('a member dropped in another section leaves the layout', () => {
+    const s = act(selIn(stack, 'Nom'), { type: 'changeSection', to: 0, top: 0, free: true });
+    expect(findControl(s.doc, 'Nom')).toMatchObject({ section: 0 });
+    expect(grid(s).cells.map((c) => c.control)).not.toContain('Nom');
+    expect(findControl(s.doc, 'Nom')!.control.props).not.toHaveProperty('LayoutID');
+  });
+  it('a member moved past the document width or the section bottom grows nothing: the same state comes back', () => {
+    const d = structuredClone(stack); d.props.Width = 6000;
+    const s0 = selIn(d, 'Nom');
+    const s = act(s0, { type: 'moveBy', dx: 9000, dy: 5000, free: true });
+    expect(s).toBe(s0); expect(s.past).toHaveLength(0);
+  });
+  it('inserted rows grow the section to hold the lowest member, in the same history entry', () => {
+    const d = structuredClone(stack); d.sections[1].height = 900;
+    const below: DesignerAction = { type: 'edit', apply: (x) => insertCells(x, 'Nom', 'below') };
+    const s = act(initDesigner(d), below, below, below);
+    expect(rect(s, 'Ville').top + rect(s, 'Ville').height).toBe(4 * (340 + ROW_GAP) + 340);
+    expect(s.doc.sections[1].height).toBe(4 * (340 + ROW_GAP) + 340);
+    expect(s.past).toHaveLength(3);
+  });
+  it('a resize that makes a member taller grows the section within the same single history entry', () => {
+    const d = structuredClone(stack); d.sections[1].height = 900;
+    const s = act(selIn(d, 'Nom'), { type: 'resize', handle: 's', dx: 0, dy: 400, free: true });
+    expect(s.doc.sections[1].height).toBe(740 + ROW_GAP + 340);
+    expect(s.past).toHaveLength(1); expect(act(s, { type: 'undo' }).doc).toBe(d);
+  });
+  describe('a tab control member carries its content', () => {
+    const tabBase = (): DesignDoc => { const d = base();
+      d.sections[1].controls = [d.sections[1].controls[0], ctl('tabControl', 'Onglet', 4000, 0, 3000, 2000, [ctl('textBox', 'Dedans', 4100, 300, 1000, 340)])];
+      return d; };
+    const tab = createLayout(tabBase(), membersOf(tabBase(), ['Nom', 'Onglet']), 'tabular', { headerSection: 'formHeader' });
+    it('creation moved the content with the tab control', () => {
+      expect(rect(initDesigner(tab), 'Dedans').left - rect(initDesigner(tab), 'Onglet').left).toBe(100);
+    });
+    it('a move of the tab control leaves it and its content in place', () => {
+      const s0 = selIn(tab, 'Onglet');
+      expect(act(s0, { type: 'moveBy', dx: 284, dy: 0, free: true })).toBe(s0);
+    });
+    it('widening an earlier column shifts the tab control and its content together', () => {
+      const s0 = selIn(tab, 'Nom');
+      const s = act(s0, { type: 'resize', handle: 'e', dx: 300, dy: 0, free: true });
+      expect(lefts(s, 'Onglet', 'Dedans')).toEqual(lefts(s0, 'Onglet', 'Dedans').map((x) => x + 300));
+      expect(tops(s, 'Dedans')).toEqual(tops(s0, 'Dedans'));
+    });
+  });
+  describe('un contrôle posé sur une disposition en devient membre', () => {
+    const neuf = () => ctl('textBox', 'Neuf', 8000, 2000, 2000, 400, [ctl('label', 'Étiquette_Neuf', 6500, 2000, 1400, 340)]);
+    const ville = () => rect(initDesigner(stack), 'Ville');
+    const over = (): DesignerAction => ({ type: 'insert', section: 1, controls: [neuf()], at: { x: ville().left + 100, y: ville().top + 10 } });
+    it('insert au-dessus de la moitié haute de Ville : une ligne de plus, puis une seule annulation retire contrôle et appartenance', () => {
+      const s0 = initDesigner(stack);
+      const s = act(s0, over());
+      expect(grid(s).cells.filter((c) => c.row === 1).map((c) => c.control)).toEqual(['Étiquette_Neuf', 'Neuf']);
+      expect(rect(s, 'Neuf')).toMatchObject({ left: ville().left, top: ville().top, height: 400 });
+      expect(rect(s, 'Ville').top).toBe(ville().top + 400 + ROW_GAP);
+      expect(s.selection).toEqual({ kind: 'controls', names: ['Neuf'] });
+      expect(s.past).toHaveLength(1);
+      expect(act(s, { type: 'undo' }).doc).toBe(stack);
+    });
+    it('sans `at`, ou hors de toute disposition : le même document qu\'aujourd\'hui', () => {
+      const plain: DesignerAction = { type: 'insert', section: 1, controls: [neuf()] };
+      const today = act(initDesigner(stack), plain);
+      expect(grid(today)).toEqual(grid(initDesigner(stack)));
+      expect(JSON.stringify(act(initDesigner(stack), { ...plain, at: { x: 12000, y: 10 } }).doc)).toBe(JSON.stringify(today.doc));
+    });
+    it('dans un conteneur (parent) : jamais membre', () => {
+      const d = structuredClone(stack); d.sections[1].controls.push(ctl('tabControl', 'Onglet', 6000, 3000, 3000, 2000));
+      const s = act(initDesigner(d), { ...over(), parent: 'Onglet' });
+      expect(grid(s)).toEqual(grid(initDesigner(d)));
+    });
+  });
+  it('a document with no Layouts goes through every action untouched by the layout step', () => {
+    const acts: DesignerAction[] = [{ type: 'moveBy', dx: 284, dy: 0 }, { type: 'resize', handle: 'e', dx: 284, dy: 0 }, { type: 'deleteSelection' },
+      { type: 'setProp', targets: [{ kind: 'control', name: 'Nom' }], name: 'Width', value: 3000 }, { type: 'arrange', op: 'alignToGrid' },
+      { type: 'changeSection', to: 0, top: 0 }, { type: 'insert', section: 1, controls: [ctl('textBox', 'X')] }, { type: 'undo' }];
+    for (const a of acts) {
+      const s0 = sel('Nom', 'Ville'); const next = coreReducer(s0, a);
+      expect(syncLayouts(s0, a, next)).toBe(next);
+    }
+  });
+});
+
+describe('dispositions d\'un état : un contrôle posé en devient membre (L3c)', () => {
+  const sec = (kind: DesignDoc['sections'][number]['kind'], height: number, controls: ControlDef[], groupLevel?: number) =>
+    ({ kind, height, props: {}, controls, ...(groupLevel === undefined ? {} : { groupLevel }) });
+  const neuf = () => ctl('textBox', 'Neuf', 8000, 2000, 2000, 400, [ctl('label', 'Étiquette_Neuf', 6500, 2000, 1400, 340)]);
+  const rdoc = (): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props: {}, sections: [
+    sec('pageHeader', 500, []),
+    sec('detail', 800, [ctl('textBox', 'Nom', 0, 0, 1500, 340, [ctl('label', 'ÉtiqNom', 0, 0, 1500, 340)]), ctl('textBox', 'Ville', 1700, 0, 1500, 340, [ctl('label', 'ÉtiqVille', 1700, 0, 1500, 340)])]),
+    sec('groupHeader', 1500, [ctl('textBox', 'GA', 2000, 0, 1500, 340, [ctl('label', 'ÉtiqGA', 0, 0, 1500, 340)]), ctl('textBox', 'GB', 2000, 500, 1500, 340, [ctl('label', 'ÉtiqGB', 0, 500, 1500, 340)])], 0),
+  ] });
+  const tabular = (): DesignDoc => { const d = rdoc();
+    const t = createLayout(d, membersOf(d, ['Nom', 'Ville']), 'tabular', { headerSection: 'pageHeader' });
+    return createLayout(t, membersOf(t, ['GA', 'GB']), 'stacked', { headerSection: 'groupHeader:0' }); };
+  const sectionOf = (d: DesignDoc, n: string) => d.sections.find((x) => x.controls.some((c) => c.name === n))!.kind;
+  const grid = (s: DesignerState, member: string) => readLayouts(s.doc).find((l) => l.cells.some((c) => c.control === member))!;
+  const start = () => initDesigner(tabular(), 'report');
+
+  it('Tabular : posé sur une cellule du détail, une colonne de plus (étiquette dans l\'en-tête de page), une annulation restaure', () => {
+    const s0 = start();
+    const nom = rect(s0, 'Nom');
+    const s = act(s0, { type: 'insert', section: 1, controls: [neuf()], at: { x: nom.left + nom.width - 10, y: nom.top + 10 } });
+    const l = grid(s, 'Nom');
+    expect(l.cols).toHaveLength(3);
+    expect(l.cells.filter((c) => c.control === 'Neuf' || c.control === 'Étiquette_Neuf')).toHaveLength(2);
+    expect(sectionOf(s.doc, 'Étiquette_Neuf')).toBe('pageHeader');
+    expect(sectionOf(s.doc, 'Neuf')).toBe('detail');
+    expect(findControl(s.doc, 'Neuf')!.control.props.LayoutID).toBe(l.id);
+    expect(s.past).toHaveLength(1);
+    expect(act(s, { type: 'undo' }).doc).toBe(s0.doc);
+  });
+  it('Stacked dans un en-tête de groupe (groupHeader:0) : le dépôt dans la disposition y ajoute une ligne', () => {
+    const s0 = start();
+    const gb = rect(s0, 'GB');
+    const l0 = readLayouts(s0.doc).find((l) => l.rows.some((r) => r.section === 'groupHeader:0'))!;
+    const s = act(s0, { type: 'insert', section: 2, controls: [neuf()], at: { x: gb.left + 10, y: gb.top + 10 } });
+    const l = readLayouts(s.doc).find((x) => x.id === l0.id)!;
+    expect(l.rows).toHaveLength(l0.rows.length + 1);
+    expect(l.cells.some((c) => c.control === 'Neuf')).toBe(true);
+    expect(sectionOf(s.doc, 'Neuf')).toBe('groupHeader');
+  });
+  it('un point hors de toute disposition : la disposition reste telle quelle', () => {
+    const s0 = start();
+    const s = act(s0, { type: 'insert', section: 1, controls: [neuf()], at: { x: 9000, y: 10 } });
+    expect(JSON.stringify(readLayouts(s.doc))).toBe(JSON.stringify(readLayouts(s0.doc)));
+    expect(findControl(s.doc, 'Neuf')!.control.props.LayoutID).toBeUndefined();
+  });
+  it('fit : la colonne qui dépasse la largeur de page élargit Width', () => {
+    const s0 = start();
+    const right = Math.max(...s0.doc.sections.flatMap((x) => x.controls).map((c) => c.left + c.width));
+    const d = { ...s0.doc, props: { ...s0.doc.props, Width: right } };
+    const nom = rect(initDesigner(d, 'report'), 'Nom');
+    const s = act(initDesigner(d, 'report'), { type: 'insert', section: 1, controls: [neuf()], at: { x: nom.left + 10, y: nom.top + 10 } });
+    expect(Number(s.doc.props.Width)).toBeGreaterThan(right);
+    expect(Number(s.doc.props.Width)).toBeGreaterThanOrEqual(rect(s, 'Neuf').left + rect(s, 'Neuf').width);
+  });
 });

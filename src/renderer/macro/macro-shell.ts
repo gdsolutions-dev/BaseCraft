@@ -12,6 +12,7 @@ import { foldName, sameName } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { parseMacroDef, submacroNames } from '../../shared/macro/model';
 import { isSelectBody, type Query } from '../../shared/query/ast';
+import { isActionDefinition } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
@@ -174,7 +175,7 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
         if (a.View !== 'print') {   // R7: Print Preview by default
           // the next action sees On Open and On No Data done; one cancelling fails the action (2501). A preview already open
           // with no condition is only activated: nothing to wait for.
-          const shown = !where && d.tabs().some((t) => isDoc(t, 'report', name) && t.mode === 'run') ? null : whenReportShown(name);
+          const shown = !where && d.tabs().some((t) => isDoc(t, 'report', name) && (t.mode === 'run' || t.mode === 'state')) ? null : whenReportShown(name);
           shown?.catch(() => {});   // a refused dispatch fails the action itself
           try { await open('report', name, 'run', where ? { where } : {}); } catch (e) {
             reportShown(name, false);   // no waiter left behind
@@ -189,8 +190,7 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
       case 'OpenQuery': {
         const name = await storedName('query', a.QueryName!);
         if (a.View === 'design') return open('query', name, 'design');
-        const q = parse(((await api.objects.get('query', name)).definition as { sql: string }).sql);
-        return q && !isSelectBody(q) ? actionQuery({ kind: 'query', name }) : open('query', name, 'run');
+        return isActionDefinition((await api.objects.get('query', name)).definition) ? actionQuery({ kind: 'query', name }) : open('query', name, 'run');
       }
       case 'OpenTable': return open('table', await storedName('table', a.TableName!), a.View === 'design' ? 'design' : 'datasheet');
       case 'CloseWindow': {

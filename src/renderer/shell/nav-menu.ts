@@ -2,7 +2,7 @@
 // (nav-menu-items.ts) ; chaque lot inscrit les siens dans son propre module, par un seul appel, sans modifier ce fichier.
 import type { LucideIcon } from 'lucide-react';
 import type { TableSummary } from '../../shared/api';
-import type { AppAction, DocKind } from '../state/app-state';
+import type { AppAction, DocKind, DocTab } from '../state/app-state';
 import type { ModalApi } from './Modal';
 import type { PlannedIn } from './ribbon-model';
 
@@ -17,6 +17,10 @@ export interface NavMenuContext {
   kind: DocKind; name: string; readOnly: boolean; runtime: boolean; modal: ModalApi; dispatch: AppDispatch;
   reselect(name: string | null): void;
   link?: TableSummary['link'];
+  /** The id of this object's open document tab, if any (its view knows its own state better than the saved definition). */
+  openTab?: string;
+  /** The open tabs (Name AutoCorrect refuses a rename while a dependent has unsaved changes). */
+  tabs?: DocTab[];
 }
 
 /** Design items a linked table lacks: its structure and name belong to its file (C1 R2, R8; its Design view opens read-only). */

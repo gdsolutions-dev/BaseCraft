@@ -6,15 +6,15 @@ import { saveObject } from '../../src/main/db/objects';
 import { seedSales } from '../../src/main/query/test-db';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { DesignDoc } from '../../src/shared/design/model';
-import { launchApp, seedBase, seedForm, seedSalesE2E } from './helpers';
+import { launchApp, seedBase, seedForm, seedSalesE2E, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 type Win = { basecraft: BasecraftApi };
 // DatasheetView: row selector width, header and row heights.
 const MARKER = 44, HEADER = 34, ROW = 30;
-// QSaisie's columns: Commandes.N° (AutoNumber 80), Client (Number 110), Clients.N° (AutoNumber 80), Nom (Short Text 170), Montant (Currency 120)
-const X = { client: 80 + 30, cliN: 190 + 30, nom: 270 + 30, montant: 440 + 30 };
+// QSaisie's columns, each the default width (O2 R12)
+const X = { client: colLeft(1) - 44 + 30, cliN: colLeft(2) - 44 + 30, nom: colLeft(3) - 44 + 30, montant: colLeft(4) - 44 + 30 };
 const COL = { cmdN: 0, client: 1, cliN: 2, nom: 3, montant: 4 };
 const QSAISIE = 'SELECT Commandes.[N°], Commandes.Client, Clients.[N°], Clients.Nom, Commandes.Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client;';
 const QVIRGULE = 'SELECT Clients.Nom, Commandes.Montant, Commandes.Le FROM Clients, Commandes WHERE Clients.[N°] = Commandes.Client;';
@@ -38,7 +38,7 @@ const rowsOf = (page: Page, table: string) =>
   page.evaluate(async (t) => (await (window as unknown as Win).basecraft.rows.page(t, { offset: 0, limit: 50 })).rows.map((r) => r.values), table);
 
 test('datasheet: a join query is updatable; a one-side edit shows on the other rows, AutoLookup fills a new record (B4 R2–R7)', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('saisie-jointure')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-jointure')], env: FR });
   try {
     for (const [name, sql] of [['QSaisie', QSAISIE], ['QVentesVirgule', QVIRGULE]]) {
       expect(await page.evaluate(([n, q]) => (window as unknown as Win).basecraft.objects.save('query', n!, { formatVersion: '1.0', sql: q }, null), [name, sql])).toEqual({ ok: true });
@@ -141,8 +141,45 @@ test('datasheet: a join query is updatable; a one-side edit shows on the other r
   }
 });
 
+test('datasheet: a new record, its client typed, then the client field: both saved (C5 final review 7)', async () => {
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-nouveau-un')], env: FR });
+  try {
+    expect(await page.evaluate((q) => (window as unknown as Win).basecraft.objects.save('query', 'QSaisie', { formatVersion: '1.0', sql: q }, null), QSAISIE)).toEqual({ ok: true });
+    await page.reload();
+    await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
+    await page.getByTestId('nav-item-query-QSaisie').dblclick();
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('5');
+    const g = await grid(page);
+    await page.mouse.click(g.x + MARKER + X.client, g.y + HEADER + 5 * ROW + ROW / 2); // the new record row: its editor opens
+    await expect(cellEditor(page)).toBeFocused();
+    await page.keyboard.type('3');
+    await page.keyboard.press('Tab');
+    await expect(cellEditor(page)).toHaveCount(0);
+    await expect(cell(page, COL.nom, 5)).toHaveText('Durand'); // AutoLookup
+    await clickCell(page, X.nom, 5, COL.nom); // the client's own field, on the row not saved yet
+    await page.keyboard.press('D');
+    await expect(cellEditor(page)).toBeFocused();
+    await page.keyboard.type('urand SARL');
+    await page.keyboard.press('Tab');
+    await expect(cellEditor(page)).toHaveCount(0);
+    await expect(cell(page, COL.nom, 5)).toHaveText('Durand SARL');
+    await expect(cell(page, COL.montant, 5)).toBeFocused(); // Tab: Nom → Montant
+    await page.keyboard.press('1');
+    await expect(cellEditor(page)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(cellEditor(page)).toHaveCount(0);
+    await page.keyboard.press('ArrowUp');
+    await settled(page);
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('6');
+    expect((await rowsOf(page, 'Commandes'))[5]!.slice(0, 3)).toEqual([6, 3, 1]);
+    expect((await rowsOf(page, 'Clients'))[2]!.slice(0, 2)).toEqual([3, 'Durand SARL']);
+  } finally {
+    await app.close();
+  }
+});
+
 test('datasheet: leaving the row waits for AutoLookup; a failed lookup keeps the row pending (B4 R4, final review I1)', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('saisie-recherche')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-recherche')], env: FR });
   // sources.autoLookup answered by the main process as usual, or failing
   const lookupFails = (on: boolean) => app.evaluate(({ ipcMain }, fail) => {
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...a: unknown[]) => unknown> })._invokeHandlers;
@@ -211,7 +248,7 @@ test('datasheet: leaving the row waits for AutoLookup; a failed lookup keeps the
 });
 
 test('datasheet: an outer join row without its key record is read-only and never deleted (B4 R5)', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('saisie-externe')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-externe')], env: FR });
   try {
     const sql = 'SELECT Clients.Nom, Commandes.Montant FROM Clients LEFT JOIN Commandes ON Clients.[N°] = Commandes.Client;';
     expect(await page.evaluate((q) => (window as unknown as Win).basecraft.objects.save('query', 'QExterne', { formatVersion: '1.0', sql: q }, null), sql)).toEqual({ ok: true });
@@ -220,7 +257,7 @@ test('datasheet: an outer join row without its key record is read-only and never
     await page.getByTestId('nav-item-query-QExterne').dblclick();
     await expect(doc(page).getByTestId('nav-record-count')).toHaveText('6'); // 5 orders + Éric, who has none
     await expect(doc(page).getByTestId('nav-readonly')).toHaveCount(0);
-    const nom = 30, montant = 170 + 30; // Nom (Short Text 170), Montant (Currency 120)
+    const nom = 30, montant = colLeft(1) - 44 + 30; // Nom, Montant: the default width each
     await clickCell(page, nom, 0, 0);
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-sortAsc').click();
@@ -258,7 +295,7 @@ test('datasheet: an outer join row without its key record is read-only and never
 });
 
 test('form: AutoForm on the join query is updatable; AutoLookup shows the client before the save; one save per record (B4 R2–R4)', async () => {
-  const { app, page } = await launchApp({ args: [seedSalesE2E('saisie-formulaire')], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSalesE2E('saisie-formulaire')], env: FR });
   const ctl = (n: string) => page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
   const dirty = page.getByTestId('form-dirty').filter({ visible: true });
   try {
@@ -272,7 +309,7 @@ test('form: AutoForm on the join query is updatable; AutoLookup shows the client
     await page.getByTestId('cmd-createForm').click();
     await expect(page.getByTestId('doc-tab-form-QSaisie')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('doc-tab-close-form-QSaisie').click();
-    expect(await page.evaluate(() => (window as unknown as Win).basecraft.objects.rename('form', 'QSaisie', 'FSaisie'))).toEqual({ ok: true });
+    expect(await page.evaluate(() => (window as unknown as Win).basecraft.objects.rename('form', 'QSaisie', 'FSaisie'))).toMatchObject({ ok: true });   // O4: the result also lists the corrected dependents
     await page.reload();
     await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
     await page.getByTestId('nav-item-form-FSaisie').dblclick();
@@ -336,7 +373,7 @@ test('form: a combo text typed out of its list stays as typed when AutoLookup an
     ] };
     seedForm(db, 'FCombo', doc);
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const ctl = (n: string) => page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
   try {
     await page.getByTestId('nav-item-form-FCombo').dblclick();

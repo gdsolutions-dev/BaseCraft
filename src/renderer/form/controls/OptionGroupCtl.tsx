@@ -48,7 +48,7 @@ export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { render
           <div key={k.name} role="radio" id={x.id(k.name)} data-testid={`form-ctl-${k.name}`} aria-checked={chosen === k.name}
             className={`frun-radio${k.kind === 'checkBox' ? ' frun-square' : ''}`} style={placed(k, c)}
             tabIndex={k.name === target && x.stops.has(c.name) ? 0 : -1} aria-disabled={disabled || prop(k, 'Enabled') === false || undefined}
-            {...(hasLabel(k) ? { 'aria-labelledby': `${x.id(k.name)}-label` } : { 'aria-label': k.name })} {...tipOf(k)}
+            {...(hasLabel(k, x) ? { 'aria-labelledby': `${x.id(k.name)}-label` } : { 'aria-label': k.name })} {...tipOf(k)}
             onClick={() => choose(k)} onKeyDown={(e) => keys(e, i)} />,
           ...(k.children ?? []).map((l) => renderChild(l, c, x.id(k.name))),
         ];

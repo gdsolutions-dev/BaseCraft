@@ -366,9 +366,16 @@
       "actionCatalog": "Aktionskatalog",
       "showAllActions": "Alle Aktionen anzeigen",
       "viewForm": "Formularansicht",
+      "viewLayout": "Layoutansicht",
+
+      "viewMenu": "Ansicht",
+
+      "viewState": "Berichtsansicht",
       "viewPrintPreview": "Seitenansicht",
       "linkBaseCraft": "BaseCraft- oder SQLite-Datenbank",
-      "linkAccess": "Access-Datenbank verknüpfen"
+      "linkAccess": "Access-Datenbank verknüpfen",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "Menüband nach links scrollen",
     "scrollRight": "Menüband nach rechts scrollen",
@@ -490,6 +497,9 @@
       "design": "Entwurfsansicht",
       "run": "Ausführungsansicht",
       "form": "Formularansicht",
+      "layout": "Layoutansicht",
+
+      "state": "Berichtsansicht",
       "sql": "SQL-Ansicht"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "Schreibgeschützt geöffnet: Eine freigegebene Datendatei kann nicht in einem synchronisierten Ordner (OneDrive, Dropbox…) verwendet werden. Legen Sie sie auf ein Netzlaufwerk oder wechseln Sie zu einem Server.",
     "unsupportedClient": "Schreibgeschützt geöffnet: Der freigegebene Modus auf einem Netzlaufwerk wird auf diesem System nicht unterstützt. Verwenden Sie eine Windows-Arbeitsstation oder wechseln Sie zu einem Server.",
     "takeOver": "Übernehmen",
-    "contentDisabled": "Sicherheitswarnung: Einige aktive Inhalte dieser Datenbank (Makros, Aktionsabfragen) wurden deaktiviert.",
+    "contentDisabled": "Sicherheitswarnung: Einige aktive Inhalte dieser Datenbank (Makros, Aktionsabfragen, Pass-Through-Abfragen) wurden deaktiviert.",
     "enableContent": "Inhalt aktivieren",
     "riskNetwork": "Diese Datenbank befindet sich auf einer Netzwerkfreigabe. Eine Verbindungsunterbrechung während eines Schreibvorgangs kann sie beschädigen.",
     "riskSynced": "Diese Datenbank befindet sich in einem synchronisierten Ordner. Eine Synchronisierung während eines Schreibvorgangs kann sie beschädigen.",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "Die Spaltenüberschrift einer Kreuztabellenabfrage (PIVOT) darf keine Aggregatfunktion enthalten: {{detail}}.",
       "queryBind_tooManyColumns": "Diese Kreuztabellenabfrage würde {{detail}} Spalten ergeben: höchstens 255, davon 254 Spaltenüberschriften. Schränken Sie die Daten ein oder legen Sie die Spaltenüberschriften fest (IN).",
       "queryBind_crosstabAsSource": "Die Kreuztabellenabfrage „{{detail}}“ kann nicht die Quelle einer anderen Abfrage oder einer Nachschlageliste sein.",
+      "queryBind_passThroughAsSource": "Die Pass-Through-Abfrage „{{detail}}“ kann nicht die Quelle einer anderen Abfrage oder einer Liste sein. Setzen Sie den Filter oder die Gruppierung in ihren SQL-Text.",
       "queryBind_mixedSources": "Eine Abfrage umfasst eine einzelne Datenquelle: „{{detail}}“ stammt nicht aus derselben Quelle wie die anderen Tabellen der Abfrage.",
       "fontMissing": "Eine eingebettete Schriftart konnte nicht geladen werden: Der Bericht wurde weder gedruckt noch exportiert.",
       "printFailed": "Das Drucken ist fehlgeschlagen.",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "Die „Spaltenüberschrift“ einer Kreuztabellenabfrage muss „Gruppierung“ in der Zeile „Funktion“ haben.",
       "invalidQuery_crosstabNone": "Eine Spalte „(nicht angezeigt)“ einer Kreuztabellenabfrage muss „Bedingung“ in der Zeile „Funktion“ haben; wählen Sie ihre Rolle in der Zeile „Kreuztabelle“.",
       "linkUnavailable_needsPassword": "Diese Access-Datenbank ist kennwortgeschützt: {{detail}}",
+      "linkUnavailable_needsLogin": "Anmeldung abgebrochen: Die verknüpften Tabellen von {{detail}} sind nicht verfügbar.",
+      "linkUnavailable_cannotConnect": "Der Server {{detail}} ist nicht erreichbar. Überprüfen Sie den Servernamen, den Port und das Netzwerk.",
+      "linkUnavailable_certificate": "Dieser Arbeitsplatz vertraut dem Zertifikat des Servers {{detail}} nicht. Lassen Sie das Zertifikat seiner Zertifizierungsstelle installieren oder wählen Sie, wenn Sie diesem Netzwerk vertrauen, im Verknüpfte-Tabellen-Manager die Verschlüsselungsoption ohne Zertifikatsprüfung (z. B. „Verschlüsselt, dem Serverzertifikat vertrauen“).",
+      "linkUnavailable_serverVersion": "Der Server {{detail}} verwendet eine Version, die BaseCraft nicht unterstützt (mindestens PostgreSQL 14 oder SQL Server 2016).",
+      "linkUnavailable_passwordExpired": "Das Kennwort dieser Anmeldung ist auf dem Server {{detail}} abgelaufen. Ändern Sie es mit dem Verwaltungstool des Servers, und stellen Sie dann erneut eine Verbindung her.",
       "linkUnavailable_syncedFolder": "Die Datendatei {{detail}} bleibt schreibgeschützt: Eine freigegebene Datendatei kann nicht in einem synchronisierten Ordner (OneDrive, Dropbox…) verwendet werden. Legen Sie sie auf ein Netzlaufwerk oder wechseln Sie zu einem Server.",
-      "linkUnavailable_unsupportedClient": "Die Datendatei {{detail}} bleibt schreibgeschützt: Der freigegebene Modus auf einem Netzlaufwerk wird auf diesem System nicht unterstützt. Verwenden Sie eine Windows-Arbeitsstation oder wechseln Sie zu einem Server."
+      "linkUnavailable_unsupportedClient": "Die Datendatei {{detail}} bleibt schreibgeschützt: Der freigegebene Modus auf einem Netzlaufwerk wird auf diesem System nicht unterstützt. Verwenden Sie eine Windows-Arbeitsstation oder wechseln Sie zu einem Server.",
+      "serverNotSupported_actionQuery": "Aktionsabfragen werden auf einer verknüpften {{detail}}-Tabelle noch nicht ausgeführt.",
+      "serverNotSupported_makeTable": "Tabellenerstellungsabfragen werden auf einer {{detail}}-Quelle nicht ausgeführt: Erstellen Sie die Tabelle auf dem Server und füllen Sie sie dann mit einer Anfügeabfrage.",
+      "serverNotSupported_appendAutoNumber": "Eine Anfügeabfrage kann die AutoWert-Werte einer Tabelle auf einem Server ({{detail}}) nicht vorgeben. Entfernen Sie dieses Feld aus der Abfrage: Der Server nummeriert die neuen Datensätze.",
+      "serverNotSupported_joinSave": "Die Dateneingabe über eine Abfrage mit mehreren Tabellen ist bei einer {{detail}}-Quelle noch nicht möglich.",
+      "serverNotSupported_crosstab": "Kreuztabellenabfragen werden auf einer {{detail}}-Quelle noch nicht ausgeführt.",
+      "serverNotSupported_passThrough": "Pass-Through-Abfragen sind auf einer {{detail}}-Quelle nicht verfügbar.",
+      "serverNotSupported_topPercent": "TOP … PERCENT wird bei einer {{detail}}-Quelle noch nicht unterstützt.",
+      "serverNotSupported": "Dieser Vorgang ist bei einer verknüpften {{detail}}-Tabelle noch nicht möglich.",
+      "serverFunction": "{{name}} kann auf einer {{detail}}-Quelle nicht ausgeführt werden: BaseCraft kann es für diesen Server nicht übersetzen.",
+      "timeout": "Der Server hat nicht innerhalb der festgelegten Zeit geantwortet ({{name}} s). Versuchen Sie es erneut, oder erhöhen Sie das Zeitlimit im Verknüpfte-Tabellen-Manager.",
+      "passThroughNoRecords": "Die Pass-Through-Abfrage hat keine Datensätze zurückgegeben, obwohl ihre Eigenschaft „Datensätze zurückgeben“ auf Ja steht.",
+      "passThroughTimeout": "Der Server hat die Pass-Through-Abfrage nicht innerhalb der festgelegten Zeit beantwortet ({{name}} s). Erhöhen Sie „ODBC-Timeout“ im Eigenschaftenblatt (0: keine Begrenzung).",
+      "passThroughLost": "Die Verbindung zum Server ging während der Pass-Through-Abfrage verloren; es ist unbekannt, ob sie abgeschlossen wurde.",
+      "serverError_connection": "Die Verbindung zum Server ging während des Speicherns verloren; ob gespeichert wurde, ist unbekannt. Aktualisieren Sie (Start › Aktualisieren), bevor Sie es erneut versuchen.",
+      "serverError_notWritten": "Der Server hat den Datensatz in „{{detail}}“ nicht gespeichert: Ein Trigger, eine Regel oder eine Sicherheitsrichtlinie der Tabelle hat ihn ignoriert.",
+      "serverError": "Der Server hat den Vorgang abgelehnt: {{detail}}"
     },
     "op": {
       "nameExists": "Ein Objekt mit diesem Namen ist bereits vorhanden.",
@@ -700,6 +732,7 @@
       "reportFooter": "Berichtsfuß"
     },
     "canvas": "Entwurfsfläche",
+    "layoutHandle": "Layout {{id}} markieren",
     "toolbox": "Toolbox",
     "arrange": {
       "alignLeft": "Links",
@@ -949,7 +982,16 @@
       "isNotNull": "Ist nicht leer",
       "clear": "Alle Filter löschen",
       "fieldTitle": "Filter",
-      "fieldLabel": "Kriterien für „{{field}}“ (leer: kein Filter für dieses Feld):"
+      "fieldLabel": "Kriterien für „{{field}}“ (leer: kein Filter für dieses Feld):",
+      "sortAsc": { "text": "Von A bis Z sortieren", "number": "Nach Größe sortieren (aufsteigend)", "date": "Vom ältesten zum neuesten sortieren" },
+      "sortDesc": { "text": "Von Z bis A sortieren", "number": "Nach Größe sortieren (absteigend)", "date": "Vom neuesten zum ältesten sortieren" },
+      "clearField": "Filter löschen aus {{field}}",
+      "typed": { "text": "Textfilter", "number": "Zahlenfilter", "date": "Datumsfilter" },
+      "all": "(Alles auswählen)",
+      "blanks": "(Leer)",
+      "tooLong": "Für diesen Filter sind zu viele Werte aktiviert. Verwenden Sie stattdessen einen Text-, Zahlen- oder Datumsfilter.",
+      "ok": "OK",
+      "cancel": "Abbrechen"
     }
   },
   "expr": {
@@ -983,7 +1025,6 @@
       "forbiddenStatement": "Anweisung nicht zulässig: Es werden nur Auswahl-, Anfüge-, Aktualisierungs-, Lösch- und Tabellenerstellungsabfragen akzeptiert.",
       "reservedName": "Dieser Name ist reserviert (bc_, bcx_ oder sqlite_): Die Abfrage kann ihn nicht verwenden.",
       "multipleStatements": "Es ist nur eine SQL-Anweisung zulässig: Entfernen Sie den Text nach dem Semikolon.",
-      "notSupportedYet": "Diese Art von Abfrage (Pass-Through) ist noch nicht verfügbar.",
       "badParameterType": "Unbekannter Parametertyp.",
       "badCrosstab": "Ungültige Kreuztabellenabfrage: TRANSFORM, ein einfaches SELECT mit GROUP BY, dann PIVOT.",
       "badCount": "Geben Sie eine ganze Zahl von 1 bis 255 ein.",
@@ -1440,6 +1481,7 @@
   "prop": {
     "Caption": "Beschriftung",
     "DefaultView": "Standardansicht",
+    "AllowLayoutView": "Layoutansicht zulassen",
     "NavigationButtons": "Navigationsschaltflächen",
     "Width": "Breite",
     "Visible": "Sichtbar",
@@ -2010,6 +2052,17 @@
       "label": "Tabellenname"
     },
     "sqlOnly": "Diese Abfrage kann nur in der SQL-Ansicht angezeigt werden.",
+    "passThrough": {
+      "notice": "Pass-Through-Abfrage: Dieser Text wird unverändert an den Server {{label}} gesendet, ohne dass BaseCraft ihn liest. Der Server wendet seine eigenen Berechtigungen an; die Gültigkeitsregeln und Beziehungen von BaseCraft gelten nicht für das, was er ändert.",
+      "noticeNoServer": "Pass-Through-Abfrage: Wählen Sie ihren Server im Eigenschaftenblatt.",
+      "empty": "Geben Sie die SQL-Anweisung ein, die an den Server gesendet werden soll.",
+      "noConnection": "Wählen Sie den Server der Abfrage im Eigenschaftenblatt (Verbindung).",
+      "connection": "Verbindung",
+      "otherServerKind": "Anderer {{product}}-Server…",
+      "returnsRecords": "Liefert Datensätze",
+      "timeout": "ODBC-Timeout",
+      "badTimeout": "Geben Sie eine Anzahl Sekunden von 0 (keine Begrenzung) bis 3600 ein."
+    },
     "builderOnTable": "Sie haben den Abfrage-Generator für eine Tabelle aufgerufen.\n\nMöchten Sie eine Abfrage auf Grundlage der Tabelle erstellen?",
     "builderSave": "Möchten Sie die Änderungen an der SQL-Anweisung speichern und die Eigenschaft aktualisieren?",
     "error": {
@@ -2165,6 +2218,65 @@
     "done": "Die Datenbank wurde aufgeteilt. Datendatei: {{path}}. Sicherungskopie: {{backup}}.",
     "noTables": "Diese Datenbank enthält keine lokale Tabelle zum Verschieben.",
     "self": "Die Datendatei darf nicht die geöffnete Datenbank sein. Wählen Sie einen anderen Namen oder Ordner."
+  },
+  "migrate": {
+    "title": "Assistent zum Verschieben auf einen Server",
+    "intro": "Dieser Assistent verschiebt alle lokalen Tabellen der aktuellen Datenbank mit ihren Daten, Schlüsseln, Indizes und Beziehungen in eine PostgreSQL- oder SQL Server-Datenbank und ersetzt sie dann durch verknüpfte Tabellen gleichen Namens. Zuerst wird eine Sicherungskopie der Datenbank erstellt. Gültigkeitsregeln und berechnete Standardwerte bleiben in der Anwendung, die zu einer Front-End-Anwendung wird.",
+    "engine": "Zielserver",
+    "next": "Weiter",
+    "schema": "Schema",
+    "start": "Verschieben",
+    "connecting": "Verbindung mit dem Server und Sicherungskopie der Datenbank…",
+    "progress": "{{table}} wird kopiert: {{done}} von {{total}} Datensätzen",
+    "finishing": "Abschließen…",
+    "stop": "Abbrechen",
+    "done": "Verschieben abgeschlossen. Sicherungskopie: {{backup}}.",
+    "backup": "Sicherungskopie: {{backup}}.",
+    "server": "{{product}}-Server: {{server}}, Schema {{schema}}.",
+    "copy": "In die Zwischenablage kopieren",
+    "report": {
+      "tables": "Verschobene Tabellen",
+      "table": "{{name}}: {{rows}} Datensatz/Datensätze",
+      "nextId": "nächster AutoWert: {{next}}",
+      "version": "Versionsspalte: {{column}}",
+      "sep": ", ",
+      "indexes": "Erstellte Indizes",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}} (ohne Duplikate)",
+      "relations": "Beziehungen",
+      "created": "{{name}}: Fremdschlüssel erstellt",
+      "noAction": "{{name}}: Fremdschlüssel ohne Weitergabe erstellt (SQL Server lehnt mehrere Weitergabepfade zu einer Tabelle ab)",
+      "notEnforced": "{{name}}: referentielle Integrität nicht erzwungen, auf dem Server wird nichts erstellt",
+      "frontEndOnly": "Nur von der Anwendung erzwungen (nicht vom Server)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "Auf dem Server als anderer Typ gespeichert",
+      "approx": "{{name}}: {{type}}",
+      "queries": "Vom Server abgelehnte Abfragen",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: Definition nicht lesbar, nicht geprüft"
+    },
+    "noTables": "Diese Datenbank enthält keine lokale Tabelle zum Verschieben.",
+    "dataFile": "Diese Datenbank ist eine freigegebene Datendatei (Datenbankaufteilung): Ihre Front-End-Anwendungen verknüpfen ihre Tabellen. Verschieben Sie die Anwendung von ihrem Front-End aus, nachdem Sie ihre verknüpften Tabellen in lokale Tabellen konvertiert haben.",
+    "noSchema": "Das Schema {{schema}} existiert auf dem Server nicht.",
+    "nameTaken": "Der Server hat bereits Tabellen mit diesen Namen: {{names}}. Löschen Sie sie, oder wählen Sie ein anderes Schema.",
+    "nameTooLong": "Diese Namen überschreiten die Grenze von PostgreSQL (63 Byte): {{names}}. Benennen Sie sie zuerst um.",
+    "invalidDesign": "Der Entwurf dieser Felder ist ungültig: {{names}}. Korrigieren Sie ihn in der Entwurfsansicht, und versuchen Sie es erneut.",
+    "cancelled": "Verschieben abgebrochen: Es wurde nichts geändert.",
+    "failed": "Das Verschieben ist fehlgeschlagen ({{table}}): {{error}}. Weder auf dem Server noch in der Datenbank wurde etwas geändert.",
+    "failedNoTable": "Das Verschieben ist fehlgeschlagen: {{error}}. Weder auf dem Server noch in der Datenbank wurde etwas geändert.",
+    "switchFailed": "Die Tabellen wurden auf den Server kopiert, aber die Datenbank konnte nicht geändert werden ({{error}}): Sie ist unverändert geblieben.",
+    "dropped": "Die kopierten Tabellen wurden vom Server gelöscht.",
+    "left": "Diese Tabellen sind auf dem Server geblieben: {{names}}.",
+    "leftCheck": "Prüfen und löschen Sie sie vor einem erneuten Verschieben.",
+    "commitUnknown": "Die Verbindung zum Server ging verloren, oder das Verschieben wurde abgebrochen, während der Server es bestätigte: Ob der Server es gespeichert hat, ist unbekannt. Die Datenbank wurde nicht geändert.",
+    "leftMaybe": "Diese Tabellen befinden sich möglicherweise auf dem Server: {{names}}. Prüfen und löschen Sie sie vor einem erneuten Verschieben.",
+    "closed": "Die Verbindung zum Server wurde geschlossen.",
+    "queriesUnchecked": "Die Abfragen konnten nicht auf dem Server geprüft werden: {{detail}}",
+    "error": {
+      "migrateCount": "Der Server zählt {{server}} Datensatz/Datensätze in {{table}} statt {{local}}.",
+      "migrateUnlinkable": "Vom Server zurückgelesen, kann die Tabelle {{table}} nicht mit ihrem Schlüssel und ihren Feldern verknüpft werden.",
+      "migrateOneNull": "Das Feld {{field}} enthält mehrere Nullwerte: SQL Server lässt im Index ohne Duplikate, den die Beziehung {{relation}} benötigt, nur einen zu."
+    }
   },
   "macro": {
     "embedded": {
@@ -2379,6 +2491,7 @@
       "cantGoToRecord": "Sie können nicht zum angegebenen Datensatz wechseln.",
       "cantFocus": "Dieses Steuerelement kann den Fokus nicht erhalten (es ist ausgeblendet oder deaktiviert).",
       "saveRefused": "Der Datensatz konnte nicht gespeichert werden.",
+      "autoCorrectLog": "Die Änderung konnte nicht in der Tabelle {{name}} (Feld {{detail}}) protokolliert werden: nichts wurde umbenannt.",
       "badReference": "„{{name}}“ ist kein Steuerelement eines geöffneten Formulars.",
       "badValue": "Der Wert „{{name}}“ passt nicht zu dieser Eigenschaft.",
       "findWhatTooLong": "Der Suchtext ist länger als 255 Zeichen.",
@@ -2438,7 +2551,9 @@
     "cat": {
       "general": "Allgemein",
       "currentDb": "Aktuelle Datenbank",
-      "client": "Clienteinstellungen"
+      "client": "Clienteinstellungen",
+      "datasheet": "Datenblatt",
+      "designers": "Objekt-Designer"
     },
     "general": {
       "header": "Allgemeine Optionen für die Arbeit mit {{product}}.",
@@ -2455,6 +2570,11 @@
       "confirmDeletions": "Dokumentlöschungen",
       "confirmActions": "Aktionsabfragen",
       "display": "Anzeige",
+      "printing": "Drucken",
+      "marginLeft": "Linker Rand:",
+      "marginRight": "Rechter Rand:",
+      "marginTop": "Oberer Rand:",
+      "marginBottom": "Unterer Rand:",
       "recentCount": "Anzahl der anzuzeigenden zuletzt verwendeten Datenbanken:",
       "advanced": "Erweitert",
       "openLast": "Zuletzt verwendete Datenbank beim Start von {{product}} öffnen",
@@ -2467,7 +2587,31 @@
       "lockEdited": "Bearbeiteter Datensatz",
       "refreshInterval": "Aktualisierungsintervall (Sek.)",
       "updateRetries": "Anzahl der Aktualisierungsversuche",
-      "updateRetryMs": "Intervall zwischen Aktualisierungsversuchen (ms)"
+      "updateRetryMs": "Intervall zwischen Aktualisierungsversuchen (ms)",
+      "enter": "Bewegung nach Eingabetaste",
+      "enterNone": "Keine Bewegung",
+      "enterNextField": "Nächstes Feld",
+      "enterNextRecord": "Nächster Datensatz",
+      "entry": "Verhalten beim Aufrufen eines Felds",
+      "entrySelectAll": "Gesamtes Feld markieren",
+      "entryStart": "Zum Feldanfang",
+      "entryEnd": "Zum Feldende",
+      "arrows": "Verhalten der Pfeiltasten",
+      "arrowsField": "Nächstes Feld",
+      "arrowsChar": "Nächstes Zeichen",
+      "continuous": "Pfeiltasten navigieren zu Datensätzen in Endlosformularen",
+      "continuousNone": "Keine",
+      "continuousUpDown": "Nach oben/unten",
+      "continuousLeftRight": "Nach links/rechts",
+      "cursorStop": "Cursor stoppt im ersten/letzten Feld",
+      "find": "Standardverhalten für Suchen/Ersetzen",
+      "findFast": "Schnellsuche",
+      "findGeneral": "Allgemeine Suche",
+      "findStart": "Suche am Feldanfang",
+      "general": "Allgemein",
+      "year4": "Vierstellige Jahreszahlen verwenden",
+      "year4Db": "Diese Datenbank",
+      "year4All": "Alle Datenbanken"
     },
     "db": {
       "header": "Optionen für die aktuelle Datenbank.",
@@ -2483,6 +2627,10 @@
       "datasheetDesign": "Entwurfsänderungen für Tabellen in der Datenblattansicht aktivieren",
       "navigation": "Navigation",
       "ribbonSection": "Optionen für Menüband und Symbolleiste",
+      "autoCorrectSection": "Optionen für die automatische Namenskorrektur",
+      "track": "Informationen zur automatischen Namenskorrektur nachverfolgen",
+      "perform": "Automatische Namenskorrektur durchführen",
+      "log": "Änderungen der automatischen Namenskorrektur protokollieren",
       "fullMenus": "Vollständige Menüs zulassen",
       "shortcutMenus": "Standardkontextmenüs zulassen",
       "iconForForms": "Als Formular- und Berichtssymbol verwenden",
@@ -2499,11 +2647,73 @@
       "ribbonSimplified": "Vereinfacht",
       "runMode": "Im Ausführungsmodus öffnen",
       "runModeHelp": "Blendet den Navigationsbereich und die Entwurfsansicht aus. Halten Sie beim Öffnen der Datenbank die Umschalttaste gedrückt, um dies zu umgehen.",
-      "nextOpen": "Diese Optionen werden beim nächsten Öffnen der Datenbank wirksam."
+      "nextOpen": "Diese Optionen werden beim nächsten Öffnen der Datenbank wirksam.",
+      "truncated": "Auf abgeschnittene Zahlenfelder prüfen",
+      "filterSection": "Suchoptionen filtern für Datenbank {{name}}",
+      "filterShow": "Werteliste anzeigen in:",
+      "listIndexed": "Lokale indizierte Felder",
+      "listNonIndexed": "Lokale nicht indizierte Felder",
+      "listMax": "Listen nicht anzeigen, wenn mehr als diese Anzahl Datensätze gelesen wird:"
+    },
+
+    "designers": {
+      "header": "Ändern Sie die Standardeinstellungen zum Erstellen von Datenbankobjekten. Die meisten Optionen werden in der Tabellendatenblatt- oder Seitenansicht ignoriert.",
+      "sheetSection": "Eigenschaftenblatt",
+      "sheetFontSize": "Schriftgrad des Eigenschaftenblatts:",
+      "tableSection": "Tabellenentwurfsansicht",
+      "fieldType": "Standardfeldtyp:",
+      "textSize": "Standardgröße für Textfelder:",
+      "numberSize": "Standardgröße für Zahlenfelder:",
+      "autoIndex": "AutoIndex beim Importieren/Erstellen:",
+      "propertyUpdate": "Schaltflächen für Optionen zur Eigenschaftenaktualisierung anzeigen",
+      "querySection": "Abfrageentwurf",
+      "tableNames": "Tabellennamen anzeigen",
+      "outputAll": "Alle Felder ausgeben",
+      "autoJoin": "AutoVerknüpfung aktivieren",
+      "queryFont": "Schriftart für den Abfrageentwurf",
+      "fontName": "Schriftart:",
+      "fontSize": "Größe:",
+      "formSection": "Formular-/Berichtsentwurfsansicht",
+      "selection": "Auswahlverhalten",
+      "partial": "Teilweise eingeschlossen",
+      "full": "Vollständig eingeschlossen"
+    },
+    "datasheet": {
+      "header": "Passen Sie das Aussehen von Datenblättern in {{product}} an.",
+      "gridSection": "Gitternetzlinien und Zelleneffekte",
+      "gridlines": "Standardmäßig angezeigte Gitternetzlinien",
+      "horizontal": "Horizontal",
+      "vertical": "Vertikal",
+      "columnWidth": "Standardspaltenbreite:",
+      "font": "Standardschriftart",
+      "fontSize": "Größe:",
+      "fontWeight": "Stärke:",
+      "underline": "Unterstrichen",
+      "italic": "Kursiv",
+      "weight": {
+        "100": "Sehr dünn",
+        "200": "Extraleicht",
+        "300": "Leicht",
+        "400": "Standard",
+        "500": "Mittel",
+        "600": "Halbfett",
+        "700": "Fett",
+        "800": "Extrafett",
+        "900": "Schwarz"
+      }
     }
   },
   "startup": {
     "formNotFound": "Das Anzeigeformular „{{name}}“ wurde nicht gefunden."
+  },
+  "import": {
+    "server": {
+      "title": "Aus PostgreSQL importieren",
+      "titleSqlServer": "Aus SQL Server importieren",
+      "ok": "Importieren",
+      "done": "Importierte Tabellen: {{names}}.",
+      "skipped": "Nicht importierte Spalten ({{table}}): {{names}}."
+    }
   },
   "link": {
     "filterBasecraft": "BaseCraft-Datenbanken",
@@ -2518,12 +2728,15 @@
     "kind": {
       "basecraft": "BaseCraft-Datenbank",
       "sqlite": "SQLite-Datei",
-      "access": "Access-Datenbank"
+      "access": "Access-Datenbank",
+      "postgresql": "PostgreSQL-Server",
+      "sqlserver": "SQL-Server-Server"
     },
     "tables": "Tabellen",
     "selectAll": "Alle markieren",
     "noTables": "Diese Datei enthält keine Tabellen.",
     "error": {
+      "unsupportedKind": "Diese Tabellen kann BaseCraft nicht verknüpfen: {{names}}. Es wurde nichts geändert.",
       "nameExists": "Diese Namen werden in dieser Datenbank bereits verwendet: {{names}}.",
       "missingTables": "Diese Tabellen sind nicht mehr in der Datei: {{names}}.",
       "self": "Eine Datenbank kann nicht mit sich selbst verknüpft werden.",
@@ -2539,6 +2752,37 @@
       "title": "Datenbankkennwort",
       "label": "Kennwort für {{path}}:",
       "wrong": "Falsches Kennwort."
+    },
+    "server": {
+      "title": "PostgreSQL-Tabellen verknüpfen",
+      "titleSqlServer": "SQL Server-Tabellen verknüpfen",
+      "host": "Server",
+      "hostHint": "Name oder Name\\Instanz",
+      "port": "Port",
+      "database": "Datenbank",
+      "tls": "Verschlüsselung",
+      "tlsVerify": "Verschlüsselt, Zertifikat geprüft (empfohlen)",
+      "tlsRequire": "Verschlüsselt, Zertifikat nicht geprüft",
+      "tlsTrust": "Verschlüsselt, dem Serverzertifikat vertrauen",
+      "tlsDisable": "Nicht verschlüsselt",
+      "timeout": "Abfragetimeout (s)",
+      "connect": "Verbinden",
+      "readOnly": "kein Primärschlüssel: schreibgeschützt",
+      "skipped": "nicht verknüpfte Spalten: {{names}}",
+      "noTables": "Dieser Server enthält keine Tabelle, die Sie lesen können.",
+      "missingTables": "Der Server enthält nicht: {{names}}. Es wurde nichts geändert."
+    },
+    "needsLogin": "Anmeldung erforderlich: Öffnen Sie die Tabelle, um sich beim Server {{detail}} anzumelden, und aktualisieren Sie dann die Verknüpfung.",
+    "login": {
+      "title": "Serveranmeldung",
+      "message": "Geben Sie Ihren Benutzernamen und Ihr Kennwort für {{label}} ein.",
+      "user": "Benutzername",
+      "password": "Kennwort",
+      "remember": "Kennwort auf diesem Arbeitsplatz speichern",
+      "noKeyring": "Dieser Arbeitsplatz hat keinen sicheren Schlüsselbund: Das Kennwort wird in jeder Sitzung erneut abgefragt.",
+      "untrusted": "Diese Datei ist nicht vertrauenswürdig: Das gespeicherte Kennwort wird für ihre Pass-Through-Abfragen nicht verwendet. Aktivieren Sie ihren Inhalt oder legen Sie sie an einem vertrauenswürdigen Speicherort ab, um es zu verwenden.",
+      "wrong": "Benutzername oder Kennwort falsch.",
+      "ok": "Anmelden"
     }
   },
   "ltm": {
@@ -2546,7 +2790,7 @@
     "col": {
       "name": "Tabelle",
       "kind": "Typ",
-      "path": "Datei",
+      "path": "Quelle",
       "state": "Status"
     },
     "state": {
@@ -2555,13 +2799,18 @@
       "readOnlyFile": "Schreibgeschützt",
       "stale": "Verwaiste Sperre – aktualisieren, um sie zu übernehmen",
       "missingFile": "Datei nicht gefunden",
-      "missingTable": "Tabelle fehlt in der Datei",
+      "missingTable": "Tabelle fehlt in der Quelle",
       "needsMigration": "Frühere Version von BaseCraft",
       "newerMajor": "Neuere Version von BaseCraft",
       "cannotOpen": "Datei kann nicht gelesen werden",
       "unsupportedKind": "Quelle nicht unterstützt",
       "needsPassword": "Kennwort erforderlich",
       "syncedFolder": "Synchronisierter Ordner: schreibgeschützt",
+      "needsLogin": "Anmeldung erforderlich",
+      "cannotConnect": "Server nicht erreichbar",
+      "certificate": "Zertifikat nicht vertrauenswürdig",
+      "serverVersion": "Serverversion nicht unterstützt",
+      "passwordExpired": "Kennwort abgelaufen",
       "unsupportedClient": "Freigegebener Modus auf diesem System nicht unterstützt: schreibgeschützt"
     },
     "risk": {
@@ -2581,5 +2830,78 @@
     "copy": "In die Zwischenablage kopieren",
     "drop": "Änderungen verwerfen",
     "deleted": "Dieser Datensatz wurde von einem anderen Benutzer gelöscht. Ihre Änderungen können nicht gespeichert werden."
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "Dieses Formular hat keine Datensatzherkunft: Die Steuerelemente zeigen keine Daten.",
+      "empty": "Die Datensatzherkunft enthält keine Datensätze.",
+      "unreadable": "Die Datensatzherkunft kann nicht gelesen werden: Die Steuerelemente zeigen keine Daten.",
+      "parameters": "Die Parameter wurden nicht eingegeben: Die Steuerelemente zeigen keine Daten.",
+      "truncated": "Vorschau der ersten {{count}} Datensätze der Herkunft; Summen und Gruppen beziehen sich nur auf diese Zeilen.",
+      "report": {
+        "noSource": "Dieser Bericht hat keine Datensatzherkunft: Er wird ohne Daten angezeigt.",
+        "empty": "Die Datensatzherkunft enthält keine Datensätze: Der Bericht wird ohne Daten angezeigt.",
+        "unreadable": "Die Datensatzherkunft kann nicht gelesen werden: Der Bericht wird ohne Daten angezeigt.",
+        "parameters": "Die Parameter wurden nicht eingegeben: Der Bericht wird ohne Daten angezeigt.",
+        "layoutFailed": "Der Bericht konnte nicht angeordnet werden."
+      }
+    }
+  },
+  "find": {
+    "title": "Suchen und Ersetzen",
+    "tabFind": "Suchen",
+    "tabReplace": "Ersetzen",
+    "what": "Suchen nach:",
+    "lookIn": "Suchen in:",
+    "lookInField": "Aktuelles Feld",
+    "lookInDocument": "Aktuelles Dokument",
+    "match": "Vergleichen:",
+    "matchAnywhere": "Teil des Feldinhaltes",
+    "matchWhole": "Ganzes Feld",
+    "matchStart": "Anfang des Feldinhaltes",
+    "search": "Suchen:",
+    "searchAll": "Alle",
+    "searchUp": "Aufwärts",
+    "searchDown": "Abwärts",
+    "matchCase": "Groß-/Kleinschreibung beachten",
+    "asFormatted": "Formatierung beachten",
+    "next": "Weitersuchen",
+    "cancel": "Abbrechen"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "Zu speichernde Objekte",
+    "dirty": "Speichern oder schließen Sie zuerst diese Objekte, die {{name}} verwenden: {{list}}",
+    "failedTitle": "Nicht korrigierte Objekte",
+    "failed": "Diese Objekte konnten nicht korrigiert werden und verwenden noch den alten Namen: {{list}}",
+    "staleTitle": "Objekte mit altem Namen",
+    "stale": "Diese Objekte verwenden noch den alten Namen (die automatische Namenskorrektur ist deaktiviert): {{list}}",
+    "logSkipped": "Die Tabelle {{table}} existiert, hat aber nicht die Protokollfelder: die Änderungen wurden darin nicht protokolliert.",
+    "log": {
+      "table": "Protokoll der automatischen Namenskorrektur",
+      "objectType": "Objekttyp",
+      "objectName": "Objektname",
+      "controlName": "Steuerelementname",
+      "propertyName": "Eigenschaftsname",
+      "oldValue": "Alter Wert",
+      "newValue": "Neuer Wert",
+      "time": "Zeit",
+      "failed": {
+        "unreadable": "Nicht korrigiert: Definition nicht lesbar",
+        "meaning": "Nicht korrigiert: die Korrektur würde die Bedeutung ändern",
+        "dependency": "Nicht korrigiert: hängt von einem nicht korrigierten Objekt ab"
+      }
+    },
+    "kind": {
+      "table": "Tabelle",
+      "query": "Abfrage",
+      "form": "Formular",
+      "report": "Bericht",
+      "macro": "Makro"
+    }
+  },
+  "propertyUpdate": {
+    "title": "Eigenschaften aktualisieren",
+    "message": "{{prop}} überall aktualisieren, wo {{field}} verwendet wird?",
+    "target": "{{kind}} {{name}} › {{control}} („{{current}}“)"
   }
 }

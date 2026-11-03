@@ -9,6 +9,7 @@ vi.mock('./ObjectProperties', () => ({ showObjectProperties: () => {} }));
 vi.mock('../exchange/export', () => ({ exportNamed: () => {} }));
 vi.mock('../exchange/paste', () => ({ pasteClip: () => {} }));
 vi.mock('../macro/macro-shell', () => ({ runMacroByName: stub.runMacroByName }));
+vi.mock('../report/ReportPreviewView', () => ({ outputBusy: () => false, outputSavedReport: async () => {} }));
 
 const ctx = (over: Partial<NavMenuContext> = {}): NavMenuContext => ({
   kind: 'form', name: 'F', readOnly: false, runtime: false, modal: {} as NavMenuContext['modal'], dispatch: () => {}, reselect: () => {}, ...over,
@@ -158,6 +159,93 @@ describe('macro menu (B1)', () => {
     stub.hasView.mockReturnValue(true); // Design View is not what is under test
     const c = ctx({ kind: 'macro', readOnly: true });
     expect(navMenuGroups(c).flat().filter((x) => x.run && !navItemEnabled(x, c)).map((x) => x.id)).toEqual(['rename', 'delete', 'cut', 'paste']);
+  });
+});
+
+describe('Layout View (L2)', () => {
+  const load = async () => {
+    vi.resetModules();
+    const nav = await import('./nav-menu');
+    await import('./nav-menu-items');
+    await import('../form/form-nav-menu');
+    return nav;
+  };
+
+  it('a form opens in Layout view unless its AllowLayoutView is false', async () => {
+    const { navMenuGroups, navItemEnabled } = await load();
+    const { emptyFormDoc } = await import('../form/form-def');
+    const { api } = await import('../bridge');
+    let props: Record<string, unknown> = {};
+    (api as { objects?: unknown }).objects = { get: vi.fn(async () => ({ definition: { ...emptyFormDoc(null), props } })) };
+    const dispatch = vi.fn();
+    const c = ctx({ kind: 'form', name: 'F', dispatch });
+    const layout = navMenuGroups(c)[0]!.find((x) => x.id === 'layout')!;
+    expect(navMenuGroups(c)[0]!.map((x) => x.id)).toEqual(['open', 'layout', 'design']);
+    expect([layout.planned, navItemEnabled(layout, c)]).toEqual([undefined, true]);
+    await layout.run!(c);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'open', kind: 'form', name: 'F', mode: 'layout' });
+    dispatch.mockClear();
+    props = { AllowLayoutView: false };
+    await layout.run!(c);
+    expect(dispatch).not.toHaveBeenCalled();
+    // an unreadable definition: opened anyway (the designer tells why)
+    (api as { objects?: unknown }).objects = { get: vi.fn(async () => { throw new Error('gone'); }) };
+    await layout.run!(c);
+    expect(dispatch).toHaveBeenCalledOnce();
+    dispatch.mockClear();
+    // already open: its view's command state decides, not the saved definition (not read)
+    const get = vi.fn(async () => ({ definition: { ...emptyFormDoc(null), props: { AllowLayoutView: false } } }));
+    (api as { objects?: unknown }).objects = { get };
+    const { registerCommandStates } = await import('./ribbon-model');
+    const open = ctx({ kind: 'form', name: 'F', dispatch, openTab: 'doc9' });
+    await layout.run!(open);
+    expect(dispatch).toHaveBeenCalledOnce();   // no state yet (the view loading): the guard decides
+    dispatch.mockClear();
+    const off = registerCommandStates('doc9', { viewLayout: { enabled: false } });
+    await layout.run!(open);
+    expect(dispatch).not.toHaveBeenCalled();
+    off();
+    registerCommandStates('doc9', { viewLayout: { enabled: true } });
+    await layout.run!(open);
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(get).not.toHaveBeenCalled();
+    expect(navItemEnabled(layout, ctx({ kind: 'form', readOnly: true }))).toBe(true);   // opens read-only
+    expect(navMenuGroups(ctx({ kind: 'form', runtime: true }))[0]!.map((x) => x.id)).toEqual(['open']);
+  });
+
+  it('L3: a report opens in Layout view unless its AllowLayoutView is false; open, its view decides; unreadable, it opens', async () => {
+    const { navMenuGroups, navItemEnabled } = await load();
+    await import('../report/report-menu');
+    const { api } = await import('../bridge');
+    const { registerCommandStates } = await import('./ribbon-model');
+    const report = (props: Record<string, unknown>) => ({ definition: { formatVersion: '1.0', recordSource: null, props,
+      sections: [{ kind: 'detail', height: 1000, props: {}, controls: [] }] } });
+    let get = vi.fn(async () => report({}));
+    (api as { objects?: unknown }).objects = { get };
+    const dispatch = vi.fn();
+    const c = ctx({ kind: 'report', name: 'R', dispatch });
+    const layout = navMenuGroups(c)[0]!.find((x) => x.id === 'layout')!;
+    expect(navMenuGroups(c)[0]!.map((x) => x.id)).toEqual(['open', 'layout', 'design']);
+    expect([layout.planned, navItemEnabled(layout, c), navItemEnabled(layout, ctx({ kind: 'report', readOnly: true }))]).toEqual([undefined, true, true]);
+    await layout.run!(c);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'open', kind: 'report', name: 'R', mode: 'layout' });
+    dispatch.mockClear();
+    get = vi.fn(async () => report({ AllowLayoutView: false }));
+    (api as { objects?: unknown }).objects = { get };
+    await layout.run!(c);
+    expect(dispatch).not.toHaveBeenCalled();
+    (api as { objects?: unknown }).objects = { get: vi.fn(async () => { throw new Error('gone'); }) };
+    await layout.run!(c);
+    expect(dispatch).toHaveBeenCalledOnce();
+    dispatch.mockClear();
+    get = vi.fn(async () => report({ AllowLayoutView: false }));   // saved: false; open, its view says true
+    (api as { objects?: unknown }).objects = { get };
+    const off = registerCommandStates('rep9', { viewLayout: { enabled: true } });
+    await layout.run!(ctx({ kind: 'report', name: 'R', dispatch, openTab: 'rep9' }));
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(get).not.toHaveBeenCalled();
+    off();
+    expect(navMenuGroups(ctx({ kind: 'report', runtime: true }))[0]!.map((x) => x.id)).toEqual(['open']);
   });
 });
 

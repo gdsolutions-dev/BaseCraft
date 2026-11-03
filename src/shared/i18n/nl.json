@@ -366,9 +366,16 @@
       "actionCatalog": "Actiecatalogus",
       "showAllActions": "Alle acties weergeven",
       "viewForm": "Formulierweergave",
+      "viewLayout": "Indelingsweergave",
+
+      "viewMenu": "Weergave",
+
+      "viewState": "Rapportweergave",
       "viewPrintPreview": "Afdrukvoorbeeld",
       "linkBaseCraft": "BaseCraft- of SQLite-database",
-      "linkAccess": "Access-database koppelen"
+      "linkAccess": "Access-database koppelen",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "Het lint naar links schuiven",
     "scrollRight": "Het lint naar rechts schuiven",
@@ -490,6 +497,9 @@
       "design": "Ontwerpweergave",
       "run": "Uitvoeringsweergave",
       "form": "Formulierweergave",
+      "layout": "Indelingsweergave",
+
+      "state": "Rapportweergave",
       "sql": "SQL-weergave"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "Alleen-lezen geopend: een gedeeld gegevensbestand kan niet worden gebruikt in een gesynchroniseerde map (OneDrive, Dropbox…). Plaats het op een netwerkstation, of stap over op een server.",
     "unsupportedClient": "Alleen-lezen geopend: de gedeelde modus op een netwerkstation wordt op dit systeem niet ondersteund. Gebruik een Windows-werkstation, of stap over op een server.",
     "takeOver": "Overnemen",
-    "contentDisabled": "Beveiligingswaarschuwing: een deel van de actieve inhoud van deze database (macro's, actiequery's) is uitgeschakeld.",
+    "contentDisabled": "Beveiligingswaarschuwing: een deel van de actieve inhoud van deze database (macro's, actiequery's, pass-throughqueries) is uitgeschakeld.",
     "enableContent": "Inhoud inschakelen",
     "riskNetwork": "Deze database staat op een netwerkshare. Een verbroken verbinding tijdens het schrijven kan de database beschadigen.",
     "riskSynced": "Deze database staat in een gesynchroniseerde map. Synchroniseren tijdens het schrijven kan de database beschadigen.",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "De kolomkop van een kruistabelquery (PIVOT) mag geen aggregatiefunctie bevatten: {{detail}}.",
       "queryBind_tooManyColumns": "Deze kruistabelquery zou {{detail}} kolommen opleveren: maximaal 255, waarvan 254 kolomkoppen. Beperk de gegevens of corrigeer de kolomkoppen (IN).",
       "queryBind_crosstabAsSource": "De kruistabelquery \"{{detail}}\" kan niet de bron zijn van een andere query of van een opzoeklijst.",
+      "queryBind_passThroughAsSource": "De pass-throughquery \"{{detail}}\" kan niet de bron zijn van een andere query of van een lijst. Zet het filter of de groepering in de SQL-tekst ervan.",
       "queryBind_mixedSources": "Een query behandelt één enkele gegevensbron: “{{detail}}” komt niet uit dezelfde bron als de andere tabellen van de query.",
       "fontMissing": "Een ingesloten lettertype kon niet worden geladen: het rapport is niet afgedrukt of geëxporteerd.",
       "printFailed": "Afdrukken is mislukt.",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "De “Kolomkop” van een kruistabelquery moet “Groeperen op” hebben in de rij Totaal.",
       "invalidQuery_crosstabNone": "Een kolom “(niet weergegeven)” van een kruistabelquery moet “Waar” hebben in de rij Totaal; kies de rol ervan in de rij Kruistabel.",
       "linkUnavailable_needsPassword": "Deze Access-database is beveiligd met een wachtwoord: {{detail}}",
+      "linkUnavailable_needsLogin": "Aanmelding geannuleerd: de gekoppelde tabellen van {{detail}} zijn niet beschikbaar.",
+      "linkUnavailable_cannotConnect": "Kan de server {{detail}} niet bereiken. Controleer de servernaam, de poort en het netwerk.",
+      "linkUnavailable_certificate": "Deze werkplek vertrouwt het certificaat van de server {{detail}} niet. Laat het certificaat van de certificeringsinstantie installeren of kies, als u dit netwerk vertrouwt, in Beheer gekoppelde tabellen de versleutelingsoptie zonder controle van het certificaat (bijvoorbeeld „Versleuteld, het servercertificaat vertrouwen”).",
+      "linkUnavailable_serverVersion": "De server {{detail}} gebruikt een versie die BaseCraft niet ondersteunt (minimaal PostgreSQL 14 of SQL Server 2016).",
+      "linkUnavailable_passwordExpired": "Het wachtwoord van deze aanmelding is verlopen op de server {{detail}}. Wijzig het met het beheerprogramma van de server en maak daarna opnieuw verbinding.",
       "linkUnavailable_syncedFolder": "Het gegevensbestand {{detail}} blijft alleen-lezen: een gedeeld gegevensbestand kan niet worden gebruikt in een gesynchroniseerde map (OneDrive, Dropbox…). Plaats het op een netwerkstation, of stap over op een server.",
-      "linkUnavailable_unsupportedClient": "Het gegevensbestand {{detail}} blijft alleen-lezen: de gedeelde modus op een netwerkstation wordt op dit systeem niet ondersteund. Gebruik een Windows-werkstation, of stap over op een server."
+      "linkUnavailable_unsupportedClient": "Het gegevensbestand {{detail}} blijft alleen-lezen: de gedeelde modus op een netwerkstation wordt op dit systeem niet ondersteund. Gebruik een Windows-werkstation, of stap over op een server.",
+      "serverNotSupported_actionQuery": "Actiequery's worden nog niet uitgevoerd op een gekoppelde {{detail}}-tabel.",
+      "serverNotSupported_makeTable": "Tabelmaakquery's worden niet uitgevoerd op een {{detail}}-bron: maak de tabel op de server en vul deze daarna met een toevoegquery.",
+      "serverNotSupported_appendAutoNumber": "Een toevoegquery kan de AutoNumber-waarden van een tabel op een server ({{detail}}) niet opgeven. Verwijder dat veld uit de query: de server nummert de nieuwe records.",
+      "serverNotSupported_joinSave": "Gegevensinvoer via een query met meerdere tabellen is nog niet mogelijk op een {{detail}}-bron.",
+      "serverNotSupported_crosstab": "Kruistabelquery's worden nog niet uitgevoerd op een {{detail}}-bron.",
+      "serverNotSupported_passThrough": "Pass-throughqueries zijn niet beschikbaar op een {{detail}}-bron.",
+      "serverNotSupported_topPercent": "TOP … PERCENT wordt nog niet ondersteund op een {{detail}}-bron.",
+      "serverNotSupported": "Deze bewerking is nog niet mogelijk op een gekoppelde {{detail}}-tabel.",
+      "serverFunction": "{{name}} kan niet worden uitgevoerd op een {{detail}}-bron: BaseCraft kan het niet vertalen voor die server.",
+      "timeout": "De server heeft niet binnen de ingestelde tijd geantwoord ({{name}} s). Probeer het opnieuw of verhoog de time-out in Beheer gekoppelde tabellen.",
+      "passThroughNoRecords": "De pass-through-query heeft geen records geretourneerd, hoewel de eigenschap Records retourneren op Ja staat.",
+      "passThroughTimeout": "De server heeft niet binnen de ingestelde tijd ({{name}} s) op de pass-through-query geantwoord. Verhoog 'ODBC-time-out' in het eigenschappenblad (0: geen limiet).",
+      "passThroughLost": "De verbinding met de server is tijdens de pass-through-query verbroken; het is niet bekend of de query is voltooid.",
+      "serverError_connection": "De verbinding met de server is verbroken tijdens het opslaan; het is niet bekend of het opslaan is gelukt. Vernieuw (Start › Vernieuwen) voordat u het opnieuw probeert.",
+      "serverError_notWritten": "De server heeft de record in '{{detail}}' niet opgeslagen: een trigger, regel of beveiligingsbeleid van de tabel heeft deze genegeerd.",
+      "serverError": "De server heeft de bewerking geweigerd: {{detail}}"
     },
     "op": {
       "nameExists": "Er bestaat al een object met deze naam.",
@@ -700,6 +732,7 @@
       "reportFooter": "Rapportvoet"
     },
     "canvas": "Ontwerpoppervlak",
+    "layoutHandle": "Indeling {{id}} selecteren",
     "toolbox": "Werkset",
     "arrange": {
       "alignLeft": "Links",
@@ -949,7 +982,16 @@
       "isNotNull": "Is niet leeg",
       "clear": "Alle filters wissen",
       "fieldTitle": "Filter",
-      "fieldLabel": "Criteria voor \"{{field}}\" (leeg: geen filter op dit veld):"
+      "fieldLabel": "Criteria voor \"{{field}}\" (leeg: geen filter op dit veld):",
+      "sortAsc": { "text": "Sorteren van A naar Z", "number": "Sorteren van klein naar groot", "date": "Sorteren van oud naar nieuw" },
+      "sortDesc": { "text": "Sorteren van Z naar A", "number": "Sorteren van groot naar klein", "date": "Sorteren van nieuw naar oud" },
+      "clearField": "Filter wissen uit {{field}}",
+      "typed": { "text": "Tekstfilters", "number": "Getalfilters", "date": "Datumfilters" },
+      "all": "(Alles selecteren)",
+      "blanks": "(Leeg)",
+      "tooLong": "Er zijn te veel waarden aangevinkt voor dit filter. Gebruik in plaats daarvan een tekst-, getal- of datumfilter.",
+      "ok": "OK",
+      "cancel": "Annuleren"
     }
   },
   "expr": {
@@ -983,7 +1025,6 @@
       "forbiddenStatement": "Instructie niet toegestaan: alleen selectie-, toevoeg-, bijwerk-, verwijder- en tabelmaakquery's worden geaccepteerd.",
       "reservedName": "Deze naam is gereserveerd (bc_, bcx_ of sqlite_): de query kan hem niet gebruiken.",
       "multipleStatements": "Slechts één SQL-instructie is toegestaan: verwijder de tekst na de puntkomma.",
-      "notSupportedYet": "Dit soort query (pass-through) is nog niet beschikbaar.",
       "badParameterType": "Onbekend parametertype.",
       "badCrosstab": "Ongeldige kruistabelquery: TRANSFORM, een gewone SELECT met GROUP BY, vervolgens PIVOT.",
       "badCount": "Voer een geheel getal van 1 tot 255 in.",
@@ -1440,6 +1481,7 @@
   "prop": {
     "Caption": "Bijschrift",
     "DefaultView": "Standaardweergave",
+    "AllowLayoutView": "Lay-outweergave toestaan",
     "NavigationButtons": "Navigatieknoppen",
     "Width": "Breedte",
     "Visible": "Zichtbaar",
@@ -2010,6 +2052,17 @@
       "label": "Tabelnaam"
     },
     "sqlOnly": "Deze query kan alleen in de SQL-weergave worden weergegeven.",
+    "passThrough": {
+      "notice": "Pass-through-query: deze tekst wordt ongewijzigd naar de server {{label}} verzonden, zonder dat BaseCraft hem leest. De server past zijn eigen machtigingen toe; de validatieregels en relaties van BaseCraft gelden niet voor wat hij wijzigt.",
+      "noticeNoServer": "Pass-through-query: kies de server in het eigenschappenblad.",
+      "empty": "Typ de SQL-instructie die naar de server moet worden verzonden.",
+      "noConnection": "Kies de server van de query in het eigenschappenblad (Verbinding).",
+      "connection": "Verbinding",
+      "otherServerKind": "Andere {{product}}-server…",
+      "returnsRecords": "Retourneert records",
+      "timeout": "ODBC-time-out",
+      "badTimeout": "Voer een aantal seconden in van 0 (geen limiet) tot 3600."
+    },
     "builderOnTable": "U hebt de Querybouwer op een tabel aangeroepen.\n\nWilt u een query maken op basis van de tabel?",
     "builderSave": "Wilt u de wijzigingen in de SQL-instructie opslaan en de eigenschap bijwerken?",
     "error": {
@@ -2165,6 +2218,65 @@
     "done": "De database is gesplitst. Gegevensbestand: {{path}}. Reservekopie: {{backup}}.",
     "noTables": "Deze database bevat geen lokale tabel om te verplaatsen.",
     "self": "Het gegevensbestand kan niet de geopende database zijn. Kies een andere naam of map."
+  },
+  "migrate": {
+    "title": "Wizard Verplaatsen naar een server",
+    "intro": "Deze wizard verplaatst alle lokale tabellen van de huidige database naar een PostgreSQL- of SQL Server-database, met hun gegevens, sleutels, indexen en relaties, en vervangt ze daarna door gekoppelde tabellen met dezelfde namen. Eerst wordt een reservekopie van de database gemaakt. Validatieregels en berekende standaardwaarden blijven in de toepassing, die een front-endtoepassing wordt.",
+    "engine": "Doelserver",
+    "next": "Volgende",
+    "schema": "Schema",
+    "start": "Verplaatsen",
+    "connecting": "Verbinding maken met de server en reservekopie van de database maken…",
+    "progress": "{{table}} kopiëren: {{done}} van {{total}} records",
+    "finishing": "Voltooien…",
+    "stop": "Stoppen",
+    "done": "Verplaatsen voltooid. Reservekopie: {{backup}}.",
+    "backup": "Reservekopie: {{backup}}.",
+    "server": "{{product}}-server: {{server}}, schema {{schema}}.",
+    "copy": "Kopiëren naar Klembord",
+    "report": {
+      "tables": "Verplaatste tabellen",
+      "table": "{{name}}: {{rows}} record(s)",
+      "nextId": "volgende AutoNummering: {{next}}",
+      "version": "versiekolom: {{column}}",
+      "sep": ", ",
+      "indexes": "Gemaakte indexen",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}} (geen duplicaten)",
+      "relations": "Relaties",
+      "created": "{{name}}: refererende sleutel gemaakt",
+      "noAction": "{{name}}: refererende sleutel gemaakt zonder trapsgewijze bewerkingen (SQL Server weigert meerdere trapsgewijze paden naar één tabel)",
+      "notEnforced": "{{name}}: referentiële integriteit niet afgedwongen, er wordt niets op de server gemaakt",
+      "frontEndOnly": "Alleen door de toepassing afgedwongen (niet door de server)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "Op de server als ander type opgeslagen",
+      "approx": "{{name}}: {{type}}",
+      "queries": "Query's die de server weigert",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: definitie onleesbaar, niet gecontroleerd"
+    },
+    "noTables": "Deze database bevat geen lokale tabel om te verplaatsen.",
+    "dataFile": "Deze database is een gedeeld gegevensbestand (Database splitsen): de front-endtoepassingen ervan koppelen de tabellen ervan. Verplaats de toepassing vanuit de front-end, na Converteren naar lokale tabel op de gekoppelde tabellen.",
+    "noSchema": "Het schema {{schema}} bestaat niet op de server.",
+    "nameTaken": "De server heeft al tabellen met deze namen: {{names}}. Verwijder ze of kies een ander schema.",
+    "nameTooLong": "Deze namen overschrijden de limiet van PostgreSQL (63 bytes): {{names}}. Wijzig eerst hun naam.",
+    "invalidDesign": "Het ontwerp van deze velden is ongeldig: {{names}}. Corrigeer het in de ontwerpweergave en probeer het opnieuw.",
+    "cancelled": "Verplaatsen geannuleerd: er is niets gewijzigd.",
+    "failed": "Het verplaatsen is mislukt ({{table}}): {{error}}. Er is niets gewijzigd op de server of in de database.",
+    "failedNoTable": "Het verplaatsen is mislukt: {{error}}. Er is niets gewijzigd op de server of in de database.",
+    "switchFailed": "De tabellen zijn naar de server gekopieerd, maar de database kon niet worden gewijzigd ({{error}}): deze is ongewijzigd gebleven.",
+    "dropped": "De gekopieerde tabellen zijn van de server verwijderd.",
+    "left": "Deze tabellen zijn op de server gebleven: {{names}}.",
+    "leftCheck": "Controleer en verwijder ze voordat u opnieuw verplaatst.",
+    "commitUnknown": "De verbinding met de server is verbroken, of het verplaatsen is gestopt, terwijl de server het doorvoerde: of de server het heeft opgeslagen, is onbekend. De database is niet gewijzigd.",
+    "leftMaybe": "Deze tabellen staan mogelijk op de server: {{names}}. Controleer en verwijder ze voordat u opnieuw verplaatst.",
+    "closed": "De verbinding met de server is gesloten.",
+    "queriesUnchecked": "De query's konden niet op de server worden gecontroleerd: {{detail}}",
+    "error": {
+      "migrateCount": "De server telt {{server}} record(s) in {{table}} in plaats van {{local}}.",
+      "migrateUnlinkable": "Teruggelezen van de server kan de tabel {{table}} niet met haar sleutel en velden worden gekoppeld.",
+      "migrateOneNull": "Het veld {{field}} bevat meerdere Null-waarden: SQL Server staat er maar één toe in de index zonder duplicaten die de relatie {{relation}} vereist."
+    }
   },
   "macro": {
     "embedded": {
@@ -2379,6 +2491,7 @@
       "cantGoToRecord": "U kunt niet naar het opgegeven record gaan.",
       "cantFocus": "Dit besturingselement kan de focus niet krijgen (het is verborgen of uitgeschakeld).",
       "saveRefused": "Het record kon niet worden opgeslagen.",
+      "autoCorrectLog": "De wijziging kon niet worden vastgelegd in de tabel {{name}} (veld {{detail}}): er is niets hernoemd.",
       "badReference": "“{{name}}” is geen besturingselement van een geopend formulier.",
       "badValue": "De waarde “{{name}}” past niet bij deze eigenschap.",
       "findWhatTooLong": "De te zoeken tekst is langer dan 255 tekens.",
@@ -2438,7 +2551,9 @@
     "cat": {
       "general": "Algemeen",
       "currentDb": "Huidige database",
-      "client": "Clientinstellingen"
+      "client": "Clientinstellingen",
+      "datasheet": "Gegevensblad",
+      "designers": "Objectontwerpers"
     },
     "general": {
       "header": "Algemene opties voor het werken met {{product}}.",
@@ -2455,6 +2570,11 @@
       "confirmDeletions": "Documentverwijderingen",
       "confirmActions": "Actiequery's",
       "display": "Weergave",
+      "printing": "Afdrukken",
+      "marginLeft": "Linkermarge:",
+      "marginRight": "Rechtermarge:",
+      "marginTop": "Bovenmarge:",
+      "marginBottom": "Ondermarge:",
       "recentCount": "Aantal weer te geven recente databases:",
       "advanced": "Geavanceerd",
       "openLast": "Laatst gebruikte database openen wanneer {{product}} wordt gestart",
@@ -2467,7 +2587,31 @@
       "lockEdited": "Bewerkt record",
       "refreshInterval": "Vernieuwingsinterval (sec)",
       "updateRetries": "Aantal updatepogingen",
-      "updateRetryMs": "Interval tussen updatepogingen (ms)"
+      "updateRetryMs": "Interval tussen updatepogingen (ms)",
+      "enter": "Verplaatsen na Enter",
+      "enterNone": "Niet verplaatsen",
+      "enterNextField": "Volgend veld",
+      "enterNextRecord": "Volgend record",
+      "entry": "Gedrag bij het ingaan van een veld",
+      "entrySelectAll": "Hele veld selecteren",
+      "entryStart": "Naar begin van veld",
+      "entryEnd": "Naar einde van veld",
+      "arrows": "Gedrag van pijltoetsen",
+      "arrowsField": "Volgend veld",
+      "arrowsChar": "Volgend teken",
+      "continuous": "Pijltoetsen navigeren naar records in doorlopende formulieren",
+      "continuousNone": "Geen",
+      "continuousUpDown": "Omhoog/omlaag",
+      "continuousLeftRight": "Links/rechts",
+      "cursorStop": "Cursor stopt bij eerste/laatste veld",
+      "find": "Standaardgedrag voor zoeken/vervangen",
+      "findFast": "Snel zoeken",
+      "findGeneral": "Algemeen zoeken",
+      "findStart": "Zoeken aan begin van veld",
+      "general": "Algemeen",
+      "year4": "Jaartallen met vier cijfers gebruiken",
+      "year4Db": "Deze database",
+      "year4All": "Alle databases"
     },
     "db": {
       "header": "Opties voor de huidige database.",
@@ -2483,6 +2627,10 @@
       "datasheetDesign": "Ontwerpwijzigingen voor tabellen in de gegevensbladweergave inschakelen",
       "navigation": "Navigatie",
       "ribbonSection": "Opties voor lint en werkbalk",
+      "autoCorrectSection": "Opties voor automatisch corrigeren van namen",
+      "track": "Informatie over automatisch corrigeren van namen bijhouden",
+      "perform": "Namen automatisch corrigeren",
+      "log": "Wijzigingen door automatisch corrigeren van namen vastleggen",
       "fullMenus": "Volledige menu's toestaan",
       "shortcutMenus": "Standaard snelmenu's toestaan",
       "iconForForms": "Gebruiken als pictogram voor formulieren en rapporten",
@@ -2499,11 +2647,73 @@
       "ribbonSimplified": "Vereenvoudigd",
       "runMode": "Openen in uitvoeringsmodus",
       "runModeHelp": "Verbergt het navigatiedeelvenster en de ontwerpweergave. Houd Shift ingedrukt tijdens het openen van de database om dit te omzeilen.",
-      "nextOpen": "Deze opties worden van kracht wanneer de database de volgende keer wordt geopend."
+      "nextOpen": "Deze opties worden van kracht wanneer de database de volgende keer wordt geopend.",
+      "truncated": "Controleren op afgekapte getalvelden",
+      "filterSection": "Zoekopties filteren voor database {{name}}",
+      "filterShow": "Lijst met waarden weergeven in:",
+      "listIndexed": "Lokale geïndexeerde velden",
+      "listNonIndexed": "Lokale niet-geïndexeerde velden",
+      "listMax": "Geen lijsten weergeven als meer dan dit aantal records is gelezen:"
+    },
+
+    "designers": {
+      "header": "Wijzig de standaardinstellingen voor het maken van databaseobjecten. De meeste opties worden genegeerd in de gegevensbladweergave van tabellen en in de paginaweergave.",
+      "sheetSection": "Eigenschappenblad",
+      "sheetFontSize": "Tekengrootte van het eigenschappenblad:",
+      "tableSection": "Tabelontwerpweergave",
+      "fieldType": "Standaardveldtype:",
+      "textSize": "Standaardgrootte tekstveld:",
+      "numberSize": "Standaardgrootte getalveld:",
+      "autoIndex": "Auto-index bij importeren/maken:",
+      "propertyUpdate": "Knoppen voor opties voor het bijwerken van eigenschappen weergeven",
+      "querySection": "Queryontwerp",
+      "tableNames": "Tabelnamen weergeven",
+      "outputAll": "Alle velden uitvoeren",
+      "autoJoin": "AutoJoin inschakelen",
+      "queryFont": "Lettertype voor queryontwerp",
+      "fontName": "Lettertype:",
+      "fontSize": "Grootte:",
+      "formSection": "Formulier-/rapportontwerpweergave",
+      "selection": "Selectiegedrag",
+      "partial": "Gedeeltelijk omsloten",
+      "full": "Volledig omsloten"
+    },
+    "datasheet": {
+      "header": "Pas het uiterlijk van gegevensbladen in {{product}} aan.",
+      "gridSection": "Rasterlijnen en celeffecten",
+      "gridlines": "Standaard weergegeven rasterlijnen",
+      "horizontal": "Horizontaal",
+      "vertical": "Verticaal",
+      "columnWidth": "Standaardkolombreedte:",
+      "font": "Standaardlettertype",
+      "fontSize": "Grootte:",
+      "fontWeight": "Dikte:",
+      "underline": "Onderstreept",
+      "italic": "Cursief",
+      "weight": {
+        "100": "Extra dun",
+        "200": "Extra licht",
+        "300": "Licht",
+        "400": "Standaard",
+        "500": "Gemiddeld",
+        "600": "Halfvet",
+        "700": "Vet",
+        "800": "Extra vet",
+        "900": "Zwaar"
+      }
     }
   },
   "startup": {
     "formNotFound": "Het weer te geven formulier “{{name}}” is niet gevonden."
+  },
+  "import": {
+    "server": {
+      "title": "Importeren uit PostgreSQL",
+      "titleSqlServer": "Importeren uit SQL Server",
+      "ok": "Importeren",
+      "done": "Geïmporteerde tabellen: {{names}}.",
+      "skipped": "Niet geïmporteerde kolommen ({{table}}): {{names}}."
+    }
   },
   "link": {
     "filterBasecraft": "BaseCraft-databases",
@@ -2518,12 +2728,15 @@
     "kind": {
       "basecraft": "BaseCraft-database",
       "sqlite": "SQLite-bestand",
-      "access": "Access-database"
+      "access": "Access-database",
+      "postgresql": "PostgreSQL-server",
+      "sqlserver": "SQL Server-server"
     },
     "tables": "Tabellen",
     "selectAll": "Alles selecteren",
     "noTables": "Dit bestand bevat geen tabellen.",
     "error": {
+      "unsupportedKind": "BaseCraft kan deze tabellen niet koppelen: {{names}}. Er is niets gewijzigd.",
       "nameExists": "Deze namen worden al gebruikt in deze database: {{names}}.",
       "missingTables": "Deze tabellen staan niet meer in het bestand: {{names}}.",
       "self": "Een database kan niet aan zichzelf worden gekoppeld.",
@@ -2539,6 +2752,37 @@
       "title": "Databasewachtwoord",
       "label": "Wachtwoord voor {{path}}:",
       "wrong": "Onjuist wachtwoord."
+    },
+    "server": {
+      "title": "PostgreSQL-tabellen koppelen",
+      "titleSqlServer": "SQL Server-tabellen koppelen",
+      "host": "Server",
+      "hostHint": "naam of naam\\instantie",
+      "port": "Poort",
+      "database": "Database",
+      "tls": "Versleuteling",
+      "tlsVerify": "Versleuteld, certificaat gecontroleerd (aanbevolen)",
+      "tlsRequire": "Versleuteld, certificaat niet gecontroleerd",
+      "tlsTrust": "Versleuteld, het servercertificaat vertrouwen",
+      "tlsDisable": "Niet versleuteld",
+      "timeout": "Time-out van query's (s)",
+      "connect": "Verbinden",
+      "readOnly": "geen primaire sleutel: alleen-lezen",
+      "skipped": "niet-gekoppelde kolommen: {{names}}",
+      "noTables": "Deze server bevat geen tabel die u kunt lezen.",
+      "missingTables": "De server bevat niet: {{names}}. Er is niets gewijzigd."
+    },
+    "needsLogin": "Aanmelden vereist: open de tabel om u aan te melden bij de server {{detail}} en vernieuw daarna de koppeling.",
+    "login": {
+      "title": "Aanmelden bij de server",
+      "message": "Voer uw gebruikersnaam en wachtwoord in voor {{label}}.",
+      "user": "Gebruikersnaam",
+      "password": "Wachtwoord",
+      "remember": "Wachtwoord op deze werkplek onthouden",
+      "noKeyring": "Deze werkplek heeft geen beveiligde sleutelbos: het wachtwoord wordt bij elke sessie opnieuw gevraagd.",
+      "untrusted": "Dit bestand wordt niet vertrouwd: het onthouden wachtwoord wordt niet gebruikt voor de pass-through-query's ervan. Schakel de inhoud in of plaats het bestand op een vertrouwde locatie om het te gebruiken.",
+      "wrong": "Onjuiste gebruikersnaam of onjuist wachtwoord.",
+      "ok": "Aanmelden"
     }
   },
   "ltm": {
@@ -2546,7 +2790,7 @@
     "col": {
       "name": "Tabel",
       "kind": "Type",
-      "path": "Bestand",
+      "path": "Bron",
       "state": "Status"
     },
     "state": {
@@ -2555,13 +2799,18 @@
       "readOnlyFile": "Alleen-lezen",
       "stale": "Verlaten vergrendeling — vernieuw om deze over te nemen",
       "missingFile": "Bestand niet gevonden",
-      "missingTable": "Tabel ontbreekt in het bestand",
+      "missingTable": "Tabel ontbreekt in de bron",
       "needsMigration": "Eerdere versie van BaseCraft",
       "newerMajor": "Nieuwere versie van BaseCraft",
       "cannotOpen": "Bestand kan niet worden gelezen",
       "unsupportedKind": "Bron niet ondersteund",
       "needsPassword": "Wachtwoord vereist",
       "syncedFolder": "Gesynchroniseerde map: alleen-lezen",
+      "needsLogin": "Aanmelding vereist",
+      "cannotConnect": "Server onbereikbaar",
+      "certificate": "Certificaat niet vertrouwd",
+      "serverVersion": "Serverversie niet ondersteund",
+      "passwordExpired": "Wachtwoord verlopen",
       "unsupportedClient": "Gedeelde modus niet ondersteund op dit systeem: alleen-lezen"
     },
     "risk": {
@@ -2581,5 +2830,78 @@
     "copy": "Kopiëren naar Klembord",
     "drop": "Wijzigingen negeren",
     "deleted": "Deze record is door een andere gebruiker verwijderd. Uw wijzigingen kunnen niet worden opgeslagen."
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "Dit formulier heeft geen recordbron: de besturingselementen tonen geen gegevens.",
+      "empty": "De recordbron bevat geen records.",
+      "unreadable": "De recordbron kan niet worden gelezen: de besturingselementen tonen geen gegevens.",
+      "parameters": "De parameters zijn niet ingevoerd: de besturingselementen tonen geen gegevens.",
+      "truncated": "Voorbeeld van de eerste {{count}} records van de bron; totalen en groepen gelden alleen voor deze rijen.",
+      "report": {
+        "noSource": "Dit rapport heeft geen recordbron: het wordt zonder gegevens weergegeven.",
+        "empty": "De recordbron bevat geen records: het rapport wordt zonder gegevens weergegeven.",
+        "unreadable": "De recordbron kan niet worden gelezen: het rapport wordt zonder gegevens weergegeven.",
+        "parameters": "De parameters zijn niet ingevoerd: het rapport wordt zonder gegevens weergegeven.",
+        "layoutFailed": "Het rapport kan niet worden opgemaakt."
+      }
+    }
+  },
+  "find": {
+    "title": "Zoeken en vervangen",
+    "tabFind": "Zoeken",
+    "tabReplace": "Vervangen",
+    "what": "Zoeken naar:",
+    "lookIn": "Zoeken in:",
+    "lookInField": "Huidig veld",
+    "lookInDocument": "Huidig document",
+    "match": "Overeenkomst:",
+    "matchAnywhere": "Een deel van het veld",
+    "matchWhole": "Volledig veld",
+    "matchStart": "Begin van veld",
+    "search": "Zoeken:",
+    "searchAll": "Alles",
+    "searchUp": "Omhoog",
+    "searchDown": "Omlaag",
+    "matchCase": "Identieke hoofdletters/kleine letters",
+    "asFormatted": "Velden zoeken zoals ze zijn opgemaakt",
+    "next": "Volgende zoeken",
+    "cancel": "Annuleren"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "Op te slaan objecten",
+    "dirty": "Sla eerst deze objecten op of sluit ze, ze gebruiken {{name}}: {{list}}",
+    "failedTitle": "Niet gecorrigeerde objecten",
+    "failed": "Deze objecten konden niet worden gecorrigeerd en gebruiken nog de oude naam: {{list}}",
+    "staleTitle": "Objecten met de oude naam",
+    "stale": "Deze objecten gebruiken nog de oude naam (automatisch corrigeren van namen is uitgeschakeld): {{list}}",
+    "logSkipped": "De tabel {{table}} bestaat, maar heeft de logvelden niet: de wijzigingen zijn er niet in vastgelegd.",
+    "log": {
+      "table": "Logboek automatisch corrigeren van namen",
+      "objectType": "Objecttype",
+      "objectName": "Objectnaam",
+      "controlName": "Besturingselementnaam",
+      "propertyName": "Eigenschapsnaam",
+      "oldValue": "Oude waarde",
+      "newValue": "Nieuwe waarde",
+      "time": "Tijd",
+      "failed": {
+        "unreadable": "Niet gecorrigeerd: definitie onleesbaar",
+        "meaning": "Niet gecorrigeerd: de correctie zou de betekenis wijzigen",
+        "dependency": "Niet gecorrigeerd: hangt af van een niet-gecorrigeerd object"
+      }
+    },
+    "kind": {
+      "table": "Tabel",
+      "query": "Query",
+      "form": "Formulier",
+      "report": "Rapport",
+      "macro": "Macro"
+    }
+  },
+  "propertyUpdate": {
+    "title": "Eigenschappen bijwerken",
+    "message": "{{prop}} bijwerken overal waar {{field}} wordt gebruikt?",
+    "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
   }
 }

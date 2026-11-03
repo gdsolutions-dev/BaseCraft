@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
 import { resolveColor } from '../../src/shared/design/colors';
 import type { DesignDoc } from '../../src/shared/design/model';
-import { launchApp, seedBase, seedReportsE2E } from './helpers';
+import { launchApp, seedBase, seedReportsE2E, pickView , checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const REPORT = 'Factures par client';
@@ -40,7 +40,7 @@ test('Report Design view: create, Field List, section pairs, page setup, save, P
     await expect(cur(page).getByTestId('designer')).toBeVisible();
     await selected(page, 'reportDesign');
     for (const id of ['arrange', 'pageSetup']) await expect(page.getByTestId(`ribbon-tab-${id}`)).toBeVisible();
-    await expect(page.getByTestId('cmd-viewPrintPreview')).toBeDisabled(); // not saved yet
+    await checkView(page, 'viewPrintPreview', (v) => expect(v).toBeDisabled()); // not saved yet
     for (const kind of ['pageHeader', 'detail', 'pageFooter']) await expect(page.getByTestId(`section-${kind}`)).toBeVisible();
 
     // source, then the Field List: Enter adds a bound text box and its label to the Detail
@@ -88,7 +88,7 @@ test('Report Design view: create, Field List, section pairs, page setup, save, P
     // Margins: a menu under its button; the preset chosen is checked
     await page.getByTestId('cmd-margins').click();
     await expect(page.getByTestId('cmd-margins')).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByTestId('margins-menu-custom')).toHaveAttribute('aria-checked', 'true'); // 1 cm: no preset
+    await expect(page.getByTestId('margins-menu-narrow')).toHaveAttribute('aria-checked', 'true'); // O3 R9: a new report has the Options' 0,635 cm = the narrow preset
     await page.getByTestId('margins-menu-normal').click();
     await expect(page.getByTestId('margins-menu')).toHaveCount(0);
     await page.getByTestId('cmd-margins').click();
@@ -122,7 +122,7 @@ test('Report Design view: create, Field List, section pairs, page setup, save, P
 
     // Print Preview, then Close Preview: back to Design view in the same tab
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(cur(page).getByTestId('report-preview')).toBeVisible();
     await expect(pageOf(page)).toHaveText(/^Page 1 sur \d+$/);
     await expect(visiblePages(page).first()).toContainText('Client:');
@@ -181,7 +181,7 @@ test('Format tab on a report: Bold, Font Color and Background Color on a text bo
       .toMatchObject({ FontWeight: 'bold', ForeColor: 'theme:danger', BackColor: 'theme:warning', BackStyle: 'normal' });
 
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     const amount = visiblePages(page).first().locator('.bc-band[data-section="detail"] .bc-text', { hasText: '€' }).first();
     await expect(amount).toHaveCSS('font-weight', '700');
     await expect(amount).toHaveCSS('color', hexToRgb(resolveColor('theme:danger', 'light')));
@@ -218,13 +218,13 @@ test('Report Design view on a read-only base: opened read-only, Print Preview st
     await expect(cur(page).getByTestId('designer')).toBeVisible();
     await expect(page.getByTestId('tool-textBox')).toBeDisabled();
     await expect(page.getByTestId('cmd-textBox')).toBeDisabled();
-    await expect(page.getByTestId('cmd-viewPrintPreview')).toBeEnabled();
+    await checkView(page, 'viewPrintPreview', (v) => expect(v).toBeEnabled());
     await page.getByTestId('ribbon-tab-pageSetup').click();
     await expect(page.getByTestId('cmd-landscape')).toBeDisabled();
     await page.getByTestId('ribbon-tab-home').click();
     await expect(page.getByTestId('cmd-save')).toBeDisabled();
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(pageOf(page)).toHaveText('Page 1 sur 3');
   } finally {
     await b.app.close();
@@ -245,7 +245,7 @@ test('Print Preview: Landscape is saved and laid out again (4 pages), kept after
     await pressed('portrait', false); await pressed('landscape', true);
     // Design view: the Page Setup tab too; Group & Sort pressed while the pane shows, Hide Details while the Detail is hidden
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(cur(page).getByTestId('designer')).toBeVisible();
     await page.getByTestId('ribbon-tab-pageSetup').click();
     await pressed('landscape', true); await pressed('portrait', false);

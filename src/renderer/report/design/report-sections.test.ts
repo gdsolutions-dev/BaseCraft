@@ -4,6 +4,7 @@ import { effectiveProp } from '../../../shared/design/properties';
 import { FACTURES_FIELDS } from '../../../shared/report/fixtures/factures';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { i18n } from '../../i18n';
+import { readReport } from '../../../shared/report/model';
 import {
   blankReport, newReportControls, removesControls, reportDesignStates, sectionLabel, sectionOrder, togglePageHeaderFooter, toggleReportHeaderFooter,
 } from './report-sections';
@@ -20,6 +21,11 @@ const withGroup = (expression: string): DesignDoc => {
 };
 
 describe('report sections (band designer)', () => {
+  it('a new report stores the default margins (O3 R9); without them, no page setup', () => {
+    const M = { top: 360, right: 360, bottom: 360, left: 1134 };
+    expect(readReport(blankReport(M), []).page).toEqual({ orientation: 'portrait', margins: M });
+    expect(blankReport().props.pageSetup).toBeUndefined();
+  });
   it('a blank report: page header, detail, page footer, no source, no grouping', () => {
     const b = blankReport();
     expect(b.sections.map((s) => [s.kind, s.height])).toEqual([['pageHeader', 454], ['detail', 2268], ['pageFooter', 454]]);

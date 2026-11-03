@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
 import { saveObject } from '../../src/main/db/objects';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
-import { launchApp, seedBase, seedSalesE2E } from './helpers';
+import { launchApp, seedBase, seedSalesE2E, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -115,7 +115,7 @@ test('a record being edited in the target table: the action query is refused (ta
   try {
     await page.getByTestId('nav-item-Clients').dblclick();
     const b = (await doc(page).getByTestId('data-grid-canvas').boundingBox())!;
-    await page.mouse.click(b.x + 44 + 80 + 30, b.y + 34 + 15); // Nom of the first row (row selector 44, N° 80, header 34)
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + 34 + 15); // Nom of the first row (row selector 44, N° 80, header 34)
     await expect(doc(page).getByTestId('datasheet').locator('td[role=gridcell]:focus')).toHaveCount(1);
     await page.keyboard.press('D');
     await page.keyboard.type('upond');

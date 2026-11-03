@@ -94,13 +94,13 @@ describe('splitDatabase (C3 R12)', () => {
     expect(rows(front!, 'SELECT count(*) AS n FROM bc_fields')).toEqual([{ n: 0 }]);
   });
 
-  it('the lookup on a saved query still works in the data file', () => {
+  it('the lookup on a saved query still works in the data file', async () => {
     const want = lookupRows(front!, tableDesign(front!, 'Commandes'), 'Client', fr).rows;
     expect(want.length).toBeGreaterThan(0);
     splitDatabase(front!, fe, data, '0.0.0');
     front!.close();
     front = null;
-    expect(open(data).lookup('Commandes', 'Client').rows).toEqual(want);
+    expect((await open(data).lookup('Commandes', 'Client')).rows).toEqual(want);
   });
 
   it('a failure leaves the front-end as it was and no data file', () => {
@@ -141,7 +141,7 @@ describe('splitDatabase (C3 R12)', () => {
     expect(s.listTables().map((x) => x.name)).toEqual(['Clients', 'Commandes', 'Notes']);
   });
 
-  it('the session backs up first and refuses what it cannot split', () => {
+  it('the session backs up first and refuses what it cannot split', async () => {
     front!.close();
     front = null;
     const s = open(fe);
@@ -152,7 +152,7 @@ describe('splitDatabase (C3 R12)', () => {
     expect(r.dataFile).toBe(data);
     expect(readFileSync(r.backupPath)).toEqual(original);
     expect(s.listTables().map((x) => [x.name, x.link?.kind])).toEqual([['Clients', 'basecraft'], ['Commandes', 'basecraft'], ['Notes', 'basecraft']]);
-    expect(s.count('Commandes')).toBe(5); // read from the data file
+    expect(await s.count('Commandes')).toBe(5); // read from the data file
     expect(s.splitDatabase(join(dir, 'encore.basecraft'))).toEqual({ ok: false, reason: 'noTables' }); // links only
 
     const other = join(dir, 'Autre.basecraft');

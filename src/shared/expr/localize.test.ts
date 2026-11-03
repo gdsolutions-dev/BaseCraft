@@ -48,6 +48,10 @@ describe('display <-> canonical', () => {
 
   it('keywords and criteria', () => {
     expect(toCanonical('Entre 1 Et 5', FR, { criteria: true })).toBe('Between 1 And 5');
+    // a word alone is text unless it names a field; a date alone is a date literal (the grid pastes text, not brackets)
+    expect(toCanonical('Paris', FR, { criteria: true, fields: ['Ville'] })).toBe('"Paris"');
+    expect(toCanonical('ville', FR, { criteria: true, fields: ['Ville'] })).toBe('[ville]');
+    expect(toCanonical('12/03/2020', FR, { criteria: true })).toBe('#2020-03-12#');
     expect(toCanonical('Pas Comme "A*" Ou Est Null', FR, { criteria: true })).toBe('Not Like "A*" Or Is Null');
     expect(toDisplay('[a] Is Not Null And [b] = True', FR)).toBe('[a] Est Pas Null Et [b] = Vrai');
   });
@@ -153,7 +157,7 @@ describe('catalog', () => {
       for (const f of FUNCTIONS) expect(get(c, `expr.fn.${f.name}`), f.name).toEqual(expect.any(String));
       for (const cat of new Set(FUNCTIONS.map((f) => f.category))) expect(get(c, `expr.cat.${cat}`), cat).toEqual(expect.any(String));
       const codes: ExprErrorCode[] = ['unexpectedToken', 'unexpectedEnd', 'unclosedString', 'unclosedBracket', 'badDate', 'badNumber', 'unknownFunction', 'arity',
-        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'notSupportedYet', 'badParameterType', 'badCrosstab',
+        'tooComplex', 'subqueryNotAllowed', 'forbiddenStatement', 'reservedName', 'multipleStatements', 'badParameterType', 'badCrosstab',
         'memberNotAllowed', 'badMember'];
       for (const k of codes) expect(get(c, `expr.error.${k}`), k).toEqual(expect.any(String));
     }

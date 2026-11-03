@@ -3,7 +3,9 @@ import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../share
 import { defaultProps, type FieldProps, type FieldType } from '../../shared/field-types';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
 import type { RecordSnapshot } from './record-controller';
-import { controlEnabled, controlStyle, errorsByControl, optionGroupValue, tabSequence } from './run-model';
+import { createLayout, membersOf } from '../../shared/design/layout-edit';
+import { ctlAttrs, hasLabel, labelTarget, type RunCtx } from './controls/run-ctx';
+import { controlEnabled, controlStyle, errorsByControl, layoutLabels, optionGroupValue, tabSequence } from './run-model';
 
 const ctl = (kind: ControlKind, name: string, props: Record<string, unknown> = {}, at = { left: 0, top: 0, width: 1000, height: 300 }): ControlDef =>
   ({ kind, name, ...at, props });
@@ -104,5 +106,34 @@ describe('run model', () => {
     expect(optionGroupValue(group([opt('A', 1), opt('B', 2)]), '1')).toBe('A');
     expect(optionGroupValue(group([opt('A', 1), opt('B', 2)]), null)).toBeNull();
     expect(optionGroupValue(group([opt('A', 1)]), 9)).toBeNull();
+  });
+});
+
+describe('layout labels', () => {
+  // Nom (étiquette « Nom du client : ») et Ville en Empilé ; Code et Pays en Tabulaire (étiquettes dans l'en-tête)
+  const field = (name: string, top: number): ControlDef => ({ ...bound(name), top, children: [{ ...ctl('label', `L${name}`, { Caption: `${name} :` }), top }] });
+  const d0: DesignDoc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [
+    { kind: 'formHeader', height: 500, props: {}, controls: [] },
+    { ...sectionWith(field('Nom', 0), field('Ville', 500), field('Code', 1000), field('Pays', 1500)) }] };
+  const st = createLayout(d0, membersOf(d0, ['Nom', 'Ville']), 'stacked', { headerSection: 'formHeader' });
+  const both = createLayout(st, membersOf(st, ['Code', 'Pays']), 'tabular', { headerSection: 'formHeader' });
+  it('maps each Stacked label to its control; Tabular header labels (another section) are not linked', () =>
+    expect(layoutLabels(both)).toEqual({ LNom: 'Nom', LVille: 'Ville' }));
+  it('no layout: none', () => expect(layoutLabels(d0)).toEqual({}));
+});
+
+describe('layout labels: control names that are Object.prototype keys', () => {
+  const named = (name: string, top: number): ControlDef => ({ ...bound(name), name, top, children: [{ ...ctl('label', `L${name}`, { Caption: name }), top }] });
+  const plain: DesignDoc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [sectionWith(named('constructor', 0), named('toString', 500), ctl('textBox', 'valueOf'))] };
+  const laid = createLayout(plain, membersOf(plain, ['constructor', 'toString']), 'stacked', { headerSection: 'formHeader' });
+  it('a form with or without a layout computes its labels, links and names without throwing', () => {
+    for (const d of [plain, laid]) {
+      const x = { errors: {}, lists: {}, stops: new Set(), id: (n: string) => `v-${n}`, events: () => ({}), labels: layoutLabels(d) } as unknown as RunCtx;
+      const s = d.sections[0];
+      const targets = s.controls.map((c) => labelTarget(c, s, x)?.name ?? null);
+      expect(targets).toEqual(d === laid ? [null, null, null, 'constructor', 'toString'] : [null, null, null]);
+      expect(s.controls.map((c) => hasLabel(c, x))).toEqual(d === laid ? [true, true, false, false, false] : [true, true, false]);
+      expect(ctlAttrs(s.controls[2], x)['aria-label']).toBe('valueOf');
+    }
   });
 });

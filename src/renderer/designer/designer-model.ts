@@ -1,10 +1,12 @@
 // Modèle pur du concepteur générique (formulaires A4, états A5) : document, sélection, déplacement, organisation, annulation.
 // Tout est en twips, relatif à la section (enfants compris). Aucune clé inconnue n'est jamais retirée : on étale toujours l'ancien objet.
 import { isValidObjectName, sameName } from '../../shared/field-types';
+import { labelOf, readLayouts, reflow, sectionRef, withLayouts } from '../../shared/design/layout';
+import { placeInLayout, pruneLayouts } from '../../shared/design/layout-edit';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
 import { reportWidth } from '../../shared/report/model';
-import { resizeRect, intersects, type Handle, type Rect } from './geometry';
+import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
 import { gridStep, MAX_TWIPS, snap } from './units';
 
 export type Selection = { kind: 'controls'; names: string[] } | { kind: 'section'; index: number } | { kind: 'doc' };
@@ -19,12 +21,12 @@ export interface DesignerState { doc: DesignDoc; selection: Selection; dirty: bo
 export type DesignerAction =
   | { type: 'load'; doc: DesignDoc; objectKind?: 'form' | 'report' } | { type: 'saved' }
   | { type: 'select'; selection: Selection } | { type: 'toggleSelect'; name: string } | { type: 'selectAll' }
-  | { type: 'selectRect'; section: number; rect: Rect; add: boolean }
+  | { type: 'selectRect'; section: number; rect: Rect; add: boolean; enclosed?: boolean }
   | { type: 'moveBy'; dx: number; dy: number; free?: boolean }            // twips ; free = sans aimantation (Alt)
   | { type: 'changeSection'; to: number; top: number; dx?: number; free?: boolean }   // dépôt dans une autre section (dx : déplacement horizontal du même geste)
   | { type: 'resize'; handle: Handle; dx: number; dy: number; free?: boolean }
-  | { type: 'insert'; section: number; controls: ControlDef[]; parent?: string }
-  | { type: 'deleteSelection' }
+  | { type: 'insert'; section: number; controls: ControlDef[]; parent?: string; at?: { x: number; y: number } }   // at : point de dépôt (twips, relatif à la section)
+  | { type: 'deleteSelection'; keep?: string[] }                         // keep : étiquettes de disposition laissées en place (Couper)
   | { type: 'setProp'; targets: PropTarget[]; name: string; value: unknown }   // undefined = clé retirée
   | { type: 'setSectionHeight'; index: number; height: number }
   | { type: 'arrange'; op: ArrangeOp }
@@ -289,8 +291,10 @@ function insert(s: DesignerState, a: Extract<DesignerAction, { type: 'insert' }>
       ...(c.children ? { children: c.children.map(fresh) } : {}) };
   };
   const added = a.controls.map(fresh);
-  const doc = parent ? updateControl(s.doc, parent.name, (c) => ({ ...c, children: [...(c.children ?? []), ...added] }))
+  let doc = parent ? updateControl(s.doc, parent.name, (c) => ({ ...c, children: [...(c.children ?? []), ...added] }))
     : mapLists(s.doc, (list, owner, si) => (owner === null && si === section ? [...list, ...added] : list));
+  // posé sur une disposition (point de dépôt `at`) : il en devient membre, dans la même entrée d'historique
+  if (a.at && !parent) doc = placeInLayout(doc, added.map((c) => c.name), { section: sectionRef(doc.sections[section]), ...a.at });
   return push(s, fit(doc, s.objectKind), { kind: 'controls', names: added.map((c) => c.name) });
 }
 
@@ -317,7 +321,98 @@ function changeSection(s: DesignerState, a: Extract<DesignerAction, { type: 'cha
   return push(s, fit({ ...rest, sections: rest.sections.map((x, i) => (i === a.to ? { ...x, controls: [...x.controls, ...out] } : x)) }, s.objectKind));
 }
 
-export function designerReducer(s: DesignerState, a: DesignerAction): DesignerState {
+// ---- dispositions : la grille (doc.props.Layouts) commande les coordonnées de ses membres
+const UNTOUCHED: DesignerAction['type'][] = ['undo', 'redo', 'load', 'saved', 'select', 'toggleSnap'];   // instantanés déjà cohérents
+
+/** Un membre redimensionné donne sa largeur à sa colonne et sa hauteur à sa ligne ; le même doc si aucun membre n'a changé. */
+function learnSizes(prev: DesignDoc, doc: DesignDoc): DesignDoc {
+  let changed = false;
+  const layouts = readLayouts(doc).map((l) => {
+    const cols = [...l.cols], rows = [...l.rows];
+    for (const c of l.cells) {
+      const was = c.control === null ? null : findControl(prev, c.control)?.control, now = c.control === null ? null : findControl(doc, c.control)?.control;
+      if (!was || !now) continue;
+      if (now.width !== was.width) { cols[c.col] = now.width; changed = true; }
+      if (now.height !== was.height) { rows[c.row] = { ...rows[c.row], height: now.height }; changed = true; }
+    }
+    return { ...l, cols, rows };
+  });
+  return changed ? withLayouts(doc, layouts) : doc;
+}
+
+/** Une disposition dont tous les membres ont bougé du même (dx, dy), dans leur section, se déplace d'un bloc : sa gauche et ses hauts
+ *  suivent (le recalcul les garde là) ; un membre déplacé seul revient à sa cellule. */
+function moveBlocks(prev: DesignDoc, doc: DesignDoc): DesignDoc {
+  let changed = false;
+  const layouts = readLayouts(doc).map((l) => {
+    const ds = l.cells.flatMap((c) => {
+      if (c.control === null) return [];
+      const a = findControl(prev, c.control), b = findControl(doc, c.control);
+      return [a && b && a.section === b.section ? [b.control.left - a.control.left, b.control.top - a.control.top] : null];
+    });
+    const d = ds[0];
+    if (!d || (!d[0] && !d[1]) || ds.some((x) => !x || x[0] !== d[0] || x[1] !== d[1])) return l;
+    changed = true;
+    return { ...l, left: Math.max(0, l.left + d[0]), tops: Object.fromEntries(Object.entries(l.tops).map(([k, t]) => [k, Math.max(0, t + d[1])])) };
+  });
+  return changed ? withLayouts(doc, layouts) : doc;
+}
+
+/** Un membre déposé (`moved`) dans une autre section que celle de sa ligne quitte la disposition (sa cellule se vide). Seul
+ *  changeSection l'appelle : une section de groupe renumérotée garde ses dispositions (regroup renomme leurs lignes). */
+function detachMoved(doc: DesignDoc, moved: string[]): DesignDoc {
+  let changed = false;
+  const layouts = readLayouts(doc).map((l) => ({ ...l, cells: l.cells.map((c) => {
+    const s = c.control === null || !moved.some((n) => sameName(n, c.control!)) ? undefined
+      : doc.sections.find((x) => x.controls.some((k) => sameName(k.name, c.control!)));
+    if (!s || sectionRef(s) === l.rows[c.row].section) return c;
+    changed = true; return { ...c, control: null };
+  }) }));
+  return changed ? withLayouts(doc, layouts) : doc;
+}
+
+/** Après l'étape du réducteur : la grille et les coordonnées des membres restent cohérentes, dans la même entrée d'historique.
+ *  Un document sans disposition ressort intact (le même état). */
+export function syncLayouts(prev: DesignerState, a: DesignerAction, next: DesignerState): DesignerState {
+  if (next.doc === prev.doc || UNTOUCHED.includes(a.type) || (!readLayouts(prev.doc).length && !readLayouts(next.doc).length)) return next;
+  let doc = next.doc;
+  if (a.type === 'setProp' && a.name === 'Name' && a.targets.length === 1 && a.targets[0].kind === 'control') {   // le renommage suit dans la grille
+    const from = a.targets[0].name, to = String(a.value);
+    doc = withLayouts(doc, readLayouts(prev.doc).map((l) => ({ ...l, cells: l.cells.map((c) => (c.control !== null && sameName(c.control, from) ? { ...c, control: to } : c)) })));
+  }
+  if (a.type === 'deleteSelection') {   // un membre supprimé emporte son étiquette : la ligne ne garde pas d'étiquette orpheline
+    const gone = readLayouts(prev.doc).flatMap((l) => l.cells).flatMap((c) => (c.control !== null && !findControl(doc, c.control) ? [c.control] : []));
+    const labels = gone.flatMap((n) => labelOf(prev.doc, n) ?? []).filter((l) => !a.keep?.some((k) => sameName(k, l.name)));
+    if (labels.length) doc = mapLists(doc, (list) => list.filter((c) => !labels.includes(c)));
+  }
+  if (a.type === 'resize' || (a.type === 'setProp' && (a.name === 'Width' || a.name === 'Height'))) doc = learnSizes(prev.doc, doc);
+  // ponytail: free drag of a member does nothing in Design view; Access moves the whole row. Add row drag with the Layout view gestures (L2).
+  const geometry = ['moveBy', 'changeSection', 'arrange', 'resize'].includes(a.type)
+    || (a.type === 'setProp' && ['Left', 'Top', 'Width', 'Height'].includes(a.name) && a.targets.every((t) => t.kind === 'control'));
+  if (geometry) doc = moveBlocks(prev.doc, unfit(prev.doc, doc));
+  // fit toujours : le recalcul a pu descendre des lignes sous la section (insertion de lignes, ligne plus haute)
+  if (a.type === 'changeSection' && prev.selection.kind === 'controls') doc = detachMoved(pruneLayouts(doc), prev.selection.names);
+  const out = fit(reflow(pruneLayouts(doc)), next.objectKind);
+  const json = JSON.stringify(out);
+  if (json === JSON.stringify(prev.doc)) return prev;
+  return json === JSON.stringify(next.doc) ? next : { ...next, doc: out };
+}
+
+/** Les hauteurs de section et la largeur du document d'avant : dans un geste de géométrie, seul le `fit` du cœur les a changées
+ *  (un membre ramené par le recalcul ne doit rien laisser grandir) ; le `fit` qui suit le recalcul refait la croissance utile. */
+function unfit(prev: DesignDoc, doc: DesignDoc): DesignDoc {
+  const sections = doc.sections.map((s, i) => (prev.sections[i] && s.height !== prev.sections[i].height ? { ...s, height: prev.sections[i].height } : s));
+  let props = doc.props;
+  if (props.Width !== prev.props.Width) {
+    if ('Width' in prev.props) props = { ...props, Width: prev.props.Width };
+    else { const { Width: _w, ...rest } = props; props = rest; }
+  }
+  return { ...doc, sections, props };
+}
+
+export const designerReducer = (s: DesignerState, a: DesignerAction): DesignerState => syncLayouts(s, a, coreReducer(s, a));
+
+export function coreReducer(s: DesignerState, a: DesignerAction): DesignerState {
   switch (a.type) {
     case 'load': return { ...initDesigner(a.doc, a.objectKind ?? s.objectKind), snap: s.snap };
     case 'saved': return { ...s, dirty: false, past: [], future: [] };
@@ -330,7 +425,7 @@ export function designerReducer(s: DesignerState, a: DesignerAction): DesignerSt
     case 'selectRect': {
       const sec = s.doc.sections[a.section];
       if (!sec) return s;
-      const hit = sec.controls.flatMap(selectable).filter((c) => intersects(controlRect(c), a.rect)).map((c) => c.name);
+      const hit = sec.controls.flatMap(selectable).filter((c) => (a.enclosed ? contains(a.rect, controlRect(c)) : intersects(controlRect(c), a.rect))).map((c) => c.name);
       const old = a.add && s.selection.kind === 'controls' ? s.selection.names : [];
       const names = [...old, ...hit.filter((n) => !old.some((o) => sameName(o, n)))];
       return names.length ? { ...s, selection: { kind: 'controls', names } } : a.add ? s : { ...s, selection: { kind: 'section', index: a.section } };

@@ -133,3 +133,18 @@ describe('formatValue (review fixes)', () => {
     expect(fmt(null, '@', 'fr-FR')).toBe('');
   });
 });
+
+describe('four-digit year (O2 R11)', () => {
+  const ctx = { locale: 'fr-FR', lang: 'fr' as const };
+  const y4 = { ...ctx, fourDigitYear: true };
+  const v = d('2026-03-05 00:00:00');
+  it('overrides yy in a custom date format only', () => {
+    expect(formatValue(v, 'dd/mm/yy', ctx)).toBe('05/03/26');
+    expect(formatValue(v, 'dd/mm/yy', y4)).toBe('05/03/2026');
+    expect(formatValue(v, 'dd/mm/yyyy', y4)).toBe('05/03/2026');
+    expect(formatValue(v, 'dd/mm/yy "yy"', y4)).toBe('05/03/2026 yy');
+    expect(formatValue(v, 'dd/mm/yy\\y', y4)).toBe('05/03/2026y');
+    for (const f of ['shortDate', 'mediumDate', 'longDate', 'generalDate']) expect(formatValue(v, f, y4)).toBe(formatValue(v, f, ctx));
+    expect(formatValue(num(26), '00', y4)).toBe('26');
+  });
+});

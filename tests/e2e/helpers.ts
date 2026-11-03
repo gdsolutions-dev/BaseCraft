@@ -1,5 +1,5 @@
 import { _electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { copyFileSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,7 +12,7 @@ import { createTable } from '../../src/main/db/schema';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../src/shared/report/fixtures/factures';
 
 export async function launchApp(
-  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean; runtime?: boolean } = {},
+  opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean; runtime?: boolean; enterMovesDown?: boolean } = {},
 ): Promise<{ app: ElectronApplication; page: Page; userDataDir: string }> {
   const userDataDir = opts.userDataDir ?? mkdtempSync(join(tmpdir(), 'basecraft-'));
   // Bases seeded in the temporary folder are trusted (their active content is enabled), unless `untrusted`: nothing is then.
@@ -20,6 +20,15 @@ export async function launchApp(
   if (!opts.untrusted) {
     trust.BASECRAFT_E2E_TRUST_CONFIG = join(userDataDir, 'e2e-trusted-folders.json');
     writeFileSync(trust.BASECRAFT_E2E_TRUST_CONFIG, JSON.stringify({ trustedFolders: [{ path: realpathSync.native(tmpdir()), subfolders: true }] }));
+  }
+  // O2 R16: specs written when a grid's Enter saved the cell and went down (Glide's) keep that move through Access's own
+  // « Déplacement après saisie : Enregistrement suivant », in settings.json before the start (the other settings kept); the
+  // default (« Champ suivant ») is tested in edit-keys-*.spec.ts.
+  if (opts.enterMovesDown) {
+    const file = join(userDataDir, 'settings.json');
+    let kept: Record<string, unknown> = {};
+    try { kept = JSON.parse(readFileSync(file, 'utf8')); } catch { /* none yet */ }
+    writeFileSync(file, JSON.stringify({ ...kept, moveAfterEnter: 'nextRecord' }));
   }
   const env = { ...process.env, BASECRAFT_E2E: '1', BASECRAFT_USER_DATA: userDataDir, ...trust, ...opts.env } as Record<string, string>;
   if (opts.untrusted) delete env.BASECRAFT_E2E_TRUST_CONFIG;
@@ -51,6 +60,16 @@ export async function openDbOptions(page: Page): Promise<void> {
   await expect(page.getByTestId('opt-db')).toBeVisible();
 }
 
+/** Default column width of a table or query datasheet (O2 R12, G2): 1 417 twips, every type. */
+export const DEFAULT_COL_PX = 1417 / 15;
+/** x, from the canvas' left edge, of a table or query datasheet's column (after the 44 px row selector): every column
+ *  DEFAULT_COL_PX wide unless `widths` (px, from column 0) says otherwise. The one place the geometry lives (R16). */
+export function colLeft(col: number, widths: number[] = []): number {
+  let x = 44;
+  for (let c = 0; c < col; c++) x += widths[c] ?? DEFAULT_COL_PX;
+  return x;
+}
+
 /** Creates a base in a fresh temporary folder, lets `setup` fill it (createTable, insertRow…), closes it, returns its path.
  *  An asynchronous setup (insertRow is async) gives a promise of the path. */
 export function seedBase(name: string, setup?: (db: DatabaseSync) => void): string;
@@ -72,9 +91,10 @@ export function seedBase(name: string, setup?: (db: DatabaseSync) => void | Prom
 }
 
 /** A base left by a crash: a hot journal (uncommitted rows already spilled to the file) and a lock whose holder is long gone. It opens
- *  read-only and `needsRecovery` (session.test.ts has the same recipe); the banner's take-over recovers it. Returns its path. */
-export function seedCrashed(name: string): string {
-  const src = seedBase(`${name}-src`);
+ *  read-only and `needsRecovery` (session.test.ts has the same recipe); the banner's take-over recovers it. Returns its path.
+ *  `setup` fills it first, committed (as seedBase). */
+export function seedCrashed(name: string, setup?: (db: DatabaseSync) => void): string {
+  const src = seedBase(`${name}-src`, setup);
   const p = join(mkdtempSync(join(tmpdir(), 'basecraft-seed-')), name + FILE_EXTENSION);
   const w = new DatabaseSync(src);
   try {
@@ -212,4 +232,19 @@ export async function layoutFromDom(page: Page): Promise<DomLayout> {
     await doc.locator(`.bc-page[data-page="${next}"]`).waitFor();
   }
   return { pages: [...pages].sort((a, b) => a[0] - b[0]).map(([, p]) => p) };
+}
+
+/** Affichage (the ribbon's split button) lists the views it shows: a view alone in its group keeps its own button. */
+export async function pickView(page: Page, id: string): Promise<void> {
+  if (!(await page.getByTestId('cmd-viewMenu').count())) return page.getByTestId(`cmd-${id}`).click();
+  await page.getByTestId('cmd-viewMenu').click();
+  await page.getByTestId(`view-item-${id}`).click();
+}
+
+/** Checks one view: its item in Affichage's list (opened, then closed with Escape), or its own button. */
+export async function checkView(page: Page, id: string, check: (view: Locator) => Promise<void>): Promise<void> {
+  if (!(await page.getByTestId('cmd-viewMenu').count())) return check(page.getByTestId(`cmd-${id}`));
+  await page.getByTestId('cmd-viewMenu').click();
+  await check(page.getByTestId(`view-item-${id}`));
+  await page.keyboard.press('Escape');
 }

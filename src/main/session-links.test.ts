@@ -76,17 +76,17 @@ describe('linked tables in the session (C1 Task 3)', () => {
     expect(s.listTables().map((x) => [x.name, x.link?.kind])).toEqual([['Clients', 'basecraft'], ['Commandes', 'basecraft'], ['Notes', undefined], ['T', 'sqlite'], ['W', 'sqlite']]);
     expect(s.listTables().find((x) => x.name === 'T')!.link).toEqual({ kind: 'sqlite', path: plain });
     expect(existsSync(`${data}.lock`)).toBe(false); // listing opens no linked file (R3)
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
-    expect(s.count('Clients')).toBe(4);
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
+    expect(await s.count('Clients')).toBe(4);
     expect(await s.update('Commandes', 1, { Montant: '0' })).toMatchObject({ ok: false }); // the data file's rule >0
     expect(await s.update('Clients', 3, { Ville: 'Marseille' })).toMatchObject({ ok: true });
     expect(readBack(data, 'SELECT Ville FROM Clients WHERE rowid = 3')).toBe('Marseille');
     expect(await s.insert('Clients', { Nom: 'Neuf' })).toMatchObject({ ok: true });
-    expect(s.delete('Clients', [5])).toEqual({ ok: true, count: 1 });
+    expect(await s.delete('Clients', [5])).toEqual({ ok: true, count: 1 });
     expect(readBack(data, 'SELECT count(*) FROM Clients')).toBe(4);
     expect(s.tableDesign('Commandes').fields.find((x) => x.name === 'Montant')!.props.validationRule).toBe('>0');
-    expect(s.describeSource({ kind: 'table', name: 'Clients' })).toMatchObject({ updatable: true, keyTable: 'Clients' });
-    expect(s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 2 }).total).toBe(4);
+    expect(await s.describeSource({ kind: 'table', name: 'Clients' })).toMatchObject({ updatable: true, keyTable: 'Clients' });
+    expect((await s.pageSource({ kind: 'table', name: 'Clients' }, { offset: 0, limit: 2 })).total).toBe(4);
     expect(s.cascadeChildren('Clients')).toEqual([]);
   });
 
@@ -94,12 +94,12 @@ describe('linked tables in the session (C1 Task 3)', () => {
     const changes: SessionState[] = [];
     s.close();
     const a = open(fe, { sessionId: 'c', onStateChanged: (x) => changes.push(x) });
-    a.page('Clients', { offset: 0, limit: 1 });
+    await a.page('Clients', { offset: 0, limit: 1 });
     expect(a.state.linkedLocks).toEqual([data]);
     expect(changes.at(-1)?.linkedLocks).toEqual([data]);
     expect(existsSync(`${data}.lock`)).toBe(true);
     const s2 = open(fe2, { sessionId: 'b' });
-    expect(s2.describeSource({ kind: 'table', name: 'Clients' }).updatable).toBe(false);
+    expect((await s2.describeSource({ kind: 'table', name: 'Clients' })).updatable).toBe(false);
     await expect(s2.insert('Clients', { Nom: 'X' })).rejects.toThrow(ReadOnlyError);
     a.close();
     expect(existsSync(`${data}.lock`)).toBe(false);
@@ -108,10 +108,10 @@ describe('linked tables in the session (C1 Task 3)', () => {
   it('a plain SQLite file is used as it is and never gets bc_ tables', async () => { // R7, Review Focus 5
     const before = readFileSync(plain);
     expect(s.tableDesign('T').fields.map((x) => x.props.external)).toEqual([true, true]);
-    expect(s.page('T', { offset: 0, limit: 5 }).rows[0]!.values).toEqual([1, 'abc']);
+    expect((await s.page('T', { offset: 0, limit: 5 })).rows[0]!.values).toEqual([1, 'abc']);
     expect(readFileSync(plain)).toEqual(before);
-    expect(s.describeSource({ kind: 'table', name: 'W' }).updatable).toBe(false);
-    expect(s.describeSource({ kind: 'table', name: 'T' }).updatable).toBe(true);
+    expect((await s.describeSource({ kind: 'table', name: 'W' })).updatable).toBe(false);
+    expect((await s.describeSource({ kind: 'table', name: 'T' })).updatable).toBe(true);
     expect(await s.insert('T', { n: '7' })).toMatchObject({ ok: true });
     expect(readBack(plain, 'SELECT n FROM T WHERE id = 2')).toBe(7);
     expect(tablesOf(plain)).toEqual(['T', 'W']);
@@ -124,15 +124,15 @@ describe('linked tables in the session (C1 Task 3)', () => {
     b.exec(`CREATE TABLE B (id INTEGER PRIMARY KEY, n INTEGER, b BLOB); INSERT INTO B VALUES (1, 1, x'0102')`);
     b.close();
     expect(s.createLinks(blobs, ['B'])).toMatchObject({ ok: true });
-    const record = () => {
+    const record = async () => {
       const names = s.tableDesign('B').fields.map((x) => x.name);
-      const row = s.page('B', { offset: 0, limit: 1 }).rows[0]!;
+      const row = (await s.page('B', { offset: 0, limit: 1 })).rows[0]!;
       return expectedValues(Object.fromEntries(names.map((n, i) => [n, row.values[i]]))); // what the datasheet sends
     };
-    const read = record()!;
+    const read = (await record())!;
     expect(read.b).toEqual(new Uint8Array([1, 2]));
     expect(await s.update('B', 1, { n: '2' }, read)).toMatchObject({ ok: true });
-    const again = record()!; // editing begins again
+    const again = (await record())!; // editing begins again
     const w = new DatabaseSync(blobs);
     w.exec(`UPDATE B SET b = x'0103'`); // another workstation
     w.close();
@@ -140,26 +140,26 @@ describe('linked tables in the session (C1 Task 3)', () => {
     expect(readBack(blobs, 'SELECT n FROM B')).toBe(2);
   });
 
-  it('a missing data file fails its links only', () => { // R3, Review Focus 1
+  it('a missing data file fails its links only', async () => { // R3, Review Focus 1
     renameSync(data, `${data}.moved`);
-    expect(() => s.page('Clients', { offset: 0, limit: 1 })).toThrow(`bc:linkUnavailable|missingFile|${data}`);
-    expect(s.page('Notes', { offset: 0, limit: 1 }).rows).toEqual([]);
-    expect(s.page('T', { offset: 0, limit: 1 }).rows).toHaveLength(1);
+    await expect(s.page('Clients', { offset: 0, limit: 1 })).rejects.toThrow(`bc:linkUnavailable|missingFile|${data}`);
+    expect((await s.page('Notes', { offset: 0, limit: 1 })).rows).toEqual([]);
+    expect((await s.page('T', { offset: 0, limit: 1 })).rows).toHaveLength(1);
   });
 
-  it('a data file that no longer holds the table fails with missingTable', () => {
+  it('a data file that no longer holds the table fails with missingTable', async () => {
     const d = new DatabaseSync(data);
     d.exec('DROP TABLE Commandes');
     d.close();
-    expect(() => s.page('Commandes', { offset: 0, limit: 1 })).toThrow(`bc:linkUnavailable|missingTable|${data}`);
+    await expect(s.page('Commandes', { offset: 0, limit: 1 })).rejects.toThrow(`bc:linkUnavailable|missingTable|${data}`);
   });
 
-  it('an older data file is refused, never migrated', () => {
+  it('an older data file is refused, never migrated', async () => {
     const d = new DatabaseSync(data);
     d.exec(`UPDATE bc_meta SET value = '0' WHERE key = 'format_major'`); // an older major: a front-end never migrates it
     d.close();
     const before = readFileSync(data);
-    expect(() => s.page('Clients', { offset: 0, limit: 1 })).toThrow(`bc:linkUnavailable|needsMigration|${data}`);
+    await expect(s.page('Clients', { offset: 0, limit: 1 })).rejects.toThrow(`bc:linkUnavailable|needsMigration|${data}`);
     expect(readFileSync(data)).toEqual(before);
     expect(fs.readdirSync(dir).filter((n) => n.includes('backup'))).toEqual([]);
   });
@@ -182,7 +182,7 @@ describe('linked tables in the session (C1 Task 3)', () => {
   });
 
   it('structure belongs to the data file', async () => { // R8
-    expect(() => s.renameTable('Clients', 'C2')).toThrow('bc:linkedTable');
+    await expect(s.renameTable('Clients', 'C2')).rejects.toThrow('bc:linkedTable');
     await expect(s.testRules('Clients')).rejects.toThrow('bc:linkedTable');
     await expect(s.saveTable({ originalName: 'Clients', design: clients, mapping: [], allowDataLoss: false })).rejects.toThrow('bc:linkedTable');
     expect(() => s.copyTable('Clients', 'C2')).toThrow('bc:linkedTable');
@@ -216,13 +216,13 @@ describe('linked tables in the session (C1 Task 3)', () => {
     expect(existsSync(`${data}.lock`)).toBe(true);
   });
 
-  it('a commit to the data file by another connection invalidates cached totals and snapshots', () => {
+  it('a commit to the data file by another connection invalidates cached totals and snapshots', async () => {
     const req = { offset: 0, limit: 10, sort: { field: 'Nom', dir: 'asc' as const } }; // a text sort: served from a snapshot
-    expect(s.page('Clients', req).rows).toHaveLength(4);
+    expect((await s.page('Clients', req)).rows).toHaveLength(4);
     const d = new DatabaseSync(data);
     d.prepare(`INSERT INTO Clients (Nom) VALUES ('Zoé')`).run();
     d.close();
-    expect(s.page('Clients', req).rows).toHaveLength(5);
+    expect((await s.page('Clients', req)).rows).toHaveLength(5);
   });
 
   it('a read-only front-end takes no data file lock', async () => {
@@ -230,22 +230,22 @@ describe('linked tables in the session (C1 Task 3)', () => {
     s.close();
     const r = open(fe, { sessionId: 'b' });
     expect(r.state.readOnly).toBe(true);
-    expect(r.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
+    expect((await r.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
     expect(existsSync(`${data}.lock`)).toBe(false);
     expect(r.state.linkedLocks).toBeUndefined();
-    expect(r.describeSource({ kind: 'table', name: 'Clients' }).updatable).toBe(false);
+    expect((await r.describeSource({ kind: 'table', name: 'Clients' })).updatable).toBe(false);
     await expect(r.update('Clients', 1, { Ville: 'x' })).rejects.toThrow(ReadOnlyError);
   });
 
-  it('a front-end that loses its lock closes its links (their locks released)', () => {
-    s.page('Clients', { offset: 0, limit: 1 });
+  it('a front-end that loses its lock closes its links (their locks released)', async () => {
+    await s.page('Clients', { offset: 0, limit: 1 });
     expect(existsSync(`${data}.lock`)).toBe(true);
     writeFileSync(`${fe}.lock`, JSON.stringify({ user: 'u', host: os.hostname(), pid: 1, sessionId: 'z', heartbeatAt: new Date(0).toISOString() }));
     s.tick();
     expect(s.state).toMatchObject({ readOnly: true, readOnlyReason: 'lockLost' });
     expect(s.state.linkedLocks).toBeUndefined();
     expect(existsSync(`${data}.lock`)).toBe(false);
-    expect(s.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4); // reopened read-only
+    expect((await s.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4); // reopened read-only
     expect(existsSync(`${data}.lock`)).toBe(false);
   });
 });
@@ -254,18 +254,18 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
   const join = 'SELECT Commandes.[N°], Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client';
   const def = (sql: string) => ({ formatVersion: '1.0', sql });
   const run = (sql: string) => s.runAction({ kind: 'sql', sql }, {}, { skipFailures: false, replaceTable: false });
-  const notes = () => s.page('Notes', { offset: 0, limit: 10 }).rows.length;
+  const notes = async () => (await s.page('Notes', { offset: 0, limit: 10 })).rows.length;
 
-  it('a parameter query over links runs on the data file', () => {
-    const r = s.pageSource({ kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client WHERE Ville = [V]' },
+  it('a parameter query over links runs on the data file', async () => {
+    const r = await s.pageSource({ kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client WHERE Ville = [V]' },
       { offset: 0, limit: 50, params: { V: 'Lyon' } });
     expect(r.rows.map((x) => x[1])).toEqual([10.1, 0.1, 0.2, 0.1]); // Lyon and LYON (Access comparison)
-    expect(s.describeSource({ kind: 'sql', sql: join })).toMatchObject({ updatable: true, keyTable: 'Commandes' });
+    expect(await s.describeSource({ kind: 'sql', sql: join })).toMatchObject({ updatable: true, keyTable: 'Commandes' });
   });
 
-  it('a saved query over links is stored in the front-end and runs on the data file', () => {
+  it('a saved query over links is stored in the front-end and runs on the data file', async () => {
     expect(s.saveObject('query', 'QLies', def('SELECT Nom FROM Clients WHERE Ville = "Paris";'), null)).toEqual({ ok: true });
-    expect(s.pageSource({ kind: 'query', name: 'QLies' }, { offset: 0, limit: 10 }).rows).toEqual([['Durand']]);
+    expect((await s.pageSource({ kind: 'query', name: 'QLies' }, { offset: 0, limit: 10 })).rows).toEqual([['Durand']]);
     expect(readBack(data, `SELECT count(*) FROM bc_objects WHERE name = 'QLies'`)).toBe(0);
   });
 
@@ -274,7 +274,7 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
     expect(await s.saveSource(ref, { rowid: 1, values: { Montant: '5' } })).toMatchObject({ ok: true });
     expect(readBack(data, 'SELECT Montant FROM Commandes WHERE rowid = 1')).toBe(5);
     expect(await s.saveSource(ref, { rowid: 1, values: { Montant: '0' } })).toMatchObject({ ok: false }); // the data file's rule >0
-    expect(s.autoLookup({ kind: 'sql', sql: 'SELECT Client, Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' }, { Client: '3' }))
+    expect(await s.autoLookup({ kind: 'sql', sql: 'SELECT Client, Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' }, { Client: '3' }))
       .toMatchObject({ Nom: 'Durand' });
   });
 
@@ -286,7 +286,7 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
     expect(await run('UPDATE Commandes SET Montant = 0')).toMatchObject({ ok: false, reason: 'rowErrors' }); // its rule, nothing written
     expect(readBack(data, 'SELECT count(*) FROM Commandes WHERE Montant = 0')).toBe(0);
     expect(await run('INSERT INTO Notes (Texte) VALUES ("local")')).toEqual({ ok: true, count: 1 }); // a local one still writes the front-end
-    expect(notes()).toBe(1);
+    expect(await notes()).toBe(1);
   });
 
   it('an action over a link on a read-only front-end is refused readOnly', async () => {
@@ -299,12 +299,12 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
     expect(readBack(data, `SELECT count(*) FROM Clients WHERE Ville = 'X'`)).toBe(0);
   });
 
-  it('a query over a link another session holds is read-only', () => { // final review I2
-    s.page('Clients', { offset: 0, limit: 1 }); // s holds data's lock
+  it('a query over a link another session holds is read-only', async () => { // final review I2
+    await s.page('Clients', { offset: 0, limit: 1 }); // s holds data's lock
     const s2 = open(fe2, { sessionId: 'b' });
-    expect(s2.describeSource({ kind: 'sql', sql: 'SELECT * FROM Clients' }).updatable).toBe(false);
-    expect(s2.describeSource({ kind: 'sql', sql: join }).updatable).toBe(false);
-    expect(s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Clients' }).updatable).toBe(true);
+    expect((await s2.describeSource({ kind: 'sql', sql: 'SELECT * FROM Clients' })).updatable).toBe(false);
+    expect((await s2.describeSource({ kind: 'sql', sql: join })).updatable).toBe(false);
+    expect((await s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Clients' })).updatable).toBe(true);
   });
 
   it('a mixed query cannot be saved', () => {
@@ -312,25 +312,25 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
     expect(s.listObjects('query')).toEqual([]);
   });
 
-  it('a form source in SQL mixing sources is refused', () => {
-    expect(() => s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' })).toThrow(/\|mixedSources\|Clients$/);
-    expect(() => s.pageSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' }, { offset: 0, limit: 5 })).toThrow(/\|mixedSources\|Clients$/);
+  it('a form source in SQL mixing sources is refused', async () => {
+    await expect(s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' })).rejects.toThrow(/\|mixedSources\|Clients$/);
+    await expect(s.pageSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' }, { offset: 0, limit: 5 })).rejects.toThrow(/\|mixedSources\|Clients$/);
   });
 
-  it('a combo box Row Source joining both is refused', () => {
+  it('a combo box Row Source joining both is refused', async () => {
     const sql = 'SELECT Nom, Texte FROM Clients INNER JOIN Notes ON Clients.Nom = Notes.Texte';
-    expect(() => s.describeSource({ kind: 'sql', sql })).toThrow(/\|mixedSources\|Notes$/);
-    expect(() => s.pageSource({ kind: 'sql', sql }, { offset: 0, limit: 5 })).toThrow(/\|mixedSources\|Notes$/);
+    await expect(s.describeSource({ kind: 'sql', sql })).rejects.toThrow(/\|mixedSources\|Notes$/);
+    await expect(s.pageSource({ kind: 'sql', sql }, { offset: 0, limit: 5 })).rejects.toThrow(/\|mixedSources\|Notes$/);
   });
 
-  it('a local query using a saved query over links is refused', () => {
+  it('a local query using a saved query over links is refused', async () => {
     expect(s.saveObject('query', 'QLies', def('SELECT Nom FROM Clients;'), null)).toEqual({ ok: true });
     const sql = 'SELECT Texte FROM Notes INNER JOIN QLies ON Notes.Texte = QLies.Nom';
-    expect(() => s.pageSource({ kind: 'sql', sql }, { offset: 0, limit: 5 })).toThrow(/\|mixedSources\|QLies$/);
+    await expect(s.pageSource({ kind: 'sql', sql }, { offset: 0, limit: 5 })).rejects.toThrow(/\|mixedSources\|QLies$/);
     expect(() => s.saveObject('query', 'QY', def(sql), null)).toThrow(/\|mixedSources\|QLies$/);
-    expect(() => s.pageSource({ kind: 'sql', sql: 'SELECT Texte FROM Notes WHERE Texte IN (SELECT Nom FROM Clients)' }, { offset: 0, limit: 5 }))
-      .toThrow(/\|mixedSources\|Clients$/);
-    expect(() => s.pageSource({ kind: 'sql', sql: 'SELECT Texte FROM Notes UNION SELECT Nom FROM Clients' }, { offset: 0, limit: 5 })).toThrow(/\|mixedSources\|Clients$/);
+    await expect(s.pageSource({ kind: 'sql', sql: 'SELECT Texte FROM Notes WHERE Texte IN (SELECT Nom FROM Clients)' }, { offset: 0, limit: 5 }))
+      .rejects.toThrow(/\|mixedSources\|Clients$/);
+    await expect(s.pageSource({ kind: 'sql', sql: 'SELECT Texte FROM Notes UNION SELECT Nom FROM Clients' }, { offset: 0, limit: 5 })).rejects.toThrow(/\|mixedSources\|Clients$/);
   });
 
   it('mixed or make-table action queries write nothing (PF4)', async () => {
@@ -340,29 +340,29 @@ describe('queries over linked tables (C1 Task 4, R10)', () => {
     await expect(run('INSERT INTO Clients (Nom) SELECT Texte FROM Notes')).rejects.toThrow(/\|mixedSources\|Notes$/);
     await expect(run('SELECT Nom INTO Copie FROM Clients')).rejects.toThrow(/\|mixedSources\|Copie$/);
     await expect(s.actionCount({ kind: 'sql', sql: 'SELECT Nom INTO Copie FROM Clients' }, {})).rejects.toThrow(/\|mixedSources\|Copie$/);
-    expect(notes()).toBe(0);
+    expect(await notes()).toBe(0);
     expect(s.listTables().map((x) => x.name)).not.toContain('Copie');
     expect(tablesOf(data)).not.toContain('Copie');
     expect(readFileSync(data)).toEqual(before);
   });
 
-  it('a crosstab over links runs on the data file; a mixed one is refused', () => {
+  it('a crosstab over links runs on the data file; a mixed one is refused', async () => {
     const x = 'TRANSFORM Sum(Montant) SELECT Client FROM Commandes GROUP BY Client PIVOT Month(Le)';
-    expect(s.describeSource({ kind: 'sql', sql: x }).fields.map((fd) => fd.name)).toEqual(['Client', '9', '10']);
-    expect(s.pageSource({ kind: 'sql', sql: x }, { offset: 0, limit: 10 }).rows).toHaveLength(3);
-    expect(() => s.describeSource({ kind: 'sql', sql: 'TRANSFORM Count(*) SELECT Texte FROM Notes, Commandes GROUP BY Texte PIVOT Client' }))
-      .toThrow(/\|mixedSources\|Commandes$/);
+    expect((await s.describeSource({ kind: 'sql', sql: x })).fields.map((fd) => fd.name)).toEqual(['Client', '9', '10']);
+    expect((await s.pageSource({ kind: 'sql', sql: x }, { offset: 0, limit: 10 })).rows).toHaveLength(3);
+    await expect(s.describeSource({ kind: 'sql', sql: 'TRANSFORM Count(*) SELECT Texte FROM Notes, Commandes GROUP BY Texte PIVOT Client' }))
+      .rejects.toThrow(/\|mixedSources\|Commandes$/);
   });
 
-  it('a linked table without a real rowid reads, read-only (R7)', () => {
+  it('a linked table without a real rowid reads, read-only (R7)', async () => {
     const p = new DatabaseSync(plain);
     p.exec(`INSERT INTO W VALUES ('b'), ('a')`);
     p.close();
-    expect(s.page('W', { offset: 0, limit: 10, sort: { field: 'k', dir: 'asc' } }).rows.map((r) => r.values)).toEqual([['a'], ['b']]);
-    expect(s.count('W')).toBe(2);
-    expect(s.pageSource({ kind: 'table', name: 'W' }, { offset: 0, limit: 10 })).toMatchObject({ rowids: [null, null], total: 2 });
-    expect(s.describeSource({ kind: 'sql', sql: 'SELECT k FROM W' }).updatable).toBe(false);
-    expect(s.pageSource({ kind: 'sql', sql: 'SELECT k FROM W WHERE k = "a"' }, { offset: 0, limit: 10 }).rows).toEqual([['a']]);
+    expect((await s.page('W', { offset: 0, limit: 10, sort: { field: 'k', dir: 'asc' } })).rows.map((r) => r.values)).toEqual([['a'], ['b']]);
+    expect(await s.count('W')).toBe(2);
+    expect(await s.pageSource({ kind: 'table', name: 'W' }, { offset: 0, limit: 10 })).toMatchObject({ rowids: [null, null], total: 2 });
+    expect((await s.describeSource({ kind: 'sql', sql: 'SELECT k FROM W' })).updatable).toBe(false);
+    expect((await s.pageSource({ kind: 'sql', sql: 'SELECT k FROM W WHERE k = "a"' }, { offset: 0, limit: 10 })).rows).toEqual([['a']]);
   });
 });
 
@@ -407,7 +407,7 @@ describe('link operations (C1 Task 5)', () => {
     expect(s.createLinks(other, ['Q'])).toEqual({ ok: false, reason: 'nameExists', names: ['Q'] }); // queries too
   });
 
-  it('a moved pair links one more table into the same source; a join across both works', () => { // final review I1, R5
+  it('a moved pair links one more table into the same source; a join across both works', async () => { // final review I1, R5
     const fe3 = join(dir, 'front3.basecraft');
     createBaseFile(fe3, '0.0.0');
     const db = openBaseFile(fe3, 'write', '0.0.0').db;
@@ -420,7 +420,7 @@ describe('link operations (C1 Task 5)', () => {
     const m = open(join(sub, 'front3.basecraft'));
     expect(m.createLinks(join(sub, 'data.basecraft'), ['Commandes'])).toEqual({ ok: true });
     expect(new Set(m.listLinks().map((l) => l.path))).toEqual(new Set([join(sub, 'data.basecraft')]));
-    expect(m.pageSource({ kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' }, { offset: 0, limit: 50 }).rows.length).toBeGreaterThan(0);
+    expect((await m.pageSource({ kind: 'sql', sql: 'SELECT Nom, Montant FROM Clients INNER JOIN Commandes ON Clients.[N°] = Commandes.Client' }, { offset: 0, limit: 50 })).rows.length).toBeGreaterThan(0);
   });
 
   it('list opens each source and tells its state', () => {
@@ -435,10 +435,10 @@ describe('link operations (C1 Task 5)', () => {
     expect(s.state.linkedLocks).toEqual([data]); // R4 write rule
   });
 
-  it('relink moves a whole source, or one table, and refuses a file missing a table', () => { // R9
+  it('relink moves a whole source, or one table, and refuses a file missing a table', async () => { // R9
     const d2 = join(dir, 'd2.basecraft');
     fs.copyFileSync(data, d2);
-    s.page('Clients', { offset: 0, limit: 1 });
+    await s.page('Clients', { offset: 0, limit: 1 });
     expect(existsSync(`${data}.lock`)).toBe(true);
     expect(s.relink(['Clients', 'Commandes'], d2)).toEqual({ ok: true });
     expect(pathsOf(s, ['Clients', 'Commandes'])).toEqual([d2, d2]);
@@ -459,7 +459,7 @@ describe('link operations (C1 Task 5)', () => {
     expect(s.saveObject('query', 'Q', { formatVersion: '1.0', sql: 'SELECT Nom FROM Clients' }, null)).toEqual({ ok: true });
   });
 
-  it('refresh takes a stale lock over', () => { // R4, R13
+  it('refresh takes a stale lock over', async () => { // R4, R13
     s.close();
     let now = 0;
     const r = open(fe, { sessionId: 'c', lockDeps: { now: () => now } });
@@ -467,18 +467,18 @@ describe('link operations (C1 Task 5)', () => {
     expect(r.listLinks().find((l) => l.name === 'Clients')).toMatchObject({ state: 'readOnly', stale: false, holder: { sessionId: 'z' } });
     now = 31_000; // observed 31 s of this reader's clock
     expect(r.listLinks().find((l) => l.name === 'Clients')!.state).toBe('readOnly'); // listing never takes over
-    const got = r.refreshLinks(['Clients']);
+    const got = await r.refreshLinks(['Clients']);
     expect(got.map((l) => [l.name, l.state])).toEqual([['Clients', 'ok']]);
     expect(lockOf(data).sessionId).toBe('c');
     expect(r.state.linkedLocks).toEqual([plain, data]); // listLinks opened plain; data reopened
-    expect(() => r.refreshLinks(['Nope'])).toThrow('bc:notFound');
+    await expect(r.refreshLinks(['Nope'])).rejects.toThrow('bc:notFound');
   });
 
-  it('convert copies structure and rows and removes the link, atomically', () => { // R12
-    s.page('Clients', { offset: 0, limit: 1 });
+  it('convert copies structure and rows and removes the link, atomically', async () => { // R12
+    await s.page('Clients', { offset: 0, limit: 1 });
     expect(s.convertLink('Commandes')).toEqual({ ok: true });
     expect(s.listTables().find((x) => x.name === 'Commandes')!.link).toBeUndefined();
-    expect(s.page('Commandes', { offset: 0, limit: 10 }).rows.map((r) => r.rowid)).toEqual([1, 2, 3, 4, 5]);
+    expect((await s.page('Commandes', { offset: 0, limit: 10 })).rows.map((r) => r.rowid)).toEqual([1, 2, 3, 4, 5]);
     expect(s.tableDesign('Commandes').fields.find((x) => x.name === 'Montant')!.props.validationRule).toBe('>0');
     expect(s.tableDesign('Commandes').fields.some((x) => x.props.external)).toBe(false);
     expect(tablesOf(fe)).toContain('Commandes');
@@ -497,27 +497,27 @@ describe('link operations (C1 Task 5)', () => {
     expect(() => s.convertLink('W')).toThrow('bc:unsupportedTable'); // WITHOUT ROWID
   });
 
-  it('a read-only front-end lists and refreshes its links but changes none', () => {
+  it('a read-only front-end lists and refreshes its links but changes none', async () => {
     writeFileSync(`${fe}.lock`, JSON.stringify({ user: 'u', host: os.hostname(), pid: 1, sessionId: 'z', heartbeatAt: new Date(0).toISOString() }));
     s.close();
     const r = open(fe, { sessionId: 'b' });
     expect(r.listLinks().map((l) => l.state)).toEqual(['readOnly', 'readOnly', 'readOnly', 'readOnly']);
-    expect(r.refreshLinks(['T']).map((l) => l.state)).toEqual(['readOnly']);
+    expect((await r.refreshLinks(['T'])).map((l) => l.state)).toEqual(['readOnly']);
     expect(existsSync(`${data}.lock`)).toBe(false);
     expect(() => r.createLinks(other, ['T2'])).toThrow(ReadOnlyError);
     expect(() => r.relink(['Clients'], data)).toThrow(ReadOnlyError);
     expect(() => r.convertLink('Clients')).toThrow(ReadOnlyError);
   });
 
-  it('a local object an older BaseCraft named like a link wins; the link is unusable', () => { // ruling (Task 2 carry)
+  it('a local object an older BaseCraft named like a link wins; the link is unusable', async () => { // ruling (Task 2 carry)
     const front = (s as unknown as { db: DatabaseSync }).db;
     front.exec(`CREATE TABLE Clients (x); INSERT INTO Clients VALUES ('local')`);
     front.prepare(`INSERT INTO bc_objects (kind, name, definition, created, modified) VALUES ('query', 'W', '{"sql":"SELECT 1"}', '', '')`).run();
     expect(s.listTables().filter((x) => ['Clients', 'W'].includes(x.name))).toEqual([{ name: 'Clients' }]);
     expect(s.listLinks().map((l) => l.name)).toEqual(['Commandes', 'T']);
     expect(s.inspectLinkFile(data).tables.find((x) => x.name === 'Clients')!.taken).toBe(true);
-    expect(s.page('Clients', { offset: 0, limit: 5 }).rows.map((r) => r.values)).toEqual([['local']]);
-    expect(() => s.refreshLinks(['Clients'])).toThrow('bc:notFound');
+    expect((await s.page('Clients', { offset: 0, limit: 5 })).rows.map((r) => r.values)).toEqual([['local']]);
+    await expect(s.refreshLinks(['Clients'])).rejects.toThrow('bc:notFound');
     expect(() => s.relink(['W'], plain)).toThrow('bc:notFound');
     expect(s.convertLink('Clients')).toEqual({ ok: false, reason: 'notFound' });
     expect(s.listRelations().filter((r) => r.linked)).toEqual([]); // Commandes' parent is the local Clients now
@@ -562,7 +562,7 @@ describe('links to a shared data file (C3 Task 5, R2, R3, R6)', () => {
   });
 
   it("a front-end's stamp moves when another front-end commits to the data file", async () => { // C3 R10
-    s.page('Clients', { offset: 0, limit: 1 }); // the link's source opened: the baseline counts it
+    await s.page('Clients', { offset: 0, limit: 1 }); // the link's source opened: the baseline counts it
     const st = s.dataStamp();
     expect((await s.update('Clients', 3, { Ville: 'Lille' })).ok).toBe(true);
     expect(s.dataStamp()).toBe(st);
@@ -580,30 +580,30 @@ describe('links to a shared data file (C3 Task 5, R2, R3, R6)', () => {
   });
 
   it('a front-end present blocks the designer\'s field', async () => {
-    s.page('Clients', { offset: 0, limit: 1 });
+    await s.page('Clients', { offset: 0, limit: 1 });
     const d = open(data, dd('d'));
     await expect(d.saveTable(addField(d, 'Clients', 'Tel'))).rejects.toThrow('bc:dataFileInUse');
     s.close();
     expect(await d.saveTable(addField(d, 'Clients', 'Tel'))).toEqual({ ok: true });
   });
 
-  it('a stale exclusive lock reads only until Refresh takes it over', () => { // R4, R13
+  it('a stale exclusive lock reads only until Refresh takes it over', async () => { // R4, R13
     s.close();
     let now = 0;
     const r = open(fe, { sessionId: 'c', lockDeps: { now: () => now } });
     foreignLock(data);
     expect(r.listLinks()[0]).toMatchObject({ state: 'readOnly', stale: false, holder: { sessionId: 'z' } });
     now = 31_000; // observed 31 s of this reader's clock
-    expect(r.refreshLinks(['Clients'])[0]).toMatchObject({ state: 'ok', shared: true });
+    expect((await r.refreshLinks(['Clients']))[0]).toMatchObject({ state: 'ok', shared: true });
     expect(existsSync(`${data}.lock`)).toBe(false);
     expect(r.state.linkedLocks).toEqual([plain, presenceEntry(data, 'c')]); // listLinks opened plain; data reopened shared
   });
 
-  it('a linked data file in a synchronized folder is read-only', () => { // R6
+  it('a linked data file in a synchronized folder is read-only', async () => { // R6
     s.close();
     const x = open(fe, { sessionId: 'c', probe: { ...probe, env: { OneDrive: dir } } });
     expect(x.listLinks()[0]).toMatchObject({ state: 'syncedFolder', risk: 'synced' });
-    expect(x.count('Clients')).toBe(4);
+    expect(await x.count('Clients')).toBe(4);
     expect(existsSync(`${data}.users`)).toBe(false);
   });
 
@@ -626,17 +626,17 @@ describe("the Runtime's front-end (C3 Task 10, R14, R15)", () => {
   };
   const run = (x: Session, sql: string) => x.runAction({ kind: 'sql', sql }, {}, { skipFailures: false, replaceTable: false });
 
-  it("a copy's links find the data file beside the original", () => { // Review Focus 5: the absolute path no longer holds
+  it("a copy's links find the data file beside the original", async () => { // Review Focus 5: the absolute path no longer holds
     const db = new DatabaseSync(fe2);
     try { db.prepare(`UPDATE bc_sources SET props = json_set(props, '$.path', ?) WHERE kind = 'basecraft'`).run(join(dir, 'gone', 'data.basecraft')); } finally { db.close(); }
     fs.mkdirSync(join(dir, 'cache'));
     const copy = join(dir, 'cache', 'front2.basecraft');
     fs.copyFileSync(fe2, copy);
     const alone = open(copy, { sessionId: 'c' });
-    expect(() => alone.page('Clients', { offset: 0, limit: 10 })).toThrow('bc:linkUnavailable');
+    await expect(alone.page('Clients', { offset: 0, limit: 10 })).rejects.toThrow('bc:linkUnavailable');
     alone.close();
     const x = open(copy, { sessionId: 'c', origin: fe2 });
-    expect(x.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(4);
+    expect((await x.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(4);
     expect(x.listTables().find((t) => t.name === 'Clients')!.link!.path).toBe(data);
     expect(x.state).toMatchObject({ path: copy, origin: fe2, fileName: 'front2.basecraft', readOnly: false });
     expect(existsSync(`${copy}.lock`)).toBe(true); // the lock is the copy's
@@ -649,8 +649,8 @@ describe("the Runtime's front-end (C3 Task 10, R14, R15)", () => {
     const x = open(fe, { runtime: true });
     await expect(x.insert('Notes', { Texte: '1' })).rejects.toThrow(ReadOnlyError);
     expect((await x.insert('Clients', { Nom: 'X' })).ok).toBe(true); // a link: writable
-    expect(x.describeSource({ kind: 'table', name: 'Notes' }).updatable).toBe(false);
-    expect(x.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes' }).updatable).toBe(false);
+    expect((await x.describeSource({ kind: 'table', name: 'Notes' })).updatable).toBe(false);
+    expect((await x.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes' })).updatable).toBe(false);
     x.setContentEnabled(x.activeContent().fingerprint);
     expect(await run(x, 'DELETE FROM Notes')).toEqual({ ok: false, reason: 'readOnly' });
     x.close();

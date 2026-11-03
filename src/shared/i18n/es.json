@@ -366,9 +366,16 @@
       "actionCatalog": "Catálogo de acciones",
       "showAllActions": "Mostrar todas las acciones",
       "viewForm": "Vista Formulario",
+      "viewLayout": "Vista Presentación",
+
+      "viewMenu": "Vista",
+
+      "viewState": "Vista Informe",
       "viewPrintPreview": "Vista preliminar",
       "linkBaseCraft": "Base de datos BaseCraft o SQLite",
-      "linkAccess": "Vincular base de datos Access"
+      "linkAccess": "Vincular base de datos Access",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "Desplazar la cinta de opciones a la izquierda",
     "scrollRight": "Desplazar la cinta de opciones a la derecha",
@@ -490,6 +497,9 @@
       "design": "Vista Diseño",
       "run": "Vista Ejecución",
       "form": "Vista Formulario",
+      "layout": "Vista Presentación",
+
+      "state": "Vista Informe",
       "sql": "Vista SQL"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "Abierto en modo de solo lectura: un archivo de datos compartido no se puede usar en una carpeta sincronizada (OneDrive, Dropbox…). Colóquelo en una unidad de red o pase a un servidor.",
     "unsupportedClient": "Abierto en modo de solo lectura: el modo compartido en una unidad de red no es compatible con este sistema. Use un equipo Windows o pase a un servidor.",
     "takeOver": "Tomar el control",
-    "contentDisabled": "Advertencia de seguridad: se ha deshabilitado parte del contenido activo de esta base de datos (macros, consultas de acción).",
+    "contentDisabled": "Advertencia de seguridad: se ha deshabilitado parte del contenido activo de esta base de datos (macros, consultas de acción, consultas de paso a través).",
     "enableContent": "Habilitar contenido",
     "riskNetwork": "Esta base de datos está en un recurso compartido de red. Una desconexión durante una escritura puede dañarla.",
     "riskSynced": "Esta base de datos está en una carpeta sincronizada. Una sincronización durante una escritura puede dañarla.",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "El encabezado de columna de una consulta de referencias cruzadas (PIVOT) no puede contener una función de agregado: {{detail}}.",
       "queryBind_tooManyColumns": "Esta consulta de referencias cruzadas daría {{detail}} columnas: 255 como máximo, 254 de ellas encabezados de columna. Restrinja los datos o corrija los encabezados de columna (IN).",
       "queryBind_crosstabAsSource": "La consulta de referencias cruzadas «{{detail}}» no puede ser el origen de otra consulta ni de una lista de búsqueda.",
+      "queryBind_passThroughAsSource": "La consulta de paso a través «{{detail}}» no puede ser el origen de otra consulta ni de una lista. Ponga el filtro o la agrupación en su texto SQL.",
       "queryBind_mixedSources": "Una consulta abarca un único origen de datos: «{{detail}}» no procede del mismo origen que las demás tablas de la consulta.",
       "fontMissing": "No se pudo cargar una fuente incrustada: el informe no se imprimió ni se exportó.",
       "printFailed": "Error al imprimir.",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "El «Encabezado de columna» de una consulta de referencias cruzadas debe tener «Agrupar por» en la fila Total.",
       "invalidQuery_crosstabNone": "Una columna «(no se muestra)» de una consulta de referencias cruzadas debe tener «Dónde» en la fila Total; elija su función en la fila Ref. cruzadas.",
       "linkUnavailable_needsPassword": "Esta base de datos Access está protegida con contraseña: {{detail}}",
+      "linkUnavailable_needsLogin": "Inicio de sesión cancelado: las tablas vinculadas de {{detail}} no están disponibles.",
+      "linkUnavailable_cannotConnect": "No se puede acceder al servidor {{detail}}. Compruebe el nombre del servidor, el puerto y la red.",
+      "linkUnavailable_certificate": "Este equipo no reconoce el certificado del servidor {{detail}}. Haga instalar el certificado de su autoridad o, si confía en esta red, elija, en el Administrador de tablas vinculadas, la opción de cifrado que no comprueba el certificado (por ejemplo «Cifrado, confiar en el certificado del servidor»).",
+      "linkUnavailable_serverVersion": "El servidor {{detail}} utiliza una versión que BaseCraft no admite (como mínimo PostgreSQL 14 o SQL Server 2016).",
+      "linkUnavailable_passwordExpired": "La contraseña de este inicio de sesión ha caducado en el servidor {{detail}}. Cámbiela con la herramienta de administración del servidor y vuelva a conectarse.",
       "linkUnavailable_syncedFolder": "El archivo de datos {{detail}} permanece en solo lectura: un archivo de datos compartido no se puede usar en una carpeta sincronizada (OneDrive, Dropbox…). Colóquelo en una unidad de red o pase a un servidor.",
-      "linkUnavailable_unsupportedClient": "El archivo de datos {{detail}} permanece en solo lectura: el modo compartido en una unidad de red no es compatible con este sistema. Use un equipo Windows o pase a un servidor."
+      "linkUnavailable_unsupportedClient": "El archivo de datos {{detail}} permanece en solo lectura: el modo compartido en una unidad de red no es compatible con este sistema. Use un equipo Windows o pase a un servidor.",
+      "serverNotSupported_actionQuery": "Las consultas de acción todavía no se ejecutan en una tabla vinculada de {{detail}}.",
+      "serverNotSupported_makeTable": "Las consultas de creación de tabla no se ejecutan en un origen de {{detail}}: cree la tabla en el servidor y luego rellénela con una consulta de datos anexados.",
+      "serverNotSupported_appendAutoNumber": "Una consulta de datos anexados no puede proporcionar los valores del campo Autonumérico de una tabla en un servidor ({{detail}}). Quite ese campo de la consulta: el servidor numera los nuevos registros.",
+      "serverNotSupported_joinSave": "La entrada de datos mediante una consulta de varias tablas todavía no es posible en un origen {{detail}}.",
+      "serverNotSupported_crosstab": "Las consultas de tabla de referencias cruzadas todavía no se ejecutan en un origen {{detail}}.",
+      "serverNotSupported_passThrough": "Las consultas de paso a través no están disponibles en un origen {{detail}}.",
+      "serverNotSupported_topPercent": "TOP … PERCENT todavía no se admite en un origen {{detail}}.",
+      "serverNotSupported": "Esta operación todavía no es posible en una tabla vinculada de {{detail}}.",
+      "serverFunction": "{{name}} no se puede ejecutar en un origen {{detail}}: BaseCraft no sabe traducirlo para ese servidor.",
+      "timeout": "El servidor no respondió en el tiempo fijado ({{name}} s). Vuelva a intentarlo o aumente el tiempo de espera en el Administrador de tablas vinculadas.",
+      "passThroughNoRecords": "La consulta de paso a través no devolvió ningún registro aunque su propiedad «Devuelve registros» es Sí.",
+      "passThroughTimeout": "El servidor no respondió a la consulta de paso a través en el tiempo fijado ({{name}} s). Aumente «Tiempo de espera de ODBC» en su hoja de propiedades (0: sin límite).",
+      "passThroughLost": "Se perdió la conexión con el servidor durante la consulta de paso a través; no se sabe si se completó.",
+      "serverError_connection": "Se perdió la conexión con el servidor durante el guardado; no se sabe si se completó. Actualice (Inicio › Actualizar) antes de volver a intentarlo.",
+      "serverError_notWritten": "El servidor no guardó el registro en «{{detail}}»: un desencadenador, una regla o una directiva de seguridad de la tabla lo ignoró.",
+      "serverError": "El servidor rechazó la operación: {{detail}}"
     },
     "op": {
       "nameExists": "Ya existe un objeto con este nombre.",
@@ -705,6 +737,7 @@
       "reportFooter": "Pie del informe"
     },
     "canvas": "Superficie de diseño",
+    "layoutHandle": "Seleccionar el diseño {{id}}",
     "toolbox": "Cuadro de herramientas",
     "arrange": {
       "alignLeft": "A la izquierda",
@@ -958,7 +991,16 @@
       "isNotNull": "No está en blanco",
       "clear": "Borrar todos los filtros",
       "fieldTitle": "Filtro",
-      "fieldLabel": "Criterios para “{{field}}” (vacío: sin filtro en este campo):"
+      "fieldLabel": "Criterios para “{{field}}” (vacío: sin filtro en este campo):",
+      "sortAsc": { "text": "Ordenar de A a Z", "number": "Ordenar de menor a mayor", "date": "Ordenar de más antiguos a más recientes" },
+      "sortDesc": { "text": "Ordenar de Z a A", "number": "Ordenar de mayor a menor", "date": "Ordenar de más recientes a más antiguos" },
+      "clearField": "Quitar filtro de {{field}}",
+      "typed": { "text": "Filtros de texto", "number": "Filtros de número", "date": "Filtros de fecha" },
+      "all": "(Seleccionar todo)",
+      "blanks": "(Vacías)",
+      "tooLong": "Hay demasiados valores marcados para este filtro. Use en su lugar un filtro de texto, de número o de fecha.",
+      "ok": "Aceptar",
+      "cancel": "Cancelar"
     }
   },
   "expr": {
@@ -992,7 +1034,6 @@
       "forbiddenStatement": "Instrucción no permitida: solo se aceptan consultas de selección, de datos anexados, de actualización, de eliminación y de creación de tabla.",
       "reservedName": "Este nombre está reservado (bc_, bcx_ o sqlite_): la consulta no puede usarlo.",
       "multipleStatements": "Solo se permite una instrucción SQL: quite el texto que sigue al punto y coma.",
-      "notSupportedYet": "Este tipo de consulta (de paso a través) aún no está disponible.",
       "badParameterType": "Tipo de parámetro desconocido.",
       "badCrosstab": "Consulta de referencias cruzadas no válida: TRANSFORM, un SELECT simple con GROUP BY y, después, PIVOT.",
       "badCount": "Escriba un número entero de 1 a 255.",
@@ -1451,6 +1492,7 @@
   "prop": {
     "Caption": "Título",
     "DefaultView": "Vista predeterminada",
+    "AllowLayoutView": "Permitir vista Presentación",
     "NavigationButtons": "Botones de desplazamiento",
     "Width": "Ancho",
     "Visible": "Visible",
@@ -2023,6 +2065,17 @@
       "label": "Nombre de la tabla"
     },
     "sqlOnly": "Esta consulta solo se puede mostrar en la vista SQL.",
+    "passThrough": {
+      "notice": "Consulta de paso a través: este texto se envía tal cual al servidor {{label}}, sin que BaseCraft lo lea. El servidor aplica sus propios permisos; las reglas de validación y las relaciones de BaseCraft no se aplican a lo que modifica.",
+      "noticeNoServer": "Consulta de paso a través: elija su servidor en la hoja de propiedades.",
+      "empty": "Escriba la instrucción SQL que se enviará al servidor.",
+      "noConnection": "Elija el servidor de la consulta en la hoja de propiedades (Conexión).",
+      "connection": "Conexión",
+      "otherServerKind": "Otro servidor {{product}}…",
+      "returnsRecords": "Devuelve registros",
+      "timeout": "Tiempo de espera de ODBC",
+      "badTimeout": "Escriba un número de segundos de 0 (sin límite) a 3600."
+    },
     "builderOnTable": "Ha invocado el Generador de consultas en una tabla.\n\n¿Desea crear una consulta basada en la tabla?",
     "builderSave": "¿Desea guardar los cambios realizados en la instrucción SQL y actualizar la propiedad?",
     "error": {
@@ -2188,6 +2241,65 @@
     "done": "La base de datos se ha dividido. Archivo de datos: {{path}}. Copia de seguridad: {{backup}}.",
     "noTables": "Esta base no contiene ninguna tabla local que mover.",
     "self": "El archivo de datos no puede ser la base abierta. Elija otro nombre u otra carpeta."
+  },
+  "migrate": {
+    "title": "Asistente para mover a un servidor",
+    "intro": "Este asistente mueve todas las tablas locales de la base de datos actual a una base de datos PostgreSQL o SQL Server, con sus datos, claves, índices y relaciones, y luego las sustituye por tablas vinculadas con los mismos nombres. Primero se hace una copia de seguridad de la base de datos. Las reglas de validación y los valores predeterminados calculados permanecen en la aplicación, que se convierte en una aplicación front-end.",
+    "engine": "Servidor de destino",
+    "next": "Siguiente",
+    "schema": "Esquema",
+    "start": "Mover",
+    "connecting": "Conectando con el servidor y haciendo la copia de seguridad de la base de datos…",
+    "progress": "Copiando {{table}}: {{done}} de {{total}} registros",
+    "finishing": "Finalizando…",
+    "stop": "Detener",
+    "done": "Traslado completado. Copia de seguridad: {{backup}}.",
+    "backup": "Copia de seguridad: {{backup}}.",
+    "server": "Servidor {{product}}: {{server}}, esquema {{schema}}.",
+    "copy": "Copiar en el Portapapeles",
+    "report": {
+      "tables": "Tablas movidas",
+      "table": "{{name}}: {{rows}} registro(s)",
+      "nextId": "siguiente Autonumeración: {{next}}",
+      "version": "columna de versión: {{column}}",
+      "sep": ", ",
+      "indexes": "Índices creados",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}} (sin duplicados)",
+      "relations": "Relaciones",
+      "created": "{{name}}: clave externa creada",
+      "noAction": "{{name}}: clave externa creada sin cascada (SQL Server rechaza varias rutas de cascada hacia una misma tabla)",
+      "notEnforced": "{{name}}: integridad referencial no exigida, no se crea nada en el servidor",
+      "frontEndOnly": "Aplicado solo por la aplicación (no por el servidor)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "Almacenado con otro tipo en el servidor",
+      "approx": "{{name}}: {{type}}",
+      "queries": "Consultas que el servidor rechaza",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: definición ilegible, no comprobada"
+    },
+    "noTables": "Esta base de datos no contiene ninguna tabla local que mover.",
+    "dataFile": "Esta base de datos es un archivo de datos compartido (Divisor de bases de datos): sus aplicaciones front-end vinculan sus tablas. Mueva la aplicación desde su front-end, después de Convertir en tabla local sus tablas vinculadas.",
+    "noSchema": "El esquema {{schema}} no existe en el servidor.",
+    "nameTaken": "El servidor ya tiene tablas con estos nombres: {{names}}. Elimínelas o elija otro esquema.",
+    "nameTooLong": "Estos nombres superan el límite de PostgreSQL (63 bytes): {{names}}. Cámbieles el nombre primero.",
+    "invalidDesign": "El diseño de estos campos no es válido: {{names}}. Corríjalo en la vista Diseño y vuelva a intentarlo.",
+    "cancelled": "Traslado cancelado: no se ha modificado nada.",
+    "failed": "El traslado ha fallado ({{table}}): {{error}}. No se ha modificado nada ni en el servidor ni en la base de datos.",
+    "failedNoTable": "El traslado ha fallado: {{error}}. No se ha modificado nada ni en el servidor ni en la base de datos.",
+    "switchFailed": "Las tablas se han copiado en el servidor, pero no se ha podido modificar la base de datos ({{error}}): se ha quedado como estaba.",
+    "dropped": "Las tablas copiadas se han eliminado del servidor.",
+    "left": "Estas tablas se han quedado en el servidor: {{names}}.",
+    "leftCheck": "Revíselas y elimínelas antes de un nuevo traslado.",
+    "commitUnknown": "Se perdió la conexión con el servidor, o se detuvo el traslado, mientras el servidor lo confirmaba: no se sabe si el servidor lo guardó. La base de datos no se ha modificado.",
+    "leftMaybe": "Puede que estas tablas estén en el servidor: {{names}}. Revíselas y elimínelas antes de un nuevo traslado.",
+    "closed": "Se cerró la conexión con el servidor.",
+    "queriesUnchecked": "No se pudieron comprobar las consultas en el servidor: {{detail}}",
+    "error": {
+      "migrateCount": "El servidor cuenta {{server}} registro(s) en {{table}} en lugar de {{local}}.",
+      "migrateUnlinkable": "Releída en el servidor, la tabla {{table}} no se puede vincular con su clave y sus campos.",
+      "migrateOneNull": "El campo {{field}} contiene varios valores nulos: SQL Server solo acepta uno en el índice sin duplicados que exige la relación {{relation}}."
+    }
   },
   "macro": {
     "embedded": {
@@ -2402,6 +2514,7 @@
       "cantGoToRecord": "No puede ir al registro especificado.",
       "cantFocus": "Este control no puede recibir el foco (está oculto o deshabilitado).",
       "saveRefused": "No se pudo guardar el registro.",
+      "autoCorrectLog": "No se pudo registrar el cambio en la tabla {{name}} (campo {{detail}}): no se cambió ningún nombre.",
       "badReference": "“{{name}}” no es un control de un formulario abierto.",
       "badValue": "El valor “{{name}}” no es adecuado para esta propiedad.",
       "findWhatTooLong": "El texto que se va a buscar supera los 255 caracteres.",
@@ -2461,7 +2574,9 @@
     "cat": {
       "general": "General",
       "currentDb": "Base de datos actual",
-      "client": "Configuración del cliente"
+      "client": "Configuración del cliente",
+      "datasheet": "Hoja de datos",
+      "designers": "Diseñadores de objetos"
     },
     "general": {
       "header": "Opciones generales para trabajar con {{product}}.",
@@ -2478,6 +2593,11 @@
       "confirmDeletions": "Eliminaciones de documentos",
       "confirmActions": "Consultas de acción",
       "display": "Pantalla",
+      "printing": "Impresión",
+      "marginLeft": "Margen izquierdo:",
+      "marginRight": "Margen derecho:",
+      "marginTop": "Margen superior:",
+      "marginBottom": "Margen inferior:",
       "recentCount": "Mostrar este número de bases de datos recientes:",
       "advanced": "Avanzadas",
       "openLast": "Abrir la última base de datos usada al iniciar {{product}}",
@@ -2490,7 +2610,31 @@
       "lockEdited": "Registro modificado",
       "refreshInterval": "Intervalo de actualización (s)",
       "updateRetries": "Número de reintentos de actualización",
-      "updateRetryMs": "Intervalo entre reintentos de actualización (ms)"
+      "updateRetryMs": "Intervalo entre reintentos de actualización (ms)",
+      "enter": "Mover después de Entrar",
+      "enterNone": "No mover",
+      "enterNextField": "Campo siguiente",
+      "enterNextRecord": "Registro siguiente",
+      "entry": "Comportamiento al entrar en el campo",
+      "entrySelectAll": "Seleccionar el campo completo",
+      "entryStart": "Ir al principio del campo",
+      "entryEnd": "Ir al final del campo",
+      "arrows": "Comportamiento de las teclas de dirección",
+      "arrowsField": "Campo siguiente",
+      "arrowsChar": "Carácter siguiente",
+      "continuous": "Las teclas de dirección navegan por los registros de formularios continuos",
+      "continuousNone": "Ninguno",
+      "continuousUpDown": "Arriba/abajo",
+      "continuousLeftRight": "Izquierda/derecha",
+      "cursorStop": "El cursor se detiene en el primer/último campo",
+      "find": "Comportamiento predeterminado de buscar/reemplazar",
+      "findFast": "Búsqueda rápida",
+      "findGeneral": "Búsqueda general",
+      "findStart": "Búsqueda al principio del campo",
+      "general": "General",
+      "year4": "Usar el formato de año de cuatro dígitos",
+      "year4Db": "Esta base de datos",
+      "year4All": "Todas las bases de datos"
     },
     "db": {
       "header": "Opciones de la base de datos actual.",
@@ -2506,6 +2650,10 @@
       "datasheetDesign": "Habilitar cambios de diseño de tablas en la vista Hoja de datos",
       "navigation": "Navegación",
       "ribbonSection": "Opciones de la cinta de opciones y de la barra de herramientas",
+      "autoCorrectSection": "Opciones de autocorrección de nombre",
+      "track": "Seguir la información de autocorrección de nombre",
+      "perform": "Realizar autocorrección de nombre",
+      "log": "Registrar los cambios de autocorrección de nombre",
       "fullMenus": "Permitir menús completos",
       "shortcutMenus": "Permitir menús contextuales predeterminados",
       "iconForForms": "Usar como icono de formularios e informes",
@@ -2522,11 +2670,73 @@
       "ribbonSimplified": "Simplificada",
       "runMode": "Abrir en modo de ejecución",
       "runModeHelp": "Oculta el panel de navegación y la vista Diseño. Mantenga presionada la tecla Mayús al abrir la base de datos para omitirlo.",
-      "nextOpen": "Estas opciones surtirán efecto la próxima vez que se abra la base de datos."
+      "nextOpen": "Estas opciones surtirán efecto la próxima vez que se abra la base de datos.",
+      "truncated": "Comprobar los campos numéricos truncados",
+      "filterSection": "Filtrar las opciones de búsqueda para la base de datos {{name}}",
+      "filterShow": "Mostrar la lista de valores en:",
+      "listIndexed": "Campos locales indexados",
+      "listNonIndexed": "Campos locales no indexados",
+      "listMax": "No mostrar listas cuando el número de registros leídos sea superior a:"
+    },
+
+    "designers": {
+      "header": "Cambie la configuración predeterminada para crear objetos de base de datos. La mayoría de las opciones se omiten en la vista Hoja de datos de tabla o Página.",
+      "sheetSection": "Hoja de propiedades",
+      "sheetFontSize": "Tamaño de fuente de la hoja de propiedades:",
+      "tableSection": "Vista Diseño de tabla",
+      "fieldType": "Tipo de campo predeterminado:",
+      "textSize": "Tamaño predeterminado de campo de texto:",
+      "numberSize": "Tamaño predeterminado de campo numérico:",
+      "autoIndex": "Índice automático al importar/crear:",
+      "propertyUpdate": "Mostrar los botones de opciones de actualización de propiedades",
+      "querySection": "Diseño de consulta",
+      "tableNames": "Mostrar nombres de tabla",
+      "outputAll": "Mostrar todos los campos",
+      "autoJoin": "Habilitar combinación automática",
+      "queryFont": "Fuente del diseño de consultas",
+      "fontName": "Fuente:",
+      "fontSize": "Tamaño:",
+      "formSection": "Vista Diseño de formulario/informe",
+      "selection": "Comportamiento de la selección",
+      "partial": "Parcialmente incluido",
+      "full": "Totalmente incluido"
+    },
+    "datasheet": {
+      "header": "Personalice la apariencia de las hojas de datos en {{product}}.",
+      "gridSection": "Líneas de cuadrícula y efectos de celda",
+      "gridlines": "Líneas de cuadrícula mostradas de forma predeterminada",
+      "horizontal": "Horizontal",
+      "vertical": "Vertical",
+      "columnWidth": "Ancho de columna predeterminado:",
+      "font": "Fuente predeterminada",
+      "fontSize": "Tamaño:",
+      "fontWeight": "Grosor:",
+      "underline": "Subrayado",
+      "italic": "Cursiva",
+      "weight": {
+        "100": "Extrafina",
+        "200": "Extraligera",
+        "300": "Ligera",
+        "400": "Normal",
+        "500": "Media",
+        "600": "Seminegrita",
+        "700": "Negrita",
+        "800": "Extranegrita",
+        "900": "Gruesa"
+      }
     }
   },
   "startup": {
     "formNotFound": "No se encuentra el formulario para mostrar “{{name}}”."
+  },
+  "import": {
+    "server": {
+      "title": "Importar desde PostgreSQL",
+      "titleSqlServer": "Importar desde SQL Server",
+      "ok": "Importar",
+      "done": "Tablas importadas: {{names}}.",
+      "skipped": "Columnas no importadas ({{table}}): {{names}}."
+    }
   },
   "link": {
     "filterBasecraft": "Bases de datos de BaseCraft",
@@ -2541,12 +2751,15 @@
     "kind": {
       "basecraft": "Base de datos de BaseCraft",
       "sqlite": "Archivo SQLite",
-      "access": "Base de datos Access"
+      "access": "Base de datos Access",
+      "postgresql": "Servidor PostgreSQL",
+      "sqlserver": "Servidor SQL Server"
     },
     "tables": "Tablas",
     "selectAll": "Seleccionar todo",
     "noTables": "Este archivo no tiene tablas.",
     "error": {
+      "unsupportedKind": "BaseCraft no puede vincular estas tablas: {{names}}. No se cambió nada.",
       "nameExists": "Estos nombres ya se usan en esta base de datos: {{names}}.",
       "missingTables": "Estas tablas ya no están en el archivo: {{names}}.",
       "self": "Una base de datos no se puede vincular consigo misma.",
@@ -2562,6 +2775,37 @@
       "title": "Contraseña de la base de datos",
       "label": "Contraseña de {{path}}:",
       "wrong": "Contraseña incorrecta."
+    },
+    "server": {
+      "title": "Vincular tablas de PostgreSQL",
+      "titleSqlServer": "Vincular tablas de SQL Server",
+      "host": "Servidor",
+      "hostHint": "nombre o nombre\\instancia",
+      "port": "Puerto",
+      "database": "Base de datos",
+      "tls": "Cifrado",
+      "tlsVerify": "Cifrado, comprobando el certificado (recomendado)",
+      "tlsRequire": "Cifrado, sin comprobar el certificado",
+      "tlsTrust": "Cifrado, confiar en el certificado del servidor",
+      "tlsDisable": "Sin cifrar",
+      "timeout": "Tiempo de espera de las consultas (s)",
+      "connect": "Conectar",
+      "readOnly": "sin clave principal: solo lectura",
+      "skipped": "columnas no vinculadas: {{names}}",
+      "noTables": "Este servidor no tiene ninguna tabla que pueda leer.",
+      "missingTables": "El servidor no contiene: {{names}}. No se cambió nada."
+    },
+    "needsLogin": "Inicio de sesión necesario: abra la tabla para iniciar sesión en el servidor {{detail}} y, a continuación, actualice el vínculo.",
+    "login": {
+      "title": "Inicio de sesión en el servidor",
+      "message": "Escriba su nombre de usuario y su contraseña para {{label}}.",
+      "user": "Nombre de usuario",
+      "password": "Contraseña",
+      "remember": "Recordar la contraseña en este equipo",
+      "noKeyring": "Este equipo no dispone de un llavero seguro: la contraseña se pedirá en cada sesión.",
+      "untrusted": "Este archivo no es de confianza: la contraseña recordada no se usa para sus consultas de paso a través. Habilite su contenido o colóquelo en una ubicación de confianza para usarla.",
+      "wrong": "Nombre de usuario o contraseña incorrectos.",
+      "ok": "Iniciar sesión"
     }
   },
   "ltm": {
@@ -2569,7 +2813,7 @@
     "col": {
       "name": "Tabla",
       "kind": "Tipo",
-      "path": "Archivo",
+      "path": "Origen",
       "state": "Estado"
     },
     "state": {
@@ -2578,13 +2822,18 @@
       "readOnlyFile": "Solo lectura",
       "stale": "Bloqueo abandonado: actualice para tomar el control",
       "missingFile": "Archivo no encontrado",
-      "missingTable": "Tabla ausente del archivo",
+      "missingTable": "Tabla ausente del origen",
       "needsMigration": "Versión anterior de BaseCraft",
       "newerMajor": "Versión más reciente de BaseCraft",
       "cannotOpen": "No se puede leer el archivo",
       "unsupportedKind": "Origen no admitido",
       "needsPassword": "Contraseña requerida",
       "syncedFolder": "Carpeta sincronizada: solo lectura",
+      "needsLogin": "Inicio de sesión requerido",
+      "cannotConnect": "Servidor inaccesible",
+      "certificate": "Certificado no reconocido",
+      "serverVersion": "Versión del servidor no compatible",
+      "passwordExpired": "Contraseña caducada",
       "unsupportedClient": "Modo compartido no compatible con este sistema: solo lectura"
     },
     "risk": {
@@ -2604,5 +2853,78 @@
     "copy": "Copiar en el Portapapeles",
     "drop": "Descartar cambios",
     "deleted": "Otro usuario ha eliminado este registro. Sus cambios no se pueden guardar."
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "Este formulario no tiene origen de registros: los controles no muestran datos.",
+      "empty": "El origen de registros no contiene registros.",
+      "unreadable": "No se puede leer el origen de registros: los controles no muestran datos.",
+      "parameters": "No se especificaron los parámetros: los controles no muestran datos.",
+      "truncated": "Vista previa de los primeros {{count}} registros del origen; los totales y los grupos solo abarcan estas filas.",
+      "report": {
+        "noSource": "Este informe no tiene origen de registros: se muestra sin datos.",
+        "empty": "El origen de registros no contiene registros: el informe se muestra sin datos.",
+        "unreadable": "No se puede leer el origen de registros: el informe se muestra sin datos.",
+        "parameters": "No se especificaron los parámetros: el informe se muestra sin datos.",
+        "layoutFailed": "No se pudo diseñar el informe."
+      }
+    }
+  },
+  "find": {
+    "title": "Buscar y reemplazar",
+    "tabFind": "Buscar",
+    "tabReplace": "Reemplazar",
+    "what": "Buscar:",
+    "lookIn": "Buscar en:",
+    "lookInField": "Campo actual",
+    "lookInDocument": "Documento actual",
+    "match": "Coincidir:",
+    "matchAnywhere": "Cualquier parte del campo",
+    "matchWhole": "Hacer coincidir todo el campo",
+    "matchStart": "Comienzo del campo",
+    "search": "Buscar:",
+    "searchAll": "Todos",
+    "searchUp": "Arriba",
+    "searchDown": "Abajo",
+    "matchCase": "Coincidir mayúsculas y minúsculas",
+    "asFormatted": "Buscar los campos con formato",
+    "next": "Buscar siguiente",
+    "cancel": "Cancelar"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "Objetos por guardar",
+    "dirty": "Guarde o cierre primero estos objetos, que usan {{name}}: {{list}}",
+    "failedTitle": "Objetos no corregidos",
+    "failed": "No se pudieron corregir estos objetos y aún usan el nombre anterior: {{list}}",
+    "staleTitle": "Objetos con el nombre anterior",
+    "stale": "Estos objetos aún usan el nombre anterior (la autocorrección de nombre está desactivada): {{list}}",
+    "logSkipped": "La tabla {{table}} existe pero no tiene los campos del registro: los cambios no se registraron en ella.",
+    "log": {
+      "table": "Registro de autocorrección de nombre",
+      "objectType": "Tipo de objeto",
+      "objectName": "Nombre del objeto",
+      "controlName": "Nombre del control",
+      "propertyName": "Nombre de la propiedad",
+      "oldValue": "Valor anterior",
+      "newValue": "Valor nuevo",
+      "time": "Hora",
+      "failed": {
+        "unreadable": "No corregido: definición ilegible",
+        "meaning": "No corregido: la corrección cambiaría el significado",
+        "dependency": "No corregido: depende de un objeto no corregido"
+      }
+    },
+    "kind": {
+      "table": "Tabla",
+      "query": "Consulta",
+      "form": "Formulario",
+      "report": "Informe",
+      "macro": "Macro"
+    }
+  },
+  "propertyUpdate": {
+    "title": "Actualizar propiedades",
+    "message": "¿Actualizar {{prop}} en todos los lugares donde se usa {{field}}?",
+    "target": "{{kind}} {{name}} › {{control}} («{{current}}»)"
   }
 }

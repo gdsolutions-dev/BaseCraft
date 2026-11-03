@@ -7,7 +7,7 @@ import { createTable } from '../../src/main/db/schema';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, seedBase, seedForm, pickView , checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const fill = (s: string, p: Record<string, string | number>) => s.replace(/\{\{(\w+)\}\}/g, (_, k: string) => String(p[k]));
@@ -183,7 +183,7 @@ test("a form's datasheet: titles and texts, entry saved on a row change, Ctrl+S 
     await page.getByTestId('nav-item-form-Contacts').dblclick();
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('form-row-4').getByTestId('form-ctl-Ville').click();   // the 5th record current
-    await page.getByTestId('cmd-viewDatasheet').click();
+    await pickView(page, 'viewDatasheet');
     const sheet = shown(page, 'form-datasheet');
     const record = page.getByTestId('nav-record-input');
 
@@ -200,7 +200,7 @@ test("a form's datasheet: titles and texts, entry saved on a row change, Ctrl+S 
     await expect(cell(page, 2, 4)).toBeFocused();
     await expect(pressed(page, 'datasheet')).toHaveAttribute('aria-pressed', 'true');
     await expect(pressed(page, 'form')).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByTestId('cmd-viewDatasheet')).toHaveAttribute('aria-pressed', 'true');
+    await checkView(page, 'viewDatasheet', (v) => expect(v).toHaveAttribute('aria-checked', 'true'));
 
     // an entry, then Down: the next row, the record left saved
     await clickCell(page, 1, 2);
@@ -230,7 +230,7 @@ test("a form's datasheet: titles and texts, entry saved on a row change, Ctrl+S 
     await typeInCell(page, 'Zzz');
     await page.keyboard.press('Tab');   // the next field, on the same record
     await expect(cell(page, 2, 4)).toHaveText('Zzz');
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(page.getByTestId('modal')).toContainText('Ville interdite');
     await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('modal')).toContainText(fill(fr.datasheet.discard, { name: 'Contacts' }));
@@ -241,7 +241,7 @@ test("a form's datasheet: titles and texts, entry saved on a row change, Ctrl+S 
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await expect(cell(page, 2, 4)).toHaveText('Lyon');
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(page.getByTestId('form-rows')).toBeVisible();
     await expect(pressed(page, 'form')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('form-row-4')).toHaveAttribute('data-current', 'true');
@@ -251,7 +251,7 @@ test("a form's datasheet: titles and texts, entry saved on a row change, Ctrl+S 
     await pressed(page, 'datasheet').click();
     await expect(cell(page, 2, 4)).toBeFocused();   // the control last focused (Ville, the refusal's)
     await clickCell(page, 3, 4);
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(page.getByTestId('lookup-editor')).toHaveValue('Dupont');
     await page.getByTestId('lookup-list').getByRole('option', { name: 'Martin' }).click();
     await expect(cell(page, 3, 4)).toHaveText('Martin');
@@ -291,9 +291,9 @@ test('opening views and the status bar: Default View at opening, Design to Datas
     await expect(shown(page, 'form-design')).toBeVisible();
     await expect(pressed(page, 'form')).toHaveAttribute('aria-pressed', 'false');
     await expect(pressed(page, 'design')).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('cmd-viewDatasheet').click();
+    await pickView(page, 'viewDatasheet');
     await expect(shown(page, 'form-datasheet')).toBeVisible();
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(shown(page, 'form-selector')).toBeVisible();
     await expect(shown(page, 'form-rows')).toHaveCount(0);
 
@@ -306,7 +306,7 @@ test('opening views and the status bar: Default View at opening, Design to Datas
     await expect(pressed(page, 'form')).toHaveAttribute('aria-pressed', 'false');
     await pressed(page, 'design').click();
     await expect(shown(page, 'form-design')).toBeVisible();
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(shown(page, 'form-selector')).toBeVisible();
 
     // a table's datasheet: its Datasheet button pressed, no Form view button

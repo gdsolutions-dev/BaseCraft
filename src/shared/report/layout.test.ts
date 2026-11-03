@@ -1,6 +1,7 @@
 // Pagination d'un état : tri et groupes, suite des bandes, placement (Garder ensemble, Répéter la section, Saut de page,
 // coupe), en-tête et pied de page, deux passes, réactivité et déterminisme.
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from './fixtures/factures';
 import { layoutReport, MAX_PAGES, sortAndGroup } from './layout';
 import { readReport, type GroupLevel } from './model';
@@ -343,4 +344,54 @@ describe('layoutReport: responsiveness and scale', () => {
     const rows = Array.from({ length: 5000 }, (_, i) => FACTURES_ROWS[i % 75]!);
     await expect(run(d, rows)).rejects.toMatchObject({ code: 'tooManyPages' });
   }, 60000);
+});
+
+describe('layoutReport: paged output guard (L3)', () => {
+  /** sha256 of the whole laid-out report: any change to the paged path breaks it (recorded from the implementation before `flow`). */
+  const digest = async (r: Promise<LaidOutReport>) => createHash('sha256').update(JSON.stringify(await r)).digest('hex');
+  const pb = (top: number): ControlDef => ({ kind: 'pageBreak', name: 'Saut', left: 0, top, width: 0, height: 0, props: {} });
+  it('the paged layouts are byte-identical to the recorded ones', async () => {
+    expect(await digest(run())).toMatchInlineSnapshot(`"ceca21f8fa8779806d2a7eabea2636b6ba6f4f61b8e9acf01064568cc94cd4fd"`);
+    expect(await digest(run(withSection(FACTURES_REPORT, 'groupHeader', { ForceNewPage: 'before' })))).toMatchInlineSnapshot(`"ff9cca6719927888844a76e2701cf5fb41599864f9bbde8027f82f6da9238ab8"`);
+    expect(await digest(run(withControl(FACTURES_REPORT, 'groupFooter', pb(454))))).toMatchInlineSnapshot(`"9aa469a62a265b89dc596aedf66c72b845250f50e5f6fe936075d4d3c9f08d5d"`);
+    expect(await digest(run(withGrouping(FACTURES_REPORT, 0, { keepTogether: 'wholeGroup' })))).toMatchInlineSnapshot(`"16554a057a065c073ce46a4ab131d395c453ad96c2aab408e1259fa6ce8bd3f2"`);
+    expect(await digest(run(withMemo(FACTURES_REPORT, 200), FACTURES_ROWS.slice(0, 1)))).toMatchInlineSnapshot(`"f15455e5bfd99620ebb6f8df5f5495b46ba6c0bfb4a03ce35029259ed8932a38"`);
+  });
+});
+
+describe('layoutReport: flow (Layout view, L3)', () => {
+  /** 3 groups, 40 rows: 25 Dupont, 10 Martin, 5 Durand; paged, it takes two pages. */
+  const rows40 = [...rowsOf('Dupont').slice(0, 25), ...rowsOf('Martin'), ...rowsOf('Durand')];
+  const flow = (doc = FACTURES_REPORT, rows = rows40, env = frEnv()) => layoutReport(readReport(doc, FACTURES_FIELDS), { fields: FACTURES_FIELDS, rows }, env, { flow: true });
+  const pb = (top: number): ControlDef => ({ kind: 'pageBreak', name: 'Saut', left: 0, top, width: 0, height: 0, props: {} });
+  const group = (n: number) => ['groupHeader', ...Array(n).fill('detail'), 'groupFooter'];
+  // the rule: one page; the Page Header once, right after the Report Header; at the end the Report Footer, then the one Page Footer
+  const order = ['reportHeader', 'pageHeader', ...group(25), ...group(5), ...group(10), 'reportFooter', 'pageFooter'];
+  it('a report of several pages lays out as one page: Report Footer, then the one Page Footer, at the end', async () => {
+    expect((await run(FACTURES_REPORT, rows40)).pages.length).toBeGreaterThanOrEqual(2);
+    const r = await flow();
+    expect(r.pages).toHaveLength(1); expect(seq(r.pages[0]!)).toEqual(order);
+    const b = r.pages[0]!.bands;
+    for (let i = 1; i < b.length; i++) expect(b[i]!.top).toBe(b[i - 1]!.top + b[i - 1]!.height);   // bands follow each other, no gap
+    expect(r.width).toBe(11906); expect(r.height).toBe(b.at(-1)!.top + b.at(-1)!.height);   // as tall as its content
+    expect(footerText(r.pages[0]!)).toBe('Page 1 sur 1');
+  });
+  it('page break controls and Force New Page do not split; Keep Together moves nothing', async () => {
+    const forced = withSection(withSection(withSection(FACTURES_REPORT, 'groupHeader', { ForceNewPage: 'before' }), 'groupFooter', { ForceNewPage: 'after' }), 'reportHeader', { ForceNewPage: 'beforeAndAfter' });
+    for (const d of [withControl(withControl(FACTURES_REPORT, 'groupFooter', pb(454)), 'groupHeader', pb(0)), forced, withGrouping(FACTURES_REPORT, 0, { keepTogether: 'wholeGroup' })]) {
+      const r = await flow(d);
+      expect(r.pages).toHaveLength(1); expect(seq(r.pages[0]!)).toEqual(order); expect(r.pages[0]!.bands.some((x) => x.continued || x.repeated)).toBe(false);
+    }
+    const memo = await flow(withMemo(FACTURES_REPORT, 200), FACTURES_ROWS.slice(0, 1));   // a band taller than a page stays whole
+    expect(memo.pages).toHaveLength(1); expect(bands(memo, 'detail')).toHaveLength(1);
+  });
+  it('every item keeps its control name; [Page] and [Pages] read 1', async () => {
+    const r = await flow(withControl(FACTURES_REPORT, 'detail', tb('P', '=[Page] & "/" & [Pages]')));
+    const named = r.pages[0]!.bands.flatMap((b) => b.items);
+    expect(named.length).toBeGreaterThan(0); expect(named.every((i) => typeof i.name === 'string' && i.name !== '')).toBe(true);
+    expect(new Set(bands(r, 'detail').map((b) => texts(b).at(-1)))).toEqual(new Set(['1/1']));
+  });
+  it('an empty source: the report sections and the page sections, once', async () => {
+    expect(seq((await flow(FACTURES_REPORT, [])).pages[0]!)).toEqual(['reportHeader', 'pageHeader', 'reportFooter', 'pageFooter']);
+  });
 });

@@ -33,6 +33,8 @@
 .rel-key { flex: none; color: var(--bc-warning); }
 .rel-key-gap { flex: none; width: 14px; }
 .rel-field-name { overflow: hidden; text-overflow: ellipsis; }
+/* Query design: the field rows take the query design font; their height is inline (TablePane, same size as the join anchors). */
+.qbe-field { font: var(--bc-qd-font, 10.6667px) var(--bc-qd-font-family, inherit); }
 
 .rel-list { flex: none; width: 260px; overflow: auto; padding: var(--bc-space-3); border-left: 1px solid var(--bc-border); }
 .rel-list h3 { margin: 0 0 var(--bc-space-2); font-size: 12px; font-weight: 600; color: var(--bc-text-muted); }

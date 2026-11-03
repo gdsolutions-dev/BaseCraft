@@ -12,7 +12,7 @@ import type { DesignDoc } from '../../shared/design/model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
 import type { MacroDef, MacroItem } from '../../shared/macro/model';
 import { activeContent } from './active-content';
-import { ApprovalStore, contentState } from '../trust';
+import { ApprovalStore, contentState, trustsFile } from '../trust';
 
 let dir: string;
 let db: DatabaseSync;
@@ -143,4 +143,42 @@ it('event names no longer offered at a place still count there', () => {
   r2.sections.find((s) => s.controls.length)!.controls[0]!.props.OnClick = 'M';
   save('report', 'R', r2);
   expect(activeContent(db).present).toBe(true);
+});
+
+const PT = { formatVersion: '2.0', sql: 'SELECT 1', passThrough: { kind: 'postgresql', params: { host: 'h', port: 5432, database: 'd', user: 'u' }, returnsRecords: true } };
+it('only a pass-through without records (or a malformed 2.x) is active content (G1, owner), its whole definition in the fingerprint', () => {
+  const only = (def: unknown) => { db.exec('DELETE FROM bc_objects'); save('query', 'P', def); return activeContent(db); };
+  const no = { ...PT, passThrough: { ...PT.passThrough, returnsRecords: false } };
+  const yes = only(PT); // Returns Records Yes: no bar, but in the fingerprint (Task 8 review: a clone of an approved file)
+  expect(yes.present).toBe(false);
+  expect(yes.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  const a = only(no);
+  expect(a.present).toBe(true);
+  expect(only({ ...no, sql: 'DELETE FROM t' }).fingerprint).not.toBe(a.fingerprint);
+  expect(only({ formatVersion: '2.0', sql: 'SELECT 1' }).present).toBe(true); // malformed
+});
+
+// C6 Task 8 fix 1: approvals are keyed by db_uuid + fingerprint; a copy of an approved file with a records-returning pass-through
+// added (or changed) is another fingerprint, so it is not approved and its pass-throughs do not use the remembered password.
+it('a records-returning pass-through added or changed moves the fingerprint, never the bar; the clone of an approved file is untrusted', () => {
+  const file = path.join(dir, 'a.basecraft');
+  const deps = { store: new ApprovalStore(path.join(dir, 'trust.json')), cfg: { trustedFolders: [] }, platform: process.platform };
+  const trusted = () => trustsFile(contentState(activeContent(db), 'u', file, deps), file, deps.cfg, deps.platform);
+  save('macro', 'M', macroDef);
+  const approved = activeContent(db);
+  deps.store.approve('u', approved.fingerprint);
+  expect(trusted()).toBe(true);
+  save('query', 'P', PT);
+  const added = activeContent(db);
+  expect(added.present).toBe(true);
+  expect(added.fingerprint).not.toBe(approved.fingerprint);
+  expect(trusted()).toBe(false); // the bar shows, the password is asked
+  expect(saveObject(db, 'query', 'P', { ...PT, sql: 'UPDATE t SET x = 1 RETURNING *' }, 'P')).toEqual({ ok: true });
+  expect(activeContent(db).fingerprint).not.toBe(added.fingerprint);
+  // only records-returning pass-throughs: no bar, untrusted (outside a trusted folder)
+  db.exec("DELETE FROM bc_objects WHERE kind = 'macro'");
+  expect(activeContent(db).present).toBe(false);
+  expect(contentState(activeContent(db), 'u', file, deps)).toBe('none');
+  expect(trusted()).toBe(false);
+  expect(trustsFile('none', file, { trustedFolders: [{ path: dir, subfolders: false }] }, process.platform)).toBe(true);
 });

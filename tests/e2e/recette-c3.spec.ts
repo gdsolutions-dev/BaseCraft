@@ -80,7 +80,7 @@ test('C3 acceptance: split, two workstations on one data file, write conflicts, 
   const ENV = { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_SETTLE_MS: '0' };
 
   // 1. Split: Database Tools › Split Database moves the tables to share/Ventes_donnees.basecraft; the base becomes its front-end
-  const a = await launchApp({ args: [front], userDataDir: workstation(),
+  const a = await launchApp({ enterMovesDown: true, args: [front], userDataDir: workstation(),
     env: { ...ENV, BASECRAFT_E2E_SAVE_PATH: data, BASECRAFT_E2E_OPEN_PATH: data } });
   let b: Awaited<ReturnType<typeof launchApp>> | null = null;
   try {
@@ -101,7 +101,7 @@ test('C3 acceptance: split, two workstations on one data file, write conflicts, 
     const uuid = inFile<{ value: string }>(front, `SELECT value FROM bc_meta WHERE key = 'db_uuid'`)[0]!.value;
 
     // 2. Two workstations: B (the Runtime) opens the front-end of the share from a local copy (R14); A and B open Clients
-    b = await launchApp({ runtime: true, args: [front], userDataDir: workstation(), env: { ...ENV, BASECRAFT_E2E_NETWORK_DIR: share } });
+    b = await launchApp({ enterMovesDown: true, runtime: true, args: [front], userDataDir: workstation(), env: { ...ENV, BASECRAFT_E2E_NETWORK_DIR: share } });
     const copy = join(b.userDataDir, 'front-ends', uuid, 'Ventes.basecraft');
     expect(await b.page.evaluate(() => (window as unknown as Win).basecraft.base.state())).toMatchObject({ path: copy, origin: front, readOnly: false });
     expect(existsSync(copy)).toBe(true);

@@ -7,7 +7,8 @@ import type { StartupOptions } from '../../shared/startup';
 import { api } from '../bridge';
 import { PRODUCT_TITLE_KEY, RUNTIME } from '../../shared/product';
 import { design } from '../design/entry';
-import { trapFocus } from './Modal';
+import { trapFocus, useErrorDialog } from './Modal';
+import { currentBaseOptions } from './startup';
 import { OptionsPage, type OptionsCategory } from './OptionsPage';
 
 export type Settings = Awaited<ReturnType<BasecraftApi['app']['getSettings']>>;
@@ -69,6 +70,8 @@ interface Props {
   forms: readonly string[]; onStartupApplied(o: StartupOptions): void;
   /** A base behind a stale lock that is not recovered yet: its options cannot be read, so the section waits for the take-over. */
   needsRecovery: boolean;
+  /** The open base's path (the section « Filtrer les options de recherche pour … » names it), null without a base. */
+  basePath: string | null;
 }
 
 const splitPath = (p: string) => {
@@ -80,6 +83,8 @@ export function Backstage(p: Props) {
   const { t } = useTranslation();
   const first = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  const showError = useErrorDialog();
+  const [year4, setYear4] = useState(() => currentBaseOptions().fourDigitYear);   // « Cette base de données » (O2 R11), published at each opening
   const [cat, setCat] = useState<OptionsCategory>('general');   // kept while the Backstage stays open
   useEffect(() => { first.current?.focus(); }, []);
   const item = (testid: string, Icon: typeof FilePlus2, label: string, onClick: (e: MouseEvent) => void, extra: { disabled?: boolean; active?: boolean } = {}) => (
@@ -89,6 +94,12 @@ export function Backstage(p: Props) {
     </button>
   );
 
+  const offered = !!design && p.hasBase && !p.needsRecovery;
+  const saveYear4 = (v: boolean) => {
+    setYear4(v);
+    api.base.startup().then((o) => { const next = { ...o, fourDigitYear: v }; return api.base.saveStartup(next).then(() => p.onStartupApplied(next)); })
+      .catch((e: unknown) => { setYear4(!v); void showError(e); });
+  };
   return (
     <div ref={root} className="backstage" data-testid="backstage" role="dialog" aria-modal="true" aria-label={t('backstage.menu')}
       onKeyDown={(e) => {
@@ -131,8 +142,9 @@ export function Backstage(p: Props) {
             ) : <p className="muted">{t('backstage.noRecent')}</p>}
           </section>
         ) : (
-          <OptionsPage settings={p.settings} cat={cat} onCat={setCat}
-            currentDb={design && p.hasBase && !p.needsRecovery ? <design.CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} /> : null} />
+          <OptionsPage settings={p.settings} cat={cat} onCat={setCat} designers={!!design}
+            thisDb={offered && !p.readOnly ? { value: year4, onChange: saveYear4 } : null}
+            currentDb={offered && design ? <design.CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} baseName={splitPath(p.basePath ?? '').name.replace(/\.[^.]*$/, '')} /> : null} />
         )}
       </main>
     </div>

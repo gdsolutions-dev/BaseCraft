@@ -7,7 +7,7 @@ import type { BasecraftApi, PrintRequest } from '../../src/shared/api';
 import type { DesignDoc } from '../../src/shared/design/model';
 import { fontFaceCss } from '../../src/shared/fonts';
 import { FACTURES_REPORT } from '../../src/shared/report/fixtures/factures';
-import { launchApp, seedBase, seedReportsE2E } from './helpers';
+import { launchApp, seedBase, seedReportsE2E, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const REPORT = 'Factures par client';
@@ -280,13 +280,20 @@ test('C3: a report on a parameterized query asks first (Open, Design view › Pr
     await item.click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
     await expect(doc.getByTestId('designer')).toBeVisible();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await answer(null);
     await expect(doc.getByTestId('designer')).toBeVisible();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await answer('Durand');
     await expect(doc.getByTestId('preview-page-of')).toHaveText('Page 1 sur 1');
     await expect(doc.locator('.bc-page').first()).toContainText('Durand');
+    // Mode État (Access's Report view): the same data, every page under the other, no page bar; Affichage goes État ↔ Page
+    await pickView(page, 'viewState');
+    await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.state);
+    await expect(doc.getByTestId('preview-page-of')).toBeHidden();
+    await expect(doc.locator('.bc-page').first()).toContainText('Durand');
+    await pickView(page, 'viewLayout');
+    await expect(doc.getByTestId('designer')).toBeVisible();
     await page.getByTestId('doc-tab-close-report-Par client').click();
 
     // Print… and Export › PDF from the pane: asked before the progress box; Cancel prints nothing

@@ -2,14 +2,18 @@
 // Runtime, R15) et Convertir en table locale (R12). Aucun concepteur importé : module d'exécution.
 import { HardDriveDownload, RefreshCw } from 'lucide-react';
 import { api } from '../bridge';
+import { errorMessage } from '../shell/Modal';
 import { registerNavMenuItems, type NavMenuContext } from '../shell/nav-menu';
 
-/** Reopens the link's file (a stale lock is taken over, R4): « Lien actualisé. » or why it is not usable. */
+/** Reopens the link's file (a stale lock is taken over, R4), a server link's design read again (C4): « Lien actualisé. » or why
+ *  it is not usable; a server not logged into yet: login required (opening the table asks it), never « Connexion annulée ». */
 async function refreshLink(c: NavMenuContext) {
   const [r] = await api.links.refresh([c.name]);
   if (!r) throw new Error('bc:notFound'); // gone meanwhile
   c.dispatch({ type: 'tableDataChanged', name: c.name }); // an open datasheet reads it again
   if (r.state === 'ok') await c.modal.confirm({ titleKey: 'nav.menu.refreshLink', messageKey: 'link.refreshed', buttons: ['ok'] });
+  else if (r.error) { const m = errorMessage(r.error); await c.modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: m.key, params: m.params, buttons: ['ok'] }); }
+  else if (r.state === 'needsLogin') await c.modal.confirm({ titleKey: 'nav.menu.refreshLink', messageKey: 'link.needsLogin', params: { detail: r.path }, buttons: ['ok'] });
   else await c.modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.error.linkUnavailable_${r.state}`, params: { detail: r.path }, buttons: ['ok'] });
 }
 

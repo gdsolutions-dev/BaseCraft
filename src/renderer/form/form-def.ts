@@ -1,6 +1,7 @@
 // Définition d'un formulaire (module pur) : lecture tolérante d'une définition stockée, formulaire vierge, contrôles d'un champ,
 // ordre de tabulation, en-tête et pied de formulaire. Aucune clé inconnue n'est retirée : on étale toujours l'objet lu.
 import type { ControlDef, ControlKind, DesignDoc, SectionDef, SectionKind } from '../../shared/design/model';
+import { createLayout, membersOf } from '../../shared/design/layout-edit';
 import { cmToTwips, validateDesignDoc } from '../../shared/design/model';
 import { sameName } from '../../shared/field-types';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
@@ -133,7 +134,7 @@ export function toggleHeaderFooter(doc: DesignDoc): DesignDoc {
 const AUTO = { gap: cmToTwips(0.15), label: cmToTwips(0.5), control: cmToTwips(3.5), header: cmToTwips(1.2), footer: cmToTwips(0.5) };
 
 /** Largeur du contrôle d'un champ dans un formulaire instantané ; undefined : celle de boundControlWithLabel (case à cocher…). */
-function autoWidth(f: SourceField): { width: number; height?: number } | undefined {
+export function autoWidth(f: SourceField): { width: number; height?: number } | undefined {
   switch (f.type) {
     case 'shortText': return { width: Math.min(Math.max(cmToTwips(Math.min(f.props.size ?? 255, 50) * 0.2), cmToTwips(2)), cmToTwips(8)) };
     case 'longText': return { width: cmToTwips(8), height: cmToTwips(1.8) };
@@ -174,10 +175,16 @@ export function autoForm(ref: RecordSourceRef, title: string, info: SourceInfo, 
     colRight = Math.max(colRight, left + ctl.width);
     top += ctl.height + AUTO.gap;
   }
+  // Une seule colonne : les champs forment une disposition Empilée (comme Access) ; elle remplace l'espacement de 0,15 cm par ROW_GAP.
+  // ponytail: several columns would need one layout each; add when asked
+  if (!x0) {
+    const laid = createLayout(doc, membersOf(doc, doc.sections[1].controls.map((c) => c.name)), 'stacked', { headerSection: 'detail' });
+    if (laid.sections[1].controls.every((c) => c.top + c.height <= MAX_TWIPS)) doc = laid;
+  }
   const bottom = Math.max(0, ...doc.sections[1].controls.map((c) => c.top + c.height));
   // ordre de tabulation : la première colonne de haut en bas, puis la suivante (une colonne : l'ordre automatique d'Access)
   const placed = doc.sections[1];
-  const detail = withTabOrder({ ...placed, height: info.fields.length ? Math.min(bottom + AUTO.gap, MAX_TWIPS) : base.sections[1].height }, placed.controls.map((c) => c.name));
+  const detail = withTabOrder({ ...placed, height: info.fields.length ? Math.min(bottom + AUTO.gap, MAX_TWIPS) : base.sections[1].height }, placed.controls.filter((c) => TAB_KINDS.includes(c.kind)).map((c) => c.name));
   const right = Math.max(...doc.sections.flatMap((s) => s.controls.map((c) => c.left + c.width)));
   return { ...doc, props: { ...doc.props, Width: Math.min(right + AUTO.label, MAX_TWIPS), DefaultView: 'single' }, sections: doc.sections.map((s, i) => (i === 1 ? detail : s)) };
 }

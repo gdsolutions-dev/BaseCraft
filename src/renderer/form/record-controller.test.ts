@@ -243,6 +243,11 @@ describe('FormRecords', () => {
     expect(s.status).toBe('error'); expect(String(s.error)).toContain('bc:notImplemented'); });
   it('concurrent saves share one call', async () => { const r = await opened(); r.edit('Nom', 'x');
     expect(await Promise.all([r.save(), r.save()])).toEqual([true, true]); expect(api.updates).toHaveLength(1); });
+  it('open and requery read their first page fresh, a sort does not (C6 R7)', async () => {
+    const r = await opened(); expect(api.pages[0]!.fresh).toBe(true);
+    api.pages.length = 0; await r.setSort([{ field: 'Nom', direction: 'asc' }]); expect(api.pages.every((x) => x.fresh === undefined)).toBe(true); expect(api.pages.length).toBeGreaterThan(0);
+    api.pages.length = 0; await r.requery(); expect(api.pages[0]!.fresh).toBe(true); expect(api.pages.slice(1).every((x) => x.fresh === undefined)).toBe(true);
+  });
   it('requery saves first, then reads again from the start', async () => { const r = await opened(); await r.goTo(1); r.edit('Nom', 'x'); api.pages.length = 0;
     expect(await r.requery()).toBe(true); expect(api.updates).toEqual([['Clients', 2, { Nom: 'x' }]]);
     expect(api.pages[0]).toMatchObject({ offset: 0 }); expect(r.snapshot.index).toBe(0); });
@@ -250,6 +255,26 @@ describe('FormRecords', () => {
     expect(await r.save()).toBe(false);
     expect(r.snapshot).toMatchObject({ pending: { Nom: 'x' }, refused: true, editable: false, canAdd: false, canDelete: false });
     expect(String(r.snapshot.writeError)).toContain('bc:readOnly'); });
+  it('a save whose connection was lost (it may have committed, C4 I1): moving away says it again, sends nothing; Save Record sends it', async () => {
+    const r = await opened(); await r.newRecord(); r.edit('Nom', 'Petit');
+    api.rejectNext(new Error('bc:serverError|connection|Connection terminated'));
+    expect(await r.save()).toBe(false);
+    const first = r.snapshot.writeError;
+    expect(await r.next()).toBe(false); // leaving the record: no second insert
+    expect(await r.requery()).toBe(false);
+    expect(api.inserts).toHaveLength(1); // the lost one only
+    expect(r.snapshot).toMatchObject({ isNew: true, pending: { Nom: 'Petit' }, dirty: true });
+    expect(r.snapshot.writeError).not.toBe(first); // a new error each time: the view shows it again
+    expect(String(r.snapshot.writeError)).toContain('bc:serverError|connection|');
+    expect(await r.save(true)).toBe(true); // Save Record, asked after the message
+    expect(api.inserts).toEqual([['Clients', { Nom: 'Petit' }], ['Clients', { Nom: 'Petit' }]]);
+  });
+  it('after a lost save, Undo Record lets the record go as usual', async () => {
+    const r = await opened(); r.edit('Nom', 'x'); api.rejectNext(new Error('bc:serverError|connection|x'));
+    expect(await r.save()).toBe(false);
+    r.undoRecord(); expect(await r.next()).toBe(true);
+    r.edit('Nom', 'y'); expect(await r.next()).toBe(true); expect(api.updates).toEqual([['Clients', 1, { Nom: 'x' }], ['Clients', 2, { Nom: 'y' }]]);
+  });
   it('a row without rowid (A3) is read-only', async () => { const r = await opened({ rowids: [null, 2, 3] }); expect(r.snapshot.editable).toBe(false);
     r.edit('Nom', 'x'); expect(r.snapshot.dirty).toBe(false); });
 
@@ -355,6 +380,18 @@ describe('write conflicts (C3 R8, R9)', () => {
       expect(r.snapshot).toMatchObject({ values: [3, 'Durand', 'Brest'], pending: {}, dirty: false });
       expect(r.row(2)).toEqual([3, 'Durand', 'Brest']);
     }
+  });
+  it.each(['save', 'drop'] as const)("Save Record adopts the conflict's reference (C4 R8): %s", async (choice) => {
+    const r = await opened({ onConflict: async () => choice });
+    await r.goTo(2);
+    r.edit('Ville', 'Lille');
+    api.conflictNext({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'], rowid: 'T2' });
+    expect(await r.save()).toBe(true);
+    if (choice === 'drop') {   // the next edit of that record writes it by the new reference
+      r.edit('Ville', 'Nice');
+      expect(await r.save()).toBe(true);
+    }
+    expect(api.updates.map((u) => u[1])).toEqual([3, 'T2']);
   });
   it('a new conflict after Save Record asks again', async () => {
     let n = 0;
@@ -622,6 +659,16 @@ describe('record events, applied filter, find', () => {
     expect(r.snapshot).toMatchObject({ dirty: true, refusedByEvent: true, index: 0 });
     expect(await r.next()).toBe(false); expect(r.snapshot.index).toBe(0);
     r.edit('Montant', '6000'); expect(r.snapshot.refusedByEvent).toBe(false);
+  });
+  it('BeforeUpdate false drops the errors of an earlier save: the macro has given its message, no stale refusal is shown', async () => {
+    let answer = true;
+    const r = await opened({ info: commandes, rows: [[1, 1, 2, 100]], events: { beforeUpdate: async () => answer } });
+    api.failNext({ field: 'Montant', code: 'validation', rule: '> 0' } as WriteError);
+    r.edit('Montant', '0');
+    expect(await r.save()).toBe(false); expect(r.snapshot.errors).toHaveLength(1);
+    answer = false; r.edit('Montant', '2000');
+    expect(await r.save()).toBe(false);
+    expect(r.snapshot).toMatchObject({ refusedByEvent: true, errors: [] });
   });
   it('a value set during BeforeUpdate is sent', async () => {
     let r!: FormRecords;

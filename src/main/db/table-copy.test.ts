@@ -22,10 +22,10 @@ describe('table copy modes and append', () => {
     await save(t('Clients', [f('Nom', 'shortText'), f('Solde', 'currency')]));
     await s.insert('Clients', { Nom: 'A', Solde: 1 });
     expect(s.copyTable('Clients', 'C2', 'structure')).toEqual({ ok: true });
-    expect(count('C2')).toBe(0);
+    expect(await count('C2')).toBe(0);
     expect(s.tableDesign('C2').fields).toEqual(s.tableDesign('Clients').fields);
     expect(s.copyTable('Clients', 'C3')).toEqual({ ok: true });
-    expect(count('C3')).toBe(1);
+    expect(await count('C3')).toBe(1);
   });
 
   it('append maps by name, renumbers AutoNumber and counts refusals', async () => {
@@ -35,8 +35,8 @@ describe('table copy modes and append', () => {
     await s.insert('Src', { Nom: 'b', Montant: -1 });
     await s.insert('Src', { Nom: 'c', Montant: 7 });
     expect(await s.appendTable('Src', 'Dst')).toEqual({ appended: 2, refused: 1 });
-    expect(count('Dst')).toBe(2);
-    const rows = s.page('Dst', { offset: 0, limit: 10, filter: [] }).rows.map((r) => r.values);
+    expect(await count('Dst')).toBe(2);
+    const rows = (await s.page('Dst', { offset: 0, limit: 10, filter: [] })).rows.map((r) => r.values);
     expect(rows[0]).toEqual([1, 'a', 5, null, expect.stringContaining('2024-03-05'), 1]);
     expect(rows[1]![0]).toBe(2);
     expect(await s.appendTable('Src', 'Src')).toEqual({ appended: 0, refused: 0 }); // never into itself
@@ -48,6 +48,6 @@ describe('table copy modes and append', () => {
     reconcile(db);
     db.prepare('INSERT INTO "Src" ("Nb") VALUES (?)').run(9007199254740993n);
     await expect(s.appendTable('Src', 'Dst')).rejects.toMatchObject({ code: 'ERR_OUT_OF_RANGE' });
-    expect(count('Dst')).toBe(0); // read before any insert: nothing appended, never a rounded copy
+    expect(await count('Dst')).toBe(0); // read before any insert: nothing appended, never a rounded copy
   });
 });

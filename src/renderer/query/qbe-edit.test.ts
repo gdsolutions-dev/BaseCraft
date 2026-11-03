@@ -4,7 +4,9 @@ import { fromQbe, toQbe, type QbeColumn, type QbeDesign } from '../../shared/que
 import { parseSql } from '../../shared/query/sql-parser';
 import { printSql } from '../../shared/query/print';
 import { localeInfo } from '../../shared/locale-format';
-import { defaultJoins, editable, fieldEntry, gridRows, headingsText, pruneInvalid, designProblem, emptyQbe, outputAll, parseHeadings, parseTop, qbeReducer, ROWS_MIN, topText } from './qbe-edit';
+import { defaultProps } from '../../shared/field-types';
+import { defaultJoins, editable, fieldEntry, gridRows, headingsText, joinKey, pruneInvalid, designProblem, emptyQbe, outputAll, parseHeadings, parseTop, qbeReducer, ROWS_MIN, topText } from './qbe-edit';
+import type { PaneBox } from './TablePane';
 
 const rel: Relation = { name: 'ClientsCommandes', parentTable: 'Clients', parentFields: ['N°'], childTable: 'Commandes', childFields: ['Client'],
   enforce: true, cascadeUpdate: false, cascadeDelete: false, joinType: 1 };
@@ -22,6 +24,45 @@ describe('defaultJoins', () => {
   it('no join to an unrelated box, none on the same names (no AutoJoin), a copy is joined by its alias', () => {
     expect(defaultJoins([{ name: 'Produits' }], 'Commandes', [rel])).toEqual([]);
     expect(defaultJoins([{ name: 'Clients', alias: 'C' }], 'Commandes', [rel], 'Commandes_1')).toEqual([{ l: 'C', lField: 'N°', r: 'Commandes_1', rField: 'Client', kind: 'inner' }]);
+  });
+});
+
+// O3 R6: AutoJoin (Review Focus 3)
+describe('AutoJoin', () => {
+  const f = (name: string, key: boolean, join?: string) => ({ name, key, join });
+  const F: Record<string, PaneBox['fields']> = {
+    Clients: [f('N°', true, 'number:longInteger'), f('Nom', false, 'shortText'), f('Ville', false, 'shortText')],
+    Commandes: [f('N°', true, 'number:longInteger'), f('Client', false, 'number:longInteger')],
+    Villes: [f('Ville', true, 'shortText'), f('Pays', false, 'shortText')],
+    Codes: [f('Ville', false, 'number:longInteger')],
+    QVilles: [f('Ville', false, 'shortText')],
+    Sans: [f('Ville', true)],
+  };
+  const at = (n: string) => F[n] ?? [];
+  it('same name, same key, one side a key; the key side is left', () => {
+    expect(defaultJoins([{ name: 'Clients' }], 'Villes', [], 'Villes', at)).toEqual([{ l: 'Villes', lField: 'Ville', r: 'Clients', rField: 'Ville', kind: 'inner' }]);
+    expect(defaultJoins([{ name: 'Clients' }], 'Commandes', [], 'Commandes', at)).toEqual([{ l: 'Clients', lField: 'N°', r: 'Commandes', rField: 'N°', kind: 'inner' }]); // Access's N° = N°
+    expect(defaultJoins([{ name: 'Clients' }], 'Codes', [], 'Codes', at)).toEqual([]);          // Text vs Number
+    expect(defaultJoins([{ name: 'Clients' }], 'QVilles', [], 'QVilles', at)).toEqual([]);      // neither side a key
+    expect(defaultJoins([{ name: 'Villes' }], 'QVilles', [], 'QVilles', at)).toHaveLength(1);   // a query to a table's key
+    expect(defaultJoins([{ name: 'Clients' }], 'Clients', [], 'Clients_1', at)).toEqual([]);   // same source
+    expect(defaultJoins([{ name: 'Clients' }], 'Sans', [], 'Sans', at)).toEqual([]);           // no join key: never joined
+  });
+  it('a relationship between the pair: no AutoJoin added; AutoJoin off: relationships only', () => {
+    expect(defaultJoins([{ name: 'Clients' }], 'Commandes', [rel], 'Commandes', at)).toEqual([{ l: 'Clients', lField: 'N°', r: 'Commandes', rField: 'Client', kind: 'inner' }]);
+    expect(defaultJoins([{ name: 'Clients' }], 'Villes', [], 'Villes')).toEqual([]);
+  });
+  it('the reducer adds them once, as ordinary joins the user can delete', () => {
+    const d = qbeReducer(withClients, { type: 'addTable', name: 'Villes', relations: [], autoJoin: at });
+    expect(d.joins).toHaveLength(1);
+    expect(qbeReducer(d, { type: 'removeJoin', index: 0 }).joins).toEqual([]);
+    expect(qbeReducer(withClients, { type: 'addTable', name: 'Villes', relations: [] }).joins).toEqual([]);
+  });
+  it('joinKey', () => {
+    expect(joinKey(defaultProps('autoNumber'))).toBe(joinKey(defaultProps('number')));
+    expect(joinKey(defaultProps('number'))).toBe('number:longInteger');
+    expect(joinKey({ ...defaultProps('number'), numberSize: 'double' })).toBe('number:double');
+    expect(joinKey(defaultProps('shortText'))).toBe('shortText');
   });
 });
 

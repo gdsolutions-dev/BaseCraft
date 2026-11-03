@@ -4,7 +4,7 @@
 import type { ControlKind } from '../../shared/design/model';
 import type { DesignerAction } from './designer-model';
 import type { Handle, Rect } from './geometry';
-import { pxToTwips, TWIPS_PER_PX } from './units';
+import { DEFAULT_SIZE, pxToTwips, TWIPS_PER_PX } from './units';
 
 type Point = { x: number; y: number };
 export type Gesture =
@@ -13,14 +13,13 @@ export type Gesture =
   | { kind: 'place'; tool: ControlKind; section: number; origin: Point };
 
 const CLICK_PX = 3;
-const DEFAULT_SIZE = { width: 1418, height: 340 }; // 2,5 cm × 0,6 cm
 const isClick = (o: Point, at: Point): boolean => Math.abs(at.x - o.x) < CLICK_PX && Math.abs(at.y - o.y) < CLICK_PX;
 const spanned = (o: Point, at: Point): Rect => ({
   left: pxToTwips(Math.min(o.x, at.x)), top: pxToTwips(Math.min(o.y, at.y)), width: pxToTwips(Math.abs(at.x - o.x)), height: pxToTwips(Math.abs(at.y - o.y)),
 });
 const free = (alt: boolean) => (alt ? { free: true } : {});
 
-export function gestureEnd(g: Gesture, at: Point & { section: number }, mods: { alt: boolean; shift: boolean }): DesignerAction[] {
+export function gestureEnd(g: Gesture, at: Point & { section: number }, mods: { alt: boolean; shift: boolean; enclosed?: boolean }): DesignerAction[] {
   switch (g.kind) {
     case 'move': {
       if (at.section === g.section && isClick(g.origin, at)) return [];
@@ -34,7 +33,7 @@ export function gestureEnd(g: Gesture, at: Point & { section: number }, mods: { 
       return isClick(g.origin, at) ? [] : [{ type: 'resize', handle: g.handle, dx: pxToTwips(at.x - g.origin.x), dy: pxToTwips(at.y - g.origin.y), ...free(mods.alt) }];
     case 'band':
       if (isClick(g.origin, at)) return mods.shift ? [] : [{ type: 'select', selection: { kind: 'doc' } }];
-      return [{ type: 'selectRect', section: g.section, rect: spanned(g.origin, at), add: mods.shift }];
+      return [{ type: 'selectRect', section: g.section, rect: spanned(g.origin, at), add: mods.shift, ...(mods.enclosed ? { enclosed: true } : {}) }];
     case 'sectionHeight':
       return Math.abs(at.y - g.origin.y) < CLICK_PX ? [] : [{ type: 'setSectionHeight', index: g.index, height: Math.max(0, g.start + pxToTwips(at.y - g.origin.y)) }];
     case 'place': return [];   // le canevas appelle placeRect, puis host.newControls

@@ -366,9 +366,16 @@
       "actionCatalog": "동작 카탈로그",
       "showAllActions": "모든 동작 표시",
       "viewForm": "양식 보기",
+      "viewLayout": "레이아웃 보기",
+
+      "viewMenu": "보기",
+
+      "viewState": "보고서 보기",
       "viewPrintPreview": "인쇄 미리 보기",
       "linkBaseCraft": "BaseCraft 또는 SQLite 데이터베이스",
-      "linkAccess": "Access 데이터베이스 연결"
+      "linkAccess": "Access 데이터베이스 연결",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "리본 메뉴를 왼쪽으로 스크롤",
     "scrollRight": "리본 메뉴를 오른쪽으로 스크롤",
@@ -490,6 +497,9 @@
       "design": "디자인 보기",
       "run": "실행 보기",
       "form": "양식 보기",
+      "layout": "레이아웃 보기",
+
+      "state": "보고서 보기",
       "sql": "SQL 보기"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "읽기 전용으로 열림: 공유 데이터 파일은 동기화 폴더(OneDrive, Dropbox 등)에서 사용할 수 없습니다. 네트워크 드라이브에 두거나 서버로 전환하세요.",
     "unsupportedClient": "읽기 전용으로 열림: 이 시스템에서는 네트워크 드라이브의 공유 모드가 지원되지 않습니다. Windows 컴퓨터를 사용하거나 서버로 전환하세요.",
     "takeOver": "인계받기",
-    "contentDisabled": "보안 경고: 이 데이터베이스의 일부 활성 콘텐츠(매크로, 동작 쿼리)가 비활성화되었습니다.",
+    "contentDisabled": "보안 경고: 이 데이터베이스의 활성 콘텐츠 일부(매크로, 동작 쿼리, 패스스루 쿼리)가 사용할 수 없도록 설정되었습니다.",
     "enableContent": "콘텐츠 사용",
     "riskNetwork": "이 데이터베이스는 네트워크 공유에 있습니다. 쓰는 중에 연결이 끊어지면 손상될 수 있습니다.",
     "riskSynced": "이 데이터베이스는 동기화되는 폴더에 있습니다. 쓰는 중에 동기화되면 손상될 수 있습니다.",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "크로스탭 쿼리(PIVOT)의 열 머리글에는 집계 함수를 사용할 수 없습니다: {{detail}}.",
       "queryBind_tooManyColumns": "이 크로스탭 쿼리는 열이 {{detail}}개가 됩니다. 최대 255개이며 그중 254개가 열 머리글입니다. 데이터를 제한하거나 열 머리글(IN)을 수정하십시오.",
       "queryBind_crosstabAsSource": "크로스탭 쿼리 \"{{detail}}\"은(는) 다른 쿼리나 조회 목록의 원본이 될 수 없습니다.",
+      "queryBind_passThroughAsSource": "패스스루 쿼리 \"{{detail}}\"은(는) 다른 쿼리나 목록의 원본이 될 수 없습니다. 필터나 그룹화는 해당 SQL 텍스트에 넣으십시오.",
       "queryBind_mixedSources": "쿼리는 하나의 데이터 원본만 사용할 수 있습니다. “{{detail}}”은(는) 쿼리의 다른 테이블과 원본이 다릅니다.",
       "fontMissing": "포함된 글꼴을 불러오지 못했습니다. 보고서가 인쇄되거나 내보내지지 않았습니다.",
       "printFailed": "인쇄에 실패했습니다.",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "크로스탭 쿼리의 “열 머리글”은 요약 행이 “그룹화”여야 합니다.",
       "invalidQuery_crosstabNone": "크로스탭 쿼리의 “(표시 안 함)” 열은 요약 행이 “조건”이어야 합니다. 크로스탭 행에서 역할을 선택하십시오.",
       "linkUnavailable_needsPassword": "이 Access 데이터베이스는 암호로 보호되어 있습니다: {{detail}}",
+      "linkUnavailable_needsLogin": "로그인이 취소됨: {{detail}}의 연결된 테이블을 사용할 수 없습니다.",
+      "linkUnavailable_cannotConnect": "서버 {{detail}}에 연결할 수 없습니다. 서버 이름, 포트 및 네트워크를 확인하십시오.",
+      "linkUnavailable_certificate": "이 컴퓨터는 서버 {{detail}}의 인증서를 신뢰하지 않습니다. 해당 인증 기관의 인증서를 설치하거나, 이 네트워크를 신뢰하는 경우 연결된 테이블 관리자에서 인증서를 확인하지 않는 암호화 옵션(예: “암호화, 서버 인증서 신뢰”)을 선택하십시오.",
+      "linkUnavailable_serverVersion": "서버 {{detail}}은(는) BaseCraft에서 지원하지 않는 버전을 사용합니다(최소 PostgreSQL 14 또는 SQL Server 2016).",
+      "linkUnavailable_passwordExpired": "서버 {{detail}}에서 이 로그인의 암호가 만료되었습니다. 서버 관리 도구로 암호를 변경한 다음 다시 연결하세요.",
       "linkUnavailable_syncedFolder": "데이터 파일 {{detail}}은(는) 읽기 전용으로 유지됩니다: 공유 데이터 파일은 동기화 폴더(OneDrive, Dropbox 등)에서 사용할 수 없습니다. 네트워크 드라이브에 두거나 서버로 전환하세요.",
-      "linkUnavailable_unsupportedClient": "데이터 파일 {{detail}}은(는) 읽기 전용으로 유지됩니다: 이 시스템에서는 네트워크 드라이브의 공유 모드가 지원되지 않습니다. Windows 컴퓨터를 사용하거나 서버로 전환하세요."
+      "linkUnavailable_unsupportedClient": "데이터 파일 {{detail}}은(는) 읽기 전용으로 유지됩니다: 이 시스템에서는 네트워크 드라이브의 공유 모드가 지원되지 않습니다. Windows 컴퓨터를 사용하거나 서버로 전환하세요.",
+      "serverNotSupported_actionQuery": "실행 쿼리는 아직 {{detail}} 연결 테이블에서 실행되지 않습니다.",
+      "serverNotSupported_makeTable": "테이블 만들기 쿼리는 {{detail}} 원본에서 실행되지 않습니다. 서버에 테이블을 만든 다음 추가 쿼리로 채우십시오.",
+      "serverNotSupported_appendAutoNumber": "추가 쿼리는 서버({{detail}})에 있는 테이블의 일련 번호 필드 값을 지정할 수 없습니다. 쿼리에서 이 필드를 제거하십시오. 새 레코드는 서버가 번호를 매깁니다.",
+      "serverNotSupported_joinSave": "여러 테이블 쿼리를 통한 데이터 입력은 아직 {{detail}} 원본에서 사용할 수 없습니다.",
+      "serverNotSupported_crosstab": "크로스탭 쿼리는 아직 {{detail}} 원본에서 실행되지 않습니다.",
+      "serverNotSupported_passThrough": "패스스루 쿼리는 {{detail}} 원본에서 사용할 수 없습니다.",
+      "serverNotSupported_topPercent": "TOP … PERCENT는 아직 {{detail}} 원본에서 지원되지 않습니다.",
+      "serverNotSupported": "이 작업은 아직 {{detail}} 연결 테이블에서 사용할 수 없습니다.",
+      "serverFunction": "{{name}}은(는) {{detail}} 원본에서 실행할 수 없습니다: BaseCraft가 이 서버용으로 변환할 수 없습니다.",
+      "timeout": "서버가 설정된 시간 안에 응답하지 않았습니다({{name}}초). 다시 시도하거나 연결된 테이블 관리자에서 제한 시간을 늘리십시오.",
+      "passThroughNoRecords": "패스스루 쿼리의 '레코드 반환' 속성이 예인데도 레코드가 반환되지 않았습니다.",
+      "passThroughTimeout": "서버가 설정된 시간 안에 패스스루 쿼리에 응답하지 않았습니다({{name}}초). 속성 시트에서 'ODBC 제한 시간'을 늘리십시오(0: 제한 없음).",
+      "passThroughLost": "패스스루 쿼리 중에 서버 연결이 끊어졌습니다. 쿼리가 완료되었는지는 알 수 없습니다.",
+      "serverError_connection": "저장하는 동안 서버 연결이 끊어졌습니다. 저장되었는지 알 수 없습니다. 다시 시도하기 전에 새로 고침(홈 › 새로 고침)하십시오.",
+      "serverError_notWritten": "서버가 \"{{detail}}\"에 레코드를 저장하지 않았습니다. 테이블의 트리거, 규칙 또는 보안 정책이 이를 무시했습니다.",
+      "serverError": "서버가 작업을 거부했습니다: {{detail}}"
     },
     "op": {
       "nameExists": "같은 이름의 개체가 이미 있습니다.",
@@ -695,6 +727,7 @@
       "reportFooter": "보고서 바닥글"
     },
     "canvas": "디자인 화면",
+    "layoutHandle": "레이아웃 {{id}} 선택",
     "toolbox": "도구 상자",
     "arrange": {
       "alignLeft": "왼쪽",
@@ -940,7 +973,16 @@
       "isNotNull": "비어 있지 않음",
       "clear": "모든 필터 지우기",
       "fieldTitle": "필터",
-      "fieldLabel": "\"{{field}}\"의 조건(비어 있으면 이 필드에는 필터 없음):"
+      "fieldLabel": "\"{{field}}\"의 조건(비어 있으면 이 필드에는 필터 없음):",
+      "sortAsc": { "text": "텍스트 오름차순 정렬", "number": "숫자 오름차순 정렬", "date": "날짜/시간 오름차순 정렬" },
+      "sortDesc": { "text": "텍스트 내림차순 정렬", "number": "숫자 내림차순 정렬", "date": "날짜/시간 내림차순 정렬" },
+      "clearField": "{{field}}에서 필터 해제",
+      "typed": { "text": "텍스트 필터", "number": "숫자 필터", "date": "날짜 필터" },
+      "all": "(모두 선택)",
+      "blanks": "(필드 값 없음)",
+      "tooLong": "이 필터에 선택된 값이 너무 많습니다. 대신 텍스트, 숫자 또는 날짜 필터를 사용하십시오.",
+      "ok": "확인",
+      "cancel": "취소"
     }
   },
   "expr": {
@@ -974,7 +1016,6 @@
       "forbiddenStatement": "허용되지 않는 문입니다. 선택, 추가, 업데이트, 삭제, 테이블 만들기 쿼리만 사용할 수 있습니다.",
       "reservedName": "이 이름은 예약되어 있습니다(bc_, bcx_ 또는 sqlite_). 쿼리에서 사용할 수 없습니다.",
       "multipleStatements": "SQL 문은 하나만 사용할 수 있습니다. 세미콜론 뒤의 텍스트를 제거하십시오.",
-      "notSupportedYet": "이런 종류의 쿼리(패스스루)는 아직 사용할 수 없습니다.",
       "badParameterType": "알 수 없는 매개 변수 형식입니다.",
       "badCrosstab": "올바르지 않은 크로스탭 쿼리입니다. TRANSFORM, GROUP BY가 있는 일반 SELECT, PIVOT 순서여야 합니다.",
       "badCount": "1에서 255 사이의 정수를 입력하십시오.",
@@ -1429,6 +1470,7 @@
   "prop": {
     "Caption": "캡션",
     "DefaultView": "기본 보기",
+    "AllowLayoutView": "레이아웃 보기 허용",
     "NavigationButtons": "탐색 단추",
     "Width": "너비",
     "Visible": "표시",
@@ -1997,6 +2039,17 @@
       "label": "테이블 이름"
     },
     "sqlOnly": "이 쿼리는 SQL 보기에서만 표시할 수 있습니다.",
+    "passThrough": {
+      "notice": "패스스루 쿼리: 이 텍스트는 BaseCraft가 읽지 않고 그대로 서버 {{label}}(으)로 전송됩니다. 서버는 자체 권한을 적용하며, 서버가 변경하는 내용에는 BaseCraft의 유효성 검사 규칙과 관계가 적용되지 않습니다.",
+      "noticeNoServer": "패스스루 쿼리: 속성 시트에서 서버를 선택하십시오.",
+      "empty": "서버로 보낼 SQL 문을 입력하십시오.",
+      "noConnection": "속성 시트에서 쿼리의 서버를 선택하십시오(연결).",
+      "connection": "연결",
+      "otherServerKind": "다른 {{product}} 서버…",
+      "returnsRecords": "레코드 반환",
+      "timeout": "ODBC 제한 시간",
+      "badTimeout": "0(제한 없음)에서 3600 사이의 초 수를 입력하십시오."
+    },
     "builderOnTable": "테이블에서 쿼리 작성기를 호출했습니다.\n\n테이블을 기반으로 쿼리를 만드시겠습니까?",
     "builderSave": "SQL 문의 변경 내용을 저장하고 속성을 업데이트하시겠습니까?",
     "error": {
@@ -2143,6 +2196,65 @@
     "noTables": "이 데이터베이스에는 옮길 로컬 테이블이 없습니다.",
     "self": "데이터 파일은 열려 있는 데이터베이스일 수 없습니다. 다른 이름이나 폴더를 선택하세요."
   },
+  "migrate": {
+    "title": "서버로 이동 마법사",
+    "intro": "이 마법사는 현재 데이터베이스의 모든 로컬 테이블을 데이터, 키, 인덱스, 관계와 함께 PostgreSQL 또는 SQL Server 데이터베이스로 옮긴 다음, 같은 이름의 연결 테이블로 바꿉니다. 먼저 데이터베이스의 백업 복사본이 만들어집니다. 유효성 검사 규칙과 계산된 기본값은 응용 프로그램에 남으며, 응용 프로그램은 프런트 엔드 응용 프로그램이 됩니다.",
+    "engine": "대상 서버",
+    "next": "다음",
+    "schema": "스키마",
+    "start": "이동",
+    "connecting": "서버에 연결하고 데이터베이스의 백업 복사본을 만드는 중…",
+    "progress": "{{table}} 복사 중: 레코드 {{total}}개 중 {{done}}개",
+    "finishing": "마무리하는 중…",
+    "stop": "중지",
+    "done": "이동을 완료했습니다. 백업 복사본: {{backup}}.",
+    "backup": "백업 복사본: {{backup}}.",
+    "server": "{{product}} 서버: {{server}}, 스키마 {{schema}}.",
+    "copy": "클립보드에 복사",
+    "report": {
+      "tables": "이동한 테이블",
+      "table": "{{name}}: 레코드 {{rows}}개",
+      "nextId": "다음 일련 번호: {{next}}",
+      "version": "버전 열: {{column}}",
+      "sep": ", ",
+      "indexes": "만든 인덱스",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}}(중복 불가능)",
+      "relations": "관계",
+      "created": "{{name}}: 외래 키를 만들었습니다",
+      "noAction": "{{name}}: 연쇄 작업 없이 외래 키를 만들었습니다(SQL Server는 한 테이블로 가는 연쇄 경로가 여러 개인 것을 거부합니다)",
+      "notEnforced": "{{name}}: 참조 무결성이 적용되지 않아 서버에 아무것도 만들지 않습니다",
+      "frontEndOnly": "응용 프로그램만 적용(서버는 적용하지 않음)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "서버에 다른 형식으로 저장됨",
+      "approx": "{{name}}: {{type}}",
+      "queries": "서버가 거부하는 쿼리",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: 정의를 읽을 수 없어 확인하지 않았습니다"
+    },
+    "noTables": "이 데이터베이스에는 옮길 로컬 테이블이 없습니다.",
+    "dataFile": "이 데이터베이스는 공유 데이터 파일(데이터베이스 분할)입니다. 프런트 엔드 응용 프로그램이 이 파일의 테이블을 연결합니다. 연결 테이블에 [로컬 테이블로 변환]을 실행한 후 프런트 엔드에서 응용 프로그램을 이동하세요.",
+    "noSchema": "스키마 {{schema}}이(가) 서버에 없습니다.",
+    "nameTaken": "서버에 이미 이 이름의 테이블이 있습니다: {{names}}. 삭제하거나 다른 스키마를 선택하세요.",
+    "nameTooLong": "이 이름은 PostgreSQL의 제한(63바이트)을 넘습니다: {{names}}. 먼저 이름을 바꾸세요.",
+    "invalidDesign": "이 필드의 디자인이 올바르지 않습니다: {{names}}. 디자인 보기에서 수정한 후 다시 시도하세요.",
+    "cancelled": "이동이 취소되었습니다. 변경된 내용이 없습니다.",
+    "failed": "이동하지 못했습니다({{table}}): {{error}}. 서버와 데이터베이스 모두 변경된 내용이 없습니다.",
+    "failedNoTable": "이동하지 못했습니다: {{error}}. 서버와 데이터베이스 모두 변경된 내용이 없습니다.",
+    "switchFailed": "테이블은 서버에 복사되었지만 데이터베이스를 변경할 수 없었습니다({{error}}). 데이터베이스는 그대로입니다.",
+    "dropped": "복사한 테이블은 서버에서 삭제되었습니다.",
+    "left": "이 테이블이 서버에 남아 있습니다: {{names}}.",
+    "leftCheck": "다시 이동하기 전에 확인하고 삭제하세요.",
+    "commitUnknown": "서버가 커밋하는 동안 서버 연결이 끊어졌거나 이동이 중지되었습니다. 서버가 저장했는지 알 수 없습니다. 데이터베이스는 변경되지 않았습니다.",
+    "leftMaybe": "이 테이블이 서버에 있을 수 있습니다: {{names}}. 다시 이동하기 전에 확인하고 삭제하세요.",
+    "closed": "서버 연결이 닫혔습니다.",
+    "queriesUnchecked": "서버에서 쿼리를 확인할 수 없습니다: {{detail}}",
+    "error": {
+      "migrateCount": "서버의 {{table}} 레코드 수가 {{local}}개가 아니라 {{server}}개입니다.",
+      "migrateUnlinkable": "서버에서 다시 읽은 테이블 {{table}}을(를) 해당 키와 필드로 연결할 수 없습니다.",
+      "migrateOneNull": "필드 {{field}}에 Null 값이 여러 개 있습니다. SQL Server는 관계 {{relation}}에 필요한 중복 불가능 인덱스에서 하나만 허용합니다."
+    }
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2272,17 +2384,17 @@
         "new": "새로 만들기"
       },
       "Match": {
-        "anywhere": "필드의 일부",
-        "whole": "필드 전체",
-        "start": "필드의 시작"
+        "anywhere": "필드의 일부분",
+        "whole": "전체 필드",
+        "start": "필드의 처음"
       },
       "MatchCase": {
         "yes": "예",
         "no": "아니요"
       },
       "Search": {
-        "up": "위로",
-        "down": "아래로",
+        "up": "위쪽",
+        "down": "아래쪽",
         "all": "모두"
       },
       "OnlyCurrentField": {
@@ -2356,6 +2468,7 @@
       "cantGoToRecord": "지정한 레코드로 이동할 수 없습니다.",
       "cantFocus": "이 컨트롤은 포커스를 받을 수 없습니다(숨겨져 있거나 사용할 수 없음).",
       "saveRefused": "레코드를 저장할 수 없습니다.",
+      "autoCorrectLog": "변경 내용을 테이블 {{name}}(필드 {{detail}})에 기록할 수 없습니다. 이름이 변경되지 않았습니다.",
       "badReference": "“{{name}}”은(는) 열려 있는 양식의 컨트롤이 아닙니다.",
       "badValue": "값 “{{name}}”은(는) 이 속성에 적합하지 않습니다.",
       "findWhatTooLong": "찾을 텍스트가 255자를 초과합니다.",
@@ -2415,7 +2528,9 @@
     "cat": {
       "general": "일반",
       "currentDb": "현재 데이터베이스",
-      "client": "클라이언트 설정"
+      "client": "클라이언트 설정",
+      "datasheet": "데이터시트",
+      "designers": "개체 디자이너"
     },
     "general": {
       "header": "{{product}} 사용에 대한 일반 옵션입니다.",
@@ -2432,6 +2547,11 @@
       "confirmDeletions": "문서 삭제",
       "confirmActions": "동작 쿼리",
       "display": "표시",
+      "printing": "인쇄",
+      "marginLeft": "왼쪽 여백:",
+      "marginRight": "오른쪽 여백:",
+      "marginTop": "위쪽 여백:",
+      "marginBottom": "아래쪽 여백:",
       "recentCount": "최근 데이터베이스 표시 개수:",
       "advanced": "고급",
       "openLast": "{{product}}을(를) 시작할 때 마지막으로 사용한 데이터베이스 열기",
@@ -2444,7 +2564,31 @@
       "lockEdited": "편집한 레코드",
       "refreshInterval": "새로 고침 간격(초)",
       "updateRetries": "업데이트 재시도 횟수",
-      "updateRetryMs": "업데이트 재시도 간격(밀리초)"
+      "updateRetryMs": "업데이트 재시도 간격(밀리초)",
+      "enter": "Enter 키 누른 후 이동",
+      "enterNone": "이동 안 함",
+      "enterNextField": "다음 필드",
+      "enterNextRecord": "다음 레코드",
+      "entry": "필드 입력 시 동작",
+      "entrySelectAll": "필드 전체 선택",
+      "entryStart": "필드 시작으로 이동",
+      "entryEnd": "필드 끝으로 이동",
+      "arrows": "방향키 동작",
+      "arrowsField": "다음 필드",
+      "arrowsChar": "다음 문자",
+      "continuous": "연속 폼에서 방향키로 레코드 이동",
+      "continuousNone": "없음",
+      "continuousUpDown": "위/아래",
+      "continuousLeftRight": "왼쪽/오른쪽",
+      "cursorStop": "첫째/마지막 필드에서 커서 멈춤",
+      "find": "기본 찾기/바꾸기 동작",
+      "findFast": "빠른 검색",
+      "findGeneral": "일반 검색",
+      "findStart": "필드 시작 검색",
+      "general": "일반",
+      "year4": "연도를 4자리로 표시",
+      "year4Db": "이 데이터베이스",
+      "year4All": "모든 데이터베이스"
     },
     "db": {
       "header": "현재 데이터베이스의 옵션입니다.",
@@ -2460,6 +2604,10 @@
       "datasheetDesign": "데이터시트 보기에서 테이블 디자인 변경 사용",
       "navigation": "탐색",
       "ribbonSection": "리본 메뉴 및 도구 모음 옵션",
+      "autoCorrectSection": "이름 자동 고침 옵션",
+      "track": "이름 자동 고침 정보 추적",
+      "perform": "이름 자동 고침 수행",
+      "log": "이름 자동 고침 변경 내용 기록",
       "fullMenus": "전체 메뉴 허용",
       "shortcutMenus": "기본 바로 가기 메뉴 허용",
       "iconForForms": "양식 및 보고서 아이콘으로 사용",
@@ -2476,11 +2624,73 @@
       "ribbonSimplified": "간소화",
       "runMode": "실행 모드로 열기",
       "runModeHelp": "탐색 창과 디자인 보기를 숨깁니다. 이를 무시하려면 데이터베이스를 열 때 Shift 키를 누르고 계십시오.",
-      "nextOpen": "이 옵션은 데이터베이스를 다음에 열 때 적용됩니다."
+      "nextOpen": "이 옵션은 데이터베이스를 다음에 열 때 적용됩니다.",
+      "truncated": "잘린 숫자 필드 확인",
+      "filterSection": "{{name}} 데이터베이스의 조회 옵션 필터링",
+      "filterShow": "값 목록 표시 위치:",
+      "listIndexed": "로컬 인덱스 필드",
+      "listNonIndexed": "로컬 인덱스 없는 필드",
+      "listMax": "읽은 레코드 수가 이 값보다 크면 목록을 표시하지 않음:"
+    },
+
+    "designers": {
+      "header": "데이터베이스 개체를 만들 때의 기본 설정을 변경합니다. 대부분의 옵션은 테이블 데이터시트 보기나 페이지 보기에서는 무시됩니다.",
+      "sheetSection": "속성 시트",
+      "sheetFontSize": "속성 시트 글꼴 크기:",
+      "tableSection": "테이블 디자인 보기",
+      "fieldType": "기본 필드 형식:",
+      "textSize": "기본 텍스트 필드 크기:",
+      "numberSize": "기본 숫자 필드 크기:",
+      "autoIndex": "가져오기/만들기 시 자동 인덱스:",
+      "propertyUpdate": "속성 업데이트 옵션 단추 표시",
+      "querySection": "쿼리 디자인",
+      "tableNames": "테이블 이름 표시",
+      "outputAll": "모든 필드 출력",
+      "autoJoin": "자동 조인 사용",
+      "queryFont": "쿼리 디자인 글꼴",
+      "fontName": "글꼴:",
+      "fontSize": "크기:",
+      "formSection": "폼/보고서 디자인 보기",
+      "selection": "선택 동작",
+      "partial": "부분적으로 포함",
+      "full": "완전히 포함"
+    },
+    "datasheet": {
+      "header": "{{product}}에서 데이터시트의 모양을 사용자 지정합니다.",
+      "gridSection": "눈금선 및 셀 효과",
+      "gridlines": "기본으로 표시할 눈금선",
+      "horizontal": "가로",
+      "vertical": "세로",
+      "columnWidth": "기본 열 너비:",
+      "font": "기본 글꼴",
+      "fontSize": "크기:",
+      "fontWeight": "두께:",
+      "underline": "밑줄",
+      "italic": "기울임꼴",
+      "weight": {
+        "100": "가장 얇게",
+        "200": "매우 가늘게",
+        "300": "가늘게",
+        "400": "표준",
+        "500": "중간",
+        "600": "약간 굵게",
+        "700": "굵게",
+        "800": "매우 굵게",
+        "900": "가장 굵게"
+      }
     }
   },
   "startup": {
     "formNotFound": "표시 양식 “{{name}}”을(를) 찾을 수 없습니다."
+  },
+  "import": {
+    "server": {
+      "title": "PostgreSQL에서 가져오기",
+      "titleSqlServer": "SQL Server에서 가져오기",
+      "ok": "가져오기",
+      "done": "가져온 테이블: {{names}}.",
+      "skipped": "가져오지 않은 열({{table}}): {{names}}."
+    }
   },
   "link": {
     "filterBasecraft": "BaseCraft 데이터베이스",
@@ -2495,12 +2705,15 @@
     "kind": {
       "basecraft": "BaseCraft 데이터베이스",
       "sqlite": "SQLite 파일",
-      "access": "Access 데이터베이스"
+      "access": "Access 데이터베이스",
+      "postgresql": "PostgreSQL 서버",
+      "sqlserver": "SQL Server 서버"
     },
     "tables": "테이블",
     "selectAll": "모두 선택",
     "noTables": "이 파일에는 테이블이 없습니다.",
     "error": {
+      "unsupportedKind": "BaseCraft에서 다음 테이블을 연결할 수 없습니다: {{names}}. 변경된 내용이 없습니다.",
       "nameExists": "이 이름들은 이 데이터베이스에서 이미 사용 중입니다: {{names}}.",
       "missingTables": "이 테이블들이 더 이상 파일에 없습니다: {{names}}.",
       "self": "데이터베이스는 자기 자신에 연결할 수 없습니다.",
@@ -2516,6 +2729,37 @@
       "title": "데이터베이스 암호",
       "label": "{{path}}의 암호:",
       "wrong": "암호가 올바르지 않습니다."
+    },
+    "server": {
+      "title": "PostgreSQL 테이블 연결",
+      "titleSqlServer": "SQL Server 테이블 연결",
+      "host": "서버",
+      "hostHint": "이름 또는 이름\\인스턴스",
+      "port": "포트",
+      "database": "데이터베이스",
+      "tls": "암호화",
+      "tlsVerify": "암호화, 인증서 확인(권장)",
+      "tlsRequire": "암호화, 인증서 확인 안 함",
+      "tlsTrust": "암호화, 서버 인증서 신뢰",
+      "tlsDisable": "암호화 안 함",
+      "timeout": "쿼리 시간 제한(초)",
+      "connect": "연결",
+      "readOnly": "기본 키 없음: 읽기 전용",
+      "skipped": "연결되지 않은 열: {{names}}",
+      "noTables": "이 서버에는 읽을 수 있는 테이블이 없습니다.",
+      "missingTables": "서버에 다음이 없습니다: {{names}}. 변경된 내용이 없습니다."
+    },
+    "needsLogin": "로그인 필요: 테이블을 열어 서버 {{detail}}에 로그인한 다음 연결을 새로 고치십시오.",
+    "login": {
+      "title": "서버 로그인",
+      "message": "{{label}}의 사용자 이름과 암호를 입력하세요.",
+      "user": "사용자 이름",
+      "password": "암호",
+      "remember": "이 컴퓨터에 암호 저장",
+      "noKeyring": "이 컴퓨터에는 보안 키링이 없습니다. 세션마다 암호를 다시 묻습니다.",
+      "untrusted": "이 파일은 신뢰할 수 없습니다. 저장된 암호는 이 파일의 패스스루 쿼리에 사용되지 않습니다. 사용하려면 콘텐츠를 사용하도록 설정하거나 파일을 신뢰할 수 있는 위치에 두십시오.",
+      "wrong": "사용자 이름 또는 암호가 올바르지 않습니다.",
+      "ok": "로그인"
     }
   },
   "ltm": {
@@ -2523,7 +2767,7 @@
     "col": {
       "name": "테이블",
       "kind": "형식",
-      "path": "파일",
+      "path": "원본",
       "state": "상태"
     },
     "state": {
@@ -2532,13 +2776,18 @@
       "readOnlyFile": "읽기 전용",
       "stale": "방치된 잠금 — 새로 고쳐 인계받기",
       "missingFile": "파일을 찾을 수 없음",
-      "missingTable": "파일에 테이블이 없음",
+      "missingTable": "원본에 테이블이 없음",
       "needsMigration": "이전 버전의 BaseCraft",
       "newerMajor": "더 최신 버전의 BaseCraft",
       "cannotOpen": "파일을 읽을 수 없음",
       "unsupportedKind": "지원되지 않는 원본",
       "needsPassword": "암호 필요",
       "syncedFolder": "동기화되는 폴더: 읽기 전용",
+      "needsLogin": "로그인 필요",
+      "cannotConnect": "서버에 연결할 수 없음",
+      "certificate": "신뢰할 수 없는 인증서",
+      "serverVersion": "지원되지 않는 서버 버전",
+      "passwordExpired": "암호 만료됨",
       "unsupportedClient": "이 시스템에서는 공유 모드가 지원되지 않음: 읽기 전용"
     },
     "risk": {
@@ -2558,5 +2807,78 @@
     "copy": "클립보드에 복사",
     "drop": "변경 내용 취소",
     "deleted": "다른 사용자가 이 레코드를 삭제했습니다. 변경 내용을 저장할 수 없습니다."
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "이 폼에는 레코드 원본이 없습니다. 컨트롤에 데이터가 표시되지 않습니다.",
+      "empty": "레코드 원본에 레코드가 없습니다.",
+      "unreadable": "레코드 원본을 읽을 수 없습니다. 컨트롤에 데이터가 표시되지 않습니다.",
+      "parameters": "매개 변수가 입력되지 않았습니다. 컨트롤에 데이터가 표시되지 않습니다.",
+      "truncated": "원본의 처음 {{count}}개 레코드 미리 보기입니다. 합계와 그룹은 이 행만 대상으로 합니다.",
+      "report": {
+        "noSource": "이 보고서에는 레코드 원본이 없습니다. 데이터 없이 표시됩니다.",
+        "empty": "레코드 원본에 레코드가 없습니다. 보고서가 데이터 없이 표시됩니다.",
+        "unreadable": "레코드 원본을 읽을 수 없습니다. 보고서가 데이터 없이 표시됩니다.",
+        "parameters": "매개 변수가 입력되지 않았습니다. 보고서가 데이터 없이 표시됩니다.",
+        "layoutFailed": "보고서의 레이아웃을 만들 수 없습니다."
+      }
+    }
+  },
+  "find": {
+    "title": "찾기 및 바꾸기",
+    "tabFind": "찾기",
+    "tabReplace": "바꾸기",
+    "what": "찾을 내용:",
+    "lookIn": "찾는 위치:",
+    "lookInField": "현재 필드",
+    "lookInDocument": "현재 문서",
+    "match": "일치:",
+    "matchAnywhere": "필드의 일부분",
+    "matchWhole": "전체 필드",
+    "matchStart": "필드의 처음",
+    "search": "검색:",
+    "searchAll": "모두",
+    "searchUp": "위쪽",
+    "searchDown": "아래쪽",
+    "matchCase": "대/소문자 구분",
+    "asFormatted": "서식 있는 필드 검색",
+    "next": "다음 찾기",
+    "cancel": "취소"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "저장할 개체",
+    "dirty": "{{name}}을(를) 사용하는 다음 개체를 먼저 저장하거나 닫으십시오: {{list}}",
+    "failedTitle": "고치지 못한 개체",
+    "failed": "다음 개체를 고치지 못해 아직 이전 이름을 사용합니다: {{list}}",
+    "staleTitle": "이전 이름의 개체",
+    "stale": "다음 개체가 아직 이전 이름을 사용합니다(이름 자동 고침이 꺼져 있음): {{list}}",
+    "logSkipped": "테이블 {{table}}이(가) 있지만 로그 필드가 없습니다. 변경 내용이 기록되지 않았습니다.",
+    "log": {
+      "table": "이름 자동 고침 로그",
+      "objectType": "개체 형식",
+      "objectName": "개체 이름",
+      "controlName": "컨트롤 이름",
+      "propertyName": "속성 이름",
+      "oldValue": "이전 값",
+      "newValue": "새 값",
+      "time": "시간",
+      "failed": {
+        "unreadable": "수정되지 않음: 정의를 읽을 수 없음",
+        "meaning": "수정되지 않음: 수정하면 의미가 바뀜",
+        "dependency": "수정되지 않음: 수정되지 않은 개체에 종속됨"
+      }
+    },
+    "kind": {
+      "table": "테이블",
+      "query": "쿼리",
+      "form": "양식",
+      "report": "보고서",
+      "macro": "매크로"
+    }
+  },
+  "propertyUpdate": {
+    "title": "속성 업데이트",
+    "message": "{{field}}을(를) 사용하는 모든 곳에서 {{prop}}을(를) 업데이트하시겠습니까?",
+    "target": "{{kind}} {{name}} › {{control}} (“{{current}}”)"
   }
 }

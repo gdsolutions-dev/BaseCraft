@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, uints, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText,
+  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { DEFAULT_STARTUP } from '../shared/startup';
@@ -136,9 +136,9 @@ describe('ipc argument checks', () => {
     expect(() => nameArg('e\u0301'.repeat(65))).toThrow(INVALID);
   });
 
-  it('filter criteria are at most 2000 characters', () => {
-    expect(sourcePageRequest({ offset: 0, limit: 1, filter: [{ field: 'a', criteria: 'x'.repeat(2000) }] })).toBeTruthy();
-    expect(() => sourcePageRequest({ offset: 0, limit: 1, filter: [{ field: 'a', criteria: 'x'.repeat(2001) }] })).toThrow(INVALID);
+  it('filter criteria are at most 65 536 characters', () => {
+    expect(sourcePageRequest({ offset: 0, limit: 1, filter: [{ field: 'a', criteria: 'x'.repeat(65_536) }] })).toBeTruthy();
+    expect(() => sourcePageRequest({ offset: 0, limit: 1, filter: [{ field: 'a', criteria: 'x'.repeat(65_537) }] })).toThrow(INVALID);
   });
 
   it('table save requests: field and mapping lists are bounded before they are read', () => {
@@ -157,6 +157,8 @@ describe('ipc argument checks', () => {
     expect(sourcePageRequest({ offset: 0, limit: 10 })).toEqual({ offset: 0, limit: 10 });
     const full = { offset: 5, limit: 10, sort: [{ field: 'a', dir: 'desc' }], filter: [{ field: 'a', criteria: '>1' }], params: { P: 1 } };
     expect(sourcePageRequest(full)).toEqual(full);
+    expect(sourcePageRequest({ offset: 0, limit: 1, fresh: true })).toEqual({ offset: 0, limit: 1, fresh: true }); // C6 R7: an open or a Requery
+    expect(() => sourcePageRequest({ offset: 0, limit: 1, fresh: 1 })).toThrow(INVALID);
     const sort = (n: number) => Array.from({ length: n }, () => ({ field: 'a', dir: 'asc' }));
     expect(sourcePageRequest({ offset: 0, limit: MAX_PAGE_ROWS, sort: sort(MAX_SORT_KEYS) })).toMatchObject({ limit: 10000 });
     expect(MAX_SORT_KEYS).toBe(8);
@@ -205,17 +207,33 @@ describe('ipc argument checks', () => {
     expect(Object.getOwnPropertyDescriptor(named.tables, '__proto__')?.value).toEqual({ x: 1, y: 2 });
   });
 
+  it('settingValue takes the O2 keys with their exact type', () => {
+    expect(settingValue('moveAfterEnter', 'nextRecord')).toEqual(['moveAfterEnter', 'nextRecord']);
+    for (const [k, v] of [['moveAfterEnter', 'next'], ['datasheetFontSize', 0], ['findReplaceDefault', 'quick'], ['cursorStopsAtEnds', 1], ['datasheetFontWeight', 450], ['columnWidth', 299]])
+      expect(() => settingValue(k, v)).toThrow('bc:invalidArgument');
+  });
+  it('startup options: the five O2 keys', () => {
+    expect(() => startupOptions({ ...DEFAULT_STARTUP, filterListMax: -1 })).toThrow('bc:invalidArgument');
+    expect(() => startupOptions({ ...DEFAULT_STARTUP, filterListMax: 1000.5 })).toThrow('bc:invalidArgument');
+    expect(() => startupOptions({ ...DEFAULT_STARTUP, checkTruncatedNumbers: 'yes' })).toThrow('bc:invalidArgument');
+    const { fourDigitYear: _f, ...missing } = DEFAULT_STARTUP;
+    expect(() => startupOptions(missing)).toThrow('bc:invalidArgument');
+    expect(startupOptions({ ...DEFAULT_STARTUP, filterListMax: 32766, fourDigitYear: true })).toMatchObject({ filterListMax: 32766, fourDigitYear: true });
+  });
+
   it('startupOptions is strict', () => {
     expect(startupOptions({ ...DEFAULT_STARTUP, startupForm: 'FMenu' })).toEqual({ ...DEFAULT_STARTUP, startupForm: 'FMenu' });
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
     const full = {
       appTitle: 'Gestion des ventes', appIcon: png, startupForm: 'FMenu', showNavPane: false, ribbon: 'simplified', runMode: true,
       statusBar: false, documentTabs: false, specialKeys: false, compactOnClose: true, datasheetDesign: false, fullMenus: false, shortcutMenus: false, iconForForms: true, frontEnd: true, dataFile: true,
+      fourDigitYear: true, checkTruncatedNumbers: false, filterListIndexed: false, filterListNonIndexed: false, filterListMax: 0,
+      trackNameAutoCorrect: false, performNameAutoCorrect: false, logNameAutoCorrect: true,
     };
     expect(startupOptions(full)).toEqual(full);
     expect(startupOptions({ ...DEFAULT_STARTUP, appTitle: 'é'.repeat(255) }).appTitle).toHaveLength(255);
     const { runMode: _runMode, ...missing } = DEFAULT_STARTUP;
-    const { fullMenus: _fullMenus, ...thirteen } = DEFAULT_STARTUP;   // a base option missing: the sixteen keys are all required
+    const { fullMenus: _fullMenus, ...thirteen } = DEFAULT_STARTUP;   // a base option missing: the twenty-one keys are all required
     const gif = btoa('GIF89a\u0001\u0000\u0001\u0000');
     // the eight switches added by O1: a boolean each, 'false' (a string) is not one
     const notBoolean = (['statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms'] as const)
@@ -242,15 +260,6 @@ describe('ipc argument checks', () => {
     expect(iconBytes(edge)).toBe(edge);
     for (const v of [new Uint8Array(2 * 1024 * 1024), new Uint8Array(1024 * 1024 + 1).fill(0x89), 'iVBOR', undefined, [137, 80, 78, 71], new Uint8Array(0), new Uint8Array(png.length).fill(1),
       new TextEncoder().encode('GIF89a......'), png.slice(0, 7), Uint8Array.from(png, (b, i) => (i === 12 ? 0x58 : b)) /* no IHDR */, new Uint16Array(png.buffer.slice(0, 8)), { 0: 137 }]) expect(() => iconBytes(v)).toThrow(INVALID);
-  });
-
-  it('integer arrays', () => {
-    expect(uints([0, 3])).toEqual([0, 3]);
-    expect(uints([])).toEqual([]);
-    expect(() => uints([1, -2])).toThrow(INVALID);
-    expect(() => uints([1, 2 ** 53])).toThrow(INVALID);
-    expect(() => uints([1, , 3])).toThrow(INVALID); // sparse
-    expect(() => uints('1,2')).toThrow(INVALID);
   });
 
   it('base paths: absolute and .basecraft only', () => {
@@ -283,16 +292,16 @@ describe('ipc argument checks', () => {
     }
   });
 
-  it('filters: 0 to 20 {field, criteria ≤ 2000}, in page requests and alone (count)', () => {
+  it('filters: 0 to 20 {field, criteria ≤ 65 536}, in page requests and alone (count)', () => {
     const filter = [{ field: 'Ville', criteria: '"Lyon"' }];
     expect(pageRequest({ offset: 0, limit: 1, filter: [{ ...filter[0], extra: 1 }] })).toEqual({ offset: 0, limit: 1, filter });
     expect(pageRequest({ offset: 0, limit: 1, filter: [] })).toEqual({ offset: 0, limit: 1, filter: [] });
     expect(fieldFilters(undefined)).toBeUndefined();
     expect(fieldFilters(filter)).toEqual(filter);
     expect(fieldFilters(Array(20).fill(filter[0]))).toHaveLength(20);
-    expect(fieldFilters([{ field: 'x', criteria: 'a'.repeat(2000) }])).toHaveLength(1);
+    expect(fieldFilters([{ field: 'x', criteria: 'a'.repeat(65_536) }])).toHaveLength(1);
     expect(fieldFilters([{ field: 'x'.repeat(1024), criteria: '1' }])).toHaveLength(1); // C8: a looked-up field name
-    for (const v of [null, 'x', {}, Array(21).fill(filter[0]), [{ field: 'x' }], [{ field: 1, criteria: '1' }], [{ field: 'x', criteria: 'a'.repeat(2001) }], [{ field: 'x'.repeat(1025), criteria: '1' }], [null], new Array(1)]) {
+    for (const v of [null, 'x', {}, Array(21).fill(filter[0]), [{ field: 'x' }], [{ field: 1, criteria: '1' }], [{ field: 'x', criteria: 'a'.repeat(65_537) }], [{ field: 'x'.repeat(1025), criteria: '1' }], [null], new Array(1)]) {
       expect(() => fieldFilters(v)).toThrow(INVALID);
       expect(() => pageRequest({ offset: 0, limit: 1, filter: v ?? 0 })).toThrow(INVALID);
     }
@@ -371,6 +380,33 @@ describe('import arguments', () => {
     expect(accessPassword('é'.repeat(256))).toBe('é'.repeat(256));
     for (const v of ['', 'x'.repeat(257), 1, null, undefined, ['x']]) expect(() => accessPassword(v)).toThrow(INVALID);
   });
+  it('serverKey: 1 to 1024 characters starting with <scheme>:// ; loginUser: 1 to 256 (C4 R10)', () => {
+    expect(serverKey('postgresql://db:5432/ventes')).toBe('postgresql://db:5432/ventes');
+    expect(serverKey('postgresql://' + 'x'.repeat(1011))).toHaveLength(1024);
+    for (const v of ['', 'db:5432/ventes', 'Postgresql://x', '1x://y', 'postgresql://' + 'x'.repeat(1012), 1, null, undefined]) expect(() => serverKey(v)).toThrow(INVALID);
+    expect(loginUser('ana')).toBe('ana');
+    expect(loginUser('é'.repeat(256))).toBe('é'.repeat(256));
+    for (const v of ['', 'x'.repeat(257), 1, null, undefined, ['x']]) expect(() => loginUser(v)).toThrow(INVALID);
+  });
+  it('migrateRequest: a kind, its params as the connector reads them, a schema of 1 to 128 characters (C7 R1)', () => {
+    const params = { host: 'db.example', database: 'v', user: 'ana', password: 'x' };
+    expect(migrateRequest({ kind: 'postgresql', params, schema: 'public' }))
+      .toEqual({ kind: 'postgresql', params: { host: 'db.example', port: 5432, database: 'v', user: 'ana', tls: 'verify-full', timeout: 60 }, schema: 'public' });
+    expect(migrateRequest({ kind: 'sqlserver', params, schema: 'é'.repeat(128) }).schema).toBe('é'.repeat(128));
+    for (const v of [null, [], 'x', { kind: 'oracle', params, schema: 'p' }, { kind: 'postgresql', params: {}, schema: 'p' }, { kind: 'postgresql', params, schema: '' },
+      { kind: 'postgresql', params, schema: 'x'.repeat(129) }, { kind: 'postgresql', params, schema: 1 }, { kind: 'postgresql', params, schema: 'p', extra: 1 }])
+      expect(() => migrateRequest(v)).toThrow(INVALID);
+  });
+  it('serverKind: a kind with a connector; serverParams: the connector reads them, a password dropped (C4 Task 12)', () => {
+    expect(serverKind('postgresql')).toBe('postgresql');
+    expect(serverKind('sqlserver')).toBe('sqlserver'); // C5 Task 4
+    for (const v of ['sqlite', 'oracle', '', null, 1]) expect(() => serverKind(v)).toThrow(INVALID);
+    expect(serverParams('sqlserver', { host: 'SRV', instance: 'SQLEXPRESS', database: 'v', user: 'ana', password: 'x' }))
+      .toEqual({ host: 'srv', instance: 'SQLEXPRESS', port: 1433, database: 'v', user: 'ana', tls: 'verify-full', timeout: 60 });
+    expect(serverParams('postgresql', { host: 'DB', database: 'v', user: 'ana', password: 'x' }))
+      .toEqual({ host: 'db', port: 5432, database: 'v', user: 'ana', tls: 'verify-full', timeout: 60 });
+    for (const v of [null, {}, { host: 'db', database: 'v', user: 'ana', port: 0 }, { host: 'db/x', database: 'v', user: 'ana' }]) expect(() => serverParams('postgresql', v)).toThrow(INVALID);
+  });
   it('linkKindOrUndefined: none or a source kind (C2 R10)', () => {
     expect(linkKindOrUndefined(undefined)).toBeUndefined();
     for (const k of ['basecraft', 'sqlite', 'access']) expect(linkKindOrUndefined(k)).toBe(k);
@@ -408,11 +444,19 @@ describe('action queries (A3)', () => {
 
 describe('record sources through a join (B4)', () => {
   const q = { kind: 'sql', sql: 'SELECT 1' };
+  it('a row reference is a rowid or a connector token', () => {
+    expect(rowRef(7)).toBe(7); expect(rowRef('[["7"],"731"]')).toBe('[["7"],"731"]');
+    for (const bad of [-1, 1.5, NaN, '', 'x'.repeat(4097), null, {}]) expect(() => rowRef(bad)).toThrow('bc:invalidArgument');
+    expect(rowRefs([1, 'a'])).toEqual([1, 'a']);
+    expect(() => rowRefs([1, ''])).toThrow('bc:invalidArgument');
+    expect(rowRefs([])).toEqual([]);
+    for (const bad of [[1, -2], [1, 2 ** 53], [1, , 3] /* sparse */, '1,2']) expect(() => rowRefs(bad)).toThrow('bc:invalidArgument');
+  });
   it('sourceSaveRequest: a query ref, a null or non-negative safe-integer rowid (as rows.update), cells', () => {
     expect(sourceSaveRequest(q, { rowid: 3, values: { Nom: 'x' } })).toEqual([q, { rowid: 3, values: { Nom: 'x' } }]);
     expect(sourceSaveRequest({ kind: 'query', name: 'Q' }, { rowid: null, values: {} })).toEqual([{ kind: 'query', name: 'Q' }, { rowid: null, values: {} }]);
     expect(() => sourceSaveRequest({ kind: 'table', name: 'T' }, { rowid: 1, values: {} })).toThrow(INVALID);
-    for (const rowid of [1.5, '1', undefined, 2 ** 53, -1]) expect(() => sourceSaveRequest(q, { rowid, values: {} })).toThrow(INVALID);
+    for (const rowid of [1.5, undefined, 2 ** 53, -1]) expect(() => sourceSaveRequest(q, { rowid, values: {} })).toThrow(INVALID);
     for (const values of [['x'], { a: {} }, null]) expect(() => sourceSaveRequest(q, { rowid: 1, values })).toThrow(INVALID);
     expect(() => sourceSaveRequest(q, null)).toThrow(INVALID);
     expect(sourceSaveRequest(q, { rowid: 3, values: { Nom: 'x' }, expected: { Nom: 'y', N: 1.5, V: null } }))
@@ -454,10 +498,60 @@ describe('record sources through a join (B4)', () => {
   });
 
 describe('startup options, C3', () => {
-  it('take the sixteen keys', () => {
+  it('take the keys', () => {
     expect(startupOptions({ ...DEFAULT_STARTUP, frontEnd: false, dataFile: true }).dataFile).toBe(true);
     const { dataFile: _, ...fifteen } = { ...DEFAULT_STARTUP, frontEnd: false, dataFile: true };
     expect(() => startupOptions(fifteen)).toThrow('bc:invalidArgument');
   });
 });
+});
+
+describe('settingValue (O3)', () => {
+  it('takes the O3 keys with their exact type', () => {
+    expect(settingValue('autoIndex', null)).toEqual(['autoIndex', null]);
+    for (const [k, v] of [['defaultFieldType', 'autoNumber'], ['defaultTextSize', 0], ['queryFontName', 'a{b'], ['selectionBehavior', 'fully'], ['printMarginLeft', 5671]])
+      expect(() => settingValue(k, v)).toThrow('bc:invalidArgument');
+  });
+});
+
+describe('startup options, O4', () => {
+  it('take the twenty-four keys, a boolean each', () => {
+    expect(startupOptions({ ...DEFAULT_STARTUP, logNameAutoCorrect: true }).logNameAutoCorrect).toBe(true);
+    for (const k of ['trackNameAutoCorrect', 'performNameAutoCorrect', 'logNameAutoCorrect'] as const) {
+      const { [k]: _, ...missing } = DEFAULT_STARTUP;
+      expect(() => startupOptions(missing)).toThrow('bc:invalidArgument');
+      expect(() => startupOptions({ ...DEFAULT_STARTUP, [k]: 'true' })).toThrow('bc:invalidArgument');
+    }
+    expect(() => settingValue('propertyUpdateOptions', 'true')).toThrow('bc:invalidArgument');
+    expect(settingValue('propertyUpdateOptions', false)).toEqual(['propertyUpdateOptions', false]);
+  });
+});
+
+describe('nameChanges (O4)', () => {
+  it('takes object and field renames, refuses a non-array, an unknown kind, a non-string name, more than 255 renames', () => {
+    const ok = [{ k: 'object', kind: 'table', from: 'Clients', to: 'Clientèle' }, { k: 'fields', table: 'Clientèle', renames: [{ from: 'Nom', to: 'NomClient' }] }];
+    expect(nameChanges(ok)).toEqual(ok);
+    expect(nameChanges([])).toEqual([]);
+    for (const v of [null, 'x', { 0: ok[0] }, [{ k: 'object', kind: 'module2', from: 'A', to: 'B' }], [{ k: 'object', kind: 'form', from: 1, to: 'B' }],
+      [{ k: 'other', kind: 'form', from: 'A', to: 'B' }], [{ k: 'fields', table: 'T', renames: [{ from: 'A', to: null }] }], [{ k: 'fields', table: 7, renames: [] }],
+      [{ k: 'object', kind: 'form', from: 'A', to: 'B'.repeat(65) }], [{ k: 'fields', table: 'T', renames: 'A' }],
+      [{ k: 'fields', table: 'T', renames: Array.from({ length: 256 }, (_, i) => ({ from: `A${i}`, to: `B${i}` })) }],
+      Array.from({ length: 256 }, (_, i) => ({ k: 'object', kind: 'form', from: `A${i}`, to: `B${i}` }))]) {
+      expect(() => nameChanges(v)).toThrow('bc:invalidArgument');
+    }
+  });
+});
+
+describe('propertyTargetsArg (O4)', () => {
+  it('takes form/report items of Format or DecimalPlaces with string values, refuses the rest', () => {
+    const ok = [{ kind: 'form', name: 'F', control: 'M', prop: 'Format', value: 'Euro' }, { kind: 'report', name: 'R', control: 'M', prop: 'DecimalPlaces', value: '2' }];
+    expect(propertyTargetsArg(ok)).toEqual(ok);
+    for (const v of [null, {}, [{ ...ok[0], kind: 'macro' }], [{ ...ok[0], prop: 'Caption' }], [{ ...ok[0], value: 2 }], [{ ...ok[0], control: 1 }], ['x'],
+      Array.from({ length: 5001 }, () => ok[0])]) expect(() => propertyTargetsArg(v)).toThrow('bc:invalidArgument');
+  });
+  it("DecimalPlaces only takes the control's values: auto or 0–15 (final Minor 5)", () => {
+    const dp = (value: string) => [{ kind: 'form', name: 'F', control: 'M', prop: 'DecimalPlaces', value }];
+    for (const v of ['auto', '0', '15']) expect(propertyTargetsArg(dp(v))).toEqual(dp(v));
+    for (const v of ['16', '-1', '2.5', 'Auto ', '', 'x'.repeat(200)]) expect(() => propertyTargetsArg(dp(v))).toThrow('bc:invalidArgument');
+  });
 });

@@ -1,5 +1,6 @@
 // État instantané (AutoReport d'Access) : un état tabulaire sur toutes les colonnes d'une table ou d'une requête. Module pur.
 // Aucune valeur par défaut écrite à la main (C5) : bordures, fonds et polices viennent du catalogue (defaultFor(…, 'report')).
+import { createLayout } from '../design/layout-edit';
 import type { ControlDef, DesignDoc, SectionDef } from '../design/model';
 import { sameName, type FieldType } from '../field-types';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../record-source';
@@ -23,7 +24,7 @@ export function uniqueReportName(taken: string[], base: string): string {
   }
 }
 
-export function instantReport(source: RecordSourceRef & { name: string }, info: SourceInfo, opts: { lang: 'fr' | 'en' }): DesignDoc {
+export function instantReport(source: RecordSourceRef & { name: string }, info: SourceInfo, opts: { lang: 'fr' | 'en'; margins?: PageSetup['margins'] }): DesignDoc {
   const names: string[] = [];
   const ctl = (kind: ControlDef['kind'], base: string, left: number, top: number, width: number, height: number, props: Record<string, unknown>): ControlDef => {
     const name = uniqueReportName(names, base);
@@ -33,8 +34,9 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
 
   let widths = info.fields.map(widthOf);
   const gaps = GAP * Math.max(0, widths.length - 1), sum = () => widths.reduce((a, b) => a + b, 0) + gaps;
-  let pageSetup: PageSetup = DEFAULT_PAGE_SETUP;
-  if (sum() > pageGeometry(pageSetup).printableWidth) pageSetup = { ...DEFAULT_PAGE_SETUP, orientation: 'landscape' };
+  const base: PageSetup = opts.margins ? { orientation: 'portrait', margins: opts.margins } : DEFAULT_PAGE_SETUP;   // O3 R9: the options' margins
+  let pageSetup: PageSetup = base;
+  if (sum() > pageGeometry(pageSetup).printableWidth) pageSetup = { ...base, orientation: 'landscape' };
   const printable = pageGeometry(pageSetup).printableWidth;
   if (sum() > printable) {   // same ratio for every column, never below 1 cm: what still overflows is clipped (widthExceedsPage)
     const ratio = (printable - gaps) / (sum() - gaps);
@@ -56,7 +58,7 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
     : i === 0 ? [ctl('textBox', 'Nombre', 0, 57, widths[0]!, 340, { ControlSource: '=Count(*)' })] : []);
 
   const section = (kind: SectionDef['kind'], height: number, controls: ControlDef[], props: Record<string, unknown> = {}): SectionDef => ({ kind, height, props, controls });
-  return {
+  const doc: DesignDoc = {
     formatVersion: '1.0',
     recordSource: source.kind === 'sql' ? { kind: 'sql', sql: source.sql } : { kind: source.kind, name: source.name },
     props: { Width: width, pageSetup, grouping: [] },
@@ -68,4 +70,7 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
       section('reportFooter', 454, totals),
     ],
   };
+  // The labels and boxes form a Tabular layout, as Access creates it; the totals stay free in the Report Footer (a layout column
+  // holds one Detail control, and the total sits under the same column at the same width). No field, no layout.
+  return createLayout(doc, boxes.map((b, i) => ({ control: b.name, label: labels[i]!.name })), 'tabular', { headerSection: 'pageHeader' });
 }

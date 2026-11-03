@@ -36,6 +36,18 @@ describe('readRows (brief)', () => {
     for (const v of ['b', 'É', 'e', null, 'a']) await insertRow(db, notes, { Txt: v }, fr);
     expect(col(readRows(db, notes, { offset: 0, limit: 10, sort: { field: 'Txt', dir: 'asc' } }), 0)).toEqual([null, 'a', 'b', 'e', 'É']);
   });
+  it('sorts Yes/No as Access: Yes first ascending, last descending', async () => {
+    const flags = t('Flags', [f('Ok', 'yesNo')]);
+    createTable(db, flags);
+    for (const v of [false, true, false, true]) await insertRow(db, flags, { Ok: v }, fr);
+    expect(col(readRows(db, flags, { offset: 0, limit: 10, sort: { field: 'Ok', dir: 'asc' } }), 0)).toEqual([1, 1, 0, 0]);
+    expect(col(readRows(db, flags, { offset: 0, limit: 10, sort: { field: 'Ok', dir: 'desc' } }), 0)).toEqual([0, 0, 1, 1]);
+  });
+  it('sorts a Yes stored as -1 (a foreign SQLite file) as a Yes stored as 1', async () => {
+    const flags = t('Flags', [f('Ok', 'yesNo')]);
+    db.exec('CREATE TABLE "Flags" ("Ok" INTEGER); INSERT INTO "Flags" VALUES (0), (1), (-1)'); // no CHECK: another tool's file
+    expect(col(readRows(db, flags, { offset: 0, limit: 10, sort: { field: 'Ok', dir: 'asc' } }), 0)).toEqual([1, -1, 0]);
+  });
   it('sorts decimals numerically', async () => {
     for (const v of ['10', '9']) await insertRow(db, notes, { Dec: v }, fr);
     expect(col(readRows(db, notes, { offset: 0, limit: 10, sort: { field: 'Dec', dir: 'asc' } }), 1)).toEqual(['9.00', '10.00']);

@@ -366,9 +366,16 @@
       "actionCatalog": "Katalog akcji",
       "showAllActions": "Pokaż wszystkie akcje",
       "viewForm": "Widok formularza",
+      "viewLayout": "Widok układu",
+
+      "viewMenu": "Widok",
+
+      "viewState": "Widok raportu",
       "viewPrintPreview": "Podgląd wydruku",
       "linkBaseCraft": "Baza danych BaseCraft lub SQLite",
-      "linkAccess": "Połącz z bazą danych Access"
+      "linkAccess": "Połącz z bazą danych Access",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "Przewiń wstążkę w lewo",
     "scrollRight": "Przewiń wstążkę w prawo",
@@ -490,6 +497,9 @@
       "design": "Widok projektu",
       "run": "Widok uruchomieniowy",
       "form": "Widok formularza",
+      "layout": "Widok układu",
+
+      "state": "Widok raportu",
       "sql": "Widok SQL"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "Otwarto tylko do odczytu: udostępnionego pliku danych nie można używać w folderze synchronizowanym (OneDrive, Dropbox…). Umieść go na dysku sieciowym lub przejdź na serwer.",
     "unsupportedClient": "Otwarto tylko do odczytu: tryb udostępniony na dysku sieciowym nie jest obsługiwany w tym systemie. Użyj stacji roboczej z systemem Windows lub przejdź na serwer.",
     "takeOver": "Przejmij",
-    "contentDisabled": "Ostrzeżenie zabezpieczeń: część aktywnej zawartości tej bazy danych (makra, kwerendy funkcjonalne) została wyłączona.",
+    "contentDisabled": "Ostrzeżenie dotyczące zabezpieczeń: część zawartości aktywnej tej bazy danych (makra, kwerendy funkcjonalne, kwerendy przekazujące) została wyłączona.",
     "enableContent": "Włącz zawartość",
     "riskNetwork": "Ta baza danych znajduje się w udziale sieciowym. Rozłączenie podczas zapisu może ją uszkodzić.",
     "riskSynced": "Ta baza danych znajduje się w folderze synchronizowanym. Synchronizacja podczas zapisu może ją uszkodzić.",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "Nagłówek kolumny kwerendy krzyżowej (PIVOT) nie może zawierać funkcji agregującej: {{detail}}.",
       "queryBind_tooManyColumns": "Ta kwerenda krzyżowa dałaby {{detail}} kolumn: maksymalnie 255, w tym 254 nagłówki kolumn. Ogranicz dane lub popraw nagłówki kolumn (IN).",
       "queryBind_crosstabAsSource": "Kwerenda krzyżowa „{{detail}}” nie może być źródłem innej kwerendy ani listy odnośnika.",
+      "queryBind_passThroughAsSource": "Kwerenda przekazująca „{{detail}}” nie może być źródłem innej kwerendy ani listy. Umieść filtr lub grupowanie w jej tekście SQL.",
       "queryBind_mixedSources": "Kwerenda obejmuje jedno źródło danych: „{{detail}}” nie pochodzi z tego samego źródła co pozostałe tabele kwerendy.",
       "fontMissing": "Nie udało się załadować osadzonej czcionki: raport nie został wydrukowany ani wyeksportowany.",
       "printFailed": "Drukowanie nie powiodło się.",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "„Nagłówek kolumny” kwerendy krzyżowej musi mieć wartość „Grupuj według” w wierszu Suma.",
       "invalidQuery_crosstabNone": "Kolumna „(nie pokazano)” kwerendy krzyżowej musi mieć wartość „Gdzie” w wierszu Suma; wybierz jej rolę w wierszu Krzyżowa.",
       "linkUnavailable_needsPassword": "Ta baza danych Access jest chroniona hasłem: {{detail}}",
+      "linkUnavailable_needsLogin": "Logowanie anulowane: tabele połączone z {{detail}} są niedostępne.",
+      "linkUnavailable_cannotConnect": "Nie można połączyć się z serwerem {{detail}}. Sprawdź nazwę serwera, port i sieć.",
+      "linkUnavailable_certificate": "Ta stacja robocza nie ufa certyfikatowi serwera {{detail}}. Poproś o zainstalowanie certyfikatu jego urzędu certyfikacji lub, jeśli ufasz tej sieci, wybierz w Menedżerze tabel połączonych opcję szyfrowania bez sprawdzania certyfikatu (na przykład „Szyfrowane, ufaj certyfikatowi serwera”).",
+      "linkUnavailable_serverVersion": "Serwer {{detail}} używa wersji, której BaseCraft nie obsługuje (co najmniej PostgreSQL 14 lub SQL Server 2016).",
+      "linkUnavailable_passwordExpired": "Hasło tego logowania wygasło na serwerze {{detail}}. Zmień je za pomocą narzędzia administracyjnego serwera, a następnie połącz się ponownie.",
       "linkUnavailable_syncedFolder": "Plik danych {{detail}} pozostaje tylko do odczytu: udostępnionego pliku danych nie można używać w folderze synchronizowanym (OneDrive, Dropbox…). Umieść go na dysku sieciowym lub przejdź na serwer.",
-      "linkUnavailable_unsupportedClient": "Plik danych {{detail}} pozostaje tylko do odczytu: tryb udostępniony na dysku sieciowym nie jest obsługiwany w tym systemie. Użyj stacji roboczej z systemem Windows lub przejdź na serwer."
+      "linkUnavailable_unsupportedClient": "Plik danych {{detail}} pozostaje tylko do odczytu: tryb udostępniony na dysku sieciowym nie jest obsługiwany w tym systemie. Użyj stacji roboczej z systemem Windows lub przejdź na serwer.",
+      "serverNotSupported_actionQuery": "Kwerendy funkcjonalne nie są jeszcze wykonywane na tabeli połączonej {{detail}}.",
+      "serverNotSupported_makeTable": "Kwerendy tworzące tabele nie są wykonywane na źródle {{detail}}: utwórz tabelę na serwerze, a następnie wypełnij ją kwerendą dołączającą.",
+      "serverNotSupported_appendAutoNumber": "Kwerenda dołączająca nie może podawać wartości pola Autonumerowanie tabeli na serwerze ({{detail}}). Usuń to pole z kwerendy: serwer numeruje nowe rekordy.",
+      "serverNotSupported_joinSave": "Wprowadzanie danych przez kwerendę wielotabelową nie jest jeszcze możliwe w źródle {{detail}}.",
+      "serverNotSupported_crosstab": "Kwerendy krzyżowe nie są jeszcze wykonywane w źródle {{detail}}.",
+      "serverNotSupported_passThrough": "Kwerendy przekazujące nie są dostępne w źródle {{detail}}.",
+      "serverNotSupported_topPercent": "TOP … PERCENT nie jest jeszcze obsługiwane w źródle {{detail}}.",
+      "serverNotSupported": "Ta operacja nie jest jeszcze możliwa na tabeli połączonej {{detail}}.",
+      "serverFunction": "Nie można wykonać {{name}} w źródle {{detail}}: BaseCraft nie potrafi tego przetłumaczyć dla tego serwera.",
+      "timeout": "Serwer nie odpowiedział w ustalonym czasie ({{name}} s). Spróbuj ponownie lub zwiększ limit czasu w Menedżerze tabel połączonych.",
+      "passThroughNoRecords": "Zapytanie przekazujące nie zwróciło żadnych rekordów, chociaż jego właściwość „Zwraca rekordy” ma wartość Tak.",
+      "passThroughTimeout": "Serwer nie odpowiedział na zapytanie przekazujące w ustalonym czasie ({{name}} s). Zwiększ „Limit czasu ODBC” w arkuszu właściwości (0: bez limitu).",
+      "passThroughLost": "Połączenie z serwerem zostało utracone podczas zapytania przekazującego; nie wiadomo, czy zostało ukończone.",
+      "serverError_connection": "Połączenie z serwerem zostało utracone podczas zapisywania; nie wiadomo, czy zapis się powiódł. Odśwież (Narzędzia główne › Odśwież) przed ponowną próbą.",
+      "serverError_notWritten": "Serwer nie zapisał rekordu w „{{detail}}”: wyzwalacz, reguła lub zasada zabezpieczeń tabeli go zignorowała.",
+      "serverError": "Serwer odrzucił operację: {{detail}}"
     },
     "op": {
       "nameExists": "Obiekt o tej nazwie już istnieje.",
@@ -710,6 +742,7 @@
       "reportFooter": "Stopka raportu"
     },
     "canvas": "Powierzchnia projektu",
+    "layoutHandle": "Zaznacz układ {{id}}",
     "toolbox": "Przybornik",
     "arrange": {
       "alignLeft": "Do lewej",
@@ -967,7 +1000,16 @@
       "isNotNull": "Nie jest puste",
       "clear": "Wyczyść wszystkie filtry",
       "fieldTitle": "Filtr",
-      "fieldLabel": "Kryteria dla pola „{{field}}” (puste: brak filtru dla tego pola):"
+      "fieldLabel": "Kryteria dla pola „{{field}}” (puste: brak filtru dla tego pola):",
+      "sortAsc": { "text": "Sortuj od A do Z", "number": "Sortuj od najmniejszych do największych", "date": "Sortuj od najstarszych do najnowszych" },
+      "sortDesc": { "text": "Sortuj od Z do A", "number": "Sortuj od największych do najmniejszych", "date": "Sortuj od najnowszych do najstarszych" },
+      "clearField": "Wyczyść filtr z {{field}}",
+      "typed": { "text": "Filtry tekstu", "number": "Filtry liczb", "date": "Filtry dat" },
+      "all": "(Zaznacz wszystko)",
+      "blanks": "(Puste)",
+      "tooLong": "Zaznaczono zbyt wiele wartości dla tego filtru. Użyj zamiast tego filtru tekstu, liczb lub dat.",
+      "ok": "OK",
+      "cancel": "Anuluj"
     }
   },
   "expr": {
@@ -1001,7 +1043,6 @@
       "forbiddenStatement": "Instrukcja niedozwolona: akceptowane są tylko kwerendy Select, Append, Update, Delete i Make-Table.",
       "reservedName": "Ta nazwa jest zarezerwowana (bc_, bcx_ lub sqlite_): kwerenda nie może jej używać.",
       "multipleStatements": "Dozwolona jest tylko jedna instrukcja SQL: usuń tekst po średniku.",
-      "notSupportedYet": "Ten rodzaj kwerendy (przekazującej) nie jest jeszcze dostępny.",
       "badParameterType": "Nieznany typ parametru.",
       "badCrosstab": "Nieprawidłowa kwerenda krzyżowa: TRANSFORM, zwykłe SELECT z GROUP BY, a następnie PIVOT.",
       "badCount": "Wprowadź liczbę całkowitą od 1 do 255.",
@@ -1462,6 +1503,7 @@
   "prop": {
     "Caption": "Podpis",
     "DefaultView": "Widok domyślny",
+    "AllowLayoutView": "Zezwalaj na widok układu",
     "NavigationButtons": "Przyciski nawigacji",
     "Width": "Szerokość",
     "Visible": "Widoczny",
@@ -2036,6 +2078,17 @@
       "label": "Nazwa tabeli"
     },
     "sqlOnly": "Tę kwerendę można wyświetlić tylko w widoku SQL.",
+    "passThrough": {
+      "notice": "Kwerenda przekazująca: ten tekst jest wysyłany bez zmian do serwera {{label}}, bez odczytywania go przez BaseCraft. Serwer stosuje własne uprawnienia; reguły poprawności i relacje BaseCraft nie dotyczą tego, co zmienia.",
+      "noticeNoServer": "Kwerenda przekazująca: wybierz jej serwer w arkuszu właściwości.",
+      "empty": "Wpisz instrukcję SQL do wysłania na serwer.",
+      "noConnection": "Wybierz serwer kwerendy w arkuszu właściwości (Połączenie).",
+      "connection": "Połączenie",
+      "otherServerKind": "Inny serwer {{product}}…",
+      "returnsRecords": "Zwraca rekordy",
+      "timeout": "Limit czasu ODBC",
+      "badTimeout": "Wprowadź liczbę sekund od 0 (bez limitu) do 3600."
+    },
     "builderOnTable": "Konstruktor kwerend został wywołany dla tabeli.\n\nCzy chcesz utworzyć kwerendę opartą na tej tabeli?",
     "builderSave": "Czy chcesz zapisać zmiany wprowadzone w instrukcji SQL i zaktualizować właściwość?",
     "error": {
@@ -2211,6 +2264,65 @@
     "done": "Baza danych została podzielona. Plik danych: {{path}}. Kopia zapasowa: {{backup}}.",
     "noTables": "Ta baza nie zawiera żadnej tabeli lokalnej do przeniesienia.",
     "self": "Plik danych nie może być otwartą bazą. Wybierz inną nazwę lub folder."
+  },
+  "migrate": {
+    "title": "Kreator przenoszenia na serwer",
+    "intro": "Ten kreator przenosi wszystkie lokalne tabele bieżącej bazy danych do bazy danych PostgreSQL lub SQL Server, z ich danymi, kluczami, indeksami i relacjami, a następnie zastępuje je tabelami połączonymi o tych samych nazwach. Najpierw tworzona jest kopia zapasowa bazy danych. Reguły poprawności i obliczane wartości domyślne pozostają w aplikacji, która staje się aplikacją frontonu.",
+    "engine": "Serwer docelowy",
+    "next": "Dalej",
+    "schema": "Schemat",
+    "start": "Przenieś",
+    "connecting": "Łączenie z serwerem i tworzenie kopii zapasowej bazy danych…",
+    "progress": "Kopiowanie {{table}}: {{done}} z {{total}} rekordów",
+    "finishing": "Kończenie…",
+    "stop": "Zatrzymaj",
+    "done": "Przenoszenie zakończone. Kopia zapasowa: {{backup}}.",
+    "backup": "Kopia zapasowa: {{backup}}.",
+    "server": "Serwer {{product}}: {{server}}, schemat {{schema}}.",
+    "copy": "Kopiuj do Schowka",
+    "report": {
+      "tables": "Przeniesione tabele",
+      "table": "{{name}}: rekordy: {{rows}}",
+      "nextId": "następny Autonumerowanie: {{next}}",
+      "version": "kolumna wersji: {{column}}",
+      "sep": ", ",
+      "indexes": "Utworzone indeksy",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}} (bez duplikatów)",
+      "relations": "Relacje",
+      "created": "{{name}}: utworzono klucz obcy",
+      "noAction": "{{name}}: utworzono klucz obcy bez kaskad (SQL Server odrzuca kilka ścieżek kaskadowych do jednej tabeli)",
+      "notEnforced": "{{name}}: więzy integralności niewymuszane, na serwerze nic nie jest tworzone",
+      "frontEndOnly": "Wymuszane tylko przez aplikację (nie przez serwer)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "Przechowywane na serwerze jako inny typ",
+      "approx": "{{name}}: {{type}}",
+      "queries": "Kwerendy odrzucane przez serwer",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: definicja nieczytelna, nie sprawdzono"
+    },
+    "noTables": "Ta baza danych nie zawiera żadnej lokalnej tabeli do przeniesienia.",
+    "dataFile": "Ta baza danych jest udostępnionym plikiem danych (Rozdzielacz bazy danych): jej aplikacje frontonu łączą jej tabele. Przenieś aplikację z jej frontonu, po wykonaniu Konwertuj na tabelę lokalną na jej tabelach połączonych.",
+    "noSchema": "Schemat {{schema}} nie istnieje na serwerze.",
+    "nameTaken": "Serwer ma już tabele o tych nazwach: {{names}}. Usuń je lub wybierz inny schemat.",
+    "nameTooLong": "Te nazwy przekraczają limit PostgreSQL (63 bajty): {{names}}. Najpierw zmień ich nazwy.",
+    "invalidDesign": "Projekt tych pól jest nieprawidłowy: {{names}}. Popraw go w widoku projektu, a następnie spróbuj ponownie.",
+    "cancelled": "Przenoszenie anulowane: nic nie zostało zmienione.",
+    "failed": "Przenoszenie nie powiodło się ({{table}}): {{error}}. Nic nie zostało zmienione ani na serwerze, ani w bazie danych.",
+    "failedNoTable": "Przenoszenie nie powiodło się: {{error}}. Nic nie zostało zmienione ani na serwerze, ani w bazie danych.",
+    "switchFailed": "Tabele zostały skopiowane na serwer, ale nie można było zmienić bazy danych ({{error}}): pozostała bez zmian.",
+    "dropped": "Skopiowane tabele zostały usunięte z serwera.",
+    "left": "Te tabele pozostały na serwerze: {{names}}.",
+    "leftCheck": "Sprawdź je i usuń przed ponownym przeniesieniem.",
+    "commitUnknown": "Połączenie z serwerem zostało utracone lub przenoszenie zatrzymane podczas jego zatwierdzania przez serwer: nie wiadomo, czy serwer je zapisał. Baza danych nie została zmieniona.",
+    "leftMaybe": "Te tabele mogą być na serwerze: {{names}}. Sprawdź je i usuń przed ponownym przeniesieniem.",
+    "closed": "Połączenie z serwerem zostało zamknięte.",
+    "queriesUnchecked": "Nie można było sprawdzić kwerend na serwerze: {{detail}}",
+    "error": {
+      "migrateCount": "Serwer liczy rekordy w {{table}}: {{server}} zamiast {{local}}.",
+      "migrateUnlinkable": "Po ponownym odczycie z serwera tabeli {{table}} nie można połączyć z jej kluczem i polami.",
+      "migrateOneNull": "Pole {{field}} zawiera kilka wartości Null: SQL Server przyjmuje tylko jedną w indeksie bez duplikatów wymaganym przez relację {{relation}}."
+    }
   },
   "macro": {
     "embedded": {
@@ -2425,6 +2537,7 @@
       "cantGoToRecord": "Nie można przejść do określonego rekordu.",
       "cantFocus": "Ten formant nie może uzyskać fokusu (jest ukryty lub wyłączony).",
       "saveRefused": "Nie można zapisać rekordu.",
+      "autoCorrectLog": "Nie można zapisać zmiany w tabeli {{name}} (pole {{detail}}): nic nie zostało zmienione.",
       "badReference": "„{{name}}” nie jest formantem otwartego formularza.",
       "badValue": "Wartość „{{name}}” nie pasuje do tej właściwości.",
       "findWhatTooLong": "Tekst do znalezienia jest dłuższy niż 255 znaków.",
@@ -2484,7 +2597,9 @@
     "cat": {
       "general": "Ogólne",
       "currentDb": "Bieżąca baza danych",
-      "client": "Ustawienia klienta"
+      "client": "Ustawienia klienta",
+      "datasheet": "Arkusz danych",
+      "designers": "Projektanci obiektów"
     },
     "general": {
       "header": "Ogólne opcje pracy z programem {{product}}.",
@@ -2501,6 +2616,11 @@
       "confirmDeletions": "Usuwanie dokumentów",
       "confirmActions": "Kwerendy funkcjonalne",
       "display": "Wyświetlanie",
+      "printing": "Drukowanie",
+      "marginLeft": "Margines lewy:",
+      "marginRight": "Margines prawy:",
+      "marginTop": "Margines górny:",
+      "marginBottom": "Margines dolny:",
       "recentCount": "Liczba wyświetlanych ostatnich baz danych:",
       "advanced": "Zaawansowane",
       "openLast": "Otwórz ostatnio używaną bazę danych przy uruchomieniu programu {{product}}",
@@ -2513,7 +2633,31 @@
       "lockEdited": "Edytowany rekord",
       "refreshInterval": "Interwał odświeżania (s)",
       "updateRetries": "Liczba ponownych prób aktualizacji",
-      "updateRetryMs": "Odstęp między próbami aktualizacji (ms)"
+      "updateRetryMs": "Odstęp między próbami aktualizacji (ms)",
+      "enter": "Przejście po naciśnięciu klawisza Enter",
+      "enterNone": "Bez przejścia",
+      "enterNextField": "Następne pole",
+      "enterNextRecord": "Następny rekord",
+      "entry": "Zachowanie po wejściu do pola",
+      "entrySelectAll": "Zaznacz całe pole",
+      "entryStart": "Przejdź na początek pola",
+      "entryEnd": "Przejdź na koniec pola",
+      "arrows": "Zachowanie klawiszy strzałek",
+      "arrowsField": "Następne pole",
+      "arrowsChar": "Następny znak",
+      "continuous": "Klawisze strzałek przechodzą między rekordami w formularzach ciągłych",
+      "continuousNone": "Brak",
+      "continuousUpDown": "Góra/dół",
+      "continuousLeftRight": "Lewo/prawo",
+      "cursorStop": "Kursor zatrzymuje się w pierwszym/ostatnim polu",
+      "find": "Domyślne zachowanie znajdowania/zamieniania",
+      "findFast": "Szybkie wyszukiwanie",
+      "findGeneral": "Wyszukiwanie ogólne",
+      "findStart": "Wyszukiwanie od początku pola",
+      "general": "Ogólne",
+      "year4": "Używaj formatu roku z czterema cyframi",
+      "year4Db": "Ta baza danych",
+      "year4All": "Wszystkie bazy danych"
     },
     "db": {
       "header": "Opcje bieżącej bazy danych.",
@@ -2529,6 +2673,10 @@
       "datasheetDesign": "Włącz zmiany projektu tabel w widoku arkusza danych",
       "navigation": "Nawigacja",
       "ribbonSection": "Opcje wstążki i paska narzędzi",
+      "autoCorrectSection": "Opcje autokorekty nazw",
+      "track": "Śledź informacje autokorekty nazw",
+      "perform": "Wykonuj autokorektę nazw",
+      "log": "Rejestruj zmiany autokorekty nazw",
       "fullMenus": "Zezwalaj na pełne menu",
       "shortcutMenus": "Zezwalaj na domyślne menu podręczne",
       "iconForForms": "Używaj jako ikony formularzy i raportów",
@@ -2545,11 +2693,73 @@
       "ribbonSimplified": "Uproszczona",
       "runMode": "Otwieraj w trybie uruchomieniowym",
       "runModeHelp": "Ukrywa okienko nawigacji i widok projektu. Przytrzymaj klawisz Shift podczas otwierania bazy danych, aby to pominąć.",
-      "nextOpen": "Te opcje zaczną obowiązywać przy następnym otwarciu bazy danych."
+      "nextOpen": "Te opcje zaczną obowiązywać przy następnym otwarciu bazy danych.",
+      "truncated": "Sprawdzaj obcięte pola liczbowe",
+      "filterSection": "Filtruj opcje wyszukiwania dla bazy danych {{name}}",
+      "filterShow": "Pokaż listę wartości w:",
+      "listIndexed": "Lokalne pola indeksowane",
+      "listNonIndexed": "Lokalne pola nieindeksowane",
+      "listMax": "Nie wyświetlaj list, gdy liczba odczytanych rekordów przekracza:"
+    },
+
+    "designers": {
+      "header": "Zmień ustawienia domyślne tworzenia obiektów bazy danych. Większość opcji jest ignorowana w widoku arkusza danych tabeli lub widoku strony.",
+      "sheetSection": "Arkusz właściwości",
+      "sheetFontSize": "Rozmiar czcionki arkusza właściwości:",
+      "tableSection": "Widok projektu tabeli",
+      "fieldType": "Domyślny typ pola:",
+      "textSize": "Domyślny rozmiar pola tekstowego:",
+      "numberSize": "Domyślny rozmiar pola liczbowego:",
+      "autoIndex": "Autoindeks podczas importowania/tworzenia:",
+      "propertyUpdate": "Pokaż przyciski opcji aktualizacji właściwości",
+      "querySection": "Projekt zapytania",
+      "tableNames": "Pokaż nazwy tabel",
+      "outputAll": "Wszystkie pola",
+      "autoJoin": "Włącz autołączenie",
+      "queryFont": "Czcionka projektu zapytania",
+      "fontName": "Czcionka:",
+      "fontSize": "Rozmiar:",
+      "formSection": "Widok projektu formularza/raportu",
+      "selection": "Zachowanie zaznaczania",
+      "partial": "Częściowo otoczone",
+      "full": "Całkowicie otoczone"
+    },
+    "datasheet": {
+      "header": "Dostosuj wygląd arkuszy danych w programie {{product}}.",
+      "gridSection": "Linie siatki i efekty komórek",
+      "gridlines": "Domyślnie wyświetlane linie siatki",
+      "horizontal": "Poziome",
+      "vertical": "Pionowe",
+      "columnWidth": "Domyślna szerokość kolumny:",
+      "font": "Domyślna czcionka",
+      "fontSize": "Rozmiar:",
+      "fontWeight": "Grubość:",
+      "underline": "Podkreślenie",
+      "italic": "Kursywa",
+      "weight": {
+        "100": "Bardzo cienka",
+        "200": "Bardzo lekka",
+        "300": "Lekka",
+        "400": "Normalna",
+        "500": "Średnia",
+        "600": "Półgruba",
+        "700": "Pogrubiona",
+        "800": "Bardzo gruba",
+        "900": "Czarna"
+      }
     }
   },
   "startup": {
     "formNotFound": "Nie można znaleźć formularza wyświetlanego przy uruchomieniu „{{name}}”."
+  },
+  "import": {
+    "server": {
+      "title": "Importuj z PostgreSQL",
+      "titleSqlServer": "Importuj z SQL Server",
+      "ok": "Importuj",
+      "done": "Zaimportowane tabele: {{names}}.",
+      "skipped": "Nieimportowane kolumny ({{table}}): {{names}}."
+    }
   },
   "link": {
     "filterBasecraft": "Bazy danych BaseCraft",
@@ -2564,12 +2774,15 @@
     "kind": {
       "basecraft": "Baza danych BaseCraft",
       "sqlite": "Plik SQLite",
-      "access": "Baza danych Access"
+      "access": "Baza danych Access",
+      "postgresql": "Serwer PostgreSQL",
+      "sqlserver": "Serwer SQL Server"
     },
     "tables": "Tabele",
     "selectAll": "Zaznacz wszystko",
     "noTables": "Ten plik nie zawiera tabel.",
     "error": {
+      "unsupportedKind": "BaseCraft nie może połączyć tych tabel: {{names}}. Nic nie zostało zmienione.",
       "nameExists": "Te nazwy są już używane w tej bazie danych: {{names}}.",
       "missingTables": "Tych tabel nie ma już w pliku: {{names}}.",
       "self": "Baza danych nie może być połączona sama ze sobą.",
@@ -2585,6 +2798,37 @@
       "title": "Hasło bazy danych",
       "label": "Hasło do pliku {{path}}:",
       "wrong": "Nieprawidłowe hasło."
+    },
+    "server": {
+      "title": "Połącz tabele PostgreSQL",
+      "titleSqlServer": "Połącz tabele SQL Server",
+      "host": "Serwer",
+      "hostHint": "nazwa lub nazwa\\wystąpienie",
+      "port": "Port",
+      "database": "Baza danych",
+      "tls": "Szyfrowanie",
+      "tlsVerify": "Szyfrowane, ze sprawdzaniem certyfikatu (zalecane)",
+      "tlsRequire": "Szyfrowane, bez sprawdzania certyfikatu",
+      "tlsTrust": "Szyfrowane, ufaj certyfikatowi serwera",
+      "tlsDisable": "Bez szyfrowania",
+      "timeout": "Limit czasu zapytań (s)",
+      "connect": "Połącz",
+      "readOnly": "brak klucza podstawowego: tylko do odczytu",
+      "skipped": "niepołączone kolumny: {{names}}",
+      "noTables": "Ten serwer nie zawiera tabel, które możesz odczytać.",
+      "missingTables": "Serwer nie zawiera: {{names}}. Nic nie zostało zmienione."
+    },
+    "needsLogin": "Wymagane logowanie: otwórz tabelę, aby zalogować się do serwera {{detail}}, a następnie odśwież połączenie.",
+    "login": {
+      "title": "Logowanie do serwera",
+      "message": "Wprowadź nazwę użytkownika i hasło dla {{label}}.",
+      "user": "Nazwa użytkownika",
+      "password": "Hasło",
+      "remember": "Zapamiętaj hasło na tym stanowisku",
+      "noKeyring": "To stanowisko nie ma bezpiecznego pęku kluczy: hasło będzie wymagane w każdej sesji.",
+      "untrusted": "Ten plik nie jest zaufany: zapamiętane hasło nie jest używane dla jego kwerend przekazujących. Aby go użyć, włącz zawartość pliku lub umieść go w zaufanej lokalizacji.",
+      "wrong": "Nieprawidłowa nazwa użytkownika lub hasło.",
+      "ok": "Zaloguj"
     }
   },
   "ltm": {
@@ -2592,7 +2836,7 @@
     "col": {
       "name": "Tabela",
       "kind": "Typ",
-      "path": "Plik",
+      "path": "Źródło",
       "state": "Stan"
     },
     "state": {
@@ -2601,13 +2845,18 @@
       "readOnlyFile": "Tylko do odczytu",
       "stale": "Porzucona blokada — odśwież, aby ją przejąć",
       "missingFile": "Nie znaleziono pliku",
-      "missingTable": "W pliku brakuje tabeli",
+      "missingTable": "W źródle brakuje tabeli",
       "needsMigration": "Wcześniejsza wersja BaseCraft",
       "newerMajor": "Nowsza wersja BaseCraft",
       "cannotOpen": "Nie można odczytać pliku",
       "unsupportedKind": "Źródło nieobsługiwane",
       "needsPassword": "Wymagane hasło",
       "syncedFolder": "Folder synchronizowany: tylko do odczytu",
+      "needsLogin": "Wymagane logowanie",
+      "cannotConnect": "Serwer nieosiągalny",
+      "certificate": "Niezaufany certyfikat",
+      "serverVersion": "Nieobsługiwana wersja serwera",
+      "passwordExpired": "Hasło wygasło",
       "unsupportedClient": "Tryb udostępniony nieobsługiwany w tym systemie: tylko do odczytu"
     },
     "risk": {
@@ -2627,5 +2876,78 @@
     "copy": "Kopiuj do Schowka",
     "drop": "Porzuć zmiany",
     "deleted": "Ten rekord został usunięty przez innego użytkownika. Nie można zapisać zmian."
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "Ten formularz nie ma źródła rekordów: formanty nie pokazują danych.",
+      "empty": "Źródło rekordów nie zawiera rekordów.",
+      "unreadable": "Nie można odczytać źródła rekordów: formanty nie pokazują danych.",
+      "parameters": "Nie wprowadzono parametrów: formanty nie pokazują danych.",
+      "truncated": "Podgląd pierwszych {{count}} rekordów źródła; sumy i grupy obejmują tylko te wiersze.",
+      "report": {
+        "noSource": "Ten raport nie ma źródła rekordów: jest wyświetlany bez danych.",
+        "empty": "Źródło rekordów nie zawiera rekordów: raport jest wyświetlany bez danych.",
+        "unreadable": "Nie można odczytać źródła rekordów: raport jest wyświetlany bez danych.",
+        "parameters": "Nie wprowadzono parametrów: raport jest wyświetlany bez danych.",
+        "layoutFailed": "Nie można rozmieścić raportu."
+      }
+    }
+  },
+  "find": {
+    "title": "Znajdowanie i zamienianie",
+    "tabFind": "Znajdź",
+    "tabReplace": "Zamień",
+    "what": "Znajdź:",
+    "lookIn": "Szukaj w:",
+    "lookInField": "Bieżące pole",
+    "lookInDocument": "Bieżący dokument",
+    "match": "Uwzględnij:",
+    "matchAnywhere": "Dowolna część pola",
+    "matchWhole": "Całe pole",
+    "matchStart": "Początek pola",
+    "search": "Wyszukaj:",
+    "searchAll": "Wszystko",
+    "searchUp": "W górę",
+    "searchDown": "W dół",
+    "matchCase": "Uwzględnij wielkość liter",
+    "asFormatted": "Wyszukaj pola jako sformatowane",
+    "next": "Znajdź następny",
+    "cancel": "Anuluj"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "Obiekty do zapisania",
+    "dirty": "Najpierw zapisz lub zamknij te obiekty, które używają {{name}}: {{list}}",
+    "failedTitle": "Obiekty bez korekty",
+    "failed": "Nie można poprawić tych obiektów i nadal używają starej nazwy: {{list}}",
+    "staleTitle": "Obiekty ze starą nazwą",
+    "stale": "Te obiekty nadal używają starej nazwy (autokorekta nazw jest wyłączona): {{list}}",
+    "logSkipped": "Tabela {{table}} istnieje, ale nie ma pól dziennika: zmiany nie zostały w niej zapisane.",
+    "log": {
+      "table": "Dziennik autokorekty nazw",
+      "objectType": "Typ obiektu",
+      "objectName": "Nazwa obiektu",
+      "controlName": "Nazwa formantu",
+      "propertyName": "Nazwa właściwości",
+      "oldValue": "Stara wartość",
+      "newValue": "Nowa wartość",
+      "time": "Czas",
+      "failed": {
+        "unreadable": "Nie poprawiono: nieczytelna definicja",
+        "meaning": "Nie poprawiono: poprawka zmieniłaby znaczenie",
+        "dependency": "Nie poprawiono: zależy od nieposprawionego obiektu"
+      }
+    },
+    "kind": {
+      "table": "Tabela",
+      "query": "Kwerenda",
+      "form": "Formularz",
+      "report": "Raport",
+      "macro": "Makro"
+    }
+  },
+  "propertyUpdate": {
+    "title": "Aktualizuj właściwości",
+    "message": "Zaktualizować {{prop}} wszędzie tam, gdzie używane jest {{field}}?",
+    "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
   }
 }

@@ -197,3 +197,12 @@ it('runs with the parameter value', () => {
   expect(run('SELECT [N°] FROM Commandes WHERE Client = [Forms]![FClients]![N°] ORDER BY [N°]', { '[Forms]![FClients]![N°]': 2 }).flat()).toEqual([3, 5]);
   expect(run('SELECT [N°] FROM Commandes WHERE Montant > [TempVars]![Seuil]', { '[TempVars]![Seuil]': 50 }).flat()).toEqual([4]);
 });
+it('Yes/No sorts as Access: Yes first ascending, in ORDER BY and TOP', () => {
+  createTable(db, t('YN', [f('k', 'number'), f('Ok', 'yesNo')]));
+  const ins = db.prepare('INSERT INTO "YN" ("k", "Ok") VALUES (?, ?)');
+  for (const [k, ok] of [[1, 0], [2, 1], [3, 0], [4, 1]]) ins.run(k, ok);
+  expect(run('SELECT k FROM YN ORDER BY Ok, k').map((r) => r[0])).toEqual([2, 4, 1, 3]);
+  expect(run('SELECT k FROM YN ORDER BY Ok DESC, k').map((r) => r[0])).toEqual([1, 3, 2, 4]);
+  expect(run('SELECT TOP 1 k FROM YN ORDER BY Ok').map((r) => r[0]).sort()).toEqual([2, 4]);
+  expect(run('SELECT k FROM YN ORDER BY k > 2, k').map((r) => r[0])).toEqual([3, 4, 1, 2]); // a condition: True first
+});

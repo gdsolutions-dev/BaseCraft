@@ -93,6 +93,8 @@ test('a plain base in the Runtime: its pane, File and Home only, no design item,
   try {
     await expect(page.getByTestId('nav-pane')).toBeVisible();
     expect(await ribbonTabs(page)).toEqual(['ribbon-tab-file', 'ribbon-tab-home']);
+    await expect(page.getByTestId('cmd-linkPostgreSql')).toHaveCount(0); // C4 R18: design only (B5)
+    await expect(page.getByTestId('cmd-linkSqlServer')).toHaveCount(0); // C5 R17
     for (const item of ['nav-item-form-FClients', 'nav-item-query-QClients', `nav-item-report-${REPORT}`, 'nav-item-macro-MBip', 'nav-item-Clients']) {
       await page.getByTestId(item).click({ button: 'right' });
       await expect(page.getByTestId('nav-menu')).toBeVisible();

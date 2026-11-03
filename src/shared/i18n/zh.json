@@ -366,9 +366,16 @@
       "actionCatalog": "操作目录",
       "showAllActions": "显示所有操作",
       "viewForm": "窗体视图",
+      "viewLayout": "布局视图",
+
+      "viewMenu": "视图",
+
+      "viewState": "报表视图",
       "viewPrintPreview": "打印预览",
       "linkBaseCraft": "BaseCraft 或 SQLite 数据库",
-      "linkAccess": "链接 Access 数据库"
+      "linkAccess": "链接 Access 数据库",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "向左滚动功能区",
     "scrollRight": "向右滚动功能区",
@@ -490,6 +497,9 @@
       "design": "设计视图",
       "run": "运行视图",
       "form": "窗体视图",
+      "layout": "布局视图",
+
+      "state": "报表视图",
       "sql": "SQL 视图"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "已以只读方式打开：共享数据文件不能在同步文件夹（OneDrive、Dropbox 等）中使用。请将其放在网络驱动器上，或改用服务器。",
     "unsupportedClient": "已以只读方式打开：此系统不支持网络驱动器上的共享模式。请使用 Windows 工作站，或改用服务器。",
     "takeOver": "接管",
-    "contentDisabled": "安全警告：此数据库的部分活动内容（宏、操作查询）已被禁用。",
+    "contentDisabled": "安全警告：此数据库的部分活动内容（宏、操作查询、传递查询）已被禁用。",
     "enableContent": "启用内容",
     "riskNetwork": "此数据库位于网络共享上。写入期间断开连接可能会损坏它。",
     "riskSynced": "此数据库位于同步文件夹中。写入期间进行同步可能会损坏它。",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "交叉表查询的列标题 (PIVOT) 不能包含聚合函数：{{detail}}。",
       "queryBind_tooManyColumns": "此交叉表查询将产生 {{detail}} 列：最多 255 列，其中列标题最多 254 列。请限制数据或修正列标题 (IN)。",
       "queryBind_crosstabAsSource": "交叉表查询“{{detail}}”不能作为其他查询或查阅列表的数据源。",
+      "queryBind_passThroughAsSource": "传递查询“{{detail}}”不能作为其他查询或列表的数据源。请将筛选或分组写在它的 SQL 文本中。",
       "queryBind_mixedSources": "一个查询只能涉及单个数据源：“{{detail}}”与查询中其他表不属于同一数据源。",
       "fontMissing": "无法加载嵌入字体：报表既未打印也未导出。",
       "printFailed": "打印失败。",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "交叉表查询的“列标题”在“总计”行中必须为“分组”。",
       "invalidQuery_crosstabNone": "交叉表查询中“（不显示）”的列在“总计”行中必须为“Where”；请在“交叉表”行中选择其作用。",
       "linkUnavailable_needsPassword": "此 Access 数据库受密码保护：{{detail}}",
+      "linkUnavailable_needsLogin": "登录已取消：来自 {{detail}} 的链接表不可用。",
+      "linkUnavailable_cannotConnect": "无法访问服务器 {{detail}}。请检查服务器名称、端口和网络。",
+      "linkUnavailable_certificate": "此工作站不信任服务器 {{detail}} 的证书。请安装其证书颁发机构的证书；如果你信任此网络，请在链接表管理器中选择不验证证书的加密选项（例如“加密，信任服务器证书”）。",
+      "linkUnavailable_serverVersion": "服务器 {{detail}} 运行的 BaseCraft 不支持的版本（至少需要 PostgreSQL 14 或 SQL Server 2016）。",
+      "linkUnavailable_passwordExpired": "此登录名的密码已在服务器 {{detail}} 上过期。请使用服务器的管理工具更改密码，然后重新连接。",
       "linkUnavailable_syncedFolder": "数据文件 {{detail}} 保持只读：共享数据文件不能在同步文件夹（OneDrive、Dropbox 等）中使用。请将其放在网络驱动器上，或改用服务器。",
-      "linkUnavailable_unsupportedClient": "数据文件 {{detail}} 保持只读：此系统不支持网络驱动器上的共享模式。请使用 Windows 工作站，或改用服务器。"
+      "linkUnavailable_unsupportedClient": "数据文件 {{detail}} 保持只读：此系统不支持网络驱动器上的共享模式。请使用 Windows 工作站，或改用服务器。",
+      "serverNotSupported_actionQuery": "操作查询尚不能在 {{detail}} 链接表上运行。",
+      "serverNotSupported_makeTable": "生成表查询不能在 {{detail}} 源上运行：请先在服务器上创建该表，再用追加查询填充。",
+      "serverNotSupported_appendAutoNumber": "追加查询不能为服务器 ({{detail}}) 上的表提供自动编号字段的值。请从查询中移除该字段：服务器会为新记录编号。",
+      "serverNotSupported_joinSave": "尚不能通过多表查询在 {{detail}} 数据源中输入数据。",
+      "serverNotSupported_crosstab": "交叉表查询尚不能在 {{detail}} 数据源上运行。",
+      "serverNotSupported_passThrough": "{{detail}} 数据源上不能使用传递查询。",
+      "serverNotSupported_topPercent": "{{detail}} 数据源尚不支持 TOP … PERCENT。",
+      "serverNotSupported": "此操作尚不能在 {{detail}} 链接表上执行。",
+      "serverFunction": "{{name}} 无法在 {{detail}} 数据源上运行：BaseCraft 无法为该服务器转换它。",
+      "timeout": "服务器未在设定的时间内响应（{{name}} 秒）。请重试，或在链接表管理器中增加超时时间。",
+      "passThroughNoRecords": "尽管“返回记录”属性为“是”，传递查询没有返回任何记录。",
+      "passThroughTimeout": "服务器未在设定的时间（{{name}} 秒）内响应传递查询。请在属性表中增加“ODBC 超时”（0：无限制）。",
+      "passThroughLost": "传递查询期间与服务器的连接丢失；不知道查询是否已完成。",
+      "serverError_connection": "保存时与服务器的连接已断开，无法确定是否已保存。请先刷新 (开始 › 刷新) 再重试。",
+      "serverError_notWritten": "服务器未将记录保存到“{{detail}}”：表的触发器、规则或安全策略忽略了它。",
+      "serverError": "服务器拒绝了该操作：{{detail}}"
     },
     "op": {
       "nameExists": "已存在同名对象。",
@@ -692,6 +724,7 @@
       "reportFooter": "报表页脚"
     },
     "canvas": "设计图面",
+    "layoutHandle": "选择布局 {{id}}",
     "toolbox": "工具箱",
     "arrange": {
       "alignLeft": "靠左",
@@ -936,7 +969,16 @@
       "isNotNull": "不为空",
       "clear": "清除所有筛选器",
       "fieldTitle": "筛选器",
-      "fieldLabel": "“{{field}}”的条件（留空：不对此字段筛选）："
+      "fieldLabel": "“{{field}}”的条件（留空：不对此字段筛选）：",
+      "sortAsc": { "text": "从 A 到 Z 排序", "number": "从小到大排序", "date": "从旧到新排序" },
+      "sortDesc": { "text": "从 Z 到 A 排序", "number": "从大到小排序", "date": "从新到旧排序" },
+      "clearField": "从“{{field}}”清除筛选",
+      "typed": { "text": "文本筛选器", "number": "数字筛选器", "date": "日期筛选器" },
+      "all": "（全选）",
+      "blanks": "（空白）",
+      "tooLong": "此筛选器勾选的值过多。请改用文本、数字或日期筛选器。",
+      "ok": "确定",
+      "cancel": "取消"
     },
     "delete_other": "您将删除 {{count}} 条记录。此操作无法撤销。是否继续？",
     "deleteCascade_other": "您将删除 {{count}} 条记录及其相关记录。此操作无法撤销。是否继续？",
@@ -974,7 +1016,6 @@
       "forbiddenStatement": "不允许此语句：仅接受选择、追加、更新、删除和生成表查询。",
       "reservedName": "此名称为保留名称（bc_、bcx_ 或 sqlite_）：查询不能使用它。",
       "multipleStatements": "只允许一条 SQL 语句：请删除分号之后的文本。",
-      "notSupportedYet": "尚不提供此类查询（传递查询）。",
       "badParameterType": "未知的参数类型。",
       "badCrosstab": "交叉表查询无效：应依次为 TRANSFORM、带 GROUP BY 的普通 SELECT，然后是 PIVOT。",
       "badCount": "请输入 1 到 255 之间的整数。",
@@ -1429,6 +1470,7 @@
   "prop": {
     "Caption": "标题",
     "DefaultView": "默认视图",
+    "AllowLayoutView": "允许布局视图",
     "NavigationButtons": "导航按钮",
     "Width": "宽度",
     "Visible": "可见",
@@ -1997,6 +2039,17 @@
       "label": "表名称"
     },
     "sqlOnly": "此查询只能在 SQL 视图中显示。",
+    "passThrough": {
+      "notice": "传递查询：此文本按原样发送到服务器 {{label}}，BaseCraft 不会读取它。服务器应用其自己的权限；BaseCraft 的验证规则和关系不适用于服务器所做的更改。",
+      "noticeNoServer": "传递查询：请在属性表中选择其服务器。",
+      "empty": "请键入要发送到服务器的 SQL 语句。",
+      "noConnection": "请在属性表中选择查询的服务器（连接）。",
+      "connection": "连接",
+      "otherServerKind": "其他 {{product}} 服务器…",
+      "returnsRecords": "返回记录",
+      "timeout": "ODBC 超时",
+      "badTimeout": "请输入 0（无限制）到 3600 之间的秒数。"
+    },
     "builderOnTable": "您对表调用了查询生成器。\n\n是否要创建基于该表的查询？",
     "builderSave": "是否保存对 SQL 语句所做的更改并更新属性？",
     "error": {
@@ -2142,6 +2195,65 @@
     "done": "数据库已拆分。数据文件：{{path}}。备份副本：{{backup}}。",
     "noTables": "此数据库没有可移动的本地表。",
     "self": "数据文件不能是当前打开的数据库。请选择其他名称或文件夹。"
+  },
+  "migrate": {
+    "title": "迁移到服务器向导",
+    "intro": "此向导会将当前数据库的所有本地表连同其数据、键、索引和关系移到 PostgreSQL 或 SQL Server 数据库，然后用同名的链接表替换它们。首先会创建数据库的备份副本。验证规则和计算得出的默认值保留在应用程序中，应用程序将成为前端应用程序。",
+    "engine": "目标服务器",
+    "next": "下一步",
+    "schema": "架构",
+    "start": "迁移",
+    "connecting": "正在连接服务器并创建数据库的备份副本…",
+    "progress": "正在复制 {{table}}：第 {{done}} 条记录，共 {{total}} 条",
+    "finishing": "正在完成…",
+    "stop": "停止",
+    "done": "迁移已完成。备份副本：{{backup}}。",
+    "backup": "备份副本：{{backup}}。",
+    "server": "{{product}} 服务器：{{server}}，架构 {{schema}}。",
+    "copy": "复制到剪贴板",
+    "report": {
+      "tables": "已迁移的表",
+      "table": "{{name}}：{{rows}} 条记录",
+      "nextId": "下一个自动编号：{{next}}",
+      "version": "版本列：{{column}}",
+      "sep": "，",
+      "indexes": "已创建的索引",
+      "index": "{{table}}：{{name}}",
+      "uniqueIndex": "{{table}}：{{name}}（无重复）",
+      "relations": "关系",
+      "created": "{{name}}：已创建外键",
+      "noAction": "{{name}}：已创建不带级联的外键（SQL Server 拒绝指向同一张表的多条级联路径）",
+      "notEnforced": "{{name}}：未实施参照完整性，不在服务器上创建任何内容",
+      "frontEndOnly": "仅由应用程序实施（不由服务器实施）",
+      "rule": "{{name}}：{{what}}",
+      "approximated": "在服务器上以其他类型存储",
+      "approx": "{{name}}：{{type}}",
+      "queries": "服务器拒绝的查询",
+      "query": "{{name}}：{{error}}",
+      "unreadable": "{{name}}：定义无法读取，未检查"
+    },
+    "noTables": "此数据库没有可移动的本地表。",
+    "dataFile": "此数据库是共享数据文件（数据库拆分器）：其前端应用程序链接了它的表。请先对其链接表执行“转换为本地表”，然后从其前端迁移应用程序。",
+    "noSchema": "服务器上不存在架构 {{schema}}。",
+    "nameTaken": "服务器上已有这些名称的表：{{names}}。请删除它们或选择其他架构。",
+    "nameTooLong": "这些名称超过了 PostgreSQL 的限制（63 字节）：{{names}}。请先重命名。",
+    "invalidDesign": "这些字段的设计无效：{{names}}。请在设计视图中更正，然后重试。",
+    "cancelled": "迁移已取消：未做任何更改。",
+    "failed": "迁移失败（{{table}}）：{{error}}。服务器和数据库均未做任何更改。",
+    "failedNoTable": "迁移失败：{{error}}。服务器和数据库均未做任何更改。",
+    "switchFailed": "表已复制到服务器，但无法更改数据库（{{error}}）：数据库保持原样。",
+    "dropped": "已从服务器删除复制的表。",
+    "left": "这些表留在了服务器上：{{names}}。",
+    "leftCheck": "请在再次迁移之前检查并删除它们。",
+    "commitUnknown": "在服务器提交迁移时，与服务器的连接已断开或迁移已停止：不知道服务器是否已保存。数据库未做更改。",
+    "leftMaybe": "这些表可能在服务器上：{{names}}。请在再次迁移之前检查并删除它们。",
+    "closed": "与服务器的连接已关闭。",
+    "queriesUnchecked": "无法在服务器上检查查询：{{detail}}",
+    "error": {
+      "migrateCount": "服务器上 {{table}} 的记录数为 {{server}}，而不是 {{local}}。",
+      "migrateUnlinkable": "从服务器重新读取后，表 {{table}} 无法按其键和字段链接。",
+      "migrateOneNull": "字段 {{field}} 包含多个 Null 值：在关系 {{relation}} 所需的无重复索引中，SQL Server 只接受一个。"
+    }
   },
   "macro": {
     "embedded": {
@@ -2356,6 +2468,7 @@
       "cantGoToRecord": "无法转到指定的记录。",
       "cantFocus": "此控件无法获得焦点（已隐藏或已禁用）。",
       "saveRefused": "无法保存该记录。",
+      "autoCorrectLog": "无法将更改记录到表 {{name}}（字段 {{detail}}）中：未重命名任何内容。",
       "badReference": "“{{name}}”不是已打开窗体的控件。",
       "badValue": "值“{{name}}”不适用于此属性。",
       "findWhatTooLong": "要查找的文本超过 255 个字符。",
@@ -2415,7 +2528,9 @@
     "cat": {
       "general": "常规",
       "currentDb": "当前数据库",
-      "client": "客户端设置"
+      "client": "客户端设置",
+      "datasheet": "数据表",
+      "designers": "对象设计器"
     },
     "general": {
       "header": "使用 {{product}} 的常规选项。",
@@ -2432,6 +2547,11 @@
       "confirmDeletions": "文档删除",
       "confirmActions": "操作查询",
       "display": "显示",
+      "printing": "打印",
+      "marginLeft": "左边距：",
+      "marginRight": "右边距：",
+      "marginTop": "上边距：",
+      "marginBottom": "下边距：",
       "recentCount": "显示最近使用的数据库数目：",
       "advanced": "高级",
       "openLast": "{{product}} 启动时打开上次使用的数据库",
@@ -2444,7 +2564,31 @@
       "lockEdited": "已编辑的记录",
       "refreshInterval": "刷新间隔(秒)",
       "updateRetries": "更新重试次数",
-      "updateRetryMs": "更新重试间隔(毫秒)"
+      "updateRetryMs": "更新重试间隔(毫秒)",
+      "enter": "按 Enter 键后的移动",
+      "enterNone": "不移动",
+      "enterNextField": "下一个字段",
+      "enterNextRecord": "下一条记录",
+      "entry": "进入字段时的行为",
+      "entrySelectAll": "选择整个字段",
+      "entryStart": "移到字段开头",
+      "entryEnd": "移到字段末尾",
+      "arrows": "方向键行为",
+      "arrowsField": "下一个字段",
+      "arrowsChar": "下一个字符",
+      "continuous": "方向键在连续窗体中导航到记录",
+      "continuousNone": "无",
+      "continuousUpDown": "上/下",
+      "continuousLeftRight": "左/右",
+      "cursorStop": "光标停在第一个/最后一个字段",
+      "find": "默认查找/替换行为",
+      "findFast": "快速搜索",
+      "findGeneral": "常规搜索",
+      "findStart": "字段开头搜索",
+      "general": "常规",
+      "year4": "使用四位数年份格式",
+      "year4Db": "此数据库",
+      "year4All": "所有数据库"
     },
     "db": {
       "header": "当前数据库的选项。",
@@ -2460,6 +2604,10 @@
       "datasheetDesign": "启用数据表视图中表的设计更改",
       "navigation": "导航",
       "ribbonSection": "功能区和工具栏选项",
+      "autoCorrectSection": "名称自动更正选项",
+      "track": "记录名称自动更正信息",
+      "perform": "执行名称自动更正",
+      "log": "记录名称自动更正更改",
       "fullMenus": "允许使用完整菜单",
       "shortcutMenus": "允许使用默认快捷菜单",
       "iconForForms": "用作窗体和报表图标",
@@ -2476,11 +2624,73 @@
       "ribbonSimplified": "简化",
       "runMode": "以运行模式打开",
       "runModeHelp": "隐藏导航窗格和设计视图。打开数据库时按住 Shift 键可绕过此设置。",
-      "nextOpen": "这些选项将在下次打开数据库时生效。"
+      "nextOpen": "这些选项将在下次打开数据库时生效。",
+      "truncated": "检查被截断的数字字段",
+      "filterSection": "筛选 {{name}} 数据库的查阅选项",
+      "filterShow": "在以下位置显示值列表：",
+      "listIndexed": "本地索引字段",
+      "listNonIndexed": "本地非索引字段",
+      "listMax": "读取的记录数超过此数量时不显示列表："
+    },
+
+    "designers": {
+      "header": "更改创建数据库对象的默认设置。大多数选项在表数据表视图或页视图中会被忽略。",
+      "sheetSection": "属性表",
+      "sheetFontSize": "属性表字号：",
+      "tableSection": "表设计视图",
+      "fieldType": "默认字段类型：",
+      "textSize": "默认文本字段大小：",
+      "numberSize": "默认数字字段大小：",
+      "autoIndex": "导入/创建时自动索引：",
+      "propertyUpdate": "显示属性更新选项按钮",
+      "querySection": "查询设计",
+      "tableNames": "显示表名称",
+      "outputAll": "输出所有字段",
+      "autoJoin": "启用自动联接",
+      "queryFont": "查询设计字体",
+      "fontName": "字体：",
+      "fontSize": "大小：",
+      "formSection": "窗体/报表设计视图",
+      "selection": "选择行为",
+      "partial": "部分包含",
+      "full": "完全包含"
+    },
+    "datasheet": {
+      "header": "自定义 {{product}} 中数据表的外观。",
+      "gridSection": "网格线和单元格效果",
+      "gridlines": "默认显示的网格线",
+      "horizontal": "水平",
+      "vertical": "垂直",
+      "columnWidth": "默认列宽：",
+      "font": "默认字体",
+      "fontSize": "大小：",
+      "fontWeight": "粗细：",
+      "underline": "下划线",
+      "italic": "倾斜",
+      "weight": {
+        "100": "极细",
+        "200": "特细",
+        "300": "细",
+        "400": "标准",
+        "500": "中等",
+        "600": "半粗",
+        "700": "粗体",
+        "800": "特粗",
+        "900": "极粗"
+      }
     }
   },
   "startup": {
     "formNotFound": "找不到显示窗体“{{name}}”。"
+  },
+  "import": {
+    "server": {
+      "title": "从 PostgreSQL 导入",
+      "titleSqlServer": "从 SQL Server 导入",
+      "ok": "导入",
+      "done": "已导入的表：{{names}}。",
+      "skipped": "未导入的列（{{table}}）：{{names}}。"
+    }
   },
   "link": {
     "filterBasecraft": "BaseCraft 数据库",
@@ -2495,12 +2705,15 @@
     "kind": {
       "basecraft": "BaseCraft 数据库",
       "sqlite": "SQLite 文件",
-      "access": "Access 数据库"
+      "access": "Access 数据库",
+      "postgresql": "PostgreSQL 服务器",
+      "sqlserver": "SQL Server 服务器"
     },
     "tables": "表",
     "selectAll": "全选",
     "noTables": "此文件中没有表。",
     "error": {
+      "unsupportedKind": "BaseCraft 无法链接这些表：{{names}}。未更改任何内容。",
       "nameExists": "此数据库中已使用这些名称：{{names}}。",
       "missingTables": "这些表已不在文件中：{{names}}。",
       "self": "数据库不能链接到自身。",
@@ -2516,6 +2729,37 @@
       "title": "数据库密码",
       "label": "{{path}} 的密码：",
       "wrong": "密码不正确。"
+    },
+    "server": {
+      "title": "链接 PostgreSQL 表",
+      "titleSqlServer": "链接 SQL Server 表",
+      "host": "服务器",
+      "hostHint": "名称或名称\\实例",
+      "port": "端口",
+      "database": "数据库",
+      "tls": "加密",
+      "tlsVerify": "加密，验证证书（推荐）",
+      "tlsRequire": "加密，不验证证书",
+      "tlsTrust": "加密，信任服务器证书",
+      "tlsDisable": "不加密",
+      "timeout": "查询超时（秒）",
+      "connect": "连接",
+      "readOnly": "无主键：只读",
+      "skipped": "未链接的列：{{names}}",
+      "noTables": "此服务器上没有你可以读取的表。",
+      "missingTables": "服务器不包含：{{names}}。未更改任何内容。"
+    },
+    "needsLogin": "需要登录：请打开该表以登录服务器 {{detail}}，然后刷新链接。",
+    "login": {
+      "title": "服务器登录",
+      "message": "请输入 {{label}} 的用户名和密码。",
+      "user": "用户名",
+      "password": "密码",
+      "remember": "在此工作站上记住密码",
+      "noKeyring": "此工作站没有安全密钥环：每次会话都会重新询问密码。",
+      "untrusted": "此文件不受信任：记住的密码不会用于其传递查询。若要使用该密码，请启用其内容或将其放在受信任的位置。",
+      "wrong": "用户名或密码错误。",
+      "ok": "登录"
     }
   },
   "ltm": {
@@ -2523,7 +2767,7 @@
     "col": {
       "name": "表",
       "kind": "类型",
-      "path": "文件",
+      "path": "源",
       "state": "状态"
     },
     "state": {
@@ -2532,13 +2776,18 @@
       "readOnlyFile": "只读",
       "stale": "已废弃的锁 — 刷新以接管",
       "missingFile": "找不到文件",
-      "missingTable": "文件中缺少该表",
+      "missingTable": "源中缺少该表",
       "needsMigration": "早期版本的 BaseCraft",
       "newerMajor": "更新版本的 BaseCraft",
       "cannotOpen": "无法读取文件",
       "unsupportedKind": "不支持的数据源",
       "needsPassword": "需要密码",
       "syncedFolder": "同步文件夹：只读",
+      "needsLogin": "需要登录",
+      "cannotConnect": "无法访问服务器",
+      "certificate": "证书不受信任",
+      "serverVersion": "不支持的服务器版本",
+      "passwordExpired": "密码已过期",
       "unsupportedClient": "此系统不支持共享模式：只读"
     },
     "risk": {
@@ -2558,5 +2807,78 @@
     "copy": "复制到剪贴板",
     "drop": "放弃更改",
     "deleted": "此记录已被另一个用户删除。无法保存您的更改。"
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "此窗体没有记录源：控件不显示数据。",
+      "empty": "记录源中没有记录。",
+      "unreadable": "无法读取记录源：控件不显示数据。",
+      "parameters": "未输入参数：控件不显示数据。",
+      "truncated": "仅预览记录源的前 {{count}} 条记录；合计和分组仅针对这些行。",
+      "report": {
+        "noSource": "此报表没有记录源：显示时不含数据。",
+        "empty": "记录源中没有记录：报表显示时不含数据。",
+        "unreadable": "无法读取记录源：报表显示时不含数据。",
+        "parameters": "未输入参数：报表显示时不含数据。",
+        "layoutFailed": "无法对报表进行布局。"
+      }
+    }
+  },
+  "find": {
+    "title": "查找和替换",
+    "tabFind": "查找",
+    "tabReplace": "替换",
+    "what": "查找内容：",
+    "lookIn": "查找范围：",
+    "lookInField": "当前字段",
+    "lookInDocument": "当前文档",
+    "match": "匹配：",
+    "matchAnywhere": "字段任何部分",
+    "matchWhole": "整个字段",
+    "matchStart": "字段开头",
+    "search": "搜索：",
+    "searchAll": "全部",
+    "searchUp": "向上",
+    "searchDown": "向下",
+    "matchCase": "区分大小写",
+    "asFormatted": "按格式搜索字段",
+    "next": "查找下一个",
+    "cancel": "取消"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "需要保存的对象",
+    "dirty": "请先保存或关闭这些使用 {{name}} 的对象：{{list}}",
+    "failedTitle": "未更正的对象",
+    "failed": "无法更正这些对象，它们仍在使用旧名称：{{list}}",
+    "staleTitle": "使用旧名称的对象",
+    "stale": "这些对象仍在使用旧名称（名称自动更正已关闭）：{{list}}",
+    "logSkipped": "表 {{table}} 已存在，但没有日志字段：更改未记录在其中。",
+    "log": {
+      "table": "名称自动更正日志",
+      "objectType": "对象类型",
+      "objectName": "对象名称",
+      "controlName": "控件名称",
+      "propertyName": "属性名称",
+      "oldValue": "旧值",
+      "newValue": "新值",
+      "time": "时间",
+      "failed": {
+        "unreadable": "未更正：定义无法读取",
+        "meaning": "未更正：更正将改变含义",
+        "dependency": "未更正：依赖于未更正的对象"
+      }
+    },
+    "kind": {
+      "table": "表",
+      "query": "查询",
+      "form": "窗体",
+      "report": "报表",
+      "macro": "宏"
+    }
+  },
+  "propertyUpdate": {
+    "title": "更新属性",
+    "message": "是否在所有使用 {{field}} 的位置更新{{prop}}？",
+    "target": "{{kind}} {{name}} › {{control}}（“{{current}}”）"
   }
 }

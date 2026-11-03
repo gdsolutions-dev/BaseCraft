@@ -64,7 +64,7 @@ L'obiettivo: un buon utente di Excel, senza scrivere codice, costruisce in un po
 - Tabelle collegate: collegamento delle tabelle di un altro file BaseCraft o di un file SQLite, Gestione tabelle collegate
 - Salva con nome, Compatta e ripristina; associazione dei file `.basecraft`
 - Barra multifunzione, riquadro di spostamento, schede, temi chiaro e scuro
-- File › Opzioni: impostazioni della postazione (conferme, database recenti, ultimo database all'avvio, cartella predefinita) e opzioni del database (menu, menu di scelta rapida, tasti speciali, barra di stato, schede, compattazione alla chiusura)
+- File › Opzioni: impostazioni della postazione (conferme, database recenti, ultimo database all'avvio, cartella predefinita) e opzioni del database (menu, menu di scelta rapida, tasti speciali, barra di stato, schede, compattazione alla chiusura), inoltre i tasti Invio e freccia, le linee della griglia, la larghezza e il tipo di carattere dei fogli dati, gli anni a quattro cifre e i valori predefiniti di Trova, i valori predefiniti degli strumenti di progettazione degli oggetti (tipo e dimensione dei nuovi campi, AutoIndex, AutoJoin, caratteri dei designer, comportamento di selezione) e i margini di stampa predefiniti, la correzione automatica dei nomi (rilevamento, esecuzione e registro delle ridenominazioni) e le opzioni di aggiornamento delle proprietà
 
 ## Roadmap
 

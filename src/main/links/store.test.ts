@@ -7,7 +7,7 @@ import { createBaseFile, openBaseFile } from '../db/file-format';
 import { renameObject, saveObject } from '../db/objects';
 import { createTable, NameExistsError, renameTable } from '../db/schema';
 import { f, t } from '../../shared/test-fixtures';
-import { addLinks, findLink, isLinkName, linkRows, relinkRows, removeLink, resolveSourcePath, setLinkDescription, sourceRows } from './store';
+import { addLinks, addServerLinks, findLink, isLinkName, linkRows, relinkRows, relinkServerRows, removeLink, resolveSourcePath, setLinkDescription, setServerDesign, sourceRows } from './store';
 
 // A 1.3 front-end in a temp folder, its data files beside it.
 let dir: string;
@@ -159,6 +159,78 @@ describe('sources and links', () => {
   it('a damaged row (props not an object, path missing) reads as an empty path, never throws', () => {
     db.exec(`INSERT INTO bc_sources VALUES ('a', 'basecraft', 'nope'), ('b', 'sqlite', '[1]'), ('c', 'sqlite', '{"path":3,"relative":4}')`);
     expect(sourceRows(db)).toEqual([{ id: 'a', kind: 'basecraft', path: '' }, { id: 'b', kind: 'sqlite', path: '' }, { id: 'c', kind: 'sqlite', path: '' }]);
+  });
+});
+
+describe('server links (C4 R6)', () => {
+  const P = { host: 'db.example', port: 5432, database: 'ventes', user: 'ana', tls: 'verify-full', timeout: 60 };
+  const remote = (name: string, fields = [f('id', 'number')]) => ({ name, remote: name, schema: 'public', design: t(name, fields), key: ['id'], skipped: [] });
+  const props = (name: string) => JSON.parse((db.prepare('SELECT props FROM bc_links WHERE name = ?').get(name) as { props: string }).props);
+
+  it('relinkServerRows moves links to another server, with their new design, and drops the empty source', () => {
+    addServerLinks(db, 'postgresql', P, [remote('Clients'), remote('Commandes')]);
+    setLinkDescription(db, 'Clients', 'd');
+    const moved = { ...remote('Clients', [f('id', 'number'), f('Nom', 'shortText')]), remote: 'clients', schema: 'ventes', key: [] };
+    relinkServerRows(db, ['clients'], 'postgresql', { ...P, host: 'autre' }, [moved]);
+    expect(sourceRows(db).map((s) => s.params)).toEqual([P, { ...P, host: 'autre' }]);
+    expect(findLink(db, 'Clients')).toMatchObject({ sourceId: sourceRows(db)[1]!.id, remote: 'clients', description: 'd', server: { schema: 'ventes', key: [], fields: moved.design.fields } });
+    relinkServerRows(db, ['Commandes'], 'postgresql', { ...P, host: 'autre' }, [remote('Commandes')]);
+    expect(sourceRows(db)).toHaveLength(1);
+  });
+
+  it('relinkServerRows is atomic: a name without its table changes nothing', () => {
+    addServerLinks(db, 'postgresql', P, [remote('Clients')]);
+    const before = [sourceRows(db), linkRows(db)];
+    expect(() => relinkServerRows(db, ['Clients'], 'postgresql', { ...P, host: 'autre' }, [remote('Autre')])).toThrow('bc:notFound');
+    expect([sourceRows(db), linkRows(db)]).toEqual(before);
+  });
+
+  it('setServerDesign replaces the cached design, keeping the other props', () => {
+    addServerLinks(db, 'postgresql', P, [remote('Clients')]);
+    setLinkDescription(db, 'Clients', 'd');
+    setServerDesign(db, 'CLIENTS', { ...remote('Clients', [f('id', 'number'), f('Ville', 'shortText')]), skipped: ['geo'] });
+    expect(props('Clients')).toEqual({ description: 'd', schema: 'public', key: ['id'], fields: [f('id', 'number'), f('Ville', 'shortText')], skipped: ['geo'] });
+  });
+
+  it('a server link keeps its rowversion column', () => {
+    addServerLinks(db, 'sqlserver', P, [{ ...remote('Clients'), version: 'rv' }]);
+    expect(linkRows(db)[0]!.server).toMatchObject({ key: ['id'], version: 'rv' });
+    expect(sourceRows(db)[0]).toMatchObject({ kind: 'sqlserver' });
+  });
+
+  it('a version naming a field reads as none', () => {
+    addServerLinks(db, 'sqlserver', P, [{ ...remote('Clients'), version: 'id' }]);
+    expect(linkRows(db)[0]!.server!.version).toBeUndefined();
+  });
+
+  it('a refresh without a rowversion drops the cached one', () => {
+    addServerLinks(db, 'sqlserver', P, [{ ...remote('Clients'), version: 'rv' }]);
+    setServerDesign(db, 'Clients', remote('Clients'));
+    expect(linkRows(db)[0]!.server!.version).toBeUndefined();
+  });
+
+  it('meta survives setServerDesign and relinkServerRows; a damaged meta reads as none', () => { // C7 R11
+    const meta = { table: { validationRule: '[id] > 0' }, fields: { id: { props: { caption: 'N°' }, from: { type: 'number' as const } } } };
+    addServerLinks(db, 'postgresql', P, [remote('Clients'), remote('Commandes')], [meta]);
+    expect(findLink(db, 'Clients')!.server!.meta).toEqual(meta);
+    expect(findLink(db, 'Commandes')!.server!.meta).toBeUndefined(); // a link without its own: none
+    setServerDesign(db, 'Clients', remote('Clients', [f('id', 'number'), f('Ville', 'shortText')]));
+    relinkServerRows(db, ['Clients'], 'postgresql', { ...P, host: 'autre' }, [remote('Clients')]);
+    expect(findLink(db, 'Clients')!.server!.meta).toEqual(meta);
+    for (const bad of [3, [], { fields: [] }, { fields: { id: { props: {} } } }, { fields: { id: { props: 1, from: {} } } }, { fields: {}, table: 'x' }]) {
+      db.prepare('UPDATE bc_links SET props = ? WHERE name = ?').run(JSON.stringify({ ...props('Clients'), meta: bad }), 'Clients');
+      expect(findLink(db, 'Clients')!.server).toMatchObject({ key: ['id'] });
+      expect(findLink(db, 'Clients')!.server!.meta).toBeUndefined();
+    }
+    db.prepare('UPDATE bc_links SET props = ? WHERE name = ?').run(JSON.stringify({ ...props('Clients'), meta: { fields: {}, table: { validationRule: 3, description: 'd' } } }), 'Clients');
+    expect(findLink(db, 'Clients')!.server!.meta).toEqual({ fields: {}, table: { description: 'd' } }); // only its texts
+  });
+
+  it('a file link never reads as a server link', () => {
+    addLinks(db, fe, 'basecraft', data, ['Clients']);
+    db.exec(`UPDATE bc_links SET props = '${JSON.stringify({ key: [], fields: [f('id', 'number')], skipped: [] })}'`);
+    expect(findLink(db, 'Clients')!.server).toBeUndefined();
+    expect(sourceRows(db)[0]!.params).toBeUndefined();
   });
 });
 

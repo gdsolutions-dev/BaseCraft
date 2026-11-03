@@ -4,7 +4,8 @@ import type { TFunction } from 'i18next';
 import type { CSSProperties, FocusEvent, KeyboardEvent, RefObject } from 'react';
 import type { CellInput, SqlValue } from '../../../shared/coerce';
 import type { EventName } from '../../../shared/design/events';
-import type { ControlDef } from '../../../shared/design/model';
+import type { ControlDef, SectionDef } from '../../../shared/design/model';
+import { sameName } from '../../../shared/field-types';
 import type { Value } from '../../../shared/expr/ast';
 import { infoOf, num, str, toText } from '../../../shared/expr/library';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../../shared/record-source';
@@ -22,16 +23,18 @@ export interface RunCtx {
   info: SourceInfo | null;
   results: Record<string, CalcResult>;   // the current record's calculated controls (empty until computed)
   defaults: Record<string, SqlValue>;    // the new record's default values, by source field (shown until typed over)
-  display: { locale: string; lang: 'fr' | 'en' };
+  display: { locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean };
   t: TFunction;
   focused: string | null;
   errors: Record<string, string>;        // control name -> message shown under it
   stops: Set<string>;                    // Tab stops (tabIndex 0); other controls take the focus by click only
+  labels: Record<string, string>;        // layout labels detached from their control: label name -> control name (layoutLabels)
   id(name: string): string;              // the control's DOM id
   edit(f: SourceField, input: CellInput): void;
   unbound: Record<string, UnboundValue>;   // unbound inputs' values, by control name (kept across records)
   editUnbound(c: ControlDef, value: Value, text?: string): void;
-  events(c: ControlDef): { onFocus(): void; onBlur(e: FocusEvent): void; onKeyDown(e: KeyboardEvent): void; onClick?(e?: { detail: number }): void; onDoubleClick?(): void };
+  events(c: ControlDef): { onFocus(): void; onBlur(e: FocusEvent): void; onKeyDown(e: KeyboardEvent): void; onMouseDown?(e: { target: EventTarget | null }): void; onClick?(e?: { detail: number }): void; onDoubleClick?(): void };
+  givenBack(n: string): boolean;               // the focus given back to n (a box closed, a ribbon command, its Exit cancelled): its selection kept
   /** The form's event (no control) or the control's, after those raised before it; resolves true when its macro cancels it. */
   raise(event: EventName, control?: string): Promise<boolean>;
   input(c: ControlDef): void;                  // typed in a text box or a combo: On Change, its update events when it is left
@@ -95,8 +98,16 @@ export function fieldOf(c: ControlDef, x: RunCtx): { f: SourceField; stored: Sql
   return { f, stored, pending: Object.hasOwn(x.snap.pending, f.name) ? x.snap.pending[f.name] : undefined };
 }
 
-/** The control has an attached label (its accessible name); otherwise its name is. */
-export const hasLabel = (c: ControlDef): boolean => (c.children ?? []).some((k) => k.kind === 'label');
+/** The control has an attached label, or a layout label (x.labels), as its accessible name; otherwise its name is. */
+export const hasLabel = (c: ControlDef, x: RunCtx): boolean =>
+  (c.children ?? []).some((k) => k.kind === 'label') || Object.values(x.labels).some((n) => sameName(n, c.name));
+
+/** The control a layout label belongs to, in the label's section: the label is linked to it and hidden with it. */
+export function labelTarget(c: ControlDef, section: SectionDef, x: RunCtx): ControlDef | undefined {
+  if (!Object.hasOwn(x.labels, c.name)) return undefined;   // never Object.prototype's: a control may be named constructor, toString…
+  const n = x.labels[c.name];
+  return section.controls.find((k) => sameName(k.name, n));
+}
 
 /** Attributes every focusable control carries: id, test id, accessible name without a label, tooltip, tab stop, error link, focus and keys. */
 export function ctlAttrs(c: ControlDef, x: RunCtx) {
@@ -104,7 +115,7 @@ export function ctlAttrs(c: ControlDef, x: RunCtx) {
   const tip = prop(c, 'ControlTipText');
   return {
     id: x.id(c.name), 'data-testid': `form-ctl-${c.name}`, 'data-ctl': c.name, tabIndex: x.stops.has(c.name) ? 0 : -1,
-    ...(hasLabel(c) ? {} : { 'aria-label': c.name }),
+    ...(hasLabel(c, x) ? {} : { 'aria-label': c.name }),
     ...(typeof tip === 'string' && tip ? { title: tip } : {}),
     ...(err !== undefined ? { 'aria-invalid': true } : {}),
     ...describedBy(c, x),

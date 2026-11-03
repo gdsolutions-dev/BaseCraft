@@ -1,4 +1,4 @@
-import { AppWindow, Code, PencilRuler, Sheet } from 'lucide-react';
+import { AppWindow, Code, LayoutTemplate, PencilRuler, ScrollText, Sheet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DocMode } from '../state/app-state';
 import { commandEnabled, commandState, commandsVersion, runCommand, subscribeCommands, type CommandId, type RibbonContext } from './ribbon-model';
@@ -17,7 +17,7 @@ export function StatusBar({ ctx }: { ctx: RibbonContext }) {
     </button>
   );
   const view = (m: DocMode | 'form', Icon: typeof Sheet) => {
-    const cmd = m === 'design' ? 'viewDesign' : m === 'form' ? 'viewForm' : 'viewDatasheet';
+    const cmd = m === 'design' ? 'viewDesign' : m === 'form' ? 'viewForm' : m === 'layout' ? 'viewLayout' : m === 'state' ? 'viewState' : 'viewDatasheet';
     const on = form ? mode === (m === 'form' ? 'run' : m) : mode === m || (m === 'datasheet' && mode === 'run');
     return button(m, t(`status.mode.${m}`), cmd, commandState(cmd)?.active ?? on, Icon);
   };
@@ -30,8 +30,10 @@ export function StatusBar({ ctx }: { ctx: RibbonContext }) {
       <span role="status" data-testid="status-message"><span className="status-flash" key={flash?.n}>{flash ? t(flash.key) : ''}</span></span>
       <div className="views" role="group" aria-label={t('status.views')}>
         {form && view('form', AppWindow)}
+        {ctx.kind === 'report' && view('state', ScrollText) /* Mode État: first of a report's views (Access) */}
         {ctx.kind !== 'macro' && view('datasheet', Sheet) /* a macro has no datasheet */}
         {ctx.kind === 'query' && !ctx.runMode && button('sql', t('status.mode.sql'), 'viewSql', sql, Code) /* A3: Access's order */}
+        {(form || ctx.kind === 'report') && !ctx.runMode && view('layout', LayoutTemplate) /* L2, L3 : le mode Page, juste avant Création (Access) */}
         {!ctx.runMode && view('design', PencilRuler) /* B3 R10: run mode has no Design view */}
       </div>
     </footer>

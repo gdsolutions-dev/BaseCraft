@@ -53,6 +53,12 @@ describe('property catalog', () => {
     }
   });
 
+  it('lists AllowLayoutView for forms and reports, default true', () => {
+    const d = PROPERTY_CATALOG.find((p) => p.name === 'AllowLayoutView');
+    expect(d).toMatchObject({ tab: 'format', editor: 'bool', default: true });
+    expect(d?.appliesTo).toEqual(expect.arrayContaining(['form', 'report']));
+  });
+
   /** A value fits its descriptor's editor, options and bounds. */
   const fits = (p: PropertyDescriptor, d: unknown) => {
     switch (p.editor) {

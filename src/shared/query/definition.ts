@@ -1,8 +1,8 @@
 // Stored definition of a query (`bc_objects`, kind 'query'): checked when received over IPC and when read back. Pure module.
-import type { ObjectKind } from '../api';
+import { isServerKind, type ObjectKind } from '../api';
 import { ExprSyntaxError } from '../expr/ast';
 import { lookupOf, sameName, type TableDesign } from '../field-types';
-import type { QueryDefinition } from './ast';
+import { isSelectBody, type PassThroughProps, type QueryDefinition } from './ast';
 import { parseSql } from './sql-parser';
 
 /** Longest SQL text of a definition (UTF-16 units). ponytail: counted in characters, not UTF-8 bytes. */
@@ -26,11 +26,16 @@ export function invalidQueryError(e: unknown, withPosition = true): Error | null
 
 /**
  * The definition as stored, after checking it: an object, `formatVersion` '1.0' (or a newer minor '1.x'), `sql` a text of
- * at most 1 MB that parseSql accepts, an optional `layout` of valid shape. Unknown keys are kept (the object itself is
+ * at most 1 MB that parseSql accepts, an optional `layout` of valid shape.
+ * 2.x (pass-through, C6 R2): `passThrough` of the shape `passThroughOf` reads and a `sql` of 1..MAX_SQL characters, not blank, never parsed. Unknown keys are kept (the object itself is
  * returned). Throws TypeError('bc:invalidQuery'), or `bc:invalidQuery|<code>|<position>` when the SQL does not parse.
  */
 export function parseQueryDefinition(def: unknown): QueryDefinition {
   const invalid = (): never => { throw new TypeError('bc:invalidQuery'); };
+  if (isObject(def) && typeof def.formatVersion === 'string' && /^2\.\d+$/.test(def.formatVersion)) { // pass-through (C6 R2): the server's text, never parsed
+    if (passThroughOf(def) === null || typeof def.sql !== 'string' || !def.sql.trim() || def.sql.length > MAX_SQL) return invalid();
+    return def as QueryDefinition;
+  }
   if (!isObject(def) || typeof def.formatVersion !== 'string' || !/^1\.\d+$/.test(def.formatVersion)) return invalid();
   if (typeof def.sql !== 'string' || def.sql.length > MAX_SQL) return invalid();
   try { parseSql(def.sql); } catch (e) {
@@ -38,6 +43,22 @@ export function parseQueryDefinition(def: unknown): QueryDefinition {
   }
   if (def.layout !== undefined && !validLayout(def.layout)) return invalid();
   return def as QueryDefinition;
+}
+
+/** The pass-through part of a stored definition (formatVersion 2.x, shape as above); null for any other definition. */
+export function passThroughOf(def: unknown): PassThroughProps | null {
+  if (!isObject(def) || typeof def.formatVersion !== 'string' || !/^2\.\d+$/.test(def.formatVersion)) return null;
+  const p = def.passThrough;
+  if (!isObject(p) || typeof p.kind !== 'string' || !isServerKind(p.kind) || !isObject(p.params) || 'password' in p.params || typeof p.returnsRecords !== 'boolean') return null;
+  return p as unknown as PassThroughProps;
+}
+
+/** What the shell runs as an action: a pass-through with Returns Records No, or SQL that parses to an action query. A malformed
+ *  2.x definition is neither (it cannot run) though activeContent still counts it: the file is untrusted. */
+export function isActionDefinition(def: unknown): boolean {
+  const pt = passThroughOf(def);
+  if (pt) return !pt.returnsRecords;
+  try { return !isSelectBody(parseSql(parseQueryDefinition(def).sql)); } catch { return false; }
 }
 
 /** Names used as sources (FROM, joins, derived tables, subqueries, at any depth) in a parsed query. */
@@ -70,7 +91,7 @@ export function queryDependents(name: string, objects: { kind: ObjectKind; name:
     .map((d) => ({ kind: 'table' as const, name: d.name }));
   const uses = (o: { kind: ObjectKind; name: string; definition: unknown }): boolean => {
     try {
-      if (o.kind === 'query') return !sameName(o.name, name) && sqlUses(parseQueryDefinition(o.definition).sql, name);
+      if (o.kind === 'query') return passThroughOf(o.definition) === null && !sameName(o.name, name) && sqlUses(parseQueryDefinition(o.definition).sql, name);
       const rs = isObject(o.definition) ? o.definition.recordSource : undefined;
       if (!isObject(rs)) return false;
       return rs.kind === 'query' ? typeof rs.name === 'string' && sameName(rs.name, name) : rs.kind === 'sql' && typeof rs.sql === 'string' && sqlUses(rs.sql, name);

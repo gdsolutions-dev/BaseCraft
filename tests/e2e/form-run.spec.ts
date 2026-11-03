@@ -16,7 +16,7 @@ import type { TableDesign } from '../../src/shared/field-types';
 import { localeInfo } from '../../src/shared/locale-format';
 import type { RecordSourceRef } from '../../src/shared/record-source';
 import { clients, f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, seedBase, seedForm, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -312,6 +312,7 @@ test('sort and filters on the focused control: descending, by selection, toggle,
     await expect(page.getByTestId('nav-filtered')).toBeDisabled();
     await ctl('Ville').click();
     await page.getByTestId('cmd-filter').click();
+    await page.getByTestId('filter-typed').click(); // O2 R14: Home › Filter opens the column menu; its typed filters, the Expression Builder
     await page.getByTestId('xb-text').fill('"Lyon"');
     await page.getByTestId('xb-ok').click();
     await expect(count).toHaveText('1');
@@ -361,7 +362,7 @@ test('theme switch keeps the entry; Shift+F9; back on the tab the records are re
 
     // Design view with a valid entry: saved first, no question (Access)
     await ctl('Nom').fill('Avant Création');
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('form-design')).toBeVisible();
     await expect(page.getByTestId('modal')).toHaveCount(0);
     expect((await bc(page).rows())[2]![1]).toBe('Avant Création');
@@ -619,4 +620,26 @@ test('query sources (A3, B4 R7): a single-table query with an alias writes its t
   } finally {
     await app.close();
   }
+});
+
+test('a formatted box (Currency) entered by Tab has its whole edit text selected: what is typed replaces it; a click keeps the caret', async () => {
+  const base = seedBase('fx-currency', (db) => { seedSales(db); seedForm(db, 'Commandes', formFor('Commandes', ['Client', 'Montant'])); });
+  await withForm(base, async ({ page, ctl, dirty }) => {
+    const selection = () => ctl('Montant').evaluate((e: HTMLInputElement) => [e.selectionStart, e.selectionEnd, e.value.length]);
+    await expect(ctl('Montant')).not.toHaveValue('10,1');   // the formatted display text
+    await ctl('Client').click();
+    await page.keyboard.press('Tab');
+    await expect(ctl('Montant')).toBeFocused();
+    await expect(ctl('Montant')).toHaveValue('10,1');   // the edit text, all of it selected (Access: Select Entire Field)
+    expect(await selection()).toEqual([0, 4, 4]);
+    await page.keyboard.type('25');
+    await expect(ctl('Montant')).toHaveValue('25');
+    await page.keyboard.press('Escape');
+    await expect(dirty).toHaveCount(0);
+    await ctl('Client').click();
+    await ctl('Montant').click();   // a click: the caret where it lands, nothing selected
+    await expect(ctl('Montant')).toHaveValue('10,1');
+    const [start, end] = await selection();
+    expect(start).toBe(end);
+  }, 'Commandes');
 });

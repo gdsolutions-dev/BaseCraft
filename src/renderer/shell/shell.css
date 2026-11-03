@@ -81,6 +81,12 @@ button:disabled { opacity: .45; }
 .rbtn-lg:hover:not(:disabled, .is-planned), .rbtn-sm:hover:not(:disabled, .is-planned), .rbtn-xs:hover:not(:disabled, .is-planned) { background: var(--hover); }
 .rbtn-lg.is-on, .rbtn-sm.is-on { background: var(--accent-soft); color: var(--bc-accent); }
 .rbtn-sm.is-on .ic { color: var(--bc-accent); }
+/* Affichage (Access's split button): the main part switches view, the caret at its bottom right lists the views */
+.rsplit { position: relative; display: flex; }
+.rsplit-menu { position: absolute; right: 2px; bottom: 2px; width: 18px; height: 14px; display: grid; place-items: center; border-radius: var(--bc-radius); color: var(--bc-text-muted); }
+.rsplit-menu svg { width: 12px; height: 12px; }
+.rsplit-menu:hover:not(:disabled) { background: var(--hover); }
+.rsplit-menu:disabled { opacity: .45; }
 /* A placeholder (C11) looks disabled but stays focusable; its tooltip names the batch that delivers it. Its content is dimmed
    less than a disabled command (.45: the ribbon is mostly placeholders) and not its focus ring. */
 .is-planned > * { opacity: .6; }
@@ -147,6 +153,13 @@ button:disabled { opacity: .45; }
 .ctxmenu button { gap: var(--bc-space-2); }
 .ctxmenu button[aria-disabled="true"] > * { opacity: .6; }
 .ctxmenu-chev { margin-left: auto; }
+.ctxmenu .filter-values { max-height: 260px; max-width: 360px; overflow-y: auto; }
+.ctxmenu .filter-values span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a long value never widens the menu past the window */
+.ctxmenu .filter-values .filter-box { flex: none; width: 13px; height: 13px; display: grid; place-items: center; border: 1px solid var(--bc-text-muted); border-radius: 2px; overflow: visible; }
+.ctxmenu .filter-values .filter-box svg { width: 11px; height: 11px; stroke-width: 3; }
+.ctxmenu .filter-error { max-width: 260px; padding: 4px 8px; color: var(--bc-danger, #b00020); font-size: 12px; }
+.ctxmenu .filter-buttons { display: flex; justify-content: flex-end; gap: var(--bc-space-2); padding: 4px 2px 2px; }
+.ctxmenu .filter-buttons button { width: auto; }
 
 /* Liste modifiable (ComboBox) : sa liste suit le thème de l'application, contrairement à celle d'un <datalist>. */
 .cbx { flex: 1; min-width: 0; display: flex; align-items: center; }
@@ -271,6 +284,12 @@ fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
 .ltm-table { border-collapse: collapse; margin-bottom: var(--bc-space-4); }
 .ltm-table :is(th, td) { padding: 4px 8px; text-align: start; vertical-align: top; }
 .ltm-path { word-break: break-all; }
+/* C7 Move to Server: the progress bar across the dialog; the report wider, its lists scrolling */
+.migrate-progress progress { width: 100%; height: 8px; margin-bottom: var(--bc-space-4); accent-color: var(--bc-accent); }
+.modal:has(.migrate-report) { width: min(640px, 100%); }
+.migrate-report .modal-message { margin-bottom: var(--bc-space-2); }
+.migrate-head { margin: var(--bc-space-3) 0 var(--bc-space-1); font-size: 13px; font-weight: 650; }
+.migrate-report ul { margin: 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 /* B1 macros: MessageBox (its type's icon beside the text) and the Action Failed dialog */
 .macro-msgbox-body { display: flex; gap: var(--bc-space-3); align-items: flex-start; }
 .macro-msgbox-critical { color: var(--bc-danger); }

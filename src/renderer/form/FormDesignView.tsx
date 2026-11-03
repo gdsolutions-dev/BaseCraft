@@ -7,25 +7,31 @@ import type { DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
 import type { SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
+import { promptParameters } from '../query/prompt-parameters';
 import { ArrangePopup, Designer, FormatPopup, type ToolState } from '../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
 import { designerReducer, findControl, initDesigner, type DesignerAction } from '../designer/designer-model';
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
+import { layoutCommands, layoutScope } from '../designer/layout-commands';
 import { fromSourceRef } from '../designer/property-sheet-model';
 import type { PropertySheetContext } from '../designer/sheet-types';
 import type { DocViewProps } from '../shell/DocumentTabs';
-import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
+import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { nameErrorKey } from '../shell/nav-menu-items';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
-import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, nextFreeTop, parseFormDoc, shouldReload, withTabOrder } from './form-def';
+import { sameView, type DocMode } from '../state/app-state';
+import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withTabOrder } from './form-def';
 import { useFormHost } from './form-host';
+import { viewHost } from './layout-host';
+import { LayoutRecordBar } from './LayoutRecordBar';
+import { loadLive, type LiveData } from './live-records';
 import { proposeLinks } from './links';
 import { GALLERY_TOOLS, headerItem } from './form-ribbon';
 import './form-nav-menu';
 import { TabOrderDialog } from './TabOrderDialog';
-import { firstRun } from './views';
+import { allowsLayout, firstRun } from './views';
 import './form.css';
 
 const FIELD_LEFT = 1701;   // 3 cm : un champ ajouté sans point de dépôt, son étiquette à gauche
@@ -36,6 +42,22 @@ const PICTURE_MAX = 1024 * 1024;   // comme la Feuille de propriétés
 /** Formulaire vierge (Créer › Formulaire vierge) : le nouvel onglet de ce nom provisoire s'ouvre avec la Liste des champs (lu une fois). */
 let fieldListFor: string | null = null;
 export function requestFieldList(name: string): void { fieldListFor = name; }
+
+interface Leaving { mode: DocMode; name: string; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean> }
+/** Avant que la vue parte : vers le mode Formulaire, Oui enregistre et Non reste ; à la fermeture, Non abandonne les modifications.
+ *  Création ↔ Page (L2) : le même concepteur reste, rien n'est demandé (modifications et annulations gardées). */
+export async function leaveFormDesign(reason: 'mode' | 'close', target: DocMode | undefined, d: Leaving): Promise<boolean> {
+  if (reason === 'mode' && sameView(d.mode, target)) return true;   // pas même pendant un enregistrement : rien n'est quitté
+  if (d.busy) return false;
+  await d.flush();
+  if (!d.dirty()) return true;
+  if (reason === 'mode') {
+    const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.mustSaveFirst', params: { name: d.name }, buttons: ['yes', 'no'] });
+    return r === 'yes' && (await d.save());
+  }
+  const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.saveFirst', params: { name: d.name }, buttons: ['yes', 'no', 'cancel'] });
+  return r === 'no' || (r === 'yes' && (await d.save()));
+}
 
 export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps) {
   const { t, i18n } = useTranslation();
@@ -60,6 +82,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const logoFile = useRef<HTMLInputElement>(null);
   const loaded = useRef<{ name: string; token: number } | null>(null);
   const busy = useRef(false);
+  const [liveGen, setLiveGen] = useState(0);   // L2 : la définition relue d'ailleurs (pas un enregistrement d'ici) relit les données du mode Page
 
   useEffect(() => { if (fieldListFor === tab.name) fieldListFor = null; }, [tab.name]);
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
@@ -87,6 +110,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       send({ type: 'load', doc: { ...doc, sections: doc.sections.slice(0, FORM_SECTIONS.length) }, objectKind: 'form' });
       setExtra(doc.sections.slice(FORM_SECTIONS.length));
       setNotice({ dropped, badSource });
+      setLiveGen((g) => g + 1);
       setPhase('ready');
     }).catch((e) => {
       if (!current) return;
@@ -122,6 +146,25 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     });
     return () => { current = false; };
   }, [sourceKey, tab.reloadToken, t]);   // `source` suit sourceKey (un nouvel objet à chaque chargement, la même source)
+
+  // L2, mode Page : les premiers enregistrements de la source, lus une fois par source et par définition relue (ni Création ↔ Page
+  // ni un enregistrement d'ici ne relisent : les paramètres ne sont demandés qu'une fois, comme en mode Formulaire) ; seul
+  // l'enregistrement montré change, rien n'est écrit
+  const layout = tab.mode === 'layout';
+  const liveKey = `${liveGen}|${sourceKey}`;
+  const [liveRows, setLiveRows] = useState<{ key: string; data: LiveData } | null>(null);
+  const [row, setRow] = useState(0);
+  useEffect(() => {
+    if (!layout || region === null || phase !== 'ready' || liveRows?.key === liveKey) return;
+    let current = true;
+    void loadLive(source, (ps) => promptParameters(modal, ps, localeInfo(region))).then((data) => {
+      if (current) { setLiveRows({ key: liveKey, data }); setRow(0); }
+    });
+    return () => { current = false; };
+  }, [layout, liveKey, region, phase]);   // eslint-disable-line react-hooks/exhaustive-deps -- `source` suit liveKey
+  useEffect(() => { if (layout) setTool({ kind: null, locked: false }); }, [layout]);   // l'outil choisi en Création ne passe pas au mode Page
+  const liveData = liveRows?.key === liveKey ? liveRows.data : null;
+  const view = viewHost(tab.mode, host, liveData, row, state.doc);
 
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: state.dirty }); }, [state.dirty, tab.id, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);   // les modifications partent avec la vue
@@ -168,19 +211,9 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     }
   };
 
-  /** Avant que la vue parte : vers le mode Formulaire, Oui enregistre et Non reste ; à la fermeture, Non abandonne les modifications. */
-  const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
-    if (busy.current) return false;
-    await flush();
-    const { state: s, tab: doc } = live.current;
-    if (!s.dirty) return true;
-    if (reason === 'mode') {
-      const r = await modal.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.mustSaveFirst', params: { name: doc.name }, buttons: ['yes', 'no'] });
-      return r === 'yes' && (await save());
-    }
-    const r = await modal.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.saveFirst', params: { name: doc.name }, buttons: ['yes', 'no', 'cancel'] });
-    return r === 'no' || (r === 'yes' && (await save()));
-  };
+  const leave = (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => leaveFormDesign(reason, target, {
+    mode: live.current.tab.mode, name: live.current.tab.name, busy: busy.current, flush, dirty: () => live.current.state.dirty || !!live.current.tab.isNew, confirm: modal.confirm, save,
+  });
 
   const tabOrder = async () => {
     const { state: s, readOnly: ro } = live.current;
@@ -209,10 +242,12 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const cmds = useRef({ save, leave, tabOrder, addHeaderItem });
   cmds.current = { save, leave, tabOrder, addHeaderItem };
   const selected = selectedCount(state);
+  const layoutKind = layoutScope(state);
   useEffect(() => {
     const off = registerCommands(tab.id, {
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
+      ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }),
       ...clipboardCommands(() => live.current.state, send, () => clipContext(live.current.host, t)),
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
       ...Object.fromEntries(Object.entries(GALLERY_TOOLS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })])),
@@ -224,12 +259,14 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       propertySheet: () => setSheetVisible((v) => !v),
       tabOrder: () => cmds.current.tabOrder(),
     });
-    const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
+    const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, selected]);
+  }, [tab.id, selected, layoutKind]);
   // Coller grisé tant qu'aucun presse-papiers (contrôles qu'un formulaire reçoit, objets du volet) n'a rien à coller
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));
-  useEffect(() => registerCommandStates(tab.id, { paste: { enabled: pasteable } }), [tab.id, pasteable]);
+  // L2 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte)
+  const layoutOk = allowsLayout(state.doc);
+  useEffect(() => registerCommandStates(tab.id, { paste: { enabled: pasteable }, viewLayout: { enabled: layoutOk } }), [tab.id, pasteable, layoutOk]);
 
   // F5 (Access, C7) : du mode Création au mode Formulaire, tant que cet onglet est actif
   useEffect(() => {
@@ -267,7 +304,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     if (ro) return;
     const detail = s.doc.sections.findIndex((x) => x.kind === 'detail');
     const where = at ?? { section: detail, left: FIELD_LEFT, top: nextFreeTop(s.doc.sections[detail]) };
-    send({ type: 'insert', section: where.section, controls: fieldControls(s.doc, f, where, l) });
+    // déposé (at) : le point de dépôt peut le faire entrer dans une disposition ; ajouté au clavier ou par double-clic, jamais
+    send({ type: 'insert', section: where.section, controls: fieldControls(s.doc, f, where, l), ...(at ? { at: { x: at.left, y: at.top } } : {}) });
   }, []);
   /** Link fields proposed when a subform gets its Source Object and has none yet: from a relation between the two forms' sources,
    *  else the master's primary key (links.ts); one more edit per list, undone like any other, announced in the banner. */
@@ -314,8 +352,10 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       {notice.badSource && <div className="fz-banner" role="status" data-testid="form-bad-source">{t('form.badSource')}</div>}
       {sourceError && <div className="fz-banner" role="status" data-testid="form-source-error">{sourceError}</div>}
       {linked && <div className="fz-banner" role="status" data-testid="form-subform-linked">{linked}</div>}
-      <Designer state={state} dispatch={dispatchDesign} host={host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} />
+      {layout && liveData?.notice && !(liveData.notice === 'unreadable' && sourceError) && <div className="fz-banner" role="status" data-testid="layout-notice">{t(`layoutView.notice.${liveData.notice}`)}</div>}
+      <Designer state={state} dispatch={dispatchDesign} host={view.host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
+        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} />
+      {layout && <LayoutRecordBar row={row} count={liveData?.rows.length ?? 0} onGo={setRow} />}
       {menu && <ArrangePopup menu={menu} state={state} dispatch={send} onClose={closeMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       <input ref={logoFile} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="form-logo-file"

@@ -19,7 +19,7 @@ test('Table Property Sheet: F4 and the ribbon, a record rule built, saved over e
     createTable(db, commandes);
     await insertRow(db, commandes, { DateCommande: '23/10/2026', DateLivraison: '01/10/2026' }, localeInfo('fr-FR')); // breaks the rule below
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const sheet = page.getByTestId('table-properties');
   try {
     await page.getByTestId('nav-item-Commandes').click({ button: 'right' });
@@ -95,7 +95,7 @@ test('Table Design › Indexes: a unique index on two fields, saved, enforced in
     createTable(db, personnes);
     await insertRow(db, personnes, { Nom: 'Dupont', Prénom: 'Jean' }, localeInfo('fr-FR'));
   });
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   const dialog = page.getByTestId('indexes-dialog');
   try {
     await page.getByTestId('nav-item-Personnes').click({ button: 'right' });

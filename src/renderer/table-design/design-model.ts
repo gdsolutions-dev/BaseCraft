@@ -3,11 +3,16 @@
 import type { SaveTableRequest } from '../../shared/api';
 import type { ExprErrorCode } from '../../shared/expr/ast';
 import type { MaskErrorCode } from '../../shared/expr/input-mask';
+import { autoIndexed } from '../../shared/auto-index';
 import {
-  changeType, defaultProps, renamedIndexes, renamedRule, LOOKUP_TEXT_KEYS, lookupRowShown, MASK_TYPES, sameName, type FieldProps, type FieldType, type IndexDef, type TableDesign,
+  changeType, defaultProps, DESIGN_DEFAULTS, newFieldProps, renamedIndexes, renamedRule, LOOKUP_TEXT_KEYS, lookupRowShown, MASK_TYPES, sameName, type FieldDefaults, type FieldProps, type FieldType, type IndexDef, type TableDesign,
 } from '../../shared/field-types';
 
-export interface DesignRow { key: string; name: string; props: FieldProps; sourceName: string | null }
+export interface DesignRow { key: string; name: string; props: FieldProps; sourceName: string | null
+  /** A new row's props as created (JSON): the row stays blank while they are unchanged, whatever the defaults become. */
+  seed?: string
+  /** A new field whose name was committed: AutoIndex has had its one chance. */
+  named?: true }
 export interface DesignModel {
   originalName: string | null; description: string; rows: DesignRow[]; selected: number; dirty: boolean; extra?: Record<string, unknown>
   /** The table's rule (canonical, naming the fields by their source names until the save) and its text. */
@@ -23,7 +28,7 @@ export interface ModelIndex { name: string; fields: { key: string; desc: boolean
 export type InvalidCode = ExprErrorCode | MaskErrorCode | 'badCount' | 'badWidths' | 'badListWidth';
 export type DesignAction =
   | { type: 'addRow'; at?: number } | { type: 'deleteRows'; indices: number[] } | { type: 'moveRow'; from: number; to: number }
-  | { type: 'setName'; index: number; name: string } | { type: 'setType'; index: number; fieldType: FieldType }
+  | { type: 'setName'; index: number; name: string } | { type: 'commitName'; index: number; autoIndex: string } | { type: 'setType'; index: number; fieldType: FieldType }
   | { type: 'setDescription'; description: string } // the table's, set from the Properties dialog: not an edit of this design
   | { type: 'setTableProp'; name: 'description' | 'validationRule' | 'validationText'; value: string | undefined } // Property Sheet
   | { type: 'setIndexes'; design: TableDesign } // the Indexes dialog's answer over designOf(m): one field per row, in order
@@ -33,7 +38,10 @@ export type DesignAction =
 export const TABLE_KEY = 'table';
 let seq = 0;
 const row = (name: string, props: FieldProps, sourceName: string | null): DesignRow => ({ key: `r${++seq}`, name, props, sourceName });
-const blankRow = () => row('', defaultProps('shortText'), null);
+const blankRow = (d: FieldDefaults): DesignRow => {
+  const props = newFieldProps(d.type, d);
+  return { ...row('', props, null), seed: JSON.stringify(props) };
+};
 
 /** IndexDefs (fields by name) as model indexes over `rows` (an unknown name is left out, an index left empty too). */
 function keyedIndexes(indexes: IndexDef[] | undefined, rows: DesignRow[]): { indexes?: ModelIndex[] } {
@@ -58,7 +66,7 @@ export const designOf = (m: DesignModel, name: string): TableDesign => {
 
 /** A row the user never touched: the save ignores it, as Access ignores empty lines. */
 function isBlank(r: DesignRow): boolean {
-  return r.name === '' && r.sourceName === null && JSON.stringify(r.props) === JSON.stringify(defaultProps('shortText'));
+  return r.name === '' && r.sourceName === null && JSON.stringify(r.props) === (r.seed ?? JSON.stringify(defaultProps('shortText')));
 }
 
 /** description: the table's description last set from the Properties dialog (DocTab.description), newer than a load
@@ -77,7 +85,7 @@ export function emptyDesign(): DesignModel {
   return { originalName: null, description: '', rows: [], selected: 0, dirty: false, invalid: {} };
 }
 
-export function designReducer(m: DesignModel, a: DesignAction): DesignModel {
+export function designReducer(m: DesignModel, a: DesignAction, d: FieldDefaults = DESIGN_DEFAULTS): DesignModel {
   const rows = [...m.rows];
   const edit = (i: number, fn: (p: FieldProps) => FieldProps): DesignModel =>
     rows[i] ? { ...m, rows: rows.map((r, j) => (j === i ? { ...r, props: fn(r.props) } : r)), dirty: true } : m;
@@ -91,7 +99,7 @@ export function designReducer(m: DesignModel, a: DesignAction): DesignModel {
     }
     case 'addRow': {
       const at = Math.min(a.at ?? rows.length, rows.length);
-      rows.splice(at, 0, blankRow());
+      rows.splice(at, 0, blankRow(d));
       return { ...m, rows, selected: at, dirty: true };
     }
     case 'deleteRows': {
@@ -109,13 +117,20 @@ export function designReducer(m: DesignModel, a: DesignAction): DesignModel {
     }
     case 'setName':
       return rows[a.index] ? { ...m, rows: rows.map((r, j) => (j === a.index ? { ...r, name: a.name } : r)), dirty: true } : m;
+    case 'commitName': {
+      const r = rows[a.index];
+      if (!r || r.sourceName !== null || r.named || r.name === '') return m;
+      const index = !r.props.primaryKey && r.props.indexed === 'no' && autoIndexed(r.name, a.autoIndex);
+      return { ...m, rows: rows.map((x, j) => (j === a.index ? { ...x, named: true, ...(index ? { props: { ...x.props, indexed: 'yesDuplicates' as const } } : {}) } : x)) };
+    }
     case 'setType': {
       const r = rows[a.index];
       if (!r) return m;
       const typed = edit(a.index, (p) => {
         const next = changeType(p, a.fieldType);
         // R7: an AutoNumber is the table's key (changeType itself stays literal).
-        return a.fieldType === 'autoNumber' ? { ...next, primaryKey: true, indexed: 'yesNoDuplicates' } : next;
+        if (a.fieldType === 'autoNumber') return { ...next, primaryKey: true, indexed: 'yesNoDuplicates' };
+        return a.fieldType === 'shortText' ? { ...next, size: d.textSize } : a.fieldType === 'number' ? { ...next, numberSize: d.numberSize } : next;
       });
       // An unreadable entry of a property the new type does not have is gone with its control: it must not block the save.
       const props = typed.rows[a.index]!.props;

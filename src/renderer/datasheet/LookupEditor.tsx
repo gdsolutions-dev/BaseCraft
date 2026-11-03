@@ -1,6 +1,6 @@
 // Éditeur de cellule Glide d'un champ Liste de choix : une zone de saisie et, dessous, la liste filtrée par ce qui est tapé ;
 // l'option qui commence par le texte tapé est mise en évidence (saisie semi-automatique d'Access). Les flèches choisissent ;
-// Entrée, Tab et Échap restent ceux de Glide : chaque changement est déjà transmis, Entrée enregistre donc le choix affiché.
+// Entrée et Tab sont ceux d'Access (useEditKeys), Échap celui de Glide : chaque changement est déjà transmis, Entrée enregistre donc le choix affiché.
 // Comme dans Access : colonnes visibles et leurs largeurs, ligne d'en-têtes, Lignes affichées, Largeur liste, et pour une
 // liste de valeurs modifiable, « Modifier les éléments de la liste… ».
 import type { ProvideEditorCallbackResult, ProvideEditorComponent, TextCell } from '@glideapps/glide-data-grid';

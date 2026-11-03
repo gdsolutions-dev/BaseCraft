@@ -1,6 +1,7 @@
 // Couper, Copier, Coller des contrôles en mode Création (formulaires, états), comme Access. Presse-papiers propre au moteur de rendu :
 // des copies profondes, jamais le presse-papiers du système ni du JSON relu ; il passe d'un formulaire ou d'un état à l'autre.
 import type { TFunction } from 'i18next';
+import { labelOf, ownLabel } from '../../shared/design/layout';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
 import { sameName } from '../../shared/field-types';
 import { getClip, onClip } from '../exchange/object-clipboard';
@@ -30,11 +31,13 @@ export const pasteEnabled = (kinds: ControlKind[]): boolean => canPaste(kinds) |
 
 export const clipContext = (host: DesignerHost, t: TFunction): ClipContext => ({ target: host.target, kinds: host.tools.map((x) => x.kind), prefix: (k) => t(`designer.ctlPrefix.${k}`) });
 
-/** Les contrôles sélectionnés dans l'ordre du document, chacun avec ses enfants (l'étiquette attachée) ; un contrôle sous un autre
- *  contrôle sélectionné vient avec lui, pas deux fois. */
+/** Les contrôles sélectionnés dans l'ordre du document, chacun avec ses enfants (l'étiquette attachée) ou, membre d'une disposition,
+ *  avec l'étiquette de sa ligne dans sa section (ownLabel ; pas l'étiquette d'en-tête d'un Tabulaire, qui se collerait sur lui) ; un
+ *  contrôle sous un autre contrôle sélectionné vient avec lui, pas deux fois. */
 export function copySelection(doc: DesignDoc, selection: Selection): DesignClip | null {
   if (selection.kind !== 'controls') return null;
-  const picked = (n: string) => selection.names.some((x) => sameName(x, n));
+  const names = [...selection.names, ...selection.names.flatMap((n) => ownLabel(doc, n)?.name ?? [])];
+  const picked = (n: string) => names.some((x) => sameName(x, n));
   const under = (n: string): boolean => { const p = findControl(doc, n)?.parent; return !!p && (picked(p) || under(p)); };
   const controls = doc.sections.flatMap((s) => flattenControls(s.controls)).filter((c) => picked(c.name) && !under(c.name));
   if (!controls.length) return null;
@@ -51,7 +54,7 @@ export function pasteControls(doc: DesignDoc, c: DesignClip, section: number, ct
     .map((x) => (x.children ? { ...x, children: keep(x.children) } : x));
   const kept = structuredClone(keep(c.controls));
   if (!s || !kept.length) return null;
-  for (const x of kept) delete x.props.PageIndex;   // collé à la racine de la section
+  for (const x of kept) { delete x.props.PageIndex; delete x.props.LayoutID; }   // collé à la racine de la section, hors de toute disposition
   const all = flattenControls(kept);
   const taken = flattenControls(doc.sections.flatMap((x) => x.controls)).map((x) => x.name);
   let tab = nextTabIndex(s);
@@ -84,7 +87,11 @@ export function clipboardAction(cmd: ClipCommand, s: DesignerState, ctx: ClipCon
     if (!c) return null;
     clip = c;
     listeners.forEach((l) => l());
-    return cmd === 'cut' ? { type: 'deleteSelection' } : null;
+    if (cmd !== 'cut') return null;
+    // Couper supprime ce qu'il emporte : l'étiquette d'en-tête d'un membre Tabulaire, laissée hors du presse-papiers, reste en place
+    const names = s.selection.kind === 'controls' ? s.selection.names : [];
+    const keep = names.flatMap((n) => { const l = labelOf(s.doc, n); return l && !ownLabel(s.doc, n) ? [l.name] : []; });
+    return keep.length ? { type: 'deleteSelection', keep } : { type: 'deleteSelection' };
   }
   if (!clip) return null;
   const sel = s.selection;

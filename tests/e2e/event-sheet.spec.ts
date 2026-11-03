@@ -11,7 +11,7 @@ import { seedSales } from '../../src/main/query/test-db';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import type { MacroItem } from '../../src/shared/macro/model';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, seedBase, seedForm, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -77,13 +77,13 @@ test('Event tab: a named macro picked and run; an embedded macro built with « �
     await expect(page.getByTestId('doc-tab-form-FClients')).not.toContainText('•');
     expect((await getForm(page, 'FClients')).sections[1]!.controls[1]!.props.OnClick).toBe('MLyon');
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await page.getByTestId('form-ctl-cmdCommandes').click();
     await msgbox(page, 'Lyon');
 
     // « … » of the form's « Avant MAJ »: a new embedded macro in its own tab, no Run there
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('designer')).toBeVisible();
     await page.getByTestId('sheet-object').selectOption('doc');
     await page.getByTestId('sheet-tab-event').click();

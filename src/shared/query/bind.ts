@@ -22,7 +22,8 @@ export interface QueryCatalog {
   sourceOf?(table: string): string;
 }
 export type ResolvedRef =
-  | { kind: 'column'; alias: string; field: string; type: FieldType; props: FieldProps; depth: number /* 0 = same level, n = enclosing query */ }
+  | { kind: 'column'; alias: string; field: string; type: FieldType; props: FieldProps; depth: number /* 0 = same level, n = enclosing query */;
+      src: BoundSource /* the source it reads (O4: a rename rewrites what refers to it) */ }
   | { kind: 'param'; name: string /* as written: look it up in `params` with sameName */ }
   | { kind: 'output'; index: number /* alias of the same SELECT: its column index */ };
 export interface BoundSource { alias: string; name: string; kind: 'table' | 'query' | 'derived'; design?: TableDesign; inner?: BoundQuery; source?: string /* a table's */ }
@@ -46,7 +47,7 @@ export interface BoundQuery {
   selects: Map<SelectQuery, BoundSelect>;
   /** A crosstab (B4 R9): `query` is its rewritten SELECT (crosstabSelect), `source` the TRANSFORM query. 'data': headings
    *  from the data, `columns` the row columns only until expandCrosstab binds it with them. */
-  crosstab?: { headings: 'fixed' | 'data'; source: Query };
+  crosstab?: { headings: 'fixed' | 'data'; source: Query; expanded?: true /* C7 R15: bound with its headings for a server connector (remoteExpandCrosstab) */ };
 }
 export type QueryBindErrorCode = 'unknownSource' | 'ambiguousField' | 'circular' | 'tooDeep' | 'notGrouped' | 'aggregateInWhere'
   | 'nestedAggregate' | 'unionArity' | 'updateTarget' | 'unknownTarget' | 'duplicateOutput'
@@ -57,6 +58,7 @@ export type QueryBindErrorCode = 'unknownSource' | 'ambiguousField' | 'circular'
   | 'crosstabValue' // a crosstab value (TRANSFORM) without an aggregate
   | 'pivotAggregate' // an aggregate in PIVOT
   | 'tooManyColumns' // a crosstab past 254 headings or 255 columns (R10); detail: its number of columns
+  | 'passThroughAsSource' // a saved pass-through used as a source (C6 R9); detail: its name
   | 'crosstabAsSource' // a saved crosstab used as a source (R12); detail: its name
   | 'mixedSources'; // tables from two data sources in one query (C1 R10); detail: the first table whose source differs
 
@@ -172,7 +174,7 @@ function infer(ctx: Ctx, a: Expr, b: Expr): void {
  *  of the level, else of an enclosing level; an output alias of the same SELECT (`outputs`); otherwise a parameter. */
 function resolve(e: Id, lvl: Level, outputs: boolean): ResolvedRef {
   const column = (s: BoundSource, c: Col, depth: number): ResolvedRef =>
-    ({ kind: 'column', alias: s.alias, field: c.name, type: c.type, props: c.props, depth });
+    ({ kind: 'column', alias: s.alias, field: c.name, type: c.type, props: c.props, depth, src: s });
   let depth = 0;
   if (e.table !== undefined) {
     for (let l: Level | undefined = lvl; l; l = l.parent, depth++) {
@@ -302,7 +304,7 @@ function bindSelect(q: SelectQuery, parent: Level | undefined, ctx: Ctx): BoundS
       for (const s of list) {
         for (const c of cols(s)) {
           const e: Expr = { k: 'id', name: c.name, table: s.alias };
-          ctx.refs.set(e, { kind: 'column', alias: s.alias, field: c.name, type: c.type, props: c.props, depth: 0 });
+          ctx.refs.set(e, { kind: 'column', alias: s.alias, field: c.name, type: c.type, props: c.props, depth: 0, src: s });
           plan.push({ e, direct: { s, c } });
         }
       }
@@ -686,7 +688,7 @@ function numInfo(e: Expr, b: BoundQuery): NumInfo | undefined {
 }
 
 /** Props of an output column: those of the field it shows (caption, format, lookup…), else the defaults of its type. */
-function columnProps(e: Expr, b: BoundQuery): FieldProps {
+export function columnProps(e: Expr, b: BoundQuery): FieldProps {
   const target = e.k === 'id' ? outputTargets.get(e) : undefined;
   if (target) return columnProps(target, b);
   const r = e.k === 'id' ? b.refs.get(e) : undefined;

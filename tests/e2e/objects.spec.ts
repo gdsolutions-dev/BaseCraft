@@ -4,7 +4,7 @@ import type { BasecraftApi } from '../../src/shared/api';
 import { clients } from '../../src/shared/test-fixtures';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 
@@ -92,7 +92,7 @@ test('Shift+F9 (Requery) refreshes the active datasheet with rows added elsewher
     await expect(page.getByTestId('nav-record-count')).toHaveText('0');
     await page.keyboard.press('Shift+F9');
     await expect(page.getByTestId('nav-record-count')).toHaveText('1');
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('status-mode')).toHaveText(fr.status.mode.design);
     await page.getByTestId('ribbon-tab-home').click(); // Design view shows its contextual tab
     await expect(page.getByTestId('cmd-refresh')).toBeDisabled(); // the design view registers no refresh

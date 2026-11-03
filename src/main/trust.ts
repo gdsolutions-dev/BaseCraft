@@ -88,6 +88,12 @@ export function contentState(a: ActiveContent, dbUuid: string, file: string, dep
   return inTrustedFolder(file, deps.cfg, deps.platform) || deps.store.isApproved(dbUuid, a.fingerprint) ? 'enabled' : 'disabled';
 }
 
+/** C6 Task 8 (owner 2026-10-31): the user trusts the file — its content enabled, or none but in a trusted location — so its
+ *  pass-throughs may use a stored password. No content elsewhere is not trusted: a file of pass-throughs only shows no bar. */
+export function trustsFile(content: ContentState, file: string, cfg: TrustConfig, platform: NodeJS.Platform): boolean {
+  return content === 'enabled' || (content === 'none' && inTrustedFolder(file, cfg, platform));
+}
+
 /** R5, after this user's own write of objects: the content stays enabled, for its new fingerprint, only when the content found
  *  just before the write is the content enabled (changed elsewhere meanwhile: it asks again). `enabled`: the fingerprint enabled
  *  ('' : no content), null when disabled. Returns the fingerprint to enable now, null: disabled. */

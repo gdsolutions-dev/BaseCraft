@@ -9,15 +9,15 @@ import { findControl, sectionBottomLimit } from '../../designer/designer-model';
 import type { Rect } from '../../designer/geometry';
 import { controlSourceToDisplay } from '../../designer/property-sheet-model';
 import { MAX_TWIPS } from '../../designer/units';
-import { readReport } from '../../../shared/report/model';
+import { readReport, type PageSetup } from '../../../shared/report/model';
 import { orientationStates } from '../page-setup';
 
 const PAIR_HEIGHT = 454;   // 0,8 cm, comme une section ajoutée par Access
 const section = (kind: SectionKind, height: number): SectionDef => ({ kind, height, props: {}, controls: [] });
 
-export function blankReport(): DesignDoc {
+export function blankReport(margins?: PageSetup['margins']): DesignDoc {
   // Width stored from the start (the catalog's): the engine never falls back to 6994 (C5, reportWidth)
-  return { formatVersion: '1.0', recordSource: null, props: { grouping: [], Width: defaultFor(PROPERTY_CATALOG.find((d) => d.name === 'Width')!, 'report', 'report') },
+  return { formatVersion: '1.0', recordSource: null, props: { grouping: [], Width: defaultFor(PROPERTY_CATALOG.find((d) => d.name === 'Width')!, 'report', 'report'), ...(margins ? { pageSetup: { orientation: 'portrait', margins } } : {}) },
     sections: [section('pageHeader', PAIR_HEIGHT), section('detail', 2268), section('pageFooter', PAIR_HEIGHT)] };
 }
 

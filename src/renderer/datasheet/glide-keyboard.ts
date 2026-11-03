@@ -1,6 +1,14 @@
-// Deux corrections clavier de Glide 6.0.3, au niveau du DOM (Glide n'offre pas d'API pour ouvrir un éditeur avec un texte).
+// Corrections clavier de Glide 6.0.3 et ouverture de son éditeur, au niveau du DOM (Glide n'offre pas d'API pour ouvrir un éditeur avec un texte).
 
 const EDITOR = '#portal .gdg-clip-region';
+/** An open editor's text entry (Glide's textarea, the masked editor's input, the lookup editor's). */
+const ENTRY = `${EDITOR} textarea, ${EDITOR} input`;
+/** The entries useEditKeys drives for this key (O2 R3–R6); the lookup editor's (a combobox) only for plain Enter and Tab (its
+ *  pick is already its value), F2 and the arrows staying with its list. */
+export const isDrivenEntry = (t: Element, e: KeyboardEvent): boolean => t.matches(ENTRY)
+  && (t.getAttribute('role') !== 'combobox' || ((e.key === 'Enter' || e.key === 'Tab') && !e.ctrlKey && !e.altKey && !e.metaKey));
+/** The open editor's text entry, if any. */
+export const openEntry = (): HTMLInputElement | HTMLTextAreaElement | null => document.querySelector(ENTRY);
 const deferred = new WeakSet<Event>();
 
 /**
@@ -15,6 +23,7 @@ export function installEditorCommitFix(): void {
     if ((e.key !== 'Enter' && e.key !== 'Tab') || (e.key === 'Enter' && e.shiftKey) || e.isComposing || deferred.has(e)) return;
     const target = e.target as Element | null;
     if (!target?.closest?.(EDITOR)) return;
+    if (isDrivenEntry(target, e) && !e.ctrlKey && !e.altKey && !e.metaKey) return; // useEditKeys saves and moves, one timeout later too
     e.preventDefault();
     e.stopImmediatePropagation();
     const again = new KeyboardEvent('keydown', {
@@ -57,6 +66,34 @@ export function openEditorWith(target: EventTarget, ch: string): void {
   target.dispatchEvent(new KeyboardEvent('keydown', { key: PLACEHOLDER, bubbles: true, cancelable: true }));
 }
 let firstChar: string | null = null;
+
+/**
+ * Opens Glide's editor on the selected cell (a synthetic Space, Glide's activateCell; already open: that one), then, once its
+ * entry is in the DOM (a mutation observer, as openEditorWith), places the caret at `at` and applies `key` (a character,
+ * 'Backspace' or 'Delete') as typed there (execCommand: the entry's own input events, its undo).
+ */
+export function editCellFrom(target: EventTarget, at: 'all' | 'start' | 'end', key?: string): void {
+  const apply = (el: HTMLInputElement | HTMLTextAreaElement) => {
+    const n = el.value.length;
+    el.focus();
+    el.setSelectionRange(at === 'end' ? n : 0, at === 'start' ? 0 : n);
+    if (key === 'Backspace') document.execCommand('delete');
+    else if (key === 'Delete') document.execCommand('forwardDelete');
+    else if (key) document.execCommand('insertText', false, key);
+  };
+  const open = openEntry();
+  if (open) return apply(open);
+  const done = () => { observer.disconnect(); clearTimeout(timer); };
+  const observer = new MutationObserver(() => {
+    const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(ENTRY);
+    if (!el) return;
+    done();
+    apply(el);
+  });
+  observer.observe(document.getElementById('portal') ?? document.body, { childList: true, subtree: true });
+  const timer = setTimeout(done, 1000); // no editor opened (the cell refused it): a later editor must not get the key
+  target.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true }));
+}
 
 /** For a custom editor opened by typing (Glide's initialValue): the character openEditorWith stands for, taken once, else null. */
 export function takeFirstChar(): string | null {

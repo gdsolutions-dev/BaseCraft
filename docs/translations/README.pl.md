@@ -64,7 +64,7 @@ Cel: dobry użytkownik Excela, bez pisania kodu, w jedno popołudnie buduje mał
 - Tabele połączone: łącz tabele z innego pliku BaseCraft lub pliku SQLite, Menedżer tabel połączonych
 - Zapisz jako, Kompaktuj i napraw; skojarzenie plików `.basecraft`
 - Wstążka, okienko nawigacji, karty, motywy jasny i ciemny
-- Plik › Opcje: ustawienia stanowiska (potwierdzenia, ostatnio używane bazy, ostatnia baza przy uruchomieniu, folder domyślny) oraz opcje bazy danych (menu, menu kontekstowe, klawisze specjalne, pasek stanu, karty, kompaktowanie przy zamknięciu)
+- Plik › Opcje: ustawienia stanowiska (potwierdzenia, ostatnio używane bazy, ostatnia baza przy uruchomieniu, folder domyślny) oraz opcje bazy danych (menu, menu kontekstowe, klawisze specjalne, pasek stanu, karty, kompaktowanie przy zamknięciu), a także klawisze Enter i strzałek, linie siatki, szerokość i czcionkę arkuszy danych, czterocyfrowe lata oraz wartości domyślne funkcji Znajdź, wartości domyślne projektantów obiektów (typ i rozmiar nowych pól, AutoIndex, AutoJoin, czcionki projektantów, sposób zaznaczania) oraz domyślne marginesy wydruku, automatyczną korektę nazw (śledzenie, wykonywanie i dziennik zmian nazw) i opcje aktualizacji właściwości
 
 ## Plan rozwoju
 

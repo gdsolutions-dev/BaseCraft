@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
+import { createLayout, membersOf } from '../../shared/design/layout-edit';
+import { flattenControls, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { setClip } from '../exchange/object-clipboard';
 import { canPaste, pasteEnabled, clipboardAction, copySelection, pasteControls, type ClipContext } from './designer-clipboard';
 import { designerReducer, findControl, initDesigner, type DesignerState } from './designer-model';
@@ -41,6 +42,41 @@ describe('designer clipboard', () => {
     expect(copySelection(doc, { kind: 'controls', names: ['Étiquette1'] })!.controls.map((c) => c.name)).toEqual(['Étiquette1']);
   });
 
+  it('a pasted layout member leaves its layout behind (no LayoutID), with or without its label', () => {
+    const doc = form();
+    doc.sections[1].controls[1].props.LayoutID = 'L1';
+    const clip = copySelection(doc, { kind: 'controls', names: ['Bouton1'] })!;
+    expect(clip.controls[0].props.LayoutID).toBe('L1');
+    expect(pasteControls(doc, clip, 1, fctx())![0].props).not.toHaveProperty('LayoutID');
+    expect(pasteControls(report(), clip, 1, { ...fctx(), target: 'report' })![0].props).not.toHaveProperty('LayoutID');
+  });
+
+  it('a layout member is copied with its layout label; Cut then Paste brings both back, outside any layout', () => {
+    const laid = createLayout(form(), membersOf(form(), ['Texte1']), 'stacked', { headerSection: 'formHeader' });
+    expect(copySelection(laid, { kind: 'controls', names: ['Texte1'] })!.controls.map((c) => c.name)).toEqual(['Texte1', 'Étiquette1']);
+    expect(copySelection(laid, { kind: 'controls', names: ['Texte1', 'Étiquette1'] })!.controls.map((c) => c.name)).toEqual(['Texte1', 'Étiquette1']);   // once
+    let s = sel(laid, 'Texte1');
+    s = designerReducer(s, clipboardAction('cut', s, fctx())!);
+    expect(findControl(s.doc, 'Étiquette1')).toBeNull();
+    s = designerReducer(s, clipboardAction('paste', s, fctx())!);
+    const label = findControl(s.doc, 'Étiquette1')!.control;
+    expect([label.props.Caption, label.props.LayoutID, findControl(s.doc, 'Texte1')!.control.props.LayoutID]).toEqual(['Nom:', undefined, undefined]);
+    // Copy then Paste beside the originals: every pasted name is new
+    const c = sel(laid, 'Texte1');
+    expect(clipboardAction('copy', c, fctx())).toBeNull();
+    const p = designerReducer(c, clipboardAction('paste', c, fctx())!);
+    const names = p.doc.sections.flatMap((x) => flattenControls(x.controls)).map((x) => x.name);
+    expect(names).toHaveLength(new Set(names).size);
+    expect(names).toHaveLength(flattenControls(laid.sections.flatMap((x) => x.controls)).length + 2);
+  });
+  it('a Tabular member is copied alone (its header label is in another section); Cut leaves that label, Delete still takes it', () => {
+    const tab = createLayout(form(), membersOf(form(), ['Texte1']), 'tabular', { headerSection: 'formHeader' });
+    const clip = copySelection(tab, { kind: 'controls', names: ['Texte1'] })!;
+    expect([clip.controls.map((c) => c.name), clip.section.kind]).toEqual([['Texte1'], 'detail']);
+    const s = sel(tab, 'Texte1');
+    expect(findControl(designerReducer(s, clipboardAction('cut', s, fctx())!).doc, 'Étiquette1')).not.toBeNull();   // not on the clipboard: kept
+    expect(findControl(designerReducer(s, { type: 'deleteSelection' }).doc, 'Étiquette1')).toBeNull();
+  });
   it('pastes below the source in its own section, renamed Access style, label still attached, TabIndex next', () => {
     const doc = form();
     const clip = copySelection(doc, { kind: 'controls', names: ['Texte1'] })!;

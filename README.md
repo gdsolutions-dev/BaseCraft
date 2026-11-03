@@ -64,9 +64,13 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - Linked tables: link the tables of another BaseCraft file or a SQLite file, Linked Table Manager; a linked table opens in Design view read-only, after a warning (as in Access)
 - Linked Access databases (`.accdb`, `.mdb`, password-protected ones too): link their tables read-only, refreshed when the file changes
 - Split database: Database Tools › Split Database moves the tables to a shared data file; several workstations enter data in it at the same time, with Access's Write Conflict dialog and refresh interval (see [Split database and shared data file](#split-database-and-shared-data-file))
+- PostgreSQL linked tables: External Data › PostgreSQL links server tables over TLS; datasheets, forms and queries on them run on the server, and two people editing the same record get the Write Conflict dialog (see [PostgreSQL linked tables](#postgresql-linked-tables))
+- SQL Server linked tables: External Data › SQL Server links server tables (SQL login, encrypted connection, named instances) the same way (see [SQL Server linked tables](#sql-server-linked-tables))
+- Move to a server: Database Tools › Move Data › « Vers un serveur » moves every local table (structure, data, keys, indexes, relationships) to PostgreSQL or SQL Server after a backup copy, replaces them with linked tables that keep their captions, formats and rules, and shows a report; External Data › Import › PostgreSQL / SQL Server copies server tables into local ones (see [Move to a server](#move-to-a-server))
+- Pass-through queries: Query Type › SQL direct sends a text in PostgreSQL's or SQL Server's own language to the server as typed, with a read-only result for datasheets, forms and reports or an action run with « Activer le contenu » (see [Pass-through queries](docs/postgresql.md#pass-through-queries))
 - Save As, Compact and Repair; `.basecraft` file association
 - Ribbon, navigation pane, tabs, light and dark themes
-- File › Options: workstation settings (confirmations, recent databases, last database at startup, default folder) and database options (menus, shortcut menus, special keys, status bar, tabs, compact on close)
+- File › Options: workstation settings (confirmations, recent databases, last database at startup, default folder) and database options (menus, shortcut menus, special keys, status bar, tabs, compact on close), plus Enter and arrow keys, datasheet gridlines, width and font, four-digit years and Find defaults, object designers' defaults (new field type and size, AutoIndex, AutoJoin, designer fonts, selection behavior) and default print margins, Name AutoCorrect (track, perform, and log renames) and the property update options
 
 ## Roadmap
 
@@ -133,6 +137,38 @@ Database Tools › Split Database (« Fractionner la base de données ») moves 
 - **One front-end per workstation with the full application.** BaseCraft (the full application) opens a front-end in place, with its exclusive lock: give each workstation its own copy of the front-end (on its own disk, or its own file on the share). Two people who open the same front-end file with the full application get it the way any base works: the second one reads only, its links to the data file included.
 - **BaseCraft Runtime** opens a front-end from a share through a local copy (in its user data folder), copied again when the original changes: only the Runtime does this copy for you. Republish the front-end on the share and each workstation takes the new version at its next opening.
 
+### PostgreSQL linked tables
+
+External Data › PostgreSQL (« Données externes › PostgreSQL ») links the tables of a PostgreSQL server, as Access links ODBC tables. Datasheets, forms and queries on them run on the server, and the server checks and stores every write. When two people change the same record, the second save shows the Write Conflict dialog. The full reference (types, the functions a query can use on a server, the differences from Access) is in [docs/postgresql.md](docs/postgresql.md).
+
+- **Requirements:** PostgreSQL 14 or later; a login with `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the linked tables; a primary key on each table you want to edit (a view or a table without one opens read-only).
+- **TLS:** « Chiffré, certificat vérifié » (the default) needs the server's certificate to be trusted by the workstation: install the certificate of its authority in the system's store. « Chiffré, sans vérifier le certificat » encrypts without checking it. « Non chiffré » is for a trusted network only.
+- **Passwords:** each user logs in with their own PostgreSQL login. The password is never written into the front-end. With « Mémoriser le mot de passe sur ce poste » (ticked by default), it is encrypted with the operating system's protection (safeStorage: Windows: your account's DPAPI; Linux: the desktop's keyring) and kept in `credentials.json` in BaseCraft's user data folder. A remembered password is tied to the link's TLS mode: after a change of mode, it is asked once more.
+- **Linux without a keyring** (no GNOME Keyring or KWallet, as on a minimal install): BaseCraft never stores the password in a weaker form. « Mémoriser » is disabled, with an explanation, and the password is asked at each session.
+- **What runs on a server:** datasheets, forms and queries on one or several joined server tables, including data entry through a query on several tables (orders joined to their customers: one server transaction, all or nothing). Action queries (Append, Update, Delete: one server transaction) and crosstab queries run on the server too; Make-Table queries do not. A function BaseCraft cannot translate for PostgreSQL (`Format`, for example) is refused with a message that names it, and the query is not sent. A query cannot mix local tables and server tables.
+- **Case and accents:** text comparisons ignore case, as in Access. On a server whose character classification (`LC_CTYPE`) is `C`, accented capitals such as `É` are not folded: there, « ÉTÉ » and « été » differ. A server created with a UTF-8 locale or an ICU collation folds them.
+- **One front-end per workstation:** give each workstation its own copy of the front-end, as for a split database.
+
+### SQL Server linked tables
+
+External Data › SQL Server (« Données externes › SQL Server ») links the tables of a SQL Server database as PostgreSQL's do: queries run on the server and the server checks and stores every write. The full reference (types, collations, the functions a query can use, locking, pass-through queries, limits) is in [docs/sqlserver.md](docs/sqlserver.md).
+
+- **Requirements:** SQL Server 2016 or later, Azure SQL Database or Managed Instance; a SQL Server login (Windows and Microsoft Entra authentication are not supported) with `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the linked tables; a primary key on each table you want to edit (a view or a table without one opens read-only).
+- **Encryption:** « Chiffré, certificat vérifié » (the default) needs the server's certificate to be trusted by the workstation. « Chiffré, approuver le certificat du serveur » encrypts without checking it (SQL Server's self-signed certificate). « Non chiffré » is for a trusted network only.
+- **Named instances:** type `host\instance` (for example `serveur\SQLEXPRESS`) in « Serveur »; the port is then found through the SQL Server Browser service (UDP 1434).
+- **Passwords:** as for PostgreSQL: each user logs in with their own login; the password is never written into the front-end; « Mémoriser » keeps it encrypted with the operating system's protection, and never on Linux without a keyring.
+- **Conflicts:** a table with a `rowversion` column is checked on it; one without is checked on the values read (except `float`, `real` and long text columns), as Access does.
+
+### Move to a server
+
+Database Tools › Move Data › « Vers un serveur » (« Assistant Migration vers un serveur ») moves an application's tables to PostgreSQL or SQL Server, as Access's Upsizing Wizard does. The full guide (what moves, the type table, what stays in the front-end, the safety rules, the report, the limits) is in [docs/server-migration.md](docs/server-migration.md).
+
+- **What moves:** every local table, with its data, primary key, required fields, literal defaults, indexes and enforced relationships (cascades included; on SQL Server, a cascade that would give a table two paths is created without cascade and the report says so). AutoNumbers continue after the largest number ever given. SQL Server tables get a `bc_rowversion` column for exact conflict checks.
+- **Safety:** a backup copy of the base is made first; the server side is one transaction, so a failure, a lost connection or Stop leaves nothing on the server; then every local table is replaced by its link in one local transaction, or none is.
+- **What stays in the front-end:** validation rules, expression defaults and Allow Zero Length are checked by BaseCraft on every write, not by the server: other programs writing to the tables bypass them. Queries, forms, reports and macros stay in the front-end; the report lists the queries the server cannot run.
+- **Afterwards:** the base is a front-end (« Application frontale »): give it to the workstations, where BaseCraft Runtime opens it from a local copy, and several people enter data at the same time with the Write Conflict dialog.
+- **Import:** External Data › Import › PostgreSQL / SQL Server copies server tables into new local tables (data, types and key; not the other indexes).
+
 ### Reading a `.basecraft` file from Power Query
 
 A `.basecraft` file is an ordinary SQLite database, so Excel and Power BI can read its tables through an ODBC driver. Power Query has no built-in SQLite connector.
@@ -180,6 +216,9 @@ Stack: Electron, React, TypeScript, Vite, Glide Data Grid, SQLite.
 ## Documentation
 
 - [UI mockups](https://gdsolutions-dev.github.io/BaseCraft/maquettes/)
+- [PostgreSQL linked tables](docs/postgresql.md)
+- [SQL Server linked tables](docs/sqlserver.md)
+- [Move an application to a server](docs/server-migration.md)
 
 ## License
 

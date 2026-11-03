@@ -8,7 +8,7 @@ import { defaultProps, quoteIdent, sameName, type TableDesign } from '../../shar
 import type { LocaleInfo } from '../../shared/locale-format';
 import { isSelectBody, type Query } from '../../shared/query/ast';
 import { bindQuery, QueryBindError, toSourceInfo, type BoundQuery, type QueryCatalog } from '../../shared/query/bind';
-import { invalidQueryError, isSqlSource, parseQueryDefinition } from '../../shared/query/definition';
+import { invalidQueryError, isSqlSource, parseQueryDefinition, passThroughOf } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import type { RecordSourceRef, SourceField, SourceInfo, SourcePage, SourcePageRequest } from '../../shared/record-source';
 import type { FieldFilter } from '../../shared/api';
@@ -20,12 +20,15 @@ import { compileSelect, orderKeys, type CompiledSelect } from './compile';
 import { expandCrosstab } from './crosstab';
 
 import type { QueryRef } from '../../shared/api';
+import type { RemoteTable, ServerKind } from '../connectors/connector';
+import { CONNECTORS, type ConnectorRegistry } from '../connectors/registry';
 
 export type { QueryRef };
 export interface QueryCtx { info: LocaleInfo; writeSeq: () => number /* moves on every write (Session.writeDb) */ }
 
 /** SQL of a stored query; a definition that no longer reads names its query: `bc:invalidQuery|storedQuery|<name>`. */
 function storedSql(o: { name: string; definition: unknown }): string {
+  if (passThroughOf(o.definition)) throw new QueryBindError('passThroughAsSource', o.name); // C6 R9
   try {
     return parseQueryDefinition(o.definition).sql;
   } catch (e) {
@@ -46,8 +49,12 @@ export function queryCatalog(db: DatabaseSync): QueryCatalog {
 
 /** Where queries bind and run (C1 R10): the front-end holds the saved queries, `catalog` finds tables (local or linked) and
  *  their source, and a bound query runs on `dbOf(b.source, write)`. A bare DatabaseSync is all of these at once. */
-/** `writable`: false when the source is read-only (a link whose file another session holds); absent, every source is. */
-export interface QueryConn { front: DatabaseSync; catalog: QueryCatalog; dbOf(source: string, write: boolean): DatabaseSync; writable?(source: string): boolean }
+/** `writable`: false when the source is read-only (a link whose file another session holds); absent, every source is.
+ *  `remote`: a server source (C4), its kind and its linked tables by link name; undefined for the front-end or a file. */
+export interface QueryConn {
+  front: DatabaseSync; catalog: QueryCatalog; dbOf(source: string, write: boolean): DatabaseSync; writable?(source: string): boolean;
+  remote?(source: string): { kind: ServerKind; table(name: string): RemoteTable } | undefined;
+}
 export type QueryDb = DatabaseSync | QueryConn;
 export const queryConn = (x: QueryDb): QueryConn => ('front' in x ? x : { front: x, catalog: queryCatalog(x), dbOf: () => x });
 
@@ -64,6 +71,8 @@ function parse(sql: string): Query {
  * The bound SELECT or UNION of `ref` (with `action`: the bound action query, bc:invalidArgument for a SELECT or UNION). bc:notFound (saved query missing), bc:notFound|unknownSource|<name> (a table or query it
  * names is missing: contract 1.2), bc:invalidQuery|…, bc:notSelectQuery, bc:queryBind|…. A key table without a real rowid
  * (WITHOUT ROWID, a field named rowid: adopted tables), or a joined table without one, makes the query read-only, as its table datasheet refuses it.
+ * On a server source (C4 R9): a Make-Table (C7 R14) …|makeTable|<kind>; updatable only when
+ * every table it writes (C5 R16: the key table and the 'one' tables) has a key, on a writable source.
  */
 export function resolve(x: QueryDb, ref: QueryRef, action = false): BoundQuery {
   const c = queryConn(x);
@@ -81,11 +90,21 @@ export function resolve(x: QueryDb, ref: QueryRef, action = false): BoundQuery {
     bound = bindQuery(q, c.catalog, self);
   } catch (e) {
     if (e instanceof Error && e.message.startsWith('bc:queryBind|unknownSource|')) throw new Error(e.message.replace('bc:queryBind', 'bc:notFound'), { cause: e });
+    // C7 R14: a Make-Table reading a server source (its INTO, a front-end table, is the other source)
+    const body = q.body;
+    if (body.k === 'select' && body.into !== undefined && e instanceof QueryBindError && e.code === 'mixedSources' && e.detail === body.into) {
+      const { into: _into, ...read } = body;
+      const server = c.remote?.(bindQuery({ ...q, body: read }, c.catalog, self).source);
+      if (server) throw new Error(`bc:serverNotSupported|makeTable|${server.kind}`, { cause: e });
+    }
     throw e;
   }
   // every table written (B4: the key table and the 'one' tables) is located by its rowid
   const written = bound.writePlan?.map((w) => w.table) ?? [bound.keyTable!];
-  if (bound.updatable) {
+  const server = c.remote?.(bound.source);
+  if (server) {
+    if (bound.updatable && (!written.every((t) => server.table(t).key.length) || c.writable?.(bound.source) === false)) bound.updatable = false;
+  } else if (bound.updatable) {
     const db = c.dbOf(bound.source, false); // where its tables are
     if (!written.every((t) => hasRealRowid(db, tableDesign(db, t))) || c.writable?.(bound.source) === false) bound.updatable = false;
   }
@@ -94,8 +113,7 @@ export function resolve(x: QueryDb, ref: QueryRef, action = false): BoundQuery {
 
 /** A crosstab (B4 R11): its IN headings; else those of the data, with `params` when it has parameters — without them, its
  *  row columns only and `crosstab.headings` 'needsParameters'. `params`: as a page's, converted in the region. */
-export function describeQuerySource(x: QueryDb, ref: QueryRef, info: LocaleInfo, params?: Record<string, CellInput>): SourceInfo {
-  const b = resolve(x, ref);
+export function describeQuerySource(x: QueryDb, ref: QueryRef, info: LocaleInfo, params?: Record<string, CellInput>, b = resolve(x, ref)): SourceInfo {
   if (!b.crosstab) return toSourceInfo(b);
   if (b.crosstab.headings === 'fixed') return toSourceInfo(expandCrosstab(x, b, {}, info)); // IN: no value needed
   if (b.params.length && !params) return { ...toSourceInfo(b), crosstab: { headings: 'needsParameters' } };
@@ -171,8 +189,7 @@ const MAX_TOTALS = 256;
  * table when the query is updatable. `total` counts the filtered rows, cached until the next write (never for a query or
  * filter calling Date(), Now() or Time()).
  */
-export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageRequest, ctx: QueryCtx): SourcePage {
-  const resolved = resolve(x, ref);
+export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageRequest, ctx: QueryCtx, resolved = resolve(x, ref)): SourcePage {
   const db = queryConn(x).dbOf(resolved.source, false);
   const values = paramValues(resolved, req.params ?? {}, ctx.info);
   const b = expandCrosstab(x, resolved, values, ctx.info); // a crosstab: its headings from these values (R11)
@@ -215,10 +232,17 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
 /**
  * Save check of a query definition (objects.save): its shape and SQL (parseQueryDefinition), then its binding against the
  * catalog where `name` already holds the new SQL, so a cycle through it is found (`QA → QB → QA`). Action queries are
- * checked too. Throws bc:invalidQuery|… or bc:queryBind|…; the caller writes nothing then.
+ * checked too; a pass-through only has its connector and params checked (C6 R13). Throws bc:invalidQuery|… or bc:queryBind|…; the caller writes nothing then.
  */
-export function checkQueryDefinition(x: QueryDb, name: string, definition: unknown): void {
+export function checkQueryDefinition(x: QueryDb, name: string, definition: unknown, connectors: ConnectorRegistry = CONNECTORS): void {
   const { sql } = parseQueryDefinition(definition);
+  const pt = passThroughOf(definition);
+  if (pt) { // C6 R13: its connector reads the params; nothing is bound (the text is the server's)
+    const connector = connectors[pt.kind];
+    if (!connector?.capabilities.passThrough) throw new Error(`bc:serverNotSupported|passThrough|${pt.kind}`);
+    connector.params(pt.params);
+    return;
+  }
   const base = queryConn(x).catalog;
   bindQuery(parseSql(sql), { ...base, query: (n) => (sameName(n, name) ? sql : base.query(n)) }, name);
 }
@@ -237,18 +261,19 @@ export function rowSourceRef(db: DatabaseSync, text: string): RecordSourceRef | 
 }
 
 /** A lookup's Row Source, never a crosstab (R12): bc:queryBind|crosstabAsSource|<its name>. */
-function lookupSource(db: DatabaseSync, ref: QueryRef): BoundQuery {
+function lookupSource(db: QueryDb, ref: QueryRef): BoundQuery {
   const b = resolve(db, ref);
   if (b.crosstab) throw new QueryBindError('crosstabAsSource', ref.kind === 'query' ? ref.name : '');
   return b;
 }
 
-/** Limit To List through a query or SQL Row Source: column `column` of the source holds `value`, compared as stored. */
-export function sourceHasValue(db: DatabaseSync, ref: QueryRef, column: number, value: SqlValue, info: LocaleInfo): boolean {
-  const b = lookupSource(db, ref);
+/** Limit To List through a query or SQL Row Source: column `column` of the source holds `value`, compared as stored; run where
+ *  its tables are (C7 R12: a server link's Row Source over local tables or file links). */
+export function sourceHasValue(x: QueryDb, ref: QueryRef, column: number, value: SqlValue, info: LocaleInfo): boolean {
+  const b = lookupSource(x, ref);
   if (!Number.isSafeInteger(column) || column < 0 || column >= b.columns.length) throw new Error('bc:invalidArgument');
   const c = compile(b, paramValues(b, {}, info), info);
-  return run(db, `SELECT 1 FROM (${c.sql}) WHERE "c${column}" = ? LIMIT 1`, [...c.params, value]).length > 0;
+  return run(queryConn(x).dbOf(b.source, false), `SELECT 1 FROM (${c.sql}) WHERE "c${column}" = ? LIMIT 1`, [...c.params, value]).length > 0;
 }
 
 /** A lookup list through a query or SQL Row Source (A2-R18): its columns and its first `limit` rows, in the query's order.

@@ -12,26 +12,13 @@ import { createBaseFile, openBaseFile } from '../../main/db/file-format';
 import { createTable, reconcile, tableDesign } from '../../main/db/schema';
 import { defaultProps, quoteIdent, sameName, type TableDesign } from '../field-types';
 import type { SelectQuery } from '../query/ast';
-import { f, t } from '../test-fixtures';
+import type { SqlValue } from '../coerce';
+import { CROSS_ROWS, CROSS_TABLE } from './cross-cases';
 
 const LOCALE = 'fr-FR';
-const T = t('T', [
-  f('id', 'autoNumber'), f('txt', 'shortText'), f('n', 'number', { numberSize: 'double' }), f('i', 'number'),
-  f('d', 'dateTime'), f('b', 'yesNo'),
-]);
-// txt, n, i, d, b : Null, accents, casse, apostrophe, %, ;, texte numérique
-const DATA: [string | null, number | string | null, number | null, string | null, number][] = [
-  ['Dupont', 1, 1, '2026-10-01 00:00:00', 1],
-  ['dupont', 2.5, 2, '2026-11-15 00:00:00', 0],
-  [null, null, null, null, 0],
-  ['été', 3, 3, '2025-12-31 00:00:00', 1],
-  ["O'Brien", 1.5, -4, '2026-09-30 23:59:59', 0],
-  ['50%', 0, 0, '2026-10-02 12:00:00', 1],
-  ['a;b', -2, 10, null, 0],
-  ['Été', 2, null, '2026-01-01 00:00:00', 1],
-  ['12', 0.1, 7, '2026-10-31 06:00:00', 0],
-  ['x', '1,5', 5, '2026-10-31', 1], // valeurs mal formées écrites par un outil externe : texte dans REAL, date sans heure
-];
+const T = CROSS_TABLE;
+// CROSS_ROWS (rows 1–9), then a row of malformed values written by an external tool: text in REAL, a date without time
+const DATA: SqlValue[][] = [...CROSS_ROWS, ['x', '1,5', 5, '2026-10-31', 1]];
 // Table adoptée, créée hors de BaseCraft : colonne INT sans CHECK (texte, BLOB), entiers au-delà de 2^53.
 const BIG = 2n ** 60n;
 const BLOB = new Uint8Array([1, 2, 3]);
@@ -205,7 +192,7 @@ describe('compileSql', () => {
     expect(compileSql(parseCanonical('[prix "ttc" ÉTÉ] > 1'), c).sql).toContain('"Prix ""TTC"" été"');
   });
   it('no native operator: the declared type does not guarantee the stored class', () => {
-    for (const s of ['[i] > 2', '[id] Is Not Null']) expect(compileSql(parseCanonical(s), src.ctx).sql).toMatch(/^bc_truth\(/);
+    for (const s of ['[i] > 2', '[id] Is Not Null']) expect(compileSql(parseCanonical(s), src.ctx).sql).toMatch(/^bc_(truth|cmp)\(/);
   });
   it('onError: a bad row excludes it, or fails the query on demand', () => {
     const e = parseCanonical('[txt] * 2 > 0');
@@ -390,3 +377,20 @@ function generator(seed: number): () => string {
   }
   return () => (rnd() < 0.9 ? g('bool', 4) : g(pick(['num', 'str', 'date'] as const), 3));
 }
+
+describe('bc_cmp (a comparison of two simple operands in one call)', () => {
+  it('gives what bc_truth(bc_op) gives on every pair of columns and literals, malformed values of an adopted table included', () => {
+    for (const [name, t] of [['T', src], ['X', ext]] as const) {
+      const ops = [...t.ctx.fields.map((f) => `[${f.name}]`), '"zoe"', '"1,5"', '""', '12', '0'];
+      for (const a of ops) for (const b of ops) for (const op of ['=', '<>', '<', '>=']) {
+        const cond = `${a} ${op} ${b}`;
+        const fast = compileSql(parseCanonical(cond), t.ctx);
+        if (!a.startsWith('[') && !b.startsWith('[')) continue; // two literals: compared once, no row read
+        expect(fast.sql, cond).toMatch(/^bc_cmp\(/);
+        const slow = compileSql(parseCanonical(`(${cond}) And True`), t.ctx); // not a bare comparison: bc_truth(bc_op)
+        const read = (f: { sql: string; params: unknown[] }) => db.prepare(`SELECT ${f.sql} AS r FROM ${quoteIdent(name)} ORDER BY rowid`).all(...(f.params as never[])).map((x) => (x as { r: unknown }).r);
+        expect(read(fast), `${name}: ${cond}`).toEqual(read(slow));
+      }
+    }
+  });
+});

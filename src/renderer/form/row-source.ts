@@ -3,7 +3,7 @@
 import type { LookupData } from '../../shared/api';
 import { listItemText, listItemValue, type CellInput, type SqlValue } from '../../shared/coerce';
 import type { ControlDef } from '../../shared/design/model';
-import { DEFAULT_COLUMN_WIDTH, shownColumns, splitValueList, valueListRows } from '../../shared/field-types';
+import { DEFAULT_COLUMN_WIDTH, sameName, shownColumns, splitValueList, valueListRows } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
 import { texts } from '../datasheet/datasheet-cells';
@@ -37,9 +37,10 @@ const int = (v: unknown, fallback: number): number => (typeof v === 'number' && 
 
 /** The control's list: a value list as typed (its bound items converted as the bound field stores them), or the first Column
  *  Count fields of a table or query (at most LIST_MAX rows: truncated beyond). An unknown source or one that cannot be read
- *  gives no rows and its error; never throws. `askParams`: the values of a parameterized source (null: declined, no rows). */
+ *  gives no rows and its error; never throws. `askParams`: the values of a parameterized source (null: declined, no rows).
+ *  `ctx.passThroughs`: pass-through queries, refused (C6 R9: never a list's source; reading one would run its text). */
 export async function loadRowSource(c: ControlDef, bound: SourceField | null, api: Pick<FormDataApi, 'describe' | 'page'>,
-  ctx: { locale: string; lang: 'fr' | 'en'; tables: string[]; queries: string[] },
+  ctx: { locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean; tables: string[]; queries: string[]; passThroughs?: string[] },
   askParams?: (p: SourceInfo['parameters']) => Promise<Record<string, CellInput> | null>): Promise<{ data: LookupData; truncated: boolean; error?: unknown }> {
   const count = int(prop(c, 'ColumnCount'), 1);
   const b = int(prop(c, 'BoundColumn'), 1) - 1;
@@ -61,6 +62,7 @@ export async function loadRowSource(c: ControlDef, bound: SourceField | null, ap
   if (source.trim() === '') return empty();
   const ref = toSourceRef(source, ctx.tables, ctx.queries);
   if (!ref) return empty(new Error(`bc:notFound ${source}`));
+  if (ref.kind === 'query' && ctx.passThroughs?.some((n) => sameName(n, ref.name))) return empty(new Error(`bc:queryBind|passThroughAsSource|${ref.name}`));
   try {
     const info = await api.describe(ref);
     const params = info.parameters.length && askParams ? await askParams(info.parameters) : undefined;

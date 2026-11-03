@@ -13,7 +13,7 @@ import { ImageCtl } from './controls/ImageCtl';
 import { LabelCtl } from './controls/LabelCtl';
 import { ListBoxCtl } from './controls/ListBoxCtl';
 import { OptionGroupCtl } from './controls/OptionGroupCtl';
-import { placed, type RunCtx } from './controls/run-ctx';
+import { labelTarget, placed, type RunCtx } from './controls/run-ctx';
 import { ShapeCtl } from './controls/ShapeCtl';
 import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
@@ -75,7 +75,10 @@ export function FormSection({ section, x, width }: { section: SectionDef; x: Run
     <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, background: back }}
       onClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnClick'); }}
       onDoubleClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnDblClick'); }}>
-      {order.map((i) => renderControl(section.controls[i], x, null, i))}
+      {order.map((i) => {   // a layout label: linked to its control (<label for>), hidden with it
+        const to = labelTarget(section.controls[i], section, x);
+        return to && prop(to, 'Visible') === false ? null : renderControl(section.controls[i], x, null, i, to && x.id(to.name));
+      })}
     </div>
   );
 }

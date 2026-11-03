@@ -42,6 +42,26 @@ function designerGuard(runtime: boolean) {
   };
 }
 
+/** C4 R1, C5 R1: each server driver (`pg`, `tedious`) sits in a chunk of its own, reached from the main bundle's entries (index,
+ *  db-host) only through import(); the build fails if an entry loads one statically, or if no chunk holds it (externalized: the
+ *  packaged app has no node_modules). Each is found by a module only it brings. */
+const DRIVERS: [string, RegExp][] = [['pg', /[\\/]node_modules[\\/]pg-protocol[\\/]/], ['tedious', /[\\/]node_modules[\\/]tedious[\\/]lib[\\/]/]];
+const lazyDriverGuard = {
+  name: 'lazy-driver-guard',
+  apply: 'build' as const,
+  generateBundle(this: { error(msg: string): never }, _: unknown, bundle: Record<string, { type: string; isEntry?: boolean; imports?: string[]; moduleIds?: string[] }>) {
+    const seen = new Set<string>();
+    const walk = (file: string): void => { if (!seen.has(file)) { seen.add(file); bundle[file]?.imports?.forEach(walk); } };
+    for (const [file, c] of Object.entries(bundle)) if (c.isEntry) walk(file);
+    for (const [name, module] of DRIVERS) {
+      const holds = (file: string) => (bundle[file]?.moduleIds ?? []).some((id) => module.test(id));
+      if (!Object.keys(bundle).some(holds)) this.error(`lazy-driver-guard: no chunk holds ${name}`);
+      const eager = [...seen].filter(holds);
+      if (eager.length) this.error(`lazy-driver-guard: ${name} is loaded at start by ${eager.join(', ')}`);
+    }
+  },
+};
+
 // The Runtime build (--mode runtime, B5): the same sources with the designers removed, in out-runtime/ (out/ stays the full build's).
 // Once main is built, the folder gets its package.json and icon (scripts/runtime-stage.mjs): `electron out-runtime` then runs as packaged.
 const runtimeStage = {
@@ -57,10 +77,12 @@ export default defineConfig(({ mode }) => {
   return {
     // db-host: the data process (utilityProcess.fork of out/main/db-host.js), the only one that opens SQLite
     // exceljs and mdb-reader (C2, Access files) are bundled (the packaged app has no node_modules)
-    main: { define, ...(runtime ? { plugins: [runtimeStage] } : {}), build: { ...outDir('main'), externalizeDeps: { exclude: ['exceljs', 'mdb-reader'] }, rollupOptions: {
+    // pg (C4) and tedious (C5) are bundled too, each in its own chunk loaded on first use (lazyDriverGuard)
+    main: { define, plugins: [lazyDriverGuard, ...(runtime ? [runtimeStage] : [])], build: { ...outDir('main'), externalizeDeps: { exclude: ['exceljs', 'mdb-reader', 'pg', 'tedious'] }, rollupOptions: {
       input: { index: 'src/main/index.ts', 'db-host': 'src/main/db-host/host.ts' },
       // unzipper (exceljs) requires it lazily, only for Open.s3_v3, which BaseCraft never calls
-      external: ['@aws-sdk/client-s3'],
+      // pg requires pg-native (native bindings) only through its `native` getter, which BaseCraft never reads
+      external: ['@aws-sdk/client-s3', 'pg-native'],
     } } },
     // sandbox: true impose un preload empaqueté en CJS
     preload: { define, build: { ...outDir('preload'), rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].js' } } } },

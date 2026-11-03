@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ControlDef, ControlKind, SectionDef } from '../../shared/design/model';
+import { readLayouts, reflow } from '../../shared/design/layout';
 import { validateDesignDoc } from '../../shared/design/model';
 import type { FieldProps, FieldType } from '../../shared/field-types';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
@@ -104,7 +105,7 @@ describe('form definition', () => {
     const info = { ...clientsInfo, fields: clientsInfo.fields.slice(0, 6) };
     const d = autoForm(tbl('Clients'), 'Clients', info, labels);
     expect(d.props.DefaultView).toBe('single'); expect(d.sections[0].controls[0]).toMatchObject({ kind: 'label', props: { Caption: 'Clients', FontWeight: 'bold' } });
-    expect(d.sections[1].controls.map((c) => c.name)).toEqual(['N°', 'Nom', 'Âge', 'Actif', 'Solde', 'Email']);
+    expect(d.sections[1].controls.filter((c) => c.kind !== 'label').map((c) => c.name)).toEqual(['N°', 'Nom', 'Âge', 'Actif', 'Solde', 'Email']);
     expect(d.sections[1].controls.find((c) => c.name === 'Actif')!.kind).toBe('checkBox');
     expect(JSON.stringify(d)).not.toMatch(/"#[0-9a-f]{6}"/);   // couleurs de thème seulement
     expect(validateDesignDoc(d)).toEqual([]); expect(parseFormDoc(JSON.parse(JSON.stringify(d))).dropped).toBe(0);
@@ -112,27 +113,34 @@ describe('form definition', () => {
   it("auto form on a join: a column named Table.Field gets a valid control name, its Control Source stays the column (B4)", () => {
     const f = (name: string) => ({ name, type: 'autoNumber' as const, props: { type: 'autoNumber' as const, required: false, indexed: 'no' as const, primaryKey: false } });
     const d = autoForm({ kind: 'query', name: 'QSaisie' }, 'QSaisie', { updatable: true, parameters: [], fields: [f('Commandes.N°'), f('Clients.N°')] }, labels);
-    expect(d.sections[1].controls.map((c) => [c.name, c.props.ControlSource])).toEqual([['Commandes_N°', 'Commandes.N°'], ['Clients_N°', 'Clients.N°']]);
+    expect(d.sections[1].controls.filter((c) => c.kind !== 'label').map((c) => [c.name, c.props.ControlSource])).toEqual([['Commandes_N°', 'Commandes.N°'], ['Clients_N°', 'Clients.N°']]);
     expect(validateDesignDoc(d)).toEqual([]); expect(parseFormDoc(JSON.parse(JSON.stringify(d))).dropped).toBe(0);
   });
-  it('auto form layout: columnar, 0,15 cm apart, labels at 0,5 cm, controls at 3,5 cm, widths by type, Width fitted', () => {
+  it('auto form layout: one Stacked layout (rows ROW_GAP apart instead of 0,15 cm), labels at 0,5 cm, controls at 3,5 cm, widths by type, Width fitted', () => {
     const d = autoForm(tbl('Clients'), 'Clients', clientsInfo, labels);
     expect(d.recordSource).toEqual(tbl('Clients'));
     const [header, detail, footer] = d.sections;
     expect(header).toMatchObject({ kind: 'formHeader', height: 680, props: { Visible: true } });
     expect(header.controls[0].props).toEqual({ Caption: 'Clients', FontSize: 16, FontWeight: 'bold' });   // colors, BackStyle, BorderStyle: catalog defaults
     expect(footer).toMatchObject({ kind: 'formFooter', height: 284, props: { Visible: true }, controls: [] });
-    const geo = detail.controls.map((c) => [c.name, c.left, c.top, c.width, c.height]);
-    // Short Text 50 -> 10 cm clamped to 8; 255 -> 8; Number, Currency 3 cm; Yes/No: its box; Long Text 8 x 1,8 cm
-    expect(geo).toEqual([['N°', 1985, 85, 1701, 340], ['Nom', 1985, 510, 4536, 340], ['Âge', 1985, 935, 1701, 340], ['Actif', 1985, 1360, 284, 340],
-      ['Solde', 1985, 1785, 1701, 340], ['Email', 1985, 2210, 4536, 340], ['Notes', 1985, 2635, 4536, 1021]]);
-    expect(detail.controls.map((c) => [c.children![0].left, c.children![0].top])).toEqual(geo.map((g) => [284, g[2]]));
-    expect(detail.controls.map((c) => c.props.TabIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(detail.height).toBe(2635 + 1021 + 85);
+    const fields = detail.controls.filter((c) => c.kind !== 'label');
+    const geo = fields.map((c) => [c.name, c.left, c.top, c.width, c.height]);
+    // The layout gives every field the width of the data column; Long Text keeps its 1,8 cm height, rows are ROW_GAP (170) apart
+    expect(geo).toEqual([['N°', 1985, 85, 4536, 340], ['Nom', 1985, 595, 4536, 340], ['Âge', 1985, 1105, 4536, 340], ['Actif', 1985, 1615, 4536, 340],
+      ['Solde', 1985, 2125, 4536, 340], ['Email', 1985, 2635, 4536, 340], ['Notes', 1985, 3145, 4536, 1021]]);
+    const labs = detail.controls.filter((c) => c.kind === 'label');
+    expect(labs.map((c) => [c.left, c.top])).toEqual(geo.map((g) => [284, g[2]]));
+    expect(fields.map((c) => c.props.TabIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(detail.height).toBe(3145 + 1021 + 85);
     expect(d.props.Width).toBe(1985 + 4536 + 284);
+    // one stacked layout over every field and its label; coordinates are the reflow output
+    const [l, ...rest] = readLayouts(d);
+    expect(rest).toEqual([]); expect(l).toMatchObject({ kind: 'stacked' });
+    expect(l.cells.flatMap((c) => (c.control ? [c.control] : [])).sort()).toEqual(detail.controls.map((c) => c.name).sort());
+    expect(reflow(d)).toBe(d);
     const short = autoForm(tbl('T'), 'T', { ...clientsInfo, fields: [{ name: 'Code', type: 'shortText', props: { type: 'shortText', size: 4, required: false, indexed: 'no', primaryKey: false } },
       { name: 'Le', type: 'dateTime', props: { type: 'dateTime', required: false, indexed: 'no', primaryKey: false } }] }, labels);
-    expect(short.sections[1].controls.map((c) => c.width)).toEqual([1134, 1701]);   // 4 x 0,2 cm -> at least 2 cm; Date 3 cm
+    expect(short.sections[1].controls.filter((c) => c.kind !== 'label').map((c) => c.width)).toEqual([1701, 1701]);   // 4 x 0,2 cm -> at least 2 cm, then the layout column takes the widest (Date 3 cm)
   });
   it('auto form: a field named like the title label still gets unique names', () => {
     const d = autoForm(tbl('T'), 'T', { ...clientsInfo, fields: [{ name: 'Auto_Header0', type: 'number', props: { type: 'number', required: false, indexed: 'no', primaryKey: false } }] }, labels);
@@ -142,6 +150,7 @@ describe('form definition', () => {
     const many = Array.from({ length: 100 }, (_, i) => ({ name: `Champ${i}`, type: 'shortText' as const, props: { type: 'shortText' as const, size: 10, required: false, indexed: 'no' as const, primaryKey: false } }));
     const d = autoForm(tbl('T'), 'T', { ...clientsInfo, fields: [...many, clientsInfo.fields[6]] }, labels);   // and a Long Text last
     const detail = d.sections[1];
+    expect(readLayouts(d)).toEqual([]);   // several columns: no layout
     expect(validateDesignDoc(d)).toEqual([]); expect(parseFormDoc(JSON.parse(JSON.stringify(d))).dropped).toBe(0);
     const boxes = detail.controls.flatMap((c) => [c, ...c.children!]);
     expect(boxes.every((b) => b.top + b.height <= 31680 && b.left + b.width <= 31680)).toBe(true);
@@ -153,6 +162,10 @@ describe('form definition', () => {
     expect(detail.height).toBeLessThanOrEqual(31680);
     expect(d.props.Width).toBe(Math.max(...detail.controls.map((c) => c.left + c.width)) + 284);
     expect(detail.controls.map((c) => c.props.TabIndex)).toEqual(detail.controls.map((_, i) => i));   // down the first column, then the second
+  });
+  it('auto form: a source with no field has no layout and does not crash', () => {
+    const d = autoForm(tbl('T'), 'T', { ...clientsInfo, fields: [] }, labels);
+    expect(readLayouts(d)).toEqual([]); expect(d.sections[1].controls).toEqual([]); expect(validateDesignDoc(d)).toEqual([]);
   });
   it('unique form name', () => {
     expect(uniqueFormName(['Clients', 'clients1'], 'Clients')).toBe('Clients2');

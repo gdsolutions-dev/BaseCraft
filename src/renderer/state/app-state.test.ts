@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appReducer, initialAppState as init, reopenMode, type AppState } from './app-state';
+import { appReducer, dialogActivates, initialAppState as init, isRunningForm, reopenMode, sameView, type AppState } from './app-state';
 
 const s1: AppState = appReducer(init, { type: 'open', kind: 'table', name: 'Clients', mode: 'datasheet' });
 
@@ -258,5 +258,51 @@ describe('appReducer', () => {
     expect(opened.activeId).toBe(owner);
     expect(appReducer(s, { type: 'open', kind: 'form', name: 'FClients', mode: 'design' }).tabs).toHaveLength(3);
     expect(appReducer(s, { type: 'close', id: s.tabs[1].id }).tabs.map((x) => x.id)).toEqual([owner, s.tabs[2].id]);
+  });
+
+  it('L2: a form\'s Layout view is the `layout` mode, one editor with its Design view', () => {
+    let s = appReducer(init, { type: 'open', kind: 'form', name: 'F', mode: 'design' });
+    const id = s.tabs[0].id;
+    s = appReducer(s, { type: 'setMode', id, mode: 'layout' });
+    expect(s.tabs).toMatchObject([{ id, mode: 'layout' }]);
+    const tab = s.tabs[0];
+    // Open in Form view from Layout view switches, as from Design view; Layout view is never rewritten
+    expect(reopenMode(tab, 'run')).toBe('run');
+    expect(reopenMode(tab, 'layout')).toBe('layout');
+    expect(reopenMode({ ...tab, mode: 'datasheet' }, 'run')).toBe('datasheet');
+    expect(reopenMode({ ...tab, mode: 'datasheet' }, 'layout')).toBe('layout');
+    // R12: a Dialog-mode OpenForm on a form in Layout view switches it, as in Design view (no form runs there)
+    expect(dialogActivates(tab, { windowMode: 'dialog' })).toBe(false);
+    expect(dialogActivates({ ...tab, mode: 'run' }, { windowMode: 'dialog' })).toBe(true);
+    expect(isRunningForm(tab)).toBe(false);
+    expect(isRunningForm({ ...tab, mode: 'design' })).toBe(false);
+    expect(isRunningForm({ ...tab, mode: 'run' })).toBe(true);
+    expect(isRunningForm({ ...tab, mode: 'datasheet' })).toBe(true);
+    expect(sameView('design', 'layout')).toBe(true);
+    expect(sameView('layout', 'design')).toBe(true);
+    expect(sameView('layout', 'run')).toBe(false);
+    expect(sameView('design', 'datasheet')).toBe(false);
+    expect(sameView('run', 'run')).toBe(true);
+  });
+
+  it("L3: a report's Layout view is the `layout` mode too: Design <-> Layout keeps its embedded macros, Print Preview closes them", () => {
+    let s = appReducer(init, { type: 'open', kind: 'report', name: 'R', mode: 'design' });
+    const owner = s.tabs[0].id;
+    s = appReducer(s, { type: 'open', kind: 'macro', name: 'R : État : Sur ouverture', mode: 'design', embedded: { id: 'e7', owner } });
+    s = appReducer(s, { type: 'setMode', id: owner, mode: 'layout' });
+    expect(s.tabs.map((x) => x.embedded ?? x.mode)).toEqual(['layout', 'e7']);
+    expect(reopenMode(s.tabs[0], 'run')).toBe('run');
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'design' }).tabs).toHaveLength(2);
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'run' }).tabs.map((x) => x.embedded ?? x.mode)).toEqual(['run']);
+  });
+
+  it('L2: Design <-> Layout keeps the embedded macros (one editor); Layout -> Form view closes them', () => {
+    let s = appReducer(init, { type: 'open', kind: 'form', name: 'F', mode: 'design' });
+    const owner = s.tabs[0].id;
+    s = appReducer(s, { type: 'open', kind: 'macro', name: 'F : Formulaire : Sur ouverture', mode: 'design', embedded: { id: 'e9', owner } });
+    s = appReducer(s, { type: 'setMode', id: owner, mode: 'layout' });
+    expect(s.tabs.map((x) => x.embedded ?? x.mode)).toEqual(['layout', 'e9']);
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'design' }).tabs).toHaveLength(2);
+    expect(appReducer(s, { type: 'setMode', id: owner, mode: 'run' }).tabs.map((x) => x.embedded ?? x.mode)).toEqual(['run']);
   });
 });

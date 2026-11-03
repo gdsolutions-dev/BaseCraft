@@ -26,7 +26,7 @@ export function dp(v: unknown): 'auto' | number | undefined {
 
 /** Typed text as is; otherwise the field's texts with the control's Format and DecimalPlaces winning over the field's. */
 export function controlTexts(c: ControlDef, f: SourceField, stored: SqlValue, pending: CellInput | undefined,
-  ctx: { locale: string; lang: 'fr' | 'en' }): { display: string; edit: string } {
+  ctx: { locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean }): { display: string; edit: string } {
   if (pending !== undefined) { const t = pending === null ? '' : String(pending); return { display: t, edit: t }; }
   const format = (typeof c.props.Format === 'string' && c.props.Format) || f.props.format;
   const props = { ...f.props, format, decimalPlaces: dp(c.props.DecimalPlaces) ?? f.props.decimalPlaces };

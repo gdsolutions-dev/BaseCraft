@@ -11,7 +11,7 @@ import type { BasecraftApi } from '../../src/shared/api';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
 import { saveObject } from '../../src/main/db/objects';
-import { formGrid, launchApp, seedBase } from './helpers';
+import { formGrid, launchApp, seedBase, pickView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const fill = (s: string, p: Record<string, string | number>) => s.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => String(p[k]));
@@ -113,7 +113,7 @@ test('recette A4: master/detail entry Clients → Commandes', async () => {
     // 4. Form view: client 1, the calculated control; two orders in the subform; -3 refused, its message under the cell; Escape
     const s = sub(page);
     const m = master(page);
-    await vis(page, 'cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(ctl('Nom')).toHaveValue('Dupont');
     await expect(ctl('Majuscules')).toHaveValue('DUPONT');
     await expect(page.getByRole('combobox', { name: 'Ville:' })).toHaveValue('Paris');   // the Field List made it a combo box

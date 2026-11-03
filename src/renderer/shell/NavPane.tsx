@@ -4,7 +4,7 @@ import { ChevronRight, Link2, PanelLeftClose, PanelLeftOpen, Search } from 'luci
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObjectSummary, TableSummary } from '../../shared/api';
-import type { AppAction } from '../state/app-state';
+import type { AppAction, DocTab } from '../state/app-state';
 import { DOC_ICONS } from './DocumentTabs';
 import { useModal } from './Modal';
 import { NavMenu } from './NavMenu';
@@ -37,9 +37,12 @@ interface Props {
   strip: boolean;
   /** The selected item (the source picker preselects it when no table or query document is active). */
   onSelect?(item: { kind: string; name: string } | null): void;
+  /** The tab id of an object's open document (not an embedded macro), if any. */
+  openTabOf?(kind: NavKind, name: string): string | undefined;
+  tabs?: DocTab[];
 }
 
-export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip }: Props) {
+export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip, openTabOf, tabs }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
   const [query, setQuery] = useState('');
@@ -57,7 +60,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
 
   /** The menu's context for `x`: `reselect` makes the selection follow a renamed object or leave a deleted one. */
   const ctxOf = (x: Item): NavMenuContext => ({
-    kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch, ...(x.link ? { link: x.link } : {}),
+    kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch, ...(x.link ? { link: x.link } : {}), openTab: openTabOf?.(x.kind, x.name), tabs: tabs ?? [],
     reselect: (to) => {
       if (selected !== itemKey(x)) return;
       if (to === null) { setSelectedKey(null); onSelect?.(null); } else setSelected({ kind: x.kind, name: to });
@@ -113,6 +116,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
                   onDoubleClick={() => open(x)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); open(x); return; }
+                    if (e.key === 'F2') { e.preventDefault(); runNavItem(ctxOf(x), 'rename'); return; } // refused while the object is open
                     const id = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey ? ({ x: 'cut', c: 'copy', v: 'paste' } as const)[e.key.toLowerCase() as 'x'] : undefined;
                     if (id) { e.preventDefault(); setSelected(x); runNavItem(ctxOf(x), id); }
                   }}

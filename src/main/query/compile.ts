@@ -7,8 +7,9 @@
 import type { Expr } from '../../shared/expr/ast';
 import { compileSql, compileValue, type SqlCompileCtx, type SqlFragment, type SqlParam, type SqlRef } from '../../shared/expr/sql';
 import type { SqlValue } from '../../shared/coerce';
-import { defaultProps, quoteIdent, sameName, type FieldType } from '../../shared/field-types';
+import { quoteIdent, sameName, type FieldType } from '../../shared/field-types';
 import type { FromItem, SelectQuery } from '../../shared/query/ast';
+import { actionSelect } from '../../shared/query/action-select';
 import { boundArgType, type BoundQuery, type BoundSelect, type BoundSource, type ResolvedRef } from '../../shared/query/bind';
 
 export interface CompiledSelect { sql: string; params: SqlParam[]; hasRowid: boolean /* 1st column = rowid of keyAlias */ }
@@ -100,7 +101,8 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
    * column. An AutoNumber (a rowid, any 64-bit integer) is native but not exact: `AutoNumber = AutoNumber` stays bc_*, where
    * 2^53 and 2^53 + 1 are equal. A column counts only in a table BaseCraft created: its INTEGER affinity and CHECK range
    * (schema.ts) hold numbers within ±2^31 or NULL, never text (an external tool's REAL, 7.5, passes the CHECK: both paths
-   * compare it numerically); an AutoNumber, integers.
+   * compare it numerically); an AutoNumber, integers. A saved query's or derived table's column counts when it is such a
+   * field passed through (BoundColumn.origin: its stored value, raw, in the source's output; a UNION's columns have none).
    * ponytail: an external tool that turns on ignore_check_constraints, or rewrites the table without its CHECK, can store a
    * text there, which `=` compares case-sensitively and bc_* case-insensitively; isExternal(db) at compile time if it matters.
    */
@@ -113,12 +115,14 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
       return (p.type === null || p.type === 'number') && Number.isSafeInteger(p.params[0]) ? { ref: p, exact: true } : null;
     }
     if (r?.kind !== 'column' || r.props.external === true) return null;
-    if (stack[stack.length - 1 - r.depth].sel.sources.find((x) => x.alias === r.alias)?.kind !== 'table') return null;
+    const s = stack[stack.length - 1 - r.depth].sel.sources.find((x) => x.alias === r.alias);
+    // a saved query's or derived table's column: only a table's field passed through (origin), raw in the source's output
+    if (s?.kind !== 'table' && !s?.inner?.columns.find((c) => sameName(c.name, r.field))?.origin) return null;
     if (r.type === 'autoNumber') return { ref: column(stack, r), exact: false };
     return r.type === 'number' && INT_SIZES.has(r.props.numberSize ?? 'longInteger') ? { ref: column(stack, r), exact: true } : null;
   };
-  /** WHERE, HAVING, ON: bc_truth (compileSql), except the conjuncts of the top-level And that compare two native integers
-   *  (Task 12), emitted as SQLite's `=` so an index serves them. A row is kept iff every conjunct is True; for two such
+  /** WHERE, HAVING, ON: one bc condition (compileSql) per conjunct of the top-level And, except those that compare two
+   *  native integers (Task 12), emitted as SQLite's `=` so an index serves them. A row is kept iff every conjunct is True; for two such
    *  numbers Access's `=` is numeric equality, Null giving Null, and an error in the rest gives NULL (onError 'null'): both
    *  forms exclude the same rows. The one error that fails the statement instead, a scalar subquery with several rows
    *  (bc_one), keeps the whole condition in bc_*: a native conjunct would let SQLite skip it, and the query succeed.
@@ -135,14 +139,13 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
       native.push(cat(l.ref, ' = ', r.ref));
       return false;
     });
-    if (!native.length) return compileSql(e, c);
-    if (rest.length) {
-      const r = compileSql(rest.reduce((l, r): Expr => ({ k: 'bin', op: 'And', l, r })), c);
-      // a scalar subquery (bc_one, at any depth) can fail the statement: SQLite may skip it after a false native conjunct
-      if (r.sql.includes('bc_one(')) return compileSql(e, c);
-      native.push(r);
-    }
-    return cat(...native.flatMap((x, i) => (i ? [' AND ', x] : [x])));
+    // each other conjunct its own condition (bc_cmp for a simple comparison: one call a row), joined by SQLite's AND: a row
+    // is kept iff each is True either way (Null And False is False, an error excludes the row on both forms)
+    const each = rest.map((x) => compileSql(x, c));
+    if (!native.length && each.length < 2) return compileSql(e, c);
+    // a scalar subquery (bc_one, at any depth) can fail the statement: SQLite may skip it after a false conjunct
+    if (each.some((x) => x.sql.includes('bc_one('))) return compileSql(e, c);
+    return cat(...[...native, ...each].flatMap((x, i) => (i ? [' AND ', x] : [x])));
   };
   /** Expressions of the innermost SELECT of `stack`; `aggregate`: its items, HAVING and ORDER BY when it is grouped. */
   const ctx = (stack: Level[], aggregate: boolean): SqlCompileCtx => {
@@ -175,19 +178,84 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     const plain = ctx(stack, false);
     const grouped = ctx(stack, sel.grouped);
 
+    // A join ON `text = text`: SQLite cannot index bc_* comparisons, so it would scan one side once per row of the other. One
+    // side gets a key column (bc_gkey: texts compareText finds equal share it) in a subquery SQLite will not flatten (LIMIT),
+    // so it indexes it itself, and the ON compares keys. A saved query or derived table always; of two tables the later one
+    // (its rowid kept as bcx_rowid). A Null key never equals: Access's Null = x is Null, the row is out either way.
+    // ponytail: the later table is copied whole, whatever its size; pick the smaller by row count if that is ever too slow.
+    type Col = ResolvedRef & { kind: 'column' };
+    const keyed = new Map<BoundSource, Set<number>>();
+    const srcOf = (c: Col) => sel.sources.find((x) => x.alias === c.alias)!;
+    const colIndex = (s: BoundSource, field: string) => (s.kind === 'table' ? s.design!.fields.map((d) => d.name) : s.inner!.columns.map((d) => d.name)).findIndex((n) => sameName(n, field));
+    /** The first `text = text` of a top-level And (the rest, through `cond`), or null: no fast path, none, or the rest holds
+     *  a scalar subquery (bc_one) a false native conjunct would let SQLite skip. An ON compares two columns of this level;
+     *  a WHERE (`correlated`), a column of this level with one of an enclosing level, inner side first. */
+    const textKey = (e: Expr, correlated: boolean): { pair: [Col, Col]; rest: F | null } | null => {
+      if (opts.fastPath === false) return null;
+      const parts: Expr[] = [];
+      const split = (x: Expr): void => { if (x.k === 'bin' && x.op === 'And') { split(x.l); split(x.r); } else parts.push(x); };
+      split(e);
+      const text = (x?: ResolvedRef): x is Col => x?.kind === 'column' && (x.type === 'shortText' || x.type === 'longText');
+      let pair: [Col, Col] | null = null;
+      const at = parts.findIndex((x) => {
+        if (x.k !== 'bin' || x.op !== '=' || x.l.k !== 'id' || x.r.k !== 'id') return false;
+        const l = qb.refs.get(x.l), r = qb.refs.get(x.r);
+        if (!text(l) || !text(r)) return false;
+        if (!correlated) pair = l.depth === 0 && r.depth === 0 ? [l, r] : null;
+        else pair = l.depth === 0 && r.depth > 0 ? [l, r] : r.depth === 0 && l.depth > 0 ? [r, l] : null;
+        return pair !== null;
+      });
+      if (at < 0) return null;
+      const others = parts.filter((_, k) => k !== at);
+      const rest = others.length ? cond(others.reduce((l, r): Expr => ({ k: 'bin', op: 'And', l, r })), stack, plain) : null;
+      if (rest?.sql.includes('bc_one(')) return null;
+      return { pair: pair!, rest };
+    };
+    const joins = new Map<Expr, ReturnType<typeof textKey>>(); // by ON: textKey compiles the rest, once
+    const keyOf = (c: Col): F => {
+      if (c.depth > 0) return cat('bc_gkey(', column(stack, c), ')'); // an enclosing level's column
+      const s = srcOf(c);
+      if (s.kind === 'table' && !keyed.has(s)) return cat('bc_gkey(', column(stack, c), ')');
+      return { sql: `"${lvl.alias.get(s)}"."bcx_k${colIndex(s, c.field)}"`, params: [] };
+    };
+    const scanJoins = (x: FromItem): void => {
+      if (x.k !== 'join') return;
+      scanJoins(x.l); scanJoins(x.r);
+      const tj = textKey(x.on, false);
+      joins.set(x.on, tj);
+      if (!tj) return;
+      const wrap = tj.pair.some((c) => srcOf(c).kind !== 'table') ? tj.pair.filter((c) => srcOf(c).kind !== 'table')
+        : [tj.pair.reduce((m, c) => (sel.sources.indexOf(srcOf(c)) > sel.sources.indexOf(srcOf(m)) ? c : m))];
+      for (const c of wrap) keyFor(c);
+    };
+    const keyFor = (c: Col) => keyed.set(srcOf(c), (keyed.get(srcOf(c)) ?? new Set()).add(colIndex(srcOf(c), c.field)));
+    q.from.forEach(scanJoins);
+    // a correlated subquery's WHERE `inner text = outer text` (Exists, a scalar or In subquery): the inner side keyed the same
+    // way; SQLite builds that index once for the statement, each outer row looks its key up
+    const whereKey = q.where && outer.length ? textKey(q.where, true) : null;
+    if (whereKey) keyFor(whereKey.pair[0]);
+
     let i = 0; // sources in binding order: joins flattened left to right
     const fromItem = (x: FromItem): F => {
       if (x.k === 'join') {
         const l = fromItem(x.l); // before the right side: `i` follows the binding order
         const r = x.r.k === 'join' ? cat('(', fromItem(x.r), ')') : fromItem(x.r);
-        return cat(l, ` ${x.kind.toUpperCase()} JOIN `, r, ' ON ', cond(x.on, stack, plain));
+        const tj = joins.get(x.on);
+        const on = tj ? cat(keyOf(tj.pair[0]), ' = ', keyOf(tj.pair[1]), ...(tj.rest ? [' AND ', tj.rest] : [])) : cond(x.on, stack, plain);
+        return cat(l, ` ${x.kind.toUpperCase()} JOIN `, r, ' ON ', on);
       }
       const s = sel.sources[i++];
       const as = ` AS "${lvl.alias.get(s)}"`;
-      return s.kind === 'table' ? cat(quoteIdent(s.design!.name), as) : cat('(', body(s.inner!, { rowid: mode.rowid, encoded: false }), ')', as);
+      const keys = [...(keyed.get(s) ?? [])];
+      const keyCols = keys.map((k) => `bc_gkey("${s.kind === 'table' ? s.design!.fields[k].name.replace(/"/g, '""') : `c${k}`}") AS "bcx_k${k}"`).join(', ');
+      if (s.kind === 'table') {
+        return keys.length ? cat(`(SELECT rowid AS "bcx_rowid", *, ${keyCols} FROM ${quoteIdent(s.design!.name)} LIMIT -1)`, as) : cat(quoteIdent(s.design!.name), as);
+      }
+      const inner = body(s.inner!, { rowid: mode.rowid, encoded: false });
+      return keys.length ? cat(`(SELECT *, ${keyCols} FROM (`, inner, ') LIMIT -1)', as) : cat('(', inner, ')', as);
     };
     if (mode.locate) { // a locator: the rowid of each of these sources, on the row whose first one has rowid ?
-      const at = (a: string) => `"${lvl.alias.get(sel.sources.find((x) => x.alias === a)!)}".rowid`;
+      const at = (a: string) => { const s = sel.sources.find((x) => x.alias === a)!; return `"${lvl.alias.get(s)}".${keyed.has(s) ? '"bcx_rowid"' : 'rowid'}`; };
       const from = list(q.from.map(fromItem));
       return cat('SELECT ', mode.locate.map((a, k) => `${at(a)} AS "bcx_r${k}"`).join(', '), ' FROM ', from, ` WHERE ${at(mode.locate[0])} = ?`);
     }
@@ -202,7 +270,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
       // the key (many-most) table's rowid, at every level (B4 R3: a join is written through it)
       const key = mode.key ?? qb.keyAlias;
       const s = sel.sources.find((x) => x.alias === key) ?? sel.sources[0];
-      cols.unshift({ sql: `"${lvl.alias.get(s)}".${s.kind === 'table' ? 'rowid' : '"bcx_rowid"'} AS "bcx_rowid"`, params: [] });
+      cols.unshift({ sql: `"${lvl.alias.get(s)}".${s.kind === 'table' && !keyed.has(s) ? 'rowid' : '"bcx_rowid"'} AS "bcx_rowid"`, params: [] });
     }
     const gkeys = (es: Expr[]): F[] => es.map((e) => cat('bc_gkey(', compileValue(e, plain), ')'));
     const groupBy = q.groupBy.length ? gkeys(q.groupBy) : q.distinct && !sel.grouped ? gkeys(sel.columns.map((c) => c.expr)) : [];
@@ -215,7 +283,7 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     const core = cat(
       'SELECT ', list([...cols, ...hidden]),
       q.from.length ? cat(' FROM ', list(q.from.map(fromItem))) : '',
-      q.where ? cat(' WHERE ', cond(q.where, stack, plain)) : '',
+      q.where ? cat(' WHERE ', whereKey ? cat(keyOf(whereKey.pair[0]), ' = ', keyOf(whereKey.pair[1]), ...(whereKey.rest ? [' AND ', whereKey.rest] : [])) : cond(q.where, stack, plain)) : '',
       groupBy.length ? cat(' GROUP BY ', list(groupBy)) : '',
       q.having ? cat(' HAVING ', cond(q.having, stack, grouped)) : '',
     );
@@ -271,28 +339,8 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
  * - INSERT … SELECT, SELECT … INTO: the SELECT's columns; INSERT … VALUES: one row of the values.
  */
 export function compileAction(b: BoundQuery, values: Record<string, SqlValue>, opts: CompileOptions): { select: CompiledSelect; target: string } {
-  const body = b.query.body;
-  const c = compiler(b, values, opts);
-  const encoded = { rowid: false, encoded: true };
-  /** A SELECT made of the action's own expressions (bound already), over `from`. */
-  const own = (items: Expr[], from: FromItem[], where?: Expr): SelectQuery => {
-    const q: SelectQuery = { k: 'select', distinct: false, items: items.map((e) => ({ e })), from, ...(where && { where }), groupBy: [], orderBy: [] };
-    b.selects.set(q, { sources: b.sources, grouped: false, columns: items.map((expr) => ({ name: '', type: 'shortText', props: defaultProps('shortText'), expr })) });
-    return q;
-  };
-  switch (body.k) {
-    case 'select':
-      if (body.into === undefined) break;
-      return { select: { ...c.select(body, b, [], encoded), hasRowid: false }, target: body.into };
-    case 'insert': {
-      const q = 'values' in body.source ? own(body.source.values, []) : body.source;
-      return { select: { ...c.select(q, b, [], encoded), hasRowid: false }, target: b.keyTable! };
-    }
-    case 'update':
-    case 'delete': {
-      const q = own(body.k === 'update' ? body.set.map((x) => x.value) : [], [body.from], body.where);
-      return { select: { ...c.select(q, b, [], { ...encoded, key: b.keyAlias }), hasRowid: true }, target: b.keyTable! };
-    }
-  }
-  throw new Error('bc:invalidArgument');
+  const { q, target, mode } = actionSelect(b);
+  const keyed = mode === 'update' || mode === 'delete';
+  const select = compiler(b, values, opts).select(q, b, [], { rowid: false, encoded: true, ...(keyed && { key: b.keyAlias }) });
+  return { select: { ...select, hasRowid: keyed }, target };
 }

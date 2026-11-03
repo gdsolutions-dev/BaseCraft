@@ -9,7 +9,7 @@ import { formatBand, type FormattedBand } from './band';
 import { pageGeometry, type ReportIssue, type ReportSpec, type SectionSpec } from './model';
 import { lineHeight } from './text';
 import { rowField } from './totals';
-import { ReportLoadError, type LaidOutBand, type LaidOutItem, type LaidOutPage, type LaidOutReport, type LayoutEnv, type ReportData } from './types';
+import { ReportLoadError, type LaidOutBand, type LaidOutItem, type LaidOutPage, type LaidOutReport, type LayoutEnv, type LayoutOpts, type ReportData } from './types';
 
 /** Past this many pages the layout stops (tooManyPages): a definition gone wrong never fills the renderer's memory. */
 export const MAX_PAGES = 10000;
@@ -152,21 +152,22 @@ const uses = (s: SectionSpec | undefined, k: 'usesPage' | 'usesPages') => !!s?.c
  * (pass 1 counts the pages, pass 2 prints "of N"; a third, the last, when widening text changed the count). Every band
  * goes through `formatBand` (which calls `onFormat`), every placed band part through `onPrint`; `env.tick` is awaited
  * after 50 ms of work and `env.signal` stops the layout with an AbortError. `env.onPage` sees the pages of a pass whose
- * count is known as they close (Print Preview shows page 1 long before the last).
+ * count is known as they close (Print Preview shows page 1 long before the last). `opts.flow`: one unbounded page (LayoutOpts).
  */
-export async function layoutReport(spec: ReportSpec, data: ReportData, env: LayoutEnv): Promise<LaidOutReport> {
+export async function layoutReport(spec: ReportSpec, data: ReportData, env: LayoutEnv, opts?: LayoutOpts): Promise<LaidOutReport> {
+  const flow = !!opts?.flow;
   const { order, keys } = await sortAndGroup(spec, data, env);
   const jobs = bandSequence(spec, order, keys, infoOf(env.locale));
   const g = pageGeometry(spec.page), width = Math.min(spec.width, g.printableWidth);
   // the Page Header and Page Footer never grow: their design height is reserved on every page
   const reserved = (s?: SectionSpec) => (s?.visible ? s.height : 0);
   const phH = reserved(spec.pageHeader), pfH = reserved(spec.pageFooter);
-  const usable = g.printableHeight - phH - pfH, limit = g.bodyTop + g.printableHeight - pfH;
+  const usable = g.printableHeight - phH - pfH, limit = flow ? Infinity : g.bodyTop + g.printableHeight - pfH;   // flow: nothing ever moves to a next page
 
   const all = [spec.reportHeader, spec.pageHeader, ...spec.groupHeaders, spec.detail, ...spec.groupFooters, spec.pageFooter, spec.reportFooter];
   const readsPages = all.some((s) => uses(s, 'usesPages'));
   /** `shown`: a pass whose page count is known (the only one, or one after the count): its pages go to `env.onPage`. */
-  const pass = async (total: number | null, shown: boolean): Promise<{ pages: LaidOutPage[]; issues: Map<string, ReportIssue> }> => {
+  const pass = async (total: number | null, shown: boolean): Promise<{ pages: LaidOutPage[]; issues: Map<string, ReportIssue>; end: number /* the y under the last band */ }> => {
     const beat = heartbeat(env), issues = new Map<string, ReportIssue>(), times = new Map<Job, number>();
     const pages: LaidOutPage[] = [], active: (Span | undefined)[] = [];   // per level: the group whose header is placed and footer not yet
     const fresh = (number: number): Page => ({ number, bands: [], y: g.bodyTop, phTop: null, body: false, first: null, last: null });
@@ -209,7 +210,7 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
     /** Page Header (row: the page's first Detail) and Page Footer (its last), formatted now that the page is complete. */
     const close = async () => {
       reservePH();
-      for (const [s, top, row, h] of [[spec.pageHeader, pg.phTop!, pg.first, phH], [spec.pageFooter, limit, pg.last, pfH]] as const) {
+      for (const [s, top, row, h] of [[spec.pageHeader, pg.phTop!, pg.first, phH], [spec.pageFooter, flow ? pg.y : limit, pg.last, pfH]] as const) {
         if (!s) continue;
         const job: Job = { s, row, scope: order }, f = await format(job);
         if (f) pg.bands.push(await band(f, job, top, 0, h));
@@ -280,10 +281,11 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
 
     for (const job of jobs) {
       if (job.s.kind !== 'reportHeader') reservePH();   // page 1: the Report Header comes before the Page Header
-      for (const sp of job.starts ?? []) await keepGroup(sp);
+      if (!flow) for (const sp of job.starts ?? []) await keepGroup(sp);
       // a band that does not print neither opens a page nor uses up a pending break
-      const force = job.s.forceNewPage;
+      const force = flow ? undefined : job.s.forceNewPage;
       let f = await format(job);
+      if (f && flow) f = { ...f, breaks: [] };   // a page break control breaks nothing
       if (f && (after || force === 'before' || force === 'beforeAndAfter') && pg.body) f = await moveOn(job, f);
       if (f) {
         const { height } = f;
@@ -294,16 +296,16 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
       for (const sp of job.closes ?? []) active[sp.level] = undefined;
     }
     await close();
-    return { pages, issues };
+    return { pages, issues, end: pg.y + pfH };
   };
 
-  let r = await pass(null, !readsPages);
-  if (readsPages) {
+  let r = await pass(flow ? 1 : null, flow || !readsPages);
+  if (readsPages && !flow) {
     const first = r.pages.length;
     r = await pass(first, true);
     if (r.pages.length !== first) r = await pass(r.pages.length, true);   // only widening text changes the count: this pass is the last
   }
   const issues = new Map(spec.issues.map((i) => [issueKey(i), i]));
   for (const [k, i] of r.issues) if (!issues.has(k)) issues.set(k, i);
-  return { width: g.width, height: g.height, pages: r.pages, issues: [...issues.values()] };
+  return { width: g.width, height: flow ? r.end : g.height, pages: r.pages, issues: [...issues.values()] };
 }

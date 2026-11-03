@@ -5,9 +5,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import { PROPERTY_CATALOG } from '../../shared/design/properties';
 import { foldName } from '../../shared/field-types';
 import { isSelectBody } from '../../shared/query/ast';
+import { passThroughOf } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 
-export interface ActiveContent { present: boolean; fingerprint: string /* sha256 hex; '' when !present */ }
+/** `present`: content that shows the security bar. `fingerprint`: sha256 hex of it and of every pass-through definition (C6 Task 8);
+ *  '' when there is none of either. */
+export interface ActiveContent { present: boolean; fingerprint: string }
 
 const EVENT_PROPS = PROPERTY_CATALOG.filter((d) => d.tab === 'event').map((d) => d.name);
 
@@ -50,15 +53,27 @@ function isActionQuery(def: unknown): boolean {
 export function activeContent(db: DatabaseSync): ActiveContent {
   const rows = db.prepare('SELECT kind, name, definition FROM bc_objects').all() as { kind: string; name: string; definition: string }[];
   const entries: [string, string, unknown][] = [];
+  let present = false;
   for (const { kind, name, definition } of rows) {
     let def: unknown;
     try { def = JSON.parse(definition); } catch { def = definition; }
+    const n = entries.length;
     if (kind === 'macro' || kind === 'module') entries.push([kind, name, def]);
-    else if (kind === 'query') { if (isActionQuery(def)) entries.push([kind, name, record(def).sql]); }
+    else if (kind === 'query') {
+      // pass-through (C6 G1, owner): every 2.x in the fingerprint, whole definition (Task 8: an approval, which lets its
+      // pass-throughs use a remembered password, covers them); only Returns Records No (it writes) or a malformed 2.x is present
+      if (/^2\.\d+$/.test(String(record(def).formatVersion))) {
+        entries.push([kind, name, def]);
+        if (passThroughOf(def)?.returnsRecords !== true) present = true;
+        continue;
+      }
+      if (isActionQuery(def)) entries.push([kind, name, record(def).sql]);
+    }
     else if (kind === 'form' || kind === 'report') {
       const ev = events(def);
       if (ev.length) entries.push([kind, name, ev]);
     }
+    if (entries.length > n) present = true;
   }
   if (!entries.length) return { present: false, fingerprint: '' };
   const key = ([k, n]: [string, string, unknown]) => [k, foldName(n), n];
@@ -67,5 +82,5 @@ export function activeContent(db: DatabaseSync): ActiveContent {
     for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! < y[i]! ? -1 : 1;
     return 0;
   });
-  return { present: true, fingerprint: createHash('sha256').update(JSON.stringify(stable(entries))).digest('hex') };
+  return { present, fingerprint: createHash('sha256').update(JSON.stringify(stable(entries))).digest('hex') };
 }

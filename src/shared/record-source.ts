@@ -1,6 +1,6 @@
 // Source d'enregistrements d'une feuille de requête, d'un formulaire ou d'un état (contrat A3/A4/A5, section 1.2).
 // Le socle sert `table` ; le lot A3 sert `query` et `sql` (src/main/query/source.ts) sans changer ces types.
-import type { FieldFilter, RowWriteResult, WriteConflict } from './api';
+import type { FieldFilter, RowRef, RowWriteResult, WriteConflict } from './api';
 import type { CellInput, SqlValue } from './coerce';
 import { sameName, type FieldProps, type FieldType } from './field-types';
 
@@ -18,12 +18,13 @@ export interface SourceInfo { fields: SourceField[]; updatable: boolean; keyTabl
    *  `fields` are its row columns only). */
   crosstab?: { headings: 'fixed' | 'data' | 'needsParameters' } }
 export interface SourcePageRequest { offset: number; limit: number; sort?: SortSpec[]; filter?: FieldFilter[]; params?: Record<string, CellInput>;
-  where?: string /* an opening's Where Condition: canonical expression over the source's output columns, no member; ANDed with filter */ }
-export interface SourcePage { rows: SqlValue[][]; rowids: (number | null)[]; total: number; columns?: string[] /* a crosstab: this page's column names (R14) */ }
+  where?: string /* an opening's Where Condition: canonical expression over the source's output columns, no member; ANDed with filter */
+  fresh?: boolean /* C6 R7: an open or a Requery: a pass-through runs again */ }
+export interface SourcePage { rows: SqlValue[][]; rowids: (RowRef | null)[]; total: number; columns?: string[] /* a crosstab: this page's column names (R14) */ }
 /** A record saved through an updatable query or SQL source (B4 R2, R3). */
-export interface SourceSaveRequest { rowid: number | null /* key table rowid; null = new record */; values: Record<string, CellInput> /* by output column */
+export interface SourceSaveRequest { rowid: RowRef | null /* key table rowid; null = new record */; values: Record<string, CellInput> /* by output column */
   expected?: Record<string, SqlValue> /* by output column: the record as read when editing began (C3 R8) */ }
-export type SourceSaveResult = { ok: true; rowid: number; values: Record<string, SqlValue> /* re-read columns of the plan's tables, by output column */ }
+export type SourceSaveResult = { ok: true; rowid: RowRef; values: Record<string, SqlValue> /* re-read columns of the plan's tables, by output column */ }
   | Extract<RowWriteResult, { errors: unknown }>   // errors[].field = output column; table set for a 'one' table
   | WriteConflict<Record<string, SqlValue>>;      // current: the plan tables' columns read back, by output column
 

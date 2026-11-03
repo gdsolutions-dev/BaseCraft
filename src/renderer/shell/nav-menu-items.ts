@@ -3,11 +3,12 @@
 // fonctions pas encore livrées (A6, plus tard) sont des emplacements désactivés dont l'info-bulle nomme le lot (comme le ruban).
 // Les lots A3, A4, A5 remplacent Ouvrir et Mode création de leurs objets en inscrivant les mêmes id (ces éléments sont des
 // replis : un lot l'emporte quel que soit l'ordre d'import).
-import { ClipboardPaste, Copy, EyeOff, LayoutTemplate, FileText, FolderInput, FileSpreadsheet, FolderOutput, PencilRuler, Pencil, Scissors, Settings, Sheet, Trash2 } from 'lucide-react';
-import type { ObjectKind, OpResult } from '../../shared/api';
+import { ClipboardPaste, Copy, EyeOff, FileText, FolderInput, FileSpreadsheet, FolderOutput, PencilRuler, Pencil, Scissors, Settings, Sheet, Trash2 } from 'lucide-react';
+import type { AutoCorrectReport, ObjectKind, OpResult, RenameResult } from '../../shared/api';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocKind } from '../state/app-state';
+import { afterRename, guardRename } from './autocorrect';
 import { nameErrorKey } from './name-error';
 import { hasDocumentView } from './document-views';
 import { designNotLink, registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
@@ -39,11 +40,15 @@ async function rename(c: NavMenuContext) {
   const to = await askName(c, c.kind === 'table' ? 'nav.renameTitle' : 'nav.renameObjectTitle', 'nav.renameLabel', c.name);
   if (to === null || to === c.name) return;
   const params = { name: c.name, newName: to };
-  if (c.kind === 'table') await op(c, () => api.tables.rename(c.name, to), () => { c.dispatch({ type: 'tableRenamed', from: c.name, to }); c.reselect(to); }, params);
+  if (!(await guardRename(c.modal, c.tabs ?? [], [{ k: 'object', kind: c.kind as ObjectKind | 'table', from: c.name, to }]))) return;
+  let report: AutoCorrectReport | undefined;
+  const keep = (r: RenameResult) => { if (r.ok) report = r.autoCorrect; return r; };
+  if (c.kind === 'table') await op(c, async () => keep(await api.tables.rename(c.name, to)), () => { c.dispatch({ type: 'tableRenamed', from: c.name, to }); c.reselect(to); }, params);
   else {
     const kind = c.kind as ObjectKind;
-    await op(c, () => api.objects.rename(kind, c.name, to), () => { c.dispatch({ type: 'objectRenamed', kind, from: c.name, to }); c.reselect(to); }, params);
+    await op(c, async () => keep(await api.objects.rename(kind, c.name, to)), () => { c.dispatch({ type: 'objectRenamed', kind, from: c.name, to }); c.reselect(to); }, params);
   }
+  await afterRename(c.modal, c.dispatch, report);
 }
 
 async function remove(c: NavMenuContext) {
@@ -90,7 +95,7 @@ const common = (propertiesLabel: string, exportPlanned: NavMenuItem['planned'] |
   { id: 'open', group: 'open', order: 10, labelKey: 'nav.menu.open', icon: Sheet, ...view('run') },
   { id: 'design', group: 'open', order: 20, labelKey: 'nav.menu.design', icon: PencilRuler, visible: design, ...view('design') }, // a link: read-only, after a warning (App, C1 R8)
   ...(exportPlanned ? [{ id: 'export', group: 'transfer', order: 20, labelKey: 'nav.menu.export', icon: FolderOutput, planned: exportPlanned } as NavMenuItem] : []),
-  { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: designNotLink, enabled: writable, run: rename },
+  { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: designNotLink, enabled: (c) => writable(c) && !c.openTab, run: rename }, // an open object keeps its name (Access)
   { id: 'hide', group: 'object', order: 20, labelKey: 'nav.menu.hide', icon: EyeOff, planned: 'later' },
   { id: 'delete', group: 'object', order: 30, labelKey: 'nav.menu.delete', icon: Trash2, visible: design, enabled: writable, run: remove },
   { id: 'cut', group: 'clipboard', order: 10, labelKey: 'nav.menu.cut', icon: Scissors, visible: design, planned: 'A6' },
@@ -98,9 +103,6 @@ const common = (propertiesLabel: string, exportPlanned: NavMenuItem['planned'] |
   { id: 'paste', group: 'clipboard', order: 30, labelKey: 'nav.menu.paste', icon: ClipboardPaste, visible: design, planned: 'A6' },
   { id: 'properties', group: 'properties', order: 10, labelKey: propertiesLabel, icon: Settings, run: properties },
 ];
-
-/** Access's Layout View of forms and reports: "later" in the spec (section 7), a placeholder until then (C11). */
-const layoutView: NavMenuItem = { id: 'layout', group: 'open', order: 15, labelKey: 'nav.menu.layout', icon: LayoutTemplate, visible: design, planned: 'later' };
 
 const MENUS: [DocKind, NavMenuItem[]][] = [
   ['table', [
@@ -111,8 +113,8 @@ const MENUS: [DocKind, NavMenuItem[]][] = [
     ...common('nav.menu.tableProperties', 'A6'),
   ]],
   ['query', common('nav.menu.objectProperties', 'A6')],
-  ['form', [layoutView, ...common('nav.menu.properties', 'later')]],
-  ['report', [layoutView, ...common('nav.menu.properties', null)]], // Export › PDF: A5's own item
+  ['form', common('nav.menu.properties', 'later')],   // Layout View: form-nav-menu.ts (L2)
+  ['report', common('nav.menu.properties', null)], // Export › PDF and Layout View (L3): report-menu.ts
   ['macro', common('nav.menu.objectProperties', 'later')], // B1's macro-menu.ts replaces Open and Design View
 ];
 

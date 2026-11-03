@@ -59,7 +59,7 @@ export function ExpressionField({ id, testId, value, criteria = false, ctx, fiel
     try {
       const { alias, expr } = parts(text);
       // aggregates only where a group exists (a report) or a query grid cell says
-      return { canonical: text === '' ? undefined : named(alias?.trim(), toCanonical(expr.trim(), ctx, { ...query, criteria, aggregates: query?.aggregates ?? aggregates })) };
+      return { canonical: text === '' ? undefined : named(alias?.trim(), toCanonical(expr.trim(), ctx, { ...query, criteria, fields, aggregates: query?.aggregates ?? aggregates })) };
     } catch (e) {
       return { code: e instanceof ExprSyntaxError ? e.code : 'tooComplex' }; // RangeError: nesting too deep
     }

@@ -63,6 +63,14 @@ describe('row source', () => {
     expect(fakeApi.lastPage).toMatchObject({ offset: 0, limit: 5000 });
   });
 
+  it('a date column follows the four-digit year option (O2 R11), passed by the form with its display', async () => {
+    const dates = { async describe(): Promise<SourceInfo> { return { fields: [sf('Le', 'dateTime', { format: 'dd/mm/yy' })], updatable: true, keyTable: 'Cmd', parameters: [] }; },
+      async page(): Promise<SourcePage> { return { rows: [['2026-03-05 00:00:00']], rowids: [1], total: 1 }; } };
+    const shown = async (year4: boolean) => (await loadRowSource(combo({ RowSource: 'Clients' }), null, dates, { ...ctx, ...(year4 ? { fourDigitYear: true } : {}) })).data.rows[0]!.display[0];
+    expect(await shown(false)).toBe('05/03/26');
+    expect(await shown(true)).toBe('05/03/2026');
+  });
+
   it('more than 5000 rows is cut and says so', async () =>
     expect((await loadRowSource(combo({ RowSourceType: 'tableQuery', RowSource: 'Gros' }), null, fakeApi, ctx)).truncated).toBe(true));
 
@@ -86,6 +94,14 @@ describe('row source', () => {
     const r = await loadRowSource(combo({ RowSourceType: 'tableQuery', RowSource: 'SELECT Nom FROM Clients' }), null, fakeApi, ctx);
     expect(fakeApi.lastDescribe).toEqual({ kind: 'sql', sql: 'SELECT Nom FROM Clients' });
     expect(r.data.rows.map((x) => x.display)).toEqual([['1'], ['2']]);
+  });
+
+  it('a pass-through as Row Source is refused, never read (C6 R9)', async () => {
+    fakeApi.lastDescribe = undefined; fakeApi.lastPage = undefined;
+    const r = await loadRowSource(combo({ RowSourceType: 'tableQuery', RowSource: 'pt' }), null, fakeApi, { ...ctx, queries: ['PT'], passThroughs: ['PT'] });
+    expect(r.data.rows).toEqual([]);
+    expect(String(r.error)).toContain('bc:queryBind|passThroughAsSource|PT');
+    expect(fakeApi.lastDescribe).toBeUndefined(); expect(fakeApi.lastPage).toBeUndefined();
   });
 
   it('an invalid SQL Row Source gives an empty list and its error', async () => {

@@ -4,7 +4,9 @@ import type { CellInput, FieldErrorCode, SqlValue } from './coerce';
 import type { DesignError, TableDesign } from './field-types';
 import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec } from './exchange';
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
+import type { MigrateRequest, MigrateResult, ServerImportResult } from './migrate';
 import type { UiLanguage } from './i18n';
+import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { StartupOptions } from './startup';
 
@@ -13,20 +15,37 @@ export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, So
 
 export interface LockInfo { user: string; host: string; pid: number; sessionId: string; heartbeatAt: string }
 export type LocationRisk = 'local' | 'network' | 'synced';
-export interface TableSummary { name: string; description?: string; link?: { kind: string; path: string /* resolved, R5 */ } }
+/** A server source's kind (C4; C5 adds 'sqlserver'). Shared with the renderer; never in registry.ts: reading links must never
+ *  load a connector (R1). */
+export type ServerKind = 'postgresql' | 'sqlserver';
+export const isServerKind = (k: string): k is ServerKind => k === 'postgresql' || k === 'sqlserver';
+/** link.kind: a source kind ('basecraft', 'sqlite', 'access', or a server's: 'postgresql'); path: a file's resolved (R5), a server's label. */
+export interface TableSummary { name: string; description?: string; link?: { kind: string; path: string } }
 /** A linked file's state (C1): readOnly = readable, not writable (held by another session, read-only on disk, or a read-only front-end).
  *  needsPassword (C2 R7): a protected Access file whose password this session was not given (links.unlock). */
 export type LinkState = 'ok' | 'readOnly' | 'missingFile' | 'missingTable' | 'needsMigration' | 'newerMajor' | 'cannotOpen' | 'unsupportedKind' | 'needsPassword'
-  | 'syncedFolder' | 'unsupportedClient'; // C3 R6: a data file refused shared mode, read-only
-/** A link in the Linked Table Manager (C1 R9): its source's path (resolved, R5), kind and state; holder and stale for readOnly;
- *  shared: a data file written in shared mode (C3 R3). */
-export interface LinkInfo { name: string; sourceId: string; kind: string; path: string; state: LinkState; holder?: LockInfo; stale?: boolean; risk: LocationRisk; shared?: true }
+  | 'syncedFolder' | 'unsupportedClient' // C3 R6: a data file refused shared mode, read-only
+  | 'needsLogin' | 'cannotConnect' | 'certificate' | 'serverVersion' // C4 R17: a server source
+  | 'passwordExpired'; // C5: a SQL Server login whose password expired or must be changed (18487, 18488)
+/** A link in the Linked Table Manager (C1 R9): its source's path (resolved, R5; a server's label, C4 R17), kind and state; holder and stale for readOnly;
+ *  shared: a data file written in shared mode (C3 R3). risk: a file's location (a server has none). params: a server's, as its connector reads
+ *  them (C4 R6: never a password), the server link dialog's prefill when it is relinked. */
+export interface LinkInfo { name: string; sourceId: string; kind: string; path: string; state: LinkState; holder?: LockInfo; stale?: boolean; risk?: LocationRisk; shared?: true;
+  params?: Record<string, unknown>;
+  /** Refresh Link of a server link that failed otherwise (a timeout, a refusal): the `bc:` error, its state cannotConnect. */
+  error?: string }
 /** A file to link (R7): its kind and its linkable tables; `taken`: the front-end already uses that name (R2). An Access table (C2 R6):
  *  `skipped`, its columns BaseCraft does not link (attachments, OLE objects, multivalued, binary, Date/Time Extended); `unsupported`, the DesignErrorCode that
  *  keeps it from being linked. */
 export interface LinkFileInfo { kind: 'basecraft' | 'sqlite' | 'access'; tables: { name: string; taken: boolean; skipped?: string[]; unsupported?: string }[] }
-/** nameExists (R2) and missingTables (R9) list the names; self: the file is the front-end itself. */
-export type LinkResult = { ok: true } | { ok: false; reason: 'nameExists' | 'missingTables' | 'self' | 'readOnly'; names: string[] };
+/** A server's linkable tables (C4 Task 12) for its `key` (credentials) and `label`: `name`, the link name offered — R6's, else with 1, 2…
+ *  appended (never one the front-end uses: `taken` stays false, the field is LinkForm's); `remote` and `schema`, the server's table;
+ *  readOnly: no primary key; skipped: columns BaseCraft does not link; unsupported: the DesignErrorCode that keeps it from being linked. */
+export interface ServerLinkInfo { key: string; label: string;
+  tables: { name: string; remote: string; schema?: string; taken: boolean; readOnly: boolean; skipped?: string[]; unsupported?: string }[] }
+/** nameExists (R2) and missingTables (R9) list the names; self: the file is the front-end itself; unsupportedKind (C4 relink):
+ *  tables the server holds that BaseCraft cannot link. */
+export type LinkResult = { ok: true } | { ok: false; reason: 'nameExists' | 'missingTables' | 'self' | 'readOnly' | 'unsupportedKind'; names: string[] };
 export interface ReconcileReport {
   addedTables: string[];
   removedTables: string[];
@@ -52,20 +71,24 @@ export type AlterResult =
 // Same declaration as lot A2 (datasheet filters): on merge, keep a single copy.
 export interface FieldFilter { field: string; criteria: string /* canonique, mode critère */ }
 export const MAX_FILTERS = 20;
+/** One criterion's length (ipc-validate refuses a longer one): the Where Condition's. */
+export const MAX_CRITERIA_CHARS = 65_536;
 /** filter: one criterion per field, combined with And (at most MAX_FILTERS). */
 export interface PageRequest { offset: number; limit: number; sort?: { field: string; dir: 'asc' | 'desc' }; filter?: FieldFilter[] }
-export interface RowPage { rows: { rowid: number; values: SqlValue[] }[] }
+/** A row's reference (C4 R4): a local rowid, or an opaque token of a server connector (never read outside it). NaN: none. */
+export type RowRef = number | string;
+export interface RowPage { rows: { rowid: RowRef; values: SqlValue[] }[] }
 /** One entry of a Lookup field's list: the stored (bound) value, and the texts shown for it. */
 export interface LookupRow { value: SqlValue; display: string[] }
 /** A Lookup field's list as the datasheet shows it: its visible columns' texts (the first one is the text shown), their widths
  *  in twips, and their heads with Column Heads. */
 export interface LookupData { rows: LookupRow[]; widths: number[]; heads?: string[] }
 export type RowWriteResult =
-  | { ok: true; rowid: number; values: SqlValue[]; nulled?: { field: string; code: FieldErrorCode }[] /* WriteOptions.nullOnConversion (A3) */ }
+  | { ok: true; rowid: RowRef; values: SqlValue[]; nulled?: { field: string; code: FieldErrorCode }[] /* WriteOptions.nullOnConversion (A3) */ }
   | { ok: false; errors: { field: string; code: FieldErrorCode; message?: string /* validationText */; table?: string }[] }
   | WriteConflict<SqlValue[]>;
 /** An update whose record changed since editing began (C3 R8): `current` as `values` would be; deleted: the row is gone. */
-export type WriteConflict<V> = { ok: false; conflict: 'changed'; current: V } | { ok: false; conflict: 'deleted' };
+export type WriteConflict<V> = { ok: false; conflict: 'changed'; current: V; rowid?: RowRef /* the current row's reference (R8) */ } | { ok: false; conflict: 'deleted' };
 
 export interface AppSettings {
   locale: 'system' | UiLanguage;
@@ -83,9 +106,39 @@ export interface AppSettings {
   refreshInterval: number;
   /** Retries of a busy update, 0..10, and the pause between them in ms, 0..1000. */
   updateRetries: number; updateRetryMs: number;
+  /** O2 Editing: what Enter does, where the caret lands entering a field, what Left/Right do. */
+  moveAfterEnter: 'none' | 'nextField' | 'nextRecord';
+  enterFieldBehavior: 'selectAll' | 'start' | 'end';
+  arrowKeyBehavior: 'nextField' | 'nextCharacter';
+  /** Arrow keys that change record in continuous forms. */
+  continuousArrowKeys: 'none' | 'upDown' | 'leftRight';
+  cursorStopsAtEnds: boolean;
+  findReplaceDefault: 'fast' | 'general' | 'startOfField';
+  /** Four-digit year for every database (the database's own is in StartupOptions). */
+  fourDigitYearAll: boolean;
+  /** O2 Datasheet: gridlines, default column width in twips (300..31680), cell font (points 1..127, weight 100..900 by 100). */
+  gridlinesHorizontal: boolean; gridlinesVertical: boolean;
+  columnWidth: number;
+  datasheetFontSize: number; datasheetFontWeight: number; datasheetFontUnderline: boolean; datasheetFontItalic: boolean;
+  /** O3 Object Designers: property sheet font (points), new-field defaults (text size 1..255), AutoIndex list (null: the UI language's default, '' none). */
+  propertySheetFontSize: 8 | 9 | 10 | 11 | 12 | 14;
+  defaultFieldType: Exclude<FieldType, 'autoNumber'>; defaultTextSize: number; defaultNumberSize: NumberSize;
+  autoIndex: string | null;
+  /** O4 R12: offer to copy a field's changed Format or Decimal Places to the bound controls (default on). */
+  propertyUpdateOptions: boolean;
+  /** Query design: table names row, output all fields, AutoJoin, grid font (name, points 1..127). */
+  showTableNames: boolean; outputAllFields: boolean; autoJoin: boolean;
+  queryFontName: string; queryFontSize: number;
+  /** Form/report marquee, and the default print margins of a new report (twips 0..5670). */
+  selectionBehavior: 'partial' | 'full';
+  printMarginLeft: number; printMarginRight: number; printMarginTop: number; printMarginBottom: number;
 }
 /** The workstation settings the renderer may write through app.setSetting (language and theme have their own channels, the recent list is the app's). */
-export const SETTING_KEYS = ['defaultFolder', 'recentCount', 'openLast', 'confirmRecordChanges', 'confirmDocumentDeletions', 'confirmActionQueries', 'openMode', 'recordLocking', 'refreshInterval', 'updateRetries', 'updateRetryMs'] as const;
+export const SETTING_KEYS = ['defaultFolder', 'recentCount', 'openLast', 'confirmRecordChanges', 'confirmDocumentDeletions', 'confirmActionQueries', 'openMode', 'recordLocking', 'refreshInterval', 'updateRetries', 'updateRetryMs',
+  'moveAfterEnter', 'enterFieldBehavior', 'arrowKeyBehavior', 'continuousArrowKeys', 'cursorStopsAtEnds', 'findReplaceDefault', 'fourDigitYearAll',
+  'gridlinesHorizontal', 'gridlinesVertical', 'columnWidth', 'datasheetFontSize', 'datasheetFontWeight', 'datasheetFontUnderline', 'datasheetFontItalic',
+  'propertySheetFontSize', 'defaultFieldType', 'defaultTextSize', 'defaultNumberSize', 'autoIndex', 'propertyUpdateOptions', 'showTableNames', 'outputAllFields', 'autoJoin', 'queryFontName', 'queryFontSize',
+  'selectionBehavior', 'printMarginLeft', 'printMarginRight', 'printMarginTop', 'printMarginBottom'] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 /** What getSettings returns and settingsChanged carries: the settings and the language and region they resolve to. */
 export type SettingsView = AppSettings & { uiLanguage: UiLanguage; region: string };
@@ -128,7 +181,11 @@ export interface SessionState {
 /** Disabled: action queries, RunSQL and unsafe macro actions are refused (bc:contentDisabled). */
 export type ContentState = 'none' | 'disabled' | 'enabled';
 export interface SaveTableRequest { originalName: string | null; design: TableDesign; mapping: FieldMapping[]; allowDataLoss: boolean; acceptExistingViolations?: boolean }
-export type SaveTableResult = AlterResult | { ok: false; reason: 'nameExists' | 'readOnly' };
+/** Property update options (O4 R12): a control of a form or report that carries its own value of a changed field property. */
+export interface PropertyTarget { kind: 'form' | 'report'; name: string; control: string; current: string }
+export interface PropertyUpdate { table: string; field: string; prop: 'Format' | 'DecimalPlaces'; value: string; targets: PropertyTarget[] }
+export type PropertyItem = { kind: 'form' | 'report'; name: string; control: string; prop: PropertyUpdate['prop']; value: string };
+export type SaveTableResult = { ok: true; autoCorrect?: AutoCorrectReport; propertyUpdates?: PropertyUpdate[] } | Exclude<AlterResult, { ok: true }> | { ok: false; reason: 'nameExists' | 'readOnly' };
 export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' }
   | { ok: false; reason: 'external'; table: string } // a table changed outside BaseCraft: it is never rebuilt
   | { ok: false; reason: 'referenced'; table: string } // `table` has a FOREIGN KEY (not a relation) to this table
@@ -139,6 +196,19 @@ export type DeleteResult = { ok: true; count: number } | { ok: false; reason: 'r
 
 /** Objects stored in bc_objects (format 1.2). Tables and queries share one namespace; every other kind has its own. */
 export type ObjectKind = 'query' | 'form' | 'report' | 'macro' | 'module';
+/** An object of the base, tables included (O4: Name AutoCorrect). */
+export type ObjRef = { kind: ObjectKind | 'table'; name: string };
+/** A rename Name AutoCorrect follows (O4): an object's, or fields of a table in one save. */
+export type NameChange =
+  | { k: 'object'; kind: ObjectKind | 'table'; from: string; to: string }
+  | { k: 'fields'; table: string /* its name after the same save's rename */; renames: { from: string; to: string }[] };
+/** What Name AutoCorrect did for a rename (O4 R2): names after the change; `stale`, with Effectuer off, the dependents left
+ *  on the old name; `logTable`, the log table created or written (R9), or with `logSkipped` the name found without its fields. */
+export interface AutoCorrectReport { corrected: ObjRef[]; failed: ObjRef[]; stale: ObjRef[]; logTable?: string; logSkipped?: true }
+export type RenameResult = { ok: true; autoCorrect?: AutoCorrectReport } | Exclude<OpResult, { ok: true }>;
+/** The log table's texts in the UI language (R9): its name, its seven fields in order, the object types, the failure text. */
+export interface LogLabels { table: string; fields: [string, string, string, string, string, string, string];
+  kinds: Record<Exclude<ObjectKind, 'module'> | 'table', string>; failed: Record<'unreadable' | 'meaning' | 'dependency', string> }
 export interface ObjectSummary { kind: ObjectKind; name: string; description: string | null; navGroup: string | null; created: string; modified: string }
 /** A record source served by A3's query engine (src/main/query/source.ts). */
 export type QueryRef = Exclude<RecordSourceRef, { kind: 'table' }>;
@@ -237,6 +307,8 @@ export const CH = {
   objectsGet: 'bc:objects:get',
   objectsSave: 'bc:objects:save',
   objectsRename: 'bc:objects:rename',
+  autoCorrectDependents: 'bc:autoCorrect:dependents',
+  autoCorrectApplyProperties: 'bc:autoCorrect:applyProperties',
   objectsDelete: 'bc:objects:delete',
   objectsCopy: 'bc:objects:copy',
   sourcesDescribe: 'bc:sources:describe',
@@ -266,6 +338,14 @@ export const CH = {
   linksRelink: 'bc:links:relink',
   linksConvert: 'bc:links:convert',
   linksUnlock: 'bc:links:unlock',
+  linksLogin: 'bc:links:login',
+  linksLoginInfo: 'bc:links:loginInfo',
+  linksInspectServer: 'bc:links:inspectServer',
+  linksCreateServer: 'bc:links:createServer',
+  linksRelinkServer: 'bc:links:relinkServer',
+  linksCanRemember: 'bc:links:canRemember',
+  migrateRun: 'bc:migrate:run', // progress: importProgress
+  migrateImport: 'bc:migrate:import', // R17, the same progress
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -350,7 +430,7 @@ export interface BasecraftApi {
     list(): Promise<TableSummary[]>;
     design(name: string): Promise<TableDesign>;
     save(req: SaveTableRequest): Promise<SaveTableResult>;
-    rename(oldName: string, newName: string): Promise<OpResult>;
+    rename(oldName: string, newName: string): Promise<RenameResult>;
     drop(name: string): Promise<OpResult>;
     /** Structure and data, under `newName` (tables and queries share one namespace). */
     /** `mode`: 'structure' copies the design only (no rows, no relationships); default 'data' (structure and data). */
@@ -366,8 +446,8 @@ export interface BasecraftApi {
     page(table: string, req: PageRequest): Promise<RowPage>;
     insert(table: string, values: Record<string, CellInput>): Promise<RowWriteResult>;
     /** expected: the record as read when editing began, by field name (C3 R8); a change since is a conflict, nothing written. */
-    update(table: string, rowid: number, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
-    delete(table: string, rowids: number[]): Promise<DeleteResult>;
+    update(table: string, rowid: RowRef, changes: Record<string, CellInput>, expected?: Record<string, SqlValue>): Promise<RowWriteResult>;
+    delete(table: string, rowids: RowRef[]): Promise<DeleteResult>;
     /** The list of a Lookup field: at most 5000 rows of a table source, sorted on the first visible column; of a SQL or saved
      *  query Row Source (A3), in the query's order; a value list in its order. No rows when the field has no lookup, its source
      *  is gone, or its query does not run (missing table, parameters…). */
@@ -413,12 +493,18 @@ export interface BasecraftApi {
      *  keys are kept. originalName null: new object; otherwise rewrites (and renames, when `name`
      *  differs) that object. */
     save(kind: ObjectKind, name: string, definition: unknown, originalName: string | null): Promise<OpResult>;
-    rename(kind: ObjectKind, oldName: string, newName: string): Promise<OpResult>;
+    rename(kind: ObjectKind, oldName: string, newName: string): Promise<RenameResult>;
     delete(kind: ObjectKind, name: string): Promise<OpResult>;
     copy(kind: ObjectKind, name: string, newName: string): Promise<OpResult>;
     /** Properties dialog, for every Navigation Pane object: a table keeps it in its metadata (TableSummary.description), an
      *  object in bc_objects (its modified date moves). At most 255 characters (else bc:invalidArgument); '' or null removes it. */
     setDescription(kind: ObjectKind | 'table', name: string, description: string | null): Promise<OpResult>;
+  };
+  /** Name AutoCorrect (O4 R10): the objects a rename would correct or fail (names after it); [] with Suivi off. Reads only. */
+  autoCorrect: {
+    dependents(changes: NameChange[]): Promise<ObjRef[]>;
+    /** Property update options (O4 R12): writes the values to the controls in one transaction; a missing object or control is skipped. */
+    applyProperties(items: PropertyItem[]): Promise<{ ok: true; count: number } | { ok: false; reason: 'readOnly' }>;
   };
   /** Record sources of query datasheets, forms and reports. Writes go through rows.* on a table, sources.save on an updatable query (B4).
    *  page: at most 10 000 rows and 8 sort keys; `filter` as rows.page applies it, `total` counts the filtered rows. A criterion
@@ -469,5 +555,29 @@ export interface BasecraftApi {
     /** C2 R7: the password of a protected Access file (a source of the open front-end, or the file the link dialog picked), kept
      *  in the data process's memory for the session only; true when the file accepts it. Never written, never sent back. */
     unlock(path: string, password: string): Promise<boolean>;
+    /** C4 R10: logs in to the server of `key` (bc:linkUnavailable|needsLogin|<key>); true when the server accepts it, then kept by
+     *  the main process for the session and, when `remember` and a keyring exists, on this workstation (G2). Never sent back. */
+    login(key: string, user: string, password: string, remember: boolean): Promise<boolean>;
+    /** The login dialog's defaults: the stored user, else the source's; the server's label; whether « Mémoriser » is offered. */
+    loginInfo(key: string): Promise<{ user: string; label: string; canRemember: boolean }>;
+    /** C4 Task 12, the server link dialog: logs in with `params`' user and `password` (a refused login rejects
+     *  bc:linkUnavailable|needsLogin|<key>, never prompts) and lists the server's tables; the login is then kept as `login`'s. */
+    inspectServer(kind: ServerKind, params: unknown, password: string, remember: boolean): Promise<ServerLinkInfo>;
+    /** Links `names`, ServerLinkInfo's offered names, of the server `params` (logged in by inspectServer). */
+    createServer(kind: ServerKind, params: unknown, names: string[]): Promise<LinkResult>;
+    /** Relink (R9) of server links: `names` move to the server `params`, which must hold each one's table (else nothing changes). */
+    relinkServer(names: string[], kind: ServerKind, params: unknown): Promise<LinkResult>;
+    /** G2: whether « Mémoriser le mot de passe » can store on this workstation (a keyring exists). */
+    canRemember(): Promise<boolean>;
+  };
+  /** C7: Database Tools › Move Data › To a Server. run: every local table to the server of `req` (logged in by inspectServer);
+   *  the renderer has closed every document first; Stop is queries.cancel (cancelled). onProgress: the importText progress
+   *  event, `label` the table copied, `finishing` once Stop is no longer offered. Rejects as inspectServer before connecting. */
+  migrate: {
+    run(req: MigrateRequest): Promise<MigrateResult>;
+    /** R17: External Data › Import › PostgreSQL / SQL Server: the tables `names` (inspectServer's) copied into local tables in one
+     *  transaction; Stop is queries.cancel (cancelled). Same progress event. */
+    importTables(kind: ServerKind, params: unknown, names: string[]): Promise<ServerImportResult>;
+    onProgress(cb: (p: ImportProgress) => void): () => void;
   };
 }

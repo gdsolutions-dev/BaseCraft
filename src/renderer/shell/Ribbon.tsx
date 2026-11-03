@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FocusEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
-  commandEnabled, commandState, commandsVersion, openPopupOf, runCommand, subscribeCommands, tabAfterContextChange, visibleTabs,
-  type CommandId, type RibbonCommand, type RibbonContext, type RibbonTabId,
+  commandEnabled, commandState, commandsVersion, openPopupOf, ribbonContextKey, runCommand, subscribeCommands, tabAfterContextChange, viewPair,
+  visibleTabs, type CommandId, type RibbonCommand, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
+import { RibbonPopup } from '../designer/RibbonPopup';
 
 /** Clipboard buttons act on the focused element (a text field, a pane item): a click on them must not take the focus. */
 const KEEP_FOCUS: ReadonlySet<string> = new Set(['cut', 'copy', 'paste']);
@@ -17,7 +19,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
   useSyncExternalStore(subscribeCommands, commandsVersion); // re-render when the active document's commands change
   const tabs = visibleTabs(ctx);
   // C10: a new object kind or mode brings its contextual tab forward; leaving it gives back the tab selected before.
-  const key = `${ctx.kind}|${ctx.mode}`;
+  const key = ribbonContextKey(ctx);
   const [sel, setSel] = useState(() => ({ ...tabAfterContextChange(tabs, { selected: 'home', before: 'home' }), key }));
   if (sel.key !== key) setSel({ ...tabAfterContextChange(tabs, sel), key });
   const current = tabs.find((x) => x.id === sel.selected) ?? tabs[0];
@@ -55,6 +57,39 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     return () => ro.disconnect();
   }, []);
   const scroll = (dir: 1 | -1) => { const b = body.current; if (b) b.scrollBy({ left: dir * b.clientWidth * 0.8, behavior: 'smooth' }); };
+
+  // Affichage (Access's split button): its main part switches between the object's two main views (viewPair), its caret opens
+  // the list of every view shown, the pressed one checked. The list sits in <body>: the ribbon body scrolls and would clip it.
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const viewSplit = (shown: RibbonCommand[]) => {
+    const isOn = (c: RibbonCommand) => commandState(c.id)?.active ?? c.active?.(ctx);
+    const [dataView, layoutView] = viewPair(ctx.kind).map((id) => shown.find((c) => c.id === id));
+    const target = dataView && layoutView ? (isOn(dataView) ? layoutView : dataView) : shown[0];
+    const label = t('ribbon.cmd.viewMenu');
+    const Icon = (shown.find(isOn) ?? target).icon;
+    return (
+      <div key="view-split" className="rsplit" data-testid="ribbon-view-split">
+        <button data-testid="cmd-view" className="rbtn-lg rsplit-main" title={label} disabled={!commandEnabled(target.id, ctx)}
+          onClick={() => runCommand(target.id)}>
+          <Icon className="ic ic-lg" aria-hidden /><span>{label}</span>
+        </button>
+        <button data-testid="cmd-viewMenu" className="rsplit-menu" aria-label={label} aria-haspopup="menu" aria-expanded={openPopupOf() === 'viewMenu'}
+          disabled={!shown.some((c) => commandEnabled(c.id, ctx))} onClick={() => setViewMenuOpen(true)}>
+          <ChevronDown aria-hidden />
+        </button>
+        {viewMenuOpen && createPortal(
+          <RibbonPopup anchor="viewMenu" testId="ribbon-view-menu" labelKey="ribbon.cmd.viewMenu" onClose={() => setViewMenuOpen(false)}>
+            {shown.map((c) => (
+              <button key={c.id} type="button" role="menuitemradio" aria-checked={!!isOn(c)} data-testid={`view-item-${c.id}`}
+                disabled={!commandEnabled(c.id, ctx)} onClick={() => { setViewMenuOpen(false); runCommand(c.id); }}>
+                <c.icon className="ic" aria-hidden />{t(c.labelKey)}
+              </button>
+            ))}
+          </RibbonPopup>,
+          document.body)}
+      </div>
+    );
+  };
 
   const button = (c: RibbonCommand) => {
     const label = t(c.labelKey);
@@ -117,17 +152,19 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
           onFocus={(e) => e.target.scrollIntoView({ block: 'nearest', inline: 'nearest' })}>
           {current.groups.filter((g) => !g.visible || g.visible(ctx)).map((g) => {
             // large buttons alone, consecutive small ones stacked in columns, icon-only ones in a grid of three rows
+            const shown = g.commands.filter((x) => !x.visible || x.visible(ctx));
             const items: Item[] = [];
-            for (const c of g.commands.filter((x) => !x.visible || x.visible(ctx))) {
+            for (const c of shown) {
               const last = items[items.length - 1];
               if (c.size === 'lg') items.push(c);
               else if (last && 'cmds' in last && last.size === c.size && (c.size === 'xs' || last.cmds.length < STACK)) last.cmds.push(c);
               else items.push({ size: c.size, cmds: [c] });
             }
+            const split = g.split && shown.length > 1;
             return (
               <div key={g.id} className="rgroup" role="group" aria-label={t(g.labelKey)} data-testid={`ribbon-group-${g.id}`}>
                 <div className="ritems">
-                  {items.map((it, i) => (!('cmds' in it) ? button(it)
+                  {split ? viewSplit(shown) : items.map((it, i) => (!('cmds' in it) ? button(it)
                     : it.size === 'sm' ? <div key={i} className="rstack">{it.cmds.map(button)}</div>
                     : <div key={i} className="rgrid" style={{ gridTemplateColumns: `repeat(${Math.ceil(it.cmds.length / STACK)}, auto)` }}>{it.cmds.map(button)}</div>))}
                 </div>

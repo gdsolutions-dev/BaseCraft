@@ -1,10 +1,11 @@
 // Gestionnaires ipcMain de l'API window.basecraft : émetteur vérifié, arguments vérifiés, une session à la fois.
-import { app, clipboard, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
+import { app, clipboard, ipcMain, nativeTheme, safeStorage, shell, type BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync, rmSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { CH, type AppInfo, type ContentState, type LicenseEntry, type LinkResult, type OpResult, type RelationResult, type SaveTableResult, type SessionState, type SettingsView } from '../shared/api';
+import { logLabels } from '../shared/autocorrect/labels';
 import { MAX_EXCEL_ROWS } from '../shared/exchange';
 import { sheetName } from '../shared/export-format';
 import { isUiLanguage, resolveUiLanguage } from '../shared/i18n';
@@ -20,14 +21,15 @@ import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, uint, uints, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue,
+  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
-import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, type TrustConfig } from './trust';
+import { CredentialStore, refusedKey } from './credentials';
+import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, trustsFile, type TrustConfig } from './trust';
 
 let mainWindow: () => BrowserWindow | null = () => null;
 let dir = '';
@@ -47,6 +49,8 @@ export const closeVeto = new CloseVeto();
 /** This user's approvals and the administrator's trusted folders (trust.ts), set up once in registerIpc. */
 let approvals: ApprovalStore;
 let trustConfig: TrustConfig = { trustedFolders: [] };
+/** Server credentials (C4 R10, G2), set up once in registerIpc. */
+let credentials: CredentialStore;
 
 const region = () => regionTag(process.env.BASECRAFT_REGION ?? app.getSystemLocale());
 const uiLanguage = () => resolveUiLanguage(settings.locale, region());
@@ -192,18 +196,45 @@ function frontEndCopies(): Pick<HostOpen, 'frontEndCache' | 'frontEndNetworkDirs
   return { frontEndCache: join(dir, 'front-ends'), ...(share ? { frontEndNetworkDirs: [share] } : {}) };
 }
 
+/** e2e only (unpackaged + BASECRAFT_E2E=1 + BASECRAFT_E2E_FAKE_SERVER=1): server sources read the fake connector. */
+const fakeServer = (): Pick<HostOpen, 'fakeServer'> =>
+  (process.env.BASECRAFT_E2E === '1' && process.env.BASECRAFT_E2E_FAKE_SERVER === '1' && !app.isPackaged ? { fakeServer: true } : {});
+
+/** M6: the keys whose credential the current data process received from main. */
+const pushed = new Set<string>();
+/** R10: the credentials this process knows for the front-end's servers go to its data process (kept in its memory). A failure
+ *  (no connection yet: needsRecovery) only means the login is asked at first use. Never logs a password. */
+async function pushCredentials(h: DbHost): Promise<void> {
+  pushed.clear();
+  try {
+    for (const key of await h.session.serverKeys()) {
+      const c = credentials.get(key);
+      if (c) { await h.session.setCredential(key, c.user, c.password); pushed.add(key); }
+    }
+  } catch { /* asked at first use */ }
+}
+/** M6: db-host lacks the credential main gave it for a key (bc:linkUnavailable|needsLogin|<key>): the server refused it and
+ *  db-host forgot it. Main forgets it too: pushed again at each Stop restart, it would count one more failed login each time. */
+function forgetRefused(e: unknown): void {
+  const key = refusedKey(e);
+  if (key !== null && pushed.delete(key)) credentials.forget(key);
+}
+
+/** Every start of a data process (openBase, Stop's restart) pushes the known credentials; takeOverLock keeps the process and
+ *  pushes them again (a base opened in recovery had none). */
 async function startHost(path: string, create: boolean, sessionId: string): Promise<DbHost> {
   let me: DbHost | null = null;
   const onEvent = (e: HostEvent) => {
     if (host !== me) return;
     const w = mainWindow();
     if (e.event === 'stateChanged') broadcast(me?.state ?? e.state); // with its content state (client.ts keeps it)
-    else if (w && !w.isDestroyed()) w.webContents.send(CH.importProgress, { done: e.done, total: e.total });
+    else if (w && !w.isDestroyed()) { const { event: _event, ...p } = e; w.webContents.send(CH.importProgress, p); }
   };
   try {
     const { host: h } = await DbHost.start({ path, create, appVersion: app.getVersion(), region: region(), sessionId, shared: sharedOptions(),
-      ...frontEndCopies() }, onEvent, () => { if (me) hostCrashed(me); });
+      ...frontEndCopies(), ...fakeServer() }, onEvent, () => { if (me) hostCrashed(me); });
     me = h;
+    await pushCredentials(h);
     return h;
   } catch (e) {
     releaseIfOurs(path, sessionId); // a process that ended during the open may leave its lock
@@ -214,9 +245,10 @@ async function startHost(path: string, create: boolean, sessionId: string): Prom
 /** The active content enabled in each data process, by fingerprint ('' : none); absent or null: disabled. */
 const enabledFor = new WeakMap<DbHost, string | null>();
 
-/** Tells the data process which content runs (null: none, action queries refused) and sets the state; broadcast if it changed. */
+/** Tells the data process which content runs (null: none, action queries refused) and whether its pass-throughs may use a
+ *  stored password (C6 Task 8), and sets the state; broadcast if it changed. */
 async function setContent(h: DbHost, fingerprint: string | null, content: ContentState, announce = true): Promise<void> {
-  try { await h.session.setContentEnabled(fingerprint); } catch (e) { if (fingerprint !== null) throw e; } // null: a process gone runs nothing
+  try { await h.session.setContentEnabled(fingerprint, trustsFile(content, h.opened.path, trustConfig, process.platform)); } catch (e) { if (fingerprint !== null) throw e; } // null: a process gone runs nothing
   enabledFor.set(h, fingerprint);
   const changed = h.state.content !== content;
   h.state = { ...h.state, content };
@@ -253,7 +285,7 @@ async function contentRefused<T>(fn: () => Promise<T>): Promise<T> {
  *  stays disabled. One at a time, so that one write's "before" is never another's "after". ponytail: a write by another
  *  connection between the "before" read and this write is approved with it; closing that needs both in one data-process call. */
 let objectWrites: Promise<unknown> = Promise.resolve();
-function objectWrite(fn: () => Promise<OpResult>): Promise<TableOpResult> {
+function objectWrite(fn: () => Promise<TableOpResult>): Promise<TableOpResult> {
   const run = async () => {
     const h = host;
     const enabled = h ? enabledFor.get(h) ?? null : null;
@@ -360,16 +392,22 @@ function restartRefresh(): void {
   refreshTimer = setInterval(refreshTick, settings.refreshInterval * 1000);
 }
 
-/** The calls Stop may end: reads of a query or table, and action queries (one transaction, rolled back). Never a row write,
- *  an import or a design change. */
-const STOPPABLE = new Set(['describeSource', 'pageSource', 'actionCount', 'runAction', 'page', 'count', 'lookup']);
+/** The calls Stop may end: reads of a query or table, action queries (one transaction, rolled back) and the server migration
+ *  (C7 R10: its server transaction rolled back, the front-end untouched). Never a row write, an import or another design change. */
+const STOPPABLE = new Set(['describeSource', 'pageSource', 'actionCount', 'runAction', 'page', 'count', 'lookup',
+  'migrateToServer', 'importServerTables']); // C7 R10: its server transaction rolls back
+
+/** R12: how long a server statement whose cancel was sent may take to answer before Stop kills the data process. */
+export const INTERRUPT_WAIT_MS = 5000;
 
 /**
  * Stop (Ctrl+Break, « Arrêter »): ends the oldest pending query call. A row write executing before it finishes first (a
- * committed write never answers bc:cancelled, so saving it again cannot duplicate it). Then the data process is killed
- * (that call and the calls queued behind it, never started, reject bc:cancelled; SQLite rolls an interrupted action query
- * back) and the base reopens under the same opening (its lock is adopted).
- * DbHost keeps one call in flight, so the kill can only end the targeted call; nothing behind it has reached the data process.
+ * committed write never answers bc:cancelled, so saving it again cannot duplicate it). A server statement running is
+ * cancelled first (DbHost.stop, R12): settled within INTERRUPT_WAIT_MS, the data process lives on. Otherwise the data
+ * process is killed (that call and the calls queued behind it, never started, reject bc:cancelled; SQLite rolls an
+ * interrupted action query back) and the base reopens under the same opening (its lock is adopted).
+ * DbHost keeps one call in flight, and stop() checks that the call still executes in the kill's own tick (the interrupt's
+ * wait lets it answer, and the next call leave): the kill can only end the targeted call.
  * ponytail: a runAction that commits just as Stop lands is reported bc:cancelled although it was written (running it again
  * would repeat it); closing that gap needs a cooperative interrupt (sqlite3_interrupt), which node:sqlite does not expose.
  * ponytail: a tracked page waiting behind an import or a design save shows « Exécution… », but Stop waits for that write
@@ -381,7 +419,9 @@ async function cancelCall(): Promise<void> {
   if (!h || id === null || !(await h.whenExecuting(id))) return;
   return serial(async () => {
     if (host !== h || !h.isExecuting(id)) return; // it ended meanwhile
-    await h.kill();
+    // R12: a server statement cancelled, or the call answered meanwhile (the next call, maybe a row save, is never killed),
+    // or the base closed meanwhile: no kill. DbHost.stop re-checks in the kill's own tick.
+    if (!(await h.stop(id, INTERRUPT_WAIT_MS, () => host === h))) return;
     try {
       const n = await startHost(h.opened.path, false, h.opened.sessionId);
       carried.set(n, linkedLocks(h));
@@ -405,7 +445,7 @@ function need(): AsyncSession {
 }
 // The data process recreates its errors with their name.
 const isReadOnly = (e: unknown) => e instanceof Error && e.name === 'ReadOnlyError';
-type TableOpResult = OpResult | SaveTableResult | RelationResult | LinkResult;
+type TableOpResult = OpResult | SaveTableResult | RelationResult | LinkResult | { ok: true; count: number };
 /** A design write: a read-only base resolves readOnly (`names` empty: LinkResult's, PF10). */
 const tableOp = async (fn: () => Promise<TableOpResult>): Promise<TableOpResult> => {
   try { return await fn(); } catch (e) { if (isReadOnly(e)) return { ok: false, reason: 'readOnly', names: [] }; throw e; }
@@ -448,6 +488,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   dir = app.getPath('userData');
   settings = loadSettings(dir);
   approvals = new ApprovalStore(join(dir, 'trust.json'));
+  credentials = new CredentialStore(join(dir, 'credentials.json'), safeStorage);
   // E2E only (unpackaged + BASECRAFT_E2E=1): the tests' trusted folders replace the system file.
   const e2eTrust = process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? process.env.BASECRAFT_E2E_TRUST_CONFIG : undefined;
   trustConfig = readTrustConfig(e2eTrust || systemTrustPath(process.platform, process.env));
@@ -459,7 +500,8 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
       const w = mainWindow();
       if (!w || e.sender !== w.webContents) throw new Error('Unauthorized IPC sender');
       // after an opening or a restart (Stop) in progress: the command-line base, a call issued just after Stop
-      return baseOps.then(() => fn(...args));
+      // M6; the link dialog's typed login, refused, leaves the key's credential as it was (RemoteSources.probe)
+      return baseOps.then(() => fn(...args)).catch((err: unknown) => { if (ch !== CH.linksInspectServer) forgetRefused(err); throw err; });
     });
   };
   // kept in memory only once written: a failed save leaves getSettings as the file is
@@ -564,6 +606,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     need();
     const h = host!;
     await h.session.takeOverLock();
+    await pushCredentials(h); // a base opened in recovery could not list its servers at its start
     await decideContent(h, true);
     return host === h ? h.state : null;   // closed meanwhile: no base
   });
@@ -580,16 +623,16 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
 
   handle(CH.tablesList, () => need().listTables());
   handle(CH.tablesDesign, (n) => need().tableDesign(lookupName(n)));
-  handle(CH.tablesSave, (r) => tableOp(() => need().saveTable(saveRequest(r))));
-  handle(CH.tablesRename, (a, b) => tableOp(() => need().renameTable(lookupName(a), nameArg(b))));
+  handle(CH.tablesSave, (r) => objectWrite(() => need().saveTable(saveRequest(r), logLabels(catalog().autoCorrect), settings.propertyUpdateOptions)));
+  handle(CH.tablesRename, (a, b) => objectWrite(() => need().renameTable(lookupName(a), nameArg(b), logLabels(catalog().autoCorrect))));
   handle(CH.tablesDrop, (n) => tableOp(() => need().dropTable(lookupName(n))));
   handle(CH.tablesTestRules, (n) => need().testRules(lookupName(n)));
 
   handle(CH.rowsCount, (t, f) => need().count(lookupName(t), fieldFilters(f)));
   handle(CH.rowsPage, (t, r) => need().page(lookupName(t), pageRequest(r)));
   handle(CH.rowsInsert, (t, v) => rowWrite(() => need().insert(lookupName(t), cells(v))));
-  handle(CH.rowsUpdate, (t, id, c, x) => rowWrite(() => need().update(lookupName(t), uint(id), cells(c), expectedValues(x))));
-  handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), uints(ids))));
+  handle(CH.rowsUpdate, (t, id, c, x) => rowWrite(() => need().update(lookupName(t), rowRef(id), cells(c), expectedValues(x))));
+  handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), rowRefs(ids))));
   handle(CH.rowsLookup, (t, fd) => need().lookup(lookupName(t), lookupName(fd)));
 
   // Startup options (B3): a read-only base reads them; saving rejects (ReadOnlyError) like any write.
@@ -640,6 +683,47 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.linksConvert, (n) => tableOp(() => need().convertLink(lookupName(n))));
   // C2 R7: data (the Runtime unlocks too); the session accepts a source of the front-end or the picked file only.
   handle(CH.linksUnlock, (p, pw) => { const path = unlockPath(p); return need().unlockAccess(path, accessPassword(pw), chosenLinks.has(path)); });
+  // C4 R10: data too (the Runtime logs in). The password goes to the data process and the store, never back to the renderer.
+  handle(CH.linksLogin, async (k, u, pw, r) => {
+    const key = serverKey(k); const user = loginUser(u); const password = accessPassword(pw); const remember = bool(r);
+    const ok = await need().login(key, user, password);
+    if (ok) { credentials.set(key, { user, password }, remember); pushed.add(key); } else { credentials.forget(key); pushed.delete(key); } // M6
+    return ok;
+  });
+  handle(CH.linksLoginInfo, async (k) => {
+    const key = serverKey(k);
+    const d = await need().loginDefaults(key);
+    return { user: credentials.user(key) ?? d.user, label: d.label, canRemember: credentials.canStore() };
+  });
+  // C4 Task 12, design: the server link dialog. Its login, accepted, is kept as `linksLogin` keeps one (R10, G2).
+  handle(CH.linksInspectServer, async (k, p, pw, r) => {
+    const kind = serverKind(k); const params = serverParams(kind, p) as { user: string }; const password = accessPassword(pw); const remember = bool(r);
+    const info = await need().inspectServer(kind, params, params.user, password);
+    credentials.set(info.key, { user: params.user, password }, remember);
+    pushed.add(info.key); // db-host keeps the dialog's accepted login too
+    return info;
+  });
+  handle(CH.linksCreateServer, (k, p, n) => {
+    const kind = serverKind(k); const params = serverParams(kind, p); const names = nameList(n);
+    return tableOp(() => need().createServerLinks(kind, params, names));
+  });
+  handle(CH.linksRelinkServer, (n, k, p) => {
+    const names = nameList(n); const kind = serverKind(k); const params = serverParams(kind, p);
+    return tableOp(() => need().relinkServer(names, kind, params));
+  });
+  handle(CH.linksCanRemember, () => credentials.canStore());
+  // C7 R1: the renderer has closed every document (as the split); one at a time with imports and exports (their progress event).
+  handle(CH.migrateRun, async (r) => {
+    const req = migrateRequest(r);
+    await whenIdle();
+    return runImport(() => need().migrateToServer(req));
+  });
+  // C7 R17: names are inspectServer's offered names; one at a time with imports and exports (their progress event).
+  handle(CH.migrateImport, async (k, p, n) => {
+    const kind = serverKind(k); const params = serverParams(kind, p); const names = nameList(n);
+    await whenIdle();
+    return runImport(() => need().importServerTables(kind, params, names));
+  });
 
   handle(CH.tablesCopy, (a, b, m) => {
     if (m !== undefined && m !== 'structure' && m !== 'data') throw new TypeError('bc:invalidArgument');
@@ -649,7 +733,9 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.objectsList, (k) => need().listObjects(objectKindOrAll(k)));
   handle(CH.objectsGet, (k, n) => need().getObject(objectKind(k), lookupName(n)));
   handle(CH.objectsSave, (k, n, d, o) => objectWrite(() => need().saveObject(objectKind(k), nameArg(n), definition(d), o === null ? null : lookupName(o))));
-  handle(CH.objectsRename, (k, a, b) => objectWrite(() => need().renameObject(objectKind(k), lookupName(a), nameArg(b))));
+  handle(CH.objectsRename, (k, a, b) => objectWrite(() => need().renameObject(objectKind(k), lookupName(a), nameArg(b), logLabels(catalog().autoCorrect))));
+  handle(CH.autoCorrectDependents, (c) => need().autoCorrectDependents(nameChanges(c)));
+  handle(CH.autoCorrectApplyProperties, (items) => objectWrite(async () => ({ ok: true, count: await need().applyProperties(propertyTargetsArg(items)) })));
   handle(CH.objectsDelete, (k, n) => objectWrite(() => need().deleteObject(objectKind(k), lookupName(n))));
   handle(CH.objectsCopy, (k, n, to) => objectWrite(() => need().copyObject(objectKind(k), lookupName(n), nameArg(to))));
   handle(CH.objectsSetDescription, (k, n, d) => tableOp(() => need().setDescription(k === 'table' ? k : objectKind(k), lookupName(n), description(d))));

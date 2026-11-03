@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { goToRow } from './find-commands';
+import { findDefaults, goToRow, matchText } from './find-commands';
 
 describe('goToRow', () => {
   it('moves within the saved records', () => {
@@ -14,5 +14,33 @@ describe('goToRow', () => {
     expect(goToRow('new', 3, 10)).toBe('new');
     expect(goToRow('last', null, 0)).toBeNull();
     expect(goToRow('new', null, 0)).toBe('new');
+  });
+});
+
+describe('Find dialog (O2 R10)', () => {
+  it('findDefaults', () => {
+    expect(findDefaults('fast')).toEqual({ onlyCurrentField: true, match: 'whole' });
+    expect(findDefaults('general')).toEqual({ onlyCurrentField: false, match: 'anywhere' });
+    expect(findDefaults('startOfField')).toEqual({ onlyCurrentField: true, match: 'start' });
+  });
+  it('matchText', () => {
+    expect(matchText('Dupont', 'dup', 'start', false, 'fr-FR')).toBe(true);
+    expect(matchText('Dupont', 'dup', 'whole', false, 'fr-FR')).toBe(false);
+    expect(matchText('Dupont', 'Pon', 'anywhere', true, 'fr-FR')).toBe(false);
+    expect(matchText('Élodie', 'élodie', 'whole', false, 'fr-FR')).toBe(true);
+    expect(matchText("O'Brien", "o'b", 'start', false, 'fr-FR')).toBe(true);
+  });
+  it('matchText: case ignored without Match Case, accents always kept (B2 R13, as FindRecord)', () => {
+    expect(matchText('Élodie', 'elodie', 'whole', false, 'fr-FR')).toBe(false);
+    expect(matchText('Lyôn', 'lyon', 'whole', false, 'fr-FR')).toBe(false);
+    expect(matchText('LYÔN', 'lyôn', 'whole', false, 'fr-FR')).toBe(true);
+    expect(matchText('Élodie', 'Elodie', 'whole', true, 'fr-FR')).toBe(false);
+    expect(matchText('Lyon', 'Lyon', 'whole', true, 'fr-FR')).toBe(true);
+    expect(matchText('1 200,00 €', '200', 'anywhere', false, 'fr-FR')).toBe(true);
+    expect(matchText('Lyon', 'yo', 'start', false, 'fr-FR')).toBe(false);
+  });
+  it('matchText: the no-break spaces of the region (grouping, currency) match a typed space', () => {
+    expect(matchText('1\u202f200,00\u00a0€', '1 200,00 €', 'whole', false, 'fr-FR')).toBe(true);
+    expect(matchText('1\u202f200,00\u00a0€', '1 200,00 €', 'whole', true, 'fr-FR')).toBe(true);
   });
 });

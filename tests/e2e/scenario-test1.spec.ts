@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
-import { launchApp } from './helpers';
+import { launchApp, pickView } from './helpers';
 
 const OUT = join(tmpdir(), 'basecraft-scenarios', 'test1');
 const PDF_PATH = join(OUT, 'export.pdf');
@@ -141,7 +141,7 @@ test('scenario 1: online retail base, 1,000 order lines, entry form, sales repor
       await expect(page.getByTestId(`ctl-${f}`)).toBeVisible();
     }
     await saveAs(page, 'form', 'OrderEntry');
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     const ctl = (n: string) => page.getByTestId(`form-ctl-${n}`).filter({ visible: true });
     await expect(ctl('CustomerID')).toHaveValue('1');
     await page.getByTestId('nav-new').filter({ visible: true }).click();
@@ -160,7 +160,7 @@ test('scenario 1: online retail base, 1,000 order lines, entry form, sales repor
     // 6. invoice: AutoReport on QInvoice, grouped on OrderNo with a Sum of Amount in the group footer, PDF
     await autoReport(page, 'query:QInvoice');
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-viewDesign').click();
+    await pickView(page, 'viewDesign');
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await page.getByTestId('cmd-groupSort').click();
     await page.getByTestId('grouping-add-group').click();
@@ -173,7 +173,7 @@ test('scenario 1: online retail base, 1,000 order lines, entry form, sales repor
     await page.getByTestId('cmd-save').click();
     await expect(page.getByTestId('doc-tab-report-QInvoice')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
-    await page.getByTestId('cmd-viewPrintPreview').click();
+    await pickView(page, 'viewPrintPreview');
     await expect(doc(page).getByTestId('preview-page-of')).toBeVisible();
     await page.screenshot({ path: join(OUT, 'invoice-preview.png') });
     await exportPdf(page, 'Invoice.pdf');

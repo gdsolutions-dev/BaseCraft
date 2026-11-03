@@ -1,10 +1,12 @@
 // Affichages d'un formulaire en mode Exécution (module pur) : affichage selon le mode de l'onglet (M10 : Formulaire = `run`,
 // Feuille de données = `datasheet`), fenêtre visible du formulaire continu, colonnes de la feuille de données.
 import type { ControlDef, DesignDoc } from '../../shared/design/model';
+import { labelOf } from '../../shared/design/layout';
 import { effectiveProp } from '../../shared/design/properties';
 import type { SourceInfo } from '../../shared/record-source';
 import { twipsToPx } from '../designer/units';
 import { boundField } from './control-values';
+import { autoWidth } from './form-def';
 
 export type RunView = 'single' | 'continuous' | 'datasheet';
 
@@ -28,6 +30,9 @@ export function runViewFor(mode: 'run' | 'datasheet', doc: DesignDoc): RunView {
 export function openingMode(doc: DesignDoc): 'run' | 'datasheet' {
   return initialView(doc) === 'datasheet' ? 'datasheet' : 'run';
 }
+
+/** Le mode Page d'un formulaire (ou d'un état, L3) est permis sauf si props.AllowLayoutView vaut false. */
+export const allowsLayout = (doc: DesignDoc, kind: 'form' | 'report' = 'form'): boolean => effectiveProp(doc.props, 'AllowLayoutView', kind) !== false;
 
 const decided = new Set<string>();
 /** True the first time a form view of this tab asks (tab ids are never reused): only then does the opening view apply. */
@@ -60,8 +65,14 @@ export function datasheetColumns(doc: DesignDoc, info: SourceInfo): SheetColumn[
   walk(detail?.controls ?? []);
   const key = (c: ControlDef) => (typeof c.props.TabIndex === 'number' ? c.props.TabIndex : Number.MAX_SAFE_INTEGER);
   return out.map((c, i) => ({ c, i })).sort((a, b) => key(a.c) - key(b.c) || a.i - b.i).map(({ c }) => {
-    const caption = (c.children ?? []).find((k) => k.kind === 'label')?.props.Caption;
+    // Étiquette attachée, sinon celle qu'une disposition a détachée (Empilé : colonne 0 ; Tabulaire : en-tête).
+    const attached = (c.children ?? []).find((k) => k.kind === 'label')?.props.Caption;
+    const caption = attached ?? labelOf(doc, c.name)?.props.Caption;
     const title = typeof caption === 'string' && caption.trim() ? caption.replace(/\s*:\s*$/, '') : c.name;
-    return { control: c.name, field: boundField(c, info)?.name ?? null, title, width: twipsToPx(c.width) };
+    const f = boundField(c, info);
+    // Membre d'une disposition : sa Width est celle de la colonne de données, pas une largeur de colonne ; on prend la largeur naturelle du champ.
+    // ponytail: une vraie propriété ColumnWidth serait la voie propre (largeur de colonne indépendante de la disposition, comme Access).
+    const w = c.props.LayoutID && f ? autoWidth(f)?.width ?? c.width : c.width;
+    return { control: c.name, field: f?.name ?? null, title, width: twipsToPx(w) };
   });
 }

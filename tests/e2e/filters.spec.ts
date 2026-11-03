@@ -7,7 +7,7 @@ import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 const fr = localeInfo('fr-FR');
@@ -17,13 +17,13 @@ const commandes = t('Commandes', [f('N°', 'autoNumber'), f('Client', 'number', 
   numberSize: 'longInteger', lookup: { kind: 'table', table: 'Clients', boundField: 'N°', displayFields: ['Nom'], limitToList: false },
 })]);
 // DatasheetView: row selector width, header and row heights; left edge of each column (AutoNumber 80, short text 170).
-const MARKER = 44, HEADER = 34, ROW = 30, LEFT = [0, 80, 250, 420];
+const HEADER = 34, ROW = 30;
 
 const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-cell-${col + 1}-${row}`);
 const count = (page: Page) => page.getByTestId('nav-record-count');
 async function clickCell(page: Page, col: number, row: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + LEFT[col]! + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + row * ROW + ROW / 2);
   await expect(cell(page, col, row)).toBeFocused(); // Glide focuses the cell after a render
 }
 async function open(page: Page, table: string) {
@@ -40,7 +40,7 @@ const base = () => seedBase('filtres', async (db) => {
 });
 
 test('filters: by selection, toggle, criteria typed in French, delete while filtered, clear', async () => {
-  const { app, page } = await launchApp({ args: [await base()], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await base()], env: FR });
   try {
     await open(page, 'Clients');
     await expect(page.getByTestId('nav-filtered')).toBeDisabled(); // no filter
@@ -76,6 +76,7 @@ test('filters: by selection, toggle, criteria typed in French, delete while filt
     // Filter on the field Solde: a criteria typed in French (decimal comma), combined with Ville
     await clickCell(page, 3, 0);
     await page.getByTestId('cmd-filter').click();
+    await page.getByTestId('filter-typed').click(); // O2 R14: Home › Filter opens the column menu; its typed filters, the Expression Builder
     await page.getByTestId('xb-text').fill('> 999,5 Et');
     await page.getByTestId('xb-ok').click();
     await expect(page.getByTestId('xb-error')).toBeVisible(); // incomplete: refused, the builder stays
@@ -95,6 +96,7 @@ test('filters: by selection, toggle, criteria typed in French, delete while filt
     // the criteria comes back in its display form; emptied, it no longer filters
     await expect(cell(page, 3, 0)).toBeFocused(); // the filter brings the grid back to its first record, same column
     await page.getByTestId('cmd-filter').click();
+    await page.getByTestId('filter-typed').click(); // O2 R14: Home › Filter opens the column menu; its typed filters, the Expression Builder
     await expect(page.getByTestId('xb-text')).toHaveValue('> 999,5');
     await page.getByTestId('xb-text').fill('');
     await page.getByTestId('xb-ok').click();
@@ -134,7 +136,7 @@ test('a row saved out of the filter: the next record is not skipped, the new rec
     createTable(db, clients);
     for (const [Nom, Ville] of [['Dupont', 'Lyon'], ['Martin', 'Lyon'], ['Zola', 'Lyon'], ['Durand', 'Paris']] as const) await insertRow(db, clients, { Nom, Ville }, fr);
   });
-  const { app, page } = await launchApp({ args: [p], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [p], env: FR });
   const editor = page.getByTestId('grid-editor-portal').locator('textarea');
   try {
     await open(page, 'Clients');
@@ -161,7 +163,7 @@ test('a row saved out of the filter: the next record is not skipped, the new rec
     await page.keyboard.press('Tab');
     await expect(editor).toHaveCount(0);
     const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-    await page.mouse.click(b.x + MARKER + LEFT[1]! + 30, b.y + HEADER + 2 * ROW + ROW / 2); // the trailing row, under Zola
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 2 * ROW + ROW / 2); // the trailing row, under Zola
     await expect(count(page)).toHaveText('1');
     await expect(editor).toBeFocused();
     await page.keyboard.type('Hugo');
@@ -175,7 +177,7 @@ test('a row saved out of the filter: the next record is not skipped, the new rec
 });
 
 test('filter by selection on a Lookup field compares its stored value', async () => {
-  const { app, page } = await launchApp({ args: [await base()], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [await base()], env: FR });
   try {
     await open(page, 'Commandes');
     await expect(cell(page, 1, 0)).toHaveText('Dupont');

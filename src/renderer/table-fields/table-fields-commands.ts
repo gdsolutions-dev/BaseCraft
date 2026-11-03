@@ -4,9 +4,11 @@ import { createElement } from 'react';
 import type { DisplayContext } from '../../shared/expr/localize';
 import { toDisplay } from '../../shared/expr/localize';
 import { validateDesign, sameName, type FieldProps, type FieldType, type NumberSize, type TableDesign } from '../../shared/field-types';
+import { fieldDefaults } from '../settings-store';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { i18n } from '../i18n';
 import type { ModalApi } from '../shell/Modal';
+import type { AppAction, DocTab } from '../state/app-state';
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { saveTableInteractive } from '../table-design/save-table';
 import { addField, namedFormatPatch, patchField, patchTable, removeField, renameField, stepDecimals, toggleIndex, type FieldEdit } from './field-edit';
@@ -15,6 +17,8 @@ import { editNameCaption } from './NameCaptionDialog';
 export interface TableFieldsEnv {
   table: string; design(): TableDesign | null; selectedField(): string | null; modal: ModalApi; readOnly: boolean;
   flushPending(): Promise<boolean>; designOpen(): boolean;
+  /** Name AutoCorrect (O4): the open tabs, and where the corrected objects are announced. */
+  tabs(): DocTab[]; dispatch(a: AppAction): void;
   /** Resolves once the datasheet shows the new structure; `select`: the field whose column is selected again (null: none). */
   reload(select: string | null): Promise<void>;
   /** Expressions are shown in the interface language and the base's region (Expression Builder); null until known. */
@@ -52,7 +56,7 @@ async function run(env: TableFieldsEnv, needsField: boolean, build: (d: TableDes
     if (!d || (needsField && !field)) return;
     const e = await build(d, field);
     if (!e) return;
-    if (!(await saveTableInteractive(env.modal, { originalName: env.table, design: e.design, mapping: e.mapping, allowDataLoss: false }))) return;
+    if (!(await saveTableInteractive(env.modal, env.tabs(), env.dispatch, { originalName: env.table, design: e.design, mapping: e.mapping, allowDataLoss: false }))) return;
     // The column to select again: the new field, else the edited one (renamed or not), else the one now at the deleted field's place.
     const at = field ? d.fields.findIndex((f) => sameName(f.name, field)) : -1;
     const target = e.mapping.find((m) => m.sourceName === null)?.name ?? e.mapping.find((m) => field && m.sourceName !== null && sameName(m.sourceName, field))?.name
@@ -67,7 +71,7 @@ async function run(env: TableFieldsEnv, needsField: boolean, build: (d: TableDes
 export const addMoreField = (env: TableFieldsEnv, m: MoreField) => addTyped(env, m.type, m.numberSize)();
 
 const addTyped = (env: TableFieldsEnv, type: FieldType, numberSize?: NumberSize) => () =>
-  run(env, false, (d, field) => addField(d, field, type, { base: t('tableFields.newField'), ...(numberSize ? { numberSize } : {}) }));
+  run(env, false, (d, field) => addField(d, field, type, { base: t('tableFields.newField'), defaults: fieldDefaults(), ...(numberSize ? { numberSize } : {}) }));
 
 const fieldOf = (d: TableDesign, field: string | null) => d.fields.find((x) => sameName(x.name, field ?? ''))!;
 const withField = (env: TableFieldsEnv, fn: (p: FieldProps) => Partial<FieldProps> | null) =>

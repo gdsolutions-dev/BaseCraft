@@ -366,9 +366,16 @@
       "actionCatalog": "アクション カタログ",
       "showAllActions": "すべてのアクションを表示",
       "viewForm": "フォーム ビュー",
+      "viewLayout": "レイアウト ビュー",
+
+      "viewMenu": "表示",
+
+      "viewState": "レポート ビュー",
       "viewPrintPreview": "印刷プレビュー",
       "linkBaseCraft": "BaseCraft または SQLite データベース",
-      "linkAccess": "Access データベースのリンク"
+      "linkAccess": "Access データベースのリンク",
+      "linkPostgreSql": "PostgreSQL",
+      "linkSqlServer": "SQL Server"
     },
     "scrollLeft": "リボンを左にスクロール",
     "scrollRight": "リボンを右にスクロール",
@@ -490,6 +497,9 @@
       "design": "デザイン ビュー",
       "run": "実行ビュー",
       "form": "フォーム ビュー",
+      "layout": "レイアウト ビュー",
+
+      "state": "レポート ビュー",
       "sql": "SQL ビュー"
     }
   },
@@ -505,7 +515,7 @@
     "syncedFolder": "読み取り専用で開きました: 共有データ ファイルは同期フォルダー (OneDrive、Dropbox など) では使用できません。ネットワーク ドライブに置くか、サーバーに移行してください。",
     "unsupportedClient": "読み取り専用で開きました: このシステムでは、ネットワーク ドライブ上の共有モードはサポートされていません。Windows のコンピューターを使用するか、サーバーに移行してください。",
     "takeOver": "引き継ぐ",
-    "contentDisabled": "セキュリティの警告: このデータベースのアクティブなコンテンツ (マクロ、アクション クエリ) の一部が無効になっています。",
+    "contentDisabled": "セキュリティの警告: このデータベースのアクティブ コンテンツの一部 (マクロ、アクション クエリ、パススルー クエリ) が無効になっています。",
     "enableContent": "コンテンツの有効化",
     "riskNetwork": "このデータベースはネットワーク共有上にあります。書き込み中に接続が切断されると、データベースが破損するおそれがあります。",
     "riskSynced": "このデータベースは同期フォルダー内にあります。書き込み中に同期が行われると、データベースが破損するおそれがあります。",
@@ -594,6 +604,7 @@
       "queryBind_pivotAggregate": "クロス集計クエリ (PIVOT) の列見出しに集計関数を含めることはできません: {{detail}}。",
       "queryBind_tooManyColumns": "このクロス集計クエリは {{detail}} 列になります。最大 255 列で、そのうち列見出しは 254 列までです。データを絞り込むか、列見出し (IN) を修正してください。",
       "queryBind_crosstabAsSource": "クロス集計クエリ「{{detail}}」を、別のクエリまたはルックアップ リストのソースにすることはできません。",
+      "queryBind_passThroughAsSource": "パススルー クエリ「{{detail}}」を、別のクエリまたはリストのソースにすることはできません。フィルターやグループ化は、その SQL テキストに記述してください。",
       "queryBind_mixedSources": "クエリで扱えるデータ ソースは 1 つだけです。「{{detail}}」は、クエリの他のテーブルと同じソースのものではありません。",
       "fontMissing": "埋め込みフォントを読み込めませんでした。レポートは印刷もエクスポートもされていません。",
       "printFailed": "印刷に失敗しました。",
@@ -614,8 +625,29 @@
       "invalidQuery_crosstabHeadingTotal": "クロス集計クエリの「列見出し」は、集計行が「グループ化」である必要があります。",
       "invalidQuery_crosstabNone": "クロス集計クエリの「(非表示)」列は、集計行が「Where 条件」である必要があります。クロス集計行で、その役割を選択してください。",
       "linkUnavailable_needsPassword": "この Access データベースはパスワードで保護されています: {{detail}}",
+      "linkUnavailable_needsLogin": "ログインがキャンセルされました: {{detail}} のリンク テーブルは使用できません。",
+      "linkUnavailable_cannotConnect": "サーバー {{detail}} に接続できません。サーバー名、ポート、ネットワークを確認してください。",
+      "linkUnavailable_certificate": "このコンピューターはサーバー {{detail}} の証明書を信頼していません。その証明機関の証明書をインストールしてもらうか、このネットワークを信頼する場合は、リンク テーブル マネージャーで、証明書を検証しない暗号化のオプション (例: 「暗号化 (サーバー証明書を信頼する)」) を選択してください。",
+      "linkUnavailable_serverVersion": "サーバー {{detail}} は BaseCraft がサポートしていないバージョンを使用しています (PostgreSQL 14 以降または SQL Server 2016 以降が必要です)。",
+      "linkUnavailable_passwordExpired": "サーバー {{detail}} でこのログインのパスワードの有効期限が切れています。サーバーの管理ツールでパスワードを変更してから、もう一度接続してください。",
       "linkUnavailable_syncedFolder": "データ ファイル {{detail}} は読み取り専用のままです: 共有データ ファイルは同期フォルダー (OneDrive、Dropbox など) では使用できません。ネットワーク ドライブに置くか、サーバーに移行してください。",
-      "linkUnavailable_unsupportedClient": "データ ファイル {{detail}} は読み取り専用のままです: このシステムでは、ネットワーク ドライブ上の共有モードはサポートされていません。Windows のコンピューターを使用するか、サーバーに移行してください。"
+      "linkUnavailable_unsupportedClient": "データ ファイル {{detail}} は読み取り専用のままです: このシステムでは、ネットワーク ドライブ上の共有モードはサポートされていません。Windows のコンピューターを使用するか、サーバーに移行してください。",
+      "serverNotSupported_actionQuery": "アクション クエリは、{{detail}} のリンク テーブルではまだ実行できません。",
+      "serverNotSupported_makeTable": "テーブル作成クエリは {{detail}} のソースでは実行できません。サーバーにテーブルを作成してから、追加クエリでデータを入れてください。",
+      "serverNotSupported_appendAutoNumber": "追加クエリでは、サーバー上のテーブルのオートナンバー フィールドの値を指定できません ({{detail}})。クエリからこのフィールドを削除してください。新しいレコードはサーバーが採番します。",
+      "serverNotSupported_joinSave": "複数テーブルのクエリを使ったデータ入力は、{{detail}} のソースではまだできません。",
+      "serverNotSupported_crosstab": "クロス集計クエリは、{{detail}} のソースではまだ実行できません。",
+      "serverNotSupported_passThrough": "パススルー クエリは {{detail}} のソースでは使用できません。",
+      "serverNotSupported_topPercent": "TOP … PERCENT は、{{detail}} のソースではまだサポートされていません。",
+      "serverNotSupported": "この操作は、{{detail}} のリンク テーブルではまだできません。",
+      "serverFunction": "{{name}} は {{detail}} のソースでは実行できません: BaseCraft はこのサーバー向けに変換できません。",
+      "timeout": "サーバーが設定された時間内に応答しませんでした ({{name}} 秒)。もう一度実行するか、リンク テーブル マネージャーでタイムアウトを延ばしてください。",
+      "passThroughNoRecords": "パススルー クエリは、[レコードを返す] プロパティが [はい] であるにもかかわらず、レコードを返しませんでした。",
+      "passThroughTimeout": "サーバーが設定された時間内にパススルー クエリに応答しませんでした（{{name}} 秒）。プロパティ シートの [ODBC タイムアウト] を増やしてください（0：無制限）。",
+      "passThroughLost": "パススルー クエリの実行中にサーバーへの接続が失われました。クエリが完了したかどうかは不明です。",
+      "serverError_connection": "保存中にサーバーとの接続が切断されました。保存が完了したかどうかは不明です。もう一度試す前に更新 (ホーム › 最新の情報に更新) してください。",
+      "serverError_notWritten": "サーバーは「{{detail}}」にレコードを保存しませんでした。テーブルのトリガー、ルール、またはセキュリティ ポリシーによって無視されました。",
+      "serverError": "サーバーが操作を拒否しました: {{detail}}"
     },
     "op": {
       "nameExists": "この名前のオブジェクトは既に存在します。",
@@ -692,6 +724,7 @@
       "reportFooter": "レポート フッター"
     },
     "canvas": "デザイン サーフェス",
+    "layoutHandle": "レイアウト {{id}} を選択",
     "toolbox": "ツールボックス",
     "arrange": {
       "alignLeft": "左",
@@ -936,7 +969,16 @@
       "isNotNull": "空白以外",
       "clear": "すべてのフィルターをクリア",
       "fieldTitle": "フィルター",
-      "fieldLabel": "「{{field}}」の抽出条件 (空の場合、このフィールドにはフィルターを適用しません):"
+      "fieldLabel": "「{{field}}」の抽出条件 (空の場合、このフィールドにはフィルターを適用しません):",
+      "sortAsc": { "text": "昇順で並べ替え", "number": "小さい順に並べ替え", "date": "古い順に並べ替え" },
+      "sortDesc": { "text": "降順で並べ替え", "number": "大きい順に並べ替え", "date": "新しい順に並べ替え" },
+      "clearField": "{{field}} のフィルターをクリア",
+      "typed": { "text": "テキスト フィルター", "number": "数値フィルター", "date": "日付フィルター" },
+      "all": "（すべて選択）",
+      "blanks": "（空白）",
+      "tooLong": "このフィルターでオンにした値が多すぎます。代わりにテキスト、数値、または日付フィルターを使用してください。",
+      "ok": "OK",
+      "cancel": "キャンセル"
     },
     "delete_other": "{{count}} 件のレコードを削除しようとしています。この操作は元に戻せません。続行しますか?",
     "deleteCascade_other": "{{count}} 件のレコードと、その関連レコードを削除しようとしています。この操作は元に戻せません。続行しますか?",
@@ -974,7 +1016,6 @@
       "forbiddenStatement": "このステートメントは使用できません。使用できるのは選択、追加、更新、削除、テーブル作成のクエリのみです。",
       "reservedName": "この名前は予約されています (bc_、bcx_、sqlite_)。クエリでは使用できません。",
       "multipleStatements": "SQL ステートメントは 1 つだけ使用できます。セミコロンの後のテキストを削除してください。",
-      "notSupportedYet": "この種類のクエリ (パススルー) はまだ利用できません。",
       "badParameterType": "不明なパラメーターの型です。",
       "badCrosstab": "クロス集計クエリが正しくありません。TRANSFORM、GROUP BY を含む単純な SELECT、PIVOT の順に記述してください。",
       "badCount": "1 ～ 255 の整数を入力してください。",
@@ -1429,6 +1470,7 @@
   "prop": {
     "Caption": "標題",
     "DefaultView": "既定のビュー",
+    "AllowLayoutView": "レイアウト ビューを許可",
     "NavigationButtons": "移動ボタン",
     "Width": "幅",
     "Visible": "可視",
@@ -1997,6 +2039,17 @@
       "label": "テーブル名"
     },
     "sqlOnly": "このクエリは SQL ビューでのみ表示できます。",
+    "passThrough": {
+      "notice": "パススルー クエリ：このテキストは BaseCraft が読み取ることなく、そのままサーバー {{label}} に送信されます。サーバーは独自のアクセス許可を適用します。サーバーが変更する内容には、BaseCraft の入力規則とリレーションシップは適用されません。",
+      "noticeNoServer": "パススルー クエリ：プロパティ シートでサーバーを選択してください。",
+      "empty": "サーバーに送信する SQL ステートメントを入力してください。",
+      "noConnection": "プロパティ シートでクエリのサーバーを選択してください（接続）。",
+      "connection": "接続",
+      "otherServerKind": "その他の {{product}} サーバー…",
+      "returnsRecords": "レコードを返す",
+      "timeout": "ODBC タイムアウト",
+      "badTimeout": "0（無制限）から 3600 までの秒数を入力してください。"
+    },
     "builderOnTable": "テーブルに対してクエリ ビルダーを呼び出しました。\n\nこのテーブルに基づくクエリを作成しますか?",
     "builderSave": "SQL ステートメントへの変更を保存して、プロパティを更新しますか?",
     "error": {
@@ -2143,6 +2196,65 @@
     "noTables": "このデータベースには移動するローカル テーブルがありません。",
     "self": "データ ファイルを開いているデータベースにすることはできません。別の名前またはフォルダーを選んでください。"
   },
+  "migrate": {
+    "title": "サーバーへの移動ウィザード",
+    "intro": "このウィザードは、現在のデータベースのすべてのローカル テーブルを、データ、キー、インデックス、リレーションシップと共に PostgreSQL または SQL Server のデータベースに移動し、同じ名前のリンク テーブルに置き換えます。最初にデータベースのバックアップ コピーが作成されます。入力規則と計算された既定値はアプリケーションに残り、アプリケーションはフロントエンド アプリケーションになります。",
+    "engine": "移動先のサーバー",
+    "next": "次へ",
+    "schema": "スキーマ",
+    "start": "移動",
+    "connecting": "サーバーに接続し、データベースのバックアップ コピーを作成しています…",
+    "progress": "{{table}} をコピーしています: {{total}} 件中 {{done}} 件のレコード",
+    "finishing": "完了処理中…",
+    "stop": "停止",
+    "done": "移動が完了しました。バックアップ コピー: {{backup}}。",
+    "backup": "バックアップ コピー: {{backup}}。",
+    "server": "{{product}} サーバー: {{server}}、スキーマ {{schema}}。",
+    "copy": "クリップボードにコピー",
+    "report": {
+      "tables": "移動したテーブル",
+      "table": "{{name}}: {{rows}} 件のレコード",
+      "nextId": "次のオートナンバー: {{next}}",
+      "version": "バージョン列: {{column}}",
+      "sep": "、",
+      "indexes": "作成したインデックス",
+      "index": "{{table}}: {{name}}",
+      "uniqueIndex": "{{table}}: {{name}} (重複なし)",
+      "relations": "リレーションシップ",
+      "created": "{{name}}: 外部キーを作成しました",
+      "noAction": "{{name}}: 連鎖なしで外部キーを作成しました (SQL Server は 1 つのテーブルへの複数の連鎖パスを拒否します)",
+      "notEnforced": "{{name}}: 参照整合性が設定されていないため、サーバーには何も作成されません",
+      "frontEndOnly": "アプリケーションだけが適用 (サーバーは適用しない)",
+      "rule": "{{name}}: {{what}}",
+      "approximated": "サーバーで別の型として格納",
+      "approx": "{{name}}: {{type}}",
+      "queries": "サーバーが拒否するクエリ",
+      "query": "{{name}}: {{error}}",
+      "unreadable": "{{name}}: 定義を読み取れないため、確認していません"
+    },
+    "noTables": "このデータベースには移動するローカル テーブルがありません。",
+    "dataFile": "このデータベースは共有データ ファイル (データベース分割ツール) です。そのフロントエンド アプリケーションがテーブルをリンクしています。リンク テーブルに [ローカル テーブルに変換] を実行した後、フロントエンドからアプリケーションを移動してください。",
+    "noSchema": "スキーマ {{schema}} はサーバーに存在しません。",
+    "nameTaken": "サーバーには既にこれらの名前のテーブルがあります: {{names}}。削除するか、別のスキーマを選んでください。",
+    "nameTooLong": "これらの名前は PostgreSQL の制限 (63 バイト) を超えています: {{names}}。先に名前を変更してください。",
+    "invalidDesign": "これらのフィールドのデザインが無効です: {{names}}。デザイン ビューで修正してから、やり直してください。",
+    "cancelled": "移動を取り消しました: 何も変更されていません。",
+    "failed": "移動に失敗しました ({{table}}): {{error}}。サーバーでもデータベースでも何も変更されていません。",
+    "failedNoTable": "移動に失敗しました: {{error}}。サーバーでもデータベースでも何も変更されていません。",
+    "switchFailed": "テーブルはサーバーにコピーされましたが、データベースを変更できませんでした ({{error}})。データベースは元のままです。",
+    "dropped": "コピーしたテーブルはサーバーから削除されました。",
+    "left": "これらのテーブルはサーバーに残っています: {{names}}。",
+    "leftCheck": "もう一度移動する前に、これらを確認して削除してください。",
+    "commitUnknown": "サーバーがコミットしている間に、サーバーとの接続が失われたか、移動が停止されました。サーバーが保存したかどうかはわかりません。データベースは変更されていません。",
+    "leftMaybe": "これらのテーブルはサーバーにある可能性があります: {{names}}。もう一度移動する前に、これらを確認して削除してください。",
+    "closed": "サーバーへの接続は閉じられました。",
+    "queriesUnchecked": "サーバーでクエリを確認できませんでした: {{detail}}",
+    "error": {
+      "migrateCount": "サーバーでの {{table}} のレコード数は {{local}} 件ではなく {{server}} 件です。",
+      "migrateUnlinkable": "サーバーから読み直したテーブル {{table}} は、そのキーとフィールドではリンクできません。",
+      "migrateOneNull": "フィールド {{field}} に複数の Null 値があります。SQL Server は、リレーションシップ {{relation}} が必要とする重複なしのインデックスで 1 つしか許可しません。"
+    }
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2209,7 +2321,7 @@
       "TableName": "テーブル名",
       "FindWhat": "検索する文字列",
       "Match": "検索条件",
-      "MatchCase": "大文字と小文字を区別",
+      "MatchCase": "大文字と小文字を区別する",
       "Search": "検索方向",
       "OnlyCurrentField": "現在のフィールドのみ検索",
       "FindFirst": "最初から検索",
@@ -2281,8 +2393,8 @@
         "no": "いいえ"
       },
       "Search": {
-        "up": "上",
-        "down": "下",
+        "up": "上へ",
+        "down": "下へ",
         "all": "すべて"
       },
       "OnlyCurrentField": {
@@ -2356,6 +2468,7 @@
       "cantGoToRecord": "指定されたレコードに移動できません。",
       "cantFocus": "このコントロールにフォーカスを移動できません (非表示または無効になっています)。",
       "saveRefused": "レコードを保存できませんでした。",
+      "autoCorrectLog": "変更をテーブル {{name}} (フィールド {{detail}}) に記録できませんでした。名前は何も変更されていません。",
       "badReference": "「{{name}}」は開いているフォームのコントロールではありません。",
       "badValue": "値「{{name}}」はこのプロパティに適していません。",
       "findWhatTooLong": "検索するテキストが 255 文字を超えています。",
@@ -2415,7 +2528,9 @@
     "cat": {
       "general": "全般",
       "currentDb": "現在のデータベース",
-      "client": "クライアントの設定"
+      "client": "クライアントの設定",
+      "datasheet": "データシート",
+      "designers": "オブジェクト デザイナー"
     },
     "general": {
       "header": "{{product}} の操作に関する全般的なオプションです。",
@@ -2432,6 +2547,11 @@
       "confirmDeletions": "ドキュメントの削除",
       "confirmActions": "アクション クエリ",
       "display": "表示",
+      "printing": "印刷",
+      "marginLeft": "左余白：",
+      "marginRight": "右余白：",
+      "marginTop": "上余白：",
+      "marginBottom": "下余白：",
       "recentCount": "最近使用したデータベースの表示数:",
       "advanced": "詳細設定",
       "openLast": "{{product}} の起動時に、最後に使用したデータベースを開く",
@@ -2444,7 +2564,31 @@
       "lockEdited": "編集中のレコード",
       "refreshInterval": "更新間隔 (秒)",
       "updateRetries": "更新の再試行回数",
-      "updateRetryMs": "更新の再試行間隔 (ミリ秒)"
+      "updateRetryMs": "更新の再試行間隔 (ミリ秒)",
+      "enter": "Enter キーを押したときの動作",
+      "enterNone": "移動しない",
+      "enterNextField": "次のフィールド",
+      "enterNextRecord": "次のレコード",
+      "entry": "フィールドに入るときの動作",
+      "entrySelectAll": "フィールド全体を選択",
+      "entryStart": "フィールドの先頭へ移動",
+      "entryEnd": "フィールドの末尾へ移動",
+      "arrows": "方向キーの動作",
+      "arrowsField": "次のフィールド",
+      "arrowsChar": "次の文字",
+      "continuous": "連続フォームのレコード間を方向キーで移動",
+      "continuousNone": "なし",
+      "continuousUpDown": "上/下",
+      "continuousLeftRight": "左/右",
+      "cursorStop": "最初/最後のフィールドでカーソルを止める",
+      "find": "検索/置換の既定の動作",
+      "findFast": "クイック検索",
+      "findGeneral": "一般検索",
+      "findStart": "フィールドの先頭検索",
+      "general": "全般",
+      "year4": "年を 4 桁で表示する",
+      "year4Db": "このデータベース",
+      "year4All": "すべてのデータベース"
     },
     "db": {
       "header": "現在のデータベースのオプションです。",
@@ -2460,6 +2604,10 @@
       "datasheetDesign": "データシート ビューでテーブルのデザインを変更できるようにする",
       "navigation": "ナビゲーション",
       "ribbonSection": "リボンとツール バーのオプション",
+      "autoCorrectSection": "名前の自動修正のオプション",
+      "track": "名前の自動修正情報を保持する",
+      "perform": "名前の自動修正を実行する",
+      "log": "名前の自動修正の変更を記録する",
       "fullMenus": "すべてのメニューを許可する",
       "shortcutMenus": "既定のショートカット メニューを許可する",
       "iconForForms": "フォームとレポートのアイコンとして使用する",
@@ -2476,11 +2624,73 @@
       "ribbonSimplified": "簡易",
       "runMode": "実行モードで開く",
       "runModeHelp": "ナビゲーション ウィンドウとデザイン ビューを非表示にします。データベースを開くときに Shift キーを押し続けると、この設定を無視できます。",
-      "nextOpen": "これらのオプションは、次回データベースを開いたときに有効になります。"
+      "nextOpen": "これらのオプションは、次回データベースを開いたときに有効になります。",
+      "truncated": "切り捨てられた数値フィールドをチェックする",
+      "filterSection": "{{name}} データベースの検索オプションをフィルターする",
+      "filterShow": "値のリストを表示する場所：",
+      "listIndexed": "ローカルのインデックス付きフィールド",
+      "listNonIndexed": "ローカルのインデックスなしフィールド",
+      "listMax": "読み取ったレコード数がこの値を超える場合はリストを表示しない："
+    },
+
+    "designers": {
+      "header": "データベース オブジェクト作成の既定の設定を変更します。ほとんどのオプションは、テーブルのデータシート ビューまたはページ ビューでは無視されます。",
+      "sheetSection": "プロパティ シート",
+      "sheetFontSize": "プロパティ シートのフォント サイズ：",
+      "tableSection": "テーブルのデザイン ビュー",
+      "fieldType": "既定のフィールドの型：",
+      "textSize": "既定のテキスト フィールド サイズ：",
+      "numberSize": "既定の数値フィールド サイズ：",
+      "autoIndex": "インポート/作成時のインデックスの自動作成：",
+      "propertyUpdate": "[プロパティの更新オプション] ボタンを表示する",
+      "querySection": "クエリのデザイン",
+      "tableNames": "テーブル名を表示する",
+      "outputAll": "すべてのフィールドを出力",
+      "autoJoin": "自動結合を有効にする",
+      "queryFont": "クエリ デザインのフォント",
+      "fontName": "フォント：",
+      "fontSize": "サイズ：",
+      "formSection": "フォーム/レポートのデザイン ビュー",
+      "selection": "選択動作",
+      "partial": "一部を囲む",
+      "full": "完全に囲む"
+    },
+    "datasheet": {
+      "header": "{{product}} のデータシートの外観をカスタマイズします。",
+      "gridSection": "枠線とセルの効果",
+      "gridlines": "既定で表示する枠線",
+      "horizontal": "横",
+      "vertical": "縦",
+      "columnWidth": "既定の列幅：",
+      "font": "既定のフォント",
+      "fontSize": "サイズ：",
+      "fontWeight": "太さ：",
+      "underline": "下線",
+      "italic": "斜体",
+      "weight": {
+        "100": "極細",
+        "200": "特細",
+        "300": "細",
+        "400": "標準",
+        "500": "中",
+        "600": "中太",
+        "700": "太字",
+        "800": "特太",
+        "900": "極太"
+      }
     }
   },
   "startup": {
     "formNotFound": "表示フォーム「{{name}}」が見つかりません。"
+  },
+  "import": {
+    "server": {
+      "title": "PostgreSQL からインポート",
+      "titleSqlServer": "SQL Server からインポート",
+      "ok": "インポート",
+      "done": "インポートしたテーブル：{{names}}。",
+      "skipped": "インポートされなかった列（{{table}}）：{{names}}。"
+    }
   },
   "link": {
     "filterBasecraft": "BaseCraft データベース",
@@ -2495,12 +2705,15 @@
     "kind": {
       "basecraft": "BaseCraft データベース",
       "sqlite": "SQLite ファイル",
-      "access": "Access データベース"
+      "access": "Access データベース",
+      "postgresql": "PostgreSQL サーバー",
+      "sqlserver": "SQL Server サーバー"
     },
     "tables": "テーブル",
     "selectAll": "すべて選択",
     "noTables": "このファイルにはテーブルがありません。",
     "error": {
+      "unsupportedKind": "BaseCraft は次のテーブルをリンクできません: {{names}}。何も変更されていません。",
       "nameExists": "これらの名前はこのデータベースで既に使用されています: {{names}}。",
       "missingTables": "これらのテーブルはファイルに存在しなくなりました: {{names}}。",
       "self": "データベースを自分自身にリンクすることはできません。",
@@ -2516,6 +2729,37 @@
       "title": "データベースのパスワード",
       "label": "{{path}} のパスワード:",
       "wrong": "パスワードが正しくありません。"
+    },
+    "server": {
+      "title": "PostgreSQL テーブルのリンク",
+      "titleSqlServer": "SQL Server テーブルのリンク",
+      "host": "サーバー",
+      "hostHint": "名前 または 名前\\インスタンス",
+      "port": "ポート",
+      "database": "データベース",
+      "tls": "暗号化",
+      "tlsVerify": "暗号化 (証明書を検証する、推奨)",
+      "tlsRequire": "暗号化 (証明書を検証しない)",
+      "tlsTrust": "暗号化 (サーバー証明書を信頼する)",
+      "tlsDisable": "暗号化しない",
+      "timeout": "クエリのタイムアウト (秒)",
+      "connect": "接続",
+      "readOnly": "主キーなし: 読み取り専用",
+      "skipped": "リンクされない列: {{names}}",
+      "noTables": "このサーバーには読み取り可能なテーブルがありません。",
+      "missingTables": "サーバーに次のテーブルが含まれていません: {{names}}。何も変更されていません。"
+    },
+    "needsLogin": "ログインが必要です: テーブルを開いてサーバー {{detail}} にログインしてから、リンクを更新してください。",
+    "login": {
+      "title": "サーバーへのログイン",
+      "message": "{{label}} のユーザー名とパスワードを入力してください。",
+      "user": "ユーザー名",
+      "password": "パスワード",
+      "remember": "このコンピューターにパスワードを保存する",
+      "noKeyring": "このコンピューターには安全なキーリングがありません。パスワードはセッションごとに再度入力が必要です。",
+      "untrusted": "このファイルは信頼されていません。保存されたパスワードは、このファイルのパススルー クエリには使用されません。使用するには、コンテンツを有効にするか、ファイルを信頼できる場所に置いてください。",
+      "wrong": "ユーザー名またはパスワードが正しくありません。",
+      "ok": "ログイン"
     }
   },
   "ltm": {
@@ -2523,7 +2767,7 @@
     "col": {
       "name": "テーブル",
       "kind": "種類",
-      "path": "ファイル",
+      "path": "ソース",
       "state": "状態"
     },
     "state": {
@@ -2532,13 +2776,18 @@
       "readOnlyFile": "読み取り専用",
       "stale": "放棄されたロック — 更新して引き継いでください",
       "missingFile": "ファイルが見つかりません",
-      "missingTable": "ファイルにテーブルがありません",
+      "missingTable": "ソースにテーブルがありません",
       "needsMigration": "以前のバージョンの BaseCraft",
       "newerMajor": "より新しいバージョンの BaseCraft",
       "cannotOpen": "ファイルを読み取れません",
       "unsupportedKind": "サポートされていないソース",
       "needsPassword": "パスワードが必要です",
       "syncedFolder": "同期フォルダー: 読み取り専用",
+      "needsLogin": "ログインが必要です",
+      "cannotConnect": "サーバーに接続できません",
+      "certificate": "証明書が信頼されていません",
+      "serverVersion": "サポートされていないサーバー バージョン",
+      "passwordExpired": "パスワードの有効期限切れ",
       "unsupportedClient": "このシステムでは共有モードはサポートされていません: 読み取り専用"
     },
     "risk": {
@@ -2558,5 +2807,78 @@
     "copy": "クリップボードにコピー",
     "drop": "変更を破棄",
     "deleted": "このレコードは別のユーザーによって削除されました。変更内容を保存できません。"
+  },
+  "layoutView": {
+    "notice": {
+      "noSource": "このフォームにはレコードソースがありません。コントロールにデータは表示されません。",
+      "empty": "レコードソースにレコードがありません。",
+      "unreadable": "レコードソースを読み取れません。コントロールにデータは表示されません。",
+      "parameters": "パラメーターが入力されませんでした。コントロールにデータは表示されません。",
+      "truncated": "ソースの最初の {{count}} 件のレコードのプレビューです。合計とグループはこれらの行のみを対象とします。",
+      "report": {
+        "noSource": "このレポートにはレコードソースがありません。データなしで表示されます。",
+        "empty": "レコードソースにレコードがありません。レポートはデータなしで表示されます。",
+        "unreadable": "レコードソースを読み取れません。レポートはデータなしで表示されます。",
+        "parameters": "パラメーターが入力されませんでした。レポートはデータなしで表示されます。",
+        "layoutFailed": "レポートをレイアウトできませんでした。"
+      }
+    }
+  },
+  "find": {
+    "title": "検索と置換",
+    "tabFind": "検索",
+    "tabReplace": "置換",
+    "what": "検索する文字列:",
+    "lookIn": "探す場所:",
+    "lookInField": "現在のフィールド",
+    "lookInDocument": "現在のドキュメント",
+    "match": "検索条件:",
+    "matchAnywhere": "フィールドの一部分",
+    "matchWhole": "フィールド全体",
+    "matchStart": "フィールドの先頭",
+    "search": "検索方向:",
+    "searchAll": "すべて",
+    "searchUp": "上へ",
+    "searchDown": "下へ",
+    "matchCase": "大文字と小文字を区別する",
+    "asFormatted": "表示書式で検索する",
+    "next": "次を検索",
+    "cancel": "キャンセル"
+  },
+  "autoCorrect": {
+    "dirtyTitle": "保存が必要なオブジェクト",
+    "dirty": "{{name}} を使用している次のオブジェクトを先に保存するか閉じてください: {{list}}",
+    "failedTitle": "修正されなかったオブジェクト",
+    "failed": "次のオブジェクトは修正できず、まだ古い名前を使用しています: {{list}}",
+    "staleTitle": "古い名前のオブジェクト",
+    "stale": "次のオブジェクトはまだ古い名前を使用しています (名前の自動修正はオフです): {{list}}",
+    "logSkipped": "テーブル {{table}} はありますが、ログのフィールドがありません。変更は記録されませんでした。",
+    "log": {
+      "table": "名前の自動修正ログ",
+      "objectType": "オブジェクトの種類",
+      "objectName": "オブジェクト名",
+      "controlName": "コントロール名",
+      "propertyName": "プロパティ名",
+      "oldValue": "古い値",
+      "newValue": "新しい値",
+      "time": "時刻",
+      "failed": {
+        "unreadable": "修正されていません：定義を読み取れません",
+        "meaning": "修正されていません：修正すると意味が変わります",
+        "dependency": "修正されていません：修正されていないオブジェクトに依存しています"
+      }
+    },
+    "kind": {
+      "table": "テーブル",
+      "query": "クエリ",
+      "form": "フォーム",
+      "report": "レポート",
+      "macro": "マクロ"
+    }
+  },
+  "propertyUpdate": {
+    "title": "プロパティの更新",
+    "message": "{{field}} が使用されているすべての場所で {{prop}} を更新しますか？",
+    "target": "{{kind}} {{name}} › {{control}}（「{{current}}」）"
   }
 }

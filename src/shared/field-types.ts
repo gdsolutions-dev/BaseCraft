@@ -3,6 +3,9 @@ import { fieldRefs, hasAggregate, hasMember, parseCanonical, renameRefs, seriali
 
 export type FieldType = 'autoNumber' | 'shortText' | 'longText' | 'number' | 'currency' | 'dateTime' | 'yesNo' | 'hyperlink'
 export type NumberSize = 'byte' | 'integer' | 'longInteger' | 'single' | 'double' | 'decimal'
+/** What a new field takes (O3 R3): the Options' defaults; the type is never AutoNumber (a table has one). */
+export interface FieldDefaults { type: Exclude<FieldType, 'autoNumber'>; textSize: number; numberSize: NumberSize }
+export const DESIGN_DEFAULTS: Readonly<FieldDefaults> = { type: 'shortText', textSize: 255, numberSize: 'longInteger' }
 /** Lookup tab, as in Access; an absent key takes Access's default. Widths in twips (1440 = 2,54 cm). Display Control: absent
  *  is Combo Box (a Text Box has no lookup). A List Box shows in the datasheet as a combo box, as in Access. */
 interface LookupTab {
@@ -29,6 +32,9 @@ export interface FieldProps {
   [unknownKey: string]: unknown // clés inconnues conservées (compatibilité mineure)
 }
 export interface FieldDef { name: string; props: FieldProps }
+/** A column its server computes (C4 M2), never written: read-only in datasheets and forms. Connector-specific props (`pg*`) are
+ *  carried in field props (bc_links.props); `pgGenerated` is PostgreSQL's generated column or GENERATED ALWAYS identity, `msComputed` SQL Server's computed or identity column (C5). */
+export const serverComputed = (p: FieldProps): boolean => p.pgGenerated === true || p.msComputed === true;
 /** A multi-field index (Indexes dialog); a one-field index of its own name is the field's Indexed property instead.
  *  Unknown keys (of the index and of each field) are kept, as for field props (minor-version compatibility). */
 export interface IndexDef { name: string; fields: IndexField[]; unique: boolean; [unknownKey: string]: unknown }
@@ -152,6 +158,12 @@ export function defaultProps(type: FieldType): FieldProps {
     case 'currency': return { ...base, decimalPlaces: 2 }
     default: return base
   }
+}
+
+/** A new field's props: the type's defaults with the client's default size (Text size, Number size). */
+export function newFieldProps(type: FieldType, d: FieldDefaults): FieldProps {
+  const p = defaultProps(type)
+  return type === 'shortText' ? { ...p, size: d.textSize } : type === 'number' ? { ...p, numberSize: d.numberSize } : p
 }
 
 export function changeType(props: FieldProps, type: FieldType): FieldProps {

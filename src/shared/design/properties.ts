@@ -54,6 +54,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   // Format
   p('Caption', 'format', 'text', ['form', 'report', 'label', 'commandButton', 'optionGroup', 'tabControl'], ''),
   p('DefaultView', 'format', 'enum', ['form'], 'single', { options: ['single', 'continuous', 'datasheet'] }),
+  p('AllowLayoutView', 'format', 'bool', ['form', 'report'], true), // Layout view (Mode Page) can be entered
   p('NavigationButtons', 'format', 'bool', ['form'], true),
   p('Width', 'format', 'twips', ['form', 'report', ...CONTROL_KINDS], 6994), // a control's width is ControlDef.width
   p('GridX', 'format', 'number', ['form', 'report'], 4, { min: 1, max: 16, integer: true }), // grid points per cm

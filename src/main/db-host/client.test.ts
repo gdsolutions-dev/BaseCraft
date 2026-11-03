@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DbHost } from './client';
 import type { HostRequest } from './protocol';
 
@@ -81,6 +81,131 @@ it('one call in flight: a call queued behind the query never reaches the data pr
   expect(child.sent.map((m) => m.method)).toEqual(['pageSource']); // the insert was never sent: it cannot have run
   await expect(query).rejects.toThrow('bc:cancelled');
   await expect(write).rejects.toThrow('bc:cancelled');
+});
+
+it('interrupt goes out while a call is in flight; its reply does not send the call again', async () => {
+  const child = fakeChild();
+  const h = DbHost.attach(child, opened, () => {}, () => {});
+  const page = h.session.page('Clients', { offset: 0, limit: 1 });
+  const next = h.session.count('Clients');
+  const stop = h.interrupt();
+  expect(child.sent.map((m) => m.method)).toEqual(['page', 'interrupt']); // at once, out of the one-call-in-flight rule
+  const id = h.pendingCall(new Set(['page']))!;
+  child.reply('interrupt', true);
+  await expect(stop).resolves.toBe(true);
+  expect(child.sent.map((m) => m.method)).toEqual(['page', 'interrupt']); // F20: neither page again nor the count
+  const settled = h.settles(id, 1000);
+  child.emit('message', { id, ok: false, name: 'Error', message: 'bc:cancelled' });
+  await expect(settled).resolves.toBe(true);
+  await expect(page).rejects.toThrow('bc:cancelled');
+  expect(child.sent.map((m) => m.method)).toEqual(['page', 'interrupt', 'count']);
+  child.reply('count', 3);
+  await expect(next).resolves.toBe(3);
+});
+
+it('settles is false when the call has not answered in time; interrupt is false when unanswered or after exit', async () => {
+  vi.useFakeTimers();
+  try {
+    const child = fakeChild();
+    const h = DbHost.attach(child, opened, () => {}, () => {});
+    void h.session.pageSource({ kind: 'query', name: 'Q' }, { offset: 0, limit: 0 }).catch(() => {});
+    const id = h.pendingCall(new Set(['pageSource']))!;
+    const settled = h.settles(id, 5000);
+    const stop = h.interrupt(); // a data process busy in SQLite (synchronous) never reads it
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(stop).resolves.toBe(false);
+    await expect(settled).resolves.toBe(false);
+    const k = h.kill();
+    await vi.runAllTimersAsync();
+    await k;
+    await expect(h.interrupt()).resolves.toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+describe('stop (R12: cancelCall\'s sequence)', () => {
+  const setup = () => {
+    const child = fakeChild();
+    const kill = vi.spyOn(child, 'kill');
+    const h = DbHost.attach(child, opened, () => {}, () => {});
+    const query = h.session.pageSource({ kind: 'query', name: 'Q' }, { offset: 0, limit: 0 });
+    query.catch(() => {});
+    return { child, kill, h, query, id: h.pendingCall(new Set(['pageSource']))! };
+  };
+
+  it('interrupt false (nothing remote running): the kill', async () => {
+    const { child, kill, h, query, id } = setup();
+    const stop = h.stop(id, 5000);
+    await tick();
+    child.reply('interrupt', false);
+    await expect(stop).resolves.toBe(true);
+    expect(kill).toHaveBeenCalledTimes(1);
+    await expect(query).rejects.toThrow('bc:cancelled');
+  });
+
+  it('interrupt true and the call settles: no kill', async () => {
+    const { child, kill, h, query, id } = setup();
+    const stop = h.stop(id, 5000);
+    child.reply('interrupt', true);
+    await tick();
+    child.emit('message', { id, ok: false, name: 'Error', message: 'bc:cancelled' });
+    await expect(stop).resolves.toBe(false);
+    expect(kill).not.toHaveBeenCalled();
+    await expect(query).rejects.toThrow('bc:cancelled');
+  });
+
+  it('interrupt true but the call does not settle in time: the kill', async () => {
+    vi.useFakeTimers();
+    try {
+      const { child, kill, h, id } = setup();
+      const stop = h.stop(id, 5000);
+      child.reply('interrupt', true);
+      await vi.advanceTimersByTimeAsync(5000);
+      await vi.runAllTimersAsync(); // the fake child's exit
+      await expect(stop).resolves.toBe(true);
+      expect(kill).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the call answers while the interrupt is pending: the save sent next is not killed and reports success', async () => {
+    const { child, kill, h, query, id } = setup();
+    const save = h.session.insert('Clients', { Nom: 'Zoé' });
+    const stop = h.stop(id, 5000);
+    child.reply('pageSource', 'rows'); // a local query ends before the data process reads the interrupt
+    await expect(query).resolves.toBe('rows');
+    expect(child.sent.map((m) => m.method)).toEqual(['pageSource', 'interrupt', 'insert']);
+    child.reply('interrupt', false);
+    await expect(stop).resolves.toBe(false);
+    expect(kill).not.toHaveBeenCalled();
+    child.reply('insert', { ok: true });
+    await expect(save).resolves.toEqual({ ok: true });
+  });
+
+  it('the base closed meanwhile (current() false): no kill', async () => {
+    const { child, kill, h, id } = setup();
+    const stop = h.stop(id, 5000, () => false);
+    child.reply('interrupt', false);
+    await expect(stop).resolves.toBe(false);
+    expect(kill).not.toHaveBeenCalled();
+  });
+});
+
+it('a timed-out settles leaves no waiter behind', async () => {
+  vi.useFakeTimers();
+  try {
+    const child = fakeChild();
+    const h = DbHost.attach(child, opened, () => {}, () => {});
+    void h.session.count('A');
+    const settled = h.settles(1, 100);
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(settled).resolves.toBe(false);
+    expect((h as unknown as { headMoved: unknown[] }).headMoved).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('the next call is sent when the previous one answers', async () => {

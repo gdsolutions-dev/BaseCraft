@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { readLayouts, reflow } from '../design/layout';
 import { validateDesignDoc, type DesignDoc } from '../design/model';
 import { defaultProps } from '../field-types';
 import type { SourceInfo } from '../record-source';
 import { FACTURES_FIELDS } from './fixtures/factures';
 import { instantReport, uniqueReportName } from './instant';
-import { readReport } from './model';
+import { layoutReport } from './layout';
+import { pageGeometry, readReport, type PageSetup } from './model';
+import type { LayoutEnv } from './types';
 
 const src = { kind: 'table', name: 'Factures' } as const, info: SourceInfo = { fields: FACTURES_FIELDS, updatable: true, parameters: [] };
 const longTexts = (n: number): SourceInfo => ({ updatable: true, parameters: [],
@@ -12,6 +15,10 @@ const longTexts = (n: number): SourceInfo => ({ updatable: true, parameters: [],
 const footer = (d: DesignDoc) => d.sections[3]!.controls[0]!.props.ControlSource;
 
 describe('instantReport', () => {
+  it('stores the options margins in a new report (O3 R9)', () => {
+    const M = { top: 360, right: 360, bottom: 360, left: 1134 };
+    expect(readReport(instantReport(src, info, { lang: 'fr', margins: M }), []).page.margins).toEqual(M);
+  });
   it('builds a tabular report', () => {
     const d = instantReport(src, info, { lang: 'fr' });
     expect(d.sections.map((s) => s.kind)).toEqual(['reportHeader', 'pageHeader', 'detail', 'pageFooter', 'reportFooter']);
@@ -88,6 +95,34 @@ describe('instantReport', () => {
     const fields = [FACTURES_FIELDS[4]!, FACTURES_FIELDS[1]!];
     const d = instantReport(src, { ...info, fields }, { lang: 'fr' });
     expect(d.sections[4]!.controls.map((c) => [c.left, c.props.ControlSource])).toEqual([[0, '=Sum([Montant])']]);
+  });
+
+  it('is one Tabular layout: labels in the Page Header, boxes in the Detail, totals stay free in the Report Footer', () => {
+    const d = instantReport(src, info, { lang: 'fr' }), ls = readLayouts(d);
+    expect(ls).toHaveLength(1); expect(ls[0]).toMatchObject({ kind: 'tabular', rows: [{ section: 'pageHeader' }, { section: 'detail' }] });
+    const names = ls[0]!.cells.flatMap((c) => (c.control ? [c.control] : [])).sort();
+    expect(names).toEqual([...d.sections[1]!.controls, ...d.sections[2]!.controls].map((c) => c.name).sort());
+    expect(reflow(d)).toBe(d);
+    expect(d.sections[4]!.controls.every((c) => !('LayoutID' in c.props))).toBe(true);
+    expect(d.sections[1]!.controls.map((c) => c.left)).toEqual(d.sections[2]!.controls.map((c) => c.left));
+  });
+
+  it('no field: no layout, no crash', () => {
+    const d = instantReport(src, { ...info, fields: [] }, { lang: 'fr' });
+    expect(readLayouts(d)).toEqual([]); expect(validateDesignDoc(d)).toEqual([]);
+  });
+
+  it('every item stays inside the printable width once laid out (layoutReport on a fixed dataset)', async () => {
+    const env: LayoutEnv = { locale: 'fr-FR', lang: 'fr', now: () => new Date(Date.UTC(2026, 9, 22)), errorText: { error: '#Erreur', name: '#Nom?' } };
+    for (const [i, inf] of [info, longTexts(4), longTexts(12)].entries()) {
+      const d = instantReport(src, inf, { lang: 'fr' });
+      const rows = Array.from({ length: 3 }, (_, k) => inf.fields.map((f) => (f.type === 'longText' ? 'x'.repeat(40 * (k + 1)) : k)));
+      const out = await layoutReport(readReport(d, inf.fields), { fields: inf.fields, rows }, env);
+      const printable = pageGeometry(d.props.pageSetup as PageSetup).printableWidth;
+      const items = out.pages.flatMap((p) => p.bands.flatMap((b) => b.items));
+      expect(items.length, `case ${i}`).toBeGreaterThan(0);
+      for (const it of items) if (it.kind !== 'line') expect(it.left + it.width, `case ${i} ${it.name}`).toBeLessThanOrEqual(printable);
+    }
   });
 
   it('english footer', () => expect(footer(instantReport(src, info, { lang: 'en' }))).toBe('="Page " & [Page] & " of " & [Pages]'));

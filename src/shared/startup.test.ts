@@ -9,6 +9,8 @@ describe('startup options', () => {
     expect(readStartup(undefined)).toEqual({
       appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
       statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false,
+      fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000,
+      trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false,
     });
     expect(startupHides(DEFAULT_STARTUP)).toBe(false);
     expect(hasStartup(DEFAULT_STARTUP, false)).toBe(false);
@@ -80,5 +82,26 @@ describe('startup options', () => {
 
   it('frontEnd and dataFile default to false and read alone', () => {
     expect(readStartup({ dataFile: 'yes', frontEnd: true })).toMatchObject({ dataFile: false, frontEnd: true });
+  });
+});
+
+describe('O2 database keys', () => {
+  it('reads the O2 database keys one by one, none bypassable', () => {
+    expect(readStartup({ filterListMax: 1000.5, checkTruncatedNumbers: 'yes', fourDigitYear: true })).toEqual({ ...DEFAULT_STARTUP, fourDigitYear: true });
+    expect(DEFAULT_STARTUP).toMatchObject({ fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000 });
+    expect(startupHides({ ...DEFAULT_STARTUP, checkTruncatedNumbers: false, filterListIndexed: false, filterListMax: 0, fourDigitYear: true })).toBe(false);
+  });
+  it('filterListMax: 0..32766 integers only', () => {
+    for (const n of [-1, 32767, '5', null]) expect(readStartup({ filterListMax: n }).filterListMax).toBe(1000);
+    for (const n of [0, 32766]) expect(readStartup({ filterListMax: n }).filterListMax).toBe(n);
+  });
+});
+
+describe('O4 database keys', () => {
+  it('reads the Name AutoCorrect options key by key', () => {
+    expect(readStartup({})).toMatchObject({ trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false });
+    expect(readStartup({ trackNameAutoCorrect: 'no', performNameAutoCorrect: false, logNameAutoCorrect: 1 }))
+      .toMatchObject({ trackNameAutoCorrect: true, performNameAutoCorrect: false, logNameAutoCorrect: false });
+    expect(readStartup({ logNameAutoCorrect: true })).toMatchObject({ logNameAutoCorrect: true });
   });
 });

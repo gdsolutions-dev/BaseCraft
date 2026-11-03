@@ -1,5 +1,5 @@
 // File › Options › « Base de données active » (B3): the startup options of the open base. Every change saves at once; the title and the
-// icon (and its use for forms and reports, O1 R10) apply at once (`onApplied`), the other options at the next opening (R11, the note says so). A read-only base shows it disabled (R13).
+// icon (and its use for forms and reports, O1 R10) apply at once (`onApplied`), the other options at the next opening (R11, the note says so; O2: the shell also publishes every saved option). A read-only base shows it disabled (R13).
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { sameName } from '../../shared/field-types';
@@ -11,17 +11,18 @@ import { bcErrorCode, useErrorDialog, useModal } from './Modal';
 /** The file the owner picks; what is stored is the 256 px PNG made from it. */
 const MAX_ICON_FILE = 5 * 1024 * 1024;
 
-export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly string[]; onApplied(o: StartupOptions): void }) {
+export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly string[]; baseName: string; onApplied(o: StartupOptions): void }) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
   const [o, setO] = useState<StartupOptions | null>(null);
   const [title, setTitle] = useState('');
+  const [listMax, setListMax] = useState('');
   const last = useRef<StartupOptions | null>(null);   // the options as last read or saved: a save sends the whole object
   const queue = useRef<Promise<void>>(Promise.resolve());   // one save at a time: a quick second change builds on the first
   const file = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(() => api.base.startup().then((s) => { last.current = s; setO(s); setTitle(s.appTitle); }).catch(showError), [showError]);
+  const load = useCallback(() => api.base.startup().then((s) => { last.current = s; setO(s); setTitle(s.appTitle); setListMax(String(s.filterListMax)); }).catch(showError), [showError]);
   useEffect(() => { void load(); }, [load]);
 
   const save = (patch: Partial<StartupOptions>) => {
@@ -38,7 +39,7 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
         return load();   // what the file holds, not what was asked
       }
       last.current = next;
-      if (next.appTitle !== cur.appTitle || next.appIcon !== cur.appIcon || next.iconForForms !== cur.iconForForms) applied(next);
+      applied(next);   // the shell publishes the options (O2) and re-applies the title and icon, if it is still the same base
     }).catch(showError);   // a rejected item never stops the saves after it
   };
 
@@ -46,6 +47,13 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
     const clean = cleanTitle(title);
     setTitle(clean);
     if (clean !== last.current?.appTitle) save({ appTitle: clean });
+  };
+
+  const commitMax = () => {
+    const n = Math.round(Number(listMax));
+    const v = listMax.trim() === '' || !Number.isFinite(n) ? (last.current?.filterListMax ?? 0) : Math.min(32766, Math.max(0, n));   // unreadable: the stored value again
+    setListMax(String(v));
+    if (v !== last.current?.filterListMax) save({ filterListMax: v });
   };
 
   const pick = async (f: File | undefined) => {
@@ -71,11 +79,12 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
   const forms = [...new Set([...p.forms, ...(stored ? [stored] : [])])].sort((a, b) => a.localeCompare(b, i18n.language));
   const off = p.readOnly;
 
-  const box = (testid: string, k: 'statusBar' | 'documentTabs' | 'specialKeys' | 'compactOnClose' | 'datasheetDesign' | 'fullMenus' | 'shortcutMenus' | 'iconForForms' | 'showNavPane' | 'frontEnd' | 'dataFile',
+  const box = (testid: string, k: 'statusBar' | 'documentTabs' | 'specialKeys' | 'compactOnClose' | 'datasheetDesign' | 'checkTruncatedNumbers' | 'filterListIndexed' | 'filterListNonIndexed' | 'fullMenus' | 'shortcutMenus' | 'iconForForms' | 'showNavPane' | 'frontEnd' | 'dataFile' | 'trackNameAutoCorrect' | 'performNameAutoCorrect' | 'logNameAutoCorrect',
     label: string, extra: { disabled?: boolean; help?: string } = {}) => (
     <label className="bs-check">
       <input type="checkbox" data-testid={testid} checked={o![k]} disabled={off || extra.disabled} aria-describedby={extra.help}
-        onChange={(e) => save({ [k]: e.target.checked })} />
+        onChange={(e) => save(k === 'trackNameAutoCorrect' && !e.target.checked ? { trackNameAutoCorrect: false, performNameAutoCorrect: false, logNameAutoCorrect: false }
+          : k === 'performNameAutoCorrect' && !e.target.checked ? { performNameAutoCorrect: false, logNameAutoCorrect: false } : { [k]: e.target.checked })} />
       <span>{label}</span>
     </label>
   );
@@ -121,6 +130,7 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
           {box('opt-db-frontend', 'frontEnd', t('options.db.frontEnd'))}
           {box('opt-db-datafile', 'dataFile', t('options.db.dataFile'))}
           {box('opt-db-datasheetdesign', 'datasheetDesign', t('options.db.datasheetDesign'))}
+          {box('opt-db-truncated', 'checkTruncatedNumbers', t('options.db.truncated'))}
           <div className="bs-field">
             <label className="bs-check">
               <input type="checkbox" data-testid="opt-db-runmode" checked={o.runMode} disabled={off} aria-describedby="opt-db-runmode-help"
@@ -129,6 +139,21 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
             </label>
             <span id="opt-db-runmode-help" className="muted">{t('options.db.runModeHelp')}</span>
           </div>
+        </div>
+        <h2>{t('options.db.filterSection', { name: p.baseName })}</h2>
+        <div className="bs-options">
+          <div className="bs-field" role="group" aria-labelledby="opt-db-filter-show">
+            <span id="opt-db-filter-show">{t('options.db.filterShow')}</span>
+            <div className="bs-indent">
+              {box('opt-db-list-indexed', 'filterListIndexed', t('options.db.listIndexed'))}
+              {box('opt-db-list-nonindexed', 'filterListNonIndexed', t('options.db.listNonIndexed'))}
+            </div>
+          </div>
+          <label className="bs-inline">
+            <span>{t('options.db.listMax')}</span>
+            <input type="number" min={0} max={32766} step={1} data-testid="opt-db-list-max" value={listMax} disabled={off}
+              onChange={(e) => setListMax(e.target.value)} onBlur={commitMax} onKeyDown={(e) => { if (e.key === 'Enter') commitMax(); }} />
+          </label>
         </div>
         <h2>{t('options.db.navigation')}</h2>
         <div className="bs-options">
@@ -148,6 +173,13 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
           {box('opt-db-fullmenus', 'fullMenus', t('options.db.fullMenus'))}
           {box('opt-db-shortcutmenus', 'shortcutMenus', t('options.db.shortcutMenus'))}
           <p className="muted" data-testid="opt-db-next-open">{t('options.db.nextOpen')}</p>
+        </div>
+        <h2>{t('options.db.autoCorrectSection')}</h2>
+        {/* R2: Effectuer needs Suivi, Historique needs Effectuer; unticking a parent stores its children off in the same save. Read at each rename, so not under the next-open note. */}
+        <div className="bs-options" data-testid="opt-db-autocorrect">
+          {box('opt-db-ac-track', 'trackNameAutoCorrect', t('options.db.track'))}
+          {box('opt-db-ac-perform', 'performNameAutoCorrect', t('options.db.perform'), { disabled: !o.trackNameAutoCorrect })}
+          {box('opt-db-ac-log', 'logNameAutoCorrect', t('options.db.log'), { disabled: !o.trackNameAutoCorrect || !o.performNameAutoCorrect })}
         </div>
       </>)}
     </section>

@@ -43,3 +43,13 @@
 }
 .recpos:focus-within { border-color: var(--bc-accent); }
 .recpos input { width: 6ch; padding: 0 2px; border: 0; background: transparent; text-align: right; outline: 0; font-variant-numeric: tabular-nums; }
+/* O2 R10: the modeless Find dialog, at the top right of its view (under the backstage, z-index 30) */
+.find-dialog { position: fixed; z-index: 25; top: 150px; right: 24px; width: min(460px, calc(100% - 48px)); }
+.find-tabs { display: flex; gap: 2px; margin-bottom: var(--bc-space-3); border-bottom: 1px solid var(--bc-border); }
+.find-tabs button { padding: 4px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: inherit; font: inherit; }
+.find-tabs button[aria-selected="true"] { border-bottom-color: var(--bc-accent); font-weight: 600; }
+.find-tabs button:disabled { color: var(--bc-text-muted); }
+.find-fields { gap: 6px var(--bc-space-3); align-items: center; margin-bottom: var(--bc-space-3); }
+.find-fields :is(input, select) { height: 28px; }
+.find-checks { display: flex; flex-wrap: wrap; gap: var(--bc-space-2) var(--bc-space-4); margin-bottom: var(--bc-space-4); }
+.find-checks label { display: inline-flex; align-items: center; gap: 6px; }

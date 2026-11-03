@@ -25,6 +25,25 @@ jobs:
         os: [windows-latest, ubuntu-latest]
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
+    # Live PostgreSQL tests (G3), Linux only: service containers need a Linux runner, and an empty image is not started.
+    services:
+      postgres:
+        image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_USER: basecraft
+          POSTGRES_PASSWORD: basecraft
+          POSTGRES_DB: basecraft_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      # Live SQL Server tests (C5 G2), Linux only, as PostgreSQL. The SA password is this CI container's only (never a
+      # workstation's); it has no character the shell would read, so the health command needs no inner quotes.
+      mssql:
+        image: ${{ matrix.os == 'ubuntu-latest' && 'mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04' || '' }}
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: BasecraftCi2026
+        ports: ['1433:1433']
+        options: --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q 'SELECT 1' -b -o /dev/null" --health-interval 10s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,7 +52,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # A service container takes no server arguments: TLS (self-signed) and pg_stat_statements are set inside it, then it restarts.
+      # ALTER SYSTEM refuses to run in a multi-statement string (an implicit transaction): one -c each.
+      - name: PostgreSQL TLS and statistics
+        if: runner.os == 'Linux'
+        env:
+          PG: ${{ job.services.postgres.id }}
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=localhost -keyout k.pem -out c.pem
+          docker cp k.pem "$PG:/var/lib/postgresql/data/k.pem"
+          docker cp c.pem "$PG:/var/lib/postgresql/data/c.pem"
+          rm k.pem c.pem
+          docker exec "$PG" sh -c 'chown postgres:postgres /var/lib/postgresql/data/k.pem /var/lib/postgresql/data/c.pem && chmod 600 /var/lib/postgresql/data/k.pem'
+          docker exec "$PG" psql -U basecraft -d basecraft_test -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET ssl = on" -c "ALTER SYSTEM SET ssl_cert_file = 'c.pem'" -c "ALTER SYSTEM SET ssl_key_file = 'k.pem'" -c "ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements'"
+          docker restart "$PG"
+          for _ in $(seq 1 30); do docker exec "$PG" pg_isready -U basecraft -d basecraft_test && break; sleep 1; done
+          docker exec "$PG" psql -U basecraft -d basecraft_test -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements" -c "SHOW ssl"
       - run: npm test
+        env:
+          BASECRAFT_PG_TEST_URL: ${{ matrix.os == 'ubuntu-latest' && 'postgres://basecraft:basecraft@localhost:5432/basecraft_test?sslmode=require' || '' }}
+          BASECRAFT_MSSQL_TEST_URL: ${{ matrix.os == 'ubuntu-latest' && 'sqlserver://sa:BasecraftCi2026@localhost:1433/master?tls=require' || '' }}
       # Access dates are read as wall-clock UTC: the reader must not depend on the machine's time zone.
       - name: Access reader in other time zones
         if: runner.os == 'Linux'
@@ -47,6 +85,9 @@ jobs:
       - name: e2e (Linux, under xvfb)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run e2e
+        env:
+          BASECRAFT_PG_TEST_URL: postgres://basecraft:basecraft@localhost:5432/basecraft_test?sslmode=require
+          BASECRAFT_MSSQL_TEST_URL: sqlserver://sa:BasecraftCi2026@localhost:1433/master?tls=require
       - name: e2e
         if: runner.os != 'Linux'
         run: npm run e2e

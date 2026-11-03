@@ -144,3 +144,13 @@ describe('Lookup tab (Access properties)', () => {
     expect(accessColumns(now, names)).toBe(now)
   })
 })
+
+describe('newFieldProps', () => {
+  it('applies the default sizes to shortText and number only', async () => {
+    const { newFieldProps } = await import('./field-types');
+    const D = { type: 'number', textSize: 50, numberSize: 'integer' } as const;
+    expect(newFieldProps('shortText', D)).toMatchObject({ size: 50 });
+    expect(newFieldProps('number', D)).toMatchObject({ numberSize: 'integer' });
+    expect(newFieldProps('currency', D)).toEqual(defaultProps('currency'));
+  });
+});

@@ -10,6 +10,11 @@ export type AsyncSession = { [K in keyof Session]: Session[K] extends (...a: inf
 
 /** What DbHost needs of a UtilityProcess (a fake one in client.test.ts). */
 type Child = { on(e: 'message', f: (m: HostReply | HostEvent) => void): unknown; once(e: 'exit', f: (code: number) => void): unknown; postMessage(m: HostRequest): void; kill(): boolean };
+/** An idle data process answers an interrupt in well under a millisecond; one running a local (synchronous) query never
+ *  reads it before the query ends, and Stop then kills it as before C4 (an unanswered interrupt only falls back to the kill).
+ *  ponytail: every local Stop waits these 250 ms; db-host posting remote-run start/end events would let the main process
+ *  interrupt only while a server call runs. */
+const INTERRUPT_ANSWER_MS = 250;
 type Pending = { method: string; args: unknown[]; resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 export class DbHost {
@@ -23,7 +28,9 @@ export class DbHost {
    * its own queue as defence in depth.)
    */
   private readonly pending = new Map<number, Pending>();
-  private headMoved: (() => void)[] = []; // whenExecuting's waiters
+  private headMoved: (() => void)[] = []; // whenExecuting's and settles' waiters
+  /** interrupt()s sent and not answered: outside `pending`, so their reply never calls sendHead() (F20). */
+  private readonly interrupts = new Map<number, (v: boolean) => void>();
   private ending = false; // close() or kill(): the exit is expected
   private exitCode: number | null = null;
   private readonly exited: Promise<void>;
@@ -56,6 +63,8 @@ export class DbHost {
         onEvent(m);
         return;
       }
+      const stop = this.interrupts.get(m.id);
+      if (stop) { stop(m.ok && m.value === true); return; }
       const p = this.pending.get(m.id);
       if (!p) return;
       this.pending.delete(m.id);
@@ -69,6 +78,7 @@ export class DbHost {
         const error = this.ending ? 'bc:cancelled' : 'bc:hostCrashed';
         for (const p of this.pending.values()) p.reject(new Error(error));
         this.pending.clear();
+        for (const stop of [...this.interrupts.values()]) stop(false);
         for (const f of this.headMoved.splice(0)) f();
         if (!this.ending) onExit(code);
         resolve();
@@ -106,6 +116,51 @@ export class DbHost {
   pendingCall(methods: ReadonlySet<string>): number | null {
     for (const [id, p] of this.pending) if (methods.has(p.method)) return id;
     return null;
+  }
+
+  /**
+   * Out of the one-call-in-flight rule: answered by the data process at once, never touching the session's data (R12). True
+   * when a remote statement was running and its cancel was sent. False when nothing remote runs, the process has exited, or
+   * it has not answered within INTERRUPT_ANSWER_MS: a data process busy in SQLite (synchronous) cannot read the message.
+   */
+  interrupt(): Promise<boolean> {
+    if (this.exitCode !== null) return Promise.resolve(false);
+    const id = this.next++;
+    return new Promise((resolve) => {
+      const done = (v: boolean) => { clearTimeout(timer); this.interrupts.delete(id); resolve(v); };
+      const timer = setTimeout(() => done(false), INTERRUPT_ANSWER_MS);
+      this.interrupts.set(id, done);
+      try { this.child.postMessage({ id, method: 'interrupt', args: [] } satisfies HostRequest); } catch { done(false); }
+    });
+  }
+
+  /** The call `id` has answered (either way) within `ms`. */
+  settles(id: number, ms: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (this.pending.has(id)) { this.headMoved.push(check); return; }
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.headMoved = this.headMoved.filter((f) => f !== check);
+        resolve(!this.pending.has(id));
+      }, ms);
+      check();
+    });
+  }
+
+  /**
+   * Stop of the executing call `id` (cancelCall, R12): its server statement is cancelled first (interrupt), and the process
+   * lives on if the call settles within `waitMs`. Otherwise the kill, unless the call answered meanwhile or `current()` (the
+   * caller still holds this host) is false. That check runs in the kill's own tick: once `id` has answered, sendHead() may
+   * have sent the next call (a row save), which a kill would end after it committed. Resolves true once killed.
+   */
+  async stop(id: number, waitMs: number, current: () => boolean = () => true): Promise<boolean> {
+    if (await this.interrupt() && await this.settles(id, waitMs)) return false;
+    if (!current() || !this.isExecuting(id)) return false;
+    await this.kill();
+    return true;
   }
 
   /** This call is the one sent to the data process (the calls before it have answered). */

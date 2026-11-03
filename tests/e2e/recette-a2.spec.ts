@@ -4,15 +4,14 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launchApp } from './helpers';
+import { launchApp, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const en = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/en.json'), 'utf8'));
 const fill = (s: string, p: Record<string, string | number>) => s.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => String(p[k]));
 // DatasheetView: row selector width, header and row heights; left edge of each column (AutoNumber 80, Number 110,
 // Currency 120, Date/Time 150, Short Text 170).
-const MARKER = 44, HEADER = 34, ROW = 30;
-const LEFT: Record<string, number[]> = { Clients: [0, 80, 250], Commandes: [0, 80, 190, 310, 460] };
+const HEADER = 34, ROW = 30;
 
 /** The datasheet shown: the other tabs' datasheets stay mounted, hidden, with the same test ids. */
 const view = (page: Page) => page.locator('.datasheet:visible');
@@ -25,7 +24,7 @@ const rowsOf = async (page: Page, table: string) =>
 
 async function clickCell(page: Page, table: string, col: number, row: number) {
   const b = (await view(page).getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + LEFT[table]![col]! + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + row * ROW + ROW / 2);
 }
 /** Enter / Tab in an open editor keeps the text and moves; waits until the editor is gone and no row is being saved. */
 async function closeEditor(page: Page, key: 'Enter' | 'Tab') {
@@ -82,7 +81,7 @@ test('recette A2', async () => {
   const today = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()}`;
   const todayStored = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())} 00:00:00`;
 
-  let { app, page } = await launchApp({ env: { ...env, BASECRAFT_E2E_SAVE_PATH: base }, userDataDir });
+  let { app, page } = await launchApp({ enterMovesDown: true, env: { ...env, BASECRAFT_E2E_SAVE_PATH: base }, userDataDir });
   try {
     // 1. a new base; Clients (N°, Nom required, Ville)
     await page.getByTestId('bs-new').click();
@@ -293,6 +292,7 @@ test('recette A2', async () => {
     await clickCell(page, 'Commandes', 2, 0);
     await expect(cell(page, 2, 0)).toBeFocused();
     await page.getByTestId('cmd-filter').click();
+    await page.getByTestId('filter-typed').click(); // O2 R14: Home › Filter opens the column menu; its typed filters, the Expression Builder
     await page.getByTestId('xb-text').fill('> 100 Et Pas Null');
     await page.getByTestId('xb-ok').click();
     await expect(page.getByTestId('modal')).toHaveCount(0);
@@ -310,7 +310,7 @@ test('recette A2', async () => {
 
   // 6. reopened with the interface in English: the rule in its display form, the relationship and the data intact
   writeFileSync(join(userDataDir, 'settings.json'), JSON.stringify({ locale: 'en' }));
-  ({ app, page } = await launchApp({ args: [base], env, userDataDir }));
+  ({ app, page } = await launchApp({ enterMovesDown: true, args: [base], env, userDataDir }));
   try {
     await expect(page.getByTestId('ribbon-tab-create')).toHaveText(en.ribbon.tab.create);
     await page.getByTestId('nav-item-Commandes').click({ button: 'right' });

@@ -1,6 +1,6 @@
 // Mode Feuille de données : grille virtualisée (Glide), enregistrement par ligne comme Access, tri, filtres, barre de navigation.
 import {
-  CompactSelection, DataEditor, GridCellKind, type DataEditorRef, type EditableGridCell, type GridCell,
+  CompactSelection, DataEditor, GridCellKind, type DataEditorRef, type DrawCellCallback, type EditableGridCell, type GridCell,
   type GridColumn, type GridKeyEventArgs, type GridSelection, type Item, type ProvideEditorCallback, type ProvideEditorCallbackResult,
   type Rectangle, type TextCell, type Theme,
 } from '@glideapps/glide-data-grid';
@@ -8,11 +8,11 @@ import '@glideapps/glide-data-grid/dist/index.css';
 import { CircleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { FieldFilter, LookupData, QueryRef, RowPage, RowWriteResult } from '../../shared/api';
+import type { FieldFilter, LookupData, QueryRef, RowPage, RowRef, RowWriteResult } from '../../shared/api';
 import type { CellInput, FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { FORMATS_BY_TYPE } from '../../shared/expr/format';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
-import { lookupOf, MASK_TYPES, sameName, type FieldDef, type FieldType, type TableDesign } from '../../shared/field-types';
+import { lookupOf, MASK_TYPES, sameName, serverComputed, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { lookupFor, writableColumn, type RecordSourceRef, type SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
@@ -23,17 +23,22 @@ import { exportSource } from '../exchange/export';
 import { registerCommands, registerCommandStates, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { RibbonPopup } from '../designer/RibbonPopup';
 import { design } from '../design/entry';
-import { currentUi } from '../shell/startup';
+import { currentBaseOptions, currentUi } from '../shell/startup';
 import type { TableFieldsEnv, ValidationItem } from '../table-fields/table-fields-commands';
-import { defaultValues, editText, fromEdit, inputCell, lookupList, pasteAllowed, texts, toCell, type LookupList } from './datasheet-cells';
+import { defaultValues, editText, fromEdit, inputCell, lookupList, measureIn, pasteAllowed, texts, toCell, truncateNumber, type LookupList } from './datasheet-cells';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from './filter-model';
 import { installEditorCommitFix } from './glide-keyboard';
+import { datasheetLook } from './datasheet-look';
+import { currentSettings, fourDigitYear } from '../settings-store';
 import {
-  cellEditorOpen, cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, ROW_HEIGHT, rowOf, RowPencil, scrollGridToRow,
-  useColumnWidths, useNonAsciiTyping, usePalette, useRowPencil,
+  cellEditorOpen, cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, rowOf, RowPencil, scrollGridToRow,
+  useColumnWidths, useEditKeys, usePalette, useRowPencil, type EditKeysEnv,
 } from './grid-shared';
-import { findCommands, goToRow, type GoTo } from './find-commands';
-import { FilterMenu, type FilterMenuState } from './FilterMenu';
+import { findCommands, goToRow, matchText, type GoTo } from './find-commands';
+import { FindDialog } from './FindDialog';
+import type { FindOptions } from '../form/form-instances';
+import { FilterMenu, type BuiltList, type FilterMenuState } from './FilterMenu';
+import { fieldMenu } from './filter-menu-data';
 import { hasLookupEditor, lookupEditor } from './LookupEditor';
 import { maskedEditor } from './MaskedEditor';
 import { NavigationBar } from './NavigationBar';
@@ -48,7 +53,7 @@ installEditorCommitFix();
 
 /** A query's datasheet: its columns (`editable`: writableColumn, B4 R2). */
 type SourceShape = { info: SourceInfo; editable: boolean[] };
-type Shape = { design: TableDesign; locale: string; cache: PageCache; defaults: SqlValue[] /* shown on the new record's row */; src?: SourceShape;
+type Shape = { design: TableDesign; locale: string; year4: boolean; cache: PageCache; defaults: SqlValue[] /* shown on the new record's row */; src?: SourceShape;
   /** C1 R7: a linked table its file does not let us write (WITHOUT ROWID, or held by another session). */ fixed?: true };
 type Sort = { field: string; dir: 'asc' | 'desc' } | null;
 type FieldError = { field: string; code: FieldErrorCode; message?: string; table?: string };
@@ -56,7 +61,6 @@ type FieldError = { field: string; code: FieldErrorCode; message?: string; table
 type Lookups = Map<string, { list: LookupList; editor: ProvideEditorCallbackResult<TextCell> }>;
 
 
-const WIDTH: Record<FieldType, number> = { autoNumber: 80, shortText: 170, longText: 240, number: 110, currency: 120, dateTime: 150, yesNo: 80, hyperlink: 200 };
 
 
 
@@ -93,18 +97,40 @@ const columnOf = (f: SourceInfo['fields'][number]): FieldDef => ({ name: f.name,
  */
 export interface DatasheetProps extends DocViewProps { source?: Exclude<RecordSourceRef, { kind: 'table' }>; params?: Record<string, CellInput> }
 
-export function DatasheetView({ tab, active, readOnly, dispatch, source, params, designOpen }: DatasheetProps) {
+export function DatasheetView({ tab, active, readOnly, dispatch, source, params, designOpen, tabs }: DatasheetProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
   const palette = usePalette();
+  const look = useMemo(() => datasheetLook(currentSettings()), []); // read when the view opens (O2 R1)
+  const checkTruncated = useMemo(() => currentBaseOptions().checkTruncatedNumbers, []); // read when the view opens (R13)
+  const measure = useMemo(() => measureIn(`${look.fontStyle} ${palette.theme.fontFamily}`), [look, palette]);
+  const theme = useMemo(() => ({
+    ...palette.theme, baseFontStyle: look.fontStyle, editorFontSize: `${look.fontPx}px`,
+    ...(look.horizontal ? {} : { horizontalBorderColor: palette.theme.bgCell }),
+  }), [palette, look]);
+  // Underline (O2 R12): Glide draws the cell, then a 1 px line under the text of a Text cell. ponytail: one line, no wrapping of long text
+  const drawUnderline = useCallback<DrawCellCallback>(({ ctx, cell, theme: th, rect }, draw) => {
+    draw();
+    if (cell.kind !== GridCellKind.Text || !cell.displayData) return;
+    ctx.font = `${th.baseFontStyle} ${th.fontFamily}`;
+    const w = Math.min(ctx.measureText(cell.displayData).width, rect.width - 2 * th.cellHorizontalPadding);
+    const x = cell.contentAlign === 'right' ? rect.x + rect.width - th.cellHorizontalPadding - w
+      : cell.contentAlign === 'center' ? rect.x + (rect.width - w) / 2 : rect.x + th.cellHorizontalPadding;
+    ctx.fillStyle = th.textDark;
+    ctx.fillRect(Math.round(x), Math.round(rect.y + rect.height / 2 + look.fontPx / 2), Math.round(w), 1);
+  }, [look]);
   const editor = useRef<DataEditorRef>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [shape, setShape] = useState<Shape | null>(null);
   const [lookups, setLookups] = useState<Lookups>(new Map());
   // The ribbon menu open under its button: Table Fields (More Fields, Data Type, Format, Validation) and Home › Find (Go To, Select).
   const [popup, setPopup] = useState<'moreFields' | 'dataType' | 'format' | 'validation' | 'goTo' | 'select' | null>(null);
-  const [searching, setSearching] = useState(false); // Home › Find: the grid's search bar
+  // Home › Find: the Find dialog is open while > 0 (its key: each opening starts it again); closed, the key negated: every
+  // opening and closing changes it, so a search under way sees it (findInSheet)
+  const [finding, setFinding] = useState(0);
+  const findOpen = useRef(0);
+  findOpen.current = finding;
   // Table Fields commands waiting for the structure to be read again, and the column to select then.
   const reloading = useRef<{ select: string | null; waiters: (() => void)[] }>({ select: null, waiters: [] });
   const [listEdit, setListEdit] = useState<string | null>(null); // the field whose « Edit List Items » box is open
@@ -113,6 +139,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [sort, setSort] = useState<Sort>(null);
   const [filter, setFilter] = useState<FilterState>(NO_FILTER);
   const [menu, setMenu] = useState<FilterMenuState | null>(null);
+  const built = useRef(new Map<string, BuiltList>()); // what each field's list last set (R14: its ticks come back while it stands)
   const [selection, setSelectionState] = useState<GridSelection>(NO_SELECTION);
   const [error, setError] = useState<FieldError | null>(null);
   const [unsupported, setUnsupported] = useState(false);
@@ -159,10 +186,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     bumpRestructure();
   };
   /** `check`: a crosstab's headings compared (R14); never while the structure itself is read (its count). */
-  const countRows = (filter?: FieldFilter[], check = false): Promise<number> => {
+  const countRows = (filter?: FieldFilter[], check = false, fresh = false): Promise<number> => {
     const src = live.current.source;
     if (!src) return api.rows.count(live.current.tab.name, filter);
-    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams() })
+    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams(), ...(fresh ? { fresh: true } : {}) })
       .then((p) => { if (check) headingsChanged(p.columns); return p.total; });
   };
   const pageRows = async (offset: number, limit: number): Promise<RowPage> => {
@@ -183,7 +210,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
   /** A query's row, saved by its output columns in one transaction (sources.save, B4 R3); the columns read back replace the
    *  row's, the others (computed) stay until its page is read again. */
-  const writeSource = async (src: SourceShape, ref: QueryRef, rowid: number | null, changes: Record<string, CellInput>,
+  const writeSource = async (src: SourceShape, ref: QueryRef, rowid: RowRef | null, changes: Record<string, CellInput>,
     expected: Record<string, SqlValue> | undefined): Promise<RowWriteResult> => {
     const r = await api.sources.save(ref, { rowid, values: changes, ...(expected && { expected }) });
     if (!r.ok && !('current' in r)) return r; // errors already name output columns; a record deleted (C3 R8)
@@ -192,7 +219,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const before = rowid === null ? s?.defaults : at === undefined ? undefined : s?.cache.get(at)?.values;
     const got = r.ok ? r.values : r.current;
     const values = src.info.fields.map((f, k) => (Object.hasOwn(got, f.name) ? got[f.name]! : before?.[k] ?? null));
-    return r.ok ? { ok: true, rowid: r.rowid, values } : { ok: false, conflict: 'changed', current: values };
+    return r.ok ? { ok: true, rowid: r.rowid, values } : { ok: false, conflict: 'changed', current: values, ...(r.rowid !== undefined && { rowid: r.rowid }) };
   };
 
   /** Also in `live` at once: a save that ends before React renders reads the selection the user just moved to. */
@@ -239,8 +266,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (!document.querySelector('[aria-modal="true"]')) document.getElementById(`glide-cell-${col + 1}-${row}`)?.focus({ preventScroll: true });
   };
 
-  /** Saves the pending row; true when nothing is left pending. One save at a time: a second call shares the first. */
-  const commitRow = (): Promise<boolean> => {
+  /** Saves the pending row; true when nothing is left pending. One save at a time: a second call shares the first. A row whose
+   *  save lost its connection (it may have committed, C4 I1) is sent again only by Save Record (`resend`): leaving it shows the
+   *  message again and keeps it. */
+  const commitRow = (resend = false): Promise<boolean> => {
     if (committing.current) return committing.current;
     if (!buffer.pending) return Promise.resolve(true);
     busyRef.current = true;
@@ -251,7 +280,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
           if (buffer.lookups.busy) await buffer.lookups.settled(); // the parents' values first: a lookup drops what was typed for the old one (R4)
           const failed = buffer.lookups.failure;
           if (failed) throw failed.e; // the parent is unknown: nothing is written, the row stays (Escape, or a lookup that succeeds, lifts it)
-          const out = await buffer.commit();
+          const out = await buffer.commit(resend);
           // The box is part of the attempt: a save asked while it is open shares this one (never a second box).
           if (out.status === 'failed') { await showFailure(p.rowIndex, out.errors); return false; }
           if (out.status === 'conflict') { await resolveConflict(p.rowIndex, p.rowid!, out); continue; }
@@ -298,9 +327,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   /** C3 R9: the row changed since its editing began, or was deleted. Save Record: the next save expects the row as it is now
-   *  (a new conflict asks again); Copy to Clipboard: the row as shown goes there, then as Drop Changes: the changes go and the
-   *  row shows the other user's values. Deleted: said, the changes go, the rows are read again. A failed copy drops nothing. */
-  const resolveConflict = async (rowIndex: number, rowid: number, out: Extract<CommitOutcome, { status: 'conflict' }>) => {
+   *  (a new conflict asks again), on the row's current reference (C4 R8); Copy to Clipboard: the row as shown goes there, then
+   *  as Drop Changes: the changes go and the row shows the other user's values (and its current reference). Deleted: said, the
+   *  changes go, the rows are read again. A failed copy drops nothing. */
+  const resolveConflict = async (rowIndex: number, rowid: RowRef, out: Extract<CommitOutcome, { status: 'conflict' }>) => {
     if (out.conflict === 'deleted') {
       await showRecordDeleted(modal);
       buffer.discard();
@@ -309,7 +339,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       return;
     }
     const choice = await askWriteConflict(modal);
-    if (choice === 'save') { buffer.setOriginal(out.current); return; }
+    if (choice === 'save') { buffer.setOriginal(out.current, out.rowid); return; }
     const s = live.current.shape;
     if (choice === 'copy' && s) {
       const text = (col: number) => {
@@ -320,7 +350,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       await api.app.writeClipboard(recordText(s.design.fields.map((f) => f.name), s.design.fields.map((_f, col) => text(col))));
     }
     buffer.discard();
-    s?.cache.set(rowIndex, { rowid, values: out.current });
+    s?.cache.set(rowIndex, { rowid: out.rowid ?? rowid, values: out.current }); // C4 R8: the row's current reference
     setError(null);
   };
 
@@ -383,7 +413,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         setUnsupported(false);
         rows.current = { count, adding: false };
         pendingHeadings.current = null;
-        setShape({ design, locale: settings.region, cache, defaults, ...(src ? { src } : {}), ...(tableInfo && !tableInfo.updatable ? { fixed: true as const } : {}) });
+        setShape({ design, locale: settings.region, year4: fourDigitYear(), cache, defaults, ...(src ? { src } : {}), ...(tableInfo && !tableInfo.updatable ? { fixed: true as const } : {}) });
         setLookups(lists);
       } catch (e) {
         if (current) dataError(e);
@@ -399,8 +429,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
 
   // Rows changed elsewhere (an import appended to this table, or Refresh): the rows and their count are read again; structure,
   // sort, filter and a pending row stay.
-  const reloadRows = () => {
-    void countRows(activeFilter(live.current.filter), true).then((count) => {
+  const reloadRows = (fresh = false) => {
+    void countRows(activeFilter(live.current.filter), true, fresh).then((count) => {
       if (!alive.current) return;
       live.current.shape?.cache.invalidate();
       setRows({ count });
@@ -454,7 +484,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     setSelection(sel);
   };
 
-  const scrollToRow = (row: number) => scrollGridToRow(wrap.current, row);
+  const scrollToRow = (row: number) => scrollGridToRow(wrap.current, row, look.rowHeight);
   const goRow = (row: number) => {
     const col = live.current.selection.current?.cell[0] ?? firstEditable();
     select(cellSelection(col, row));
@@ -462,7 +492,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // the scroll too (Glide's focus scrolls by a delta from its last rendered position). Only once the row left is saved:
     // refused, the message box keeps the focus and the grid stays on the cell in error.
     void (committing.current ?? Promise.resolve(true)).then((ok) => {
-      if (ok) requestAnimationFrame(() => { scrollToRow(row); requestAnimationFrame(() => editor.current?.focus()); });
+      if (ok) requestAnimationFrame(() => { scrollToRow(row); requestAnimationFrame(() => { if (!cellEditorOpen()) editor.current?.focus(); }); });
     });
   };
   /** Home > Find > Go To. */
@@ -479,9 +509,60 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     select({ columns: CompactSelection.empty(), rows: CompactSelection.fromSingleSelection(what === 'all' ? [0, count + (adding ? 1 : 0)] : row!) });
   };
 
+  /** Home › Find (O2 R10): from the selected cell, the selected column's cells (« Champ actif ») or each row's cells left to right,
+   *  down, up or all around (back to the cell itself last); the text shown (as formatted: a truncated number's value, R13) or the
+   *  stored value's edit text. Rows are read through the cache four pages at a time (ensure), only as far as the search goes;
+   *  from MAX_LOADED_ROWS on they are not searched (told once); every 800 rows the UI runs (the dialog closed or opened again:
+   *  the search stops). A match in another row saves the row being edited first (Access: only when it moves): refused, its
+   *  message shows and the search stops (bc:saveRefused). A match selects its cell, scrolled into view; the focus stays in the
+   *  dialog. */
+  const findInSheet = async (o: FindOptions): Promise<boolean> => {
+    flushCellEditor();
+    const opened = findOpen.current;
+    const gone = () => findOpen.current !== opened;
+    const s = live.current.shape;
+    const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
+    if (!s || n === 0) return false;
+    const cur = live.current.selection.current?.cell;
+    const width = o.onlyCurrentField ? 1 : s.design.fields.length;
+    const col0 = cur?.[0] ?? firstEditable();
+    const total = n * width;
+    // the position searched from (row × width + column); none, or the new record's row: before the first (after the last going up)
+    const at = cur && cur[1] < n ? cur[1] * width + (o.onlyCurrentField ? 0 : cur[0]) : o.search === 'up' ? total : -1;
+    for (let k = 1; k <= total; k++) {
+      if (k % (800 * width) === 0) {
+        await new Promise((r) => setTimeout(r));
+        if (gone() || live.current.shape !== s) return false;
+      }
+      const pos = o.search === 'all' ? (((at + k) % total) + total) % total : o.search === 'down' ? at + k : at - k;
+      if (pos < 0 || pos >= total) break;
+      const row = Math.floor(pos / width), col = o.onlyCurrentField ? col0 : pos % width;
+      if (!s.cache.fresh(row)) {
+        await (o.search === 'up' ? s.cache.ensure(Math.max(0, row - 799), row, gone) : s.cache.ensure(row, Math.min(n - 1, row + 799), gone));
+        if (gone() || live.current.shape !== s) return false;   // the structure was read again meanwhile
+      }
+      const saved = s.cache.get(row);
+      const field = s.design.fields[col];
+      if (!saved || !field) continue;
+      const cell = o.asFormatted ? cellAt.current([col, row]) : null;
+      const text = cell?.kind === GridCellKind.Text ? cell.copyData ?? cell.displayData : editText(field, saved.values[col] ?? null, s.locale);
+      if (!matchText(text, o.what, o.match, o.matchCase, s.locale)) continue;
+      const p = buffer.pending;
+      if (p && p.rowIndex !== row && !(await commitRow())) throw new Error('bc:saveRefused');
+      select(cellSelection(col, row));
+      requestAnimationFrame(() => { scrollToRow(row); editor.current?.scrollTo(col, row, 'horizontal'); });
+      return true;
+    }
+    if (rows.current.count > n && !cappedTold.current) {
+      cappedTold.current = true;
+      await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.findCapped', buttons: ['ok'] });
+    }
+    return false;
+  };
+
   const firstEditable = () => {
     const s = live.current.shape;
-    return Math.max(0, s?.design.fields.findIndex((x, k) => x.props.type !== 'autoNumber' && (!s.src || s.src.editable[k])) ?? 0);
+    return Math.max(0, s?.design.fields.findIndex((x, k) => x.props.type !== 'autoNumber' && !serverComputed(x.props) && (!s.src || s.src.editable[k])) ?? 0);
   };
 
   const onCellEdited = ([col, row]: Item, cell: EditableGridCell) => {
@@ -493,9 +574,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (row >= count && !(adding && row === count)) return;
     if (row < count && !s.cache.fresh(row)) return; // cannot happen: rows shown from before a reload are read-only
     const rowid = row === count ? null : s.cache.get(row)?.rowid;
-    // a query's computed column, a join field, a row without its key record (R5)
-    if (rowid === undefined || Number.isNaN(rowid) || (s.src && !s.src.editable[col])) return;
     const field = s.design.fields[col];
+    // a query's computed column, a join field, a row without its key record (R5), a column its server computes (C4 M2)
+    if (rowid === undefined || Number.isNaN(rowid) || (s.src && !s.src.editable[col]) || serverComputed(field.props)) return;
     buffer.edit(row, rowid, field.name, fromEdit(field, cell), rowid === null ? null : s.cache.get(row)?.values ?? null);
     bump();
     if (s.src) lookUp(row, field.name);
@@ -541,7 +622,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   /** Rowids of the given rows (ascending), as shown; rows never loaded are read in one request. */
-  const rowids = async (indices: number[]): Promise<number[]> => {
+  const rowids = async (indices: number[]): Promise<RowRef[]> => {
     const s = live.current.shape;
     const ids = indices.map((i) => s?.cache.get(i)?.rowid);
     if (ids.some((x) => x === undefined)) {
@@ -549,7 +630,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       const page = await pageRows(lo, indices[indices.length - 1] - lo + 1);
       indices.forEach((i, k) => { ids[k] ??= page.rows[i - lo]?.rowid; });
     }
-    return ids.filter((x): x is number => x !== undefined && !Number.isNaN(x)); // a row without its key record is never deleted (R5)
+    return ids.filter((x): x is RowRef => x !== undefined && !Number.isNaN(x)); // a row without its key record is never deleted (R5)
   };
 
   const deleteRecords = async (sel: GridSelection = live.current.selection) => {
@@ -608,9 +689,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (e.key === 'Escape' && buffer.pending && !busyRef.current) { e.cancel(); discardRow(); }
   };
 
-  const sortBy = async (dir: 'asc' | 'desc' | null) => {
+  /** `at`: the column (a header's drop-down), else the selected one. */
+  const sortBy = async (dir: 'asc' | 'desc' | null, at?: number) => {
     const { shape: s, selection: sel } = live.current;
-    const col = sel.current?.cell[0] ?? sel.columns.first();
+    const col = at ?? sel.current?.cell[0] ?? sel.columns.first();
     if (!s || (dir !== null && col === undefined)) return;
     if (!(await commitRow())) return;
     const next: Sort = dir === null ? null : { field: s.design.fields[col!].name, dir };
@@ -637,8 +719,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     setRows({ count, adding: false });
     const col = live.current.selection.current?.cell[0] ?? firstEditable();
     setSelection(count ? cellSelection(col, 0) : NO_SELECTION);
-    // Back to the grid (not to the ribbon or the closed menu), once the selection is rendered; never behind a dialog.
-    requestAnimationFrame(() => { if (!document.querySelector('[aria-modal="true"]')) editor.current?.focus(); });
+    // Back to the grid (not to the ribbon or the closed menu), once the selection is rendered; never behind a dialog, nor
+    // away from an editor a click opened meanwhile.
+    requestAnimationFrame(() => { if (!document.querySelector('[aria-modal="true"]') && !cellEditorOpen()) editor.current?.focus(); });
   };
   const setCriteria = async (field: string, criteria: string) => {
     let next: FilterState;
@@ -678,12 +761,17 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     void setCriteria(menu.field.name, selectionCriteria(kind, menu.field, menu.value));
   };
 
-  /** Access's Filter on the selected column: its criteria in the Expression Builder (display form). Empty: no criteria on this
-   *  field. A criterion the base refuses keeps the builder open with the text and the reason. */
-  const filterField = async () => {
+  /** The column `col` (a header's drop-down), else the selected one. */
+  const fieldAt = (col?: number) => {
+    const s = live.current.shape;
+    return col === undefined ? selectedField() : s && s.design.fields[col] ? { col, field: s.design.fields[col] } : undefined;
+  };
+  /** The column menu's « Filtres de texte » (…): its criteria in the Expression Builder (display form). Empty: no criteria on
+   *  this field. A criterion the base refuses keeps the builder open with the text and the reason. */
+  const filterField = async (col?: number) => {
     flushCellEditor();
     if (!(await commitRow())) return;
-    const at = selectedField();
+    const at = fieldAt(col);
     const s = live.current.shape;
     if (!at || !s) return;
     const ctx: DisplayContext = { lang: i18n.language.startsWith('fr') ? 'fr' : 'en', region: localeInfo(s.locale) };
@@ -707,6 +795,38 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (criteria !== null) await setCriteria(at.field.name, criteria);
   };
 
+  /** Home › Filter, a column header's drop-down (`col`, the menu at `at`): Access's column menu, with the field's list (R14)
+   *  of the values its records have under the other fields' criteria. */
+  const filterMenu = async (col?: number, at?: { x: number; y: number }) => {
+    flushCellEditor();
+    if (!(await commitRow())) return;
+    const picked = fieldAt(col);
+    const s = live.current.shape;
+    if (!picked || !s) return;
+    const { field } = picked;
+    const lookup = live.current.lookups.get(field.name)?.list;
+    const ctx = { locale: s.locale, lang: i18n.language.startsWith('fr') ? 'fr' as const : 'en' as const, ...(s.year4 ? { fourDigitYear: true } : {}) };
+    const shown = (v: SqlValue) => {
+      const c = toCell(field, v, { ...ctx, readOnly: true, lookup });
+      return c.kind === GridCellKind.Text ? c.displayData : texts({ ...field, props: { ...field.props, format: field.props.format || 'yesNo' } }, v, ctx)[0]; // a Yes/No: Oui / Non
+    };
+    const filter = activeFilter(withCriteria(live.current.filter, field.name, ''));
+    const src = live.current.source;
+    const table = live.current.tab.name;
+    let total: Promise<number> | undefined;
+    const read = async (offset: number, limit: number) => {
+      if (src) return api.sources.page(src, { offset, limit, sort: [{ field: field.name, dir: 'asc' }], ...(filter ? { filter } : {}), ...withParams() });
+      total ??= api.rows.count(table, filter);
+      const rows = limit ? (await api.rows.page(table, { offset, limit, sort: { field: field.name, dir: 'asc' }, ...(filter ? { filter } : {}) })).rows.map((r) => r.values) : [];
+      return { rows, total: await total };
+    };
+    const m = await fieldMenu(field, at ?? menuAt('filter'), { ref: src ?? { kind: 'table', name: table }, info: s.src?.info, col: picked.col, byShown: !!lookup, read, shown,
+      criteria: live.current.filter.items.find((x) => x.field === field.name)?.criteria, built: built.current.get(field.name) });
+    if (live.current.shape === s) setMenu(m);
+  };
+  /** A menu's field, as a column (undefined: gone meanwhile, the selected one then). */
+  const colOf = (field: FieldDef) => { const i = live.current.shape?.design.fields.findIndex((x) => x.name === field.name) ?? -1; return i < 0 ? undefined : i; };
+
   const toggleFilter = () => { const f = live.current.filter; if (f.items.length) void applyFilter({ ...f, active: !f.active }); };
   const clearFilter = () => { setMenu(null); void applyFilter(NO_FILTER); };
 
@@ -728,7 +848,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return true;
   };
 
-  const save = async () => { flushCellEditor(); await commitRow(); };
+  const save = async () => { flushCellEditor(); await commitRow(true); };
 
   /** External Data › Export › Text File or Excel: this datasheet's rows, in its current order and filter (a query's with its
    *  parameters). The record being edited is saved first, as Access does; refused, nothing is exported. */
@@ -743,12 +863,15 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   /** Table Fields (a table tab only): the commands edit the structure through the same save as Design view. Read at call time. */
   const designOpenRef = useRef(designOpen);
   designOpenRef.current = designOpen;
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const fieldsEnv = useRef<TableFieldsEnv>({
     get table() { return live.current.tab.name; }, get readOnly() { return live.current.ro; }, modal,
     design: () => live.current.shape?.design ?? null,
     selectedField: () => selectedFieldRef.current()?.field.name ?? null,
     flushPending: async () => { flushCellEditor(); return commitRowRef.current(); },
     designOpen: () => !!designOpenRef.current,
+    tabs: () => tabsRef.current ?? [], dispatch: (a) => dispatch(a),
     // Resolves once the new structure is shown (or after 10 s, should the reload never come): the next command builds from it.
     reload: (select) => new Promise<void>((done) => {
       reloading.current.select = select;
@@ -761,8 +884,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const fieldHandlers = useMemo(() => (currentUi().datasheetDesign ? design?.tableFieldsCommands(fieldsEnv) : undefined), [fieldsEnv]);   // O1 R9: read at mount
   commitRowRef.current = commitRow;
   selectedFieldRef.current = selectedField;
-  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterField, filterSelection, toggleFilter, menuAt, exportData });
-  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterField, filterSelection, toggleFilter, menuAt, exportData };
+  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet });
+  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet };
   const hasFilter = filter.items.length > 0;
   useEffect(() => {
     // Read-only (also a refused write before the session says so): the ribbon offers no record command.
@@ -771,7 +894,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       sortAsc: () => cmds.current.sortBy('asc'),
       sortDesc: () => cmds.current.sortBy('desc'),
       sortClear: () => cmds.current.sortBy(null),
-      filter: () => cmds.current.filterField(),
+      filter: () => cmds.current.filterMenu(),
       filterSelection: () => cmds.current.filterSelection(),
       filterAdvanced: () => setMenu({ kind: 'advanced', ...cmds.current.menuAt('filterAdvanced') }),
       ...(hasFilter ? { filterToggle: () => cmds.current.toggleFilter() } : {}),
@@ -779,8 +902,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       ...(tab.kind === 'table' && !source && fieldHandlers ? {
         ...fieldHandlers, moreFields: () => setPopup('moreFields'), dataType: () => setPopup('dataType'), format: () => setPopup('format'), validation: () => setPopup('validation'),
       } : {}),
-      ...(tab.kind === 'table' || tab.kind === 'query' ? findCommands({ openSearch: () => setSearching(true), openMenu: (m) => setPopup(m) }) : {}),
-      refresh: () => cmds.current.reloadRows(), // Shift+F9 (Requery)
+      ...(tab.kind === 'table' || tab.kind === 'query' ? findCommands({ openFind: () => setFinding((k) => Math.abs(k) + 1), openMenu: (m) => setPopup(m) }) : {}),
+      refresh: () => cmds.current.reloadRows(true), // Shift+F9 (Requery): a pass-through runs again (C6 R7)
       ...(tab.kind === 'table' || tab.kind === 'query' ? { exportText: () => cmds.current.exportData('text'), exportExcel: () => cmds.current.exportData('excel') } : {}), // a form's datasheet exports the pane's selection
     });
     return offCommands;
@@ -822,26 +945,28 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (!isNew && !saved) return LOADING;
     // Read-only: during a save, other rows while one is pending, rows from before a sort/delete until their page lands.
     const locked = ro || busyRef.current || (p !== null && p.rowIndex !== row) || (!isNew && !shape.cache.fresh(row)) || (!!shape.src && !shape.src.editable[col])
-      || (!isNew && Number.isNaN(saved!.rowid)); // a row without its key record (R5)
+      || (!isNew && Number.isNaN(saved!.rowid)) // a row without its key record (R5)
+      || serverComputed(field.props); // a column its server computes (C4 M2)
     const lookup = lookups.get(field.name)?.list;
     let cell: GridCell;
     const looked = p?.rowIndex === row ? buffer.looked : {}; // AutoLookup's values (R4), under what was typed since
     if (p?.rowIndex === row && Object.hasOwn(p.changes, field.name)) cell = inputCell(field, p.changes[field.name], { readOnly: locked, locale: shape.locale, lookup });
-    else if (Object.hasOwn(looked, field.name)) cell = toCell(field, looked[field.name] ?? null, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', readOnly: locked, lookup });
+    else if (Object.hasOwn(looked, field.name)) cell = toCell(field, looked[field.name] ?? null, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', ...(shape.year4 ? { fourDigitYear: true } : {}), readOnly: locked, lookup });
     else if (isNew && field.props.type === 'autoNumber') cell = { kind: GridCellKind.Text, data: '', displayData: t('datasheet.newRecord'), allowOverlay: false, readonly: true };
     else {
       // The new record's row shows the default values, as stored values (display and edit text).
       const value = isNew ? shape.defaults[col] ?? null : saved?.values[col] ?? null;
-      cell = toCell(field, value, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', readOnly: locked, lookup });
+      cell = toCell(field, value, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', ...(shape.year4 ? { fourDigitYear: true } : {}), readOnly: locked, lookup });
     }
+    if (checkTruncated && !(p?.rowIndex === row && Object.hasOwn(p.changes, field.name))) cell = truncateNumber(field, cell, widths[field.name] ?? look.columnPx, measure);
     if (error && p?.rowIndex === row && error.field === field.name) cell = { ...cell, themeOverride: { bgCell: palette.error } };
     return cell;
-  }, [shape, lookups, ro, busy, error, palette, version, t, i18n.language]); // busy, version: Glide redraws when the function changes
+  }, [shape, lookups, ro, busy, error, palette, version, t, i18n.language, checkTruncated, measure, widths, look]); // busy, version: Glide redraws when the function changes
 
   const cellAt = useRef(getCellContent);
   cellAt.current = getCellContent;
-  // Find and copy read the cells of rows never shown: their pages are loaded first (a few at a time), then the cells are read.
-  // Rows from MAX_LOADED_ROWS on are not read for them: blank unless already loaded (shown), and told once.
+  // Copy reads the cells of rows never shown: their pages are loaded first (a few at a time), then the cells are read. Rows
+  // from MAX_LOADED_ROWS on are not read: blank unless already loaded (shown), and told once (Find tells it too: findInSheet).
   const cappedTold = useRef(false);
   const cellsFor = (r: Rectangle, signal: AbortSignal) => async () => {
     const s = live.current.shape;
@@ -854,7 +979,14 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       y < MAX_LOADED_ROWS || s?.cache.fresh(y) ? cellAt.current([x, y]) : { kind: GridCellKind.Text, data: '', displayData: '', allowOverlay: false };
     return Array.from({ length: r.height }, (_, dy) => Array.from({ length: r.width }, (_, dx) => cell(r.x + dx, r.y + dy)));
   };
-  useNonAsciiTyping(wrap, cellAt, () => live.current.selection.current?.cell);
+  // Access's keys (O2): a move goes through select, as a click (leaving the pending row saves it; refused, the selection comes back)
+  const keysEnv = useRef<EditKeysEnv>(null!);
+  keysEnv.current = {
+    cellAt: (item) => cellAt.current(item), selected: () => live.current.selection.current,
+    cols: () => live.current.shape?.design.fields.length ?? 0, rows: () => rows.current.count + (rows.current.adding ? 1 : 0) + (live.current.ro ? 0 : 1), // past a new record: another one
+    moveTo: ([col, row]) => select(cellSelection(col, row)),
+  };
+  useEditKeys(wrap, keysEnv);
 
   // A Lookup field gets its drop-down list, a field with an input mask the masked editor. Glide gives only the cell: the
   // edited one is the selected one.
@@ -878,7 +1010,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const dir = sort?.field === fd.name ? sort.dir : null;
     const filtered = !!activeFilter(filter)?.some((x) => x.field === fd.name);
     return {
-      id: fd.name, title: fd.props.caption || fd.name, width: widths[fd.name] ?? WIDTH[fd.props.type],
+      id: fd.name, title: fd.props.caption || fd.name, width: widths[fd.name] ?? look.columnPx, hasMenu: true, // the column menu (R14)
       ...headerDecor(fd.props.type, dir, filtered, palette.theme.accentColor!),
     };
   }), [shape, sort, filter, widths, palette]);
@@ -900,13 +1032,13 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     <div className="datasheet">
       <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
         onPointerDownCapture={() => { appendClick.current = false; }}>
-        <DataEditor ref={editor} theme={palette.theme} columns={columns} rows={count + (adding ? 1 : 0)} headerIcons={HEADER_ICONS}
+        <DataEditor ref={editor} theme={theme} verticalBorder={look.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={columns} rows={count + (adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
           gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited} onFinishedEditing={() => refreshIfMissed(false)}
           onRowAppended={ro ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
-          onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false }} showSearch={searching} onSearchClose={() => setSearching(false)}
-          rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={ROW_HEIGHT} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
-          onColumnResize={onColumnResize}
+          onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
+          rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={look.rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
+          onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => void cmds.current.filterMenu(col, { x: b.x, y: b.y + b.height })}
           onVisibleRegionChanged={() => { if (buffer.pending) scrolled(); }}
           width="100%" height="100%" />
         {(popup === 'goTo' || popup === 'select') && (
@@ -977,9 +1109,21 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         onGo={goRow}
         filter={!filter.items.length ? 'none' : filter.active ? 'on' : 'off'} onToggleFilter={toggleFilter}
         onNew={() => void newRecord()} />
+      {finding > 0 && <FindDialog key={finding} find={(o) => cmds.current.findInSheet(o)}
+        close={() => { setFinding((k) => -k); requestAnimationFrame(() => { if (!cellEditorOpen()) editor.current?.focus(); }); }} />}
       {menu && (
-        <FilterMenu menu={menu} hasFilter={filter.items.length > 0} onPick={pickSelection} onClear={clearFilter}
-          onClose={(escaped) => { setMenu(null); if (escaped) editor.current?.focus(); }} />
+        <FilterMenu menu={menu} hasFilter={menu.kind === 'field' ? filter.items.some((x) => x.field === menu.field.name) : filter.items.length > 0}
+          onPick={pickSelection} onClear={clearFilter}
+          onClose={(escaped) => { setMenu(null); if (escaped) editor.current?.focus(); }}
+          onSort={(dir) => { setMenu(null); if (menu.kind === 'field') void sortBy(dir, colOf(menu.field)); }}
+          onClearField={() => { setMenu(null); if (menu.kind === 'field') void setCriteria(menu.field.name, ''); }}
+          onTyped={() => { setMenu(null); if (menu.kind === 'field') void filterField(colOf(menu.field)); }}
+          onValues={(b) => {
+            setMenu(null);
+            if (menu.kind !== 'field') return;
+            if (b) built.current.set(menu.field.name, b);
+            void setCriteria(menu.field.name, b?.criteria ?? '');
+          }} />
       )}
     </div>
   );

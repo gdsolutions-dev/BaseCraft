@@ -1,5 +1,5 @@
 import type { RowWriteResult } from '../../shared/api';
-import { RowBuffer } from './row-buffer';
+import { RowBuffer, unsureSave } from './row-buffer';
 
 const deferred = () => {
   let resolve!: (r: RowWriteResult) => void;
@@ -31,6 +31,33 @@ describe('RowBuffer', () => {
     expect(b.pending?.changes).toEqual({ Client: 2, Nom: 'y', Ville: 'Nice' });
   });
 
+  it('a save whose connection was lost (it may have committed, C4 I1) is never sent again by itself: only when asked', async () => {
+    const lost = new Error("Error invoking remote method 'bc:rows:insert': Error: bc:serverError|connection|Connection terminated");
+    const save = vi.fn().mockRejectedValueOnce(lost).mockResolvedValue({ ok: true, rowid: 'B', values: [] } as RowWriteResult);
+    const b = new RowBuffer(save);
+    b.edit(0, null, 'Nom', 'Ana');
+    await expect(b.commit()).rejects.toBe(lost);
+    await expect(b.leaveRow(1)).rejects.toBe(lost); // leaving the row: the message again, nothing sent
+    await expect(b.commit()).rejects.toBe(lost);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(b.pending?.changes).toEqual({ Nom: 'Ana' }); // still to be saved
+    expect(await b.commit(true)).toMatchObject({ status: 'saved', rowid: 'B' }); // Save Record, asked after the message
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(unsureSave(lost)).toBe(true);
+    expect(unsureSave(new Error('bc:serverError|23505|duplicate'))).toBe(false);
+  });
+  it('any other failed save is tried again on leaving the row', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('bc:busy')).mockResolvedValue({ ok: true, rowid: 1, values: [] } as RowWriteResult);
+    const b = new RowBuffer(save);
+    b.edit(0, null, 'Nom', 'Ana');
+    await expect(b.commit()).rejects.toThrow('bc:busy');
+    expect(await b.leaveRow(1)).toMatchObject({ status: 'saved' });
+  });
+  it('keeps a string reference as given', async () => {
+    const save = vi.fn(async () => ({ ok: true, rowid: 'B', values: [] }) as RowWriteResult);
+    const b = new RowBuffer(save); b.edit(0, 'A', 'Ville', 'Lille', [1]); expect(await b.commit()).toMatchObject({ status: 'saved', rowid: 'B' });
+    expect(save).toHaveBeenCalledWith('A', { Ville: 'Lille' }, [1]);
+  });
   it('keeps the values of the first edit as the original', async () => {
     const save = vi.fn(async () => ({ ok: true, rowid: 3, values: [] }) as RowWriteResult);
     const b = new RowBuffer(save);
@@ -52,6 +79,19 @@ describe('RowBuffer', () => {
     expect(await b.commit()).toEqual({ status: 'conflict', conflict: 'deleted' });
     expect(await b.commit()).toMatchObject({ status: 'saved' });
     expect(save.mock.calls.map((c) => c[2])).toEqual([[3, 'Durand', 'Paris'], [3, 'Durand', 'Brest'], [3, 'Durand', 'Brest']]);
+  });
+
+  it("a conflict's new reference (C4 R8) is carried out; setOriginal with it makes the next save use it", async () => {
+    const save = vi.fn<(...a: unknown[]) => Promise<RowWriteResult>>()
+      .mockResolvedValueOnce({ ok: false, conflict: 'changed', current: [3, 'Durand', 'Brest'], rowid: 'T2' })
+      .mockResolvedValueOnce({ ok: true, rowid: 'T3', values: [3, 'Durand', 'Lille'] });
+    const b = new RowBuffer(save);
+    b.edit(2, 'T1', 'Ville', 'Lille', [3, 'Durand', 'Paris']);
+    expect(await b.commit()).toEqual({ status: 'conflict', conflict: 'changed', current: [3, 'Durand', 'Brest'], rowid: 'T2' });
+    b.setOriginal([3, 'Durand', 'Brest'], 'T2');
+    expect(b.pending).toEqual({ rowIndex: 2, rowid: 'T2', changes: { Ville: 'Lille' } });
+    expect(await b.commit()).toEqual({ status: 'saved', rowid: 'T3', values: [3, 'Durand', 'Lille'] });
+    expect(save.mock.calls.map((c) => c[0])).toEqual(['T1', 'T2']);
   });
 
   it('a save that leaves typed changes pending makes the saved values the original (never a conflict with its own write)', async () => {

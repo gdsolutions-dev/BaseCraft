@@ -6,10 +6,12 @@ import { useId, useRef, useState, type DragEvent, type KeyboardEvent, type Point
 import { useTranslation } from 'react-i18next';
 import { sameName } from '../../shared/field-types';
 import type { QbeJoin } from '../../shared/query/qbe';
-import { BOX_W, boxHeight, linePath, type Box, type Point } from '../relations/relations-layout';
+import { currentSettings } from '../settings-store';
+import { BOX_W, boxHeight, linePath, rowFor, type Box, type Point } from '../relations/relations-layout';
 import '../relations/relations.css';
 
-export interface PaneBox { alias: string; fields: { name: string; key: boolean }[] }
+/** `join`: the field's join key (`joinKey`, O3 R6); absent: never auto-joined. */
+export interface PaneBox { alias: string; fields: { name: string; key: boolean; join?: string }[] }
 /** The drag data of a field (onto another box's field: a join; onto the grid: a column). */
 export const FIELD_DRAG = 'application/x-basecraft-field';
 
@@ -34,8 +36,9 @@ export function TablePane({ boxes, joins, positions, readOnly, onMove, onAddFiel
   const drag = useRef<{ alias: string; x: number; y: number; from: Point; moved: boolean } | null>(null);
   const arrow = `qbe-arrow${useId().replace(/:/g, '')}`; // one per pane: every tab stays mounted, hidden ones too
 
+  const rowH = rowFor(currentSettings().queryFontSize); // re-read on each render: App re-renders when the settings change
   const shown = boxes.filter((b) => positions[b.alias]);
-  const boxOf = (b: PaneBox): Box => ({ ...positions[b.alias], w: BOX_W, h: boxHeight(b.fields.length + 1), scroll: scrolls.get(b.alias) ?? 0 });
+  const boxOf = (b: PaneBox): Box => ({ ...positions[b.alias], w: BOX_W, h: boxHeight(b.fields.length + 1, rowH), scroll: scrolls.get(b.alias) ?? 0, row: rowH });
   const extent = shown.reduce((m, b) => {
     const r = boxOf(b);
     return { w: Math.max(m.w, r.x + r.w + 80), h: Math.max(m.h, r.y + r.h + 80) };
@@ -124,7 +127,7 @@ export function TablePane({ boxes, joins, positions, readOnly, onMove, onAddFiel
       {shown.map((b) => {
         const r = boxOf(b);
         const row = (name: string, key: boolean, label: string) => (
-          <div key={name} className="rel-field qbe-field" role="button" tabIndex={0} draggable aria-label={label}
+          <div key={name} className="rel-field qbe-field" role="button" tabIndex={0} draggable aria-label={label} style={{ height: rowH }}
             data-testid={`qbe-field-${b.alias}-${name}`}
             onDragStart={dragField(b.alias, name)} onDragOver={(e) => { if (e.dataTransfer.types.includes(FIELD_DRAG)) e.preventDefault(); }}
             onDrop={dropOnField(b.alias, name)}

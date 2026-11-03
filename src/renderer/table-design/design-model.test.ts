@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clients, f, t } from '../../shared/test-fixtures';
 import { designOf, designReducer, emptyDesign, fromDesign, longFieldNames, savedModel, toSaveRequest, withDefaultPrimaryKey } from './design-model';
+import { DESIGN_DEFAULTS, defaultProps, type FieldDefaults } from '../../shared/field-types';
 
 describe('design model', () => {
   it('rename keeps sourceName; new rows have none', () => {
@@ -192,5 +193,38 @@ describe('field names over 64 characters', () => {
     expect(longFieldNames(m).map((r) => r.name)).toEqual(['x'.repeat(65)]);
     m = designReducer(m, { type: 'setName', index: 0, name: long + 'x' });
     expect(longFieldNames(m)).toHaveLength(2);
+  });
+});
+
+describe('O3 defaults and AutoIndex', () => {
+  const D: FieldDefaults = { type: 'number', textSize: 50, numberSize: 'integer' };
+  it('a new row takes the default type and size; a type change the default size', () => {
+    let m = designReducer(emptyDesign(), { type: 'addRow' }, D);
+    expect(m.rows[0]!.props).toMatchObject({ type: 'number', numberSize: 'integer' });
+    m = designReducer(m, { type: 'setType', index: 0, fieldType: 'shortText' }, D);
+    expect(m.rows[0]!.props).toMatchObject({ type: 'shortText', size: 50 });
+  });
+  it('a blank row stays blank when the defaults change', () => {
+    const m = designReducer(emptyDesign(), { type: 'addRow' }, D);
+    expect(toSaveRequest(m, 'T', false).design.fields).toEqual([]);
+  });
+  it('existing fields keep their size', () => {
+    const m = fromDesign({ name: 'T', fields: [{ name: 'Nom', props: { ...defaultProps('shortText'), size: 80 } }] });
+    expect(designReducer(m, { type: 'addRow' }, D).rows[0]!.props).toMatchObject({ size: 80 });
+  });
+  it('AutoIndex once, on the committed name of a new field', () => {
+    let m = designReducer(emptyDesign(), { type: 'addRow' }, DESIGN_DEFAULTS);
+    m = designReducer(m, { type: 'setName', index: 0, name: 'Annum' });
+    m = designReducer(m, { type: 'setName', index: 0, name: 'Annumber' });
+    m = designReducer(m, { type: 'commitName', index: 0, autoIndex: 'num' });
+    expect(m.rows[0]!.props.indexed).toBe('no');
+    m = designReducer(designReducer(m, { type: 'addRow' }), { type: 'setName', index: 1, name: 'CodeClient' });
+    m = designReducer(m, { type: 'commitName', index: 1, autoIndex: 'N°;clé;code;num' });
+    expect(m.rows[1]!.props.indexed).toBe('yesDuplicates');
+    m = designReducer(designReducer(m, { type: 'setProp', index: 1, key: 'indexed', value: 'no' }), { type: 'commitName', index: 1, autoIndex: 'code' });
+    expect(m.rows[1]!.props.indexed).toBe('no');
+    const old = fromDesign({ name: 'T', fields: [{ name: 'Ville', props: defaultProps('shortText') }] });
+    const renamed = designReducer(designReducer(old, { type: 'setName', index: 0, name: 'CodeVille' }), { type: 'commitName', index: 0, autoIndex: 'code' });
+    expect(renamed.rows[0]!.props.indexed).toBe('no');
   });
 });

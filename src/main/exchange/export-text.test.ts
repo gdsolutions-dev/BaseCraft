@@ -81,7 +81,7 @@ it('a Where Condition (a report opened by OpenReport) exports only the matching 
   const spec = { ...defaultExportSpec(fr), encoding: 'utf-8' as const, hasHeader: false };
   const r = await session.exportText({ ref: { kind: 'table', name: 'Clients' }, where: '[Nom] = "Dupont"' }, spec, out(), words);
   expect(r).toMatchObject({ ok: true, rows: 1 });
-  expect(session.exportRowCount({ ref: { kind: 'table', name: 'Clients' }, where: '[Nom] = "Dupont"' })).toBe(1);
+  expect(await session.exportRowCount({ ref: { kind: 'table', name: 'Clients' }, where: '[Nom] = "Dupont"' })).toBe(1);
 });
 
 it('no rows and no header still writes the BOM; the unqualified ambiguous cells are counted', async () => {

@@ -169,10 +169,14 @@ test('keyboard: the categories are a vertical tab list; the page fits the narrow
     await expect(page.getByTestId('opt-cat-general')).toBeFocused();
     await expect(page.getByTestId('backstage').getByRole('tablist')).toHaveAttribute('aria-orientation', 'vertical');
     await page.keyboard.press('ArrowDown');
+    await expect(page.getByTestId('opt-cat-datasheet')).toBeFocused();   // O2: « Feuille de données » sits between the two
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByTestId('opt-cat-designers')).toBeFocused();   // O3: « Concepteurs d'objets » between « Feuille de données » and the client settings
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByTestId('opt-cat-client')).toBeFocused();
     await selected(page, 'client');
     await expect(page.getByTestId('backstage').getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'opt-cat-client');
-    await page.keyboard.press('ArrowUp');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
     await selected(page, 'general');
 
     await minSize(app);

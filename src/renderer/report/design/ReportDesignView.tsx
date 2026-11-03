@@ -10,10 +10,11 @@ import type { SourceField } from '../../../shared/record-source';
 import { uniqueReportName } from '../../../shared/report/instant';
 import { readReport, type PageSetup } from '../../../shared/report/model';
 import { api } from '../../bridge';
-import { ArrangePopup, Designer, FormatPopup, type ToolState } from '../../designer/Designer';
+import { ArrangePopup, Designer, FormatPopup, type CanvasProps, type ToolState } from '../../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../../designer/designer-commands';
 import { formatCommands, type FormatPopupId } from '../../designer/format-commands';
+import { layoutCommands, layoutScope } from '../../designer/layout-commands';
 import { designerReducer, findControl, initDesigner, sectionBottomLimit, type DesignerAction } from '../../designer/designer-model';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { FieldList } from '../../designer/FieldList';
@@ -21,19 +22,25 @@ import { fromSourceRef } from '../../designer/property-sheet-model';
 import { RibbonPopup } from '../../designer/RibbonPopup';
 import type { PropertySheetContext } from '../../designer/sheet-types';
 import type { DocViewProps } from '../../shell/DocumentTabs';
-import { errorMessage, useErrorDialog, useModal } from '../../shell/Modal';
+import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../../shell/Modal';
 import { nameErrorKey } from '../../shell/nav-menu-items';
 import { registerCommandStates, registerCommands, registerModeGuard, type CommandHandlers, type CommandId } from '../../shell/ribbon-model';
+import { sameView, type DocMode } from '../../state/app-state';
+import { allowsLayout } from '../../form/views';
 import { loadReportDoc, ReportLoadError } from '../load';
 import { withPageSetup } from '../page-setup';
 import { PageSetupDialog, PageSetupMenu } from '../PageSetupDialog';
+import { ReportLayoutCanvas } from '../ReportLayoutCanvas';
 import { previewFromDesign, ReportIssues } from '../ReportPreviewView';
+import { useReportFlow } from '../useReportFlow';
 import { addTotal, TOTAL_FNS, type TotalFn } from './grouping-model';
 import { GroupingPane } from './GroupingPane';
 import { headerItemControls, insertPageNumbers, reportHeaderItem } from './header-items';
 import { PageNumbersDialog, type PageNumberChoice } from './PageNumbersDialog';
 import { reportHost, reportRenderControl } from './report-host';
+import { printMargins } from '../../settings-store';
 import { blankReport, detailHidden, removesControls, reportDesignStates } from './report-sections';
+import { layoutNoticeKey, reportView } from './report-view';
 
 const FIELD_LEFT = 1418;   // 2,5 cm : un champ ajouté sans point de dépôt, son étiquette à gauche
 const FIELD_GAP = 113;     // 0,2 cm sous le contrôle le plus bas
@@ -51,11 +58,31 @@ const fieldListRequests = new Set<string>();
 export function requestFieldList(name: string): void { fieldListRequests.add(name); }
 const takeFieldListRequest = (name: string): boolean => fieldListRequests.delete(name);
 
+interface Leaving { mode: DocMode; name: string; isNew: boolean; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean> }
+/** Avant que la vue parte : des modifications -> Oui (enregistrer), Non (abandonnées), Annuler. L'Aperçu avant impression lit
+ *  l'état enregistré : un nouvel état l'est d'abord. Création ↔ Page (L3) : le même concepteur reste, rien n'est demandé
+ *  (modifications et annulations gardées), pas même pendant un enregistrement. */
+export async function leaveReportDesign(reason: 'mode' | 'close', target: DocMode | undefined, d: Leaving): Promise<boolean> {
+  if (reason === 'mode' && sameView(d.mode, target)) return true;
+  if (d.busy) return false;
+  await d.flush();
+  if (reason === 'mode' && d.isNew) {
+    // garde-fou : le ruban n'offre aucun changement de mode à un état jamais enregistré (Aperçu avant impression : !isNew) ;
+    // si une autre voie le demande un jour, l'aperçu lirait un état absent de la base
+    return d.save();
+  }
+  if (d.dirty() || d.isNew) {
+    const r = await d.confirm({ titleKey: 'report.saveFirstTitle', messageKey: 'report.saveFirst', params: { name: d.name }, buttons: ['yes', 'no', 'cancel'] });
+    if (r === 'cancel' || (r === 'yes' && !(await d.save()))) return false;
+  }
+  return true;
+}
+
 export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
-  const [state, send] = useReducer(designerReducer, undefined, () => initDesigner(blankReport(), 'report'));
+  const [state, send] = useReducer(designerReducer, undefined, () => initDesigner(blankReport(printMargins()), 'report'));
   const [phase, setPhase] = useState<'loading' | 'ready' | { error: string; list?: string[] }>(tab.isNew ? 'ready' : 'loading');
   const [described, setDescribed] = useState<{ key: string; fields: SourceField[] }>({ key: 'null', fields: [] });
   const [sourceError, setSourceError] = useState<string | null>(null);
@@ -118,6 +145,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       if (!current) return;
       send({ type: 'load', doc, objectKind: 'report' });
       setPhase('ready');
+      // L3 : un état dont la définition interdit le mode Page s'ouvre en mode Création (quelle que soit la voie qui l'a demandé)
+      if (live.current.tab.mode === 'layout' && !allowsLayout(doc, 'report')) dispatch({ type: 'setMode', id: tab.id, mode: 'design' });
     }, (e) => {
       if (!current) return;
       if (e instanceof ReportLoadError) { setPhase({ error: t(`report.${e.code}`), list: e.list }); return; }
@@ -224,22 +253,14 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     }
   };
 
-  /** Avant que la vue parte : des modifications -> Oui (enregistrer), Non (abandonnées), Annuler. L'Aperçu avant impression lit
-   *  l'état enregistré : un nouvel état l'est d'abord. Vers l'aperçu, son « Fermer » ramènera ici. */
-  const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
-    if (busy.current) return false;
-    await flush();
-    const { state: s, tab: doc } = live.current;
-    if (reason === 'mode' && doc.isNew) {
-      // garde-fou : le ruban n'offre aucun changement de mode à un état jamais enregistré (Aperçu avant impression : !isNew) ;
-      // si une autre voie le demande un jour, l'aperçu lirait un état absent de la base
-      if (!(await save())) return false;
-    } else if (s.dirty) {
-      const r = await modal.confirm({ titleKey: 'report.saveFirstTitle', messageKey: 'report.saveFirst', params: { name: doc.name }, buttons: ['yes', 'no', 'cancel'] });
-      if (r === 'cancel' || (r === 'yes' && !(await save()))) return false;
-    }
-    if (reason === 'mode') previewFromDesign.add(doc.id);
-    return true;
+  /** Vers l'aperçu, son « Fermer » ramènera ici. */
+  const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
+    const doc = live.current.tab;
+    const ok = await leaveReportDesign(reason, target, {
+      mode: doc.mode, name: doc.name, isNew: !!doc.isNew, busy: busy.current, flush, dirty: () => live.current.state.dirty, confirm: modal.confirm, save,
+    });
+    if (ok && reason === 'mode' && !sameView(doc.mode, target)) previewFromDesign.set(doc.id, doc.mode);   // « Fermer » y ramène
+    return ok;
   };
 
   const setup = (patch: Partial<PageSetup>) => guarded({ type: 'edit', apply: (d) => withPageSetup(d, patch) });
@@ -293,11 +314,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const cmds = useRef({ save, leave, pageSetupDialog, hideDetails, pageNumbers, headerItem });
   cmds.current = { save, leave, pageSetupDialog, hideDetails, pageNumbers, headerItem };
   const selected = selectedCount(state);
+  const layoutKind = layoutScope(state);
   useEffect(() => {
     const tools: CommandHandlers = Object.fromEntries(Object.entries(TOOL_COMMANDS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })]));
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
+      ...layoutCommands(() => live.current.state, guarded),
       ...clipboardCommands(() => live.current.state, guarded, () => clipContext(liveHost.current, t)),
       ...tools,
       save: async () => { await cmds.current.save(); },
@@ -316,13 +339,15 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       title: () => cmds.current.headerItem('title'),
       dateTime: () => cmds.current.headerItem('dateTime'),
     });
-    const offGuard = registerModeGuard(tab.id, (reason) => cmds.current.leave(reason));
+    const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, selected, guarded, totalKey]);   // setup ne lit que guarded
+  }, [tab.id, selected, layoutKind, guarded, totalKey]);   // setup ne lit que guarded
 
   // boutons enfoncés : orientation, volet Regrouper, trier et total affiché, Détail masqué
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));   // Coller grisé sinon
-  const states = JSON.stringify({ ...reportDesignStates(state.doc, grouping), paste: { enabled: pasteable } });
+  // L3 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte) ; le volet Regrouper est
+  // masqué en mode Page, son bouton n'y est donc pas enfoncé
+  const states = JSON.stringify({ ...reportDesignStates(state.doc, grouping && tab.mode !== 'layout'), paste: { enabled: pasteable }, viewLayout: { enabled: allowsLayout(state.doc, 'report') } });
   useEffect(() => registerCommandStates(tab.id, JSON.parse(states)), [tab.id, states]);
 
   // un champ de la Liste des champs : au point de dépôt, ou sous le contrôle le plus bas du Détail
@@ -343,6 +368,17 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   useEffect(() => { if (readOnly) setPageMenu(null); }, [readOnly]);
   useEffect(() => setTotalsMenu(false), [totalKey, readOnly]);   // une autre sélection : le menu ne vaut plus
 
+  // L3, mode Page : le même concepteur (état du réducteur, modifications, annulations) sur le flux mis en page avec les données ;
+  // ni événement ni macro (useReportFlow), rien n'est écrit tant que l'utilisateur ne modifie rien
+  const layout = tab.mode === 'layout';
+  const view = reportView(tab.mode);
+  const { flow, busy: flowBusy } = useReportFlow(state.doc, layout && phase === 'ready');
+  useEffect(() => { if (layout) setTool({ kind: null, locked: false }); }, [layout]);   // l'outil ne passe pas d'un mode à l'autre
+  const noticeKey = layoutNoticeKey(flow.notice, !!sourceError);
+  const canvas = view.canvas === 'flow'
+    ? (c: CanvasProps) => <ReportLayoutCanvas {...c} flow={flow} busy={flowBusy} notice={noticeKey} />
+    : undefined;
+
   if (typeof phase === 'object') {
     return (
       <div className="doc-empty muted" role="alert" data-testid="report-design-error">
@@ -355,15 +391,16 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   return (
     <div className="rd" ref={root} data-testid="report-design">
       {sourceError && <div className="rd-banner" role="status" data-testid="report-source-error">{sourceError}</div>}
+      {/* en Page : pas de surface de section, donc ni menu contextuel de section ni dépôt de la Liste des champs (Global Constraints) */}
       <Designer state={state} dispatch={guarded} host={host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} />
-      {grouping && <GroupingPane doc={state.doc} fields={fields} display={display} readOnly={readOnly} dispatch={guarded} onClose={closeGrouping} />}
+        side={fieldList && !layout && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} canvas={canvas} />
+      {grouping && !layout && <GroupingPane doc={state.doc} fields={fields} display={display} readOnly={readOnly} dispatch={guarded} onClose={closeGrouping} />}
       <ReportIssues issues={issues} />
       {menu && <ArrangePopup menu={menu} state={state} dispatch={guarded} onClose={closeMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={guarded} docKind="report" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       {pageMenu && <PageSetupMenu menu={pageMenu} page={readReport(state.doc, []).page} onClose={closePageMenu}
         onPick={(v) => (v === 'custom' ? void cmds.current.pageSetupDialog() : setup(v))} />}
-      {totalsMenu && totalKey && !readOnly && (
+      {totalsMenu && totalKey && !readOnly && !layout && (
         <RibbonPopup anchor="reportTotals" testId="totals-popup" labelKey="ribbon.cmd.reportTotals" onClose={closeTotals}>
           {TOTAL_FNS.map((fn) => (
             <button key={fn} type="button" role="menuitem" data-testid={`totals-popup-${fn}`} onClick={() => { closeTotals(); total(fn); }}>{t(`report.totals.${fn}`)}</button>

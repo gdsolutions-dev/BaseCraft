@@ -85,3 +85,49 @@ describe('settings', () => {
       .toMatchObject({ openMode: 'exclusive', refreshInterval: 32766, updateRetries: 0, updateRetryMs: 1000 });
   });
 });
+
+describe('O2 settings', () => {
+  it('reads the O2 keys one by one', () => {
+    expect(readSettings({ moveAfterEnter: 'next', arrowKeyBehavior: 'nextCharacter', datasheetFontSize: '11', columnWidth: '2,5cm', gridlinesVertical: false }))
+      .toEqual({ ...DEFAULT_SETTINGS, arrowKeyBehavior: 'nextCharacter', gridlinesVertical: false });
+    for (const n of [0, 128, 10.5]) expect(readSettings({ datasheetFontSize: n }).datasheetFontSize).toBe(11);
+    for (const n of [450, 0, 1000]) expect(readSettings({ datasheetFontWeight: n }).datasheetFontWeight).toBe(400);
+    for (const n of [299, 31681]) expect(readSettings({ columnWidth: n }).columnWidth).toBe(1417);
+    expect(readSettings({ columnWidth: 300, datasheetFontWeight: 900 })).toMatchObject({ columnWidth: 300, datasheetFontWeight: 900 });
+  });
+  it('the O2 defaults', () => {
+    expect(DEFAULT_SETTINGS).toMatchObject({
+      moveAfterEnter: 'nextField', enterFieldBehavior: 'selectAll', arrowKeyBehavior: 'nextField', continuousArrowKeys: 'none', cursorStopsAtEnds: false,
+      findReplaceDefault: 'fast', fourDigitYearAll: false, gridlinesHorizontal: true, gridlinesVertical: true, columnWidth: 1417,
+      datasheetFontSize: 11, datasheetFontWeight: 400, datasheetFontUnderline: false, datasheetFontItalic: false,
+    });
+  });
+  it('every enum and boolean key refuses a wrong value', () => {
+    for (const k of ['enterFieldBehavior', 'continuousArrowKeys', 'findReplaceDefault'] as const)
+      expect(readSettings({ [k]: 'bogus' })[k]).toBe(DEFAULT_SETTINGS[k]);
+    for (const k of ['cursorStopsAtEnds', 'fourDigitYearAll', 'gridlinesHorizontal', 'datasheetFontUnderline', 'datasheetFontItalic'] as const)
+      expect(readSettings({ [k]: 'yes' })[k]).toBe(DEFAULT_SETTINGS[k]);
+    expect(readSettings({ moveAfterEnter: 'none', enterFieldBehavior: 'end', continuousArrowKeys: 'leftRight', findReplaceDefault: 'startOfField' }))
+      .toMatchObject({ moveAfterEnter: 'none', enterFieldBehavior: 'end', continuousArrowKeys: 'leftRight', findReplaceDefault: 'startOfField' });
+  });
+  it('reads the O3 keys one by one', () => {
+    expect(readSettings({ defaultFieldType: 'autoNumber', defaultTextSize: '50', defaultNumberSize: 'large', autoIndex: 42,
+      queryFontName: '"; } body { display:none', propertySheetFontSize: 13, selectionBehavior: 'fully', printMarginLeft: 360.5, showTableNames: false }))
+      .toEqual({ ...DEFAULT_SETTINGS, showTableNames: false });
+    for (const n of [0, 256]) expect(readSettings({ defaultTextSize: n }).defaultTextSize).toBe(255);
+    for (const n of [-1, 5671]) expect(readSettings({ printMarginTop: n }).printMarginTop).toBe(360);
+    for (const n of [0, 128]) expect(readSettings({ queryFontSize: n }).queryFontSize).toBe(8);
+    for (const v of ['x'.repeat(256), 'ID\u0007']) expect(readSettings({ autoIndex: v }).autoIndex).toBeNull();
+    for (const v of ['', 'a'.repeat(65), 'A\\B', 'a;b', 'a{b', 'a<b', 'a\u0001']) expect(readSettings({ queryFontName: v }).queryFontName).toBe('Segoe UI');
+    expect(readSettings({ autoIndex: '', defaultFieldType: 'number', queryFontName: 'Liberation Serif', printMarginLeft: 0 }))
+      .toMatchObject({ autoIndex: '', defaultFieldType: 'number', queryFontName: 'Liberation Serif', printMarginLeft: 0 });
+  });
+});
+
+describe('O4 settings', () => {
+  it('reads propertyUpdateOptions', () => {
+    expect(readSettings({}).propertyUpdateOptions).toBe(true);
+    expect(readSettings({ propertyUpdateOptions: 'off' }).propertyUpdateOptions).toBe(true);
+    expect(readSettings({ propertyUpdateOptions: false }).propertyUpdateOptions).toBe(false);
+  });
+});

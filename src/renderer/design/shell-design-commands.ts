@@ -8,9 +8,12 @@ import { autoForm, formLabels, formNames, uniqueFormName } from '../form/form-de
 import { i18n } from '../i18n';
 import { linkTables } from '../links/LinkDialog';
 import { openLinkedTableManager } from '../links/LinkedTableManager';
+import { moveToServer } from '../links/MigrateWizard';
+import { importServerTables, linkServerTables } from '../links/ServerLinkDialog';
 import { splitDatabase } from '../links/SplitDialog';
 import { openSqlView } from '../query/QueryDesignView';
 import { requestFieldList as requestReportFieldList } from '../report/design/ReportDesignView';
+import { printMargins } from '../settings-store';
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { emptyDesign, toSaveRequest, withDefaultPrimaryKey } from '../table-design/design-model';
 import { saveTableInteractive } from '../table-design/save-table';
@@ -36,7 +39,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
       while (taken(`${t('tableFields.newTable')}${n}`)) n++;
       const name = `${t('tableFields.newTable')}${n}`;
       const m = withDefaultPrimaryKey(emptyDesign(), t('designer.defaultIdName'));
-      if (!(await saveTableInteractive(modal, toSaveRequest(m, name, false)))) return;
+      if (!(await saveTableInteractive(modal, s.tabs, dispatch, toSaveRequest(m, name, false)))) return;
       dispatch({ type: 'tableSaved', name });
       dispatch({ type: 'open', kind: 'table', name, mode: 'datasheet' });
     },
@@ -46,9 +49,18 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     linkBaseCraft: async () => { if (await linkTables(modal)) dispatch({ type: 'listsChanged' }); },
     // C2: External Data › Link Access Database (the same dialog, the Access filter first)
     linkAccess: async () => { if (await linkTables(modal, 'access')) dispatch({ type: 'listsChanged' }); },
+    // C4: External Data › PostgreSQL (R18)
+    linkPostgreSql: async () => { if (await linkServerTables(modal, 'postgresql')) dispatch({ type: 'listsChanged' }); },
+    // C5: External Data › SQL Server (R17)
+    linkSqlServer: async () => { if (await linkServerTables(modal, 'sqlserver')) dispatch({ type: 'listsChanged' }); },
+    // C7: External Data › Import › PostgreSQL / SQL Server (R17): the tables copied into local tables
+    importPostgreSql: async () => { if (await importServerTables(modal, 'postgresql')) dispatch({ type: 'listsChanged' }); },
+    importSqlServer: async () => { if (await importServerTables(modal, 'sqlserver')) dispatch({ type: 'listsChanged' }); },
     linkedTableManager: () => openLinkedTableManager(modal, dispatch),
     // C3: Database Tools › Move Data › Split Database; the pane then lists the links
     splitDatabase: () => splitDatabase(modal, closeDocuments, dispatch),
+    // C7: Database Tools › Move Data › To a Server; the pane then lists the links
+    moveToServer: () => moveToServer(modal, closeDocuments, dispatch),
     relationships: () => rawDispatch({ type: 'open', kind: 'relations', name: 'Relations', mode: 'run' }),
     createFormDesign: () => newForm(false),
     // Access opens it in Layout view (later): a new unbound form in Design view, the Field List shown
@@ -77,7 +89,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     createReport: async () => {
       const src = await sourceToCreate('report.pickSourceTitle');
       if (!src) return;
-      const doc = instantReport({ ...src.ref, name: src.name }, await api.sources.describe(src.ref), { lang: formulaLang(i18n.language) });
+      const doc = instantReport({ ...src.ref, name: src.name }, await api.sources.describe(src.ref), { lang: formulaLang(i18n.language), margins: printMargins() });
       const name = uniqueReportName((await api.objects.list('report')).map((o) => o.name), src.name);
       const r = await api.objects.save('report', name, doc, null);
       if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }

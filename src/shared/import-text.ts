@@ -48,7 +48,8 @@ export interface TextPreview {
   columns: number;
   assumedDecimal: boolean; // every sampled number was ambiguous (« 1,250 ») : the region's decimal symbol was assumed
 }
-export interface ImportProgress { done: number; total: number }
+/** `label`: the table being copied (C7 R8); `finishing`: the run past its last row, Stop no longer offered. */
+export interface ImportProgress { done: number; total: number; label?: string; finishing?: boolean; backupPath?: string /* C7: the migration's first event */ }
 export type ImportResult =
   | { ok: true; table: string; imported: number; errors: number; errorTable?: string }
   | { ok: false; reason: 'nameExists' }

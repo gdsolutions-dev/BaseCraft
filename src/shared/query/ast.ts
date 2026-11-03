@@ -1,5 +1,6 @@
 // Query tree (A3), engine-independent. Its expressions are the A2 engine's `Expr`. Pure module.
 // Stored form: the canonical SQL text (`printSql`, Task 2), read back by `parseSql`.
+import type { ServerKind } from '../api';
 import type { Expr } from '../expr/ast';
 import type { FieldType, NumberSize } from '../field-types';
 
@@ -30,5 +31,7 @@ export interface Query { params: ParamDecl[]; body: SelectQuery | UnionQuery | I
 /** A select, union or crosstab query (it has a datasheet), not an action query. */
 export const isSelectBody = ({ body }: Query): boolean => body.k === 'union' || body.k === 'crosstab' || (body.k === 'select' && body.into === undefined);
 /** Definition stored in `bc_objects` for a query; unknown keys are kept. */
-export interface QueryDefinition { formatVersion: '1.0'; sql: string; layout?: QbeLayout; [unknownKey: string]: unknown }
+/** C6 R2, R3: a pass-through's connection (the connector's params, never a password) and Returns Records. */
+export interface PassThroughProps { kind: ServerKind; params: Record<string, unknown>; returnsRecords: boolean }
+export interface QueryDefinition { formatVersion: '1.0' | '2.0'; sql: string; layout?: QbeLayout; passThrough?: PassThroughProps; [unknownKey: string]: unknown }
 export interface QbeLayout { tables: Record<string /* alias */, { x: number; y: number }>; widths?: number[] }

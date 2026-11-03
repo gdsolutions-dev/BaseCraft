@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTable } from '../../src/main/db/schema';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, colLeft } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 const contacts = t('Contacts', [f('N°', 'autoNumber'), f('Tel', 'shortText'), f('Code', 'shortText', { inputMask: '>L<LL', format: '>' }), f('Lot', 'shortText', { inputMask: '99-00' })]);
 // DatasheetView: row selector width, header and row heights, AutoNumber and short text column widths.
-const MARKER = 44, HEADER = 34, ROW = 30, AUTONUMBER = 80, TEXT = 170;
+const HEADER = 34, ROW = 30;
 
 const cell = (page: Page, col: number, row: number) => page.getByTestId(`glide-cell-${col + 1}-${row}`);
 const editor = (page: Page) => page.getByTestId('masked-editor');
@@ -17,7 +17,7 @@ const rowsOf = async (page: Page) =>
   (await page.evaluate(() => (window as any).basecraft.rows.page('Contacts', { offset: 0, limit: 100 }))).rows as { values: unknown[] }[];
 async function clickCell(page: Page, col: number, row: number) {
   const b = (await page.getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + AUTONUMBER + (col - 1) * TEXT + 30, b.y + HEADER + row * ROW + ROW / 2);
+  await page.mouse.click(b.x + colLeft(col) + 30, b.y + HEADER + row * ROW + ROW / 2);
 }
 async function closeEditor(page: Page, key: 'Enter' | 'Tab') {
   await page.keyboard.press(key);
@@ -35,7 +35,7 @@ async function pressChar(page: Page, ch: string, dead = false) {
 
 test('input mask: designer, masked editor, refused entry, case and accents', async () => {
   const base = seedBase('masque', (db) => createTable(db, contacts));
-  const { app, page } = await launchApp({ args: [base], env: FR });
+  const { app, page } = await launchApp({ enterMovesDown: true, args: [base], env: FR });
   try {
     await page.getByTestId('nav-item-Contacts').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -102,14 +102,14 @@ test('input mask: designer, masked editor, refused entry, case and accents', asy
     await expect.poll(async () => (await rowsOf(page)).map((r) => r.values[3])).toEqual(['1 23']);
     await page.keyboard.press('ArrowUp'); // Enter moved down to the new record's row
     await expect(cell(page, 3, 0)).toBeFocused();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(editor(page)).toHaveValue('1 -23');
     await page.keyboard.press('Escape');
 
     // editing a stored value opens the editor prefilled; Backspace clears the slot before the caret
     await clickCell(page, 1, 0);
     await expect(cell(page, 1, 0)).toBeFocused();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('F2');
     await expect(editor(page)).toBeFocused();
     await expect(editor(page)).toHaveValue('06 12 34 56 78');
     await page.keyboard.press('Backspace');

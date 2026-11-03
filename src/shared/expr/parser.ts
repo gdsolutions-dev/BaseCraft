@@ -16,6 +16,8 @@ export interface ParseOptions {
   /** Bare names (ASCII lower case, `asciiLower`) that end the expression: never read as a field (`FROM`, `AS`…). A call
    *  `Left(…)` is still a call. */
   stopWords?: ReadonlySet<string>;
+  /** A criterion only: the names of the fields in reach. A bare word that is one of them is a field; any other is text. Left out: any bare word is a field. */
+  fields?: readonly string[];
   /** Reads `SELECT …` from `toks[pos]` (the SELECT token) and returns the position of the token after it (the closing
    *  parenthesis). Enables `(SELECT …)`, `Exists (SELECT …)` and `x [Not] In (SELECT …)`; without it, subqueryNotAllowed.
    *  Every parseExprAt call made by the hook shares the enclosing expression's MAX_NESTING / MAX_OPERANDS budget. */
@@ -255,6 +257,9 @@ class Parser {
         if (!t.bare && t.v === '') return this.fail();
         const call = t.bare && this.isOp('(', this.peek());
         if (t.bare && !call && this.opts.stopWords?.has(asciiLower(t.v))) return this.fail();
+        // a criterion word alone is text unless it names a field (Paris = "Paris"); a dotted or ! name is never text
+        if (this.crit && t.bare && !call && !this.isOp('!', this.peek()) && !(this.opts.qualified && this.isOp('.', this.peek()))
+          && this.opts.fields && !this.opts.fields.some((f) => f.toLowerCase() === t.v.toLowerCase())) { this.p++; return { k: 'str', v: t.v }; }
         this.p++;
         if (call && asciiLower(t.v) === 'exists' && this.isSelect(this.peek())) return { k: 'sub', mode: 'exists', q: this.subquery() };
         if (call) return this.nested(() => this.call(t));

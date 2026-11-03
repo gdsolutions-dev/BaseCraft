@@ -8,7 +8,7 @@ import { createTable } from '../../src/main/db/schema';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { DesignDoc } from '../../src/shared/design/model';
 import { clients, f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase, seedForm } from './helpers';
+import { launchApp, seedBase, seedForm, pickView, checkView } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const table = t('Clients', [...clients.fields, f('Ville', 'shortText')]);
@@ -50,8 +50,11 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await selected(page, 'formDesign');
     for (const id of ['arrange', 'format']) await expect(page.getByTestId(`ribbon-tab-${id}`)).toBeVisible();
     await expect.poll(() => groups(page)).toEqual(['view', 'themes', 'controls', 'headerFooter', 'tools'].map((g) => `ribbon-group-${g}`));
-    expect(await testIds(page.getByTestId('ribbon-group-view').locator('[data-testid^="cmd-"]'))).toEqual(['cmd-viewForm', 'cmd-viewDatasheet']);
-    await expect(page.getByTestId('cmd-viewForm')).toBeDisabled();   // pas encore enregistré
+    expect(await testIds(page.getByTestId('ribbon-group-view').locator('[data-testid^="cmd-"]'))).toEqual(['cmd-view', 'cmd-viewMenu']);
+    await page.getByTestId('cmd-viewMenu').click();
+    expect(await testIds(page.getByTestId('ribbon-view-menu').locator('[data-testid^="view-item-"]'))).toEqual(['view-item-viewForm', 'view-item-viewDatasheet', 'view-item-viewLayout', 'view-item-viewDesign']);
+    await expect(page.getByTestId('view-item-viewForm')).toBeDisabled();   // pas encore enregistré
+    await page.keyboard.press('Escape');
     expect(await testIds(page.getByTestId('ribbon-group-tools').locator('[data-testid^="cmd-"]')))
       .toEqual(['cmd-addExistingFields', 'cmd-propertySheet', 'cmd-tabOrder', 'cmd-chartSettings', 'cmd-subformInNewWindow', 'cmd-viewCode']);
     await expect(page.getByTestId('ruler-h')).toContainText('15');   // 16 cm de large, en cm
@@ -177,7 +180,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await expect(page.getByTestId('doc-tab-form-Fiche client')).toBeVisible();
     await expect(page.getByTestId('doc-tab-form-Fiche client')).not.toContainText('•');
     await expect(page.getByTestId('nav-item-form-Fiche client')).toBeVisible();
-    await expect(page.getByTestId('cmd-viewForm')).toBeEnabled();
+    await checkView(page, 'viewForm', (v) => expect(v).toBeEnabled());
 
     const saved = await getForm(page, 'Fiche client');
     expect(saved.recordSource).toEqual({ kind: 'table', name: 'Clients' });
@@ -223,7 +226,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     // modifié : vers le mode Formulaire, Non reste en Création ; la fermeture propose Oui/Non/Annuler ; Oui enregistre puis change de mode
     await page.getByTestId('ctl-Nom').press('ArrowRight');
     await expect(page.getByTestId('doc-tab-form-Fiche client')).toContainText('•');
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await expect(page.getByTestId('modal')).toContainText(fr.form.mustSaveFirst.replace('{{name}}', 'Fiche client'));
     await page.getByTestId('modal-btn-no').click();
     await expect(page.getByTestId('design-canvas')).toBeVisible();
@@ -232,7 +235,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await page.getByTestId('modal-btn-cancel').click();
     await expect(page.getByTestId('doc-tab-form-Fiche client')).toBeVisible();
     // Mode Formulaire : la vue d'exécution
-    await page.getByTestId('cmd-viewForm').click();
+    await pickView(page, 'viewForm');
     await page.getByTestId('modal-btn-yes').click();
     await expect(page.getByTestId('form-run')).toBeVisible();
     await expect(page.getByTestId('ribbon-tab-formDesign')).toHaveCount(0);
@@ -276,7 +279,7 @@ test('the « … » of Record Source asks, then opens the Query Builder in a mod
     await builder.getByTestId('qbe-field-Clients-Ville').dblclick();
     await builder.getByTestId('qbe-cell-sort-0').selectOption('asc');
     // SQL View and back; Run shows the datasheet in the tab, Design View comes back to the grid
-    await page.getByTestId('cmd-viewSql').click();
+    await pickView(page, 'viewSql');
     await expect(builder.getByTestId('query-sql')).toHaveValue(/^SELECT \[Clients\]\.\[Nom\], \[Clients\]\.\[Ville\]/);
     await page.getByTestId('status-view-design').click();
     await page.getByTestId('cmd-runQuery').click();

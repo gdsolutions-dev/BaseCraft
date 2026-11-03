@@ -6,10 +6,12 @@ import { DatasheetView } from '../datasheet/DatasheetView';
 import { FormRunView } from '../form/FormRunView';
 import type { DocTab } from '../state/app-state';
 import { QueryRunView } from '../query/QueryRunView';
+import { unsavedRunSql } from '../query/unsaved-run';
 import type { DocViewProps } from './DocumentTabs';
+import type { AppDispatch } from './nav-menu';
 import { ReportPreviewView } from '../report/ReportPreviewView';
 
-type ViewMode = 'design' | 'run';
+type ViewMode = 'design' | 'run' | 'layout' | 'state';
 // `var`, créé au premier usage : design/entry.ts inscrit ses vues par un cycle d'imports (ce module → DatasheetView → design/entry)
 // qui peut l'évaluer avant le corps de ce module ; un `const` serait alors encore inaccessible (TDZ), quel que soit l'ordre des imports.
 var views: Map<string, ComponentType<DocViewProps>> | undefined;
@@ -32,9 +34,22 @@ export function UnavailableView() {
 }
 
 export function DocumentView(p: DocViewProps) {
-  const mode: ViewMode = p.tab.mode === 'design' ? 'design' : 'run';
+  const mode: ViewMode = p.tab.mode === 'datasheet' ? 'run' : p.tab.mode;
   const View = views?.get(`${p.tab.kind}:${mode}`) ?? UnavailableView;
+  const Design = p.tab.kind === 'query' ? views?.get('query:design') : undefined;
+  if (Design) { // a new or modified query runs as it stands, unsaved (Access): its design stays mounted behind the datasheet, which a close sends back to it
+    const run = mode === 'run';
+    const keep = !!p.tab.isNew || unsavedRunSql.has(p.tab.id); // the datasheet clears the tab's dirty flag: the stash tells
+    const back: AppDispatch = (a) => (a.type === 'close' && a.id === p.tab.id ? p.dispatch({ type: 'setMode', id: p.tab.id, mode: 'design' }) : p.dispatch(a));
+    return (
+      <>
+        {(!run || keep) && <section className="doc" hidden={run}><Design {...p} active={p.active && !run} /></section>}
+        {run && <section className="doc">{keep ? <QueryRunView {...p} dispatch={back} sql={unsavedRunSql.get(p.tab.id)} /> : <View {...p} />}</section>}
+      </>
+    );
+  }
   return <View {...p} />;
 }
 
 registerDocumentView('report', 'run', ReportPreviewView);
+registerDocumentView('report', 'state', ReportPreviewView);   // Mode État: the same component, its tab mode tells it to draw every page

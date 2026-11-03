@@ -70,7 +70,7 @@ describe('a data file opened directly (C3 R2–R6)', () => {
     expect(existsSync(`${data}.lock`)).toBe(false);
     expect(readdirSync(`${data}.users`).sort()).toEqual(['a.lock', 'b.lock']);
     expect((await s1.insert('Clients', { Nom: 'Petit' })).ok).toBe(true);
-    expect(s2.page('Clients', { offset: 0, limit: 10 }).rows).toHaveLength(5);
+    expect((await s2.page('Clients', { offset: 0, limit: 10 })).rows).toHaveLength(5);
     expect(s1.state.linkedLocks).toEqual([presenceEntry(data, 'a')]);
   });
 
@@ -150,7 +150,7 @@ describe('a data file opened directly (C3 R2–R6)', () => {
     expect(open(data, deps('d')).state).toMatchObject({ readOnly: true, readOnlyReason: 'heldByOther' });
   });
 
-  it('a data file in a synchronized folder is refused shared mode', () => {
+  it('a data file in a synchronized folder is refused shared mode', async () => {
     const syncedDir = join(dir, 'OneDrive - Contoso');
     fs.mkdirSync(syncedDir);
     const syncedData = join(syncedDir, 'data.basecraft');
@@ -158,7 +158,7 @@ describe('a data file opened directly (C3 R2–R6)', () => {
     const s = open(syncedData, { ...deps('c'), probe: { ...probe, env: { OneDrive: syncedDir } } });
     expect(s.state).toMatchObject({ readOnly: true, readOnlyReason: 'syncedFolder', dataFile: true });
     expect(existsSync(`${syncedData}.users`)).toBe(false);
-    expect(s.count('Clients')).toBe(4);
+    expect(await s.count('Clients')).toBe(4);
   });
 
   it('a Linux client opens a data file on a network location read-only, with no entry', () => { // G1

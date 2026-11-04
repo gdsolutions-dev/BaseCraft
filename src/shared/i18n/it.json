@@ -454,6 +454,7 @@
     "forms": "Maschere",
     "reports": "Report",
     "macros": "Macro",
+    "modules": "Moduli",
     "renameObjectTitle": "Rinomina oggetto",
     "deleteObjectTitle": "Elimina oggetto",
     "deleteObjectMessage": "Eliminare “{{name}}”? L'operazione non può essere annullata.",
@@ -535,7 +536,10 @@
       "ok": "OK",
       "yes": "Sì",
       "no": "No",
-      "cancel": "Annulla"
+      "cancel": "Annulla",
+      "retry": "Riprova",
+      "abort": "Interrompi",
+      "ignore": "Ignora"
     },
     "error": {
       "busy": "Il file di dati è occupato da un'altra postazione. Riprovare tra un istante.",
@@ -2301,6 +2305,15 @@
       "migrateOneNull": "Il campo {{field}} contiene più valori Null: SQL Server ne accetta uno solo nell'indice senza duplicati richiesto dalla relazione {{relation}}."
     }
   },
+  "module": {
+    "newName": "Modulo{{n}}",
+    "nameLabel": "Nome del modulo",
+    "badName": "Il nome di un modulo deve essere un nome Python: lettere, cifre e _, non iniziare con una cifra e non essere una parola riservata di Python.",
+    "syntaxError": "Errore di sintassi, riga {{line}}: {{message}}",
+    "exportsUnavailable": "Il modulo è stato salvato, ma non è stato possibile leggere le sue funzioni: Python non si è avviato.",
+    "saveFirstTitle": "Salva modulo",
+    "saveFirst": "Salvare le modifiche al modulo «{{name}}»?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2926,5 +2939,22 @@
     "title": "Aggiorna proprietà",
     "message": "Aggiornare {{prop}} ovunque venga utilizzato {{field}}?",
     "target": "{{kind}} {{name}} › {{control}} («{{current}}»)"
+  },
+  "python": {
+    "running": "Python è in esecuzione… Ctrl+Pausa per interrompere.",
+    "interrupt": "Interrompi",
+    "restarted": "Python non rispondeva più ed è stato riavviato. Lo stato dei moduli è perso.",
+    "contentDisabled": "Il codice Python è bloccato finché il contenuto non è abilitato.",
+    "loading": "Caricamento di Python…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Immediata",
+    "placeholder": "Digitare un'istruzione Python o ?espressione",
+    "errorAt": "(Modulo {{module}}, riga {{line}})",
+    "splitter": "Ridimensiona la finestra Immediata"
   }
 }

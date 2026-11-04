@@ -186,7 +186,7 @@ export interface PropertyTarget { kind: 'form' | 'report'; name: string; control
 export interface PropertyUpdate { table: string; field: string; prop: 'Format' | 'DecimalPlaces'; value: string; targets: PropertyTarget[] }
 export type PropertyItem = { kind: 'form' | 'report'; name: string; control: string; prop: PropertyUpdate['prop']; value: string };
 export type SaveTableResult = { ok: true; autoCorrect?: AutoCorrectReport; propertyUpdates?: PropertyUpdate[] } | Exclude<AlterResult, { ok: true }> | { ok: false; reason: 'nameExists' | 'readOnly' };
-export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' }
+export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' | 'badModuleName' }
   | { ok: false; reason: 'external'; table: string } // a table changed outside BaseCraft: it is never rebuilt
   | { ok: false; reason: 'referenced'; table: string } // `table` has a FOREIGN KEY (not a relation) to this table
   | { ok: false; reason: 'danglingKey'; table: string } // `table` has a FOREIGN KEY to a dropped table of the new name
@@ -366,6 +366,8 @@ export interface AppInfo {
 export interface LicenseEntry { name: string; version: string; license: string }
 
 export interface BasecraftApi {
+  /** True in an e2e run (never in a packaged app): the page may expose test hooks. */
+  e2e: boolean;
   app: {
     getSettings(): Promise<SettingsView>;
     setLocale(l: AppSettings['locale']): Promise<void>;

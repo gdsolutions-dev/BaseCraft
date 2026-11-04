@@ -454,6 +454,7 @@
     "forms": "Formularze",
     "reports": "Raporty",
     "macros": "Makra",
+    "modules": "Moduły",
     "renameObjectTitle": "Zmiana nazwy obiektu",
     "deleteObjectTitle": "Usuwanie obiektu",
     "deleteObjectMessage": "Usunąć „{{name}}”? Tej operacji nie można cofnąć.",
@@ -535,7 +536,10 @@
       "ok": "OK",
       "yes": "Tak",
       "no": "Nie",
-      "cancel": "Anuluj"
+      "cancel": "Anuluj",
+      "retry": "Ponów",
+      "abort": "Przerwij",
+      "ignore": "Ignoruj"
     },
     "error": {
       "busy": "Plik danych jest zajęty przez inną stację roboczą. Spróbuj ponownie za chwilę.",
@@ -2324,6 +2328,15 @@
       "migrateOneNull": "Pole {{field}} zawiera kilka wartości Null: SQL Server przyjmuje tylko jedną w indeksie bez duplikatów wymaganym przez relację {{relation}}."
     }
   },
+  "module": {
+    "newName": "Moduł{{n}}",
+    "nameLabel": "Nazwa modułu",
+    "badName": "Nazwa modułu musi być nazwą Pythona: litery, cyfry i _, nie może zaczynać się od cyfry ani być słowem zastrzeżonym Pythona.",
+    "syntaxError": "Błąd składni, wiersz {{line}}: {{message}}",
+    "exportsUnavailable": "Moduł został zapisany, ale nie udało się odczytać jego funkcji: Python nie uruchomił się.",
+    "saveFirstTitle": "Zapisz moduł",
+    "saveFirst": "Czy zapisać zmiany w module „{{name}}”?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2949,5 +2962,22 @@
     "title": "Aktualizuj właściwości",
     "message": "Zaktualizować {{prop}} wszędzie tam, gdzie używane jest {{field}}?",
     "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
+  },
+  "python": {
+    "running": "Python jest uruchomiony… Ctrl+Break, aby przerwać.",
+    "interrupt": "Przerwij",
+    "restarted": "Python przestał odpowiadać i został uruchomiony ponownie. Stan modułów został utracony.",
+    "contentDisabled": "Kod Python jest zablokowany do czasu włączenia zawartości.",
+    "loading": "Ładowanie Pythona…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Okno poleceń",
+    "placeholder": "Wpisz instrukcję Pythona lub ?wyrażenie",
+    "errorAt": "(Moduł {{module}}, wiersz {{line}})",
+    "splitter": "Zmień rozmiar okna poleceń"
   }
 }

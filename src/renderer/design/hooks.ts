@@ -3,6 +3,7 @@ import type { ObjectSummary, TableSummary } from '../../shared/api';
 import type { RecordSourceRef } from '../../shared/record-source';
 import type { EditListDialog } from '../datasheet/EditListDialog';
 import type { ImportTextWizard } from '../import-text/ImportTextWizard';
+import type { ImmediateWindow } from '../python/ImmediateWindow';
 import type { CurrentDatabaseOptions } from '../shell/CurrentDatabaseOptions';
 import type { ModalApi } from '../shell/Modal';
 import type { AppDispatch } from '../shell/nav-menu';
@@ -28,6 +29,8 @@ export interface DesignHooks {
   setFormat: typeof setFormat;
   editValidation: typeof editValidation;
   EditListDialog: typeof EditListDialog;
+  /** D1 R12: the Immediate window (bottom pane); the shell keeps it mounted once opened. */
+  ImmediateWindow: typeof ImmediateWindow;
 }
 
 /** The App closures those handlers read — no more. */
@@ -42,7 +45,10 @@ export interface DesignShellEnv {
   newQueryName(): string;
   newReportName(): string;
   newMacroName(): string;
+  newModuleName(): string;
   setImporting(v: { source?: 'excel' }): void;
   /** Every document closed, each asked about its changes (as before Compact); false: one stayed. */
   closeDocuments(): Promise<boolean>;
+  /** pythonEditor, Ctrl+G: shows or hides the Immediate window and focuses its input. */
+  toggleImmediate(): void;
 }

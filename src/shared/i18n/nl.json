@@ -454,6 +454,7 @@
     "forms": "Formulieren",
     "reports": "Rapporten",
     "macros": "Macro's",
+    "modules": "Modules",
     "renameObjectTitle": "Object hernoemen",
     "deleteObjectTitle": "Object verwijderen",
     "deleteObjectMessage": "“{{name}}” verwijderen? Dit kan niet ongedaan worden gemaakt.",
@@ -535,7 +536,10 @@
       "ok": "OK",
       "yes": "Ja",
       "no": "Nee",
-      "cancel": "Annuleren"
+      "cancel": "Annuleren",
+      "retry": "Opnieuw proberen",
+      "abort": "Afbreken",
+      "ignore": "Negeren"
     },
     "error": {
       "busy": "Het gegevensbestand is bezet door een andere werkplek. Probeer het zo meteen opnieuw.",
@@ -2278,6 +2282,15 @@
       "migrateOneNull": "Het veld {{field}} bevat meerdere Null-waarden: SQL Server staat er maar één toe in de index zonder duplicaten die de relatie {{relation}} vereist."
     }
   },
+  "module": {
+    "newName": "Module{{n}}",
+    "nameLabel": "Modulenaam",
+    "badName": "Een modulenaam moet een Python-naam zijn: letters, cijfers en _, niet beginnend met een cijfer en geen gereserveerd Python-woord.",
+    "syntaxError": "Syntaxisfout, regel {{line}}: {{message}}",
+    "exportsUnavailable": "De module is opgeslagen, maar de functies ervan konden niet worden gelezen: Python is niet gestart.",
+    "saveFirstTitle": "Module opslaan",
+    "saveFirst": "Wilt u de wijzigingen in de module '{{name}}' opslaan?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2903,5 +2916,22 @@
     "title": "Eigenschappen bijwerken",
     "message": "{{prop}} bijwerken overal waar {{field}} wordt gebruikt?",
     "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
+  },
+  "python": {
+    "running": "Python wordt uitgevoerd… Ctrl+Break om te onderbreken.",
+    "interrupt": "Onderbreken",
+    "restarted": "Python reageerde niet meer en is opnieuw gestart. De status van de modules is verloren.",
+    "contentDisabled": "Python-code is geblokkeerd totdat de inhoud is ingeschakeld.",
+    "loading": "Python laden…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Direct",
+    "placeholder": "Typ een Python-instructie of ?expressie",
+    "errorAt": "(Module {{module}}, regel {{line}})",
+    "splitter": "Grootte van het Direct-venster wijzigen"
   }
 }

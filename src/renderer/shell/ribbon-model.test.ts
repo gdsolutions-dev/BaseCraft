@@ -288,13 +288,13 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect((fr.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     expect((en.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, 'D', 'D']);   // crosstabQuery delivered in B4 Task 8
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, 'D']);   // crosstabQuery delivered in B4 Task 8, createModule in D1 Task 7
   });
 
   it('B3 leaves no B3 placeholder', () => {
     expect(commands.filter((c) => c.planned === 'B3').map((c) => c.id)).toEqual([]);
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, 'D', 'D']);   // crosstabQuery delivered in B4 Task 8
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, 'D']);   // crosstabQuery delivered in B4 Task 8, createModule in D1 Task 7
   });
 
   it('B4 leaves no B4 placeholder', () => {
@@ -742,6 +742,10 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(macros.map((c) => c.id)).toEqual(['createMacro', 'createModule', 'pythonEditor']);
     expect(cmd.planned).toBeUndefined(); expect(cmd.enabled(ctx({}))).toBe(true);
     expect(cmd.enabled(ctx({ readOnly: true }))).toBe(false); expect(cmd.enabled(ctx({ hasBase: false }))).toBe(false);
+    const py = macros.find((c) => c.id === 'pythonEditor')!;   // D1 Task 9: the Immediate window
+    expect(py.planned).toBeUndefined(); expect(py.enabled(ctx({}))).toBe(true); expect(py.enabled(ctx({ hasBase: false }))).toBe(false);
+    const mod = macros.find((c) => c.id === 'createModule')!;   // D1 Task 7
+    expect(mod.planned).toBeUndefined(); expect(mod.enabled(ctx({}))).toBe(true); expect(mod.enabled(ctx({ readOnly: true }))).toBe(false);
   });
 
   it('Create › Form Design and the Form Design tools are delivered (A4); the tools open read-only too', () => {

@@ -452,6 +452,7 @@
     "forms": "Formulaires",
     "reports": "États",
     "macros": "Macros",
+    "modules": "Modules",
     "renameObjectTitle": "Renommer l'objet",
     "deleteObjectTitle": "Supprimer l'objet",
     "deleteObjectMessage": "Supprimer « {{name}} » ? Cette opération est irréversible.",
@@ -528,7 +529,10 @@
       "ok": "OK",
       "yes": "Oui",
       "no": "Non",
-      "cancel": "Annuler"
+      "cancel": "Annuler",
+      "retry": "Réessayer",
+      "abort": "Abandonner",
+      "ignore": "Ignorer"
     },
     "error": {
       "busy": "Le fichier de données est occupé par un autre poste. Réessayez dans un instant.",
@@ -2247,6 +2251,15 @@
       "migrateOneNull": "Le champ {{field}} contient plusieurs valeurs Null : SQL Server n'en accepte qu'une dans l'index sans doublons qu'exige la relation {{relation}}."
     }
   },
+  "module": {
+    "newName": "Module{{n}}",
+    "nameLabel": "Nom du module",
+    "badName": "Un nom de module doit être un nom Python : lettres, chiffres et _, sans chiffre au début, et pas un mot réservé de Python.",
+    "syntaxError": "Erreur de syntaxe, ligne {{line}} : {{message}}",
+    "exportsUnavailable": "Le module est enregistré, mais ses fonctions n'ont pas pu être lues : Python n'a pas démarré.",
+    "saveFirstTitle": "Enregistrer le module",
+    "saveFirst": "Enregistrer les modifications du module « {{name}} » ?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2781,5 +2794,22 @@
     "title": "Mettre à jour les propriétés",
     "message": "Mettre à jour {{prop}} partout où {{field}} est utilisé ?",
     "target": "{{kind}} {{name}} › {{control}} (« {{current}} »)"
+  },
+  "python": {
+    "running": "Exécution de Python… Ctrl+Pause pour interrompre.",
+    "interrupt": "Interrompre",
+    "restarted": "Python ne répondait plus : il a été redémarré. L'état des modules est perdu.",
+    "contentDisabled": "Le code Python est bloqué tant que le contenu n'est pas activé.",
+    "loading": "Chargement de Python…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Exécution",
+    "placeholder": "Tapez une instruction Python, ou ?expression",
+    "errorAt": "(Module {{module}}, ligne {{line}})",
+    "splitter": "Redimensionner la fenêtre Exécution"
   }
 }

@@ -5,6 +5,7 @@ import { readReport } from '../../../shared/report/model';
 import { addGroup, addSort, addTotal, moveGroup, orderKind, removeGroup, setGroup } from './grouping-model';
 import { blankReport, removesControls, sectionOrder } from './report-sections';
 import { readLayouts } from '../../../shared/design/layout';
+import { instantReport } from '../../../shared/report/instant';
 import { createLayout, membersOf } from '../../../shared/design/layout-edit';
 import { designerReducer, initDesigner } from '../../designer/designer-model';
 
@@ -83,6 +84,29 @@ describe('grouping model (Group, Sort and Total pane)', () => {
     const [a, b] = footer.controls;
     expect(b!.top).toBeGreaterThanOrEqual(a!.top + a!.height);
     expect(footer.height).toBeGreaterThanOrEqual(b!.top + b!.height);
+  });
+});
+
+describe('addTotal in a Tabular layout column', () => {
+  const MONTANT = FACTURES_FIELDS[4]!;
+  const info = { fields: FACTURES_FIELDS, updatable: true, parameters: [] };
+  const grouped = () => setGroup(addGroup(instantReport({ kind: 'table', name: 'Factures' }, info, { lang: 'fr' }), 'Client'), 0, { footer: true });
+  const cellOf = (d: DesignDoc, n: string) => { const l = readLayouts(d)[0]!; const c = l.cells.find((x) => x.control === n)!; return [l.rows[c.row]!.section, c.col]; };
+  const rowsIn = (d: DesignDoc, sec: string) => readLayouts(d)[0]!.rows.filter((r) => r.section === sec).length;
+  it('each footer total joins the column of the member, once per fn', () => {
+    const d = addTotal(grouped(), MONTANT, 'Avg', 3000, 1500, 'Montant');
+    const avg = controlsWithSource(d, '=Avg([Montant])');
+    expect(avg.map((c) => cellOf(d, c.name))).toEqual([['groupFooter:0', 4], ['reportFooter', 4]]);
+    expect(avg.every((c) => c.props.LayoutID === readLayouts(d)[0]!.id)).toBe(true);
+    expect(addTotal(d, MONTANT, 'Avg', 3000, 1500, 'Montant')).toBe(d);
+    const e = addTotal(d, MONTANT, 'Max', 3000, 1500, 'Montant');
+    expect([rowsIn(d, 'groupFooter:0'), rowsIn(e, 'groupFooter:0')]).toEqual([1, 2]);
+    expect([rowsIn(d, 'reportFooter'), rowsIn(e, 'reportFooter')]).toEqual([2, 3]);
+  });
+  it('a free member or none: placed as before', () => {
+    const d = addTotal(grouped(), MONTANT, 'Avg', 3000, 1500);
+    expect(controlsWithSource(d, '=Avg([Montant])').every((c) => !('LayoutID' in c.props))).toBe(true);
+    expect(addTotal(blank, MONTANT, 'Sum', 3000, 1500, 'Inconnu')).toEqual(addTotal(blank, MONTANT, 'Sum', 3000, 1500));
   });
 });
 

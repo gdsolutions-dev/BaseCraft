@@ -22,5 +22,6 @@ export const DESIGNER_MODULES: readonly string[] = [
   `${R}shell/CurrentDatabaseOptions.tsx`,
   `${R}links/LinkDialog.tsx`, `${R}links/LinkedTableManager.tsx`, `${R}links/SplitDialog.tsx`, `${R}links/ServerLinkDialog.tsx`,
   `${R}links/MigrateWizard.tsx`, `${R}links/migrate-report.ts`,
+  `${R}python/ImmediateWindow.tsx`, `${R}python/ModuleEditorView.tsx`, `${R}python/module-menu.ts`,
   `${R}design/entry.ts`, `${R}design/shell-design-commands.ts`,
 ];

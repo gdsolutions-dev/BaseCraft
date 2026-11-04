@@ -1,6 +1,6 @@
 {
   "name": "basecraft",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Desktop database application in the spirit of Microsoft Access",
   "author": "SARL IN SET <info@in-set.com>",
@@ -14,7 +14,7 @@
     "files": ["out/**/*", "!**/node_modules/**"],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": { "buildResources": "build" },
-    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }],
+    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }, { "from": "build/python", "to": "python" }],
     "fileAssociations": [{ "ext": "basecraft", "name": "BaseCraft database", "role": "Editor", "rank": "Owner", "mimeType": "application/x-basecraft" }],
     "win": { "target": ["nsis", "zip"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
@@ -60,8 +60,13 @@
     "bench": "vitest bench --run --configLoader runner --reporter=verbose"
   },
   "dependencies": {
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
     "@fontsource-variable/inter": "5.3.0",
     "@glideapps/glide-data-grid": "6.0.3",
+    "codemirror": "6.0.2",
     "exceljs": "4.4.0",
     "i18next": "26.5.4",
     "lodash": "4.18.1",
@@ -85,6 +90,7 @@
     "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "electron-vite": "6.0.0",
+    "pyodide": "314.0.7",
     "typescript": "6.0.3",
     "vite": "8.3.5",
     "vitest": "5.0.5"

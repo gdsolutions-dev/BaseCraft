@@ -97,14 +97,24 @@ describe('instantReport', () => {
     expect(d.sections[4]!.controls.map((c) => [c.left, c.props.ControlSource])).toEqual([[0, '=Sum([Montant])']]);
   });
 
-  it('is one Tabular layout: labels in the Page Header, boxes in the Detail, totals stay free in the Report Footer', () => {
+  it('is one Tabular layout: labels in the Page Header, boxes in the Detail, totals in a Report Footer row', () => {
     const d = instantReport(src, info, { lang: 'fr' }), ls = readLayouts(d);
-    expect(ls).toHaveLength(1); expect(ls[0]).toMatchObject({ kind: 'tabular', rows: [{ section: 'pageHeader' }, { section: 'detail' }] });
+    expect(ls).toHaveLength(1); expect(ls[0]).toMatchObject({ kind: 'tabular', rows: [{ section: 'pageHeader' }, { section: 'detail' }, { section: 'reportFooter' }] });
     const names = ls[0]!.cells.flatMap((c) => (c.control ? [c.control] : [])).sort();
-    expect(names).toEqual([...d.sections[1]!.controls, ...d.sections[2]!.controls].map((c) => c.name).sort());
+    expect(names).toEqual([...d.sections[1]!.controls, ...d.sections[2]!.controls, ...d.sections[4]!.controls].map((c) => c.name).sort());
     expect(reflow(d)).toBe(d);
-    expect(d.sections[4]!.controls.every((c) => !('LayoutID' in c.props))).toBe(true);
+    expect(d.sections[4]!.controls.every((c) => c.props.LayoutID === ls[0]!.id)).toBe(true);
     expect(d.sections[1]!.controls.map((c) => c.left)).toEqual(d.sections[2]!.controls.map((c) => c.left));
+  });
+
+  it('totals are cells of the footer row in their box column, positions unchanged', () => {
+    const d = instantReport(src, info, { lang: 'fr' }), l = readLayouts(d)[0]!;
+    const col = (n: string) => l.cells.find((c) => c.control === n)!.col, box = (i: number) => d.sections[2]!.controls[i]!;
+    const [nombre, somme] = d.sections[4]!.controls;
+    expect(nombre).toMatchObject({ name: 'Nombre', left: 0, top: 57, height: 340, width: box(0).width });
+    expect(somme).toMatchObject({ name: 'Somme_Montant', left: box(4).left, top: 57, height: 340, width: box(4).width });
+    expect([col('Nombre'), col('Somme_Montant')]).toEqual([0, 4]);
+    expect(l.cells.filter((c) => c.row === 2 && c.control).length).toBe(2);
   });
 
   it('no field: no layout, no crash', () => {

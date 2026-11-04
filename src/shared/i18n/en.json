@@ -452,6 +452,7 @@
     "forms": "Forms",
     "reports": "Reports",
     "macros": "Macros",
+    "modules": "Modules",
     "renameObjectTitle": "Rename object",
     "deleteObjectTitle": "Delete object",
     "deleteObjectMessage": "Delete “{{name}}”? This cannot be undone.",
@@ -528,7 +529,10 @@
       "ok": "OK",
       "yes": "Yes",
       "no": "No",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "abort": "Abort",
+      "ignore": "Ignore"
     },
     "error": {
       "busy": "The data file is busy on another workstation. Try again in a moment.",
@@ -2247,6 +2251,15 @@
       "migrateOneNull": "The field {{field}} holds several Null values: SQL Server accepts only one in the no-duplicates index the relationship {{relation}} requires."
     }
   },
+  "module": {
+    "newName": "Module{{n}}",
+    "nameLabel": "Module Name",
+    "badName": "A module name must be a Python name: letters, digits and _, not starting with a digit, and not a Python keyword.",
+    "syntaxError": "Syntax error, line {{line}}: {{message}}",
+    "exportsUnavailable": "The module was saved, but its functions could not be read: Python did not start.",
+    "saveFirstTitle": "Save Module",
+    "saveFirst": "Do you want to save changes to the module '{{name}}'?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2781,5 +2794,22 @@
     "title": "Update Properties",
     "message": "Update {{prop}} everywhere {{field}} is used?",
     "target": "{{kind}} {{name}} › {{control}} (“{{current}}”)"
+  },
+  "python": {
+    "running": "Python is running… Ctrl+Break to interrupt.",
+    "interrupt": "Interrupt",
+    "restarted": "Python stopped responding and was restarted. Module state is lost.",
+    "contentDisabled": "Python code is blocked until the content is enabled.",
+    "loading": "Loading Python…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Immediate",
+    "placeholder": "Type a Python statement, or ?expression",
+    "errorAt": "(Module {{module}}, line {{line}})",
+    "splitter": "Resize the Immediate window"
   }
 }

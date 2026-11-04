@@ -10,6 +10,7 @@ ipcRenderer.on(CH.closeRequested, () => {
 });
 
 const api: BasecraftApi = {
+  e2e: process.argv.includes('--bc-e2e'),
   app: {
     getSettings: () => ipcRenderer.invoke(CH.getSettings),
     setLocale: (l) => ipcRenderer.invoke(CH.setLocale, l),

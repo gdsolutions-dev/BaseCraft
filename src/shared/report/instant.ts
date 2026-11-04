@@ -1,6 +1,6 @@
 // État instantané (AutoReport d'Access) : un état tabulaire sur toutes les colonnes d'une table ou d'une requête. Module pur.
 // Aucune valeur par défaut écrite à la main (C5) : bordures, fonds et polices viennent du catalogue (defaultFor(…, 'report')).
-import { createLayout } from '../design/layout-edit';
+import { createLayout, joinColumn } from '../design/layout-edit';
 import type { ControlDef, DesignDoc, SectionDef } from '../design/model';
 import { sameName, type FieldType } from '../field-types';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../record-source';
@@ -54,8 +54,8 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
   const page = opts.lang === 'fr' ? '="Page " & [Page] & " sur " & [Pages]' : '="Page " & [Page] & " of " & [Pages]';
   const pageNo = ctl('textBox', 'Numéro_Page', 0, 57, width, 340, { ControlSource: page, TextAlign: 'right' });
   // A Currency first column shows its sum rather than the count (one control per place).
-  const totals = info.fields.flatMap((f, i) => f.type === 'currency' ? [ctl('textBox', `Somme_${f.name}`, lefts[i]!, 57, widths[i]!, 340, { ControlSource: `=Sum([${f.name}])` })]
-    : i === 0 ? [ctl('textBox', 'Nombre', 0, 57, widths[0]!, 340, { ControlSource: '=Count(*)' })] : []);
+  const totals = info.fields.flatMap((f, i): [number, ControlDef][] => f.type === 'currency' ? [[i, ctl('textBox', `Somme_${f.name}`, lefts[i]!, 57, widths[i]!, 340, { ControlSource: `=Sum([${f.name}])` })]]
+    : i === 0 ? [[0, ctl('textBox', 'Nombre', 0, 57, widths[0]!, 340, { ControlSource: '=Count(*)' })]] : []);
 
   const section = (kind: SectionDef['kind'], height: number, controls: ControlDef[], props: Record<string, unknown> = {}): SectionDef => ({ kind, height, props, controls });
   const doc: DesignDoc = {
@@ -67,10 +67,11 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
       section('pageHeader', 454, labels),
       section('detail', 340, boxes, info.fields.some((f) => f.type === 'longText') ? { CanGrow: true } : {}),
       section('pageFooter', 454, [pageNo]),
-      section('reportFooter', 454, totals),
+      section('reportFooter', 454, totals.map(([, t]) => t)),
     ],
   };
-  // The labels and boxes form a Tabular layout, as Access creates it; the totals stay free in the Report Footer (a layout column
-  // holds one Detail control, and the total sits under the same column at the same width). No field, no layout.
-  return createLayout(doc, boxes.map((b, i) => ({ control: b.name, label: labels[i]!.name })), 'tabular', { headerSection: 'pageHeader' });
+  // The labels and boxes form a Tabular layout, as Access creates it; each total joins its box's column in a Report Footer row
+  // (same left, width and top as free). No field, no layout (joinColumn is then a no-op).
+  const laid = createLayout(doc, boxes.map((b, i) => ({ control: b.name, label: labels[i]!.name })), 'tabular', { headerSection: 'pageHeader' });
+  return totals.reduce((d, [i, t]) => joinColumn(d, boxes[i]!.name, t.name), laid);
 }

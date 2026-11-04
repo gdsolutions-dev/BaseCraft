@@ -1,0 +1,142 @@
+// Module editor (D1): CodeMirror over the Python source. Save asks the engine for the module's exports (parsing only), stores
+// { source, exports }, then resets the user modules. A syntax error still saves (no exports); a bar and a red line show it.
+import { python } from '@codemirror/lang-python';
+import { indentUnit } from '@codemirror/language';
+import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet } from '@codemirror/view';
+import { basicSetup, EditorView } from 'codemirror';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { isModuleName, parseModuleDef } from '../../shared/python/module-def';
+import { api } from '../bridge';
+import type { DocViewProps } from '../shell/DocumentTabs';
+import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
+import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
+import { pythonHost } from './python-host';
+import './module-editor.css';
+
+type SyntaxError = { line: number; col: number; message: string };
+const setErrorLine = StateEffect.define<number | null>();
+/** The red line marker. */
+const errorLine = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    for (const e of tr.effects) if (e.is(setErrorLine)) {
+      if (e.value === null || e.value < 1 || e.value > tr.state.doc.lines) return Decoration.none;
+      const from = tr.state.doc.line(e.value).from;
+      const b = new RangeSetBuilder<Decoration>();
+      b.add(from, from, Decoration.line({ class: 'cm-bc-error-line' }));
+      return b.finish();
+    }
+    return tr.docChanged ? deco.map(tr.changes) : deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+/** Loads the definition (a new module starts empty), then the editor. */
+export function ModuleEditorView(p: DocViewProps) {
+  const { t } = useTranslation();
+  const [source, setSource] = useState<string | { error: string } | null>(p.tab.isNew ? '' : null);
+  useEffect(() => {
+    if (p.tab.isNew) return;
+    let current = true;
+    api.objects.get('module', p.tab.name).then((r) => { if (current) setSource(parseModuleDef(r.definition).source); }).catch((e) => {
+      if (!current) return;
+      const m = errorMessage(e);
+      setSource({ error: e instanceof Error && e.message === 'bc:badModule' ? t('dialog.error.corruptObject') : t(m.key, m.params) });
+    });
+    return () => { current = false; };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- read once: a save renames the tab, it does not reload
+  if (typeof source === 'object' && source) return <div className="doc-empty muted" role="alert" data-testid="module-load-error">{source.error}</div>;
+  return source === null ? <div className="module-editor" /> : <ModuleEditor {...p} initial={source} />;
+}
+
+function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { initial: string }) {
+  const { t } = useTranslation();
+  const modal = useModal();
+  const showError = useErrorDialog();
+  const host = useRef<HTMLDivElement>(null);
+  const view = useRef<EditorView | null>(null);
+  const dirty = useRef(false);
+  const busy = useRef(false);
+  const [error, setError] = useState<SyntaxError | null>(null);
+  const live = useRef({ tab, readOnly });
+  live.current = { tab, readOnly };
+
+  const markDirty = (v: boolean) => { dirty.current = v; void dispatch({ type: 'setDirty', id: live.current.tab.id, dirty: v }); };
+
+  useEffect(() => {
+    const ev = new EditorView({
+      doc: initial, parent: host.current!,
+      extensions: [basicSetup, python(), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
+        EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); })],
+    });
+    view.current = ev;
+    return () => { ev.destroy(); void dispatch({ type: 'setDirty', id: live.current.tab.id, dirty: false }); };
+  }, [tab.id]);   // eslint-disable-line react-hooks/exhaustive-deps -- one editor per tab
+
+  const message = (messageKey: string) => modal.confirm({ titleKey: 'dialog.errorTitle', messageKey, buttons: ['ok'] });
+  const askName = (initialName: string) => modal.prompt({ titleKey: 'designer.saveAsTitle', labelKey: 'module.nameLabel', initial: initialName,
+    validate: (v) => (isModuleName(v) ? null : t('module.badName')) });
+
+  /** The name saved under, or null (nothing saved). */
+  const save = async (): Promise<string | null> => {
+    if (busy.current) return null;
+    if (live.current.readOnly) { await message('dialog.op.readOnly'); return null; }
+    busy.current = true;
+    try {
+      const doc = live.current.tab;
+      const source = view.current!.state.doc.toString();
+      let name = doc.isNew ? await askName(doc.name) : doc.name;
+      if (name === null) return null;
+      // The first call starts Python. If the engine fails, the code is saved anyway (exports are recomputed at the next save).
+      let parsed: Awaited<ReturnType<ReturnType<typeof pythonHost>['exports']>> = { exports: [], error: null };
+      let engineDown = false;
+      try { parsed = await pythonHost().exports(source); } catch { engineDown = true; }
+      for (;;) {
+        const r = await api.objects.save('module', name, { formatVersion: '1.0', source, exports: parsed.exports }, doc.isNew ? null : doc.name);
+        if (r.ok) {
+          if (!engineDown && pythonHost().state() !== 'off') await pythonHost().reset();   // R7: a saved module resets every user module
+          setError(parsed.error);
+          view.current!.dispatch({ effects: setErrorLine.of(parsed.error?.line ?? null) });
+          if (view.current!.state.doc.toString() === source) markDirty(false);   // typed during the awaits: stay dirty
+          dispatch(doc.isNew ? { type: 'objectSaved', kind: 'module', name, tabId: doc.id } : { type: 'objectSaved', kind: 'module', name });
+          if (engineDown) await message('module.exportsUnavailable');
+          return name;
+        }
+        await message(r.reason === 'badModuleName' ? 'module.badName' : `dialog.op.${r.reason}`);
+        if (!doc.isNew || (r.reason !== 'nameExists' && r.reason !== 'nameInvalid' && r.reason !== 'badModuleName')) return null;
+        name = await askName(name);
+        if (name === null) return null;
+      }
+    } catch (e) {
+      await showError(e);
+      return null;
+    } finally {
+      busy.current = false;
+    }
+  };
+
+  /** Before the view goes: Yes saves, No drops the changes, Cancel keeps the module open. */
+  const leave = async (): Promise<boolean> => {
+    if (busy.current) return false;
+    if (!dirty.current) return true;
+    const r = await modal.confirm({ titleKey: 'module.saveFirstTitle', messageKey: 'module.saveFirst', params: { name: live.current.tab.name }, buttons: ['yes', 'no', 'cancel'] });
+    return r === 'no' || (r === 'yes' && (await save()) !== null);
+  };
+
+  const cmds = useRef({ save, leave });
+  cmds.current = { save, leave };
+  useEffect(() => {
+    const off = registerCommands(tab.id, { save: async () => { await cmds.current.save(); } });
+    const offGuard = registerModeGuard(tab.id, () => cmds.current.leave());
+    return () => { off(); offGuard(); };
+  }, [tab.id]);
+
+  return (
+    <div className="module-editor-wrap">
+      <div className="module-editor" ref={host} data-testid="module-editor" />
+      {error && <div className="module-error" role="alert" data-testid="module-error">{t('module.syntaxError', { line: error.line, message: error.message })}</div>}
+    </div>
+  );
+}

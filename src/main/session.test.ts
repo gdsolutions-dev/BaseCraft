@@ -347,6 +347,17 @@ describe('session (lock lifecycle and data access)', () => {
 describe('session (objects and record sources)', () => {
   const def = { formatVersion: '1.0' };
 
+  it('module: the name is a Python name on save, rename and copy; a bad definition is refused', async () => {
+    const a = create();
+    const m = { formatVersion: '1.0' as const, source: 'def f(): pass', exports: [{ name: 'f', params: [] }] };
+    expect(a.saveObject('module', 'class', m, null)).toEqual({ ok: false, reason: 'badModuleName' });
+    expect(() => a.saveObject('module', 'Module1', { formatVersion: '1.0' }, null)).toThrow('bc:badModule');
+    expect(a.saveObject('module', 'Module1', m, null)).toEqual({ ok: true });
+    expect(await a.renameObject('module', 'Module1', '1x')).toEqual({ ok: false, reason: 'badModuleName' });
+    expect(a.copyObject('module', 'Module1', 'a-b')).toEqual({ ok: false, reason: 'badModuleName' });
+    expect(a.listObjects('module').map((o) => o.name)).toEqual(['Module1']);
+  });
+
   it('objects: CRUD in write mode, refused in read-only mode', async () => {
     const a = create();
     expect(a.saveObject('form', 'F', def, null)).toEqual({ ok: true });

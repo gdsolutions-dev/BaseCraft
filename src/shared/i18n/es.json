@@ -454,6 +454,7 @@
     "forms": "Formularios",
     "reports": "Informes",
     "macros": "Macros",
+    "modules": "Módulos",
     "renameObjectTitle": "Cambiar nombre del objeto",
     "deleteObjectTitle": "Eliminar objeto",
     "deleteObjectMessage": "¿Desea eliminar “{{name}}”? Esta acción no se puede deshacer.",
@@ -535,7 +536,10 @@
       "ok": "Aceptar",
       "yes": "Sí",
       "no": "No",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "retry": "Reintentar",
+      "abort": "Anular",
+      "ignore": "Omitir"
     },
     "error": {
       "busy": "Otro puesto de trabajo está usando el archivo de datos. Vuelva a intentarlo en un momento.",
@@ -2301,6 +2305,15 @@
       "migrateOneNull": "El campo {{field}} contiene varios valores nulos: SQL Server solo acepta uno en el índice sin duplicados que exige la relación {{relation}}."
     }
   },
+  "module": {
+    "newName": "Módulo{{n}}",
+    "nameLabel": "Nombre del módulo",
+    "badName": "El nombre de un módulo debe ser un nombre de Python: letras, dígitos y _, sin empezar por un dígito y sin ser una palabra reservada de Python.",
+    "syntaxError": "Error de sintaxis, línea {{line}}: {{message}}",
+    "exportsUnavailable": "El módulo se ha guardado, pero no se pudieron leer sus funciones: Python no se inició.",
+    "saveFirstTitle": "Guardar módulo",
+    "saveFirst": "¿Desea guardar los cambios del módulo «{{name}}»?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2926,5 +2939,22 @@
     "title": "Actualizar propiedades",
     "message": "¿Actualizar {{prop}} en todos los lugares donde se usa {{field}}?",
     "target": "{{kind}} {{name}} › {{control}} («{{current}}»)"
+  },
+  "python": {
+    "running": "Python se está ejecutando… Ctrl+Pausa para interrumpir.",
+    "interrupt": "Interrumpir",
+    "restarted": "Python dejó de responder y se reinició. Se perdió el estado de los módulos.",
+    "contentDisabled": "El código Python está bloqueado mientras no se habilite el contenido.",
+    "loading": "Cargando Python…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Inmediato",
+    "placeholder": "Escriba una instrucción de Python o ?expresión",
+    "errorAt": "(Módulo {{module}}, línea {{line}})",
+    "splitter": "Cambiar el tamaño de la ventana Inmediato"
   }
 }

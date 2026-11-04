@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ControlDef, DesignDoc, SectionDef } from './model';
 import { cmToTwips as cm } from './model';
-import { COL_GAP, ROW_GAP, labelOf, readLayouts, reflow, type Layout } from './layout';
-import { createLayout, insertCells, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
+import { COL_GAP, ROW_GAP, labelOf, readLayouts, reflow, withLayouts, type Layout } from './layout';
+import { createLayout, insertCells, joinColumn, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
 
 const ctl = (name: string, layoutId?: string): ControlDef =>
   ({ kind: 'textBox', name, left: 0, top: 0, width: 10, height: 10, props: layoutId ? { LayoutID: layoutId } : {} });
@@ -476,5 +476,62 @@ describe('placeInLayout', () => {
       const d = d0();
       expect(placeInLayout(d, ['Nom'], inside(d))).toBe(d);
     });
+  });
+});
+
+describe('joinColumn', () => {
+  const tot = (name: string, left = 0, top = 57, height = 340): ControlDef => ({ ...ctl(name), left, top, width: 10, height });
+  const withFooters = (kind: SectionDef['kind'], ...cs: ControlDef[]) => ({ kind, height: 454, props: {}, controls: cs }) as SectionDef;
+  const base = (...footer: ControlDef[]) => reflow(mk([sec('formHeader', 'T', 'H0', 'H1'), sec('detail', 'T', 'D0', 'D1'), withFooters('reportFooter', ...footer)], [tabular()]));
+  const rows = (d: DesignDoc) => readLayouts(d)[0].rows.map((r) => r.section);
+
+  it('joins column 1 with a reportFooter row', () => {
+    const d0 = base(tot('Tot'));
+    const d = joinColumn(d0, 'D1', 'Tot');
+    const l = readLayouts(d)[0];
+    expect(l.tops.reportFooter).toBe(57);
+    expect(rows(d)).toEqual(['formHeader', 'detail', 'reportFooter']);
+    expect(l.cells.find((c) => c.control === 'Tot')).toMatchObject({ row: 2, col: 1 });
+    expect(byName(d, 'Tot')).toMatchObject({ left: byName(d, 'D1').left, width: 900, top: 57, height: 340, props: { LayoutID: 'T' } });
+  });
+  it('a second control for the same column goes on a new row; a column 0 control fills the first row', () => {
+    let d = joinColumn(base(tot('A1'), tot('A2'), tot('B1')), 'D1', 'A1');
+    d = joinColumn(d, 'D1', 'A2');
+    expect(rows(d).filter((r) => r === 'reportFooter')).toHaveLength(2);
+    expect(readLayouts(d)[0].cells.find((c) => c.control === 'A1')).toMatchObject({ row: 2, col: 1 });
+    expect(readLayouts(d)[0].cells.find((c) => c.control === 'A2')).toMatchObject({ row: 3, col: 1 });
+    d = joinColumn(d, 'D0', 'B1');
+    expect(rows(d).filter((r) => r === 'reportFooter')).toHaveLength(2);
+    expect(readLayouts(d)[0].cells.find((c) => c.control === 'B1')).toMatchObject({ row: 2, col: 0 });
+  });
+  it('widening the column widens the total', () => {
+    const d = joinColumn(base(tot('Tot')), 'D1', 'Tot');
+    const l = readLayouts(d)[0];
+    expect(byName(reflow(withLayouts(d, [{ ...l, cols: [800, 1200] }])), 'Tot').width).toBe(1200);
+  });
+  it('a group footer total joins on its own row, before the report footer rows', () => {
+    const gf = { ...withFooters('groupFooter', tot('G')), groupLevel: 0 } as SectionDef;
+    const d0 = reflow(mk([sec('formHeader', 'T', 'H0', 'H1'), sec('detail', 'T', 'D0', 'D1'), gf, withFooters('reportFooter', tot('R'))], [tabular()]));
+    const d = joinColumn(joinColumn(d0, 'D1', 'R'), 'D1', 'G');
+    expect(rows(d)).toEqual(['formHeader', 'detail', 'groupFooter:0', 'reportFooter']);
+    expect(readLayouts(d)).toHaveLength(1);
+  });
+  it('is the same doc for a Stacked member, a non-member, a control already in a layout, a missing control, the member itself', () => {
+    const t = base(tot('Tot'));
+    expect(joinColumn(t, 'D1', 'Nope')).toBe(t);
+    expect(joinColumn(t, 'D1', 'D1')).toBe(t);
+    expect(joinColumn(t, 'D1', 'D0')).toBe(t);
+    expect(joinColumn(t, 'Tot', 'D0')).toBe(t);
+    expect(joinColumn(t, 'Nope', 'Tot')).toBe(t);
+    const s = stackedDoc();
+    expect(joinColumn({ ...s, sections: [...s.sections, withFooters('reportFooter', tot('X'))] }, 'B', 'X').props).toBe(s.props);
+  });
+  it('after the Detail box is deleted the total stays a member; removeLayout strips its LayoutID', () => {
+    const d = joinColumn(base(tot('Tot')), 'D1', 'Tot');
+    const del = { ...d, sections: d.sections.map((s) => ({ ...s, controls: s.controls.filter((c) => c.name !== 'D1') })) };
+    const p = pruneLayouts(del);
+    expect(readLayouts(p)[0].cells.some((c) => c.control === 'Tot')).toBe(true);
+    expect(byName(p, 'Tot').props.LayoutID).toBe('T');
+    expect('LayoutID' in byName(removeLayout(p, 'T'), 'Tot').props).toBe(false);
   });
 });

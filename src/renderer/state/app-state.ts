@@ -12,6 +12,7 @@ export type DocKind =
   | 'report'
   | 'relations'
   | 'macro'
+  | 'module'
 
 /** layout: a form's Layout view (L2), the Design view's editor over live records. */
 /** state: a report's Mode État (Access's Report view: the data, every page under the other, read-only). */

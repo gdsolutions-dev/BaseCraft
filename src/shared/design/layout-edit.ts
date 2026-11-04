@@ -268,6 +268,34 @@ export function placeInLayout(doc: DesignDoc, names: string[], at: { section: Se
   return grow(replaceLayout({ ...doc, sections }, next));
 }
 
+/**
+ * An existing top-level control joins the Tabular column of `member`, in a row of its own section (a footer total under its column).
+ * Target row: the first row of the layout in that section with nothing in the column, else a new row after the section's last row
+ * (or after the last row of an earlier section), as tall as the control; a section new to the layout starts at the control's top.
+ * The doc is unchanged for a missing member/control, a Stacked layout, a nested control, one already in a layout, or the member itself.
+ */
+export function joinColumn(doc: DesignDoc, member: string, control: string): DesignDoc {
+  const l = layoutOf(doc, member);
+  const si = doc.sections.findIndex((s) => s.controls.some((x) => sameName(x.name, control)));
+  if (!l || l.kind !== 'tabular' || si < 0 || sameName(member, control) || layoutOf(doc, control)) return doc;
+  const c = doc.sections[si].controls.find((x) => sameName(x.name, control))!;
+  const k = l.cells.find((x) => x.control !== null && sameName(x.control, member))!.col;
+  const ref = sectionRef(doc.sections[si]);
+  const order = (r: SectionRef) => doc.sections.findIndex((s) => sectionRef(s) === r);
+  let row = l.rows.findIndex((x, i) => x.section === ref && !l.cells.some((y) => y.row === i && y.col === k && y.control !== null));
+  let next: Layout;
+  if (row >= 0) next = { ...l, cells: [...l.cells.filter((y) => y.row !== row || y.col !== k), { row, col: k, control: c.name }] };
+  else {
+    row = l.rows.reduce((n, x, i) => (order(x.section) <= si ? i + 1 : n), 0);
+    next = { ...l, tops: l.rows.some((x) => x.section === ref) ? l.tops : { ...l.tops, [ref]: c.top },
+      rows: [...l.rows.slice(0, row), { section: ref, height: c.height }, ...l.rows.slice(row)],
+      cells: [...l.cells.map((y) => (y.row >= row ? { ...y, row: y.row + 1 } : y)), ...l.cols.map((_, col) => ({ row, col, control: col === k ? c.name : null }))] };
+  }
+  const sections = doc.sections.map((s, i) => (i !== si ? s
+    : { ...s, controls: s.controls.map((x) => (x === c ? { ...x, props: { ...x.props, LayoutID: l.id } } : x)) }));
+  return grow(replaceLayout({ ...doc, sections }, next));
+}
+
 /** The point lies on the layout's grid in that section (gaps included, empty edge cells included). */
 function hits(l: Layout, at: { section: SectionRef; x: number; y: number }): boolean {
   const { tops, lefts } = gridGeometry(l);

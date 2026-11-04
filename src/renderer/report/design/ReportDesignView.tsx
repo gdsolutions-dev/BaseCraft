@@ -305,7 +305,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     const { state: s, readOnly: ro, totalTarget: target } = live.current;
     const e = target && findControl(s.doc, target.name);
     if (ro || !target || !e) return;
-    const apply = (d: DesignDoc) => addTotal(d, target.field, fn, e.control.left, e.control.width);
+    const apply = (d: DesignDoc) => addTotal(d, target.field, fn, e.control.left, e.control.width, target.name);
     const added = apply(s.doc).sections.flatMap((x) => x.controls).find((c) => !findControl(s.doc, c.name));
     guarded({ type: 'edit', apply });
     if (added) send({ type: 'select', selection: { kind: 'controls', names: [added.name] } });

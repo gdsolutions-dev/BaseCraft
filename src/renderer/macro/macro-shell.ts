@@ -202,7 +202,7 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
       }
       case 'MessageBox':
         if (a.Beep === 'yes') api.app.beep().catch(() => {});   // no beep is no reason to fail the message
-        return showMessageBox(d.modal, { message: a.Message ?? '', title: a.Title || i18n.t('macro.msgbox.defaultTitle'), type: (a.Type ?? 'none') as MessageBoxType });
+        return showMessageBox(d.modal, { message: a.Message ?? '', title: a.Title || i18n.t('macro.msgbox.defaultTitle'), type: (a.Type ?? 'none') as MessageBoxType }).then(() => {});
       case 'Beep': return api.app.beep();
       // the window or the base goes: the run ends there (as StopAllMacros); a document kept open fails the action
       case 'Quit': case 'CloseDatabase':

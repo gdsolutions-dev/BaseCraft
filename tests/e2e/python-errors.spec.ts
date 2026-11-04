@@ -26,7 +26,7 @@ const base = () => seedBase('python-errors', (db) => {
 
 test('Python error dialog names type, module and line; Débogage opens the module at the line; Fin closes; RunCode shows Action Failed', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ args: [base()], env: { BASECRAFT_REGION: 'fr-FR' } })
   try {
     await page.getByTestId('nav-item-form-FErr').dblclick()
     await page.getByTestId('form-ctl-cmdCasser').click()
@@ -49,7 +49,7 @@ test('Python error dialog names type, module and line; Débogage opens the modul
 
 test('Runtime: the Python error dialog has no Débogage', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ runtime: true, args: [base()] })
+  const { app, page } = await launchApp({ runtime: true, args: [base()], env: { BASECRAFT_REGION: 'fr-FR' } })
   try {
     await page.getByTestId('nav-item-form-FErr').dblclick()
     await page.getByTestId('form-ctl-cmdCasser').click()

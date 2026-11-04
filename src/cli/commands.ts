@@ -11,6 +11,6 @@ export const COMMANDS: CommandInfo[] = [
     id: 'relation.create',
     label: 'Create a relation',
     params: 'parentTable: string; parentFields: string[]; childTable: string; childFields: string[]; name?: string; enforce?: boolean; cascadeUpdate?: boolean; cascadeDelete?: boolean; joinType?: 1|2|3',
-    description: 'Relates the parent fields (a unique key) to the child fields. Both tables must already exist. name defaults to ParentChild; enforce defaults to true, cascadeUpdate and cascadeDelete to false, joinType to 1.',
+    description: 'Relates the parent fields (a unique key) to the child fields. Both tables must already exist. name defaults to ParentChild; enforce defaults to true, cascadeUpdate and cascadeDelete to false, joinType to 1. As in Access, the tables are not added to the Relationships window layout: open the window and click All Relationships to see them.',
   },
 ];

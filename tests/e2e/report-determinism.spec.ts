@@ -46,7 +46,7 @@ test('determinism: layout model = golden, drawn widths = model, PDF pages and fo
     await page.getByTestId('nav-group-report').getByTestId('nav-item-report-Factures par client').dblclick();
     const doc = page.locator('.doc:not([hidden])');
     await expect(doc.getByTestId('preview-page-of')).toHaveText('Page 1 sur 3');
-    expect(await page.evaluate(() => document.fonts.check('10pt "BC Liberation Sans"'))).toBe(true);
+    await expect.poll(() => page.evaluate(() => document.fonts.check('10pt "BC Liberation Sans"'))).toBe(true);
 
     // 1. the layout model, against the golden file produced by the app
     const model = await layoutFromDom(page);

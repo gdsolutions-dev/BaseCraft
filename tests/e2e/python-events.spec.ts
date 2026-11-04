@@ -131,7 +131,7 @@ test('Python dialog form: nested events usable, Ctrl+Break in the dialog keeps t
 
 test('Python On Current calling go_to_record: too deep, shown once, the window stays usable', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ args: [base()], env: { BASECRAFT_REGION: 'fr-FR' } })
   try {
     await open(page, 'FBoucle')
     await expect(page.getByTestId('macro-failed')).toBeVisible({ timeout: 120_000 })

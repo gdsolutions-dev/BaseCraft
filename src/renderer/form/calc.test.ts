@@ -3,6 +3,10 @@ import type { ControlDef } from '../../shared/design/model';
 import { defaultProps, type FieldProps, type FieldType } from '../../shared/field-types';
 import { bool, num, str } from '../../shared/expr/library';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
+import type { Value } from '../../shared/expr/ast'
+import { ExprRuntimeError } from '../../shared/expr/ast'
+import { i18n } from '../i18n'
+import { setUserFunctions } from '../../shared/expr/user-functions';
 import { buildCalcEnv, checkControlRule, controlDefaults, evalControlSource, FAILED, Latest, parseExpr, typedValue, unboundDefaults } from './calc';
 
 const ctl = (props: Record<string, unknown>): ControlDef => ({ kind: 'textBox', name: 'T', left: 0, top: 0, width: 1000, height: 300, props });
@@ -224,5 +228,55 @@ describe('[Forms]! and [TempVars]! in a form (B2 R11)', () => {
     expect(await unboundDefaults([ctl({ DefaultValue: '[TempVars]![x] + 1' })], base)).toEqual({ T: num(8) });
     expect(await checkControlRule(ctl({ ValidationRule: '<[TempVars]![x]' }), num(9), infoWith(), base)).not.toBeNull();
     expect((await buildCalcEnv([calcCtl('=[TempVars]![x]')], infoWith(), {}, {}, env())).results.T).toEqual({ ok: false, code: 'name' });   // no member: #Nom?
+  });
+});
+
+describe('user functions (D3)', () => {
+  it('a registered name parses and is re-parsed when the registry changes', async () => {
+    setUserFunctions([]);
+    expect(() => parseExpr('remise([P])', false)).toThrow();
+    setUserFunctions(['remise']);
+    expect(parseExpr('remise([P])', false)).toMatchObject({ k: 'call', name: 'remise' });
+    setUserFunctions([]);
+    expect(() => parseExpr('remise([P])', false)).toThrow();
+    setUserFunctions(['remise']);
+    expect(parseExpr('remise(1) > 0', true)).toBeTruthy();
+    setUserFunctions([]);
+  });
+  it('evalControlSource passes env.callUser', async () => {
+    setUserFunctions(['remise']);
+    const callUser = async (n: string, a: unknown[]) => (n === 'remise' ? num(Number((a[0] as { v: number }).v) * 2) : null);
+    expect(await evalControlSource(calcCtl('=remise([P])'), { ...env({ P: num(4) }), callUser })).toMatchObject({ ok: true, text: '8' });
+    setUserFunctions([]);
+  });
+});
+
+describe('Python failures (D3 R3)', () => {
+  const failWith = (code: ConstructorParameters<typeof ExprRuntimeError>[0]) => async (): Promise<Value> => { throw new ExprRuntimeError(code, 'remise'); };
+  it('evalControlSource: contentDisabled and unknownFunction are #Nom?, pythonError is #Erreur', async () => {
+    setUserFunctions(['remise']);
+    try {
+      expect(await evalControlSource(calcCtl('=remise([P])'), { ...env({ P: num(4) }), callUser: failWith('contentDisabled') })).toEqual({ ok: false, code: 'name' });
+      expect(await evalControlSource(calcCtl('=remise([P])'), { ...env({ P: num(4) }), callUser: failWith('unknownFunction') })).toEqual({ ok: false, code: 'name' });
+      expect(await evalControlSource(calcCtl('=remise([P])'), { ...env({ P: num(4) }), callUser: failWith('pythonError') })).toEqual({ ok: false, code: 'error' });
+    } finally { setUserFunctions([]); }
+  });
+  it('checkControlRule refuses with python.contentDisabled when content is disabled, else as a False rule', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const info = infoWith(sf('Qté', 'number'));
+      const c = bound('Qté', { ValidationRule: 'remise(1)>0', ValidationText: 'non' });
+      const base = (callUser: () => Promise<Value>) => ({ ...env(), callUser });
+      expect(await checkControlRule(c, num(1), info, base(failWith('contentDisabled')))).toEqual({ field: 'Qté', code: 'controlValidation', message: i18n.t('python.contentDisabled') });
+      expect(await checkControlRule(c, num(1), info, base(failWith('pythonError')))).toEqual({ field: 'Qté', code: 'controlValidation', message: 'non' });
+    } finally { setUserFunctions([]); }
+  });
+  it('a default calling Python that fails is empty', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const info = infoWith(sf('Qté', 'number'));
+      const out = await controlDefaults([bound('Qté', { DefaultValue: '=remise(1)' })], info, { ...env(), callUser: failWith('contentDisabled') });
+      expect(out.Qté).toBeNull();
+    } finally { setUserFunctions([]); }
   });
 });

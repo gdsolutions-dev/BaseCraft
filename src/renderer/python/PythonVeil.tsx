@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { pythonHost } from './python-host';
 
 export const usePythonRunning = (): boolean =>
-  useSyncExternalStore(pythonHost().subscribe, () => pythonHost().state() === 'running');
+  useSyncExternalStore(pythonHost().subscribe, () => pythonHost().busy());
 
 const SLOW_MS = 2000;
 

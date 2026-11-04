@@ -45,6 +45,8 @@ import { boundField, controlTexts, isUnbound } from './control-values';
 import type { ListState, RunCtx, RunnerApi, SubformHost, UnboundValue } from './controls/run-ctx';
 import { parseFormDoc } from './form-def';
 import { FormEvents, withOverrides } from './form-events';
+import { callUserFunction } from '../python/expr-call';
+import { onUserFunctionsChanged } from '../python/user-function-names';
 import { formCancelled, formReady, memberValue, registerForm, type FindOptions, type FormInstance } from './form-instances';
 import './form-nav-menu';
 import { FormRecords, type FormDataApi, type RecordError, type RecordEvents, type RecordSnapshot } from './record-controller';
@@ -204,7 +206,7 @@ function recordsFor(doc: DesignDoc, region: string, readOnly: boolean, modal: Mo
     ref: doc.recordSource, locale: region, readOnly, allowAdditions: allow('AllowAdditions'), allowEdits: allow('AllowEdits'), allowDeletions: allow('AllowDeletions'),
     ...(childFields?.length ? { link: { childFields, values: null } } : {}),
     ...(args?.where !== undefined ? { where: args.where } : {}), ...(args?.dataMode ? { dataMode: args.dataMode } : {}),
-    newRecordValues: () => controlDefaults(all, records.snapshot.info ?? NO_INFO, { locale: region, lang: langOf(), now: () => new Date() }),
+    newRecordValues: () => controlDefaults(all, records.snapshot.info ?? NO_INFO, { locale: region, lang: langOf(), now: () => new Date(), callUser: callUserFunction }),
     ...(events ? { events } : {}),
   });
   return records;
@@ -283,6 +285,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const lastOwn = useRef<string | null>(null);       // the last of this form's own controls focused
   const [calc, setCalc] = useState<{ key: string; results: Record<string, CalcResult> }>({ key: '', results: {} });
   const [calcTick, setCalcTick] = useState(0);
+  useEffect(() => onUserFunctionsChanged(() => setCalcTick((n) => n + 1)), []);   // D3 R5: a Python function added, removed or edited
   const [filter, setFilterState] = useState<FilterState>(NO_FILTER);
   const filterRef = useRef(filter);
   const [menu, setMenu] = useState<FilterMenuState | null>(null);
@@ -307,7 +310,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const byName = useMemo(() => new Map(all.map((c) => [c.name, c])), [all]);
   const [year4] = useState(fourDigitYear);   // read once when the form opens (O2 R1)
   const display = useMemo(() => ({ locale: region, lang, ...(year4 ? { fourDigitYear: true } : {}) }), [region, lang, year4]);
-  const base = useMemo(() => ({ locale: region, lang, ...(year4 ? { fourDigitYear: true } : {}), now: () => new Date(), member: memberValue }), [region, lang, year4]);   // [Forms]!, [TempVars]! (R11)
+  const base = useMemo(() => ({ locale: region, lang, ...(year4 ? { fourDigitYear: true } : {}), now: () => new Date(), member: memberValue, callUser: callUserFunction }), [region, lang, year4]);   // [Forms]!, [TempVars]! (R11)
   // the design as shown: with its runtime properties (SetProperty, R9), for the views and the tab order
   useEffect(() => { hub.didShow(); }, [hub]);   // its form actions are set (hub.form): On Load may run
   const overrides = useSyncExternalStore(useCallback((cb) => hub.subscribe(cb), [hub]), () => hub.overrides);

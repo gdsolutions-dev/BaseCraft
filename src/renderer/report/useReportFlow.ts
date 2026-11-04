@@ -6,6 +6,7 @@ import type { DesignDoc } from '../../shared/design/model';
 import type { LaidOutReport } from '../../shared/report/types';
 import { useModal } from '../shell/Modal';
 import { flowKey, keptOutOfLayout, latestRun, layoutFlow, loadFlowData, type FlowData, type FlowSource } from './layout-flow';
+import { onUserFunctionsChanged } from '../python/user-function-names';
 import { askParameters, layoutEnv } from './ReportPreviewView';
 
 const RELAYOUT_DELAY = 150;   // ms
@@ -17,6 +18,8 @@ export function useReportFlow(doc: DesignDoc, active: boolean): { flow: FlowData
   const [runs] = useState(() => latestRun(RELAYOUT_DELAY));
   const key = flowKey(doc);
   const [src, setSrc] = useState<{ key: string; source: FlowSource } | null>(null);
+  const [fnTick, setFnTick] = useState(0);
+  useEffect(() => onUserFunctionsChanged(() => setFnTick((n) => n + 1)), []);   // D3 R5: laid out again
   const [laid, setLaid] = useState<{ doc: DesignDoc; source: FlowSource; report: LaidOutReport | null } | null>(null);
 
   // une lecture en cours n'est pas abandonnée en quittant le mode Page (y revenir ne redemande pas les paramètres) ; seule une
@@ -41,7 +44,7 @@ export function useReportFlow(doc: DesignDoc, active: boolean): { flow: FlowData
     if (!active || !source) return;
     runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal)), (report) => setLaid({ doc, source, report }));
     return runs.cancel;
-  }, [active, doc, source, runs]);
+  }, [active, doc, source, runs, fnTick]);
 
   const failed = laid !== null && laid.source === source && !laid.report;
   return {

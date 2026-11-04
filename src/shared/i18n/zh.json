@@ -1022,6 +1022,9 @@
       "badDate": "# 符号之间的日期无效。",
       "badNumber": "数字无效。",
       "unknownFunction": "未知函数。",
+      "pythonNotAllowed": "此处不能使用 Python 函数 {{name}}：查询、筛选器和表规则由数据引擎计算。",
+      "contentDisabled": "在启用内容之前，Python 代码被阻止。",
+      "pythonError": "Python 错误：{{detail}}",
       "arity": "此函数的参数个数不正确。",
       "tooComplex": "表达式过于复杂（In 列表或嵌套过长）。",
       "maskUnclosedQuote": "掩码缺少结束引号。",
@@ -2307,8 +2310,8 @@
     }
   },
   "module": {
-    "functionClash": "函数 {{fn}} 在模块 {{other}} 中也存在：调用 ={{fn}}() 将有歧义。",
-    "functionBuiltin": "{{fn}} 是内置函数的名称：请选择其他名称。",
+    "functionClash": "函数 {{name}} 在模块 {{other}} 中也存在：调用 ={{fn}}() 将有歧义。",
+    "functionBuiltin": "{{name}} 是内置函数的名称：请选择其他名称。",
     "newName": "模块{{n}}",
     "nameLabel": "模块名称",
     "badName": "模块名必须是 Python 名称：由字母、数字和 _ 组成，不能以数字开头，也不能是 Python 保留字。",

@@ -24,7 +24,8 @@ import type { PropertySheetContext } from '../../designer/sheet-types';
 import type { DocViewProps } from '../../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../../shell/Modal';
 import { nameErrorKey } from '../../shell/nav-menu-items';
-import { registerCommandStates, registerCommands, registerModeGuard, type CommandHandlers, type CommandId } from '../../shell/ribbon-model';
+import { firstPythonCall, viewCode } from '../../designer/view-code';
+import { registerCommandStates, registerCommands, registerModeGuard, runCommand, type CommandHandlers, type CommandId } from '../../shell/ribbon-model';
 import { editsDesign, sameView, type DocMode } from '../../state/app-state';
 import { allowsLayout } from '../../form/views';
 import { unsavedRunDoc } from '../../query/unsaved-run';
@@ -337,6 +338,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       save: async () => { await cmds.current.save(); },
       addExistingFields: () => setFieldList((v) => !v),
       propertySheet: () => setSheetVisible((v) => !v),
+      viewCode: () => { const { state: s } = live.current; viewCode(firstPythonCall(s.doc, s.selection), (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }, () => { runCommand('createModule'); }).catch(showError); },
       pageSetupDialog: () => cmds.current.pageSetupDialog(),
       portrait: () => setup({ orientation: 'portrait' }),
       landscape: () => setup({ orientation: 'landscape' }),

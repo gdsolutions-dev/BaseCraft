@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fr from '../i18n/fr.json';
 import en from '../i18n/en.json';
+import { setUserFunctions } from '../expr/user-functions';
 import { validateMacro, parseMacroDef, submacroNames, emptyMacro, type MacroDef, type MacroItem } from './model';
 import { ACTIONS, actionDef } from './catalog';
 
@@ -16,6 +17,14 @@ describe('macro definition', () => {
     const rc = (fn: string): MacroDef => ({ ...ok, items: [{ k: 'action', action: 'RunCode', args: { FunctionName: fn } }] } as MacroDef);
     expect(validateMacro(rc('f(1)'))).toEqual([]); expect(validateMacro(rc('=f(1)'))).toEqual([]);
     expect(validateMacro(rc('f('))).toEqual([expect.objectContaining({ code: 'badExpression' })]);
+  });
+  it('a WHERE argument refuses a registered Python name', () => {
+    setUserFunctions(['Remise']);
+    try {
+      const w = (v: string): MacroDef => ({ ...ok, items: [{ k: 'action', action: 'ApplyFilter', args: { WhereCondition: v } }] } as MacroDef);
+      expect(validateMacro(w('Remise(1) > 0'))).toEqual([expect.objectContaining({ code: 'badExpression' })]);
+      expect(validateMacro(w('[Ville] = "Lyon"'))).toEqual([]);
+    } finally { setUserFunctions([]); }
   });
   it('a valid macro', () => expect(validateMacro(ok)).toEqual([]));
   it('unknown action, argument and keys are kept', () => {

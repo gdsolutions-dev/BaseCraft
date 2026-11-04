@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Span } from '../../shared/expr/ast';
+import { exprErrorText } from '../expr/error-text';
 
 interface Props {
   sql: string;
@@ -31,7 +32,7 @@ export function SqlView({ sql, onChange, error, notice, readOnly }: Props) {
         onChange={(e) => onChange(e.target.value)} />
       {error && (
         <p id={errorId} className="modal-error" role="alert" data-testid="query-sql-error">
-          {t([`query.error.${error.code}`, `expr.error.${error.code}`])}
+          {error.code.startsWith('pythonNotAllowed:') ? exprErrorText(t, error.code) : t([`query.error.${error.code}`, `expr.error.${error.code}`])}
         </p>
       )}
       {notice && <p className="muted" data-testid="query-sql-notice">{notice}</p>}

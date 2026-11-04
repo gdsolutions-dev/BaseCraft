@@ -5,6 +5,7 @@ import { useEffect, useState, type Dispatch } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ExprErrorCode } from '../../shared/expr/ast';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
+import { withUserFunctions } from '../../shared/expr/user-functions';
 import { sameName } from '../../shared/field-types';
 import type { ArgDef } from '../../shared/macro/catalog';
 import { passThroughOf } from '../../shared/query/definition';
@@ -19,12 +20,13 @@ export type ObjectLists = Record<'table' | 'query' | 'form' | 'report' | 'macro'
 export interface MacroViewCtx { display: DisplayContext; readOnly: boolean; send: Dispatch<MacroEditAction>; lists: ObjectLists }
 
 /** An expression (canonical stored, display form shown), its error shown under it until a readable text is committed. */
-export function ExprInput({ id, testId, value, fields = [], ctx, label, onCommit }: {
-  id: string; testId: string; value: string | undefined; fields?: string[]; ctx: MacroViewCtx; label?: string; onCommit(canonical: string | undefined): void
+export function ExprInput({ id, testId, value, fields = [], ctx, label, onCommit, userFunctions = true }: {
+  id: string; testId: string; value: string | undefined; fields?: string[]; ctx: MacroViewCtx; label?: string; onCommit(canonical: string | undefined): void;
+  userFunctions?: boolean   // D3: false for a WHERE condition (it reaches SQL)
 }) {
   const [error, setError] = useState<ExprErrorCode | undefined>();
   return <ExpressionField id={id} testId={testId} value={value} ctx={ctx.display} fields={fields} disabled={ctx.readOnly} error={error} label={label}
-    onCommit={onCommit} onInvalid={(c) => setError(c ?? undefined)} />;
+    onCommit={onCommit} onInvalid={(c) => setError(c ?? undefined)} userFunctions={userFunctions} />;
 }
 
 /** The fields of a form's or report's record source, for the Where Condition's builder (none while the object does not exist). */
@@ -49,12 +51,12 @@ function useTargetFields(kind: 'form' | 'report', name: string, exists: boolean)
 /** `=` + an expression shown in display form; any other text as stored. */
 function shownText(v: string, ctx: DisplayContext): string {
   if (!v.startsWith('=')) return v;
-  try { return `=${toDisplay(v.slice(1), ctx)}`; } catch { return v; }
+  try { return `=${toDisplay(v.slice(1), ctx, { functions: withUserFunctions() })}`; } catch { return v; }
 }
 /** The typed text as stored: `=` + the canonical expression when it reads (else as typed: Save reports it), any other text as is. */
 function storedText(v: string, ctx: DisplayContext): string {
   if (!v.startsWith('=')) return v;
-  try { return `=${toCanonical(v.slice(1), ctx)}`; } catch { return v; }
+  try { return `=${toCanonical(v.slice(1), ctx, { functions: withUserFunctions() })}`; } catch { return v; }
 }
 
 function WhereField({ id, testId, value, action, args, ctx, onCommit }: {
@@ -63,7 +65,7 @@ function WhereField({ id, testId, value, action, args, ctx, onCommit }: {
   const kind = action === 'OpenReport' ? 'report' : 'form';   // the actions that take a Where Condition
   const name = (kind === 'report' ? args.ReportName : args.FormName) ?? '';
   const fields = useTargetFields(kind, name, !!name && ctx.lists[kind].some((n) => sameName(n, name)));
-  return <ExprInput id={id} testId={testId} value={value} fields={fields} ctx={ctx} onCommit={onCommit} />;
+  return <ExprInput id={id} testId={testId} value={value} fields={fields} ctx={ctx} onCommit={onCommit} userFunctions={false} />;
 }
 
 export function ArgEditor({ path, action, def, args, ctx }: { path: ItemPath; action: string; def: ArgDef; args: Record<string, string>; ctx: MacroViewCtx }) {

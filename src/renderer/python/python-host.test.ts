@@ -305,3 +305,61 @@ describe('PythonHost interrupt (R6)', () => {
     await expect(p).rejects.toThrow('bc:pythonRestarted')
   })
 })
+
+describe('quiet calls (R4)', () => {
+  it('a quiet call is not busy until 2 s; a normal call is busy at once; interrupt reaches a quiet call', async () => {
+    const h = make()
+    await h.ensure()
+    const w = FakeWorker.all[0]!
+    w.hold = true
+    const seen: boolean[] = []
+    h.subscribe(() => seen.push(h.busy()))
+    vi.useFakeTimers()
+    try {
+      const q = h.call('m', 'f', [], { quiet: true }).catch(() => {})
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.state()).toBe('running')
+      expect(h.busy()).toBe(false)
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(h.busy()).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(h.busy()).toBe(true)
+      expect(seen).toContain(true)
+      w.emit({ t: 'done', id: 1, ok: true, value: null })
+      await q
+      expect(h.busy()).toBe(false)
+      const n = h.call('m', 'f', [])
+      void n.catch(() => {})
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.busy()).toBe(true)
+      w.emit({ t: 'done', id: 2, ok: true, value: null })
+      await n
+      const q2 = h.call('m', 'f', [], { quiet: true }).catch(() => {})
+      await vi.advanceTimersByTimeAsync(0)
+      h.interrupt()
+      expect(Atomics.load(new Int32Array((w.received.find((m) => m.t === 'init') as Extract<HostToWorker, { t: 'init' }>).interrupt), 0)).toBe(2)
+      h.restart(); await q2
+    } finally { vi.useRealTimers() }
+  })
+})
+
+describe('quiet calls: slow flag (R4)', () => {
+  it('the timer firing a hair early still makes the host busy', async () => {
+    const h = make()
+    await h.ensure()
+    const w = FakeWorker.all[0]!
+    w.hold = true
+    vi.useFakeTimers()
+    const now = vi.spyOn(Date, 'now')
+    try {
+      now.mockReturnValue(1000)
+      const q = h.call('m', 'f', [], { quiet: true }).catch(() => {})
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(2000) // the timer fires, but the clock reads 1999 ms
+      now.mockReturnValue(2999)
+      expect(h.busy()).toBe(true)
+      w.emit({ t: 'done', id: 1, ok: true, value: null })
+      await q
+    } finally { now.mockRestore(); vi.useRealTimers() }
+  })
+})

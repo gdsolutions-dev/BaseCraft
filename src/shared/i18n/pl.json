@@ -1049,6 +1049,9 @@
       "badDate": "Nieprawidłowa data między znakami #.",
       "badNumber": "Nieprawidłowa liczba.",
       "unknownFunction": "Nieznana funkcja.",
+      "pythonNotAllowed": "Funkcji Pythona {{name}} nie można tu użyć: zapytania, filtry i reguły tabel są obliczane przez silnik danych.",
+      "contentDisabled": "Kod Pythona jest zablokowany, dopóki zawartość nie zostanie włączona.",
+      "pythonError": "Błąd Pythona: {{detail}}",
       "arity": "Nieprawidłowa liczba argumentów tej funkcji.",
       "tooComplex": "Wyrażenie zbyt złożone (lista In lub zagnieżdżenie zbyt długie).",
       "maskUnclosedQuote": "W masce brakuje zamykającego cudzysłowu.",
@@ -2376,8 +2379,8 @@
     }
   },
   "module": {
-    "functionClash": "Funkcja {{fn}} istnieje także w module {{other}}: wywołanie ={{fn}}() będzie niejednoznaczne.",
-    "functionBuiltin": "{{fn}} to nazwa funkcji wbudowanej: wybierz inną nazwę.",
+    "functionClash": "Funkcja {{name}} istnieje także w module {{other}}: wywołanie ={{fn}}() będzie niejednoznaczne.",
+    "functionBuiltin": "{{name}} to nazwa funkcji wbudowanej: wybierz inną nazwę.",
     "newName": "Moduł{{n}}",
     "nameLabel": "Nazwa modułu",
     "badName": "Nazwa modułu musi być nazwą Pythona: litery, cyfry i _, nie może zaczynać się od cyfry ani być słowem zastrzeżonym Pythona.",

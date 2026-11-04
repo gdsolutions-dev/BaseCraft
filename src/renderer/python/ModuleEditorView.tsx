@@ -1,5 +1,6 @@
 // Module editor (D1): CodeMirror over the Python source. Save asks the engine for the module's exports (parsing only), stores
 // { source, exports }, then resets the user modules. A syntax error still saves (no exports); a bar and a red line show it.
+import type { CompletionContext } from '@codemirror/autocomplete';
 import { python } from '@codemirror/lang-python';
 import { indentUnit } from '@codemirror/language';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
@@ -8,10 +9,13 @@ import { basicSetup, EditorView } from 'codemirror';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isModuleName, parseModuleDef } from '../../shared/python/module-def';
+import { flattenControls } from '../../shared/design/model';
 import { api } from '../bridge';
+import { parseFormDoc } from '../form/form-def';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
 import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
+import { basecraftCompletions, type CompletionCatalog } from './completions';
 import { functionClashes } from './function-index';
 import { pythonHost } from './python-host';
 import './module-editor.css';
@@ -33,6 +37,28 @@ const errorLine = StateField.define<DecorationSet>({
   },
   provide: (f) => EditorView.decorations.from(f),
 });
+
+/** R7: object names read once at mount; a form's control names the first time the form is dotted into (cached). */
+function completionSource() {
+  const cat: CompletionCatalog = { forms: [], reports: [], tables: [], queries: [], macros: [], controls: () => [], fields: () => [] };
+  const controls = new Map<string, string[]>();
+  cat.controls = (f) => controls.get(f.toLowerCase()) ?? [];
+  const names = (k: 'form' | 'report' | 'query' | 'macro') => api.objects.list(k).then((l) => l.map((o) => o.name));
+  const ready = Promise.all([names('form'), names('report'), names('query'), names('macro'), api.tables.list()]).then(([forms, reports, queries, macros, tables]) => {
+    Object.assign(cat, { forms, reports, queries, macros, tables: tables.map((x) => x.name) });
+  }).catch(() => {});
+  return async (ctx: CompletionContext) => {
+    const line = ctx.state.doc.lineAt(ctx.pos), before = line.text.slice(0, ctx.pos - line.from);
+    const m = before.match(/\bforms(?:\[["']([^"']+)["']\]|\.([A-Za-z_]\w*))\.\w*$/);
+    await ready;
+    const form = m && cat.forms.find((f) => f.toLowerCase() === (m[1] ?? m[2]).toLowerCase());
+    if (form && !controls.has(form.toLowerCase())) {
+      try { controls.set(form.toLowerCase(), flattenControls(parseFormDoc((await api.objects.get('form', form)).definition).doc.sections.flatMap((x) => x.controls)).map((c) => c.name)); } catch { controls.set(form.toLowerCase(), []); }
+    }
+    const r = basecraftCompletions(before, cat);
+    return r && { from: line.from + r.from, options: r.options, validFor: /^\w*$/ };
+  };
+}
 
 /** Loads the definition (a new module starts empty), then the editor. */
 export function ModuleEditorView(p: DocViewProps) {
@@ -68,9 +94,10 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
   const markDirty = (v: boolean) => { dirty.current = v; void dispatch({ type: 'setDirty', id: live.current.tab.id, dirty: v }); };
 
   useEffect(() => {
+    const py = python();
     const ev = new EditorView({
       doc: initial, parent: host.current!,
-      extensions: [basicSetup, python(), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
+      extensions: [basicSetup, py, py.language.data.of({ autocomplete: completionSource() }), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
         EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); })],
     });
     view.current = ev;
@@ -110,7 +137,7 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
         if (r.ok) {
           if (!engineDown && pythonHost().state() !== 'off') await pythonHost().reset();   // R7: a saved module resets every user module
           setError(parsed.error);
-          functionClashes(name, parsed.exports).then((c) => setWarnings(c.map((x) => (x.other === null ? t('module.functionBuiltin', { fn: x.fn }) : t('module.functionClash', { fn: x.fn, other: x.other })))),
+          functionClashes(name, parsed.exports).then((c) => setWarnings(c.map((x) => (x.other === null ? t('module.functionBuiltin', { name: x.fn }) : t('module.functionClash', { name: x.fn, fn: x.fn, other: x.other })))),
             () => setWarnings([]));
           view.current!.dispatch({ effects: setErrorLine.of(parsed.error?.line ?? null) });
           if (view.current!.state.doc.toString() === source) markDirty(false);   // typed during the awaits: stay dirty

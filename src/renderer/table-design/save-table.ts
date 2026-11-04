@@ -3,6 +3,7 @@
 import { i18n } from '../i18n';
 import type { SaveTableRequest, SaveTableResult } from '../../shared/api';
 import { api } from '../bridge';
+import { designErrorText } from '../expr/error-text';
 import type { ModalApi } from '../shell/Modal';
 import type { AppAction, DocTab } from '../state/app-state';
 import { saveTableChanges } from '../../shared/autocorrect/sql';
@@ -17,7 +18,7 @@ async function explain(modal: ModalApi, r: Exclude<SaveTableResult, { ok: true }
     case 'lossy':
       return (await modal.confirm({ titleKey: 'designer.lossyTitle', messageKey: 'designer.lossy', params: { count: r.lossyRows }, buttons: ['yes', 'no'], defaultButton: 'no' })) === 'yes';
     case 'design': {
-      const text = (e: (typeof r.errors)[number]) => t(`designError.${e.code}`, e.prop ? { prop: t(`fieldProp.${e.prop}`) } : {});
+      const text = (e: (typeof r.errors)[number]) => designErrorText(e);
       const table = (e: (typeof r.errors)[number]) => e.code === 'invalidExpression' || e.code === 'validationTextSize'; // the Property Sheet's
       const lines = r.errors.map((e) => (e.field === undefined ? (table(e) ? t('designer.tableErrors', { message: text(e) }) : text(e))
         : t('designer.fieldError', { field: e.field || t('designer.unnamedField'), message: text(e) })));

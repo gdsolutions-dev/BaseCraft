@@ -758,7 +758,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   /** A criterion a query source refuses comes back as bc:invalidArgument (contract 1.2): shown as the table's bc:invalidFilter. */
-  const filterError = (e: unknown): unknown => (live.current.source && bcErrorCode(e) === 'invalidArgument' ? new Error('bc:invalidFilter') : e);
+  const filterError = (e: unknown): unknown => (live.current.source && bcErrorCode(e) === 'invalidArgument' ? new Error((e as Error).message.includes('|unknownFunction|') ? (e as Error).message.replace('invalidArgument', 'invalidFilter') : 'bc:invalidFilter') : e);
 
   /** A new filter: the pending row is saved first; the filter applies once the base accepted it (its count). The grid goes
    *  back to the first record, as in Access. */

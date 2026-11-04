@@ -1040,6 +1040,9 @@
       "badDate": "Data non valida tra i segni #.",
       "badNumber": "Numero non valido.",
       "unknownFunction": "Funzione sconosciuta.",
+      "pythonNotAllowed": "La funzione Python {{name}} non può essere usata qui: query, filtri e regole delle tabelle sono calcolati dal motore dati.",
+      "contentDisabled": "Il codice Python è bloccato finché il contenuto non viene abilitato.",
+      "pythonError": "Errore Python: {{detail}}",
       "arity": "Numero di argomenti errato per questa funzione.",
       "tooComplex": "Espressione troppo complessa (elenco In o annidamento troppo lungo).",
       "maskUnclosedQuote": "Nella maschera manca una virgoletta di chiusura.",
@@ -2353,8 +2356,8 @@
     }
   },
   "module": {
-    "functionClash": "La funzione {{fn}} esiste anche nel modulo {{other}}: una chiamata ={{fn}}() sarà ambigua.",
-    "functionBuiltin": "{{fn}} è il nome di una funzione incorporata: scegliere un altro nome.",
+    "functionClash": "La funzione {{name}} esiste anche nel modulo {{other}}: una chiamata ={{fn}}() sarà ambigua.",
+    "functionBuiltin": "{{name}} è il nome di una funzione incorporata: scegliere un altro nome.",
     "newName": "Modulo{{n}}",
     "nameLabel": "Nome del modulo",
     "badName": "Il nome di un modulo deve essere un nome Python: lettere, cifre e _, non iniziare con una cifra e non essere una parola riservata di Python.",

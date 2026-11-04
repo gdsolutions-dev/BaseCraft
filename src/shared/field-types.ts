@@ -1,3 +1,4 @@
+import { ExprSyntaxError } from './expr/ast'
 import { parseMask } from './expr/input-mask'
 import { fieldRefs, hasAggregate, hasMember, parseCanonical, renameRefs, serialize } from './expr/parser'
 
@@ -53,7 +54,7 @@ export interface TableDesign { name: string; description?: string; validationRul
 export type DesignErrorCode = 'nameEmpty' | 'nameInvalid' | 'reservedName' | 'nameDuplicate' | 'noFields'
   | 'autoNumberMultiple' | 'autoNumberNotPrimaryKey' | 'shortTextSize' | 'decimalPrecision' | 'reservedFieldName'
   | 'invalidExpression' | 'invalidMask' | 'validationTextSize' | 'invalidIndex'
-export interface DesignError { code: DesignErrorCode; field?: string; prop?: 'defaultValue' | 'validationRule' }
+export interface DesignError { code: DesignErrorCode; field?: string; prop?: 'defaultValue' | 'validationRule'; /** an unknown function in the expression (R6: the renderer says whether it is a Python one) */ fn?: string }
 
 /** Types that take an input mask (as in Access); on another type a stored mask is ignored. */
 export const MASK_TYPES: readonly FieldType[] = ['shortText', 'number', 'currency', 'dateTime']
@@ -209,28 +210,31 @@ export function foldName(s: string): string {
 }
 
 /** A field's expression is readable, and refers to no field (default value) or only to its own field (rule), as in Access. */
-function validExpression(fd: FieldDef, prop: 'defaultValue' | 'validationRule'): boolean {
+function validExpression(fd: FieldDef, prop: 'defaultValue' | 'validationRule'): true | { fn?: string } {
   const text = fd.props[prop]
   if (!text) return true
   try {
     const tree = parseCanonical(text, { criteria: prop === 'validationRule' })
-    if (hasAggregate(tree) || hasMember(tree)) return false // Sum, Count… need a group; a member has no value in a write
+    if (hasAggregate(tree) || hasMember(tree)) return {} // Sum, Count… need a group; a member has no value in a write
     const refs = fieldRefs(tree)
-    return prop === 'defaultValue' ? refs.length === 0 : refs.every(n => sameName(n, fd.name))
-  } catch {
-    return false
+    return (prop === 'defaultValue' ? refs.length === 0 : refs.every(n => sameName(n, fd.name))) || {}
+  } catch (e) {
+    return unknownFn(e)
   }
 }
 
+/** The refusal of an expression that does not parse; an unknown function keeps its name. */
+const unknownFn = (e: unknown): { fn?: string } => (e instanceof ExprSyntaxError && e.code === 'unknownFunction' && e.fn ? { fn: e.fn } : {})
+
 /** The table's rule is readable and refers only to fields of the table: never another table, an aggregate or a function
  *  outside the catalogue (DCount… are unknown functions), as in Access. */
-function validTableRule(design: TableDesign): boolean {
+function validTableRule(design: TableDesign): true | { fn?: string } {
   if (!design.validationRule) return true
   try {
     const tree = parseCanonical(design.validationRule)
-    return !hasAggregate(tree) && !hasMember(tree) && fieldRefs(tree).every(n => design.fields.some(fd => sameName(fd.name, n)))
-  } catch {
-    return false
+    return (!hasAggregate(tree) && !hasMember(tree) && fieldRefs(tree).every(n => design.fields.some(fd => sameName(fd.name, n)))) || {}
+  } catch (e) {
+    return unknownFn(e)
   }
 }
 
@@ -277,7 +281,8 @@ export function validateDesign(design: TableDesign): DesignError[] {
   // Réservé : tables seulement (une colonne ne peut pas entrer en collision avec une table système).
   if (isReservedName(design.name)) errors.push({ code: 'reservedName' })
   if (design.fields.length === 0) errors.push({ code: 'noFields' })
-  if (!validTableRule(design)) errors.push({ code: 'invalidExpression', prop: 'validationRule' })
+  const rule = validTableRule(design)
+  if (rule !== true) errors.push({ code: 'invalidExpression', prop: 'validationRule', ...rule })
   if ([...design.validationText ?? ''].length > 255) errors.push({ code: 'validationTextSize' })
   if (!validIndexes(design)) errors.push({ code: 'invalidIndex' })
 
@@ -295,7 +300,7 @@ export function validateDesign(design: TableDesign): DesignError[] {
       const { precision: pr, scale: sc } = p
       if (!(Number.isInteger(pr) && pr! >= 1 && pr! <= 28 && Number.isInteger(sc) && sc! >= 0 && sc! <= pr!)) errors.push({ code: 'decimalPrecision', field: name })
     }
-    for (const prop of ['defaultValue', 'validationRule'] as const) if (!validExpression(fd, prop)) errors.push({ code: 'invalidExpression', field: name, prop })
+    for (const prop of ['defaultValue', 'validationRule'] as const) { const ok = validExpression(fd, prop); if (ok !== true) errors.push({ code: 'invalidExpression', field: name, prop, ...ok }) }
     if ([...p.validationText ?? ''].length > 255) errors.push({ code: 'validationTextSize', field: name })
     if (p.inputMask && MASK_TYPES.includes(p.type)) { try { parseMask(p.inputMask) } catch { errors.push({ code: 'invalidMask', field: name }) } }
     if (p.type === 'autoNumber' && (!p.primaryKey || design.fields.some(o => o !== fd && o.props.primaryKey))) errors.push({ code: 'autoNumberNotPrimaryKey', field: name })

@@ -292,13 +292,13 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect((fr.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     expect((en.sheet as Record<string, unknown>).eventsLater).toBeUndefined();
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, 'D']);   // crosstabQuery delivered in B4 Task 8, createModule in D1 Task 7
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, undefined]);   // crosstabQuery in B4 Task 8, createModule in D1 Task 7, viewCode in D3 Task 6
   });
 
   it('B3 leaves no B3 placeholder', () => {
     expect(commands.filter((c) => c.planned === 'B3').map((c) => c.id)).toEqual([]);
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
-    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, 'D']);   // crosstabQuery delivered in B4 Task 8, createModule in D1 Task 7
+    expect([tag('crosstabQuery'), tag('createModule'), tag('viewCode')]).toEqual([undefined, undefined, undefined]);   // crosstabQuery in B4 Task 8, createModule in D1 Task 7, viewCode in D3 Task 6
   });
 
   it('B4 leaves no B4 placeholder', () => {
@@ -685,7 +685,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     }
     expect(on('tabOrder')).toBe(false);
     expect(on('tabOrder', ctx({ kind: 'form', mode: 'design' }))).toBe(true);
-    expect(on('viewCode')).toBe(false);
+    expect(on('viewCode')).toBe(true);
     for (const id of ['addExistingFields', 'propertySheet', 'logo', 'title', 'dateTime'] as const) expect(on(id), id).toBe(true);
     const all = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
     for (const id of ['bold', 'selectAll', 'stacked', 'tabular'] as const) expect(all.find((c) => c.id === id)!.enabled(lay), id).toBe(true);
@@ -710,10 +710,12 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
       expect(on(id, { ...lay, mode: 'run' }), id).toBe(false);
     }
-    for (const id of ['groupSort', 'hideDetails', 'addExistingFields', 'viewCode'] as const) {
+    for (const id of ['groupSort', 'hideDetails', 'addExistingFields'] as const) {
       expect(on(id), id).toBe(false);
-      if (id !== 'viewCode') expect(on(id, design), id).toBe(true);
+      expect(on(id, design), id).toBe(true);
     }
+    expect(on('viewCode')).toBe(true);
+    expect(on('viewCode', { ...lay, mode: 'run' })).toBe(false);
     // Totaux : aussi en mode Page, pas en lecture seule ni hors d'un état
     expect(on('reportTotals')).toBe(true);
     expect(on('reportTotals', design)).toBe(true);

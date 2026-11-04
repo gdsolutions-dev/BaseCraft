@@ -16,6 +16,7 @@ import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
 import { TABLE_KEY, designOf, designReducer, emptyDesign, fromDesign, savedModel, toSaveRequest, withDefaultPrimaryKey, type DesignAction, type DesignModel, fieldNameTooLong, longFieldNames } from './design-model';
 import { FIELD_TYPES, FieldPropertiesPanel } from './FieldPropertiesPanel';
 import { TablePropertiesPanel } from './TablePropertiesPanel';
+import { exprErrorText } from '../expr/error-text';
 import { runSave } from './save-table';
 import { editIndexes } from './IndexesDialog';
 import './table-design.css';
@@ -119,7 +120,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   const invalidLines = (m: DesignModel) => Object.entries(m.invalid).map(([k, code]) => {
     const sep = k.lastIndexOf(':');
     const r = m.rows.find((x) => x.key === k.slice(0, sep));
-    const message = t('designer.propError', { prop: t(`fieldProp.${k.slice(sep + 1)}`), message: t(`expr.error.${code}`) });
+    const message = t('designer.propError', { prop: t(`fieldProp.${k.slice(sep + 1)}`), message: exprErrorText(t, code) });
     if (k.startsWith(`${TABLE_KEY}:`)) return t('designer.tableErrors', { message }); // the Property Sheet's
     return t('designer.fieldError', { field: r?.name || t('designer.unnamedField'), message });
   });

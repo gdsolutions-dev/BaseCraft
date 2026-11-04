@@ -100,10 +100,10 @@ test('Module editor: a name that exists in another module, or is a built-in, war
   const { app, page } = await launchApp({ args: [base()], env: FR })
   try {
     await newModule(page, ['def remise(a):', 'return a'], 'Autre')
-    await expect(page.locator('[data-testid="module-warning"]:visible')).toHaveText(fill(fr.module.functionClash, { fn: 'remise', other: 'Calculs' }))
+    await expect(page.locator('[data-testid="module-warning"]:visible')).toHaveText(fill(fr.module.functionClash, { name: 'remise', fn: 'remise', other: 'Calculs' }))
     expect((await getModule(page, 'Autre')).exports.map((e) => e.name)).toEqual(['remise'])
     await newModule(page, ['def left(x):', 'return x'], 'Tiers')
-    await expect(page.locator('[data-testid="module-warning"]:visible')).toHaveText(fill(fr.module.functionBuiltin, { fn: 'left' }))
+    await expect(page.locator('[data-testid="module-warning"]:visible')).toHaveText(fill(fr.module.functionBuiltin, { name: 'left' }))
     expect((await getModule(page, 'Tiers')).exports.map((e) => e.name)).toEqual(['left'])
   } finally { await app.close() }
 })

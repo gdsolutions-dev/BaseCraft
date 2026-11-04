@@ -52,7 +52,7 @@ export async function sortAndGroup(spec: ReportSpec, data: ReportData, env: Layo
     const field = rowField(data.fields, row);
     const keys: Value[] = [];
     for (const { key } of spec.grouping) {
-      try { keys.push(key.kind === 'field' ? field(key.name) : key.kind === 'expr' ? await evaluate(key.expr, { now: () => env.now(), locale: env.locale, lang: env.lang, field }) : null); }
+      try { keys.push(key.kind === 'field' ? field(key.name) : key.kind === 'expr' ? await evaluate(key.expr, { now: () => env.now(), locale: env.locale, lang: env.lang, field, ...(env.callUser ? { callUser: env.callUser } : {}) }) : null); }
       catch (e) { if (!(e instanceof ExprRuntimeError)) throw e; keys.push(null); }
     }
     byRow.push(keys);

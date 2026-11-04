@@ -4,6 +4,7 @@
 import { CONTROL_KINDS, type ControlKind, type DesignDoc, type SectionKind } from '../design/model';
 import type { Expr } from '../expr/ast';
 import { fieldRefs, parseCanonical } from '../expr/parser';
+import { withUserFunctions } from '../expr/user-functions';
 import { MAX_TWIPS, sameName } from '../field-types';
 import { defaultFor, PROPERTY_CATALOG } from '../design/properties';
 import { resolveFont } from '../fonts';
@@ -111,7 +112,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
       return { kind: 'field', name };
     }
     let x: { expr: Expr; aggs: AggSpec[] };
-    try { x = extractAggregates(parseCanonical(text.slice(1))); } catch { add(bad, control, text); return { kind: 'error' }; }
+    try { x = extractAggregates(parseCanonical(text.slice(1), { functions: withUserFunctions() })); } catch { add(bad, control, text); return { kind: 'error' }; }
     if (noAgg && x.aggs.length > 0) { add(noAgg, control, text); return { kind: 'error' }; }
     const refs = fieldRefs(x.expr);
     const page = (n: string) => !known(n) && refs.some((r) => sameName(r, n));

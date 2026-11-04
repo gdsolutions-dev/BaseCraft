@@ -4,7 +4,8 @@ import { test, expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BasecraftApi } from '../../src/shared/api'
-import { launchApp, seedBase } from './helpers'
+import { saveObject } from '../../src/main/db/objects'
+import { launchApp, seedBase, seedForm } from './helpers'
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'))
 const FR = { BASECRAFT_REGION: 'fr-FR' }
@@ -87,6 +88,33 @@ test('Module: create, type, save under a name, exports from the engine, listed, 
     await page.getByTestId('nav-item-module-Outils').dblclick()
     await page.waitForTimeout(500) // a tab, if one were to open, is there by now
     await expect(page.locator('[data-testid^="doc-tab-"]')).toHaveCount(0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('Module: typing forms[" lists the forms, then the controls of the chosen one; Enter inserts the name', async () => {
+  test.setTimeout(120_000)
+  const base = seedBase('completions', (db) => {
+    seedForm(db, 'Clients', { formatVersion: '1.0', recordSource: null, props: { Width: 6000 }, sections: [
+      { kind: 'formHeader', height: 0, props: { Visible: false }, controls: [] },
+      { kind: 'detail', height: 2400, props: {}, controls: [{ kind: 'textBox', name: 'txtVille', left: 1701, top: 100, width: 2268, height: 340, props: {} }] },
+      { kind: 'formFooter', height: 0, props: { Visible: false }, controls: [] }] })
+    saveObject(db, 'macro', 'MLyon', { formatVersion: '1.0', items: [] }, null)
+  })
+  const { app, page } = await launchApp({ args: [base], env: FR })
+  try {
+    await createModule(page)
+    await editor(page).locator('.cm-content').click()
+    await page.keyboard.type('forms["')
+    const list = page.locator('.cm-tooltip-autocomplete:visible')
+    await expect(list).toContainText('Clients')
+    await page.waitForTimeout(200) // CodeMirror ignores Enter for 75 ms after the list opens
+    await page.keyboard.press('Enter')
+    await expect(editor(page).locator('.cm-content')).toContainText('forms["Clients')
+    await page.keyboard.type('"].')
+    await expect(list).toContainText('txtVille')
+    await expect(list).toContainText('requery')
   } finally {
     await app.close()
   }

@@ -61,6 +61,7 @@
     "bench": "vitest bench --run --configLoader runner --reporter=verbose"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "6.20.4",
     "@codemirror/lang-python": "6.2.1",
     "@codemirror/language": "6.13.1",
     "@codemirror/state": "6.7.6",

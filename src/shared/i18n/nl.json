@@ -1031,6 +1031,9 @@
       "badDate": "Ongeldige datum tussen #-tekens.",
       "badNumber": "Ongeldig getal.",
       "unknownFunction": "Onbekende functie.",
+      "pythonNotAllowed": "De Python-functie {{name}} kan hier niet worden gebruikt: query's, filters en tabelregels worden door de data-engine berekend.",
+      "contentDisabled": "Python-code is geblokkeerd totdat de inhoud is ingeschakeld.",
+      "pythonError": "Python-fout: {{detail}}",
       "arity": "Onjuist aantal argumenten voor deze functie.",
       "tooComplex": "Expressie te complex (In-lijst of nesting te lang).",
       "maskUnclosedQuote": "Het masker mist een afsluitend aanhalingsteken.",
@@ -2330,8 +2333,8 @@
     }
   },
   "module": {
-    "functionClash": "De functie {{fn}} bestaat ook in module {{other}}: een aanroep ={{fn}}() is dubbelzinnig.",
-    "functionBuiltin": "{{fn}} is de naam van een ingebouwde functie: kies een andere naam.",
+    "functionClash": "De functie {{name}} bestaat ook in module {{other}}: een aanroep ={{fn}}() is dubbelzinnig.",
+    "functionBuiltin": "{{name}} is de naam van een ingebouwde functie: kies een andere naam.",
     "newName": "Module{{n}}",
     "nameLabel": "Modulenaam",
     "badName": "Een modulenaam moet een Python-naam zijn: letters, cijfers en _, niet beginnend met een cijfer en geen gereserveerd Python-woord.",

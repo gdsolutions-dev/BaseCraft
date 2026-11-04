@@ -1246,7 +1246,7 @@ export class Session {
       const { rows } = readRows(db, d, { offset: req.offset, limit: req.limit, filter, ...(where !== undefined ? { where } : {}) }, this.info.locale, req.sort ?? [], this.writeSeq());
       return { rows: rows.map((r) => r.values), rowids: rows.map((r) => r.rowid), total: countRows(db, d.name, filter, this.info.locale, where) };
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error('bc:invalidArgument');
+      if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error(e.message.startsWith('bc:invalidFilter|') ? e.message.replace('invalidFilter', 'invalidArgument') : 'bc:invalidArgument');   // R6: the unknown function's name stays
       throw e;
     }
   }

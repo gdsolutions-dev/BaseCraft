@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Value } from './ast';
-import { FUNCTIONS } from './catalog';
+import { FUNCTION_TABLE, FUNCTIONS } from './catalog';
 import { evaluate, fromStored, recordFields, toStored, truthy, type EvalEnv } from './evaluate';
 import { bool, compareText, date, fromSerial, LIBRARY, likeMatch, num, str, toSerial } from './library';
 import { parseCanonical } from './parser';
@@ -345,5 +345,31 @@ describe('stored values', () => {
     expect(toStored(f('C', 'number'), str('1,5'), fr)).toBe('1,5'); // coerce lit la saisie régionale
     expect(toStored(f('C', 'yesNo'), num(-1), fr)).toBe(true);
     expect(toStored(f('C', 'yesNo'), num(0), fr)).toBe(false);
+  });
+});
+
+describe('callUser (D3)', () => {
+  const withUser = (calls: [string, Value[]][] = []): EvalEnv => ({ ...env({ Prix: num(3) }), callUser: async (n, a) => { calls.push([n, a]); return num(9); } });
+  const F = { functions: { ...FUNCTION_TABLE, remise: { min: 0, max: 255 } } };
+  it('calls the user function with evaluated arguments, left to right', async () => {
+    const calls: [string, Value[]][] = [];
+    expect(plain(await evaluate(parseCanonical('remise([Prix], 2)*2', F), withUser(calls)))).toBe(18);
+    expect(calls).toEqual([['remise', [num(3), num(2)]]]);
+  });
+  it('a user function named like an Object member goes to callUser', async () => {
+    for (const n of ['constructor', 'toString', '__proto__']) {
+      const calls: [string, Value[]][] = [];
+      const T = { functions: { ...FUNCTION_TABLE, ...Object.fromEntries([[n, { min: 0, max: 255 }]]) } };
+      expect(plain(await evaluate(parseCanonical(`${n}(1)`, T), withUser(calls)))).toBe(9);
+      expect(calls).toEqual([[n, [num(1)]]]);
+    }
+  });
+  it('without callUser: badArgument', async () => {
+    await expect(evaluate(parseCanonical('remise(1)', F), env())).rejects.toMatchObject({ code: 'badArgument' });
+  });
+  it('IIf still evaluates one branch', async () => {
+    const calls: [string, Value[]][] = [];
+    expect(plain(await evaluate(parseCanonical('IIf(True, 1, remise(1))', F), withUser(calls)))).toBe(1);
+    expect(calls).toEqual([]);
   });
 });

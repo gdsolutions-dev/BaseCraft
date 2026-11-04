@@ -22,6 +22,8 @@ import { exportSource } from '../exchange/export';
 import { registerCommandStates, registerCommands } from '../shell/ribbon-model';
 import { localeInfo } from '../../shared/locale-format';
 import { promptParameters } from '../query/prompt-parameters';
+import { callUserFunction } from '../python/expr-call';
+import { onUserFunctionsChanged } from '../python/user-function-names';
 import { memberValue } from '../form/form-instances';
 import { docParameters, layoutSavedReport, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
 import { unsavedRunDoc } from '../query/unsaved-run';
@@ -80,7 +82,7 @@ export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
     locale: s.region, lang: formulaLang(s.uiLanguage), fourDigitYear: fourDigitYear(), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
-    tick: () => new Promise((r) => setTimeout(r)), member: memberValue,   // [Forms]!, [Reports]!, [TempVars]! (R11)
+    tick: () => new Promise((r) => setTimeout(r)), member: memberValue, callUser: callUserFunction,   // D3: Python functions; [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }
 
@@ -306,6 +308,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     void cmds.current.run('object');
     return () => ctl.current?.abort();   // closing during its macros: the layout stops, no message (a message box shown finishes)
   }, [tab.name, tab.reloadToken]);
+  useEffect(() => onUserFunctionsChanged(() => { if (doc.current && data.current) void cmds.current.run('layout'); }), []);   // D3 R5: Python functions added, removed or edited
   useEffect(() => () => { reportShown(name.current, false); void events.current?.close(); }, []);   // the preview closes
 
   const ready = phase.k === 'ready' && !phase.partial;

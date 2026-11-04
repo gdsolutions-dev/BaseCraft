@@ -1,6 +1,7 @@
 // Stored definition of a macro (`bc_objects`, kind 'macro'): checked when received over IPC and when read back. Pure module.
 // Invariant names are stored (action, argument, enum value, canonical expression); labels come from the i18n catalogues.
 import { parseCanonical } from '../expr/parser';
+import { withUserFunctions } from '../expr/user-functions';
 import { foldName, isValidObjectName, sameName } from '../field-types';
 import { parsePythonCall } from '../python/call-text';
 import { actionDef } from './catalog';
@@ -22,8 +23,8 @@ export type MacroIssue = { path: string /* 'items[2].branches[0].cond' */; code:
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const KINDS = new Set(['action', 'comment', 'group', 'if', 'submacro']);
 
-function parses(text: string): boolean {
-  try { parseCanonical(text); return true; } catch { return false; }
+function parses(text: string, python = true): boolean {
+  try { parseCanonical(text, python ? { functions: withUserFunctions() } : undefined); return true; } catch { return false; }
 }
 
 /**
@@ -51,7 +52,7 @@ export function validateMacro(def: unknown): MacroIssue[] {
       const formula = type === 'expression' || type === 'where' || type === 'reference' ? value.trim() === '' ? undefined : value   // blank: not set
         : (type === 'text' || type === 'number') && value.startsWith('=') ? value.slice(1) : undefined;     // '=' + expression
       if (type === 'functionCall' && value.trim() !== '' && !parsePythonCall(value)) add(`${p}.args.${name}`, 'badExpression');
-      if (formula !== undefined && !parses(formula)) add(`${p}.args.${name}`, 'badExpression');
+      if (formula !== undefined && !parses(formula, type !== 'where')) add(`${p}.args.${name}`, 'badExpression');
     }
   };
 

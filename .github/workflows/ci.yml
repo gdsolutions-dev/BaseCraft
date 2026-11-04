@@ -97,8 +97,8 @@ jobs:
           BASECRAFT_BENCH_STRICT: 1
           BASECRAFT_BENCH_FACTOR: 2
       # Test builds: the dist:* scripts run the strict licence check, which blocks while an exception is pending.
-      - run: node scripts/licenses.mjs --allow-pending
       - run: npx electron-vite build
+      - run: node scripts/licenses.mjs --allow-pending
       - name: Installers (Windows)
         if: runner.os == 'Windows'
         run: npx electron-builder --win --x64 --publish never

@@ -2,6 +2,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { PYTHON_LICENSES } from './python-assets.mjs';
 
 const ALLOWED = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'MPL-2.0', 'CC0-1.0', 'BlueOak-1.0.0', 'Unlicense', 'Python-2.0']);
 const root = process.cwd();
@@ -55,10 +56,19 @@ for (const [id, dir] of [...found].sort(([a], [b]) => a.localeCompare(b))) {
 const fontDir = join(root, 'src/renderer/public/fonts/LICENSES');
 const fonts = existsSync(fontDir) ? readdirSync(fontDir).map((f) => ({ name: `font ${f.replace(/\.txt$/, '')}`, version: '', license: readFileSync(join(fontDir, f), 'utf8').split(/\r?\n/).find((l) => l.trim())?.trim() ?? f })) : [];
 const electron = { name: 'electron', version: JSON.parse(readFileSync(join(root, 'node_modules/electron/package.json'), 'utf8')).version, license: 'MIT (bundles Chromium and other components under their own licences, see LICENSES.chromium.html)' };
+// Python (D1): Pyodide, CPython and the wheels shipped in resources/python (build/python is made by the main build).
+const python = [
+  { name: 'pyodide', version: '314.0.7', license: 'MPL-2.0 (unmodified; source: https://github.com/pyodide/pyodide/releases/tag/314.0.7)' },
+  { name: 'CPython', version: '3.14.2', license: 'Python-2.0' },
+  ...Object.entries(JSON.parse(readFileSync(join(root, 'build/python/pyodide-lock.json'), 'utf8')).packages).map(([name, p]) => {
+    if (!PYTHON_LICENSES[name]) { console.error(`no licence for shipped wheel ${name}`); process.exit(1); }
+    return { name, version: p.version, license: PYTHON_LICENSES[name] };
+  }),
+];
 
 if (bad.length) { console.error(`Licences not allowed:\n  ${bad.join('\n  ')}`); process.exit(1); }
 mkdirSync(join(root, 'out'), { recursive: true });
-writeFileSync(join(root, 'out/licenses.json'), JSON.stringify([...list, ...fonts, electron], null, 1));
+writeFileSync(join(root, 'out/licenses.json'), JSON.stringify([...list, ...fonts, electron, ...python], null, 1));
 if (notes.length) console.log(['Reviewed exceptions:', ...notes].join('\n  '));
 const allowPending = process.argv.includes('--allow-pending');
 if (pending.length) console[allowPending ? 'warn' : 'error']([`${allowPending ? 'WARNING, pending licence decisions (allowed by --allow-pending)' : 'Pending licence decisions block the release'}:`, ...pending].join('\n  '));

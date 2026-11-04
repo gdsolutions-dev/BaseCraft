@@ -7,6 +7,7 @@ import type { ObjectSummary, TableSummary } from '../../shared/api';
 import type { AppAction, DocTab } from '../state/app-state';
 import { DOC_ICONS } from './DocumentTabs';
 import { useModal } from './Modal';
+import { hasDocumentView } from './document-views';
 import { NavMenu } from './NavMenu';
 import { runNavItem, setNavClipboardRunner, type NavMenuContext } from './nav-menu';
 import './nav-menu-items';
@@ -16,11 +17,12 @@ export { nameErrorKey } from './nav-menu-items';
 /** Same folding as bc_fold (accents and case ignored). */
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('und');
 
-type NavKind = 'table' | 'query' | 'form' | 'report' | 'macro';
+type NavKind = 'table' | 'query' | 'form' | 'report' | 'macro' | 'module';
 interface Item { kind: NavKind; name: string; description?: string | null; link?: TableSummary['link'] }
 const GROUPS: { kind: NavKind; labelKey: string }[] = [
   { kind: 'table', labelKey: 'nav.tables' }, { kind: 'query', labelKey: 'nav.queries' },
   { kind: 'form', labelKey: 'nav.forms' }, { kind: 'report', labelKey: 'nav.reports' }, { kind: 'macro', labelKey: 'nav.macros' },
+  { kind: 'module', labelKey: 'nav.modules' },
 ];
 const itemKey = (x: Item) => `${x.kind}:${x.name}`;
 /** Tables keep their test id; objects carry their kind (a form may share a table's name). */
@@ -54,7 +56,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
   const q = fold(query.trim());
   const items: Item[] = [
     ...tables.map((x) => ({ ...x, kind: 'table' as const })),
-    ...objects.flatMap((o) => (o.kind === 'query' || o.kind === 'form' || o.kind === 'report' || o.kind === 'macro' ? [{ ...o, kind: o.kind }] : [])), // modules: stage D
+    ...objects.flatMap((o) => (o.kind === 'query' || o.kind === 'form' || o.kind === 'report' || o.kind === 'macro' || o.kind === 'module' ? [{ ...o, kind: o.kind }] : [])),
   ];
   const shown = items.filter((x) => fold(x.name).includes(q));
 
@@ -84,7 +86,8 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
   }
 
   /** A table runs as a datasheet; a query, form or report in its Run view; a macro is run (its menu's Run). */
-  const open = (x: Item) => x.kind === 'macro' ? runNavItem(ctxOf(x), 'open') : dispatch({ type: 'open', kind: x.kind, name: x.name, mode: x.kind === 'table' ? 'datasheet' : 'run' });
+  const open = (x: Item) => x.kind === 'module' && !hasDocumentView('module', 'design') ? undefined // the Runtime lists modules without an editor
+    : x.kind === 'macro' ? runNavItem(ctxOf(x), 'open') : dispatch({ type: 'open', kind: x.kind, name: x.name, mode: x.kind === 'table' ? 'datasheet' : x.kind === 'module' ? 'design' : 'run' });
 
   return (
     <aside className="nav" data-testid="nav-pane" aria-label={t('nav.title')}>

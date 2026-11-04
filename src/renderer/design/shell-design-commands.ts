@@ -20,7 +20,7 @@ import { saveTableInteractive } from '../table-design/save-table';
 import type { DesignShellEnv } from './hooks';
 
 export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
-  const { modal, dispatch, rawDispatch, t, live, sourceToCreate, newForm, newQueryName, newReportName, newMacroName, setImporting, closeDocuments } = env;
+  const { modal, dispatch, rawDispatch, t, live, sourceToCreate, newForm, newQueryName, newReportName, newMacroName, newModuleName, setImporting, closeDocuments } = env;
   return {
     createTableDesign: () => {
       const { state: s, tables: list, objects: objs } = live.current; // a query shares the tables' namespace
@@ -105,6 +105,8 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
       rawDispatch({ type: 'open', kind: 'report', name, mode: 'design', isNew: true });
     },
     // Create › Macro (B1): a new macro in Design view, Macro1…, not saved until the user saves it
+    pythonEditor: env.toggleImmediate,
+    createModule: () => rawDispatch({ type: 'open', kind: 'module', name: newModuleName(), mode: 'design', isNew: true }),
     createMacro: () => rawDispatch({ type: 'open', kind: 'macro', name: newMacroName(), mode: 'design', isNew: true }),
   };
 }

@@ -1,0 +1,183 @@
+import {
+  BridgeServer, createBridgeMemory,
+  type HostRequest, type HostToWorker, type ModuleExport, type PyError, type WorkerToHost,
+} from '../../shared/python/bridge'
+import { PYTHON_BASE_URL } from '../../shared/python/paths'
+import { LIB_FILES } from './install-lib'
+
+export type PythonState = 'off' | 'loading' | 'idle' | 'running'
+export type BridgeHandler = (args: unknown[]) => Promise<unknown>
+export type ExportsResult = { exports: ModuleExport[]; error: { line: number; col: number; message: string } | null }
+
+export class PythonError extends Error {
+  constructor(readonly info: PyError) {
+    super(info.message)
+    this.name = 'PythonError'
+  }
+}
+
+const LOG_MAX = 1000
+const INTERRUPT_GRACE_MS = 2000 // R6
+
+/** One worker with its bridge and shared memory; dropped as a whole when the worker dies. */
+type Session = {
+  worker: Worker
+  server: BridgeServer
+  interrupt: SharedArrayBuffer
+  ready: boolean
+  whenReady: Promise<void>
+  dead: Promise<never> // rejects when the session ends; races every request
+  end(reason: Error): void
+}
+
+export function createPythonHost() {
+  let contentEnabled: () => boolean = () => false
+  let createWorker: () => Worker = () => new Worker(new URL('./python-worker.ts', import.meta.url), { type: 'module', name: 'python-worker' })
+  const handlers: Record<string, BridgeHandler> = {
+    'log.write': async ([text]) => { pushLog(String(text)); return null },
+    'modules.source': async ([name]) => {
+      const { api } = await import('../bridge') // lazy: bridge.ts reads window.basecraft at load
+      try {
+        const o = await api.objects.get('module', String(name))
+        return (o.definition as { source?: string } | null)?.source ?? null
+      } catch (e) {
+        if (/bc:notFound/.test(String((e as Error)?.message ?? e))) return null
+        throw e
+      }
+    },
+  }
+  let session: Session | null = null
+  const flight: number[] = [] // ids of the requests in flight, oldest (the one the worker runs) first
+  let seq = 0
+  let killTimer: { id: number; handle: ReturnType<typeof setTimeout> } | null = null // R6: one at most
+  let stuck = false // test hook: the next interrupt is not delivered
+  const restartSubs = new Set<() => void>()
+  let since: number | null = null
+  let lines: string[] = []
+  const subs = new Set<() => void>()
+  const logSubs = new Set<(line: string) => void>()
+  const notify = () => subs.forEach((f) => f())
+
+  function pushLog(text: string): void {
+    for (const line of text.replace(/\n$/, '').split('\n')) {
+      lines.push(line)
+      if (lines.length > LOG_MAX) lines.shift()
+      logSubs.forEach((f) => f(line))
+    }
+  }
+
+  function start(): Session {
+    const memory = createBridgeMemory()
+    const interrupt = new SharedArrayBuffer(4)
+    const worker = createWorker()
+    let resolveReady!: () => void
+    let rejectReady!: (e: Error) => void
+    const whenReady = new Promise<void>((res, rej) => { resolveReady = res; rejectReady = rej })
+    let kill!: (e: Error) => void
+    const dead = new Promise<never>((_, rej) => { kill = rej })
+    dead.catch(() => {}); whenReady.catch(() => {})
+    const server = new BridgeServer(memory, (m: HostToWorker) => worker.postMessage(m), (method, args) => {
+      const h = handlers[method]
+      return h ? h(args) : Promise.reject(Object.assign(new Error(`unknown bridge method ${method}`), { code: 'unknownMethod' }))
+    })
+    const s: Session = {
+      worker, server, interrupt, ready: false, whenReady, dead,
+      end(reason) {
+        if (session !== s) return
+        session = null
+        worker.terminate()
+        rejectReady(reason); kill(reason)
+        flight.length = 0; since = null
+        clearKill()
+        notify()
+      },
+    }
+    worker.onmessage = (e: MessageEvent<WorkerToHost>) => {
+      if (session !== s) return
+      const m = e.data
+      if (m.t === 'ready') { s.ready = true; resolveReady(); notify() }
+      else if (m.t === 'stdout') pushLog(m.text)
+      else if (m.t === 'loadError') s.end(new Error(m.message))
+      else server.onWorkerMessage(m)
+    }
+    worker.onerror = (e: ErrorEvent) => s.end(new Error(e.message || 'python worker crashed'))
+    worker.postMessage({ t: 'init', memory, interrupt, baseUrl: PYTHON_BASE_URL, lib: LIB_FILES } satisfies HostToWorker)
+    return s
+  }
+
+  function clearKill(): void { if (killTimer) { clearTimeout(killTimer.handle); killTimer = null } }
+
+  function ensure(): Promise<void> {
+    if (!session) { session = start(); notify() }
+    return session.whenReady
+  }
+
+  async function send(req: HostRequest): Promise<unknown> {
+    await ensure()
+    const s = session
+    if (!s) throw new Error('bc:pythonRestarted') // restart() or a crash ran while ensure() waited
+    const id = ++seq
+    if (flight.push(id) === 1) { since = Date.now(); notify() }
+    try {
+      return await Promise.race([s.server.request(req), s.dead])
+    } catch (e) {
+      throw e && typeof e === 'object' && 'traceback' in e ? new PythonError(e as PyError) : e
+    } finally {
+      if (session === s) {
+        flight.splice(flight.indexOf(id), 1)
+        if (killTimer?.id === id) clearKill()
+        if (flight.length === 0) { since = null; notify() }
+      }
+    }
+  }
+
+  const gated = (req: HostRequest): Promise<unknown> =>
+    contentEnabled() ? send(req) : Promise.reject(new Error('bc:contentDisabled')) // R9
+
+  function restart(): void { session?.end(new Error('bc:pythonRestarted')) }
+
+  return {
+    configure(o: { contentEnabled: () => boolean; createWorker?: () => Worker }): void {
+      contentEnabled = o.contentEnabled
+      if (o.createWorker) createWorker = o.createWorker
+    },
+    registerHandlers(h: Record<string, BridgeHandler>): void { Object.assign(handlers, h) },
+    ensure,
+    immediate: (line: string) => gated({ op: 'immediate', line }) as Promise<string>,
+    exec: async (code: string) => { await gated({ op: 'exec', code }) },
+    call: (module: string, fn: string, args: unknown[]) => gated({ op: 'call', module, fn, args }),
+    exports: (source: string) => send({ op: 'exports', source }) as Promise<ExportsResult>,
+    reset: async () => { await send({ op: 'reset' }) },
+    /** R6: asks Python to stop; a call still running 2 s later costs the worker (restarted by the next need). */
+    interrupt(): void {
+      const s = session
+      if (!s || flight.length === 0) return
+      if (stuck) stuck = false
+      else Atomics.store(new Int32Array(s.interrupt), 0, 2)
+      if (killTimer) return
+      const id = flight[0]!
+      killTimer = { id, handle: setTimeout(() => {
+        killTimer = null
+        if (session === s && flight[0] === id) { pushLog('python.restarted'); restart(); restartSubs.forEach((f) => f()) }
+      }, INTERRUPT_GRACE_MS) }
+    },
+    /** Test hook (e2e): the next interrupt does not reach Python, so the 2 s restart path can be exercised. */
+    simulateStuck(): void { stuck = true },
+    /** Fired when a call ignored the interrupt and the worker was terminated (R6): the window tells the user. */
+    onRestart(fn: () => void): () => void { restartSubs.add(fn); return () => { restartSubs.delete(fn) } },
+    restart,
+    state: (): PythonState => (!session ? 'off' : !session.ready ? 'loading' : flight.length > 0 ? 'running' : 'idle'),
+    subscribe(fn: () => void): () => void { subs.add(fn); return () => { subs.delete(fn) } },
+    runningSince: (): number | null => since,
+    log: (): readonly string[] => lines,
+    onLog(fn: (line: string) => void): () => void { logSubs.add(fn); return () => { logSubs.delete(fn) } },
+  }
+}
+
+export type PythonHost = ReturnType<typeof createPythonHost>
+
+declare global { interface Window { __bcPython?: PythonHost } }
+
+let instance: PythonHost | null = null
+/** The window's host. */
+export function pythonHost(): PythonHost { return (instance ??= createPythonHost()) }

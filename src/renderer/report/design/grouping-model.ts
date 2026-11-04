@@ -1,6 +1,6 @@
 // Regroupement, tri et totaux d'un état (pur) : les niveaux de props.grouping et leurs sections d'en-tête et de pied de groupe
 // restent cohérents après chaque opération (une section par drapeau, groupLevel dans l'ordre de grouping, sections rangées).
-import { remapSections } from '../../../shared/design/layout-edit';
+import { joinColumn, remapSections } from '../../../shared/design/layout-edit';
 import { flattenControls, type DesignDoc, type SectionDef } from '../../../shared/design/model';
 import { sameName } from '../../../shared/field-types';
 import type { SourceField } from '../../../shared/record-source';
@@ -87,16 +87,19 @@ const HEIGHT = 340;   // 0,6 cm de haut (état instantané)
 
 /** `=<Fn>([Champ])` (`=Count(*)` pour CountRecords) à la gauche et la largeur de la zone de texte, sous les contrôles déjà là,
  *  dans chaque pied de groupe et dans le pied d'état (la paire En-tête/pied d'état est créée s'il manque). Un pied qui a déjà ce total est laissé tel quel ;
- *  rien d'ajouté : le même document. Pas de BorderStyle : le défaut des états (C5). */
-export function addTotal(doc: DesignDoc, field: SourceField, fn: TotalFn, left: number, width: number): DesignDoc {
+ *  rien d'ajouté : le même document. Pas de BorderStyle : le défaut des états (C5). `member` : une zone de texte d'une disposition
+ *  tabulaire ; chaque total ajouté rejoint sa colonne, sur une ligne de son pied. */
+export function addTotal(doc: DesignDoc, field: SourceField, fn: TotalFn, left: number, width: number, member?: string): DesignDoc {
   const source = fn === 'CountRecords' ? '=Count(*)' : `=${fn}([${field.name}])`;
   const format = TYPED.includes(fn) ? field.props.format || (field.type === 'currency' ? 'currency' : undefined) : undefined;
   let out = withSections(doc, ['reportHeader', 'reportFooter']);
   for (let i = 0; i < out.sections.length; i++) {
     const s = out.sections[i]!;
     if ((s.kind !== 'groupFooter' && s.kind !== 'reportFooter') || flattenControls(s.controls).some((c) => c.props.ControlSource === source)) continue;
-    out = placeControls(out, i, [{ kind: 'textBox', name: uniqueName(out, `${PREFIX[fn]}_${field.name}`), left, top: topBelow(s), width, height: HEIGHT,
+    const name = uniqueName(out, `${PREFIX[fn]}_${field.name}`);
+    out = placeControls(out, i, [{ kind: 'textBox', name, left, top: topBelow(s), width, height: HEIGHT,
       props: { ControlSource: source, ...(format ? { Format: format } : {}) } }]);
+    if (member) out = joinColumn(out, member, name);
   }
   return out;
 }

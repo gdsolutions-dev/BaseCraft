@@ -41,3 +41,4 @@ registerNavMenuItems('query', [exportItem, ...clipboardItems]);
 registerNavMenuItems('form', clipboardItems);
 registerNavMenuItems('report', clipboardItems);
 registerNavMenuItems('macro', clipboardItems);
+registerNavMenuItems('module', clipboardItems);

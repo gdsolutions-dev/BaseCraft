@@ -454,6 +454,7 @@
     "forms": "フォーム",
     "reports": "レポート",
     "macros": "マクロ",
+    "modules": "モジュール",
     "renameObjectTitle": "オブジェクト名の変更",
     "deleteObjectTitle": "オブジェクトの削除",
     "deleteObjectMessage": "「{{name}}」を削除しますか? この操作は元に戻せません。",
@@ -535,7 +536,10 @@
       "ok": "OK",
       "yes": "はい",
       "no": "いいえ",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "retry": "再試行",
+      "abort": "中止",
+      "ignore": "無視"
     },
     "error": {
       "busy": "データ ファイルは別のコンピューターで使用中です。しばらくしてからもう一度お試しください。",
@@ -2255,6 +2259,15 @@
       "migrateOneNull": "フィールド {{field}} に複数の Null 値があります。SQL Server は、リレーションシップ {{relation}} が必要とする重複なしのインデックスで 1 つしか許可しません。"
     }
   },
+  "module": {
+    "newName": "モジュール{{n}}",
+    "nameLabel": "モジュール名",
+    "badName": "モジュール名は Python の名前である必要があります。英数字と _ を使用し、先頭に数字は使えず、Python の予約語も使えません。",
+    "syntaxError": "構文エラー、{{line}} 行目: {{message}}",
+    "exportsUnavailable": "モジュールは保存されましたが、関数を読み取れませんでした: Python が起動しませんでした。",
+    "saveFirstTitle": "モジュールを保存",
+    "saveFirst": "モジュール「{{name}}」の変更を保存しますか?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2880,5 +2893,22 @@
     "title": "プロパティの更新",
     "message": "{{field}} が使用されているすべての場所で {{prop}} を更新しますか？",
     "target": "{{kind}} {{name}} › {{control}}（「{{current}}」）"
+  },
+  "python": {
+    "running": "Python を実行中です… Ctrl+Break で中断します。",
+    "interrupt": "中断",
+    "restarted": "Python が応答しなくなったため再起動しました。モジュールの状態は失われました。",
+    "contentDisabled": "コンテンツを有効にするまで、Python コードはブロックされます。",
+    "loading": "Python を読み込み中…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "イミディエイト",
+    "placeholder": "Python のステートメントまたは ?式 を入力",
+    "errorAt": "(モジュール {{module}}、{{line}} 行目)",
+    "splitter": "イミディエイトウィンドウのサイズを変更"
   }
 }

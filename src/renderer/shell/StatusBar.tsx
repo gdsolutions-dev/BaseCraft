@@ -31,7 +31,7 @@ export function StatusBar({ ctx }: { ctx: RibbonContext }) {
       <div className="views" role="group" aria-label={t('status.views')}>
         {form && view('form', AppWindow)}
         {ctx.kind === 'report' && view('state', ScrollText) /* Mode État: first of a report's views (Access) */}
-        {ctx.kind !== 'macro' && view('datasheet', Sheet) /* a macro has no datasheet */}
+        {ctx.kind !== 'macro' && ctx.kind !== 'module' && view('datasheet', Sheet) /* a macro has no datasheet */}
         {ctx.kind === 'query' && !ctx.runMode && button('sql', t('status.mode.sql'), 'viewSql', sql, Code) /* A3: Access's order */}
         {(form || ctx.kind === 'report') && !ctx.runMode && view('layout', LayoutTemplate) /* L2, L3 : le mode Page, juste avant Création (Access) */}
         {!ctx.runMode && view('design', PencilRuler) /* B3 R10: run mode has no Design view */}

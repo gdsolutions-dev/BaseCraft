@@ -9,3 +9,5 @@ playwright-report/
 docs/analyse-access/raw/
 docs/analyse-access/captures/
 docs/analyse-access/OptionsAccess/
+build/python/
+build/python-cache/

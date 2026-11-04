@@ -6,12 +6,18 @@ import { CH } from '../shared/api';
 import { PRODUCT_NAME } from '../shared/product';
 import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openFromSystem, openLastBase, registerIpc, whenIdle } from './ipc';
 import { fileArg, handleOpenFile, openAll } from './open-file';
+import { appRoots, registerAppProtocol } from './app-protocol';
+import { APP_ORIGIN, APP_SCHEME } from '../shared/python/paths';
 import { closePrintWindows, PRINT_SCHEME, registerPrintProtocol } from './report-print';
 import { defaultIconPath } from './window-icon';
 
 if (process.env.BASECRAFT_USER_DATA) app.setPath('userData', process.env.BASECRAFT_USER_DATA);
 // The print window's documents and fonts (report-print.ts): a standard scheme, so fonts/<file> resolves against the document.
-protocol.registerSchemesAsPrivileged([{ scheme: PRINT_SCHEME, privileges: { standard: true, secure: true } }]);
+// bc-app (app-protocol.ts) serves the renderer and the Python files with COOP/COEP; Electron allows one call, so both go here.
+protocol.registerSchemesAsPrivileged([
+  { scheme: PRINT_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 
 let mainWindow: BrowserWindow | null = null;
 // E2E only (unpackaged + BASECRAFT_E2E=1): Playwright's app.close() calls app.quit(), which must not wait for the
@@ -40,6 +46,7 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
       ...(e2eHidden ? { backgroundThrottling: false } : {}),
+      ...(process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? { additionalArguments: ['--bc-e2e'] } : {}),
     },
   });
   mainWindow = win;
@@ -68,7 +75,7 @@ function createWindow(): void {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void win.loadFile(join(__dirname, '../renderer/index.html'));
+  else void win.loadURL(`${APP_ORIGIN}/index.html`);
 }
 
 // A new BaseCraft process for a second base (one database = one window); macOS goes through LaunchServices.
@@ -94,6 +101,7 @@ app.whenReady().then(() => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
   registerIpc(() => mainWindow);
   registerPrintProtocol();
+  registerAppProtocol(appRoots());
   createWindow();
   // `electron . <file>` in dev/tests, `BaseCraft.exe <file>` once packaged, or a file queued by macOS before ready;
   // none: the last base, when « Ouvrir la dernière base » is on and its file is still there (else nothing opens: the Backstage shows; ipc.ts openLastBase)

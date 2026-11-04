@@ -28,7 +28,7 @@ async function op(c: NavMenuContext, fn: () => Promise<OpResult>, done: () => vo
   const r = await fn();
   if (r.ok) return done();
   await c.modal.confirm({
-    titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`,
+    titleKey: 'dialog.errorTitle', messageKey: r.reason === 'badModuleName' ? 'module.badName' : `dialog.op.${r.reason}`,
     params: { ...params, table: 'table' in r ? r.table : '', view: 'view' in r ? r.view : '' }, buttons: ['ok'],
   });
 }
@@ -116,6 +116,7 @@ const MENUS: [DocKind, NavMenuItem[]][] = [
   ['form', common('nav.menu.properties', 'later')],   // Layout View: form-nav-menu.ts (L2)
   ['report', common('nav.menu.properties', null)], // Export › PDF and Layout View (L3): report-menu.ts
   ['macro', common('nav.menu.objectProperties', 'later')], // B1's macro-menu.ts replaces Open and Design View
+  ['module', common('nav.menu.objectProperties', 'later')], // python/module-menu.ts replaces Open and Design View
 ];
 
 for (const [kind, items] of MENUS) registerNavMenuItems(kind, items, { fallback: true });

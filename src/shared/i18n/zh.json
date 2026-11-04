@@ -454,6 +454,7 @@
     "forms": "窗体",
     "reports": "报表",
     "macros": "宏",
+    "modules": "模块",
     "renameObjectTitle": "重命名对象",
     "deleteObjectTitle": "删除对象",
     "deleteObjectMessage": "要删除“{{name}}”吗？此操作无法撤销。",
@@ -535,7 +536,10 @@
       "ok": "确定",
       "yes": "是",
       "no": "否",
-      "cancel": "取消"
+      "cancel": "取消",
+      "retry": "重试",
+      "abort": "中止",
+      "ignore": "忽略"
     },
     "error": {
       "busy": "数据文件正被另一台工作站占用。请稍后重试。",
@@ -2255,6 +2259,15 @@
       "migrateOneNull": "字段 {{field}} 包含多个 Null 值：在关系 {{relation}} 所需的无重复索引中，SQL Server 只接受一个。"
     }
   },
+  "module": {
+    "newName": "模块{{n}}",
+    "nameLabel": "模块名称",
+    "badName": "模块名必须是 Python 名称：由字母、数字和 _ 组成，不能以数字开头，也不能是 Python 保留字。",
+    "syntaxError": "语法错误，第 {{line}} 行：{{message}}",
+    "exportsUnavailable": "模块已保存，但无法读取其函数：Python 未启动。",
+    "saveFirstTitle": "保存模块",
+    "saveFirst": "是否保存对模块“{{name}}”的更改？"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2880,5 +2893,22 @@
     "title": "更新属性",
     "message": "是否在所有使用 {{field}} 的位置更新{{prop}}？",
     "target": "{{kind}} {{name}} › {{control}}（“{{current}}”）"
+  },
+  "python": {
+    "running": "Python 正在运行… 按 Ctrl+Break 中断。",
+    "interrupt": "中断",
+    "restarted": "Python 停止响应，已重新启动。模块状态已丢失。",
+    "contentDisabled": "在启用内容之前，Python 代码被阻止。",
+    "loading": "正在加载 Python…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "即时窗口",
+    "placeholder": "输入 Python 语句，或 ?表达式",
+    "errorAt": "(模块 {{module}}，第 {{line}} 行)",
+    "splitter": "调整即时窗口大小"
   }
 }

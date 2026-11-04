@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft brengt de Access-manier van kleine gegevenstoepassingen bouwen terug — tabellen, query's, formulieren, rapporten, macro's en code — met een moderne interface en zonder aan Windows gebonden te zijn. Alles wat een database bevat, staat in **één bestand**, een gewone SQLite-database die elk SQLite-hulpmiddel nog kan openen.
 
-> **Status: vroege ontwikkeling.** Fase A (tabellen, relaties, query's, formulieren, rapporten, import en export) is voltooid in preview 0.3.1. Verwacht brekende wijzigingen vóór 1.0.
+> **Status: vroege ontwikkeling.** Fase A, B en C zijn voltooid in preview 0.4.0, en fase D (Python) heeft haar eerste deel, de engine en de modules. Verwacht brekende wijzigingen vóór 1.0.
 
 ## Waarom
 
@@ -71,9 +71,9 @@ Het doel: een goede Excel-gebruiker bouwt zonder code te schrijven in een middag
 | Fase | Inhoud |
 |---|---|
 | **A — Excel vervangen** ✅ | Tabellen, relaties en expressies, query's (QBE + SQL), formulieren, rapporten met pdf-export, csv-/Excel-import en -export, installatieprogramma's |
-| **B — Automatiseren en verspreiden** | Gebeurtenissen, macro's, AutoExec, BaseCraft Runtime (een database uitvoeren zonder ontwerptoegang) |
-| **C — Samenwerken** | Gekoppelde tabellen op PostgreSQL, SQL Server, SQLite en Access; optimistische vergrendeling; migratiewizard |
-| **D — Python** | Python-code (Pyodide) in plaats van VBA, met BaseCraft-objecten |
+| **B — Automatiseren en verspreiden** ✅ | Gebeurtenissen, macro's, AutoExec, BaseCraft Runtime (een database uitvoeren zonder ontwerptoegang) |
+| **C — Samenwerken** ✅ | Gekoppelde tabellen op PostgreSQL, SQL Server, SQLite en Access; gesplitste database en gedeeld gegevensbestand met optimistische vergrendeling; pass-through-query's; migratiewizard naar een server |
+| **D — Python** 🚧 | Python-code (Pyodide) in plaats van VBA, met BaseCraft-objecten. Klaar: engine, modules, Direct-venster; daarna: de rest van het objectmodel |
 | **E — Access-import** | Tabellen, gegevens, query's, formulieren, rapporten en macro's uit `.mdb` / `.accdb` |
 
 Niet gepland: VBA-compatibiliteit, gelijktijdig ontwerpen door meerdere personen, een web- of mobiele versie.

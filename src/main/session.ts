@@ -69,6 +69,7 @@ import { remoteActionCount, remoteRunAction } from './connectors/remote-action';
 import { withMetadata } from './links/meta';
 import { refusedQueries, runMigration, switchLocal } from './migrate/run';
 import { fold } from '../shared/expr/sql';
+import { isModuleName, parseModuleDef } from '../shared/python/module-def';
 
 export interface SessionDeps {
   appVersion: string;
@@ -1135,6 +1136,7 @@ export class Session {
   /** A query is checked and bound first (bc:invalidQuery|…, bc:queryBind|…, cycle included): nothing is written then. */
   saveObject(kind: ObjectKind, name: string, definition: unknown, originalName: string | null): OpResult {
     const db = this.writeDb();
+    if (kind === 'module') { if (!isModuleName(name.normalize('NFC'))) return { ok: false, reason: 'badModuleName' }; parseModuleDef(definition); }
     if (kind === 'query') checkQueryDefinition(this.qc(), name.normalize('NFC'), definition, this.deps.connectors ?? CONNECTORS);
     if (kind === 'query') { this.dropSnapshot(name); if (originalName !== null) this.dropSnapshot(originalName); }
     return saveObject(db, kind, name, definition, originalName);
@@ -1143,6 +1145,7 @@ export class Session {
     if (kind === 'query') this.dropSnapshot(oldName);
     const db = this.writeDb();
     const to = newName.normalize('NFC');
+    if (kind === 'module' && !isModuleName(to)) return { ok: false, reason: 'badModuleName' };
     const { r, autoCorrect } = await this.autoCorrected(kind === 'module' || oldName === to ? [] : [{ k: 'object', kind, from: oldName, to }], labels, (then) =>
       inTransactionAsync(db, async () => {
         const x = renameObject(db, kind, oldName, newName);
@@ -1155,7 +1158,10 @@ export class Session {
     if (kind === 'query') this.dropSnapshot(name);
     return deleteObject(this.writeDb(), kind, name);
   }
-  copyObject(kind: ObjectKind, name: string, newName: string): OpResult { return copyObject(this.writeDb(), kind, name, newName); }
+  copyObject(kind: ObjectKind, name: string, newName: string): OpResult {
+    const db = this.writeDb();
+    return kind === 'module' && !isModuleName(newName.normalize('NFC')) ? { ok: false, reason: 'badModuleName' } : copyObject(db, kind, name, newName);
+  }
   /** Properties dialog: a table keeps it in its metadata, an object in bc_objects. */
   setDescription(kind: ObjectKind | 'table', name: string, description: string | null): OpResult {
     const db = this.writeDb();

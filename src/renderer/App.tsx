@@ -8,6 +8,9 @@ import { DEFAULT_STARTUP, hasStartup, type StartupOptions } from '../shared/star
 import { api, setLoginPrompt, setPasswordPrompt } from './bridge';
 import { applyUi } from './i18n';
 import { design } from './design/entry';
+import { pythonHost } from './python/python-host';
+import { PythonVeil, usePythonRunning } from './python/PythonVeil';
+import { uiHandlers } from './python/ui-handlers';
 import { hasPendingRow } from './import-text/wizard-model';
 import { firstFreeName, formNames } from './form/form-def';
 import { Backstage, type BackstageView, type Settings } from './shell/Backstage';
@@ -96,6 +99,7 @@ function Shell() {
   const blockedAutoExec = useRef<string | null>(null);
   const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui });
   live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui };
+  const pythonRunning = usePythonRunning();
 
   /** Bumped by each read and each settingsChanged broadcast: a read overtaken meanwhile is older, dropped. */
   const settingsGen = useRef(0);
@@ -167,6 +171,8 @@ function Shell() {
     rawDispatch(a);
     if (a.type === 'tableSaved' || a.type === 'tableRenamed' || a.type === 'tableDropped' || a.type === 'listsChanged' || a.type === 'tableDescribed') void refreshTables();
     if (a.type === 'objectSaved' || a.type === 'objectRenamed' || a.type === 'objectDeleted' || a.type === 'listsChanged') void refreshObjects();
+    // a renamed or deleted module must not stay importable from the running Python session
+    if ((a.type === 'objectRenamed' || a.type === 'objectDeleted') && a.kind === 'module' && pythonHost().state() !== 'off') void pythonHost().reset().catch(() => {});
   }, [refreshTables, refreshObjects, showError]);
 
   const dispatch = useCallback((a: AppAction) => {
@@ -331,6 +337,12 @@ function Shell() {
     return firstFreeName([...s.tabs, ...objs.filter((x) => x.kind === 'macro')].map((x) => x.name), (n) => t('macro.newName', { n }));
   }, [t]);
 
+  /** The first « Module<n> » free among the modules and the open tabs. */
+  const newModuleName = useCallback(() => {
+    const { state: s, objects: objs } = live.current;
+    return firstFreeName([...s.tabs, ...objs.filter((x) => x.kind === 'module')].map((x) => x.name), (n) => t('module.newName', { n }));
+  }, [t]);
+
   // Create › Form and Report, as Access: the Navigation Pane's selection (a form's or report's own source), else the picker
   const sourceToCreate = async (titleKey: string) => {
     const sel = live.current.navSelection;
@@ -355,7 +367,7 @@ function Shell() {
 
   // Shell-level commands; a document registering the same command takes precedence.
   useEffect(() => registerCommands(SHELL_SCOPE, {
-    ...design?.shellCommands({ modal, dispatch, rawDispatch, t, live, sourceToCreate, newForm, newQueryName, newReportName, newMacroName, setImporting, closeDocuments }),
+    ...design?.shellCommands({ modal, dispatch, rawDispatch, t, live, sourceToCreate, newForm, newQueryName, newReportName, newMacroName, newModuleName, setImporting, closeDocuments, toggleImmediate }),
     viewDesign: () => {
       const id = live.current.state.activeId;
       if (id) dispatch({ type: 'setMode', id, mode: 'design' });
@@ -398,7 +410,7 @@ function Shell() {
       const id = live.current.state.activeId;
       if (id) dispatch({ type: 'setMode', id, mode: 'layout' });
     },
-  }), [t, i18n, modal, dispatch, newReportName, newMacroName]);
+  }), [t, i18n, modal, dispatch, newReportName, newMacroName, newModuleName]);
   /** A3: Requête1…, free among tables, queries and open tabs. */
   function newQueryName(): string {
     const { state: s, tables: list, objects: objs } = live.current;
@@ -419,12 +431,51 @@ function Shell() {
     else if (tab.mode === 'datasheet') { rawDispatch({ type: 'tableDataChanged', name: r.table }); rawDispatch({ type: 'activate', id: tab.id }); }
   };
 
+  // Immediate window (D1 R12): design only; once opened it stays mounted (log and history kept), hidden when closed
+  const [immediate, setImmediate] = useState<{ open: boolean; seen: boolean; focus: number }>({ open: false, seen: false, focus: 0 });
+  const toggleImmediateRef = useRef(() => {});
+  const toggleImmediate = () => setImmediate((s) => ({ open: !s.open, seen: true, focus: s.focus + 1 }));
+  toggleImmediateRef.current = design ? toggleImmediate : () => {};
+
+  // Python engine (D1): blocked only where the macro shell blocks (content disabled; 'none' runs what the designer types). The hook is for e2e runs.
+  useEffect(() => {
+    const host = pythonHost();
+    host.configure({ contentEnabled: () => live.current.session?.content !== 'disabled' });
+    host.registerHandlers(uiHandlers(modal));
+    if (api.e2e) window.__bcPython = host;
+    return host.onRestart(() => { void modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'python.restarted', buttons: ['ok'] }); });
+  }, [modal]);
+
+  // Another base (or none) must not inherit the modules and the Immediate namespace of the previous one: fresh worker.
+  const lastBase = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const p = session === undefined ? undefined : session?.path ?? null;
+    if (p === undefined) return;
+    if (lastBase.current !== undefined && lastBase.current !== p && pythonHost().state() !== 'off') pythonHost().restart();
+    lastBase.current = p;
+  }, [session]);
+
+  // R10: warm the engine once the window is idle, only for a trusted base that carries a module.
+  const hasModule = objects.some((o) => o.kind === 'module');
+  useEffect(() => {
+    if (session?.content !== 'enabled' || !hasModule) return;
+    let idle: number | undefined;
+    const delay = setTimeout(() => { idle = requestIdleCallback(() => { pythonHost().ensure().catch(() => {}); }, { timeout: 5000 }); }, 2000);
+    return () => { clearTimeout(delay); if (idle !== undefined) cancelIdleCallback(idle); };
+  }, [session?.content, hasModule]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl+Break interrupts Python, even with a dialog in front
+      if (e.ctrlKey && (e.key === 'Cancel' || e.code === 'Pause') && pythonHost().state() === 'running') { e.preventDefault(); pythonHost().interrupt(); return; }
+      if (pythonHost().state() === 'running') return; // the veil makes the window inert: no shortcut runs under a Python call
       if (dialogInFront()) return; // a dialog or the backstage is in front (a Query Builder's tab is served)
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         runCommand('save');
+      } else if (e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault(); e.stopPropagation();
+        if (live.current.ui.specialKeys) toggleImmediateRef.current();   // special keys off: Ctrl+G does nothing (the ribbon command still opens it)
       } else if (e.key === 'F11') {
         e.preventDefault();
         if (live.current.ui.specialKeys) rawDispatch({ type: 'toggleNav' });   // special keys off: F11 does nothing (O1 R6)
@@ -584,7 +635,7 @@ function Shell() {
 
   return (<>
     {/* a dialog form (R12): the whole window stands back, but RunningNotice's Stop (above modals) */}
-    <div className="app" data-testid="app-root" ref={inertRef(dialogOpen)}>
+    <div className="app" data-testid="app-root" ref={inertRef(dialogOpen || pythonRunning)}>
       {/* a Query Builder's tab (modal): all but the ribbon and the status bar (which serve it) and the document tabs stands back */}
       <Ribbon ctx={ctx}
         onFile={() => { void refreshSettings(); setBackstage('home'); }} />
@@ -599,6 +650,7 @@ function Shell() {
         )}
         <DocumentTabs state={state} readOnly={readOnly} linkOf={linkedDesign} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} showTabs={ui.documentTabs} formIcon={formIcon} />
       </div>
+      {design && immediate.seen && session && <design.ImmediateWindow visible={immediate.open} focusKey={immediate.focus} />}
       {ui.statusBar && <StatusBar ctx={ctx} />}
       {importing && session && design && (
         <design.ImportWizard tables={tables} queries={objects.filter((o) => o.kind === 'query').map((o) => o.name)} pendingRow={(name) => hasPendingRow(live.current.state.tabs, name)}
@@ -615,5 +667,6 @@ function Shell() {
     </div>
     <DialogHost tabs={state.tabs} activeId={state.activeId} dispatch={dispatch} readOnly={readOnly} />
     <RunningNotice />
+    <PythonVeil />
   </>);
 }

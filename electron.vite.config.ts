@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { execFileSync } from 'node:child_process';
 import { relative } from 'node:path';
 import { DESIGNER_MODULES } from './src/shared/designer-modules';
+// @ts-expect-error plain .mjs script
+import { preparePythonAssets } from './scripts/python-assets.mjs';
 
 /** A build-only patch of one Glide file (dist/esm/<file>): `patch` gives the new code, null when the code no longer has the
  *  expected shape. The build fails then, and also when the file never came through (moved or renamed by a Glide upgrade). */
@@ -62,6 +64,26 @@ const lazyDriverGuard = {
   },
 };
 
+/** D1 (R3): build/python/ (Pyodide core, numpy + pandas wheels, trimmed lock) is prepared once per main build, whatever starts it
+ *  (npm scripts, CI, e2e, both products); electron-builder ships it as resources/python. */
+const pythonAssets = {
+  name: 'python-assets',
+  apply: 'build' as const,
+  async buildStart() { await preparePythonAssets({ out: 'build/python', cache: 'build/python-cache' }); },
+};
+
+/** D1: Pyodide lives in resources/python, never in the renderer bundle (the worker loads it at run time from bc-app://). */
+const pythonGuard = {
+  name: 'python-guard',
+  apply: 'build' as const,
+  generateBundle(this: { error(msg: string): never }, _: unknown, bundle: Record<string, { type: string; moduleIds?: string[] }>) {
+    const hit = Object.values(bundle).some((c) => c.type === 'chunk' && (c.moduleIds ?? []).some((id) => id.replace(/\\/g, '/').includes('node_modules/pyodide/')));
+    if (hit) this.error('python-guard: node_modules/pyodide is in the renderer bundle');
+    // app-protocol.ts gives the worker's CSP to assets/python-worker-*.js only: no such chunk, no CSP (and no engine)
+    if (!Object.keys(bundle).some((f) => /^assets\/python-worker-[^/]*\.js$/.test(f))) this.error('python-guard: no assets/python-worker-*.js chunk in the renderer build');
+  },
+};
+
 // The Runtime build (--mode runtime, B5): the same sources with the designers removed, in out-runtime/ (out/ stays the full build's).
 // Once main is built, the folder gets its package.json and icon (scripts/runtime-stage.mjs): `electron out-runtime` then runs as packaged.
 const runtimeStage = {
@@ -78,7 +100,7 @@ export default defineConfig(({ mode }) => {
     // db-host: the data process (utilityProcess.fork of out/main/db-host.js), the only one that opens SQLite
     // exceljs and mdb-reader (C2, Access files) are bundled (the packaged app has no node_modules)
     // pg (C4) and tedious (C5) are bundled too, each in its own chunk loaded on first use (lazyDriverGuard)
-    main: { define, plugins: [lazyDriverGuard, ...(runtime ? [runtimeStage] : [])], build: { ...outDir('main'), externalizeDeps: { exclude: ['exceljs', 'mdb-reader', 'pg', 'tedious'] }, rollupOptions: {
+    main: { define, plugins: [pythonAssets, lazyDriverGuard, ...(runtime ? [runtimeStage] : [])], build: { ...outDir('main'), externalizeDeps: { exclude: ['exceljs', 'mdb-reader', 'pg', 'tedious'] }, rollupOptions: {
       input: { index: 'src/main/index.ts', 'db-host': 'src/main/db-host/host.ts' },
       // unzipper (exceljs) requires it lazily, only for Open.s3_v3, which BaseCraft never calls
       // pg requires pg-native (native bindings) only through its `native` getter, which BaseCraft never reads
@@ -87,6 +109,10 @@ export default defineConfig(({ mode }) => {
     // sandbox: true impose un preload empaqueté en CJS
     preload: { define, build: { ...outDir('preload'), rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].js' } } } },
     renderer: { root: 'src/renderer', define, build: outDir('renderer'),
+      // dev: the isolation bc-app:// gives in production (SharedArrayBuffer for the Python bridge)
+      server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
+      // the Python worker chunk keeps a stable name: app-protocol.ts gives assets/python-worker-*.js its CSP
+      worker: { rollupOptions: { output: { entryFileNames: 'assets/python-worker-[hash].js', chunkFileNames: 'assets/python-worker-[hash].js' } } },
       // the designers' single way in (src/renderer/design/entry.ts) is the Runtime's design-free one
       ...(runtime ? { resolve: { alias: [{ find: /^(.*)\/design\/entry$/, replacement: '$1/design/entry.runtime' }] } } : {}),
       plugins: [

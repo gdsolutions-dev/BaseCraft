@@ -1,0 +1,11 @@
+/* Module editor: CodeMirror coloured from the app variables. */
+.module-editor-wrap { display: flex; flex-direction: column; height: 100%; background: var(--bc-surface); }
+.module-editor { flex: 1; min-height: 0; overflow: hidden; }
+.module-editor .cm-editor { height: 100%; background: var(--bc-surface); color: var(--bc-text); }
+.module-editor .cm-scroller { font-family: ui-monospace, Consolas, monospace; }
+.module-editor .cm-gutters { background: var(--bc-surface-2); color: var(--bc-text-muted); border-right: 1px solid var(--bc-border); }
+.module-editor .cm-activeLine, .module-editor .cm-activeLineGutter { background: var(--bc-surface-2); }
+.module-editor .cm-cursor { border-left-color: var(--bc-text); }
+.module-editor .cm-focused { outline: 2px solid var(--bc-accent); outline-offset: -2px; }
+.module-editor .cm-bc-error-line { background: color-mix(in srgb, var(--bc-danger) 18%, transparent); box-shadow: inset 3px 0 0 var(--bc-danger); }
+.module-error { padding: var(--bc-space-2) var(--bc-space-3); color: var(--bc-danger); border-top: 1px solid var(--bc-danger); background: var(--bc-surface-2); }

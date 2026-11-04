@@ -517,8 +517,8 @@ export const viewPair = (kind: RibbonContext['kind']): [CommandId, CommandId] =>
 const resized = (c: RibbonCommand, size: RibbonCommand['size']): RibbonCommand => ({ ...c, size });
 
 const viewDatasheet: RibbonCommand = {
-  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && (!c.isNew || c.kind === 'query') && c.kind !== 'macro', // a new query: the mode guard asks to save first (as Run does)
-  visible: (c) => c.kind !== 'report' && c.kind !== 'macro', // a report or a macro has no datasheet (Access)
+  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && (!c.isNew || c.kind === 'query') && c.kind !== 'macro' && c.kind !== 'module', // a new query: the mode guard asks to save first (as Run does)
+  visible: (c) => c.kind !== 'report' && c.kind !== 'macro' && c.kind !== 'module', // a report, a macro or a module has no datasheet (Access)
   // an object's Run view; a form's Datasheet view is its datasheet mode (M10); a report's Run view is its Print Preview
   active: (c) => sheet(c) || (c.mode === 'run' && c.kind !== 'form' && c.kind !== 'report'),
 };
@@ -556,7 +556,8 @@ const viewSql: RibbonCommand = { id: 'viewSql', icon: Code, labelKey: 'ribbon.cm
 // Entries shown in several tabs (same id in one context = same entry).
 const formatPainter = plan('later', 'formatPainter', Paintbrush);
 const alternateRowColor = plan('later', 'alternateRowColor', Rows3, 'xs');
-const pythonEditor = plan('D', 'pythonEditor', Code);
+// D1 Task 9: the Immediate window (a design module: the Runtime registers no handler)
+const pythonEditor: RibbonCommand = { id: 'pythonEditor', icon: Code, labelKey: 'ribbon.cmd.pythonEditor', size: 'sm', enabled: (c) => c.hasBase };
 // Access offers it in Database Tools, Table Design and Table (relationshipsGroup).
 const relationships: RibbonCommand = { id: 'relationships', icon: Network, labelKey: 'ribbon.cmd.relationships', size: 'lg', enabled: (c) => c.hasBase };
 const objectDependencies = plan('later', 'objectDependencies', GitFork, 'lg');
@@ -701,7 +702,7 @@ export const RIBBON: RibbonTab[] = [
         { id: 'createBlankReport', icon: File, labelKey: 'ribbon.cmd.createBlankReport', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
         plan('later', 'reportWizard', WandSparkles), plan('later', 'labels', Tags)),
       group('macrosCode', { id: 'createMacro', icon: Zap, labelKey: 'ribbon.cmd.createMacro', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly },
-        plan('D', 'createModule', FileCode2), pythonEditor),
+        { id: 'createModule', icon: FileCode2, labelKey: 'ribbon.cmd.createModule', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }, pythonEditor),
     ],
   },
   {

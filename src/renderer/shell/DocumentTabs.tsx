@@ -1,5 +1,5 @@
 // Onglets de documents ; la vue de chacun vient du registre documentViews (type + mode).
-import { AppWindow, FileSearch, FileText, Network, Table, X, Zap, type LucideIcon } from 'lucide-react';
+import { AppWindow, FileCode2, FileSearch, FileText, Network, Table, X, Zap, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TableSummary } from '../../shared/api';
 import type { AppAction, AppState, DocKind, DocTab } from '../state/app-state';
@@ -19,6 +19,7 @@ export const DOC_ICONS: Record<DocKind, LucideIcon> = {
   report: FileText,
   relations: Network,
   macro: Zap,
+  module: FileCode2,
 };
 
 /** showTabs false (O1 R7): no strip of document tabs, but a Query Builder's own tab; the front document is shown alone.

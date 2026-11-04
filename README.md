@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft brings back the Access way of building small data applications — tables, queries, forms, reports, macros and code — with a modern interface, and without being tied to Windows. Everything a database contains lives in **a single file**, which is a plain SQLite database that any SQLite tool can still open.
 
-> **Status: early development.** Stage A (tables, relationships, queries, forms, reports, import and export) is complete in preview 0.3.1. Expect breaking changes before 1.0.
+> **Status: early development.** Stages A, B and C are complete in preview 0.4.0, and stage D (Python) has its first part, the engine and modules. Expect breaking changes before 1.0.
 
 ## Why
 
@@ -68,6 +68,7 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - SQL Server linked tables: External Data › SQL Server links server tables (SQL login, encrypted connection, named instances) the same way (see [SQL Server linked tables](#sql-server-linked-tables))
 - Move to a server: Database Tools › Move Data › « Vers un serveur » moves every local table (structure, data, keys, indexes, relationships) to PostgreSQL or SQL Server after a backup copy, replaces them with linked tables that keep their captions, formats and rules, and shows a report; External Data › Import › PostgreSQL / SQL Server copies server tables into local ones (see [Move to a server](#move-to-a-server))
 - Pass-through queries: Query Type › SQL direct sends a text in PostgreSQL's or SQL Server's own language to the server as typed, with a read-only result for datasheets, forms and reports or an action run with « Activer le contenu » (see [Pass-through queries](docs/postgresql.md#pass-through-queries))
+- Python (Pyodide, offline, numpy and pandas included): modules, Immediate window (Ctrl+G), `msgbox` and `inputbox`, Ctrl+Break (see [Python](docs/python.md))
 - Save As, Compact and Repair; `.basecraft` file association
 - Ribbon, navigation pane, tabs, light and dark themes
 - File › Options: workstation settings (confirmations, recent databases, last database at startup, default folder) and database options (menus, shortcut menus, special keys, status bar, tabs, compact on close), plus Enter and arrow keys, datasheet gridlines, width and font, four-digit years and Find defaults, object designers' defaults (new field type and size, AutoIndex, AutoJoin, designer fonts, selection behavior) and default print margins, Name AutoCorrect (track, perform, and log renames) and the property update options
@@ -77,9 +78,9 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 | Stage | Content |
 |---|---|
 | **A — Replace Excel** ✅ | Tables, relations and expressions, queries (QBE + SQL), forms, reports with PDF export, CSV/Excel import and export, installers |
-| **B — Automate and distribute** | Events, macros, AutoExec, BaseCraft Runtime (run a database without design access) |
-| **C — Work together** | Linked tables on PostgreSQL, SQL Server, SQLite and Access; split database and shared data file with optimistic locking; migration wizard |
-| **D — Python** | Python code (Pyodide) in place of VBA, with BaseCraft objects |
+| **B — Automate and distribute** ✅ | Events, macros, AutoExec, BaseCraft Runtime (run a database without design access) |
+| **C — Work together** ✅ | Linked tables on PostgreSQL, SQL Server, SQLite and Access; split database and shared data file with optimistic locking; pass-through queries; migration wizard to a server |
+| **D — Python** 🚧 | Python code (Pyodide) in place of VBA, with BaseCraft objects. Done: engine, modules, Immediate window; next: the rest of the object model |
 | **E — Access import** | Tables, data, queries, forms, reports and macros from `.mdb` / `.accdb` |
 
 Not planned: VBA compatibility, concurrent design by several people, a web or mobile version.

@@ -454,6 +454,7 @@
     "forms": "양식",
     "reports": "보고서",
     "macros": "매크로",
+    "modules": "모듈",
     "renameObjectTitle": "개체 이름 바꾸기",
     "deleteObjectTitle": "개체 삭제",
     "deleteObjectMessage": "“{{name}}”을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
@@ -535,7 +536,10 @@
       "ok": "확인",
       "yes": "예",
       "no": "아니요",
-      "cancel": "취소"
+      "cancel": "취소",
+      "retry": "다시 시도",
+      "abort": "중단",
+      "ignore": "무시"
     },
     "error": {
       "busy": "다른 컴퓨터에서 데이터 파일을 사용 중입니다. 잠시 후 다시 시도하세요.",
@@ -2255,6 +2259,15 @@
       "migrateOneNull": "필드 {{field}}에 Null 값이 여러 개 있습니다. SQL Server는 관계 {{relation}}에 필요한 중복 불가능 인덱스에서 하나만 허용합니다."
     }
   },
+  "module": {
+    "newName": "모듈{{n}}",
+    "nameLabel": "모듈 이름",
+    "badName": "모듈 이름은 Python 이름이어야 합니다. 문자, 숫자, _ 만 사용할 수 있고 숫자로 시작할 수 없으며 Python 예약어도 안 됩니다.",
+    "syntaxError": "구문 오류, {{line}}번째 줄: {{message}}",
+    "exportsUnavailable": "모듈은 저장되었지만 함수를 읽을 수 없습니다: Python이 시작되지 않았습니다.",
+    "saveFirstTitle": "모듈 저장",
+    "saveFirst": "모듈 '{{name}}'의 변경 내용을 저장하시겠습니까?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2880,5 +2893,22 @@
     "title": "속성 업데이트",
     "message": "{{field}}을(를) 사용하는 모든 곳에서 {{prop}}을(를) 업데이트하시겠습니까?",
     "target": "{{kind}} {{name}} › {{control}} (“{{current}}”)"
+  },
+  "python": {
+    "running": "Python 실행 중… 중단하려면 Ctrl+Break를 누르세요.",
+    "interrupt": "중단",
+    "restarted": "Python이 응답하지 않아 다시 시작되었습니다. 모듈 상태가 손실되었습니다.",
+    "contentDisabled": "콘텐츠를 사용하도록 설정할 때까지 Python 코드가 차단됩니다.",
+    "loading": "Python 로드 중…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "직접 실행",
+    "placeholder": "Python 문 또는 ?식을 입력하세요",
+    "errorAt": "(모듈 {{module}}, {{line}}행)",
+    "splitter": "직접 실행 창 크기 조정"
   }
 }

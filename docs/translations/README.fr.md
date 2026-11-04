@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft retrouve la manière Access de construire de petites applications de données — tables, requêtes, formulaires, états, macros et code — avec une interface moderne, sans être lié à Windows. Tout ce qu'une base contient vit dans **un seul fichier**, une simple base SQLite que n'importe quel outil SQLite peut encore ouvrir.
 
-> **État : développement précoce.** L'étape A (tables, relations, requêtes, formulaires, états, import et export) est terminée dans la préversion 0.3.1. Attendez-vous à des changements incompatibles avant la 1.0.
+> **État : développement précoce.** Les étapes A, B et C sont terminées dans la préversion 0.4.0, et l'étape D (Python) a sa première partie, le moteur et les modules. Attendez-vous à des changements incompatibles avant la 1.0.
 
 ## Pourquoi
 
@@ -71,9 +71,9 @@ L'objectif : un bon utilisateur d'Excel, sans écrire de code, construit en un a
 | Étape | Contenu |
 |---|---|
 | **A — Remplacer Excel** ✅ | Tables, relations et expressions, requêtes (QBE + SQL), formulaires, états avec export PDF, import et export CSV/Excel, programmes d'installation |
-| **B — Automatiser et distribuer** | Événements, macros, AutoExec, BaseCraft Runtime (exécuter une base sans accès à la conception) |
-| **C — Travailler ensemble** | Tables liées vers PostgreSQL, SQL Server, SQLite et Access ; verrouillage optimiste ; assistant de migration |
-| **D — Python** | Code Python (Pyodide) à la place de VBA, avec les objets BaseCraft |
+| **B — Automatiser et distribuer** ✅ | Événements, macros, AutoExec, BaseCraft Runtime (exécuter une base sans accès à la conception) |
+| **C — Travailler ensemble** ✅ | Tables liées vers PostgreSQL, SQL Server, SQLite et Access ; base de données scindée et fichier de données partagé avec verrouillage optimiste ; requêtes directes ; assistant de migration vers un serveur |
+| **D — Python** 🚧 | Code Python (Pyodide) à la place de VBA, avec les objets BaseCraft. Fait : moteur, modules, fenêtre Exécution ; ensuite : le reste du modèle d'objets |
 | **E — Import Access** | Tables, données, requêtes, formulaires, états et macros depuis `.mdb` / `.accdb` |
 
 Non prévus : la compatibilité VBA, la conception simultanée par plusieurs personnes, une version web ou mobile.

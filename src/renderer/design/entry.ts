@@ -6,6 +6,9 @@ import { FormDesignView, requestFieldList as requestFormFieldList } from '../for
 import { ImportTextWizard } from '../import-text/ImportTextWizard';
 import { linkedTableManagerItem } from '../links/LinkedTableManager';
 import { MacroDesignView } from '../macro/MacroDesignView';
+import { ImmediateWindow } from '../python/ImmediateWindow';
+import { ModuleEditorView } from '../python/ModuleEditorView';
+import '../python/module-menu';
 import { openSqlView, QueryDesignView } from '../query/QueryDesignView';
 import { RelationsView } from '../relations/RelationsView';
 import { ReportDesignView, requestFieldList as requestReportFieldList } from '../report/design/ReportDesignView';
@@ -26,6 +29,7 @@ registerDocumentView('query', 'design', QueryDesignView);
 registerDocumentView('report', 'design', ReportDesignView);
 registerDocumentView('report', 'layout', ReportDesignView);   // L3: likewise for a report
 registerDocumentView('macro', 'design', MacroDesignView);
+registerDocumentView('module', 'design', ModuleEditorView);
 
 registerNavMenuItems('query', [
   // A3 Task 9: the SQL view (part of the Design view)
@@ -41,5 +45,5 @@ export const design: DesignHooks | null = {
   ImportWizard: ImportTextWizard,
   CurrentDatabaseOptions,
   tableFieldsCommands, FIELD_TYPES, moreFieldsFor, addMoreField, setDataType, setFormat, editValidation,
-  EditListDialog,
+  EditListDialog, ImmediateWindow,
 };

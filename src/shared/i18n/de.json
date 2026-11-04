@@ -454,6 +454,7 @@
     "forms": "Formulare",
     "reports": "Berichte",
     "macros": "Makros",
+    "modules": "Module",
     "renameObjectTitle": "Objekt umbenennen",
     "deleteObjectTitle": "Objekt löschen",
     "deleteObjectMessage": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden.",
@@ -535,7 +536,10 @@
       "ok": "OK",
       "yes": "Ja",
       "no": "Nein",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "retry": "Wiederholen",
+      "abort": "Abbrechen",
+      "ignore": "Ignorieren"
     },
     "error": {
       "busy": "Die Datendatei wird gerade von einer anderen Arbeitsstation verwendet. Versuchen Sie es gleich noch einmal.",
@@ -2278,6 +2282,15 @@
       "migrateOneNull": "Das Feld {{field}} enthält mehrere Nullwerte: SQL Server lässt im Index ohne Duplikate, den die Beziehung {{relation}} benötigt, nur einen zu."
     }
   },
+  "module": {
+    "newName": "Modul{{n}}",
+    "nameLabel": "Modulname",
+    "badName": "Ein Modulname muss ein Python-Name sein: Buchstaben, Ziffern und _, nicht mit einer Ziffer beginnend und kein reserviertes Python-Wort.",
+    "syntaxError": "Syntaxfehler, Zeile {{line}}: {{message}}",
+    "exportsUnavailable": "Das Modul wurde gespeichert, aber seine Funktionen konnten nicht gelesen werden: Python wurde nicht gestartet.",
+    "saveFirstTitle": "Modul speichern",
+    "saveFirst": "Möchten Sie die Änderungen am Modul „{{name}}“ speichern?"
+  },
   "macro": {
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
@@ -2903,5 +2916,22 @@
     "title": "Eigenschaften aktualisieren",
     "message": "{{prop}} überall aktualisieren, wo {{field}} verwendet wird?",
     "target": "{{kind}} {{name}} › {{control}} („{{current}}“)"
+  },
+  "python": {
+    "running": "Python wird ausgeführt… Strg+Untbr zum Unterbrechen.",
+    "interrupt": "Unterbrechen",
+    "restarted": "Python hat nicht mehr geantwortet und wurde neu gestartet. Der Zustand der Module ist verloren.",
+    "contentDisabled": "Python-Code ist blockiert, solange der Inhalt nicht aktiviert ist.",
+    "loading": "Python wird geladen…",
+    "inputbox": {
+      "title": "{{title}}",
+      "prompt": "{{prompt}}"
+    }
+  },
+  "immediate": {
+    "title": "Direktfenster",
+    "placeholder": "Python-Anweisung oder ?Ausdruck eingeben",
+    "errorAt": "(Modul {{module}}, Zeile {{line}})",
+    "splitter": "Größe des Direktfensters ändern"
   }
 }

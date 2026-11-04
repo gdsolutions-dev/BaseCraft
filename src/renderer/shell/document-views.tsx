@@ -6,7 +6,7 @@ import { DatasheetView } from '../datasheet/DatasheetView';
 import { FormRunView } from '../form/FormRunView';
 import type { DocTab } from '../state/app-state';
 import { QueryRunView } from '../query/QueryRunView';
-import { unsavedRunSql } from '../query/unsaved-run';
+import { unsavedRunDoc, unsavedRunSql } from '../query/unsaved-run';
 import type { DocViewProps } from './DocumentTabs';
 import type { AppDispatch } from './nav-menu';
 import { ReportPreviewView } from '../report/ReportPreviewView';
@@ -36,15 +36,18 @@ export function UnavailableView() {
 export function DocumentView(p: DocViewProps) {
   const mode: ViewMode = p.tab.mode === 'datasheet' ? 'run' : p.tab.mode;
   const View = views?.get(`${p.tab.kind}:${mode}`) ?? UnavailableView;
-  const Design = p.tab.kind === 'query' ? views?.get('query:design') : undefined;
-  if (Design) { // a new or modified query runs as it stands, unsaved (Access): its design stays mounted behind the datasheet, which a close sends back to it
-    const run = mode === 'run';
-    const keep = !!p.tab.isNew || unsavedRunSql.has(p.tab.id); // the datasheet clears the tab's dirty flag: the stash tells
-    const back: AppDispatch = (a) => (a.type === 'close' && a.id === p.tab.id ? p.dispatch({ type: 'setMode', id: p.tab.id, mode: 'design' }) : p.dispatch(a));
+  const Design = p.tab.kind === 'query' || p.tab.kind === 'form' || p.tab.kind === 'report' ? views?.get(`${p.tab.kind}:design`) : undefined;
+  if (Design) { // a new or modified object runs as it stands, unsaved (Access): its design stays mounted behind the run view, which a close sends back to it
+    const run = mode === 'run' || mode === 'state';
+    const id = p.tab.id;
+    const keep = !!p.tab.isNew || unsavedRunSql.has(id) || unsavedRunDoc.has(id); // the run view clears the tab's dirty flag: the stash tells
+    const back: AppDispatch = (a) => (a.type === 'close' && a.id === id ? p.dispatch({ type: 'setMode', id, mode: 'design' }) : p.dispatch(a));
+    const shown = p.active || !!p.tab.dialog; // a dialog form is shown by DialogHost even when another tab is active (a Python error opens its module)
+    // inner sections hidden with their tab too: a background tab's design or run view is never a shown `.doc`
     return (
       <>
-        {(!run || keep) && <section className="doc" hidden={run}><Design {...p} active={p.active && !run} /></section>}
-        {run && <section className="doc">{keep ? <QueryRunView {...p} dispatch={back} sql={unsavedRunSql.get(p.tab.id)} /> : <View {...p} />}</section>}
+        {(!run || keep) && <section className="doc" hidden={run || !shown}><Design {...p} active={p.active && !run} /></section>}
+        {run && <section className="doc" hidden={!shown}>{!keep ? <View {...p} /> : p.tab.kind === 'query' ? <QueryRunView {...p} dispatch={back} sql={unsavedRunSql.get(id)} /> : <View {...p} dispatch={back} />}</section>}
       </>
     );
   }

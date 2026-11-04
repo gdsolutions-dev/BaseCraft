@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft riporta il modo di Access di costruire piccole applicazioni di dati — tabelle, query, maschere, report, macro e codice — con un'interfaccia moderna e senza essere legati a Windows. Tutto ciò che un database contiene vive in **un unico file**, un semplice database SQLite che qualsiasi strumento SQLite può ancora aprire.
 
-> **Stato: sviluppo iniziale.** Le fasi A, B e C sono complete nell'anteprima 0.4.0, e la fase D (Python) ha la sua prima parte, il motore e i moduli. Aspettati modifiche incompatibili prima della 1.0.
+> **Stato: sviluppo iniziale.** La fase A (tabelle, relazioni, query, maschere, report, importazione ed esportazione) è completa nell'anteprima 0.3.1. Aspettati modifiche incompatibili prima della 1.0.
 
 ## Perché
 
@@ -71,9 +71,9 @@ L'obiettivo: un buon utente di Excel, senza scrivere codice, costruisce in un po
 | Fase | Contenuto |
 |---|---|
 | **A — Sostituire Excel** ✅ | Tabelle, relazioni ed espressioni, query (QBE + SQL), maschere, report con esportazione PDF, importazione ed esportazione CSV/Excel, programmi di installazione |
-| **B — Automatizzare e distribuire** ✅ | Eventi, macro, AutoExec, BaseCraft Runtime (eseguire un database senza accesso alla progettazione) |
-| **C — Lavorare insieme** ✅ | Tabelle collegate su PostgreSQL, SQL Server, SQLite e Access; database suddiviso e file dati condiviso con blocco ottimistico; query pass-through; procedura guidata di migrazione verso un server |
-| **D — Python** 🚧 | Codice Python (Pyodide) al posto di VBA, con gli oggetti BaseCraft. Fatto: motore, moduli, finestra Immediata; prossimo: il resto del modello a oggetti |
+| **B — Automatizzare e distribuire** | Eventi, macro, AutoExec, BaseCraft Runtime (eseguire un database senza accesso alla progettazione) |
+| **C — Lavorare insieme** | Tabelle collegate su PostgreSQL, SQL Server, SQLite e Access; blocco ottimistico; procedura guidata di migrazione |
+| **D — Python** | Codice Python (Pyodide) al posto di VBA, con gli oggetti BaseCraft |
 | **E — Importazione da Access** | Tabelle, dati, query, maschere, report e macro da `.mdb` / `.accdb` |
 
 Non previsti: compatibilità con VBA, progettazione simultanea da parte di più persone, una versione web o mobile.

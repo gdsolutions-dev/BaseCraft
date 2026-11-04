@@ -13,6 +13,7 @@ import { EMBEDDED_FONTS, resolveFont } from '../../../shared/fonts';
 import type { DesignerHost, ToolDef } from '../../designer/Designer';
 import { controlSourceToDisplay } from '../../designer/property-sheet-model';
 import type { PropertySheetContext } from '../../designer/sheet-types';
+import { gridlineStyle, marginInset } from '../../form/run-model';
 import { i18n } from '../../i18n';
 import { newReportControls, sectionLabel, togglePageHeaderFooter, toggleReportHeaderFooter } from './report-sections';
 import './report-design.css';
@@ -54,13 +55,18 @@ function boxStyle(c: ControlDef): CSSProperties {
     const a = String(prop(c, 'TextAlign'));
     st.justifyContent = a === 'center' ? 'center' : a === 'right' ? 'flex-end' : 'flex-start';
   }
-  return st;
+  return Object.assign(st, marginInset(c));
 }
 
 /** L'aperçu d'un contrôle en mode Création ; ne dépend que de `display` (règle de stabilité d'A4 : jamais du document). */
 export function reportRenderControl(display: DisplayContext): DesignerHost['renderControl'] {
   const unbound = i18n.getFixedT(display.lang)('report.unbound');
   return (c: ControlDef): ReactNode => {
+    const grid = gridlineStyle(c, c);   // a sibling over the cell rectangle, relative to the control's box
+    const body = draw(c);
+    return grid ? <>{body}<div aria-hidden data-testid={`grid-${c.name}`} style={grid} /></> : body;
+  };
+  function draw(c: ControlDef): ReactNode {
     const st = boxStyle(c);
     const source = () => controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound;
     switch (c.kind) {
@@ -91,7 +97,7 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
       case 'pageBreak': return <div className="rz rz-pagebreak" />;
       default: return <div className="rz rz-other" />;   // non imprimé (avertissement unsupportedControl sous la surface)
     }
-  };
+  }
 }
 
 export function reportHost(p: { doc: DesignDoc; sheet: PropertySheetContext; t: TFunction; renderControl: DesignerHost['renderControl'] }): DesignerHost {

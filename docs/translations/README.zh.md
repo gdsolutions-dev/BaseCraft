@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft 重现了 Access 构建小型数据应用的方式——表、查询、窗体、报表、宏和代码——并配以现代化的界面，且不再受限于 Windows。数据库包含的一切都存放在**单个文件**中，这个文件就是一个普通的 SQLite 数据库，任何 SQLite 工具都能打开。
 
-> **状态：早期开发中。** 阶段 A、B、C 已在预览版 0.4.0 中完成，阶段 D（Python）已完成第一部分，即引擎和模块。1.0 之前可能出现不兼容的变更。
+> **状态：早期开发中。** 阶段 A（表、关系、查询、窗体、报表、导入与导出）已在预览版 0.3.1 中完成。1.0 之前可能出现不兼容的变更。
 
 ## 为什么做 BaseCraft
 
@@ -71,9 +71,9 @@ BaseCraft 重现了 Access 构建小型数据应用的方式——表、查询�
 | 阶段 | 内容 |
 |---|---|
 | **A — 取代 Excel** ✅ | 表、关系与表达式、查询（QBE + SQL）、窗体、可导出 PDF 的报表、CSV/Excel 导入导出、安装程序 |
-| **B — 自动化与分发** ✅ | 事件、宏、AutoExec、BaseCraft Runtime（无设计权限地运行数据库） |
-| **C — 协同工作** ✅ | 链接到 PostgreSQL、SQL Server、SQLite 和 Access 的表；拆分数据库和带乐观锁定的共享数据文件；传递查询；迁移到服务器的迁移向导 |
-| **D — Python** 🚧 | 以 Python 代码（Pyodide）取代 VBA，可操作 BaseCraft 对象。已完成：引擎、模块、立即窗口；接下来：对象模型的其余部分 |
+| **B — 自动化与分发** | 事件、宏、AutoExec、BaseCraft Runtime（无设计权限地运行数据库） |
+| **C — 协同工作** | 链接到 PostgreSQL、SQL Server、SQLite 和 Access 的表；乐观锁定；迁移向导 |
+| **D — Python** | 以 Python 代码（Pyodide）取代 VBA，可操作 BaseCraft 对象 |
 | **E — 导入 Access** | 从 `.mdb` / `.accdb` 导入表、数据、查询、窗体、报表和宏 |
 
 不在计划内：VBA 兼容、多人同时设计、网页版或移动版。

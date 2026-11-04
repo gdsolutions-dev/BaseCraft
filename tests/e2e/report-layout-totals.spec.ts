@@ -74,3 +74,30 @@ test('Instant report totals follow their column: width handle in Layout view, To
     await app.close();
   }
 });
+
+test('Totals in Layout view: a Detail value selected in the flow, Totals > Sum puts the total in the footer, aligned with its column', async () => {
+  test.setTimeout(120000);
+  const { app, page } = await launchApp({ args: [base()], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    await page.getByTestId('nav-item-Achats').click();
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createReport').click();
+    await expect(cur(page).getByTestId('preview-page-of')).toBeVisible();
+    await page.getByTestId('status-view-layout').click();
+    await settled(page);
+
+    await item(page, 'Quantite').click();
+    await page.getByTestId('ribbon-tab-reportDesign').click();
+    await page.getByTestId('cmd-reportTotals').click();
+    await page.getByTestId('totals-popup-Sum').click();
+    await settled(page);
+    // le total est dans le flux (pied d'état) : même gauche et même largeur que la colonne
+    await expect(item(page, 'Somme_Quantite')).toBeVisible();
+    await expect(item(page, 'Somme_Quantite')).toContainText('3');
+    const [c, t] = [(await item(page, 'Quantite').boundingBox())!, (await item(page, 'Somme_Quantite').boundingBox())!];
+    expect(Math.round(t.x)).toBe(Math.round(c.x));
+    expect(Math.round(t.width)).toBe(Math.round(c.width));
+  } finally {
+    await app.close();
+  }
+});

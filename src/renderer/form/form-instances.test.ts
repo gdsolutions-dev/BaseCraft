@@ -13,7 +13,7 @@ function stub(name: string, values: Record<string, Value>, tabId = `t-${name}`):
   return {
     name, tabId,
     value: (c) => { const k = Object.keys(values).find((x) => x.toLowerCase() === c.toLowerCase()); if (k === undefined) throw new ExprRuntimeError('unknownField'); return values[k]!; },
-    setValue: no, setProperty: no, goToRecord: no, goToControl: no, applyFilter: no, showAllRecords: no, find: no, requery: no,
+    setValue: no, setProperty: no, property: no, activeControl: () => null, goToRecord: no, goToControl: no, applyFilter: no, showAllRecords: no, find: no, requery: no,
     saveRecord: no, undoRecord: no, deleteRecord: no, refreshRecord: no,
   };
 }

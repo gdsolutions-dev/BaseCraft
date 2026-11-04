@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "없음", "narrow": "좁게", "medium": "보통", "wide": "넓게"}, "controlPadding": {"none": "없음", "narrow": "좁게", "medium": "보통", "wide": "넓게"}, "anchoring": {"topLeft": "왼쪽 위", "stretchDown": "아래로 늘이기", "bottomLeft": "왼쪽 아래", "stretchTop": "위쪽 가로로 늘이기", "stretchAll": "아래로 및 가로로 늘이기", "stretchBottom": "아래쪽 가로로 늘이기", "topRight": "오른쪽 위", "stretchDownRight": "아래로 및 오른쪽으로 늘이기", "bottomRight": "오른쪽 아래"}, "layoutGridlines": {"both": "양쪽", "vertical": "세로", "horizontal": "가로", "top": "위쪽", "bottom": "아래쪽", "outline": "윤곽", "none": "없음", "width": "두께", "style": "스타일", "color": "색"}},
     "scrollLeft": "리본 메뉴를 왼쪽으로 스크롤",
     "scrollRight": "리본 메뉴를 오른쪽으로 스크롤",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "파일에 100만 자를 초과하는 필드 또는 줄이 있어 가져올 수 없습니다.",
       "notImplemented": "이 기능은 아직 이 버전에서 사용할 수 없습니다.",
       "notFound": "이 개체가 더 이상 없습니다.",
+      "notOpen": "“{{detail}}”이(가) 열려 있지 않습니다.",
+      "tooManyTempVars": "임시 변수가 너무 많습니다(최대 255개).",
+      "pythonFunctionNotFound": "공개 함수 {{name}}이(가) 있는 모듈이 없습니다.",
+      "pythonFunctionAmbiguous": "함수 {{name}}이(가) 있는 모듈이 여러 개입니다: {{detail}}.",
+      "badArgument": "잘못된 인수: {{name}}",
+      "notUpdatable": "이 원본은 업데이트할 수 없습니다. 레코드를 추가, 변경 또는 삭제할 수 없습니다.",
+      "runSqlSelect": "RunSQL에는 동작 쿼리(INSERT, UPDATE, DELETE, SELECT … INTO)가 필요합니다.",
+      "saveRefused": "“{{name}}”: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "인수 “{{name}}”은(는) 필수입니다.",
+      "noSuchDocmd": "docmd.{{name}}이(가) 없습니다.",
+      "refusedDocmd": "docmd.{{name}}은(는) Python에서 사용할 수 없습니다. {{detail}}을(를) 사용하세요.",
       "corruptObject": "이 개체의 정의를 읽을 수 없습니다.",
       "invalidQuery": "이 쿼리가 올바르지 않습니다. {{reason}}",
       "queryBind": "이 쿼리를 실행할 수 없습니다: {{detail}}",
@@ -732,6 +745,7 @@
     },
     "canvas": "디자인 화면",
     "layoutHandle": "레이아웃 {{id}} 선택",
+    "emptyCell": "레이아웃 {{layout}}의 빈 셀, {{row}}행 {{col}}열",
     "toolbox": "도구 상자",
     "arrange": {
       "alignLeft": "왼쪽",
@@ -935,6 +949,8 @@
     "findCapped": "찾기와 복사는 처음 100,000개 레코드에만 적용됩니다.",
     "pasteOneRow": "붙여넣기는 한 번에 한 행으로 제한됩니다.",
     "discardTitle": "레코드를 저장할 수 없음",
+    "saveTableLayout": "테이블 '{{name}}'의 레이아웃 변경 내용을 저장하시겠습니까?",
+    "saveQueryLayout": "쿼리 '{{name}}'의 레이아웃 변경 내용을 저장하시겠습니까?",
     "discard": "“{{name}}”에서 편집 중인 레코드를 저장할 수 없습니다. 변경 내용을 취소하시겠습니까?",
     "shapeChanged": "“{{name}}”의 구조가 변경되어 편집 중인 레코드를 저장할 수 없으며 취소되었습니다.",
     "deleteTitle": "레코드 삭제",
@@ -1472,6 +1488,7 @@
     "unavailable": "이 버전에서는 사용할 수 없습니다"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}}은(는) 기본 제공 함수이며 Python 함수가 아닙니다." },
     "Caption": "캡션",
     "DefaultView": "기본 보기",
     "AllowLayoutView": "레이아웃 보기 허용",
@@ -1486,6 +1503,25 @@
     "BackColor": "배경색",
     "BorderStyle": "테두리 스타일",
     "BorderWidth": "테두리 두께",
+    "GridlineStyleTop": "눈금선 스타일 (위쪽)",
+    "GridlineWidthTop": "눈금선 두께 (위쪽)",
+    "TopMargin": "여백 (위쪽)",
+    "TopPadding": "안쪽 여백 (위쪽)",
+    "GridlineStyleBottom": "눈금선 스타일 (아래쪽)",
+    "GridlineWidthBottom": "눈금선 두께 (아래쪽)",
+    "BottomMargin": "여백 (아래쪽)",
+    "BottomPadding": "안쪽 여백 (아래쪽)",
+    "GridlineStyleLeft": "눈금선 스타일 (왼쪽)",
+    "GridlineWidthLeft": "눈금선 두께 (왼쪽)",
+    "LeftMargin": "여백 (왼쪽)",
+    "LeftPadding": "안쪽 여백 (왼쪽)",
+    "GridlineStyleRight": "눈금선 스타일 (오른쪽)",
+    "GridlineWidthRight": "눈금선 두께 (오른쪽)",
+    "RightMargin": "여백 (오른쪽)",
+    "RightPadding": "안쪽 여백 (오른쪽)",
+    "GridlineColor": "눈금선 색",
+    "HorizontalAnchor": "가로 고정",
+    "VerticalAnchor": "세로 고정",
     "BorderColor": "테두리 색",
     "ForeColor": "전경색",
     "FontName": "글꼴 이름",
@@ -1551,9 +1587,16 @@
     "OnNoData": "데이터 없음 시",
     "OnFormat": "서식 지정 시",
     "OnPrint": "인쇄 시",
-    "ColumnHeads": "열 머리글"
+    "ColumnHeads": "열 머리글",
+    "ColumnWidth": "열 너비"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "투명", "solid": "실선", "dashed": "파선", "dotted": "점선"},
+    "GridlineStyleBottom": {"transparent": "투명", "solid": "실선", "dashed": "파선", "dotted": "점선"},
+    "GridlineStyleLeft": {"transparent": "투명", "solid": "실선", "dashed": "파선", "dotted": "점선"},
+    "GridlineStyleRight": {"transparent": "투명", "solid": "실선", "dashed": "파선", "dotted": "점선"},
+    "HorizontalAnchor": {"left": "왼쪽", "right": "오른쪽", "both": "양쪽"},
+    "VerticalAnchor": {"top": "위쪽", "bottom": "아래쪽", "both": "양쪽"},
     "DefaultView": {
       "single": "단일 양식",
       "continuous": "연속 양식",
@@ -1820,6 +1863,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "작성기 선택", "macro": "매크로 작성기", "function": "함수 작성기" },
+    "function": { "title": "함수 작성기", "empty": "공개 함수가 있는 모듈이 없습니다." },
     "title": "식 작성기",
     "expression": "식을 입력하십시오:",
     "elements": "식 요소",
@@ -1894,6 +1939,7 @@
       "unknownSource": "이 이름의 테이블이나 쿼리가 없습니다.",
       "pictureTooLarge": "그림이 너무 큽니다(최대 1MB).",
       "notInteger": "정수를 입력하십시오.",
+      "badFunctionCall": "함수 호출은 =이름(인수) 형식으로 쓰며, 모듈의 Python 함수 이름을 사용합니다.",
       "badMacroName": "매크로 이름이 올바르지 않습니다. “Macro” 또는 “Macro.Submacro” 형식이어야 하며 다른 마침표나 대괄호는 사용할 수 없습니다.",
       "badEmbedded": "포함된 매크로가 올바르지 않습니다."
     },
@@ -1913,6 +1959,7 @@
     "unbound": "바인딩 안 됨",
     "saveFirstTitle": "양식 저장",
     "saveFirst": "양식 “{{name}}”의 변경 내용을 저장하시겠습니까?",
+    "saveLayout": "양식 '{{name}}'의 레이아웃 변경 내용을 저장하시겠습니까?",
     "mustSaveFirst": "먼저 양식 “{{name}}”을(를) 저장해야 합니다. 지금 저장하시겠습니까?",
     "sourceError": "레코드 원본 “{{name}}”: {{message}}",
     "tabOrder": {
@@ -2260,6 +2307,8 @@
     }
   },
   "module": {
+    "functionClash": "함수 {{fn}}은(는) {{other}} 모듈에도 있습니다. ={{fn}}() 호출이 모호해집니다.",
+    "functionBuiltin": "{{fn}}은(는) 기본 제공 함수의 이름입니다. 다른 이름을 선택하십시오.",
     "newName": "모듈{{n}}",
     "nameLabel": "모듈 이름",
     "badName": "모듈 이름은 Python 이름이어야 합니다. 문자, 숫자, _ 만 사용할 수 있고 숫자로 시작할 수 없으며 Python 예약어도 안 됩니다.",
@@ -2289,6 +2338,7 @@
       "Quit": "끝내기",
       "RemoveAllTempVars": "모든임시변수제거",
       "RemoveTempVar": "임시변수제거",
+      "RunCode": "코드실행",
       "RunMacro": "매크로실행",
       "RunSQL": "SQL실행",
       "SetLocalVar": "로컬변수설정",
@@ -2321,6 +2371,7 @@
       "Title": "제목",
       "Name": "이름",
       "Expression": "식",
+      "FunctionName": "함수 이름",
       "MacroName": "매크로 이름",
       "RepeatCount": "반복 횟수",
       "RepeatExpression": "반복 식",
@@ -2895,6 +2946,15 @@
     "target": "{{kind}} {{name}} › {{control}} (“{{current}}”)"
   },
   "python": {
+    "error": {
+      "title": "Python 오류",
+      "text": "{{type}}: {{message}}",
+      "where": "모듈 {{module}}, {{line}}번째 줄",
+      "interrupted": "실행이 중단되었습니다.",
+      "debug": "디버그",
+      "end": "끝내기",
+      "traceback": "자세히"
+    },
     "running": "Python 실행 중… 중단하려면 Ctrl+Break를 누르세요.",
     "interrupt": "중단",
     "restarted": "Python이 응답하지 않아 다시 시작되었습니다. 모듈 상태가 손실되었습니다.",

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ControlDef, DesignDoc, SectionDef } from './model';
 import { cmToTwips as cm } from './model';
 import { COL_GAP, ROW_GAP, labelOf, readLayouts, reflow, withLayouts, type Layout } from './layout';
-import { createLayout, insertCells, joinColumn, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
+import { canMerge, createLayout, insertCells, mergeCells, splitCell, joinColumn, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
 
 const ctl = (name: string, layoutId?: string): ControlDef =>
   ({ kind: 'textBox', name, left: 0, top: 0, width: 10, height: 10, props: layoutId ? { LayoutID: layoutId } : {} });
@@ -533,5 +533,193 @@ describe('joinColumn', () => {
     expect(readLayouts(p)[0].cells.some((c) => c.control === 'Tot')).toBe(true);
     expect(byName(p, 'Tot').props.LayoutID).toBe('T');
     expect('LayoutID' in byName(removeLayout(p, 'T'), 'Tot').props).toBe(false);
+  });
+});
+
+describe('cell spans in edits', () => {
+  const wide = (): Layout => ({ ...stacked(), cells: [{ row: 0, col: 0, colSpan: 2, control: 'A' }, { row: 1, col: 0, control: 'C' }, { row: 1, col: 1, control: 'D' }] });
+  const tall = (): Layout => ({ ...stacked(), cells: [{ row: 0, col: 0, rowSpan: 2, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 1, control: 'D' }] });
+  const wdoc = () => reflow(mk([sec('detail', 'L1', 'A', 'C', 'D')], [wide()]));
+  const tdoc = () => reflow(mk([sec('detail', 'L1', 'A', 'B', 'D')], [tall()]));
+  it('back-compat: createLayout then reflow gives the same object, Stacked and Tabular', () => {
+    const s = stack(s3(), S3), t = tab(s3([]), S3);
+    expect(reflow(s)).toBe(s);
+    expect(reflow(t)).toBe(t);
+  });
+  it('insert right of a member under a spanning cell widens the span', () => {
+    const l = readLayouts(insertCells(wdoc(), 'C', 'right'))[0];
+    expect(l.cols).toHaveLength(3);
+    expect(l.cells.find((c) => c.control === 'A')).toMatchObject({ col: 0, colSpan: 3 });
+    expect(l.cells.filter((c) => c.control === null)).toHaveLength(1);   // only row 1 gets a new empty slot
+  });
+  it('insert below under a row crossed by a rowSpan grows the span', () => {
+    const l = readLayouts(insertCells(tdoc(), 'B', 'below'))[0];
+    expect(l.rows).toHaveLength(3);
+    expect(l.cells.find((c) => c.control === 'A')).toMatchObject({ rowSpan: 3 });
+    expect(l.cells.find((c) => c.control === 'D')).toMatchObject({ row: 2 });
+  });
+  it('moveRow across a vertical span is a no-op', () => {
+    const d = tdoc();
+    expect(moveRow(d, 'B', 1)).toBe(d);
+  });
+  it('selectionOf column includes a cell spanning the column', () => {
+    expect(selectionOf(wdoc(), 'D', 'column').sort()).toEqual(['A', 'D']);
+  });
+  it('removeLayout, pruneLayouts and remapSections keep spans valid', () => {
+    const d = tdoc();
+    expect(readLayouts(removeLayout(d, 'zz'))).toHaveLength(1);
+    expect(readLayouts(pruneLayouts({ ...d, sections: [{ ...d.sections[0], controls: d.sections[0].controls.filter((c) => c.name !== 'B') }] }))).toHaveLength(1);
+    const two = reflow(mk([sec('detail', 'L1', 'A', 'B', 'D')], [{ ...tall(), rows: [{ section: 'formHeader', height: 400 }, { section: 'detail', height: 400 }], tops: { formHeader: 0, detail: 0 } }]));
+    const r = remapSections(two, (x) => (x === 'formHeader' ? null : x));
+    expect(readLayouts(r)).toHaveLength(1);
+    expect(readLayouts(r)[0].cells.find((c) => c.control === 'A')).not.toHaveProperty('rowSpan');
+  });
+});
+
+describe('cell spans in placeInLayout, joinColumn, selectionOf, insertCells above/left', () => {
+  const kept = (d: DesignDoc) => { expect(readLayouts(d)).toHaveLength(1); return readLayouts(d)[0]; };
+  const fresh = (name: string): ControlDef => ({ ...ctl(name), left: 6000, top: 6000, width: 2000, height: 400 });
+  const add = (d: DesignDoc, kind: SectionDef['kind'], c: ControlDef): DesignDoc =>
+    ({ ...d, sections: d.sections.map((s) => (s.kind === kind ? { ...s, controls: [...s.controls, c] } : s)) });
+  // 3 rows x 2 cols; A spans rows 0-1 of column 0
+  const tall3 = (): Layout => ({ ...stacked(), rows: [...stacked().rows, { section: 'detail', height: 300 }],
+    cells: [{ row: 0, col: 0, rowSpan: 2, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 1, control: 'D' }, { row: 2, col: 0, control: 'E' }, { row: 2, col: 1, control: 'F' }] });
+  const t3 = () => reflow(mk([sec('detail', 'L1', 'A', 'B', 'D', 'E', 'F')], [tall3()]));
+  const rowTop = (d: DesignDoc, i: number) => { const l = readLayouts(d)[0]; return l.rows.slice(0, i).reduce((n, r) => n + r.height + ROW_GAP, l.tops.detail); };
+
+  it('placeInLayout (Stacked) through a rowSpan widens it and keeps the layout', () => {
+    const d0 = add(t3(), 'detail', fresh('Neuf'));
+    const d = placeInLayout(d0, ['Neuf'], { section: 'detail', x: byName(d0, 'B').left + 10, y: rowTop(d0, 1) + 10 });
+    const l = kept(d);
+    expect(l.rows).toHaveLength(4);
+    expect(l.cells.find((c) => c.control === 'A')).toMatchObject({ rowSpan: 3 });
+    expect(l.cells.find((c) => c.control === 'Neuf')).toMatchObject({ row: 1, col: 1 });
+  });
+  it('placeInLayout is a no-op when a span covers the data column it needs', () => {
+    const wide = (): Layout => ({ ...stacked(), rows: [...stacked().rows, { section: 'detail', height: 300 }],
+      cells: [{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, rowSpan: 2, control: 'B' }, { row: 1, col: 0, control: 'C' }, { row: 2, col: 0, control: 'E' }, { row: 2, col: 1, control: 'F' }] });
+    const d0 = add(reflow(mk([sec('detail', 'L1', 'A', 'B', 'C', 'E', 'F')], [wide()])), 'detail', fresh('Neuf'));
+    expect(placeInLayout(d0, ['Neuf'], { section: 'detail', x: byName(d0, 'A').left + 10, y: rowTop(d0, 1) + 10 })).toBe(d0);
+  });
+  it('placeInLayout (Tabular) through a colSpan widens it and keeps the layout', () => {
+    const t: Layout = { ...tabular(), cols: [800, 900, 700], cells: [{ row: 0, col: 0, colSpan: 2, control: 'H0' }, { row: 0, col: 2, control: 'H2' },
+      { row: 1, col: 0, control: 'D0' }, { row: 1, col: 1, control: 'D1' }, { row: 1, col: 2, control: 'D2' }] };
+    const d0 = add(reflow(mk([sec('formHeader', 'T', 'H0', 'H2'), sec('detail', 'T', 'D0', 'D1', 'D2')], [t])), 'detail', fresh('Neuf'));
+    const g = readLayouts(d0)[0];
+    const d = placeInLayout(d0, ['Neuf'], { section: 'detail', x: g.left + 800 + 10, y: byName(d0, 'D1').top + 10 });   // left half of column 1
+    const l = kept(d);
+    expect(l.cols).toHaveLength(4);
+    expect(l.cells.find((c) => c.control === 'H0')).toMatchObject({ colSpan: 3 });
+    expect(l.cells.find((c) => c.control === 'Neuf')).toMatchObject({ row: 1, col: 1 });
+  });
+  it('joinColumn skips a row whose column is covered by a colSpan', () => {
+    const t: Layout = { ...tabular(), tops: { ...tabular().tops, reportFooter: 20 }, rows: [...tabular().rows, { section: 'reportFooter', height: 250 }],
+      cells: [{ row: 0, col: 0, control: 'H0' }, { row: 0, col: 1, control: 'H1' }, { row: 1, col: 0, control: 'D0' }, { row: 1, col: 1, control: 'D1' }, { row: 2, col: 0, colSpan: 2, control: 'Tot0' }] };
+    const foot = { kind: 'reportFooter', height: 454, props: {}, controls: [{ ...ctl('Tot0', 'T') }, { ...ctl('Tot'), top: 57 }] } as SectionDef;
+    const d0 = reflow(mk([sec('formHeader', 'T', 'H0', 'H1'), sec('detail', 'T', 'D0', 'D1'), foot], [t]));
+    const l = kept(joinColumn(d0, 'D1', 'Tot'));
+    expect(l.cells.find((c) => c.control === 'Tot0')).toMatchObject({ colSpan: 2 });
+    expect(l.rows.map((r) => r.section)).toEqual(['formHeader', 'detail', 'reportFooter', 'reportFooter']);
+    expect(l.cells.find((c) => c.control === 'Tot')).toMatchObject({ row: 3, col: 1 });
+  });
+  it('joinColumn new row through a rowSpan keeps the layout', () => {
+    const t: Layout = { ...tabular(), rows: [...tabular().rows, { section: 'detail', height: 250 }],
+      cells: [{ row: 0, col: 0, control: 'H0' }, { row: 0, col: 1, control: 'H1' }, { row: 1, col: 0, control: 'D0' }, { row: 1, col: 1, rowSpan: 2, control: 'D1' }, { row: 2, col: 0, control: 'E0' }] };
+    const foot = { kind: 'reportFooter', height: 454, props: {}, controls: [{ ...ctl('Tot'), top: 57 }] } as SectionDef;
+    const d0 = reflow(mk([sec('formHeader', 'T', 'H0', 'H1'), sec('detail', 'T', 'D0', 'D1', 'E0'), foot], [t]));
+    const l = kept(joinColumn(d0, 'D1', 'Tot'));
+    expect(l.cells.find((c) => c.control === 'Tot')).toMatchObject({ row: 3, col: 1 });
+  });
+  it("selectionOf honours the reference cell's own span", () => {
+    expect(selectionOf(t3(), 'A', 'row').sort()).toEqual(['A', 'B', 'D']);
+    const w = reflow(mk([sec('detail', 'L1', 'A', 'C', 'D')], [{ ...stacked(), cells: [{ row: 0, col: 0, colSpan: 2, control: 'A' }, { row: 1, col: 0, control: 'C' }, { row: 1, col: 1, control: 'D' }] }]));
+    expect(selectionOf(w, 'A', 'column').sort()).toEqual(['A', 'C', 'D']);
+  });
+  it('insertCells above a row crossed by a rowSpan widens it', () => {
+    const l = kept(insertCells(t3(), 'D', 'above'));
+    expect(l.cells.find((c) => c.control === 'A')).toMatchObject({ rowSpan: 3 });
+    expect(l.cells.find((c) => c.control === 'D')).toMatchObject({ row: 2 });
+    expect(l.cells.filter((c) => c.control === null)).toEqual([{ row: 1, col: 1, control: null }]);
+  });
+  it('insertCells left of a column crossed by a colSpan widens it', () => {
+    const w = reflow(mk([sec('detail', 'L1', 'A', 'C', 'D')], [{ ...stacked(), cells: [{ row: 0, col: 0, colSpan: 2, control: 'A' }, { row: 1, col: 0, control: 'C' }, { row: 1, col: 1, control: 'D' }] }]));
+    const l = kept(insertCells(w, 'D', 'left'));
+    expect(l.cells.find((c) => c.control === 'A')).toMatchObject({ colSpan: 3 });
+    expect(l.cells.find((c) => c.control === 'D')).toMatchObject({ col: 2 });
+  });
+});
+
+describe('mergeCells / splitCell', () => {
+  const wide = () => insertCells(stackedDoc(), 'B', 'right');   // cols [1000, 3000, 3000]; (0,2) and (1,2) empty
+  const tall = () => reflow(mk([sec('detail', 'L1', 'A', 'B', 'C', 'D')], [{ ...stacked(), rows: [{ section: 'detail', height: 340 }, { section: 'detail', height: 300 }] }]));
+  it('canMerge: not two controls; a control + its empty neighbour; not a non-rectangle nor two sections', () => {
+    expect(canMerge(stackedDoc(), 'L1', [{ row: 0, col: 0 }, { row: 0, col: 1 }])).toBe(false);
+    expect(canMerge(wide(), 'L1', [{ row: 0, col: 1 }, { row: 0, col: 2 }])).toBe(true);
+    expect(canMerge(wide(), 'L1', [{ row: 0, col: 2 }, { row: 1, col: 2 }, { row: 1, col: 1 }])).toBe(false);
+    const t = insertCells(tabDoc(), 'H1', 'right');
+    expect(canMerge(t, 'T', [{ row: 0, col: 2 }, { row: 1, col: 2 }])).toBe(false);
+    expect(canMerge(wide(), 'L1', [{ row: 0, col: 1 }])).toBe(false);
+  });
+  it('merge: one cell, the control takes the merged width, props untouched', () => {
+    const d = wide();
+    const m = mergeCells(d, 'L1', [{ row: 0, col: 1 }, { row: 0, col: 2 }]);
+    expect(readLayouts(m)[0].cells.find((c) => c.control === 'B')).toEqual({ row: 0, col: 1, colSpan: 2, control: 'B' });
+    expect(byName(m, 'B').width).toBe(3000 + COL_GAP + 3000);
+    expect(byName(m, 'B').props).toEqual(byName(d, 'B').props);
+  });
+  it('split vertical: halves 85/85, others span both, new row in the section, same total height', () => {
+    const d = tall();
+    const s = splitCell(d, 'L1', { row: 0, col: 1 }, 'vertical');
+    const l = readLayouts(s)[0];
+    expect(l.rows.map((r) => r.height)).toEqual([85, 85, 300]);
+    expect(l.rows[1].section).toBe('detail');
+    expect(l.cells.find((c) => c.control === 'A')!.rowSpan).toBe(2);
+    expect(byName(s, 'B').height).toBe(85);
+    expect(l.rows[0].height + ROW_GAP + l.rows[1].height).toBe(340);
+    expect(byName(s, 'C').top).toBe(byName(d, 'C').top);
+    expect(mergeCells(s, 'L1', [{ row: 0, col: 1 }, { row: 1, col: 1 }])).toEqual(d);
+  });
+  it('split horizontal: left half keeps the control, remainder on the first half; round trip', () => {
+    const d = stackedDoc();   // B is 3000 wide: (3000 - 57) / 2 = 1471.5 -> 1471 + remainder 1472
+    const s = splitCell(d, 'L1', { row: 0, col: 1 }, 'horizontal');
+    expect(readLayouts(s)[0].cols).toEqual([1000, 1472, 1471]);
+    expect(byName(s, 'B').width).toBe(1472);
+    expect(mergeCells(s, 'L1', [{ row: 0, col: 1 }, { row: 0, col: 2 }])).toEqual(d);
+  });
+  it('split of a colSpan 2 cell is horizontal without a new column', () => {
+    const m = mergeCells(wide(), 'L1', [{ row: 0, col: 1 }, { row: 0, col: 2 }]);
+    const s = splitCell(m, 'L1', { row: 0, col: 1 }, 'horizontal');
+    expect(readLayouts(s)[0].cols).toHaveLength(3);
+    expect(readLayouts(s)[0].cells.filter((c) => c.row === 0 && c.col > 0).every((c) => !c.colSpan)).toBe(true);
+  });
+  it('split is a no-op when a half would be under 1 twip', () => {
+    const d = stackedDoc();   // row 1 is 300 high; make it 171 -> (171 - 170) / 2 = 0
+    const thin = reflow(withLayouts(d, [{ ...stacked(), rows: [{ section: 'detail', height: 400 }, { section: 'detail', height: 171 }] }]));
+    expect(splitCell(thin, 'L1', { row: 1, col: 1 }, 'vertical')).toBe(thin);
+  });
+});
+
+describe('padded layouts (L4 review fixes)', () => {
+  const pad = (d: DesignDoc, name: string, props: Record<string, unknown>): DesignDoc =>
+    ({ ...d, sections: d.sections.map((s) => ({ ...s, controls: s.controls.map((c) => (c.name === name ? { ...c, props: { ...c.props, ...props } } : c)) })) });
+  const withN = (d: DesignDoc, section = 'detail'): DesignDoc =>
+    ({ ...d, sections: d.sections.map((s) => (s.kind === section ? { ...s, controls: [...s.controls, ctl('N')] } : s)) });
+
+  it('a drop on the padded right or bottom edge hits the layout', () => {
+    const d = withN(reflow(pad(pad(stackedDoc(), 'B', { RightPadding: 500 }), 'D', { BottomPadding: 500 })));
+    expect(readLayouts(placeInLayout(d, ['N'], { section: 'detail', x: 4500, y: 200 }))[0].rows).toHaveLength(3);
+    expect(readLayouts(placeInLayout(d, ['N'], { section: 'detail', x: 500, y: 1300 }))[0].rows).toHaveLength(3);
+  });
+  it('before/after is decided on the padded extent', () => {
+    const s = withN(reflow(pad(stackedDoc(), 'A', { BottomPadding: 400 })));   // row 0: top 100, padded height 800
+    expect(readLayouts(placeInLayout(s, ['N'], { section: 'detail', x: 500, y: 450 }))[0].rows[0].height).toBe(10);
+    const t = withN(reflow(pad(tabDoc(), 'D0', { RightPadding: 1000 })));   // col 0: padded width 1800
+    expect(readLayouts(placeInLayout(t, ['N'], { section: 'detail', x: 500, y: 100 }))[0].cols[0]).toBe(10);
+  });
+  it('grouping padded controls keeps the first one where it was', () => {
+    const at = (name: string, top: number) => ({ ...ctl(name), left: 300, top, width: 1000, height: 200, props: { LeftPadding: 100, TopPadding: 50 } });
+    const d: DesignDoc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [{ kind: 'detail', height: 5000, props: {}, controls: [at('A', 200), at('B', 600)] }] };
+    const out = createLayout(d, [{ control: 'A' }, { control: 'B' }], 'stacked', { headerSection: 'formHeader' });
+    expect([byName(out, 'A').left, byName(out, 'A').top]).toEqual([300, 200]);
   });
 });

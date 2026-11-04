@@ -15,7 +15,7 @@ export interface DisplayContext { lang: 'fr' | 'en'; region: LocaleInfo }
 /** `printSub`: canonical SQL of a subquery, kept as is inside the display form (needed with `subquery`).
  *  `aggregates` false: an aggregate (Sum, Count(*)…) is refused at entry with aggregateContext, the whole text as its span:
  *  a field or table rule, a default value, a filter has no group to evaluate it in (A3 and A5 leave it out). */
-export type LocalizeOptions = Pick<ParseOptions, 'criteria' | 'qualified' | 'subquery' | 'fields'> & {
+export type LocalizeOptions = Pick<ParseOptions, 'criteria' | 'functions' | 'qualified' | 'subquery' | 'fields'> & {
   printSub?: (q: SelectQuery) => string;
   aggregates?: boolean;
 };

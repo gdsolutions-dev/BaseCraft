@@ -10,11 +10,17 @@ import type { EventBinding } from '../../shared/design/events';
 import { formCancelled, formReady, registerForm, type FormInstance } from '../form/form-instances';
 import type { SectionEvent } from '../../shared/report/types';
 import type { ActionCall, EventContext } from './engine';
+import { topEvent } from '../python/event-stack';
+import { parsePythonCall } from '../../shared/python/call-text';
 
 const runActionFlow = vi.fn(async (): Promise<string> => 'done');
 vi.mock('../query/run-action', () => ({ runActionFlow }));
 const outputSavedReport = vi.fn(async (..._: unknown[]) => false);
 vi.mock('../report/ReportPreviewView', () => ({ outputSavedReport }));
+
+const pythonCall = vi.fn(async (..._: unknown[]): Promise<unknown> => null);
+vi.mock('../python/python-host', () => ({ PythonError: class extends Error { constructor(readonly info: { message: string }) { super(info.message); this.name = 'PythonError'; } }, pythonHost: () => ({ call: pythonCall, state: () => 'running', subscribe: () => () => {} }) }));
+vi.mock('../python/function-index', () => ({ resolveFunction: async (n: string) => ({ module: 'Calculs', fn: n, params: [] }) }));
 
 const m = (items: MacroItem[]): MacroDef => ({ formatVersion: '1.0', items });
 const act = (action: string, args: Record<string, string> = {}): MacroItem => ({ k: 'action', action, args });
@@ -36,7 +42,7 @@ const beep = vi.fn(async () => {});
     } as unknown as BasecraftApi['objects'],
   },
 };
-const { clearTempVars, macroNamesWithSubs, MAX_EVENT_DEPTH, runEvent, runMacroByName, setMacroShell, shellHost } = await import('./macro-shell');
+const { clearTempVars, currentShell, macroNamesWithSubs, MAX_EVENT_DEPTH, runEvent, runMacroByName, setMacroShell, shellHost } = await import('./macro-shell');
 const { failureMessage } = await import('./MacroFailedDialog');
 const { onContentBlocked } = await import('../shell/Banners');
 const { reportShown } = await import('../report/report-events');
@@ -522,5 +528,71 @@ describe('failureMessage', () => {
     expect(failureMessage(f({ action: 'RunSQL', code: 'blocked', number: 2003 }))).toBe(i18n.t('macro.error.blocked', { action: i18n.t('macro.action.RunSQL') }));
     expect(failureMessage(f({ action: 'RunSQL', detail: 'bc:runSqlSelect' }))).toBe(i18n.t('macro.error.runSqlSelect'));
     expect(failureMessage({ macro: 'Absent', action: '', raw: {}, code: 'notFound', number: 2002, detail: 'bc:notFound' })).toContain('Absent');
+  });
+});
+
+describe('RunCode (D2)', () => {
+  it('shellHost.runCode calls the Python function and propagates its failure; currentShell is the set shell', async () => {
+    expect(currentShell()).toBe(d);
+    const host = shellHost(d, { singleStep: false });
+    await host.runCode!('f', [num(1)]);
+    expect(pythonCall).toHaveBeenCalledWith('Calculs', 'f', [1]);
+    pythonCall.mockRejectedValueOnce(new Error('py'));
+    await expect(host.runCode!('f', [])).rejects.toThrow('py');
+  });
+  it('hands the event context to the Python function (topEvent during the call)', async () => {
+    const host = shellHost(d, { singleStep: false });
+    const event = { cancelled: false } as unknown as EventContext;
+    let seen: unknown;
+    pythonCall.mockImplementationOnce(async () => { seen = topEvent(); return null; });
+    await host.runCode!('f', [], event);
+    expect(seen).toBe(event);
+    expect(topEvent()).toBeNull();
+  });
+});
+
+describe('Python events (D2 R3)', () => {
+  const py = (text: string): EventBinding => { const c = parsePythonCall(text)!; return { kind: 'python', name: c.name, args: c.args, text }; };
+  it('calls the function with the evaluated arguments; returns false when it succeeds', async () => {
+    expect(await runEvent(py('=f([Prix])'), ctx({ field: (n) => (n === 'Prix' ? num(5) : null), cancellable: true }))).toBe(false);
+    expect(pythonCall).toHaveBeenCalledWith('Calculs', 'f', [5]);
+  });
+  it('cancel_event (cancelled set on the event) cancels; a failure cancels only a cancellable event', async () => {
+    const c = ctx({ cancellable: true });
+    pythonCall.mockImplementationOnce(async () => { c.cancelled = true; return null; });
+    expect(await runEvent(py('=f()'), c)).toBe(true);
+    pythonCall.mockRejectedValueOnce(new Error('py'));
+    expect(await runEvent(py('=f()'), ctx({ cancellable: true }))).toBe(true);
+    expect(d.showError).toHaveBeenCalledTimes(1);
+    pythonCall.mockRejectedValueOnce(new Error('py'));
+    expect(await runEvent(py('=f()'), ctx())).toBe(false);
+    pythonCall.mockRejectedValueOnce(new Error('bc:pythonRestarted'));
+    expect(await runEvent(py('=f()'), ctx({ cancellable: true }))).toBe(true);
+    expect(d.showError).toHaveBeenCalledTimes(2);   // the restart is not shown again
+  });
+  it('a failure after the base was closed (halt) shows no dialog but still cancels', async () => {
+    pythonCall.mockImplementationOnce(async () => { shellHost(d, { singleStep: false }).stopAll(); throw new Error('py'); });
+    expect(await runEvent(py('=f()'), ctx({ cancellable: true }))).toBe(true);
+    expect(d.showError).not.toHaveBeenCalled();
+  });
+  it('content disabled: the bar comes back, nothing runs, no cancel', async () => {
+    enabled = false;
+    const blocked = vi.fn(); const off = onContentBlocked(blocked);
+    expect(await runEvent(py('=f()'), ctx({ cancellable: true }))).toBe(false);
+    off();
+    expect(blocked).toHaveBeenCalled();
+    expect(pythonCall).not.toHaveBeenCalled();
+  });
+  it('an argument error shows an expression failure and cancels', async () => {
+    expect(await runEvent(py('=f([Absent])'), ctx({ cancellable: true, field: () => { throw new Error('unknownField'); } }))).toBe(true);
+    expect(shown).toEqual(['macro.failed.title']);
+    expect(pythonCall).not.toHaveBeenCalled();
+  });
+  it('the 21st nested event is too deep', async () => {
+    pythonCall.mockImplementation(async () => { await runEvent(py('=f()'), ctx()); return null; });
+    await runEvent(py('=f()'), ctx());
+    pythonCall.mockImplementation(async () => null);
+    expect(pythonCall).toHaveBeenCalledTimes(MAX_EVENT_DEPTH);
+    expect(shown).toEqual(['macro.failed.title']);
   });
 });

@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "Brak", "narrow": "Wąski", "medium": "Średni", "wide": "Szeroki"}, "controlPadding": {"none": "Brak", "narrow": "Wąski", "medium": "Średni", "wide": "Szeroki"}, "anchoring": {"topLeft": "Lewy górny", "stretchDown": "Rozciągnij w dół", "bottomLeft": "Lewy dolny", "stretchTop": "Rozciągnij w poprzek u góry", "stretchAll": "Rozciągnij w dół i w poprzek", "stretchBottom": "Rozciągnij w poprzek u dołu", "topRight": "Prawy górny", "stretchDownRight": "Rozciągnij w dół i w prawo", "bottomRight": "Prawy dolny"}, "layoutGridlines": {"both": "Oba", "vertical": "Pionowe", "horizontal": "Poziome", "top": "Góra", "bottom": "Dół", "outline": "Obrys", "none": "Brak", "width": "Szerokość", "style": "Styl", "color": "Kolor"}},
     "scrollLeft": "Przewiń wstążkę w lewo",
     "scrollRight": "Przewiń wstążkę w prawo",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "Plik zawiera pole lub wiersz dłuższy niż milion znaków: nie można go zaimportować.",
       "notImplemented": "Ta funkcja nie jest jeszcze dostępna w tej wersji.",
       "notFound": "Ten obiekt już nie istnieje.",
+      "notOpen": "„{{detail}}” nie jest otwarte.",
+      "tooManyTempVars": "Zbyt wiele zmiennych tymczasowych (najwyżej 255).",
+      "pythonFunctionNotFound": "Żaden moduł nie zawiera funkcji publicznej {{name}}.",
+      "pythonFunctionAmbiguous": "Kilka modułów zawiera funkcję {{name}}: {{detail}}.",
+      "badArgument": "Nieprawidłowy argument: {{name}}",
+      "notUpdatable": "To źródło nie jest aktualizowalne: jego rekordów nie można dodawać, zmieniać ani usuwać.",
+      "runSqlSelect": "RunSQL oczekuje kwerendy funkcjonalnej (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "„{{name}}”: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "Argument „{{name}}” jest wymagany.",
+      "noSuchDocmd": "docmd.{{name}} nie istnieje.",
+      "refusedDocmd": "docmd.{{name}} nie jest dostępne w Pythonie: użyj {{detail}}.",
       "corruptObject": "Definicji tego obiektu nie można odczytać.",
       "invalidQuery": "Ta kwerenda jest nieprawidłowa. {{reason}}",
       "queryBind": "Ta kwerenda nie może zostać uruchomiona: {{detail}}",
@@ -747,6 +760,7 @@
     },
     "canvas": "Powierzchnia projektu",
     "layoutHandle": "Zaznacz układ {{id}}",
+    "emptyCell": "Pusta komórka układu {{layout}}, wiersz {{row}}, kolumna {{col}}",
     "toolbox": "Przybornik",
     "arrange": {
       "alignLeft": "Do lewej",
@@ -950,6 +964,8 @@
     "findCapped": "Wyszukiwanie i kopiowanie obejmują pierwsze 100 000 rekordów.",
     "pasteOneRow": "Wklejanie jest ograniczone do jednego wiersza naraz.",
     "discardTitle": "Nie można zapisać rekordu",
+    "saveTableLayout": "Czy chcesz zapisać zmiany układu tabeli '{{name}}'?",
+    "saveQueryLayout": "Czy chcesz zapisać zmiany układu kwerendy '{{name}}'?",
     "discard": "Nie można zapisać rekordu edytowanego w „{{name}}”. Odrzucić zmiany?",
     "shapeChanged": "Struktura „{{name}}” została zmieniona: edytowanego rekordu nie można zapisać i zostaje odrzucony.",
     "deleteTitle": "Usuwanie rekordów",
@@ -1505,6 +1521,7 @@
     "unavailable": "Niedostępne w tej wersji"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} jest funkcją wbudowaną, a nie funkcją Pythona." },
     "Caption": "Podpis",
     "DefaultView": "Widok domyślny",
     "AllowLayoutView": "Zezwalaj na widok układu",
@@ -1519,6 +1536,25 @@
     "BackColor": "Kolor tła",
     "BorderStyle": "Styl obramowania",
     "BorderWidth": "Szerokość obramowania",
+    "GridlineStyleTop": "Styl linii siatki: górna",
+    "GridlineWidthTop": "Szerokość linii siatki: górna",
+    "TopMargin": "Margines: górna",
+    "TopPadding": "Dopełnienie: górna",
+    "GridlineStyleBottom": "Styl linii siatki: dolna",
+    "GridlineWidthBottom": "Szerokość linii siatki: dolna",
+    "BottomMargin": "Margines: dolna",
+    "BottomPadding": "Dopełnienie: dolna",
+    "GridlineStyleLeft": "Styl linii siatki: lewa",
+    "GridlineWidthLeft": "Szerokość linii siatki: lewa",
+    "LeftMargin": "Margines: lewa",
+    "LeftPadding": "Dopełnienie: lewa",
+    "GridlineStyleRight": "Styl linii siatki: prawa",
+    "GridlineWidthRight": "Szerokość linii siatki: prawa",
+    "RightMargin": "Margines: prawa",
+    "RightPadding": "Dopełnienie: prawa",
+    "GridlineColor": "Kolor linii siatki",
+    "HorizontalAnchor": "Zakotwiczenie poziome",
+    "VerticalAnchor": "Zakotwiczenie pionowe",
     "BorderColor": "Kolor obramowania",
     "ForeColor": "Kolor pierwszego planu",
     "FontName": "Nazwa czcionki",
@@ -1584,9 +1620,16 @@
     "OnNoData": "Przy braku danych",
     "OnFormat": "Przy formatowaniu",
     "OnPrint": "Przy drukowaniu",
-    "ColumnHeads": "Nagłówki kolumn"
+    "ColumnHeads": "Nagłówki kolumn",
+    "ColumnWidth": "Szerokość kolumny"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Przezroczysty", "solid": "Ciągły", "dashed": "Kreskowany", "dotted": "Kropkowany"},
+    "GridlineStyleBottom": {"transparent": "Przezroczysty", "solid": "Ciągły", "dashed": "Kreskowany", "dotted": "Kropkowany"},
+    "GridlineStyleLeft": {"transparent": "Przezroczysty", "solid": "Ciągły", "dashed": "Kreskowany", "dotted": "Kropkowany"},
+    "GridlineStyleRight": {"transparent": "Przezroczysty", "solid": "Ciągły", "dashed": "Kreskowany", "dotted": "Kropkowany"},
+    "HorizontalAnchor": {"left": "Lewo", "right": "Prawo", "both": "Oba"},
+    "VerticalAnchor": {"top": "Góra", "bottom": "Dół", "both": "Oba"},
     "DefaultView": {
       "single": "Pojedynczy formularz",
       "continuous": "Formularze ciągłe",
@@ -1856,6 +1899,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Wybierz konstruktor", "macro": "Konstruktor makr", "function": "Konstruktor funkcji" },
+    "function": { "title": "Konstruktor funkcji", "empty": "Żaden moduł nie zawiera funkcji publicznej." },
     "title": "Konstruktor wyrażeń",
     "expression": "Wprowadź wyrażenie:",
     "elements": "Elementy wyrażenia",
@@ -1930,6 +1975,7 @@
       "unknownSource": "Żadna tabela ani kwerenda nie ma takiej nazwy.",
       "pictureTooLarge": "Obraz jest zbyt duży (maksymalnie 1 MB).",
       "notInteger": "Wprowadź liczbę całkowitą.",
+      "badFunctionCall": "Wywołanie funkcji zapisuje się jako =nazwa(argumenty), z nazwą funkcji Pythona z modułu.",
       "badMacroName": "Nieprawidłowa nazwa makra: „Makro” lub „Makro.Podmakro”, bez innych kropek ani nawiasów.",
       "badEmbedded": "Nieprawidłowe makro osadzone."
     },
@@ -1952,6 +1998,7 @@
     "unbound": "Niepowiązane",
     "saveFirstTitle": "Zapisywanie formularza",
     "saveFirst": "Czy chcesz zapisać zmiany w formularzu „{{name}}”?",
+    "saveLayout": "Czy chcesz zapisać zmiany układu formularza '{{name}}'?",
     "mustSaveFirst": "Najpierw musisz zapisać formularz „{{name}}”. Zapisać go teraz?",
     "sourceError": "Źródło rekordów „{{name}}”: {{message}}",
     "tabOrder": {
@@ -2329,6 +2376,8 @@
     }
   },
   "module": {
+    "functionClash": "Funkcja {{fn}} istnieje także w module {{other}}: wywołanie ={{fn}}() będzie niejednoznaczne.",
+    "functionBuiltin": "{{fn}} to nazwa funkcji wbudowanej: wybierz inną nazwę.",
     "newName": "Moduł{{n}}",
     "nameLabel": "Nazwa modułu",
     "badName": "Nazwa modułu musi być nazwą Pythona: litery, cyfry i _, nie może zaczynać się od cyfry ani być słowem zastrzeżonym Pythona.",
@@ -2358,6 +2407,7 @@
       "Quit": "Zakończ",
       "RemoveAllTempVars": "UsuńWszystkieZmTymcz",
       "RemoveTempVar": "UsuńZmTymcz",
+      "RunCode": "UruchomKod",
       "RunMacro": "UruchomMakro",
       "RunSQL": "UruchomSQL",
       "SetLocalVar": "UstawZmLokalną",
@@ -2390,6 +2440,7 @@
       "Title": "Tytuł",
       "Name": "Nazwa",
       "Expression": "Wyrażenie",
+      "FunctionName": "Nazwa funkcji",
       "MacroName": "Nazwa makra",
       "RepeatCount": "Liczba powtórzeń",
       "RepeatExpression": "Wyrażenie powtarzania",
@@ -2964,6 +3015,15 @@
     "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
   },
   "python": {
+    "error": {
+      "title": "Błąd Pythona",
+      "text": "{{type}}: {{message}}",
+      "where": "Moduł {{module}}, wiersz {{line}}",
+      "interrupted": "Wykonywanie zostało przerwane.",
+      "debug": "Debuguj",
+      "end": "Koniec",
+      "traceback": "Szczegóły"
+    },
     "running": "Python jest uruchomiony… Ctrl+Break, aby przerwać.",
     "interrupt": "Przerwij",
     "restarted": "Python przestał odpowiadać i został uruchomiony ponownie. Stan modułów został utracony.",

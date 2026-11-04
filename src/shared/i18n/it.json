@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "Nessuno", "narrow": "Stretto", "medium": "Medio", "wide": "Largo"}, "controlPadding": {"none": "Nessuno", "narrow": "Stretto", "medium": "Medio", "wide": "Largo"}, "anchoring": {"topLeft": "In alto a sinistra", "stretchDown": "Estendi verso il basso", "bottomLeft": "In basso a sinistra", "stretchTop": "Estendi in orizzontale in alto", "stretchAll": "Estendi verso il basso e in orizzontale", "stretchBottom": "Estendi in orizzontale in basso", "topRight": "In alto a destra", "stretchDownRight": "Estendi verso il basso e a destra", "bottomRight": "In basso a destra"}, "layoutGridlines": {"both": "Entrambe", "vertical": "Verticale", "horizontal": "Orizzontale", "top": "In alto", "bottom": "In basso", "outline": "Contorno", "none": "Nessuna", "width": "Spessore", "style": "Stile", "color": "Colore"}},
     "scrollLeft": "Scorri la barra multifunzione a sinistra",
     "scrollRight": "Scorri la barra multifunzione a destra",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "Il file contiene un campo o una riga di oltre un milione di caratteri: non può essere importato.",
       "notImplemented": "Questa funzionalità non è ancora disponibile in questa versione.",
       "notFound": "Questo oggetto non esiste più.",
+      "notOpen": "“{{detail}}” non è aperto.",
+      "tooManyTempVars": "Troppe variabili temporanee (255 al massimo).",
+      "pythonFunctionNotFound": "Nessun modulo contiene una funzione pubblica {{name}}.",
+      "pythonFunctionAmbiguous": "Più moduli contengono una funzione {{name}}: {{detail}}.",
+      "badArgument": "Argomento non valido: {{name}}",
+      "notUpdatable": "Questa origine non è aggiornabile: i suoi record non possono essere aggiunti, modificati o eliminati.",
+      "runSqlSelect": "RunSQL richiede una query di comando (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "“{{name}}”: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "L'argomento «{{name}}» è obbligatorio.",
+      "noSuchDocmd": "docmd.{{name}} non esiste.",
+      "refusedDocmd": "docmd.{{name}} non è disponibile in Python: usare {{detail}}.",
       "corruptObject": "Impossibile leggere la definizione di questo oggetto.",
       "invalidQuery": "Questa query non è valida. {{reason}}",
       "queryBind": "Impossibile eseguire questa query: {{detail}}",
@@ -732,6 +745,7 @@
     },
     "canvas": "Area di progettazione",
     "layoutHandle": "Seleziona il layout {{id}}",
+    "emptyCell": "Cella vuota del layout {{layout}}, riga {{row}}, colonna {{col}}",
     "toolbox": "Casella degli strumenti",
     "arrange": {
       "alignLeft": "A sinistra",
@@ -945,6 +959,8 @@
     "findCapped": "Trova e copia riguardano i primi 100.000 record.",
     "pasteOneRow": "L'incollamento è limitato a una riga alla volta.",
     "discardTitle": "Impossibile salvare il record",
+    "saveTableLayout": "Salvare le modifiche al layout della tabella '{{name}}'?",
+    "saveQueryLayout": "Salvare le modifiche al layout della query '{{name}}'?",
     "discard": "Impossibile salvare il record in modifica in “{{name}}”. Annullare le modifiche?",
     "shapeChanged": "La struttura di “{{name}}” è cambiata: il record in modifica non può essere salvato e viene annullato.",
     "deleteTitle": "Elimina record",
@@ -1494,6 +1510,7 @@
     "unavailable": "Non disponibile in questa versione"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} è una funzione incorporata, non una funzione Python." },
     "Caption": "Didascalia",
     "DefaultView": "Visualizzazione predefinita",
     "AllowLayoutView": "Consenti visualizzazione Layout",
@@ -1508,6 +1525,25 @@
     "BackColor": "Colore sfondo",
     "BorderStyle": "Stile bordo",
     "BorderWidth": "Spessore bordo",
+    "GridlineStyleTop": "Stile griglia superiore",
+    "GridlineWidthTop": "Spessore griglia superiore",
+    "TopMargin": "Margine superiore",
+    "TopPadding": "Spaziatura interna superiore",
+    "GridlineStyleBottom": "Stile griglia inferiore",
+    "GridlineWidthBottom": "Spessore griglia inferiore",
+    "BottomMargin": "Margine inferiore",
+    "BottomPadding": "Spaziatura interna inferiore",
+    "GridlineStyleLeft": "Stile griglia sinistro",
+    "GridlineWidthLeft": "Spessore griglia sinistro",
+    "LeftMargin": "Margine sinistro",
+    "LeftPadding": "Spaziatura interna sinistro",
+    "GridlineStyleRight": "Stile griglia destro",
+    "GridlineWidthRight": "Spessore griglia destro",
+    "RightMargin": "Margine destro",
+    "RightPadding": "Spaziatura interna destro",
+    "GridlineColor": "Colore griglia",
+    "HorizontalAnchor": "Ancoraggio orizzontale",
+    "VerticalAnchor": "Ancoraggio verticale",
     "BorderColor": "Colore bordo",
     "ForeColor": "Colore primo piano",
     "FontName": "Nome carattere",
@@ -1573,9 +1609,16 @@
     "OnNoData": "Senza dati",
     "OnFormat": "Alla formattazione",
     "OnPrint": "Alla stampa",
-    "ColumnHeads": "Intestazioni colonne"
+    "ColumnHeads": "Intestazioni colonne",
+    "ColumnWidth": "Larghezza colonna"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Trasparente", "solid": "Continuo", "dashed": "Tratteggiato", "dotted": "Punteggiato"},
+    "GridlineStyleBottom": {"transparent": "Trasparente", "solid": "Continuo", "dashed": "Tratteggiato", "dotted": "Punteggiato"},
+    "GridlineStyleLeft": {"transparent": "Trasparente", "solid": "Continuo", "dashed": "Tratteggiato", "dotted": "Punteggiato"},
+    "GridlineStyleRight": {"transparent": "Trasparente", "solid": "Continuo", "dashed": "Tratteggiato", "dotted": "Punteggiato"},
+    "HorizontalAnchor": {"left": "Sinistra", "right": "Destra", "both": "Entrambi"},
+    "VerticalAnchor": {"top": "In alto", "bottom": "In basso", "both": "Entrambi"},
     "DefaultView": {
       "single": "Maschera singola",
       "continuous": "Maschere continue",
@@ -1844,6 +1887,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Scegli generatore", "macro": "Generatore di macro", "function": "Generatore di funzioni" },
+    "function": { "title": "Generatore di funzioni", "empty": "Nessun modulo contiene una funzione pubblica." },
     "title": "Generatore di espressioni",
     "expression": "Immetti un'espressione:",
     "elements": "Elementi dell'espressione",
@@ -1918,6 +1963,7 @@
       "unknownSource": "Nessuna tabella o query ha questo nome.",
       "pictureTooLarge": "Immagine troppo grande (al massimo 1 MB).",
       "notInteger": "Immetti un numero intero.",
+      "badFunctionCall": "Una chiamata di funzione si scrive =nome(argomenti), con il nome di una funzione Python di un modulo.",
       "badMacroName": "Nome di macro non valido: “Macro” o “Macro.Sottomacro”, senza altri punti o parentesi.",
       "badEmbedded": "Macro incorporata non valida."
     },
@@ -1937,6 +1983,7 @@
     "unbound": "Non associato",
     "saveFirstTitle": "Salva maschera",
     "saveFirst": "Salvare le modifiche alla maschera “{{name}}”?",
+    "saveLayout": "Salvare le modifiche al layout della maschera '{{name}}'?",
     "mustSaveFirst": "È necessario salvare prima la maschera “{{name}}”. Salvarla ora?",
     "sourceError": "Origine record “{{name}}”: {{message}}",
     "tabOrder": {
@@ -2306,6 +2353,8 @@
     }
   },
   "module": {
+    "functionClash": "La funzione {{fn}} esiste anche nel modulo {{other}}: una chiamata ={{fn}}() sarà ambigua.",
+    "functionBuiltin": "{{fn}} è il nome di una funzione incorporata: scegliere un altro nome.",
     "newName": "Modulo{{n}}",
     "nameLabel": "Nome del modulo",
     "badName": "Il nome di un modulo deve essere un nome Python: lettere, cifre e _, non iniziare con una cifra e non essere una parola riservata di Python.",
@@ -2335,6 +2384,7 @@
       "Quit": "Esci",
       "RemoveAllTempVars": "RimuoviTutteVarTemp",
       "RemoveTempVar": "RimuoviVarTemp",
+      "RunCode": "EseguiCodice",
       "RunMacro": "EseguiMacro",
       "RunSQL": "EseguiSQL",
       "SetLocalVar": "ImpostaVarLocale",
@@ -2367,6 +2417,7 @@
       "Title": "Titolo",
       "Name": "Nome",
       "Expression": "Espressione",
+      "FunctionName": "Nome funzione",
       "MacroName": "Nome macro",
       "RepeatCount": "Numero di ripetizioni",
       "RepeatExpression": "Espressione di ripetizione",
@@ -2941,6 +2992,15 @@
     "target": "{{kind}} {{name}} › {{control}} («{{current}}»)"
   },
   "python": {
+    "error": {
+      "title": "Errore Python",
+      "text": "{{type}}: {{message}}",
+      "where": "Modulo {{module}}, riga {{line}}",
+      "interrupted": "Esecuzione interrotta.",
+      "debug": "Debug",
+      "end": "Fine",
+      "traceback": "Dettagli"
+    },
     "running": "Python è in esecuzione… Ctrl+Pausa per interrompere.",
     "interrupt": "Interrompi",
     "restarted": "Python non rispondeva più ed è stato riavviato. Lo stato dei moduli è perso.",

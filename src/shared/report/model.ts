@@ -10,7 +10,7 @@ import { resolveFont } from '../fonts';
 import type { SourceField } from '../record-source';
 import { readColor, readProp } from './props';
 import { extractAggregates, type AggSpec } from './totals';
-import type { Border, FontSpec } from './types';
+import type { Border, FontSpec, Gridlines } from './types';
 
 // props du DesignDoc propres aux états (contrat 1.3, clés A5)
 export interface GroupLevel { expression: string /* nom de champ, ou '=' + expression canonique */; order: 'asc' | 'desc';
@@ -25,6 +25,10 @@ export type ControlSource = { kind: 'none' } | { kind: 'error' } | { kind: 'fiel
 export interface ControlSpec { kind: ControlKind; name: string; left: number; top: number; width: number; height: number;
   source: ControlSource; caption: string; format?: string; decimalPlaces?: 'auto' | number; visible: boolean; canGrow: boolean; canShrink: boolean;
   font: FontSpec; color: string; back: string | null; border: Border | null; align: 'general' | 'left' | 'center' | 'right';
+  /** Control Margins (twips): the text inset. */
+  margin: { top: number; right: number; bottom: number; left: number };
+  /** Gridlines over the cell rectangle; null when all four sides are transparent. */
+  gridlines: Gridlines | null;
   picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; slant?: boolean }
 export interface SectionSpec { kind: SectionKind; groupLevel?: number; height: number; visible: boolean; canGrow: boolean; canShrink: boolean;
   keepTogether: boolean; repeatSection: boolean; forceNewPage: 'none' | 'before' | 'after' | 'beforeAndAfter'; back: string | null; controls: ControlSpec[] }
@@ -126,6 +130,12 @@ export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
       italic: r('FontItalic') as boolean, underline: r('FontUnderline') as boolean };
     if (!resolveFont(font.name).portable) add('fontNotPortable', undefined, font.name);
     const format = r('Format') as string, places = r('DecimalPlaces') as string, picture = r('Picture'), sizeMode = r('SizeMode', 'zoom');
+    const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
+    const four = <T,>(f: (s: (typeof sides)[number]) => T) => ({ top: f('Top'), right: f('Right'), bottom: f('Bottom'), left: f('Left') });
+    const margin = four((s) => (kind === 'pageBreak' ? 0 : r(`${s}Margin`) as number));
+    const line = (s: (typeof sides)[number]): Border | null => kind === 'pageBreak' || r(`GridlineStyle${s}`) === 'transparent' ? null   // GridlineWidth: px, 0 = hairline
+      : { width: Math.round(Math.max(1, r(`GridlineWidth${s}`) as number) * 15), color: readColor(p, 'GridlineColor', target), style: r(`GridlineStyle${s}`) as Border['style'] };
+    const lines = four(line);
     return {
       kind, name, left: twips(c.left, name), top: twips(c.top, name), width: twips(c.width, name), height: twips(c.height, name),
       source: source(r('ControlSource') as string, name, 'invalidExpression', pageSection ? 'aggregateNotAllowed' : undefined),
@@ -137,6 +147,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
       border: r('BorderStyle') === 'transparent' ? null
         : { width: Math.round(Math.max(1, r('BorderWidth') as number) * 15), color: readColor(p, 'BorderColor', target), style: r('BorderStyle') as Border['style'] },
       align: r('TextAlign') as ControlSpec['align'],
+      margin, gridlines: Object.values(lines).some(Boolean) ? { ...lines, padding: four((s) => r(`${s}Padding`) as number) } : null,
       // Picture, SizeMode and LineSlant come with A4: read raw until then; only an embedded image is ever drawn.
       ...(kind === 'image' ? { ...(typeof picture === 'string' && picture.startsWith('data:image/') ? { picture } : {}),
         sizeMode: isIn(sizeMode, ['clip', 'stretch', 'zoom']) ? sizeMode : 'zoom' } : {}),

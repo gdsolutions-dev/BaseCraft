@@ -24,7 +24,7 @@ export type DocMode = 'design' | 'datasheet' | 'run' | 'layout' | 'state';
 /** openArgs: how a macro opened a form or report (OpenForm, OpenReport): its Where Condition (canonical, over the source's
  *  output columns) restricts the records of that opening (R8), its data mode applies to a form (R9); its window mode `dialog`
  *  shows the form over the whole window (R12). */
-export interface OpenArgs { where?: string; dataMode?: 'add' | 'edit' | 'readOnly'; windowMode?: 'dialog' }
+export interface OpenArgs { where?: string; dataMode?: 'add' | 'edit' | 'readOnly'; windowMode?: 'dialog'; line?: number; message?: string }
 /** dialog: a form opened in Dialog mode (R12), shown by DialogHost, not in the tab bar; openerId: the tab active when it opened.
  *  embedded: an embedded macro's session (R16, embedded.ts), named by its title; openerId is then its design's tab, which takes it
  *  along when it closes or changes mode. */
@@ -59,7 +59,7 @@ export const isDoc = (t: DocTab, kind: DocKind | ObjectKind, name: string): bool
 const isTable = (t: DocTab, name: string) => isDoc(t, 'table', name);
 /** The mode an Open asks of a tab already open: a form shown in its Datasheet view stays in it (Open only activates its tab, Access). */
 export const reopenMode = (t: DocTab, mode: DocMode): DocMode => (t.kind === 'form' && t.mode === 'datasheet' && mode === 'run' ? 'datasheet' : mode);
-const editsDesign = (m: DocMode | undefined): boolean => m === 'design' || m === 'layout';
+export const editsDesign = (m: DocMode | undefined): boolean => m === 'design' || m === 'layout';
 /** Design and Layout views are one editor (L2): a switch between them keeps the design as it is (no save asked, embedded macros stay). */
 export const sameView = (a: DocMode, b: DocMode | undefined): boolean => a === b || (editsDesign(a) && editsDesign(b));
 /** A form in its Form or Datasheet view (none runs in Design or Layout view). */

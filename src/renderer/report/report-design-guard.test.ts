@@ -5,12 +5,14 @@ import { leaveReportDesign } from './design/ReportDesignView';
 vi.mock('../bridge', () => ({ api: {} }));
 vi.mock('../datasheet/glide-keyboard', () => ({ installEditorCommitFix: () => {} })); // node, no DOM
 
-// The report designer's mode guard (L3): Design <-> Layout is one editor, nothing to ask; Print Preview and closing ask a modified design.
+// The report designer's mode guard (L3): Design <-> Layout is one editor, nothing to ask; Print Preview and State run the report as it
+// stands, unsaved (as a query); closing asks a modified design.
 const guard = (mode: DocMode, dirty: boolean, answer: 'yes' | 'no' | 'cancel' = 'no', o: { busy?: boolean; isNew?: boolean } = {}) => {
   const confirm = vi.fn(async () => answer);
   const save = vi.fn(async () => true);
   const flush = vi.fn(async () => {});
-  return { confirm, save, flush, d: { mode, name: 'R', busy: o.busy ?? false, isNew: o.isNew ?? false, flush, dirty: () => dirty, confirm, save } };
+  const unsaved = vi.fn();
+  return { confirm, save, flush, unsaved, d: { mode, name: 'R', busy: o.busy ?? false, isNew: o.isNew ?? false, flush, dirty: () => dirty, confirm, save, unsaved } };
 };
 
 describe('leaveReportDesign', () => {
@@ -26,20 +28,21 @@ describe('leaveReportDesign', () => {
     }
   });
 
-  it('to Print Preview, from Design or Layout view: a modified design is asked (Yes saves, No goes on, Cancel stays); a clean one is not', async () => {
+  it('to Print Preview or State, from Design or Layout view: nothing asked, nothing saved; the report runs as it stands when modified or new', async () => {
     for (const from of ['design', 'layout'] as const) {
-      const yes = guard(from, true, 'yes');
-      expect(await leaveReportDesign('mode', 'run', yes.d)).toBe(true);
-      expect([yes.confirm.mock.calls.length, yes.save.mock.calls.length]).toEqual([1, 1]);
-      expect(await leaveReportDesign('mode', 'run', guard(from, true, 'no').d)).toBe(true);
-      expect(await leaveReportDesign('mode', 'run', guard(from, true, 'cancel').d)).toBe(false);
-      const clean = guard(from, false);
-      expect(await leaveReportDesign('mode', 'run', clean.d)).toBe(true);
-      expect(clean.confirm).not.toHaveBeenCalled();
+      for (const to of ['run', 'state'] as const) {
+        const modified = guard(from, true);
+        expect(await leaveReportDesign('mode', to, modified.d)).toBe(true);
+        expect([modified.confirm.mock.calls.length, modified.save.mock.calls.length]).toEqual([0, 0]);
+        expect(modified.unsaved).toHaveBeenCalledWith(true);
+        const fresh = guard(from, false, 'cancel', { isNew: true });
+        expect(await leaveReportDesign('mode', to, fresh.d)).toBe(true);
+        expect([fresh.confirm.mock.calls.length, fresh.save.mock.calls.length, fresh.unsaved.mock.calls[0]]).toEqual([0, 0, [true]]);
+        const clean = guard(from, false);
+        expect(await leaveReportDesign('mode', to, clean.d)).toBe(true);
+        expect(clean.unsaved).toHaveBeenCalledWith(false);
+      }
     }
-    const fresh = guard('layout', false, 'cancel', { isNew: true });   // a new report is saved first
-    expect(await leaveReportDesign('mode', 'run', fresh.d)).toBe(true);
-    expect([fresh.confirm.mock.calls.length, fresh.save.mock.calls.length]).toEqual([0, 1]);
   });
 
   it('a save under way refuses Print Preview and closing; closing asks a modified design', async () => {

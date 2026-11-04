@@ -24,7 +24,7 @@ export interface HostOpen { path: string; create: boolean; appVersion: string; r
 export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listTables', 'tableDesign', 'saveTable', 'renameTable', 'dropTable', 'testRules', 'copyTable', 'appendTable',
   'count', 'page', 'insert', 'update', 'delete', 'lookup',
-  'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'cascadeChildren',
+  'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'saveColumnWidths', 'cascadeChildren',
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription', 'autoCorrectDependents', 'applyProperties',
   'describeSource', 'pageSource', 'saveSource', 'autoLookup', 'actionCount', 'runAction',

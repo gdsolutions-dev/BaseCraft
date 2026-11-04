@@ -33,5 +33,8 @@ export function gridStep(doc: DesignDoc): number {
 /** Multiple de `step` le plus proche. */
 export const snap = (tw: number, step: number): number => Math.round(tw / step) * step + 0; // + 0 : jamais -0
 
+/** Écart (px) sous lequel un appui-relâchement est un clic, pas un tracé. */
+export const CLICK_PX = 3;
+
 /** Taille par défaut d'un contrôle posé d'un clic (twips) : 2,5 cm × 0,6 cm. */
 export const DEFAULT_SIZE = { width: 1418, height: 340 };

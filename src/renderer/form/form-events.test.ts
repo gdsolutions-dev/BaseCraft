@@ -114,3 +114,11 @@ it('value: a control, else a field of the current record, with what is typed; el
   expect(h.value('nom')).toEqual({ t: 'str', v: 'Dupont' });
   expect(() => h.value('Absent')).toThrow(expect.objectContaining({ code: 'unknownField' }));
 });
+
+it('a Python call (=f()) counts as bound: has() is true and raise() runs it', async () => {
+  const c = { ...ctl, props: { OnClick: '=marquer()' } };
+  const h = new FormEvents(doc({}), 'F', base);
+  expect(h.has('OnClick', c)).toBe(true);
+  void h.raise('OnClick', c);
+  expect(runs[0]!.binding).toMatchObject({ kind: 'python', name: 'marquer' });
+});

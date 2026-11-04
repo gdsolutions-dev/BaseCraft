@@ -1,8 +1,9 @@
 import builtins
 import sys
 
-from . import errors, exports, immediate, modules, ui  # noqa: F401
+from . import data, errors, exports, immediate, modules, objects, ui  # noqa: F401
 from ._bridge import call
+from .errors import BaseCraftError  # noqa: F401
 
 
 class _LogWriter:
@@ -41,6 +42,9 @@ def flush():
 def install():
     builtins.msgbox = ui.msgbox
     builtins.inputbox = ui.inputbox
+    for n in ('app', 'forms', 'reports', 'me', 'screen', 'docmd', 'tempvars'):
+        setattr(builtins, n, getattr(objects, n))
+    builtins.db = data.db
     if not any(isinstance(f, modules.Finder) for f in sys.meta_path):
         sys.meta_path.append(modules.Finder())
     sys.stdout = sys.stderr = _LogWriter()

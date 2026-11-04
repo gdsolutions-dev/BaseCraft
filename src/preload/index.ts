@@ -72,6 +72,7 @@ const api: BasecraftApi = {
     save: (req) => ipcRenderer.invoke(CH.tablesSave, req),
     rename: (oldName, newName) => ipcRenderer.invoke(CH.tablesRename, oldName, newName),
     drop: (name) => ipcRenderer.invoke(CH.tablesDrop, name),
+    saveColumnWidths: (name, widths) => ipcRenderer.invoke(CH.tablesSaveColumnWidths, name, widths),
     copy: (name, newName, mode) => ipcRenderer.invoke(CH.tablesCopy, name, newName, mode),
     append: (from, to) => ipcRenderer.invoke(CH.tablesAppend, from, to),
   },

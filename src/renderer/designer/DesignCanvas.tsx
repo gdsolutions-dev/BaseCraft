@@ -14,7 +14,7 @@ import { clipboardAction, clipContext } from './designer-clipboard';
 import { gestureAllowed, type DesignerRestrict } from './designer-restrict';
 import { CONTAINER_KINDS, designerReducer, docWidth, documentKind, findControl, type DesignerAction, type DesignerState } from './designer-model';
 import type { Handle } from './geometry';
-import { layoutOutlines } from './layout-outline';
+import { emptyCells, layoutOutlines } from './layout-outline';
 import { gestureEnd, keyAction, placeRect, type Gesture } from './pointer';
 import { currentSettings } from '../settings-store';
 import { fieldDrop } from './FieldList';
@@ -95,6 +95,8 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const doc = shown.doc;
   // contours des dispositions, recalculés seulement quand le document affiché change
   const outlines = useMemo(() => doc.sections.map((_, i) => layoutOutlines(doc, i)), [doc]);
+  const empties = useMemo(() => doc.sections.map((_, i) => emptyCells(doc, i)), [doc]);
+  const cellsSel = shown.selection.kind === 'controls' ? shown.selection.cells ?? [] : [];
   const selectLayout = (id: string) => {
     const first = readLayouts(state.doc).find((l) => l.id === id)?.cells.find((c) => c.control !== null)?.control;
     if (first) dispatch({ type: 'select', selection: { kind: 'controls', names: selectionOf(state.doc, first, 'layout') } });
@@ -147,7 +149,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0 || drag) return;
     const el = e.target as HTMLElement;
-    if (el.closest('[data-layout-handle]')) return;   // la poignée d'une disposition sélectionne au clic : ni glisser ni rectangle
+    if (el.closest('[data-layout-handle], [data-layout-cell]')) return;   // la poignée d'une disposition et une cellule vide sélectionnent au clic : ni glisser ni rectangle
     const at = pt(e);
     measure();
     const handle = el.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined;
@@ -333,6 +335,15 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                   aria-label={t('designer.layoutHandle', { id })} title={t('designer.layoutHandle', { id })}
                   style={{ left: Math.max(0, twipsToPx(rect.left) - 14), top: Math.max(0, twipsToPx(rect.top) - 14) }} onClick={() => selectLayout(id)} />
               ))}
+              {empties[i].map(({ layout, row, col, rect }) => {   // ponytail: ni glisser ni rectangle sur une cellule vide ; la vue Disposition d'un état n'en montre pas (à ajouter si la fusion s'y fait)
+                const on = cellsSel.some((c) => c.layout === layout && c.row === row && c.col === col);
+                return (
+                  <button key={`${layout}-${row}-${col}`} type="button" className={`dz-cell${on ? ' is-sel' : ''}`} data-layout-cell data-testid={`cell-${layout}-${row}-${col}`}
+                    aria-pressed={on} aria-label={t('designer.emptyCell', { layout, row: row + 1, col: col + 1 })}
+                    style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }}
+                    onClick={(e) => dispatch({ type: 'selectCell', cell: { layout, row, col }, add: e.ctrlKey || e.metaKey })} />
+                );
+              })}
               {flattenControls(s.controls).map((c) => (   // un parent sous ses enfants
                 <CanvasControl key={c.name} c={c} s={s} sel={isSel(c.name)} label={typeLabel(c.kind)} render={host.renderControl} onFocusCtl={onFocusCtl} />
               ))}

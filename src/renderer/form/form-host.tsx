@@ -16,7 +16,7 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import { MAX_TWIPS } from '../designer/units';
 import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
-import { applies, color, controlLook, prop } from './run-model';
+import { applies, color, controlLook, gridlineStyle, prop } from './run-model';
 
 /** Dans l'ordre de la maquette ; libellés : l'entrée de la galerie Contrôles du ruban. */
 export const FORM_TOOLS: ToolDef[] = [
@@ -94,6 +94,12 @@ function boxStyle(c: ControlDef): CSSProperties {
 
 /** L'aperçu d'un contrôle ; `live` (mode Page) : le texte de l'enregistrement courant au lieu de la source, l'état de la case. */
 export function preview(c: ControlDef, display: PropertySheetContext['display'], unbound: string, live?: { text?: string; checked?: boolean }): ReactNode {
+  const grid = gridlineStyle(c, c);   // relative to the control's own box (the canvas wrapper), a sibling of the preview
+  const body = previewBody(c, display, unbound, live);
+  return grid ? <>{body}<div aria-hidden data-testid={`grid-${c.name}`} style={grid} /></> : body;
+}
+
+function previewBody(c: ControlDef, display: PropertySheetContext['display'], unbound: string, live?: { text?: string; checked?: boolean }): ReactNode {
   const st = boxStyle(c);
   const source = () => live?.text ?? (controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound);
   const on = live?.checked ? ' is-on' : '';

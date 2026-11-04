@@ -24,6 +24,7 @@ import { localeInfo } from '../../shared/locale-format';
 import { promptParameters } from '../query/prompt-parameters';
 import { memberValue } from '../form/form-instances';
 import { docParameters, layoutSavedReport, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
+import { unsavedRunDoc } from '../query/unsaved-run';
 import { reportEvents, reportShown, type ReportEvents } from './report-events';
 import { orientationStates, withPageSetup } from './page-setup';
 import { PageSetupDialog, PageSetupMenu } from './PageSetupDialog';
@@ -205,7 +206,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         doc.current = null; // a definition that can no longer be read is never saved back by Page Setup
         setLayoutAllowed(null);
         data.current = null;
-        const def = await loadReportDoc(api, tab.name);
+        const def = unsavedRunDoc.get(tab.id) ?? await loadReportDoc(api, tab.name);   // a new or modified report: as its design stands
         if (!live()) return;
         doc.current = def;
         setLayoutAllowed(allowsLayout(def, 'report'));   // at once: neither the layout nor its failure is waited for
@@ -269,7 +270,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     if (!d) return;
     const def = withPageSetup(d, patch);
     if (def === d) return;
-    const r = RUNTIME ? null : await api.objects.save('report', tab.name, def, tab.name);
+    const r = RUNTIME || unsavedRunDoc.has(tab.id) ? null : await api.objects.save('report', tab.name, def, tab.name);   // unsaved: this preview only
     if (r && !r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }
     doc.current = def;
     await run('layout');

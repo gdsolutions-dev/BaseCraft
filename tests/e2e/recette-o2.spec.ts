@@ -239,6 +239,7 @@ test('recette O2: the Enter and arrow settings in a datasheet and a continuous f
     await page.getByTestId('opt-db-truncated').uncheck();
     await page.getByTestId('bs-back').click();
     await page.getByTestId('doc-tab-close-Commandes').click();
+    await page.getByTestId('modal-btn-no').click();   // the widths dragged: the layout is not saved
     await openSheet(page, 'Commandes');
     await dragEdge(left + 151 - 1, left + 40);
     await clickAt(left + 20, 0, 2);

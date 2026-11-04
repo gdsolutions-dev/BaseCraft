@@ -5,7 +5,9 @@ import { isColorValue } from '../../shared/design/colors';
 import { effectiveProp, PROPERTY_CATALOG, type PropertyDescriptor, type PropertyTarget } from '../../shared/design/properties';
 import { checkEventValue } from '../../shared/design/events';
 import { ExprSyntaxError, type ExprErrorCode } from '../../shared/expr/ast';
+import { FUNCTION_TABLE } from '../../shared/expr/catalog';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
+import { parsePythonCall, pythonCallFunctions } from '../../shared/python/call-text';
 import { columnWidthsText, isValidObjectName, parseColumnWidths, sameName } from '../../shared/field-types';
 import { resolveFont } from '../../shared/fonts';
 import { reportWidth } from '../../shared/report/model';
@@ -117,16 +119,24 @@ export function controlSourceToCanonical(text: string, ctx: DisplayContext, opts
   }
 }
 
-/** Une instruction SQL (une table « Selections » reste une table), sinon une table, puis une requête ; inconnu ou vide -> null. */
-export function toSourceRef(text: string, tables: string[], queries: string[]): RecordSourceRef | null {
-  const s = text.trim();
-  if (!s) return null;
-  if (/^\s*(SELECT|TRANSFORM|PARAMETERS)\b/i.test(s)) return { kind: 'sql', sql: s };
-  const table = tables.find((x) => sameName(x, s));
-  if (table) return { kind: 'table', name: table };
-  const query = queries.find((x) => sameName(x, s));
-  return query ? { kind: 'query', name: query } : null;
+/** R1: a stored `=fn(args)` shown in the interface language (`;` in French); an unreadable text as stored. */
+export function eventToDisplay(stored: string, ctx: DisplayContext): string {
+  try { return `=${toDisplay(stored.slice(1), ctx, { functions: pythonCallFunctions(stored), aggregates: false })}`; } catch { return stored; }
 }
+
+/** R1: the typed `=fn(args)` -> canonical, or the message key to show (`key|name`: the name fills {{name}}). A built-in written in the
+ *  display language (`=Gauche(...)`) is a built-in once localized: refused, it is not a Python function. */
+export function eventToCanonical(text: string, ctx: DisplayContext): { ok: true; value: string } | { ok: false; error: string } {
+  const s = text.trim();
+  let canonical: string;
+  try { canonical = toCanonical(s.slice(1), ctx, { functions: pythonCallFunctions(s), aggregates: false }); } catch { return { ok: false, error: 'sheet.error.badFunctionCall' }; }
+  const value = `=${canonical}`;
+  if (parsePythonCall(value)) return { ok: true, value };
+  const typed = /^=?\s*([\p{L}_][\p{L}\p{N}_]*)\s*\(/u.exec(s)?.[1], head = /^([\p{L}_][\p{L}\p{N}_]*)\s*\(/u.exec(canonical)?.[1];
+  return { ok: false, error: head && typed && Object.keys(FUNCTION_TABLE).some((k) => k.toLowerCase() === head.toLowerCase())
+    ? `prop.event.builtinFunction|${typed}` : 'sheet.error.badFunctionCall' };
+}
+
 export const fromSourceRef = (ref: RecordSourceRef | null): string => (!ref ? '' : ref.kind === 'sql' ? ref.sql : ref.name);
 
 /** Twips stockés -> cm de l'onglet Liste de choix (A2) : '0;1417' -> '0cm;2,5cm'. Un texte stocké illisible est montré tel quel. */

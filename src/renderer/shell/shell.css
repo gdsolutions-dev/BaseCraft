@@ -139,8 +139,6 @@ button:disabled { opacity: .45; }
 .nitem .ic { color: var(--bc-text-muted); }
 .nitem:hover { background: var(--hover); }
 .nitem.is-selected { background: var(--hover); }
-.nitem.is-active { background: var(--accent-soft); font-weight: 500; }
-.nitem.is-active .ic { color: var(--bc-accent); }
 .nav-empty { margin: 4px 0 0 26px; font-size: 12px; }
 .nav-rail { width: 36px; flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--bc-space-2); padding-top: 2px; color: var(--bc-text-muted); }
 .nav-rail span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; font-weight: 500; white-space: nowrap; }

@@ -23,6 +23,15 @@ describe('appReducer', () => {
     expect(appReducer(s, { type: 'open', kind: 'form', name: 'F', mode: 'run' }).tabs[0].mode).toBe('run');
   });
 
+  it('open of an open module tab with a line replaces its openArgs and activates it (R10)', () => {
+    let s = appReducer(init, { type: 'open', kind: 'module', name: 'X', mode: 'design' });
+    s = appReducer(s, { type: 'open', kind: 'form', name: 'F', mode: 'run' });
+    s = appReducer(s, { type: 'open', kind: 'module', name: 'X', mode: 'design', args: { line: 3, message: 'boom' } });
+    expect(s.tabs).toHaveLength(2);
+    expect(s.tabs[0].openArgs).toEqual({ line: 3, message: 'boom' });
+    expect(s.activeId).toBe(s.tabs[0].id);
+  });
+
   it('open with args on an open form re-applies (R8); without args it only activates; a new tab takes them', () => {
     const open = (args?: { where?: string; dataMode?: 'add' | 'edit' | 'readOnly' }) => ({ type: 'open', kind: 'form', name: 'F', mode: 'run', ...(args ? { args } : {}) }) as const;
     const s0 = appReducer(init, open());

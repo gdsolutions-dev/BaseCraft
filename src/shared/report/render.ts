@@ -3,7 +3,7 @@
 // data:image/, tout texte et tout attribut échappé.
 import { cssFamily, cssString, fontFaceCss, resolveFont } from '../fonts';
 import { lineHeight } from './text';
-import type { Border, FontSpec, LaidOutItem, LaidOutPage, LaidOutReport } from './types';
+import type { Border, FontSpec, Gridlines, LaidOutItem, LaidOutPage, LaidOutReport } from './types';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ESC[c]!);
@@ -40,7 +40,20 @@ const attrs = (base: string, where: string, look: string, looks?: Looks): string
 };
 const data = (looks: Looks | undefined, a: Record<string, string>) => (looks ? '' : Object.entries(a).map(([k, v]) => ` data-${k}="${v}"`).join(''));
 
+/** The gridline overlay: a sibling box over the cell rectangle (the control grown by its padding), only its drawn sides bordered. */
+function gridHtml(i: LaidOutItem, looks?: Looks): string {
+  const g: Gridlines | undefined = i.kind === 'line' ? undefined : i.grid;
+  if (!g || i.kind === 'line') return '';
+  const p = g.padding;
+  const sides = (['top', 'right', 'bottom', 'left'] as const).flatMap((s) => (g[s] ? [`;border-${s}:${stroke(g[s]!)}`] : []));
+  return `<div ${attrs('bc-grid', box(i.left - p.left, i.top - p.top, i.width + p.left + p.right, i.height + p.top + p.bottom), sides.join(''), looks)}></div>`;
+}
+
 function item(i: LaidOutItem, looks?: Looks): string {
+  return itemHtml(i, looks) + gridHtml(i, looks);
+}
+
+function itemHtml(i: LaidOutItem, looks?: Looks): string {
   switch (i.kind) {
     case 'text': {
       const lh = `;line-height:${pt(lineHeight(i.font))}${i.font.underline ? ';text-decoration:underline' : ''}`;
@@ -99,9 +112,10 @@ export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
     '.bc-page{position:relative;overflow:hidden;background:#ffffff;color:#000000;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
     // a cut band part can hold items above its top or past its bottom: the band clips them
     '.bc-band{position:absolute;overflow:hidden}',
-    '.bc-text,.bc-check,.bc-rule,.bc-rect,.bc-img{position:absolute;box-sizing:border-box;margin:0}',
+    '.bc-text,.bc-check,.bc-rule,.bc-rect,.bc-img,.bc-grid{position:absolute;box-sizing:border-box;margin:0}',
     '.bc-text,.bc-check{overflow:hidden}.bc-rule{overflow:visible}.bc-check svg{display:block}',
     '.bc-text{font-kerning:none;font-variant-ligatures:none;font-feature-settings:"kern" 0,"liga" 0,"calt" 0;font-synthesis:none}',
+    '.bc-grid{pointer-events:none}',
     '.bc-line{position:absolute;left:0;top:0;white-space:pre}',
   ].filter(Boolean).join('\n');
 }

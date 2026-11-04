@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "なし", "narrow": "狭い", "medium": "標準", "wide": "広い"}, "controlPadding": {"none": "なし", "narrow": "狭い", "medium": "標準", "wide": "広い"}, "anchoring": {"topLeft": "左上", "stretchDown": "下方向に拡張", "bottomLeft": "左下", "stretchTop": "上部を横方向に拡張", "stretchAll": "下方向と横方向に拡張", "stretchBottom": "下部を横方向に拡張", "topRight": "右上", "stretchDownRight": "下方向と右方向に拡張", "bottomRight": "右下"}, "layoutGridlines": {"both": "両方", "vertical": "縦", "horizontal": "横", "top": "上", "bottom": "下", "outline": "外枠", "none": "なし", "width": "太さ", "style": "スタイル", "color": "色"}},
     "scrollLeft": "リボンを左にスクロール",
     "scrollRight": "リボンを右にスクロール",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "ファイルに 100 万文字を超えるフィールドまたは行があるため、インポートできません。",
       "notImplemented": "この機能は、このバージョンではまだ利用できません。",
       "notFound": "このオブジェクトは存在しなくなりました。",
+      "notOpen": "「{{detail}}」は開かれていません。",
+      "tooManyTempVars": "一時変数が多すぎます (最大 255 個)。",
+      "pythonFunctionNotFound": "公開関数 {{name}} を含むモジュールがありません。",
+      "pythonFunctionAmbiguous": "関数 {{name}} を含むモジュールが複数あります: {{detail}}。",
+      "badArgument": "無効な引数: {{name}}",
+      "notUpdatable": "このソースは更新できません。レコードの追加、変更、削除はできません。",
+      "runSqlSelect": "RunSQL にはアクション クエリ (INSERT、UPDATE、DELETE、SELECT … INTO) を指定してください。",
+      "saveRefused": "「{{name}}」: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "引数「{{name}}」は必須です。",
+      "noSuchDocmd": "docmd.{{name}} は存在しません。",
+      "refusedDocmd": "docmd.{{name}} は Python では使えません。{{detail}} を使ってください。",
       "corruptObject": "このオブジェクトの定義を読み取れません。",
       "invalidQuery": "このクエリは正しくありません。{{reason}}",
       "queryBind": "このクエリは実行できません: {{detail}}",
@@ -729,6 +742,7 @@
     },
     "canvas": "デザイン サーフェス",
     "layoutHandle": "レイアウト {{id}} を選択",
+    "emptyCell": "レイアウト {{layout}} の空のセル、{{row}} 行 {{col}} 列",
     "toolbox": "ツールボックス",
     "arrange": {
       "alignLeft": "左",
@@ -935,6 +949,8 @@
     "findCapped": "検索とコピーの対象は、最初の 100,000 件のレコードです。",
     "pasteOneRow": "貼り付けできるのは一度に 1 行までです。",
     "discardTitle": "レコードを保存できません",
+    "saveTableLayout": "テーブル '{{name}}' のレイアウトの変更を保存しますか?",
+    "saveQueryLayout": "クエリ '{{name}}' のレイアウトの変更を保存しますか?",
     "discard": "「{{name}}」で編集中のレコードを保存できません。変更を破棄しますか?",
     "shapeChanged": "「{{name}}」の構造が変更されました。編集中のレコードは保存できないため、破棄されます。",
     "deleteTitle": "レコードの削除",
@@ -1472,6 +1488,7 @@
     "unavailable": "このバージョンでは利用できません"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} は組み込み関数であり、Python の関数ではありません。" },
     "Caption": "標題",
     "DefaultView": "既定のビュー",
     "AllowLayoutView": "レイアウト ビューを許可",
@@ -1486,6 +1503,25 @@
     "BackColor": "背景色",
     "BorderStyle": "境界線スタイル",
     "BorderWidth": "境界線幅",
+    "GridlineStyleTop": "枠線スタイル (上)",
+    "GridlineWidthTop": "枠線の太さ (上)",
+    "TopMargin": "余白 (上)",
+    "TopPadding": "パディング (上)",
+    "GridlineStyleBottom": "枠線スタイル (下)",
+    "GridlineWidthBottom": "枠線の太さ (下)",
+    "BottomMargin": "余白 (下)",
+    "BottomPadding": "パディング (下)",
+    "GridlineStyleLeft": "枠線スタイル (左)",
+    "GridlineWidthLeft": "枠線の太さ (左)",
+    "LeftMargin": "余白 (左)",
+    "LeftPadding": "パディング (左)",
+    "GridlineStyleRight": "枠線スタイル (右)",
+    "GridlineWidthRight": "枠線の太さ (右)",
+    "RightMargin": "余白 (右)",
+    "RightPadding": "パディング (右)",
+    "GridlineColor": "枠線の色",
+    "HorizontalAnchor": "水平方向のアンカー",
+    "VerticalAnchor": "垂直方向のアンカー",
     "BorderColor": "境界線色",
     "ForeColor": "前景色",
     "FontName": "フォント名",
@@ -1551,9 +1587,16 @@
     "OnNoData": "データなし時",
     "OnFormat": "書式設定時",
     "OnPrint": "印刷時",
-    "ColumnHeads": "列見出し"
+    "ColumnHeads": "列見出し",
+    "ColumnWidth": "列幅"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "透明", "solid": "実線", "dashed": "破線", "dotted": "点線"},
+    "GridlineStyleBottom": {"transparent": "透明", "solid": "実線", "dashed": "破線", "dotted": "点線"},
+    "GridlineStyleLeft": {"transparent": "透明", "solid": "実線", "dashed": "破線", "dotted": "点線"},
+    "GridlineStyleRight": {"transparent": "透明", "solid": "実線", "dashed": "破線", "dotted": "点線"},
+    "HorizontalAnchor": {"left": "左", "right": "右", "both": "両方"},
+    "VerticalAnchor": {"top": "上", "bottom": "下", "both": "両方"},
     "DefaultView": {
       "single": "単票フォーム",
       "continuous": "帳票フォーム",
@@ -1820,6 +1863,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "ビルダーの選択", "macro": "マクロ ビルダー", "function": "関数ビルダー" },
+    "function": { "title": "関数ビルダー", "empty": "公開関数を含むモジュールはありません。" },
     "title": "式ビルダー",
     "expression": "式を入力してください:",
     "elements": "式の要素",
@@ -1894,6 +1939,7 @@
       "unknownSource": "この名前のテーブルまたはクエリはありません。",
       "pictureTooLarge": "画像が大きすぎます (最大 1 MB)。",
       "notInteger": "整数を入力してください。",
+      "badFunctionCall": "関数呼び出しは =名前(引数) の形式で、モジュールの Python 関数の名前を指定します。",
       "badMacroName": "マクロ名が正しくありません。「Macro」または「Macro.Submacro」の形式で、それ以外のピリオドやかっこを含めないでください。",
       "badEmbedded": "埋め込みマクロが正しくありません。"
     },
@@ -1912,6 +1958,7 @@
     "unbound": "非連結",
     "saveFirstTitle": "フォームの保存",
     "saveFirst": "フォーム「{{name}}」への変更を保存しますか?",
+    "saveLayout": "フォーム '{{name}}' のレイアウトの変更を保存しますか?",
     "mustSaveFirst": "先にフォーム「{{name}}」を保存する必要があります。今すぐ保存しますか?",
     "sourceError": "レコード ソース「{{name}}」: {{message}}",
     "tabOrder": {
@@ -2260,6 +2307,8 @@
     }
   },
   "module": {
+    "functionClash": "関数 {{fn}} はモジュール {{other}} にも存在します。={{fn}}() の呼び出しはあいまいになります。",
+    "functionBuiltin": "{{fn}} は組み込み関数の名前です。別の名前を選択してください。",
     "newName": "モジュール{{n}}",
     "nameLabel": "モジュール名",
     "badName": "モジュール名は Python の名前である必要があります。英数字と _ を使用し、先頭に数字は使えず、Python の予約語も使えません。",
@@ -2289,6 +2338,7 @@
       "Quit": "終了",
       "RemoveAllTempVars": "すべての一時変数を削除",
       "RemoveTempVar": "一時変数を削除",
+      "RunCode": "コードの実行",
       "RunMacro": "マクロの実行",
       "RunSQL": "SQL の実行",
       "SetLocalVar": "ローカル変数の設定",
@@ -2321,6 +2371,7 @@
       "Title": "タイトル",
       "Name": "名前",
       "Expression": "式",
+      "FunctionName": "関数名",
       "MacroName": "マクロ名",
       "RepeatCount": "繰り返し回数",
       "RepeatExpression": "繰り返し条件式",
@@ -2895,6 +2946,15 @@
     "target": "{{kind}} {{name}} › {{control}}（「{{current}}」）"
   },
   "python": {
+    "error": {
+      "title": "Python エラー",
+      "text": "{{type}}: {{message}}",
+      "where": "モジュール {{module}}、{{line}} 行目",
+      "interrupted": "実行が中断されました。",
+      "debug": "デバッグ",
+      "end": "終了",
+      "traceback": "詳細"
+    },
     "running": "Python を実行中です… Ctrl+Break で中断します。",
     "interrupt": "中断",
     "restarted": "Python が応答しなくなったため再起動しました。モジュールの状態は失われました。",

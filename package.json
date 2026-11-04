@@ -1,6 +1,6 @@
 {
   "name": "basecraft",
-  "version": "0.4.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Desktop database application in the spirit of Microsoft Access",
   "author": "SARL IN SET <info@in-set.com>",
@@ -45,6 +45,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:cli": "vite build -c vite.cli.config.ts",
     "build:runtime": "electron-vite build --mode runtime",
     "licenses": "node scripts/licenses.mjs",
     "dist:win": "electron-vite build && npm run licenses && electron-builder --win --x64 --publish never",

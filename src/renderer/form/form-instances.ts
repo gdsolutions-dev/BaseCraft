@@ -18,6 +18,10 @@ export interface FormInstance {
   value(control: string): Value;
   /** A control or field of the current record; rejects bc:readOnly, bc:notFound||<name>; fires no update event (R18). */
   setValue(target: string, v: Value): Promise<void>;
+  /** D2: the runtime override, else the stored property, else the geometry (`value`: value(control)); throws bc:notFound||<name>. */
+  property(control: string, p: SettableProperty): Value;
+  /** D2: the name of the control holding the focus. */
+  activeControl(): string | null;
   /** R9 (`value`: as setValue); throws bc:propertyNotSupported, bc:notFound||<name>. */
   setProperty(control: string, p: SettableProperty, v: Value): void | Promise<void>;
   /** Rejects bc:cantGoToRecord (Access 2105). */
@@ -56,6 +60,8 @@ export const registerForm = (f: FormInstance): (() => void) => register(forms, f
 export const registerReport = (r: ReportInstance): (() => void) => register(reports, r);
 export const formNamed = (name: string): FormInstance | undefined => forms.find((f) => sameName(f.name, name));
 export const formOfTab = (tabId: string): FormInstance | undefined => forms.find((f) => f.tabId === tabId);
+export const listOpenForms = (): readonly FormInstance[] => forms;
+export const listOpenReports = (): readonly ReportInstance[] => reports;
 const reportNamed = (name: string): ReportInstance | undefined => reports.find((r) => sameName(r.name, name));
 
 /** Registered, its On Open, On Load or first On Current still running. */

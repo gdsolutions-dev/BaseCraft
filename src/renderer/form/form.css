@@ -6,11 +6,11 @@
 
 /* aperçu d'un contrôle : il remplit le cadre du concepteur */
 .fz { box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; font-size: 12.5px; }
-.fz-text { display: flex; align-items: center; gap: 4px; padding: 0 4px; white-space: nowrap; }
+.fz-text { --bc-ix: 4px; display: flex; align-items: center; gap: 4px; padding: 0 4px; white-space: nowrap; }
 .fz-clip { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fz-text > .fz-clip { flex: 1 1 auto; }
 .fz-combo svg { flex: none; color: var(--bc-text-muted); }
-.fz-list { padding: 2px 4px; }
+.fz-list { --bc-ix: 4px; --bc-iy: 2px; padding: 2px 4px; }
 .fz-check { border: 1.5px solid var(--bc-border); border-radius: 3px; background: var(--bc-surface); width: min(100%, 16px); height: min(100%, 16px); }
 .fz-radio { border-radius: 50%; }
 .fz-check.is-on { background: var(--bc-text); box-shadow: inset 0 0 0 3px var(--bc-surface); }   /* mode Page : case cochée */
@@ -48,12 +48,12 @@
 .frun-fixed .frun-section { margin-left: 18px; }
 .frun-section { position: relative; flex: none; overflow: hidden; }
 .frun-section input, .frun-section textarea, .frun-section button { font: inherit; margin: 0; }
-.frun-text { padding: 0 4px; outline-offset: -1px; }
-textarea.frun-text { padding: 2px 4px; resize: none; }
+.frun-text { --bc-ix: 4px; padding: 0 4px; outline-offset: -1px; }
+textarea.frun-text { --bc-iy: 2px; padding: 2px 4px; resize: none; }
 .frun-text[readonly] { cursor: default; }
 .frun-text:focus-visible, .frun-radio:focus-visible, .frun-check:focus-visible, .frun-button:focus-visible { outline: 2px solid var(--bc-accent); }
 .frun-text[aria-invalid="true"] { outline: 2px solid var(--bc-danger); }
-.frun-label { display: flex; align-items: center; padding: 0 2px; white-space: nowrap; overflow: hidden; }
+.frun-label { --bc-ix: 2px; display: flex; align-items: center; padding: 0 2px; white-space: nowrap; overflow: hidden; }
 .frun-check { margin: 0; accent-color: var(--bc-accent); }
 .frun-group { overflow: visible; }
 .frun-legend { position: absolute; top: -0.7em; left: 8px; padding: 0 4px; background: inherit; font-size: 12px; line-height: 1.4; }

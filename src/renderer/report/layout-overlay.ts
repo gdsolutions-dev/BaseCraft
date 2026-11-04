@@ -1,12 +1,12 @@
 // Mode Page des états (L3) : géométrie pure de la surcouche du flux (anneaux de sélection, poignée de largeur) et la largeur
 // posée par cette poignée. Tout est en twips dans le document, en px (× scale) à l'écran.
 import type { DesignDoc } from '../../shared/design/model';
-import { occurrences, sectionPointAt } from '../../shared/report/flow';
+import { itemAt, occurrences, sectionPointAt } from '../../shared/report/flow';
 import type { LaidOutReport } from '../../shared/report/types';
 import type { Rect } from '../designer/geometry';
 import type { ToolState } from '../designer/Designer';
-import { designerReducer, initDesigner, type Selection } from '../designer/designer-model';
-import { DEFAULT_SIZE, snap as snapTo } from '../designer/units';
+import { CONTAINER_KINDS, designerReducer, findControl, initDesigner, type Selection } from '../designer/designer-model';
+import { CLICK_PX, DEFAULT_SIZE, snap as snapTo } from '../designer/units';
 
 export const MIN_WIDTH = 100;   // twips
 export interface Ring { name: string; left: number; top: number; width: number; height: number }
@@ -47,12 +47,27 @@ export function stepDrag(d: WidthDrag | null, s: DragStep, scale: number): { dra
 /** Les contrôles que Suppr retire : ceux de la sélection ; vide pour l'état ou une section (on ne supprime ni l'un ni l'autre ici). */
 export const deleteTargets = (selection: Selection): string[] => (selection.kind === 'controls' ? selection.names : []);
 
-/** Poser un contrôle d'un clic sur le flux : (x, y) en twips absolus du flux ; la section sous le point et le rectangle (taille par
- *  défaut) relatif à sa bande, accroché à la grille de pas `snap` (null ou 0 : sans accrochage), left/top ≥ 0. Null hors bande ou sans outil. */
-export function placement(report: LaidOutReport, doc: DesignDoc, tool: ToolState, x: number, y: number, snap: number | null): { section: number; rect: Rect } | null {
+/** Poser un contrôle sur le flux : `from` (appui) et `to` (relâchement) en twips absolus du flux ; la section est celle sous `from`, le
+ *  rectangle relatif à sa bande (`to` y est ramené même hors de la bande), left/top ≥ 0. Un clic (moins de CLICK_PX en px, `scale` px par
+ *  twip, sur les deux axes) : la taille par défaut ; sinon le rectangle tracé, ses deux coins accrochés à la grille de pas `snap` (null ou
+ *  0 : sans accrochage), au moins un pas (1 twip sans accrochage). Null hors bande ou sans outil. */
+export function placement(report: LaidOutReport, doc: DesignDoc, tool: ToolState, from: { x: number; y: number }, to: { x: number; y: number }, snap: number | null, scale: number): { section: number; rect: Rect } | null {
   if (!tool.kind) return null;
-  const p = sectionPointAt(report, doc.sections, x, y);
+  const p = sectionPointAt(report, doc.sections, from.x, from.y);
   if (!p) return null;
   const at = (v: number) => Math.max(0, Math.round(snap ? snapTo(v, snap) : v));
-  return { section: p.section, rect: { left: at(p.x), top: at(p.y), ...DEFAULT_SIZE } };
+  const tol = CLICK_PX / scale;
+  if (Math.abs(to.x - from.x) < tol && Math.abs(to.y - from.y) < tol) return { section: p.section, rect: { left: at(p.x), top: at(p.y), ...DEFAULT_SIZE } };
+  const ex = p.x + to.x - from.x, ey = p.y + to.y - from.y;
+  const [l, t, r, b] = [at(Math.min(p.x, ex)), at(Math.min(p.y, ey)), at(Math.max(p.x, ex)), at(Math.max(p.y, ey))];
+  const min = snap || 1;
+  return { section: p.section, rect: { left: l, top: t, width: Math.max(min, r - l), height: Math.max(min, b - t) } };
+}
+
+/** Le groupe d'options ou le contrôle onglet sous le point (twips absolus du flux), comme le mode Création : le contrôle posé là
+ *  y entre (insert `parent`). Undefined sur un autre contrôle (un bouton d'option du groupe compris), hors de tout élément. */
+export function containerAt(report: LaidOutReport, doc: DesignDoc, x: number, y: number): string | undefined {
+  const name = itemAt(report, x, y);
+  const c = name ? findControl(doc, name)?.control : undefined;
+  return c && CONTAINER_KINDS.includes(c.kind) ? c.name : undefined;
 }

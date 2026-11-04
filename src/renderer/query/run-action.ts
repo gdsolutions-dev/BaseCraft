@@ -85,6 +85,14 @@ async function refreshAfterRun(dispatch: AppDispatch | undefined, tables?: { nam
   void dispatch({ type: 'queryDataChanged' });
 }
 
+/** The interface's message for a refusal that is not a row error, a replace or a column name (shared with Python's db.execute). */
+export function refusalMessage(r: { reason: 'related' | 'nameExists' | 'tableExists' | 'hasRelations' | 'readOnly' | 'badColumnName'; table?: string; column?: string }): { key: string; params: { table?: string; column?: string; context?: 'unnamed' } } {
+  if (r.reason === 'badColumnName') return { key: 'query.action.badColumnName', params: { column: r.column } };
+  const table = r.table ?? '';
+  return { key: r.reason === 'related' || r.reason === 'nameExists' ? `query.action.${r.reason}` : `dialog.op.${r.reason}`,
+    params: { table, context: r.reason === 'related' && !table ? 'unnamed' : undefined } };
+}
+
 /**
  * Runs the action query `ref` (on a read-only base: refused at once, `dialog.op.readOnly`): its parameters asked in order (each one actionCount says is missing, with its PARAMETERS type
  * when declared; a value the main process cannot convert is shown, then asked again), the count confirmed
@@ -170,13 +178,9 @@ export async function runActionFlow(ref: QueryRef, deps: { modal: ModalApi; regi
       } else if (r.reason === 'tableExists') {
         if ((await ask('query.action.replace', { table: r.table })) !== 'yes') return 'cancelled';
         opts.replaceTable = true;
-      } else if (r.reason === 'badColumnName') {
-        await message('query.action.badColumnName', { column: r.column });
-        return 'failed';
       } else {
-        const table = 'table' in r ? r.table : '';
-        await message(r.reason === 'related' || r.reason === 'nameExists' ? `query.action.${r.reason}` : `dialog.op.${r.reason}`,
-          { table, context: r.reason === 'related' && !table ? 'unnamed' : undefined });
+        const m = refusalMessage(r);
+        await message(m.key, m.params);
         return 'failed';
       }
     }

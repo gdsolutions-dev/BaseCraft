@@ -109,6 +109,17 @@ describe('BridgeServer', () => {
     srv.onWorkerMessage(done(2, 2))
     await expect(p2).resolves.toBe(2)
   })
+  it('pendingCalls counts a worker call until its reply is written', async () => {
+    let release!: (v: unknown) => void
+    const { srv, mem } = server(() => new Promise((r) => { release = r }))
+    expect(srv.pendingCalls()).toBe(0)
+    fakeWorker(mem).call(srv)
+    expect(srv.pendingCalls()).toBe(1)
+    release('v')
+    await flush()
+    expect(state(mem)).toBe(REPLY)
+    expect(srv.pendingCalls()).toBe(0)
+  })
   it('answers a worker call with { value }', async () => {
     const { srv, mem } = server(async () => 'v')
     fakeWorker(mem).call(srv)

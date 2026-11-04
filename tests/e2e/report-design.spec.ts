@@ -40,7 +40,7 @@ test('Report Design view: create, Field List, section pairs, page setup, save, P
     await expect(cur(page).getByTestId('designer')).toBeVisible();
     await selected(page, 'reportDesign');
     for (const id of ['arrange', 'pageSetup']) await expect(page.getByTestId(`ribbon-tab-${id}`)).toBeVisible();
-    await checkView(page, 'viewPrintPreview', (v) => expect(v).toBeDisabled()); // not saved yet
+    await checkView(page, 'viewPrintPreview', (v) => expect(v).toBeEnabled()); // an unsaved report can be previewed, as a query (de6f3a8)
     for (const kind of ['pageHeader', 'detail', 'pageFooter']) await expect(page.getByTestId(`section-${kind}`)).toBeVisible();
 
     // source, then the Field List: Enter adds a bound text box and its label to the Detail

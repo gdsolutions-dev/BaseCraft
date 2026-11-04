@@ -5,12 +5,14 @@ import { leaveFormDesign } from './FormDesignView';
 vi.mock('../bridge', () => ({ api: {} }));
 vi.mock('../datasheet/glide-keyboard', () => ({ installEditorCommitFix: () => {} })); // node, no DOM
 
-// The form designer's mode guard (L2): Design <-> Layout is one editor, nothing to ask; any other view asks a modified design.
+// The form designer's mode guard (L2): Design <-> Layout is one editor, nothing to ask; Form and Datasheet views run the design as it
+// stands, unsaved (as a query); closing asks a modified design.
 const guard = (mode: DocMode, dirty: boolean, answer: 'yes' | 'no' | 'cancel' = 'no') => {
   const confirm = vi.fn(async () => answer);
   const save = vi.fn(async () => true);
   const flush = vi.fn(async () => {});
-  return { confirm, save, flush, d: { mode, name: 'F', busy: false, flush, dirty: () => dirty, confirm, save } };
+  const unsaved = vi.fn();
+  return { confirm, save, flush, unsaved, d: { mode, name: 'F', busy: false, flush, dirty: () => dirty, confirm, save, unsaved } };
 };
 
 describe('leaveFormDesign', () => {
@@ -23,20 +25,19 @@ describe('leaveFormDesign', () => {
     }
   });
 
-  it('to Form or Datasheet view, from Design or Layout view: a modified design is asked (Yes saves, No stays)', async () => {
+  it('to Form or Datasheet view: nothing asked, nothing saved; the design runs as it stands when modified or new, not when saved and clean', async () => {
     for (const from of ['design', 'layout'] as const) {
       for (const to of ['run', 'datasheet'] as const) {
-        const no = guard(from, true, 'no');
-        expect(await leaveFormDesign('mode', to, no.d)).toBe(false);
-        expect(no.confirm).toHaveBeenCalledOnce();
-        const yes = guard(from, true, 'yes');
-        expect(await leaveFormDesign('mode', to, yes.d)).toBe(true);
-        expect(yes.save).toHaveBeenCalledOnce();
+        const modified = guard(from, true);
+        expect(await leaveFormDesign('mode', to, modified.d)).toBe(true);
+        expect(modified.confirm).not.toHaveBeenCalled();
+        expect(modified.save).not.toHaveBeenCalled();
+        expect(modified.unsaved).toHaveBeenCalledWith(true);
+        const clean = guard(from, false);
+        expect(await leaveFormDesign('mode', to, clean.d)).toBe(true);
+        expect(clean.unsaved).toHaveBeenCalledWith(false);
       }
     }
-    const clean = guard('layout', false);
-    expect(await leaveFormDesign('mode', 'run', clean.d)).toBe(true);
-    expect(clean.confirm).not.toHaveBeenCalled();
   });
 
   it('closing still asks a modified design (No discards); a save under way refuses, except Design <-> Layout', async () => {

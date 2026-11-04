@@ -53,6 +53,7 @@ export interface FormDatasheetProps extends Omit<SingleFormProps, 'doc'> {
   onDeleteRecord(): void;                                        // the current record's row selected, then Delete
   error: string | null;                                         // the first error (a field no control shows included)
   name: string;
+  onWidths?(control: string, px: number): void;                 // a column dragged (a tab's form: kept for Access's layout question)
   onTabOut?(dir: 1 | -1): boolean;                              // a subform: Tab, Enter or an arrow past the last cell (or before the first) leaves it at its end
 }
 
@@ -61,7 +62,8 @@ export function FormDatasheet(p: FormDatasheetProps) {
   const { t } = useTranslation();
   const palette = usePalette();
   const modal = useModal();
-  const [widths, onColumnResize] = useColumnWidths();
+  const [widths, resize] = useColumnWidths();
+  const onColumnResize = (c: GridColumn, w: number) => { resize(c, w); if (c.id !== undefined) p.onWidths?.(c.id, w); };
   const checkTruncated = useMemo(() => currentBaseOptions().checkTruncatedNumbers, []); // read when the view opens (R13)
   const measure = useMemo(() => measureIn(`${palette.theme.baseFontStyle} ${palette.theme.fontFamily}`), [palette]);
   const [, scrolled] = useState(0);

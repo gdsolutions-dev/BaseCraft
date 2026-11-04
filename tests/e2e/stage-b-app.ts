@@ -147,6 +147,7 @@ async function buildMenu(page: Page) {
     await expect(vis(page, `ctl-${b.name}`)).toHaveText(b.caption);
     await vis(page, 'sheet-tab-event').click();
     await vis(page, 'prop-OnClick-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     const tab = `doc-tab-macro-FMenu : ${b.name} : ${fr.prop.OnClick}`;
     await expect(page.getByTestId(tab)).toHaveAttribute('aria-selected', 'true');
     await add(page, 'root', b.action);
@@ -172,6 +173,7 @@ export async function buildStageBApp(userDataDir?: string): Promise<string> {
     await vis(page, 'sheet-object').selectOption('doc');
     await vis(page, 'sheet-tab-event').click();
     await vis(page, 'prop-BeforeUpdate-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     const beforeUpdate = `doc-tab-macro-FCommandes : ${fr.tabs.kind.form} : ${fr.prop.BeforeUpdate}`;
     await expect(page.getByTestId(beforeUpdate)).toHaveAttribute('aria-selected', 'true');
     await add(page, 'root', 'block-if');

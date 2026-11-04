@@ -9,9 +9,9 @@ import { itemAt } from '../../shared/report/flow';
 import { renderFlowHtml, reportCss } from '../../shared/report/render';
 import type { CanvasProps } from '../designer/Designer';
 import { findControl } from '../designer/designer-model';
-import { gridStep, twipsToPx } from '../designer/units';
+import { CLICK_PX, gridStep, twipsToPx } from '../designer/units';
 import { FLOW_ROWS, type FlowData } from './layout-flow';
-import { deleteTargets, overlayFor, placement, resizeTo, stepDrag, type DragStep, type WidthDrag } from './layout-overlay';
+import { containerAt, deleteTargets, overlayFor, placement, resizeTo, stepDrag, type DragStep, type WidthDrag } from './layout-overlay';
 import { faces } from './ReportPreviewView';
 import './preview.css';
 
@@ -27,6 +27,10 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
   const [fontsReady, setFontsReady] = useState(false);
   const [drag, setDrag] = useState<WidthDrag | null>(null);
   const dragRef = useRef<WidthDrag | null>(null);
+  // tracé d'un contrôle : x0/y0 = appui, x/y = pointeur courant, en px relatifs à la feuille ; par la référence comme le glisser
+  const [draw, setDraw] = useState<{ x0: number; y0: number; x: number; y: number } | null>(null);
+  const drawRef = useRef(draw);
+  const setDrawing = (d: typeof draw) => { drawRef.current = d; setDraw(d); };
 
   // comme l'aperçu : le flux reste caché tant que ses polices embarquées ne sont pas chargées
   useEffect(() => {
@@ -62,19 +66,45 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
     if (tool.kind && busy) return;   // outil actif pendant le recalcul : le flux affiché est périmé, le clic est ignoré
     root.current?.focus({ preventScroll: true });   // le clavier suit le clic
     const r = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - r.left) / SCALE, y = (e.clientY - r.top) / SCALE;
-    if (placing) {   // un outil actif : on pose (Alt : sans accrochage) ; hors bande, rien ne change et l'outil reste
-      const at = placement(report, state.doc, tool, x, y, state.snap && !e.altKey ? gridStep(state.doc) : null);
-      if (!at) return;
-      dispatch({ type: 'insert', section: at.section, controls: host.newControls(tool.kind!, at.rect, at.section, state.doc),
-        at: { x: at.rect.left + at.rect.width / 2, y: at.rect.top + at.rect.height / 2 } });
-      if (!tool.locked) onTool({ kind: null, locked: false });
+    if (placing) {   // un outil actif : le tracé commence ; la pose a lieu au relâchement (drawEnd)
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDrawing({ x0: e.clientX - r.left, y0: e.clientY - r.top, x: e.clientX - r.left, y: e.clientY - r.top });
       return;
     }
+    const x = (e.clientX - r.left) / SCALE, y = (e.clientY - r.top) / SCALE;
     const name = itemAt(report, x, y) || null;   // '' : un élément sans nom
     if (e.ctrlKey || e.shiftKey || e.metaKey) { if (name) dispatch({ type: 'toggleSelect', name }); return; }
     dispatch({ type: 'select', selection: name ? { kind: 'controls', names: [name] } : { kind: 'doc' } });
   };
+  const drawMove = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drawRef.current;
+    if (!d) return;
+    if (e.buttons === 0) { setDrawing(null); return; }   // relâché hors de la fenêtre
+    const r = e.currentTarget.getBoundingClientRect();
+    setDrawing({ ...d, x: e.clientX - r.left, y: e.clientY - r.top });
+  };
+  // relâchement : pose le rectangle tracé (Alt : sans accrochage) ; hors bande, rien ne change et l'outil reste ; recalcul en cours : rien
+  const drawEnd = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drawRef.current;
+    if (!d) return;
+    setDrawing(null);
+    if (!report || !placing || !tool.kind) return;
+    const at = placement(report, state.doc, tool, { x: d.x0 / SCALE, y: d.y0 / SCALE }, { x: d.x / SCALE, y: d.y / SCALE },
+      state.snap && !e.altKey ? gridStep(state.doc) : null, SCALE);
+    if (!at) return;
+    const parent = containerAt(report, state.doc, d.x0 / SCALE, d.y0 / SCALE);   // commencé dans un groupe d'options ou un onglet : il y entre
+    dispatch({ type: 'insert', section: at.section, controls: host.newControls(tool.kind, at.rect, at.section, state.doc),
+      at: { x: at.rect.left + at.rect.width / 2, y: at.rect.top + at.rect.height / 2 }, ...(parent ? { parent } : {}) });
+    if (!tool.locked) onTool({ kind: null, locked: false });
+  };
+  const drawing = !!draw;
+  useEffect(() => {   // Échap abandonne le tracé en cours, l'outil reste
+    if (!drawing) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawing(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawing]);
+  const past = !!draw && (Math.abs(draw.x - draw.x0) >= CLICK_PX || Math.abs(draw.y - draw.y0) >= CLICK_PX);
   // l'état du glisser lu par la référence : deux événements entre deux rendus voient le même dernier état
   const step = (s: DragStep) => {
     const r = stepDrag(dragRef.current, s, SCALE);
@@ -109,13 +139,16 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
         {report && (
           <div className="rp-spread">
             <div className={`rp-sheet rl-sheet${placing ? ' rl-placing' : ''}`} data-testid="layout-flow" style={{ width: report.width * SCALE, visibility: fontsReady ? 'visible' : 'hidden' }}
-              aria-busy={!fontsReady} onPointerDown={select}>
+              aria-busy={!fontsReady} onPointerDown={select} onPointerMove={drawMove} onPointerUp={drawEnd}
+              onPointerCancel={() => setDrawing(null)} onLostPointerCapture={() => setDrawing(null)}>
               {/* renderFlowHtml échappe tout texte et tout attribut ; la CSP de l'interface interdit les scripts */}
               <div dangerouslySetInnerHTML={{ __html: html }} />
               {overlay.rings.map((r, i) => (
                 <div key={i} className="rl-ring" data-testid={`layout-ring-${r.name}`} aria-hidden
                   style={{ left: r.left, top: r.top, width: r.width + dw(r.name), height: r.height }} />
               ))}
+              {past && <div className="rl-draw" data-testid="layout-draw" aria-hidden
+                style={{ left: Math.min(draw.x0, draw.x), top: Math.min(draw.y0, draw.y), width: Math.abs(draw.x - draw.x0), height: Math.abs(draw.y - draw.y0) }} />}
               {handle && (
                 <span className="rl-handle" data-testid="layout-width-handle" aria-hidden style={{ left: handle.left + dw(handle.name), top: handle.top, height: handle.height }}
                   onPointerDown={(e) => grab(e, handle.name)} onPointerMove={(e) => step({ kind: 'move', x: e.clientX, buttons: e.buttons })}

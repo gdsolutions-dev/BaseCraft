@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { validateDesignDoc, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { MAX_TWIPS } from './units';
-import { ROW_GAP, readLayouts } from '../../shared/design/layout';
-import { createLayout, insertCells, membersOf, selectionOf } from '../../shared/design/layout-edit';
+import { ROW_GAP, readLayouts, reflow, withLayouts } from '../../shared/design/layout';
+import { createLayout, insertCells, removeLayout, membersOf, selectionOf } from '../../shared/design/layout-edit';
 import { CONTAINER_KINDS, controlRect, coreReducer, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, syncLayouts,
   uniqueName, type DesignerAction, type DesignerState } from './designer-model';
 
@@ -267,6 +267,29 @@ describe('layouts stay in step with coordinates', () => {
     expect(grid(s).cols).toEqual([1000, 2568]);
     expect(rect(s, 'Ville').left).toBe(rect(s, 'Nom').left);
   });
+  it('resizing a padded data control learns its own size, not the padding', () => {
+    const padded = reflow({ ...stack, sections: stack.sections.map((x) => ({ ...x, controls: x.controls.map((c) => (c.name === 'Ville' ? { ...c, props: { ...c.props, LeftPadding: 180 } } : c)) })) });
+    const left = rect(selIn(padded, 'Nom') as DesignerState, 'Nom').left;
+    const s = act(selIn(padded, 'Nom'), { type: 'resize', handle: 'e', dx: 300, dy: 0, free: true });
+    expect(grid(s).cols[1]).toBe(2568);
+    expect(rect(s, 'Nom')).toMatchObject({ left, width: 2568 });
+  });
+  it('resizing a colSpan 2 member adds the change to the last spanned column', () => {
+    const l = readLayouts(stack)[0];
+    const lay = { ...l, cells: [{ ...l.cells[0], colSpan: 2 }, ...l.cells.slice(2)] };   // row 0: one cell over both columns
+    const doc = reflow({ ...stack, props: { ...stack.props, Layouts: [lay] } });
+    expect(readLayouts(doc)).toHaveLength(1);
+    const s = act(selIn(doc, lay.cells[0].control!), { type: 'resize', handle: 'e', dx: 200, dy: 0, free: true });
+    expect(grid(s).cols).toEqual([1000, l.cols[1] + 200]);
+  });
+  it('resizing a rowSpan 2 member adds the change to the last spanned row', () => {
+    const l = readLayouts(stack)[0];
+    const lay = { ...l, cells: [{ ...l.cells[0], rowSpan: 2 }, l.cells[1], l.cells[3]] };   // column 0: one cell over both rows
+    const doc = reflow({ ...stack, props: { ...stack.props, Layouts: [lay] } });
+    expect(readLayouts(doc)).toHaveLength(1);
+    const s = act(selIn(doc, lay.cells[0].control!), { type: 'resize', handle: 's', dx: 0, dy: 200, free: true });
+    expect(grid(s).rows.map((r) => r.height)).toEqual([l.rows[0].height, l.rows[1].height + 200]);
+  });
   it('setProp Width / Height of a member sets its column / row', () => {
     const s = act(selIn(stack, 'Ville'), { type: 'setProp', targets: [{ kind: 'control', name: 'Ville' }], name: 'Width', value: 3000 },
       { type: 'setProp', targets: [{ kind: 'control', name: 'Nom' }], name: 'Height', value: 500 });
@@ -459,5 +482,29 @@ describe('dispositions d\'un état : un contrôle posé en devient membre (L3c)'
     const s = act(initDesigner(d, 'report'), { type: 'insert', section: 1, controls: [neuf()], at: { x: nom.left + 10, y: nom.top + 10 } });
     expect(Number(s.doc.props.Width)).toBeGreaterThan(right);
     expect(Number(s.doc.props.Width)).toBeGreaterThanOrEqual(rect(s, 'Neuf').left + rect(s, 'Neuf').width);
+  });
+  describe('empty cells', () => {
+    const d = insertCells(createLayout(fixture(), membersOf(fixture(), ['Nom', 'Ville']), 'stacked', { headerSection: 'formHeader' }), 'Nom', 'right');
+    const l = readLayouts(d)[0];
+    const empty = l.cells.find((c) => c.control === null)!;
+    const cell = { layout: l.id, row: empty.row, col: empty.col };
+    it('selectCell replaces, or toggles with add and keeps the names', () => {
+      const s = act(initDesigner(d), { type: 'selectCell', cell, add: false });
+      expect(s.selection).toEqual({ kind: 'controls', names: [], cells: [cell] });
+      const s2 = act(selIn(d, 'Nom'), { type: 'selectCell', cell, add: true });
+      expect(s2.selection).toEqual({ kind: 'controls', names: ['Nom'], cells: [cell] });
+      expect(act(s2, { type: 'selectCell', cell, add: true }).selection).toEqual({ kind: 'controls', names: ['Nom'] });
+      expect(act(s2, { type: 'toggleSelect', name: 'Ville' }).selection).toEqual({ kind: 'controls', names: ['Nom', 'Ville'], cells: [cell] });
+    });
+    it('a ref naming a slot covered by a merged empty cell, not its anchor, is dropped', () => {
+      const [a, b] = [{ layout: l.id, row: 0, col: 2 }, { layout: l.id, row: 1, col: 2 }];
+      const merged = { ...l, cells: l.cells.filter((c) => !(c.col === 2)).concat({ row: 0, col: 2, rowSpan: 2, control: null }) };
+      const s = act({ ...initDesigner(d), selection: { kind: 'controls', names: [], cells: [a, b] } }, { type: 'edit', apply: (x) => withLayouts(x, [merged]) });
+      expect(s.selection).toEqual({ kind: 'controls', names: [], cells: [a] });
+    });
+    it('a doc edit that removes the cell drops it from the selection', () => {
+      const s = act(initDesigner(d), { type: 'selectCell', cell, add: false }, { type: 'edit', apply: (x) => removeLayout(x, l.id) });
+      expect(s.selection).toEqual({ kind: 'doc' });
+    });
   });
 });

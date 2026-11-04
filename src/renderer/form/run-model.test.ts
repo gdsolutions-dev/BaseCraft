@@ -5,7 +5,8 @@ import type { SourceField, SourceInfo } from '../../shared/record-source';
 import type { RecordSnapshot } from './record-controller';
 import { createLayout, membersOf } from '../../shared/design/layout-edit';
 import { ctlAttrs, hasLabel, labelTarget, type RunCtx } from './controls/run-ctx';
-import { controlEnabled, controlStyle, errorsByControl, layoutLabels, optionGroupValue, tabSequence } from './run-model';
+import { twipsToPx } from '../designer/units';
+import { controlEnabled, controlLook, controlStyle, gridlineStyle, errorsByControl, layoutLabels, optionGroupValue, tabSequence } from './run-model';
 
 const ctl = (kind: ControlKind, name: string, props: Record<string, unknown> = {}, at = { left: 0, top: 0, width: 1000, height: 300 }): ControlDef =>
   ({ kind, name, ...at, props });
@@ -135,5 +136,33 @@ describe('layout labels: control names that are Object.prototype keys', () => {
       expect(s.controls.map((c) => hasLabel(c, x))).toEqual(d === laid ? [true, true, false, false, false] : [true, true, false]);
       expect(ctlAttrs(s.controls[2], x)['aria-label']).toBe('valueOf');
     }
+  });
+});
+
+describe('margins and gridlines', () => {
+  it('a margin is the text inset, only on text-bearing kinds', () => {
+    expect(controlLook(ctl('textBox', 'A', { LeftMargin: 90 })).paddingLeft).toBe(`calc(var(--bc-ix, 0px) + ${twipsToPx(90)}px)`);
+    expect(controlLook(ctl('textBox', 'A')).paddingLeft).toBeUndefined();
+    expect(controlLook(ctl('checkBox', 'C', { LeftMargin: 90 })).paddingLeft).toBeUndefined();
+  });
+
+  it('a margin adds to the stylesheet inset (None < Narrow < Medium < Wide); margin 0 adds nothing', () => {
+    for (const kind of ['textBox', 'label'] as const) {
+      const look = controlLook(ctl(kind, 'A', { LeftMargin: 30, TopMargin: 30 }));
+      expect(look.paddingLeft).toBe('calc(var(--bc-ix, 0px) + 2px)');
+      expect(look.paddingTop).toBe('calc(var(--bc-iy, 0px) + 2px)');
+      const none = controlLook(ctl(kind, 'A', { LeftMargin: 0 }));
+      expect(none.paddingLeft).toBeUndefined();
+      expect(none.paddingTop).toBeUndefined();
+    }
+  });
+
+  it('gridlineStyle: null by default, else borders on the cell rectangle (control grown by its padding)', () => {
+    expect(gridlineStyle(ctl('textBox', 'A'))).toBeNull();
+    const g = gridlineStyle(ctl('textBox', 'A', { GridlineStyleTop: 'solid', GridlineWidthTop: 2, GridlineColor: '#ff0000', LeftPadding: 90, TopPadding: 30 },
+      { left: 1000, top: 500, width: 1000, height: 300 }))!;
+    expect(g.borderTop).toBe('2px solid #ff0000');
+    expect(g.borderBottom).toBeUndefined();
+    expect(g).toMatchObject({ position: 'absolute', pointerEvents: 'none', left: twipsToPx(910), top: twipsToPx(470), width: twipsToPx(1090), height: twipsToPx(330) });
   });
 });

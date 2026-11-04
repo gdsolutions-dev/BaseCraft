@@ -70,6 +70,10 @@
   background-size: 6px 1px, 1px 6px; background-position: center; background-repeat: no-repeat; }
 .dz-layout-handle:focus-visible { outline: 2px solid var(--dz-layout); outline-offset: 1px; }
 
+.dz-cell { position: absolute; padding: 0; box-sizing: border-box; cursor: pointer; background: transparent; border: 1px dotted var(--dz-layout, #e8710a); }
+.dz-cell.is-sel { background: var(--accent-soft); border-style: solid; }
+.dz-cell:focus-visible { outline: 2px solid var(--dz-layout, #e8710a); outline-offset: 1px; }
+
 .dz-rubber { position: absolute; z-index: 4; pointer-events: none; border: 1px dashed var(--bc-accent); background: var(--accent-soft); }
 
 /* Feuille de propriétés (maquette : .props, .ptabs, .prow, .pval, .swatch) et Liste des champs */

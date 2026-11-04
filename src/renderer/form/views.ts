@@ -4,7 +4,7 @@ import type { ControlDef, DesignDoc } from '../../shared/design/model';
 import { labelOf } from '../../shared/design/layout';
 import { effectiveProp } from '../../shared/design/properties';
 import type { SourceInfo } from '../../shared/record-source';
-import { twipsToPx } from '../designer/units';
+import { pxToTwips, twipsToPx } from '../designer/units';
 import { boundField } from './control-values';
 import { autoWidth } from './form-def';
 
@@ -70,9 +70,24 @@ export function datasheetColumns(doc: DesignDoc, info: SourceInfo): SheetColumn[
     const caption = attached ?? labelOf(doc, c.name)?.props.Caption;
     const title = typeof caption === 'string' && caption.trim() ? caption.replace(/\s*:\s*$/, '') : c.name;
     const f = boundField(c, info);
-    // Membre d'une disposition : sa Width est celle de la colonne de données, pas une largeur de colonne ; on prend la largeur naturelle du champ.
-    // ponytail: une vraie propriété ColumnWidth serait la voie propre (largeur de colonne indépendante de la disposition, comme Access).
-    const w = c.props.LayoutID && f ? autoWidth(f)?.width ?? c.width : c.width;
+    // ColumnWidth (twips entiers > 0) d'abord. Sinon un membre de disposition prend la largeur naturelle de son champ (sa Width est celle de la colonne de données), un autre sa Width.
+    const cw = c.props.ColumnWidth;
+    const w = typeof cw === 'number' && Number.isInteger(cw) && cw > 0 ? cw : c.props.LayoutID && f ? autoWidth(f)?.width ?? c.width : c.width;
     return { control: c.name, field: f?.name ?? null, title, width: twipsToPx(w) };
   });
+}
+
+/** The definition with each named control's ColumnWidth set to its dragged width (px -> twips); the same doc when nothing changes. */
+export function withColumnWidths(doc: DesignDoc, widths: Record<string, number>): DesignDoc {
+  let changed = false;
+  const map = (cs: ControlDef[]): ControlDef[] => cs.map((c) => {
+    const w = widths[c.name] === undefined ? undefined : pxToTwips(widths[c.name]);
+    const kids = c.children && map(c.children);
+    const same = (w === undefined || c.props.ColumnWidth === w) && (!kids || kids.every((k, i) => k === c.children![i]));
+    if (same) return c;
+    changed = true;
+    return { ...c, props: w === undefined ? c.props : { ...c.props, ColumnWidth: w }, ...(kids ? { children: kids } : {}) };
+  });
+  const sections = doc.sections.map((s) => ({ ...s, controls: map(s.controls) }));
+  return changed ? { ...doc, sections } : doc;
 }

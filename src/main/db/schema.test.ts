@@ -8,7 +8,7 @@ import { changeType } from '../../shared/field-types';
 import { clients, f, t } from '../../shared/test-fixtures';
 import type { FieldProps, TableDesign } from '../../shared/field-types';
 import {
-  createTable, createTableStatements, dropTable, writeTableMetadata, listTables, NameExistsError, quoteIdent, reconcile, renameTable, tableDesign,
+  createTable, createTableStatements, dropTable, writeTableMetadata, listTables, NameExistsError, quoteIdent, reconcile, renameTable, setColumnWidths, tableDesign,
 } from './schema';
 
 let dir: string;
@@ -51,6 +51,16 @@ describe('schema', () => {
     raw.exec(`INSERT INTO "Clients"("Nom") VALUES ('z')`);
     expect(raw.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
     raw.close();
+  });
+
+  it('setColumnWidths stores columnWidth per field (case-insensitive, unknown ignored), survives a table save', () => {
+    createTable(db, t('T', [f('Nom', 'shortText', { caption: 'Cap' }), f('Age', 'number')]));
+    setColumnWidths(db, 't', { nom: 2000, inconnu: 900 });
+    const nom = () => tableDesign(db, 'T').fields.find((x) => x.name === 'Nom')!.props;
+    expect(nom()).toMatchObject({ columnWidth: 2000, caption: 'Cap' });
+    expect(tableDesign(db, 'T').fields.find((x) => x.name === 'Age')!.props.columnWidth).toBeUndefined();
+    writeTableMetadata(db, t('T', [f('Nom', 'shortText', { caption: 'Cap' }), f('Age', 'number')]));
+    expect(nom().columnWidth).toBe(2000);
   });
 
   it('new props round-trip and clearing removes them', () => {

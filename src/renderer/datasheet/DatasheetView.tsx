@@ -29,6 +29,9 @@ import { defaultValues, editText, fromEdit, inputCell, lookupList, measureIn, pa
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from './filter-model';
 import { installEditorCommitFix } from './glide-keyboard';
 import { datasheetLook } from './datasheet-look';
+import { layoutSavable, storedPx, toTwips, withQueryWidths } from './sheet-layout';
+import { leaveSheetLayout } from '../form/FormRunView';
+import { passThroughOf } from '../../shared/query/definition';
 import { currentSettings, fourDigitYear } from '../settings-store';
 import {
   cellEditorOpen, cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, rowOf, RowPencil, scrollGridToRow,
@@ -88,6 +91,8 @@ async function loadLookups(read: (fd: FieldDef) => Promise<LookupData> | null, d
 
 /** A query's column (SourceField) as a field of the grid. */
 const columnOf = (f: SourceInfo['fields'][number]): FieldDef => ({ name: f.name, props: f.props });
+/** Idle time before a query's rows are counted (Access counts its recordset in the background). */
+const COUNT_IDLE_MS = 1500;
 
 /**
  * Without `source`: a table's datasheet (rows.*, tables.design). With `source` (a query, A3): its rows through sources.page
@@ -97,7 +102,7 @@ const columnOf = (f: SourceInfo['fields'][number]): FieldDef => ({ name: f.name,
  */
 export interface DatasheetProps extends DocViewProps { source?: Exclude<RecordSourceRef, { kind: 'table' }>; params?: Record<string, CellInput> }
 
-export function DatasheetView({ tab, active, readOnly, dispatch, source, params, designOpen, tabs }: DatasheetProps) {
+export function DatasheetView({ tab, active, readOnly, dispatch, source, params, designOpen, tabs, link }: DatasheetProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -145,11 +150,17 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [unsupported, setUnsupported] = useState(false);
   const [refused, setRefused] = useState(false); // a write was refused as read-only (lock lost meanwhile)
   const [busy, setBusy] = useState(false); // a row is being saved: the grid is locked
-  const [widths, onColumnResize] = useColumnWidths();
+  const [widths, resize] = useColumnWidths();
+  // Largeurs enregistrées (px par colonne : propriété des champs d'une table, `columnWidths` d'une requête) et tirées depuis (pas encore enregistrées)
+  const [stored, setStored] = useState<Record<string, number>>({});
+  const dragged = useRef<Record<string, number>>({});
+  const passThrough = useRef(false);
+  const onColumnResize = (c: GridColumn, w: number) => { resize(c, w); if (c.id !== undefined) dragged.current[c.id] = w; };
   const [version, bump] = useReducer((n: number) => n + 1, 0); // rows or pending edits changed: redraw
   const [, scrolled] = useReducer((n: number) => n + 1, 0);
-  // Synchronous state (read right after an await, before React renders): saved rows count, new record's row shown.
-  const rows = useRef({ count: 0, adding: false });
+  // Synchronous state (read right after an await, before React renders): saved rows count, new record's row shown. `more`:
+  // a query not counted yet (Access counts once idle): `count` is the rows read so far, a loading row follows them.
+  const rows = useRef({ count: 0, adding: false, more: false });
   const busyRef = useRef(false);
   const committing = useRef<Promise<boolean> | null>(null);
   // A click on the new record's row: Glide appends a row, then opens its editor once the row is there; the click's mouse-up opens
@@ -162,8 +173,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   useEffect(() => { if (!readOnly) setRefused(false); }, [readOnly]); // writable again (lock taken over)
   const notUpdatable = (!!shape?.src && !shape.src.info.updatable) || !!shape?.fixed; // a multi-table (or grouped…) query, a read-only link
   const ro = readOnly || refused || notUpdatable;
-  const live = useRef({ tab, active, shape, sort, filter, selection, ro, lookups, source, params });
-  live.current = { tab, active, shape, sort, filter, selection, ro, lookups, source, params };
+  const live = useRef({ tab, active, shape, sort, filter, selection, ro, readOnly, lookups, source, params });
+  live.current = { tab, active, shape, sort, filter, selection, ro, readOnly, lookups, source, params };
   /** The order and filter of every page request (set in `live` before React renders: read right after an await). */
   const query = () => {
     const { sort: s, filter: f } = live.current;
@@ -185,18 +196,19 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     pendingHeadings.current = key;
     bumpRestructure();
   };
-  /** `check`: a crosstab's headings compared (R14); never while the structure itself is read (its count). */
-  const countRows = (filter?: FieldFilter[], check = false, fresh = false): Promise<number> => {
+  /** `check`: a crosstab's headings compared (R14); never while the structure itself is read (its count). `exact` false: a
+   *  query is not run, only compiled (its filter checked): -1 unless its count is already known. */
+  const countRows = (filter?: FieldFilter[], check = false, fresh = false, exact = true): Promise<number> => {
     const src = live.current.source;
     if (!src) return api.rows.count(live.current.tab.name, filter);
-    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams(), ...(fresh ? { fresh: true } : {}) })
+    return api.sources.page(src, { offset: 0, limit: 0, ...(filter ? { filter } : {}), ...withParams(), ...(fresh ? { fresh: true } : {}), ...(exact ? {} : { count: false as const }) })
       .then((p) => { if (check) headingsChanged(p.columns); return p.total; });
   };
   const pageRows = async (offset: number, limit: number): Promise<RowPage> => {
     const src = live.current.source;
     const q = query();
     if (!src) return api.rows.page(live.current.tab.name, { offset, limit, ...q });
-    const p = await api.sources.page(src, { offset, limit, ...(q.sort ? { sort: [q.sort] } : {}), ...(q.filter ? { filter: q.filter } : {}), ...withParams() });
+    const p = await api.sources.page(src, { offset, limit, ...(q.sort ? { sort: [q.sort] } : {}), ...(q.filter ? { filter: q.filter } : {}), ...withParams(), count: false });
     headingsChanged(p.columns);
     // A row with no key-table rowid (a read-only source, an outer join's row without its key record: R5) carries NaN.
     return { rows: p.rows.map((values, i) => ({ rowid: p.rowids[i] ?? NaN, values })) };
@@ -297,7 +309,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
               try {
                 const before = rows.current.count;
                 const count = await countRows(filtered);
-                setRows({ count });
+                setRows({ count, more: false });
                 // Out of the filter: the rows under it move up, and so does a selection below it (never a record skipped).
                 const at = live.current.selection.current?.cell;
                 if (count < before && at && at[1] > p.rowIndex) setSelection(cellSelection(at[0], at[1] - 1));
@@ -382,22 +394,37 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
           src = { info, editable: info.fields.map((f) => writableColumn(info, f.name)) };
         }
         const design: TableDesign = src ? { name, fields: src.info.fields.map(columnOf) } : table!;
+        // Les largeurs enregistrées : celles des champs de la table, `columnWidths` de la requête enregistrée (illisible : aucune)
+        let widthsKept: Record<string, number> = {};
+        if (!src) for (const fd of design.fields) { const px = storedPx(fd.props.columnWidth); if (px) widthsKept[fd.name] = px; }
+        else if (source?.kind === 'query') {
+          try {
+            const def = (await api.objects.get('query', source.name)).definition as Record<string, unknown>;
+            passThrough.current = passThroughOf(def) !== null;
+            const cw = def.columnWidths;
+            if (typeof cw === 'object' && cw !== null && !Array.isArray(cw)) for (const [k, v] of Object.entries(cw)) { const px = storedPx(v); if (px) widthsKept[k] = px; }
+          } catch { widthsKept = {}; }
+        }
         // A sort and the criteria of fields still there are kept (a reload after a structure change); the others go.
         const has = (field: string) => design.fields.some((x) => sameName(x.name, field));
         const keptSort = live.current.sort && has(live.current.sort.field) ? live.current.sort : null;
         const items = live.current.filter.items.filter((x) => has(x.field));
         let keptFilter: FilterState = items.length ? { ...live.current.filter, items } : NO_FILTER;
-        let count: number;
+        let count: number; // a query: -1, counted once idle (its pages come first)
         try {
-          count = await countRows(activeFilter(keptFilter));
+          count = await countRows(activeFilter(keptFilter), false, false, false);
         } catch (e) {
           if (keptFilter === NO_FILTER) throw e;
           keptFilter = NO_FILTER; // a criterion the changed field no longer accepts
-          count = await countRows();
+          count = await countRows(undefined, false, false, false);
         }
         const [defaults, lists] = await Promise.all([defaultValues(design, settings.region), loadLookups((fd) => readLookup(fd, src), design, settings.region, editList)]);
         if (!current) return;
-        const cache = new PageCache((offset, limit) => pageRows(offset, limit));
+        const cache: PageCache = new PageCache(async (offset, limit) => {
+          const page = await pageRows(offset, limit);
+          if (live.current.shape?.cache === cache) grew(offset + page.rows.length, page.rows.length < limit);
+          return page;
+        });
         cache.onLoaded(() => { if (alive.current) bump(); });
         cache.onError((e) => { if (alive.current && live.current.shape?.cache === cache) dataError(e); });
         live.current.sort = keptSort;
@@ -411,10 +438,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         setSelection(col < 0 ? NO_SELECTION : { columns: CompactSelection.fromSingleSelection(col), rows: CompactSelection.empty() });
         setError(null);
         setUnsupported(false);
-        rows.current = { count, adding: false };
+        rows.current = { count: Math.max(count, 0), adding: false, more: count < 0 };
         pendingHeadings.current = null;
+        setStored(widthsKept);
         setShape({ design, locale: settings.region, year4: fourDigitYear(), cache, defaults, ...(src ? { src } : {}), ...(tableInfo && !tableInfo.updatable ? { fixed: true as const } : {}) });
         setLookups(lists);
+        idle();
       } catch (e) {
         if (current) dataError(e);
       } finally {
@@ -427,13 +456,36 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return () => { current = false; };
   }, [tab.reloadToken, restructure]);
 
+  /** A query not counted yet: a page read grows `count` to its end; a short page ends it (the count is then known). */
+  const grew = (end: number, last: boolean) => {
+    if (!alive.current || !rows.current.more) return;
+    if (last) setRows({ count: end, more: false });
+    else if (end > rows.current.count) setRows({ count: end });
+  };
+  /** A query's count, once the sheet is idle (COUNT_IDLE_MS without scrolling or keys: Access counts in the background), or at
+   *  once for the last record, the new record or all records. Its run holds the data process: never while scrolling. */
+  const countTimer = useRef(0);
+  const counting = useRef<Promise<void> | null>(null);
+  const countAll = (): Promise<void> => {
+    window.clearTimeout(countTimer.current);
+    if (!rows.current.more) return Promise.resolve();
+    const s = live.current.shape;
+    return (counting.current ??= countRows(activeFilter(live.current.filter)).then((count) => {
+      if (alive.current && live.current.shape === s && rows.current.more) setRows({ count, more: false });
+    }, dataError).finally(() => { counting.current = null; }));
+  };
+  const idle = () => {
+    window.clearTimeout(countTimer.current);
+    if (rows.current.more) countTimer.current = window.setTimeout(() => { if (alive.current) void countAll(); }, COUNT_IDLE_MS);
+  };
+
   // Rows changed elsewhere (an import appended to this table, or Refresh): the rows and their count are read again; structure,
   // sort, filter and a pending row stay.
   const reloadRows = (fresh = false) => {
     void countRows(activeFilter(live.current.filter), true, fresh).then((count) => {
       if (!alive.current) return;
       live.current.shape?.cache.invalidate();
-      setRows({ count });
+      setRows({ count, more: false });
     }, dataError);
   };
   // A sheet that never loaded (its link's file missing, C1) loads in full: relinked or refreshed meanwhile.
@@ -496,13 +548,15 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     });
   };
   /** Home > Find > Go To. */
-  const goTo = (where: GoTo) => {
+  const goTo = async (where: GoTo) => {
+    if (where === 'last' || where === 'new') await countAll();
     const target = goToRow(where, rowOf(live.current.selection), rows.current.count);
     if (target === 'new') void newRecord();
     else if (target !== null) goRow(target);
   };
   /** Home > Find > Select: the current record, or all records. */
-  const selectRecords = (what: 'record' | 'all') => {
+  const selectRecords = async (what: 'record' | 'all') => {
+    if (what === 'all') await countAll();
     const { count, adding } = rows.current;
     const row = rowOf(live.current.selection);
     if (what === 'record' ? row === null : count === 0) return;
@@ -662,7 +716,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     try {
       const n = await countRows(activeFilter(live.current.filter));
       s.cache.invalidate();
-      setRows({ count: n });
+      setRows({ count: n, more: false });
       setSelection(n ? cellSelection(sel.current?.cell[0] ?? firstEditable(), Math.min(existing[0], n - 1)) : NO_SELECTION);
     } catch (e) {
       dataError(e);
@@ -685,6 +739,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   const onKeyDown = (e: GridKeyEventArgs) => {
+    idle();
     // Escape outside a cell editor (which handles its own) cancels the pending row, as in Access.
     if (e.key === 'Escape' && buffer.pending && !busyRef.current) { e.cancel(); discardRow(); }
   };
@@ -716,7 +771,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     live.current.filter = next;
     setFilter(next);
     s.cache.invalidate();
-    setRows({ count, adding: false });
+    setRows({ count, adding: false, more: false });
     const col = live.current.selection.current?.cell[0] ?? firstEditable();
     setSelection(count ? cellSelection(col, 0) : NO_SELECTION);
     // Back to the grid (not to the ribbon or the closed menu), once the selection is rendered; never behind a dialog, nor
@@ -833,22 +888,62 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
 
   const newRecord = async () => {
     if (live.current.ro) return;
+    if (rows.current.more) { // the new record's row comes after all the rows: counted first, then rendered
+      await countAll();
+      await new Promise((r) => requestAnimationFrame(r));
+    }
     editor.current?.focus();
     await editor.current?.appendRow(live.current.selection.current?.cell[0] ?? firstEditable());
+  };
+
+  /** The record bar's Go: beyond the rows read (a query not counted yet), counted first. */
+  const navGo = async (row: number) => {
+    if (row >= rows.current.count && rows.current.more) await countAll();
+    if (rows.current.count > 0) goRow(Math.min(row, rows.current.count - 1));
   };
 
   /** Before the view goes (mode change, tab, base or window closed): the pending row is saved, else discarding is asked. */
   const leave = async (): Promise<boolean> => {
     flushCellEditor();
-    if (await commitRow()) return true;
-    const r = await modal.confirm({ titleKey: 'datasheet.discardTitle', messageKey: 'datasheet.discard', params: { name: live.current.tab.name }, buttons: ['yes', 'no'], defaultButton: 'no' });
-    if (r !== 'yes') return false;
-    if (busyRef.current) return false; // cannot happen: the question waits for the save
-    discardRow();
-    return true;
+    if (!(await commitRow())) {
+      const r = await modal.confirm({ titleKey: 'datasheet.discardTitle', messageKey: 'datasheet.discard', params: { name: live.current.tab.name }, buttons: ['yes', 'no'], defaultButton: 'no' });
+      if (r !== 'yes') return false;
+      if (busyRef.current) return false; // cannot happen: the question waits for the save
+      discardRow();
+    }
+    // Les largeurs tirées, une fois l'enregistrement quitté : la question d'Access (Oui enregistre, Non les oublie, Annuler reste)
+    const ok = await leaveSheetLayout({ widths: dragged.current, readOnly: !layoutOk(), name: live.current.tab.name,
+      messageKey: live.current.source ? 'datasheet.saveQueryLayout' : 'datasheet.saveTableLayout', confirm: modal.confirm, save: saveLayout });
+    if (ok) dragged.current = {};
+    return ok;
   };
 
-  const save = async () => { flushCellEditor(); await commitRow(true); };
+  // ponytail: un lien (fichier ou serveur) garde ses largeurs pour la session, sans question (Access les garde dans le front-end) ; à ajouter avec `bc_links.props.meta`.
+  const layoutOk = () => layoutSavable({ kind: live.current.source ? 'query' : 'table', ...(live.current.source ? { source: live.current.source } : {}), link: !!link, passThrough: passThrough.current, readOnly: live.current.readOnly, runtime: !design });
+  /** Enregistre les largeurs tirées : les champs de la table (twips), ou la définition de la requête ; un échec est montré, l'onglet reste. */
+  const saveLayout = async (w: Record<string, number>): Promise<boolean> => {
+    const { tab: tb, source: src } = live.current;
+    try {
+      if (!src) await api.tables.saveColumnWidths(tb.name, toTwips(w));
+      else {
+        const def = (await api.objects.get('query', tb.name)).definition as Record<string, unknown>;
+        const r = await api.objects.save('query', tb.name, withQueryWidths(def, w), tb.name);
+        if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return false; }
+      }
+      setStored((k) => ({ ...k, ...w }));
+      return true;
+    } catch (e) { await showError(e); return false; }
+  };
+
+  // Ctrl+S : l'enregistrement, puis les largeurs tirées sans question (comme Enregistrer d'Access) ; prises avant l'écriture,
+  // pour qu'une fermeture pendant celle-ci ne repose pas la question (échec : rendues, la question reviendra)
+  const save = async () => {
+    flushCellEditor();
+    if (!(await commitRow(true)) || !layoutOk() || !Object.keys(dragged.current).length) return;
+    const w = dragged.current;
+    dragged.current = {};
+    if (!(await saveLayout(w))) dragged.current = { ...w, ...dragged.current };
+  };
 
   /** External Data › Export › Text File or Excel: this datasheet's rows, in its current order and filter (a query's with its
    *  parameters). The record being edited is saved first, as Access does; refused, nothing is exported. */
@@ -940,6 +1035,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     if (!shape) return LOADING;
     const field = shape.design.fields[col];
     const p = buffer.pending;
+    if (rows.current.more && row >= rows.current.count) { shape.cache.get(row); return LOADING; } // the next page, read here
     const isNew = row >= rows.current.count;
     const saved = isNew ? undefined : shape.cache.get(row);
     if (!isNew && !saved) return LOADING;
@@ -1010,10 +1106,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const dir = sort?.field === fd.name ? sort.dir : null;
     const filtered = !!activeFilter(filter)?.some((x) => x.field === fd.name);
     return {
-      id: fd.name, title: fd.props.caption || fd.name, width: widths[fd.name] ?? look.columnPx, hasMenu: true, // the column menu (R14)
+      id: fd.name, title: fd.props.caption || fd.name, width: widths[fd.name] ?? stored[fd.name] ?? look.columnPx, hasMenu: true, // the column menu (R14)
       ...headerDecor(fd.props.type, dir, filtered, palette.theme.accentColor!),
     };
-  }), [shape, sort, filter, widths, palette]);
+  }), [shape, sort, filter, widths, stored, palette]);
 
   // The pending row's selector shows a pencil (drawn over the canvas, where Glide draws the row number).
   const pencil = useRowPencil(editor, wrap, buffer.pending?.rowIndex ?? null);
@@ -1027,28 +1123,28 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   if (unsupported) return <div className="doc-empty muted" role="alert" data-testid="datasheet-unsupported">{t('datasheet.unsupported')}</div>;
   if (!shape) return <div className="datasheet" aria-busy />;
 
-  const { count, adding } = rows.current;
+  const { count, adding, more } = rows.current;
   return (
     <div className="datasheet">
       <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
         onPointerDownCapture={() => { appendClick.current = false; }}>
-        <DataEditor ref={editor} theme={theme} verticalBorder={look.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={columns} rows={count + (adding ? 1 : 0)} headerIcons={HEADER_ICONS}
+        <DataEditor ref={editor} theme={theme} verticalBorder={look.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={columns} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
           gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited} onFinishedEditing={() => refreshIfMissed(false)}
-          onRowAppended={ro ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
+          onRowAppended={ro || more ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro || more ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
           onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={look.rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
           onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => void cmds.current.filterMenu(col, { x: b.x, y: b.y + b.height })}
-          onVisibleRegionChanged={() => { if (buffer.pending) scrolled(); }}
+          onVisibleRegionChanged={() => { idle(); if (buffer.pending) scrolled(); }}
           width="100%" height="100%" />
         {(popup === 'goTo' || popup === 'select') && (
           <RibbonPopup anchor={popup === 'goTo' ? 'goTo' : 'selectMenu'} testId={`${popup}-menu`} labelKey={`ribbon.cmd.${popup === 'goTo' ? 'goTo' : 'selectMenu'}`} onClose={() => setPopup(null)}>
             {popup === 'goTo'
               ? (['first', 'previous', 'next', 'last', 'new'] as const).map((w) => (
-                <button key={w} type="button" role="menuitem" data-testid={`goto-${w}`} disabled={w === 'new' && ro} onClick={() => { setPopup(null); goTo(w); }}>{t(`datasheet.goTo.${w}`)}</button>
+                <button key={w} type="button" role="menuitem" data-testid={`goto-${w}`} disabled={w === 'new' && ro} onClick={() => { setPopup(null); void goTo(w); }}>{t(`datasheet.goTo.${w}`)}</button>
               ))
               : (['record', 'all'] as const).map((w) => (
-                <button key={w} type="button" role="menuitem" data-testid={`select-${w}`} onClick={() => { setPopup(null); selectRecords(w); }}>{t(`datasheet.select.${w}`)}</button>
+                <button key={w} type="button" role="menuitem" data-testid={`select-${w}`} onClick={() => { setPopup(null); void selectRecords(w); }}>{t(`datasheet.select.${w}`)}</button>
               ))}
           </RibbonPopup>
         )}
@@ -1105,8 +1201,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
           {t('datasheet.fieldError', errorParams(error))}
         </div>
       )}
-      <NavigationBar current={rowOf(selection)} count={count} canAdd={!ro} note={notUpdatable ? t('query.readOnly') : undefined}
-        onGo={goRow}
+      <NavigationBar current={rowOf(selection)} count={count} more={more} canAdd={!ro} note={notUpdatable ? t('query.readOnly') : undefined}
+        onGo={(row) => void navGo(row)}
         filter={!filter.items.length ? 'none' : filter.active ? 'on' : 'off'} onToggleFilter={toggleFilter}
         onNew={() => void newRecord()} />
       {finding > 0 && <FindDialog key={finding} find={(o) => cmds.current.findInSheet(o)}

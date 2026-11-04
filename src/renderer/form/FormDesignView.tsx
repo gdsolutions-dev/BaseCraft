@@ -8,20 +8,21 @@ import { localeInfo } from '../../shared/locale-format';
 import type { SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
 import { promptParameters } from '../query/prompt-parameters';
-import { ArrangePopup, Designer, FormatPopup, type ToolState } from '../designer/Designer';
+import { unsavedRunDoc } from '../query/unsaved-run';
+import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type ToolState } from '../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
 import { designerReducer, findControl, initDesigner, type DesignerAction } from '../designer/designer-model';
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
-import { layoutCommands, layoutScope } from '../designer/layout-commands';
+import { layoutCommands, layoutKey, type LayoutPopup } from '../designer/layout-commands';
 import { fromSourceRef } from '../designer/property-sheet-model';
 import type { PropertySheetContext } from '../designer/sheet-types';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { nameErrorKey } from '../shell/nav-menu-items';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
-import { sameView, type DocMode } from '../state/app-state';
+import { editsDesign, sameView, type DocMode } from '../state/app-state';
 import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withTabOrder } from './form-def';
 import { useFormHost } from './form-host';
 import { viewHost } from './layout-host';
@@ -43,18 +44,16 @@ const PICTURE_MAX = 1024 * 1024;   // comme la Feuille de propriétés
 let fieldListFor: string | null = null;
 export function requestFieldList(name: string): void { fieldListFor = name; }
 
-interface Leaving { mode: DocMode; name: string; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean> }
-/** Avant que la vue parte : vers le mode Formulaire, Oui enregistre et Non reste ; à la fermeture, Non abandonne les modifications.
+interface Leaving { mode: DocMode; name: string; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean>; unsaved(keep: boolean): void }
+/** Avant que la vue parte : vers le mode Formulaire ou Feuille, la définition telle quelle s'affiche, enregistrée ou non (Access, comme une
+ *  requête) ; à la fermeture, Oui enregistre, Non abandonne les modifications.
  *  Création ↔ Page (L2) : le même concepteur reste, rien n'est demandé (modifications et annulations gardées). */
 export async function leaveFormDesign(reason: 'mode' | 'close', target: DocMode | undefined, d: Leaving): Promise<boolean> {
   if (reason === 'mode' && sameView(d.mode, target)) return true;   // pas même pendant un enregistrement : rien n'est quitté
   if (d.busy) return false;
   await d.flush();
+  if (reason === 'mode') { d.unsaved(d.dirty()); return true; }
   if (!d.dirty()) return true;
-  if (reason === 'mode') {
-    const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.mustSaveFirst', params: { name: d.name }, buttons: ['yes', 'no'] });
-    return r === 'yes' && (await d.save());
-  }
   const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: 'form.saveFirst', params: { name: d.name }, buttons: ['yes', 'no', 'cancel'] });
   return r === 'no' || (r === 'yes' && (await d.save()));
 }
@@ -78,6 +77,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const [fieldList, setFieldList] = useState(() => !!tab.isNew && fieldListFor === tab.name);
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
+  const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const logoFile = useRef<HTMLInputElement>(null);
   const loaded = useRef<{ name: string; token: number } | null>(null);
@@ -166,7 +166,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const liveData = liveRows?.key === liveKey ? liveRows.data : null;
   const view = viewHost(tab.mode, host, liveData, row, state.doc);
 
-  useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: state.dirty }); }, [state.dirty, tab.id, dispatch]);
+  // `tab.mode`: back from the form view (this design stays mounted behind it), whose unmount cleared the tab's flag (as a query)
+  useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: state.dirty }); }, [state.dirty, tab.id, tab.mode, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);   // les modifications partent avec la vue
 
   /** Un brouillon de la feuille se valide à la sortie du champ : il atteint le document avant l'enregistrement. */
@@ -213,6 +214,12 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
 
   const leave = (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => leaveFormDesign(reason, target, {
     mode: live.current.tab.mode, name: live.current.tab.name, busy: busy.current, flush, dirty: () => live.current.state.dirty || !!live.current.tab.isNew, confirm: modal.confirm, save,
+    unsaved: (keep) => { // what the form view shows: the design as it stands (its extra sections too), unsaved
+      const id = live.current.tab.id;
+      if (!keep) { unsavedRunDoc.delete(id); return; }
+      const { state: s, extra: more } = live.current;
+      unsavedRunDoc.set(id, { ...s.doc, sections: [...s.doc.sections, ...more] });
+    },
   });
 
   const tabOrder = async () => {
@@ -242,12 +249,17 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const cmds = useRef({ save, leave, tabOrder, addHeaderItem });
   cmds.current = { save, leave, tabOrder, addHeaderItem };
   const selected = selectedCount(state);
-  const layoutKind = layoutScope(state);
+  const layoutKind = layoutKey(state);
+  // the form view runs in front (DocumentView keeps this design behind it): this design registers no command, only its close guard
+  // (closing the tab there asks to save the design, as a query does). A tab merely in the
+  // background still registers, its close guard above all (else a modified form closed from another tab is lost unasked)
+  const behind = !editsDesign(tab.mode);
   useEffect(() => {
+    if (behind) return registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
     const off = registerCommands(tab.id, {
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
-      ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }),
+      ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, send, () => clipContext(live.current.host, t)),
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
       ...Object.fromEntries(Object.entries(GALLERY_TOOLS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })])),
@@ -261,12 +273,12 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, selected, layoutKind]);
+  }, [tab.id, behind, selected, layoutKind]);
   // Coller grisé tant qu'aucun presse-papiers (contrôles qu'un formulaire reçoit, objets du volet) n'a rien à coller
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));
   // L2 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte)
   const layoutOk = allowsLayout(state.doc);
-  useEffect(() => registerCommandStates(tab.id, { paste: { enabled: pasteable }, viewLayout: { enabled: layoutOk } }), [tab.id, pasteable, layoutOk]);
+  useEffect(() => (behind ? undefined : registerCommandStates(tab.id, { paste: { enabled: pasteable }, viewLayout: { enabled: layoutOk } })), [tab.id, behind, pasteable, layoutOk]);
 
   // F5 (Access, C7) : du mode Création au mode Formulaire, tant que cet onglet est actif
   useEffect(() => {
@@ -342,6 +354,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   }, []);
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
+  const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
   const closeSheet = useCallback(() => setSheetVisible(false), []);
 
   if (typeof phase === 'object') return <div className="doc-empty muted" role="alert" data-testid="form-load-error">{phase.error}</div>;
@@ -357,6 +370,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
         side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} />
       {layout && <LayoutRecordBar row={row} count={liveData?.rows.length ?? 0} onGo={setRow} />}
       {menu && <ArrangePopup menu={menu} state={state} dispatch={send} onClose={closeMenu} readOnly={readOnly} />}
+      {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={send} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       <input ref={logoFile} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="form-logo-file"
         onChange={(e) => { readLogo(e.target.files?.[0]); e.target.value = ''; }} />

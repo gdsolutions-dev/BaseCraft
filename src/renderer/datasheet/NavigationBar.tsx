@@ -8,6 +8,8 @@ interface Props {
   /** 0-based row of the current record (count = the new record), null when nothing is selected. */
   current: number | null;
   count: number;
+  /** A query not counted yet: `count` is a lower bound, shown "200+"; the last record, or a number beyond, counts it first. */
+  more?: boolean;
   canAdd: boolean;
   /** none: no criteria; on: applied; off: criteria kept, not applied. */
   filter: 'none' | 'on' | 'off';
@@ -18,7 +20,7 @@ interface Props {
   note?: string;
 }
 
-export function NavigationBar({ current, count, canAdd, filter, onGo, onNew, onToggleFilter, note }: Props) {
+export function NavigationBar({ current, count, more = false, canAdd, filter, onGo, onNew, onToggleFilter, note }: Props) {
   const { t } = useTranslation();
   const shown = current === null ? '' : String(current + 1);
   const [draft, setDraft] = useState(shown);
@@ -26,7 +28,7 @@ export function NavigationBar({ current, count, canAdd, filter, onGo, onNew, onT
 
   const go = () => {
     const n = Number(draft);
-    if (Number.isInteger(n) && n >= 1 && count > 0) onGo(Math.min(n, count) - 1);
+    if (Number.isInteger(n) && n >= 1 && count > 0) onGo((more ? n : Math.min(n, count)) - 1);
     else setDraft(shown);
   };
   const btn = (key: string, Icon: LucideIcon, row: number | null, testid?: string) => (
@@ -35,7 +37,7 @@ export function NavigationBar({ current, count, canAdd, filter, onGo, onNew, onT
       <Icon className="ic" aria-hidden />
     </button>
   );
-  const last = count > 0 ? count - 1 : null;
+  const last = count > 0 ? (more ? Number.MAX_SAFE_INTEGER : count - 1) : null; // more: onGo counts first
   return (
     <div className="recnav" role="group" aria-label={t('datasheet.nav.region')}>
       <span className="lbl" aria-hidden>{t('datasheet.nav.label')}</span>
@@ -48,9 +50,9 @@ export function NavigationBar({ current, count, canAdd, filter, onGo, onNew, onT
             if (e.key === 'Enter') { e.preventDefault(); go(); }
             else if (e.key === 'Escape') { e.preventDefault(); setDraft(shown); }
           }} />
-        <span>{t('datasheet.nav.of')}&nbsp;<span data-testid="nav-record-count">{count}</span></span>
+        <span>{t('datasheet.nav.of')}&nbsp;<span data-testid="nav-record-count">{more ? `${count}+` : count}</span></span>
       </span>
-      {btn('next', ChevronRight, current === null ? (last === null ? null : 0) : current + 1 < count ? current + 1 : null)}
+      {btn('next', ChevronRight, current === null ? (last === null ? null : 0) : current + 1 < count + (more ? 1 : 0) ? current + 1 : null)}
       {btn('last', ChevronLast, last)}
       <button className="iconbtn" aria-label={t('datasheet.nav.new')} title={t('datasheet.nav.new')} data-testid="nav-new" disabled={!canAdd} onClick={onNew}>
         <Plus className="ic" aria-hidden />

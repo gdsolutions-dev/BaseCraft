@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
 import { defaultProps, type FieldType } from '../../shared/field-types';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
-import { cmToTwips } from '../../shared/design/model';
-import { twipsToPx } from '../designer/units';
+import { cmToTwips, flattenControls } from '../../shared/design/model';
+import { pxToTwips, twipsToPx } from '../designer/units';
 import { readLayouts } from '../../shared/design/layout';
 import { createLayout, membersOf, removeLayout } from '../../shared/design/layout-edit';
-import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor, visibleRange } from './views';
+import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor, visibleRange, withColumnWidths } from './views';
 
 const ctl = (kind: ControlKind, name: string, props: Record<string, unknown> = {}, children?: ControlDef[]): ControlDef =>
   ({ kind, name, left: 0, top: 0, width: 1500, height: 300, props, ...(children ? { children } : {}) });
@@ -127,5 +127,38 @@ describe('form views', () => {
     expect(firstRun('docA')).toBe(true);
     expect(firstRun('docA')).toBe(false);
     expect(firstRun('docB')).toBe(true);
+  });
+});
+
+describe('datasheet columns: ColumnWidth', () => {
+  const inf: SourceInfo = { ...info, fields: [sf('N°', 'autoNumber'), sf('Libre', 'number')] };
+  const w = (props: Record<string, unknown>, layout = false) =>
+    datasheetColumns(docWith({}, [{ ...ctl('textBox', 'N°', { ControlSource: layout ? 'N°' : 'Libre', ...(layout ? { LayoutID: 'S' } : {}), ...props }), width: 4536 }]), inf)[0].width;
+  it('a valid ColumnWidth wins, on a layout member and on a free control', () => {
+    expect(w({ ColumnWidth: 2268 }, true)).toBe(twipsToPx(2268));
+    expect(w({ ColumnWidth: 2268 })).toBe(twipsToPx(2268));
+  });
+  it('an invalid one (0, negative, fractional, text) counts as absent', () => {
+    for (const v of [0, -5, 1.5, '2268']) {
+      expect(w({ ColumnWidth: v }, true)).toBe(twipsToPx(cmToTwips(3)));
+      expect(w({ ColumnWidth: v })).toBe(twipsToPx(4536));
+    }
+  });
+});
+
+describe('withColumnWidths', () => {
+  const d = docWith({}, [ctl('textBox', 'A', { ColumnWidth: 900 }), ctl('tabControl', 'Onglets', {}, [ctl('textBox', 'B')])]);
+  const find = (x: DesignDoc, n: string) => flattenControls(x.sections.flatMap((s) => s.controls)).find((c) => c.name === n)!;
+  it('sets ColumnWidth (px -> twips, rounded) on the named controls at any depth, others untouched', () => {
+    const out = withColumnWidths(d, { A: 150, B: 100.4, Inconnu: 80 });
+    expect(find(out, 'A').props.ColumnWidth).toBe(pxToTwips(150));
+    expect(find(out, 'B').props.ColumnWidth).toBe(pxToTwips(100.4));
+    expect(find(out, 'Onglets').props.ColumnWidth).toBeUndefined();
+    expect(find(d, 'B').props.ColumnWidth).toBeUndefined();   // the input is not mutated
+  });
+  it('the same doc when nothing changes (equal value, unknown name, no widths)', () => {
+    expect(withColumnWidths(d, {})).toBe(d);
+    expect(withColumnWidths(d, { Inconnu: 80 })).toBe(d);
+    expect(withColumnWidths(d, { A: twipsToPx(900) })).toBe(d);
   });
 });

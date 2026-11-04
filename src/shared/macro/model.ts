@@ -2,6 +2,7 @@
 // Invariant names are stored (action, argument, enum value, canonical expression); labels come from the i18n catalogues.
 import { parseCanonical } from '../expr/parser';
 import { foldName, isValidObjectName, sameName } from '../field-types';
+import { parsePythonCall } from '../python/call-text';
 import { actionDef } from './catalog';
 
 export interface MacroDef { formatVersion: '1.0'; items: MacroItem[] }
@@ -49,6 +50,7 @@ export function validateMacro(def: unknown): MacroIssue[] {
       const type = known?.args.find((a) => a.name === name)?.type;
       const formula = type === 'expression' || type === 'where' || type === 'reference' ? value.trim() === '' ? undefined : value   // blank: not set
         : (type === 'text' || type === 'number') && value.startsWith('=') ? value.slice(1) : undefined;     // '=' + expression
+      if (type === 'functionCall' && value.trim() !== '' && !parsePythonCall(value)) add(`${p}.args.${name}`, 'badExpression');
       if (formula !== undefined && !parses(formula)) add(`${p}.args.${name}`, 'badExpression');
     }
   };

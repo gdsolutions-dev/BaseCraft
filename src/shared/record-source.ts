@@ -19,8 +19,9 @@ export interface SourceInfo { fields: SourceField[]; updatable: boolean; keyTabl
   crosstab?: { headings: 'fixed' | 'data' | 'needsParameters' } }
 export interface SourcePageRequest { offset: number; limit: number; sort?: SortSpec[]; filter?: FieldFilter[]; params?: Record<string, CellInput>;
   where?: string /* an opening's Where Condition: canonical expression over the source's output columns, no member; ANDed with filter */
-  fresh?: boolean /* C6 R7: an open or a Requery: a pass-through runs again */ }
-export interface SourcePage { rows: SqlValue[][]; rowids: (RowRef | null)[]; total: number; columns?: string[] /* a crosstab: this page's column names (R14) */ }
+  fresh?: boolean /* C6 R7: an open or a Requery: a pass-through runs again */
+  count?: false /* the rows only, not counted (a query's datasheet counts once idle, as Access): total is then -1 */ }
+export interface SourcePage { rows: SqlValue[][]; rowids: (RowRef | null)[]; total: number /* -1: not counted (count: false, no count kept) */; columns?: string[] /* a crosstab: this page's column names (R14) */ }
 /** A record saved through an updatable query or SQL source (B4 R2, R3). */
 export interface SourceSaveRequest { rowid: RowRef | null /* key table rowid; null = new record */; values: Record<string, CellInput> /* by output column */
   expected?: Record<string, SqlValue> /* by output column: the record as read when editing began (C3 R8) */ }
@@ -52,4 +53,15 @@ export function lookupFor(info: SourceInfo, column: string): { links: string[]; 
   for (const c of tables.flatMap((x) => x.lookupBy)) if (!links.some((l) => sameName(l, c)) && !upstream.some((u) => sameName(u, c))) links.push(c);
   const columns = info.fields.filter((f) => f.origin && tables.some((x) => sameName(x.table, f.origin!.table))).map((f) => f.name);
   return { links, columns };
+}
+
+/** Une instruction SQL (une table « Selections » reste une table), sinon une table, puis une requête ; inconnu ou vide -> null. */
+export function toSourceRef(text: string, tables: string[], queries: string[]): RecordSourceRef | null {
+  const s = text.trim();
+  if (!s) return null;
+  if (/^\s*(SELECT|TRANSFORM|PARAMETERS)\b/i.test(s)) return { kind: 'sql', sql: s };
+  const table = tables.find((x) => sameName(x, s));
+  if (table) return { kind: 'table', name: table };
+  const query = queries.find((x) => sameName(x, s));
+  return query ? { kind: 'query', name: query } : null;
 }

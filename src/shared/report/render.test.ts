@@ -189,3 +189,14 @@ describe('flow rendering and item lookup (L3)', () => {
     r.pages[0]!.bands[0]!.items.push(T('Over', { left: 100, top: 50 })); expect(itemAt(r, 700, 100)).toBe('Over');
   });
 });
+
+describe('gridlines', () => {
+  const B = { width: 15, color: '#ff0000', style: 'solid' as const };
+  it('one overlay sibling with exactly the drawn sides, over the padded cell', () => {
+    const html = renderPageHtml(page([textItem('a', { grid: { top: B, bottom: B, left: null, right: null, padding: { top: 0, bottom: 0, left: 20, right: 0 } } })]), report([]));
+    expect(html.match(/bc-grid/g)).toHaveLength(1);
+    expect(html).toMatch(/class="bc-grid" style="left:-1pt;top:0pt;width:151pt;height:15pt;border-top:0.75pt solid #ff0000;border-bottom:0.75pt solid #ff0000"/);
+    expect(html).not.toContain('border-left');
+  });
+  it('no overlay without gridlines', () => expect(renderPageHtml(pageWithText('a'), report([]))).not.toContain('bc-grid'));
+});

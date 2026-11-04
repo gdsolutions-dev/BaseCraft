@@ -12,6 +12,11 @@ const ok: MacroDef = { formatVersion: '1.0', items: [
   { k: 'submacro', name: 'Fermer', items: [{ k: 'action', action: 'CloseWindow', args: {} }] }] };
 
 describe('macro definition', () => {
+  it('RunCode FunctionName: a call with or without =, a broken one rejected', () => {
+    const rc = (fn: string): MacroDef => ({ ...ok, items: [{ k: 'action', action: 'RunCode', args: { FunctionName: fn } }] } as MacroDef);
+    expect(validateMacro(rc('f(1)'))).toEqual([]); expect(validateMacro(rc('=f(1)'))).toEqual([]);
+    expect(validateMacro(rc('f('))).toEqual([expect.objectContaining({ code: 'badExpression' })]);
+  });
   it('a valid macro', () => expect(validateMacro(ok)).toEqual([]));
   it('unknown action, argument and keys are kept', () => {
     const d = { ...ok, extra: 1, items: [{ k: 'action', action: 'ImportXML', args: { Path: 'x' }, note: 'n' }] };   // Review Focus 5
@@ -83,8 +88,8 @@ describe('macro definition', () => {
 });
 
 describe('action catalogue', () => {
-  it('catalogue: 33 actions, three unsafe, every label in both languages', () => {
-    expect(ACTIONS).toHaveLength(33); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['RunSQL', 'SetValue', 'SetWarnings']);
+  it('catalogue: 34 actions, four unsafe, every label in both languages', () => {
+    expect(ACTIONS).toHaveLength(34); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['RunCode', 'RunSQL', 'SetValue', 'SetWarnings']);
     for (const a of ACTIONS) for (const cat of [fr, en]) { expect(get(cat, `macro.action.${a.name}`)).toBeTruthy();
       for (const g of a.args) { expect(get(cat, `macro.arg.${g.name}`)).toBeTruthy(); for (const o of g.options ?? []) expect(get(cat, `macro.argValue.${g.name}.${o || 'empty'}`)).toBeTruthy(); } }
     expect(fr.macro.action.OpenForm).toBe('OuvrirFormulaire'); expect(actionDef('OpenReport')?.args.find((x) => x.name === 'View')?.default).toBe('preview');
@@ -92,7 +97,7 @@ describe('action catalogue', () => {
     expect(actionDef('GoToRecord')?.args.find((a) => a.name === 'Record')?.default).toBe('next'); });
   it('names are unique; every category, block and the unknown action have a label', () => {
     const names = ACTIONS.map((a) => a.name);
-    expect(new Set(names).size).toBe(33);
+    expect(new Set(names).size).toBe(34);
     for (const cat of [fr, en]) {
       for (const c of new Set(ACTIONS.map((a) => a.category))) expect(get(cat, `macro.category.${c}`), c).toBeTruthy();
       for (const b of ['comment', 'group', 'if', 'elseIf', 'else', 'submacro']) expect(get(cat, `macro.block.${b}`), b).toBeTruthy();

@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft brings back the Access way of building small data applications — tables, queries, forms, reports, macros and code — with a modern interface, and without being tied to Windows. Everything a database contains lives in **a single file**, which is a plain SQLite database that any SQLite tool can still open.
 
-> **Status: early development.** Stages A, B and C are complete in preview 0.4.0, and stage D (Python) has its first part, the engine and modules. Expect breaking changes before 1.0.
+> **Status: early development.** Stage A (tables, relationships, queries, forms, reports, import and export) is complete in preview 0.3.1. Expect breaking changes before 1.0.
 
 ## Why
 
@@ -66,7 +66,7 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - Split database: Database Tools › Split Database moves the tables to a shared data file; several workstations enter data in it at the same time, with Access's Write Conflict dialog and refresh interval (see [Split database and shared data file](#split-database-and-shared-data-file))
 - PostgreSQL linked tables: External Data › PostgreSQL links server tables over TLS; datasheets, forms and queries on them run on the server, and two people editing the same record get the Write Conflict dialog (see [PostgreSQL linked tables](#postgresql-linked-tables))
 - SQL Server linked tables: External Data › SQL Server links server tables (SQL login, encrypted connection, named instances) the same way (see [SQL Server linked tables](#sql-server-linked-tables))
-- Move to a server: Database Tools › Move Data › To a Server moves every local table (structure, data, keys, indexes, relationships) to PostgreSQL or SQL Server after a backup copy, replaces them with linked tables that keep their captions, formats and rules, and shows a report; External Data › Import › PostgreSQL / SQL Server copies server tables into local ones (see [Move to a server](#move-to-a-server))
+- Move to a server: Database Tools › Move Data › « Vers un serveur » moves every local table (structure, data, keys, indexes, relationships) to PostgreSQL or SQL Server after a backup copy, replaces them with linked tables that keep their captions, formats and rules, and shows a report; External Data › Import › PostgreSQL / SQL Server copies server tables into local ones (see [Move to a server](#move-to-a-server))
 - Pass-through queries: Query Type › SQL direct sends a text in PostgreSQL's or SQL Server's own language to the server as typed, with a read-only result for datasheets, forms and reports or an action run with « Activer le contenu » (see [Pass-through queries](docs/postgresql.md#pass-through-queries))
 - Python (Pyodide, offline, numpy and pandas included): modules, Immediate window (Ctrl+G), `msgbox` and `inputbox`, Ctrl+Break (see [Python](docs/python.md))
 - Save As, Compact and Repair; `.basecraft` file association
@@ -78,9 +78,9 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 | Stage | Content |
 |---|---|
 | **A — Replace Excel** ✅ | Tables, relations and expressions, queries (QBE + SQL), forms, reports with PDF export, CSV/Excel import and export, installers |
-| **B — Automate and distribute** ✅ | Events, macros, AutoExec, BaseCraft Runtime (run a database without design access) |
-| **C — Work together** ✅ | Linked tables on PostgreSQL, SQL Server, SQLite and Access; split database and shared data file with optimistic locking; pass-through queries; migration wizard to a server |
-| **D — Python** 🚧 | Python code (Pyodide) in place of VBA, with BaseCraft objects. Done: engine, modules, Immediate window; next: the rest of the object model |
+| **B — Automate and distribute** | Events, macros, AutoExec, BaseCraft Runtime (run a database without design access) |
+| **C — Work together** | Linked tables on PostgreSQL, SQL Server, SQLite and Access; split database and shared data file with optimistic locking; migration wizard |
+| **D — Python** | Python code (Pyodide) in place of VBA, with BaseCraft objects |
 | **E — Access import** | Tables, data, queries, forms, reports and macros from `.mdb` / `.accdb` |
 
 Not planned: VBA compatibility, concurrent design by several people, a web or mobile version.
@@ -162,7 +162,7 @@ External Data › SQL Server (« Données externes › SQL Server ») links the 
 
 ### Move to a server
 
-Database Tools › Move Data › To a Server (Move to Server Wizard) moves an application's tables to PostgreSQL or SQL Server, as Access's Upsizing Wizard does. The full guide (what moves, the type table, what stays in the front-end, the safety rules, the report, the limits) is in [docs/server-migration.md](docs/server-migration.md).
+Database Tools › Move Data › « Vers un serveur » (« Assistant Migration vers un serveur ») moves an application's tables to PostgreSQL or SQL Server, as Access's Upsizing Wizard does. The full guide (what moves, the type table, what stays in the front-end, the safety rules, the report, the limits) is in [docs/server-migration.md](docs/server-migration.md).
 
 - **What moves:** every local table, with its data, primary key, required fields, literal defaults, indexes and enforced relationships (cascades included; on SQL Server, a cascade that would give a table two paths is created without cascade and the report says so). AutoNumbers continue after the largest number ever given. SQL Server tables get a `bc_rowversion` column for exact conflict checks.
 - **Safety:** a backup copy of the base is made first; the server side is one transaction, so a failure, a lost connection or Stop leaves nothing on the server; then every local table is replaced by its link in one local transaction, or none is.

@@ -2,6 +2,8 @@
 // An event property holds a macro name (`M` or `M.Sub`), an embedded macro (`{ embedded: MacroDef }`) or, from an import or a
 // later version, any other text that is kept and shown as is and does nothing (stage D). Names are invariant: stored as written.
 import { isValidObjectName, sameName } from '../field-types';
+import type { Expr } from '../expr/ast';
+import { parsePythonCall } from '../python/call-text';
 import { validateMacro, type MacroDef } from '../macro/model';
 import type { SectionDef, SectionKind } from './model';
 
@@ -16,7 +18,7 @@ export const EVENTS: readonly EventName[] = ['OnOpen', 'OnLoad', 'OnCurrent', 'O
 export const CANCELLABLE: ReadonlySet<EventName> = new Set<EventName>(['OnOpen', 'BeforeInsert', 'BeforeUpdate', 'OnDelete', 'OnExit', 'OnNoData', 'OnFormat', 'OnPrint']);
 
 export interface EmbeddedEvent { embedded: MacroDef }
-export type EventBinding = { kind: 'none' } | { kind: 'macro'; name: string } | { kind: 'embedded'; def: MacroDef } | { kind: 'other'; text: string };
+export type EventBinding = { kind: 'none' } | { kind: 'macro'; name: string } | { kind: 'embedded'; def: MacroDef } | { kind: 'python'; name: string; args: Expr[]; text: string } | { kind: 'other'; text: string };
 
 /** `M` or `M.Sub`, each part a valid object name (a name has no dot, so the split is unambiguous). A leading `=` is a function call (Access): not a name. */
 const isMacroRef = (s: string): boolean => { const parts = s.split('.'); return !s.startsWith('=') && parts.length <= 2 && parts.every(isValidObjectName); };
@@ -26,14 +28,18 @@ const isEmbedded = (v: unknown): v is EmbeddedEvent =>
 /** The binding an event property stands for (R1). The file is untrusted: any value is read without failing. */
 export function readEvent(v: unknown): EventBinding {
   if (v === undefined || v === null || v === '') return { kind: 'none' };
-  if (typeof v === 'string') return isMacroRef(v) ? { kind: 'macro', name: v } : { kind: 'other', text: v };
+  if (typeof v === 'string') {
+    if (isMacroRef(v)) return { kind: 'macro', name: v };
+    const call = v.startsWith('=') ? parsePythonCall(v) : null;   // R1 (D2): `=name(args)` calls a Python function
+    return call ? { kind: 'python', ...call, text: v } : { kind: 'other', text: v };
+  }
   return isEmbedded(v) ? { kind: 'embedded', def: v.embedded } : { kind: 'other', text: '' };
 }
 
 /** What a value typed or built in the Property Sheet must satisfy ('' and undefined clear the event). Imported values are not checked. */
-export function checkEventValue(v: unknown): 'badMacroName' | 'badEmbedded' | null {
+export function checkEventValue(v: unknown): 'badMacroName' | 'badEmbedded' | 'badFunctionCall' | null {
   if (v === undefined || v === '') return null;
-  if (typeof v === 'string') return isMacroRef(v) ? null : 'badMacroName';
+  if (typeof v === 'string') return v.startsWith('=') ? (parsePythonCall(v) ? null : 'badFunctionCall') : isMacroRef(v) ? null : 'badMacroName';
   return isEmbedded(v) ? null : 'badEmbedded';
 }
 

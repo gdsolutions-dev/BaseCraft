@@ -10,6 +10,9 @@ import { applyUi } from './i18n';
 import { design } from './design/entry';
 import { pythonHost } from './python/python-host';
 import { PythonVeil, usePythonRunning } from './python/PythonVeil';
+import { dbHandlers } from './python/db-handlers';
+import { docmdHandlers } from './python/docmd-handlers';
+import { objectHandlers } from './python/object-handlers';
 import { uiHandlers } from './python/ui-handlers';
 import { hasPendingRow } from './import-text/wizard-model';
 import { firstFreeName, formNames } from './form/form-def';
@@ -27,6 +30,7 @@ import { setNavImportExcel } from './exchange/exchange-menu';
 import { setNavLeaveTable } from './links/nav-menu-links';
 import './query/nav-menu-query'; // after the foundation's items (a later registration wins by id)
 import { setOpenTabs } from './query/run-action';
+import { hasDocumentView } from './shell/document-views';
 import { clearTempVars, macroNamesWithSubs, runMacroByName, setMacroShell } from './macro/macro-shell';
 import { closeEmbeddedOf } from './macro/embedded';
 import { formCancelled, whenFormOpened } from './form/form-instances';
@@ -442,6 +446,12 @@ function Shell() {
     const host = pythonHost();
     host.configure({ contentEnabled: () => live.current.session?.content !== 'disabled' });
     host.registerHandlers(uiHandlers(modal));
+    host.registerHandlers(docmdHandlers());
+    host.registerHandlers(dbHandlers());
+    host.registerHandlers(objectHandlers({
+      projectName: () => (live.current.session?.path ?? '').split(/[\\/]/).pop()?.replace(/\.[^.]*$/, '') || null,
+      activeTab: () => live.current.state.tabs.find((x) => x.id === live.current.state.activeId) ?? null,
+    }));
     if (api.e2e) window.__bcPython = host;
     return host.onRestart(() => { void modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'python.restarted', buttons: ['ok'] }); });
   }, [modal]);
@@ -589,7 +599,7 @@ function Shell() {
   shellRef.current = { closeTab, closeBase, quit };
   useEffect(() => {
     setMacroShell({
-      dispatch, modal, showError,
+      dispatch, modal, showError, canDebug: () => hasDocumentView('module', 'design'),
       tabs: () => live.current.state.tabs,
       active: () => live.current.state.tabs.find((x) => x.id === live.current.state.activeId) ?? null,
       contentEnabled: () => live.current.session?.content !== 'disabled', // the data process refuses again on its own
@@ -643,7 +653,7 @@ function Shell() {
       <div className="work">
         {session && (
           <div className="contents" ref={inertRef(!!modalTab)}>
-            <NavPane tables={tables} objects={objects} readOnly={readOnly} active={active && !active.isNew ? active : null}
+            <NavPane tables={tables} objects={objects} readOnly={readOnly}
               visible={state.navVisible} strip={state.navStrip} runtime={ui.runMode} shortcutMenus={ui.shortcutMenus} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection}
               tabs={state.tabs} openTabOf={(k, n) => state.tabs.find((x) => !x.embedded && isDoc(x, k, n))?.id} />
           </div>

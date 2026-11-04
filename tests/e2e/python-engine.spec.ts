@@ -71,8 +71,8 @@ test('Python engine: arithmetic, numpy and pandas offline, network and package i
     // R6: an interrupt stops a loop; one that swallows it costs the worker, which restarts on the next call
     const stopped = await page.evaluate(async () => {
       const h = (window as unknown as W).__bcPython
-      const p = h.immediate('while True: pass').then(() => 'ended', (e: { info?: { type: string } }) => e.info?.type ?? String(e))
-      await new Promise((r) => setTimeout(r, 300))
+      const p = h.immediate('print("looping"); exec("while True: pass")').then(() => 'ended', (e: { info?: { type: string } }) => e.info?.type ?? String(e))
+      while (!h.log().includes('looping')) await new Promise((r) => setTimeout(r, 20))
       h.interrupt()
       return p
     })
@@ -80,8 +80,8 @@ test('Python engine: arithmetic, numpy and pandas offline, network and package i
     expect(await imm(page, '?1+1')).toBe('2')
     const swallowed = await page.evaluate(async () => {
       const h = (window as unknown as W).__bcPython
-      const p = h.immediate(String.raw`exec("while 1:\n try:\n  while 1: pass\n except BaseException: pass")`).then(() => 'ended', () => 'rejected')
-      await new Promise((r) => setTimeout(r, 300))
+      const p = h.immediate(String.raw`print("swallowing"); exec("while 1:\n try:\n  while 1: pass\n except BaseException: pass")`).then(() => 'ended', () => 'rejected')
+      while (!h.log().includes('swallowing')) await new Promise((r) => setTimeout(r, 20))
       h.interrupt()
       return { result: await p, state: h.state(), log: [...h.log()] }
     })

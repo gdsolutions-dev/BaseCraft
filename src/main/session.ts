@@ -28,7 +28,7 @@ import { acquireExclusive, dataFileInUse, joinPresence, othersPresent, presenceE
 import { countRows, fieldListRows, LOOKUP_MAX, lookupRows, NO_LIST, readRows, sourceListRows, type PageRequest, type RowPage } from './db/rows';
 import {
   cascadeChildren, createTable, DanglingKeyError, DesignValidationError, dataDesign, dropTable, hasRealRowid, isQueryName, isTableName, listTables, NameExistsError, reconcile, renameTable,
-  sanitizeStoredProps, setTableDescription, tableDesign, usableProps, ViewBrokenError, type TableSummary,
+  sanitizeStoredProps, setColumnWidths, setTableDescription, tableDesign, usableProps, ViewBrokenError, type TableSummary,
 } from './db/schema';
 import { splitDatabase } from './db/split';
 import { importTables } from './migrate/import';
@@ -989,6 +989,13 @@ export class Session {
     }
     this.closeUnused([link.sourceId]);
     return { ok: true };
+  }
+
+  /** Datasheet column widths of a local table; a link's belong to its file. */
+  // ponytail: Access saves a link's layout in the front-end; add with bc_links.props.meta later.
+  saveColumnWidths(table: string, widths: Record<string, number>): void {
+    this.noLink(table);
+    setColumnWidths(this.writeDb(), table, widths);
   }
 
   async testRules(table: string): Promise<{ field: string; rows: number }[]> {

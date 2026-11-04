@@ -7,7 +7,7 @@ import { DEFAULT_COLUMN_WIDTH, sameName, shownColumns, splitValueList, valueList
 import { localeInfo } from '../../shared/locale-format';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
 import { texts } from '../datasheet/datasheet-cells';
-import { toSourceRef } from '../designer/property-sheet-model';
+import { toSourceRef } from '../../shared/record-source';
 import { fold } from '../shell/combobox-model';
 export { listOptions, prefixMatch } from '../shell/combobox-model';   // shared with the datasheet's lookupEditor
 import type { FormDataApi } from './record-controller';

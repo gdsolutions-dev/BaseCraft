@@ -121,6 +121,71 @@ test('Report Layout view gallery: place in the 3rd record, every record gets it,
   }
 });
 
+test('Report Layout view gallery: dragging draws the control rectangle (3 cm x 1 cm), one undo, Escape cancels and keeps the tool, a click keeps the default size', async () => {
+  test.setTimeout(150000);
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await openLayout(page);
+    const draw = cur(page).getByTestId('layout-draw');
+    const size = async (name: string) => (await rings(page, name).first().boundingBox())!;
+    const before = await allNames(page);
+    await cur(page).getByTestId('tool-textBox').click();
+    await detail(page).nth(1).scrollIntoViewIfNeeded();
+    const p = await detailPoint(page, 1);
+
+    // tracé de 3 cm sur 1 cm dans le Détail du 2e enregistrement : l'aperçu pointillé suit, puis chaque enregistrement reçoit le contrôle
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    await expect(draw).toHaveCount(0);   // sous le seuil du clic : pas d'aperçu
+    await page.mouse.move(p.x + 113.4, p.y + 37.8, { steps: 6 });
+    await expect(draw).toBeVisible();
+    const pv = (await draw.boundingBox())!;
+    expect(Math.abs(pv.width - 113.4)).toBeLessThan(2); expect(Math.abs(pv.height - 37.8)).toBeLessThan(2);
+    await page.mouse.up();
+    await expect(draw).toHaveCount(0);
+    await expect(tab(page)).toContainText('•');
+    await expect(flow(page)).not.toHaveClass(/rl-placing/);
+    await settled(page);
+    const added = (await allNames(page)).filter((n) => !before.includes(n));
+    const box = added.find((n) => !n.startsWith('Étiquette'))!;
+    await expect(rings(page, box)).toHaveCount(75);
+    const r = await size(box);
+    expect(Math.abs(r.width - 113.4)).toBeLessThanOrEqual(20); expect(Math.abs(r.height - 37.8)).toBeLessThanOrEqual(20);
+
+    // une seule annulation le retire partout
+    await page.getByTestId('ribbon-tab-home').click();
+    await page.keyboard.press('Control+z');
+    await expect(items(page, box)).toHaveCount(0);
+    await settled(page);
+
+    // un tracé abandonné par Échap avant le relâchement ne pose rien et garde l'outil
+    await page.getByTestId('ribbon-tab-reportDesign').click();
+    await cur(page).getByTestId('tool-textBox').click();
+    await detail(page).nth(1).scrollIntoViewIfNeeded();
+    const q = await detailPoint(page, 1);
+    await page.mouse.move(q.x, q.y);
+    await page.mouse.down();
+    await page.mouse.move(q.x + 113, q.y + 38, { steps: 4 });
+    await expect(draw).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(draw).toHaveCount(0);
+    await page.mouse.up();
+    await settled(page);
+    expect(await allNames(page)).toEqual(before);
+    await expect(flow(page)).toHaveClass(/rl-placing/);
+
+    // un simple clic pose la taille par défaut (2,5 cm x 0,6 cm)
+    await page.mouse.click(q.x, q.y);
+    await expect(flow(page)).not.toHaveClass(/rl-placing/);
+    await settled(page);
+    const box2 = (await allNames(page)).filter((n) => !before.includes(n)).find((n) => !n.startsWith('Étiquette'))!;
+    const d = await size(box2);
+    expect(Math.abs(d.width - 94.5)).toBeLessThanOrEqual(20); expect(Math.abs(d.height - 22.7)).toBeLessThanOrEqual(20);
+  } finally {
+    await app.close();
+  }
+});
+
 test('Report Layout view gallery in a read-only base stays disabled', async () => {
   test.setTimeout(90000);
   const b = base();

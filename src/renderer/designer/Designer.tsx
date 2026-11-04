@@ -13,8 +13,9 @@ import type { Rect } from './geometry';
 import { DesignCanvas } from './DesignCanvas';
 import { ARRANGE_MENUS, arrangeItemEnabled, selectedCount, type ArrangeMenu } from './designer-commands';
 import type { DesignerRestrict } from './designer-restrict';
-import type { DesignerAction, DesignerState, Selection } from './designer-model';
+import { documentKind, type DesignerAction, type DesignerState, type Selection } from './designer-model';
 import { currentValue, fillAction, outlineAction, selectionSet, type FormatPopupId } from './format-commands';
+import { anchorAction, gridlineColorAction, gridlineStyleAction, gridlinesAction, gridlineWidthAction, marginsAction, paddingAction, type GridlinePreset, type LayoutPopup } from './layout-commands';
 import { fontWarning } from './property-sheet-model';
 import { RibbonPopup } from './RibbonPopup';
 import { ColorChoices, PropertySheet } from './PropertySheet';
@@ -86,6 +87,39 @@ export function ArrangePopup(p: { menu: ArrangeMenu; state: DesignerState; dispa
       ])}
     </RibbonPopup>
   );
+}
+
+const MARGIN_ITEMS = ['none', 'narrow', 'medium', 'wide'] as const;
+const GRID_PRESETS: GridlinePreset[] = ['both', 'vertical', 'horizontal', 'top', 'bottom', 'outline', 'none'];
+// Access order: the three left-hand anchors, then the middle column, then the right-hand one
+const ANCHOR_ITEMS: [string, 'left' | 'right' | 'both', 'top' | 'bottom' | 'both'][] = [
+  ['topLeft', 'left', 'top'], ['stretchDown', 'left', 'both'], ['bottomLeft', 'left', 'bottom'],
+  ['stretchTop', 'both', 'top'], ['stretchAll', 'both', 'both'], ['stretchBottom', 'both', 'bottom'],
+  ['topRight', 'right', 'top'], ['stretchDownRight', 'right', 'both'], ['bottomRight', 'right', 'bottom']];
+
+/** Gridlines, Control Margins, Control Padding and Anchoring (Arrange tab), opened by `layoutCommands` (layout-popup-<id>, items
+ *  layout-popup-<id>-<item>): the host shows it while `id` is set. Every pick is one `edit` on the selected controls. */
+export function LayoutPopupMenu(p: { id: LayoutPopup; state: DesignerState; dispatch: (a: DesignerAction) => void; onClose(): void; readOnly?: boolean }) {
+  const { t } = useTranslation();
+  const { id, readOnly, onClose, state } = p;
+  const [sub, setSub] = useState<'width' | 'style' | 'color' | null>(null);
+  useEffect(() => { if (readOnly) onClose(); }, [readOnly, onClose]);
+  const testId = `layout-popup-${id}`;
+  const run = (a: DesignerAction | null) => { onClose(); if (a) p.dispatch(a); };
+  const label = (k: string) => t(`ribbon.layoutMenu.${id}.${k}`);
+  const item = (k: string, text: string, onClick: () => void) => <button key={k} type="button" role="menuitem" data-testid={`${testId}-${k}`} onClick={onClick}>{text}</button>;
+  let body: ReactNode;
+  if (id === 'controlMargins') body = MARGIN_ITEMS.map((k) => item(k, label(k), () => run(marginsAction(state, k))));
+  else if (id === 'controlPadding') body = MARGIN_ITEMS.map((k) => item(k, label(k), () => run(paddingAction(state, k))));
+  else if (id === 'anchoring') {
+    body = <div style={{ display: 'grid', gridTemplateRows: 'repeat(3, auto)', gridAutoFlow: 'column' }}>
+      {ANCHOR_ITEMS.map(([k, h, v]) => item(k, label(k), () => run(anchorAction(state, h, v))))}</div>;
+  } else if (sub === 'width') body = [0, 1, 2, 3, 4, 5, 6].map((w) => item(String(w), String(w), () => run(gridlineWidthAction(state, w))));
+  else if (sub === 'style') body = (['solid', 'dashed', 'dotted'] as const).map((k) => item(k, t(`propValue.GridlineStyleTop.${k}`), () => run(gridlineStyleAction(state, k))));
+  else if (sub === 'color') body = <ColorChoices value={currentValue(state.doc, documentKind(state), state.selection, 'GridlineColor')} testId={`${testId}-colors`} onPick={(c) => run(gridlineColorAction(state, c))} />;
+  else body = [...GRID_PRESETS.map((k) => item(k, label(k), () => run(gridlinesAction(state, k)))), <div key="sep" className="ctxmenu-sep" role="separator" />,
+    ...(['width', 'style', 'color'] as const).map((k) => item(k, label(k), () => setSub(k)))];
+  return <RibbonPopup anchor={id} testId={testId} labelKey={`ribbon.cmd.${id}`} onClose={onClose} role={sub === 'color' ? 'dialog' : 'menu'}>{body}</RibbonPopup>;
 }
 
 const NAMED_FORMATS = [...FORMATS_BY_TYPE.number, ...FORMATS_BY_TYPE.dateTime];

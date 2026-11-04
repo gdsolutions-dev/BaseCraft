@@ -1,6 +1,6 @@
 # Python in BaseCraft
 
-BaseCraft can run Python code, in place of the VBA you would write in Access. This first release (D1) gives you **modules** (files of Python functions), the **Immediate window** to try code on the spot, and two ready-made dialogs, `msgbox` and `inputbox`. Python reacting to form and report events, and reading or writing your data, come in the next releases (see the end of this page).
+BaseCraft can run Python code, in place of the VBA you would write in Access. It gives you **modules** (files of Python functions), the **Immediate window** to try code on the spot, two ready-made dialogs (`msgbox` and `inputbox`), and Python that **reacts to events** and works on your **forms, reports and data** (see *Python in your application* below). Python in expressions comes in the next release (see the end of this page).
 
 Python runs entirely inside BaseCraft. Nothing needs to be installed on your computer, and it works offline.
 
@@ -77,6 +77,104 @@ While Python runs, the other keyboard shortcuts (Ctrl+S, F11...) do nothing. If 
 
 `numpy` and `pandas` (with their own requirements) come with BaseCraft; just `import numpy` or `import pandas`. They load the first time you import them, in a few seconds, and need no internet connection. No other package is available, and nothing can be installed.
 
+## Python in your application
+
+### Events: `=function(args)`
+
+In the Property Sheet (Event tab), type a call instead of a macro name:
+
+```
+=remise([Prix]; [Client])
+```
+
+The name is a function exported by one of your modules (the module name is not needed). The arguments are ordinary BaseCraft expressions, evaluated when the event fires: `[Field]`, `[Forms]![F]![Control]`, `[TempVars]!x`, constants. In a French BaseCraft the separator is `;`; the call is stored the same way in every language.
+
+You can also click **...** next to the event. On an empty event BaseCraft first asks **Choose Builder**: *Macro Builder* or *Function Builder*. The Function Builder lists every function of your modules as `Module.function(parameters)`; OK writes the call for you.
+
+Things to know:
+
+- The function's return value is ignored. An event that can be cancelled (Before Update, On Open...) is cancelled when the Python code fails, as for a failing macro, or when it calls `docmd.cancel_event()`.
+- A name that is also a built-in expression function (`Left`, `Sum`...) is refused in the Property Sheet. Two modules exporting the same name are both saved; the module editor shows a warning, and the event reports the ambiguity when it fires.
+- Like macros, Python events do nothing while content is disabled; the security bar comes back.
+- Events that call each other (On Current moving the record, which fires On Current...) stop at the same depth limit as macros, with the same message.
+- The **RunCode** macro action runs the same call (`FunctionName`: `remise([Prix])`, with or without the `=`). It needs enabled content.
+
+### `me`
+
+Inside a function run by an event, `me` is the form (or report) that fired it:
+
+```python
+def verifier():
+    if me.Montant.value < 0:
+        msgbox("Negative amount")
+        docmd.cancel_event()
+```
+
+`me.Control.value` reads or writes a control; `me.name` is the form's name. Outside an event, `me` raises an error: use `forms["Name"]` instead.
+
+### Object reference
+
+Names of forms, reports and controls are used as stored and are not case-sensitive. `forms.Clients` works for names that are valid Python names and not a member of the object; otherwise write `forms["Nom client"]`.
+
+| In Python | What it does |
+|---|---|
+| `forms["F"]`, `forms.F`, `"F" in forms`, `len(forms)`, `for name in forms` | The forms that are open. Asking for a form that is not open raises `KeyError`. |
+| `form.name` | The form's name. |
+| `form["C"].value`, `form.C.value` | Reads or writes a control's value. |
+| `ctl.visible`, `enabled`, `locked`, `caption`, `fore_color`, `back_color`, `left`, `top`, `width`, `height` | Reads or writes the property of a control. |
+| `form.requery(control=None)`, `go_to_record(record="next", offset=1)`, `go_to_control(name)`, `save_record()`, `undo_record()`, `delete_record()`, `refresh_record()`, `apply_filter(where)`, `show_all_records()` | The form's actions. `delete_record()` asks for confirmation as the user gets it. |
+| `reports["R"]`, `reports.R`, `rpt["C"].value` | The reports that are open; reads a control's value. |
+| `rpt["C"].visible = ...`, `rpt["C"].value = ...`, `rpt.section.visible = ...`, `rpt.section.height = ...` | In a report's On Format and On Print events only. |
+| `me` | The form or report that fired the running event. |
+| `screen.active_form`, `screen.active_control` | The active form and control (`None` when there is none). |
+| `docmd.<action>(...)` | Runs a macro action (below). |
+| `docmd.cancel_event()` | Cancels the event being handled (when it can be cancelled). |
+| `docmd.run_macro("M")` | Runs a saved macro. |
+| `tempvars["x"]`, `tempvars["x"] = v`, `del tempvars["x"]`, `"x" in tempvars`, `len(tempvars)`, `keys()`, `items()`, `clear()` | Temporary variables, shared with macros. An absent variable is `None`. |
+| `app.current_project.name`, `app.quit()` | The open database's name; quits BaseCraft. |
+| `db.open_recordset(source, params=None)`, `db.execute(sql, params=None)` | Data (below). |
+
+Values go both ways as Python values: text, numbers, `True`/`False`, `None` (empty) and `datetime.datetime` for dates (a `datetime.date` is stored at midnight; numpy numbers are converted).
+
+### `docmd`: macro actions
+
+`docmd.open_form("F", where_condition="[Id] = 3")` runs the macro action OpenForm. The action name is written in snake case (`open_form`, `run_sql`, `go_to_record`, `set_warnings`); `close` stands for CloseWindow. Keyword arguments use the action's argument names the same way (`where_condition`); positional arguments follow the order of the macro builder. A required argument left out raises `TypeError`; a value that is not allowed raises an error naming the argument.
+
+The same rules as a macro apply, including `docmd.set_warnings(False)`, which lasts for the Python call that made it.
+
+A few actions have a Python equivalent and are refused with a message that names it: `SetValue` (a control's `.value`), `SetTempVar` and `RemoveTempVar` (`tempvars`), `RunMacro` (`docmd.run_macro()`), `MessageBox` (`msgbox()`), `CancelEvent` (`docmd.cancel_event()`), and the macro-flow actions (`StopMacro`, `OnError`, `RunCode`...).
+
+**Dialog forms.** `docmd.open_form("F", window_mode="dialog")` opens the form as a dialog and the calling function **waits** until the dialog is closed. The dialog's own buttons run their Python events normally, nested inside the waiting call. When the dialog closes, the caller carries on and can read what the dialog left, for example in `tempvars`.
+
+### Recordsets: `db`
+
+```python
+total = 0
+for row in db.open_recordset("Commandes"):
+    total += row["Montant"]
+```
+
+`db.open_recordset(source)` takes a table name, a saved query name, or SQL text starting with `SELECT`, `TRANSFORM` or `PARAMETERS` (then `params` supplies the parameters). Rows are read page by page, so large tables are fine.
+
+| In Python | What it does |
+|---|---|
+| `for row in rs`, `len(rs)`, `rs.fields` | Walks the rows; `len(rs)` is the number of rows when the recordset was opened. |
+| `row["Name"]`, `row.get("Name")`, `row.to_dict()` | Reads a row. |
+| `row.update({"Name": value})`, `row.delete()` | Changes or deletes the row in the database. |
+| `rs.add({"Name": value})` | Adds a record. |
+| `rs.to_pandas()` | All rows as a `pandas.DataFrame`. pandas is loaded for you. |
+| `db.execute(sql, params=None)` | Runs an action query (INSERT, UPDATE, DELETE...) without confirmation and returns the number of records. A SELECT raises an error. |
+
+Writes follow the rules of the interface: a required field, a validation rule or a read-only query refuses the change with the same message, as a Python error (`BaseCraftError`), and nothing is half-written.
+
+**Deleting while looping.** Deleting rows with `row.delete()` inside the `for` loop is safe: the loop does not skip the rows that follow. Deleting with `db.execute("DELETE ...")` during the loop is not compensated, so the loop may skip rows. Collect first, or run the query after the loop.
+
+### Errors and « Debug »
+
+When Python fails in an event, BaseCraft shows the **Python Error** box: the error type and message, `Module Calculs, line 3`, and the full traceback in a collapsible section. **Debug** opens the module in the editor with the cursor on that line, the line marked and the message in the bar under the editor. **End** closes the box. The event is cancelled when it can be.
+
+Ctrl+Break stops the innermost running call, so a runaway button in a dialog form can be stopped while the caller keeps waiting and the dialog stays usable. A **RunCode** failure is the macro action's failure: handle it with *OnError*, or the Action Failed box appears, with **Debug** when the cause is a Python error. In the Runtime, which has no module editor, the box has no **Debug** button.
+
 ## What Python cannot do
 
 Python in BaseCraft is a closed room:
@@ -85,7 +183,7 @@ Python in BaseCraft is a closed room:
 - **No network.** Any attempt to reach a web address fails with an error line.
 - **No programs.** It cannot start other programs or reach the system.
 
-It can use only what BaseCraft hands it: your modules, the standard library, numpy, pandas, `msgbox` and `inputbox`.
+It can use only what BaseCraft hands it: your modules, the standard library, numpy, pandas, `msgbox`, `inputbox`, and the BaseCraft objects described above (`forms`, `db`, `docmd`...), which follow the same rules as the interface.
 
 ## When content is disabled
 
@@ -105,5 +203,5 @@ BaseCraft itself starts as fast as before: Python is loaded only when needed. Lo
 
 ## What comes next
 
-- **D2: Python in your application.** Python reacting to events (a button click, Before Update), functions in event properties, objects for forms, reports and the database (`forms`, `reports`, `me`, `db` with recordsets), and dialog forms.
 - **D3: Python in expressions.** Your functions in calculated controls on forms and reports, in macro conditions, and in a control's validation rule and default value; autocomplete on BaseCraft objects; *View Code* buttons.
+- Still out of reach: code behind a form (`[Event Procedure]`), recordsets in the style of DAO (`find_first`, `edit`/`update`), exporting or importing files from Python (`docmd.output_to`, `transfer_*`), and Python in queries or table rules.

@@ -111,6 +111,15 @@ it('UNION dedups like Access; UNION ALL keeps every row; ORDER BY names the outp
   expect(run('SELECT Ville FROM Clients UNION SELECT Ville FROM Clients WHERE [N°] = 3 ORDER BY Ville DESC').map((r) => String(r[0]).toLowerCase())).toEqual(['paris', 'lyôn', 'lyon']);
   expect(run('SELECT Nom FROM Clients UNION ALL SELECT Nom FROM Clients WHERE [N°] = 3 ORDER BY Nom').flat()).toEqual(['Dupont', 'Durand', 'Durand', 'Éric', 'Martin']);
 });
+it('UNION chains dedup once, on raw integers natively; a later UNION ALL keeps its rows', () => {
+  const sql = compile('SELECT [N°], Nom FROM Clients UNION SELECT [N°], Nom FROM Clients UNION SELECT [N°], Nom FROM Clients').sql;
+  expect(sql.match(/GROUP BY/g)).toHaveLength(1);
+  expect(sql).toMatch(/GROUP BY "c0", bc_gkey\("c1"\)$/);
+  expect(run('SELECT Ville FROM Clients UNION ALL SELECT Ville FROM Clients UNION SELECT Ville FROM Clients WHERE [N°] = 3')).toHaveLength(3);
+  expect(run('SELECT Ville FROM Clients UNION SELECT Ville FROM Clients UNION ALL SELECT Ville FROM Clients WHERE [N°] = 3')).toHaveLength(4);
+  // a text in one part: that column keeps bc_gkey
+  expect(compile('SELECT [N°] FROM Clients UNION SELECT Nom FROM Clients').sql).toMatch(/GROUP BY bc_gkey\("c0"\)$/);
+});
 it('DISTINCT on a totals query, ordered and limited', () => {
   expect(run('SELECT DISTINCT Count(*) FROM Clients GROUP BY Ville ORDER BY Count(*) DESC')).toEqual([[2], [1]]);
   expect(run('SELECT DISTINCT TOP 1 Count(*) FROM Clients GROUP BY Ville ORDER BY Count(*)')).toEqual([[1]]);
@@ -170,6 +179,12 @@ it('the authorizer refuses VACUUM INTO, table-valued pragmas, dbstat and any tab
     expect(() => authorizedPrepare(db, sql), sql).toThrow(/bc:invalidQuery/);
   expect(fs.existsSync(path.join(process.cwd(), 'copie.basecraft'))).toBe(false);
   expect(() => authorizedPrepare(db, 'SELECT x.c FROM (SELECT "Nom" AS c FROM "Clients") AS x')).not.toThrow();
+  // a snapshot (source.ts): only the temp table its caller names
+  db.exec('CREATE TEMP TABLE "bcx_t1" ("c0"); CREATE TEMP TABLE "bcx_t2" ("c0")');
+  expect(() => authorizedPrepare(db, 'SELECT * FROM temp."bcx_t1"', 'bcx_t1')).not.toThrow();
+  for (const sql of ['SELECT * FROM temp."bcx_t2"', 'SELECT * FROM temp.sqlite_schema', `INSERT INTO temp."bcx_t1" VALUES (1)`])
+    expect(() => authorizedPrepare(db, sql, 'bcx_t1'), sql).toThrow(/bc:invalidQuery/);
+  db.exec('DROP TABLE temp."bcx_t1"; DROP TABLE temp."bcx_t2"');
 });
 it('the authorizer allows only a SELECT: writes go through the write layer (rules, relations, cascades), never a compiled statement', () => {
   for (const sql of [`INSERT INTO "Clients" ("Nom") VALUES ('x')`, `UPDATE "Clients" SET "Nom" = 'x'`, 'DELETE FROM "Clients"',

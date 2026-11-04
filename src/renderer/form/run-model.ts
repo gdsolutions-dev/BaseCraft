@@ -85,7 +85,40 @@ export function controlLook(c: ControlDef): CSSProperties {
       textDecoration: prop(c, 'FontUnderline') === true ? 'underline' : 'none',
     });
   }
+  // Control Margins: the text inset, only on the text-bearing kinds; added to the stylesheet's own inset (--bc-ix/--bc-iy, 0 in print); a side at 0 adds nothing
+  return Object.assign(st, marginInset(c));
+}
+
+/** Control Margins as CSS padding (the text inset; the box keeps its size). */
+export function marginInset(c: ControlDef): CSSProperties {
+  const st: CSSProperties = {};
+  if (MARGIN_KINDS.includes(c.kind)) {
+    for (const [side, key] of SIDE_KEYS) { const m = Number(prop(c, `${side}Margin`)) || 0; if (m > 0) st[key] = `calc(var(${side === 'Top' || side === 'Bottom' ? '--bc-iy' : '--bc-ix'}, 0px) + ${twipsToPx(m)}px)`; }
+  }
   return st;
+}
+
+const MARGIN_KINDS: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox'];
+const SIDE_KEYS = [['Top', 'paddingTop'], ['Bottom', 'paddingBottom'], ['Left', 'paddingLeft'], ['Right', 'paddingRight']] as const;
+
+/** The gridline overlay of a control, null when its four sides are transparent: an absolutely positioned box at the cell rectangle
+ *  (the control grown by its own padding), positioned relative to `origin` (the section's corner by default), drawn as a sibling of
+ *  the control so its size and text do not change. ponytail: a cell padded less than its column's maximum draws its lines at its own padding. */
+export function gridlineStyle(c: ControlDef, origin: { left: number; top: number } = { left: 0, top: 0 }): CSSProperties | null {
+  if (!applies(c, 'GridlineColor')) return null;
+  const pad = (side: string) => Number(prop(c, `${side}Padding`)) || 0;
+  const st: CSSProperties = {};
+  let any = false;
+  for (const [side] of SIDE_KEYS) {
+    const style = String(prop(c, `GridlineStyle${side}`));
+    if (style === 'transparent') continue;
+    any = true;
+    (st as Record<string, string>)[`border${side}`] = `${Math.max(1, Number(prop(c, `GridlineWidth${side}`)) || 0)}px ${style} ${color(c, 'GridlineColor')}`;
+  }
+  if (!any) return null;
+  const [t, b, l, r] = [pad('Top'), pad('Bottom'), pad('Left'), pad('Right')];
+  return { ...st, position: 'absolute', boxSizing: 'border-box', pointerEvents: 'none', left: twipsToPx(c.left - l - origin.left), top: twipsToPx(c.top - t - origin.top),
+    width: twipsToPx(c.width + l + r), height: twipsToPx(c.height + t + b) };
 }
 
 /** Enabled false: disabled. An unbound input is read-only only when Locked. Otherwise read-only: Locked, a record that cannot be edited now (busy, rights), an AutoNumber, a calculated or

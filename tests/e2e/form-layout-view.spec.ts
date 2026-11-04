@@ -149,12 +149,12 @@ test('Layout view: live record, record bar, restricted designer, layout commands
     await expect(page.getByTestId('ribbon-tab-arrange')).toHaveAttribute('aria-selected', 'true');
     await designerTools(page, false);
 
-    // vers Formulaire, modifié : la question d'enregistrement ; Oui enregistre ; le formulaire montre la colonne élargie
+    // enregistré (Ctrl+S), puis vers Formulaire : le formulaire montre la colonne élargie (sans enregistrer, il s'affiche aussi : de6f3a8)
     await expect(page.getByTestId('doc-tab-form-Fiche')).toContainText('•');
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('doc-tab-form-Fiche')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-home').click();
     await pickView(page, 'viewForm');
-    await expect(modal).toContainText(fr.form.mustSaveFirst.replace('{{name}}', 'Fiche'));
-    await page.getByTestId('modal-btn-yes').click();
     const run = page.getByTestId('form-run').filter({ visible: true });
     await expect(run).toBeVisible();
     await expect(run.getByTestId('form-ctl-Texte2')).toHaveValue('Dupont');

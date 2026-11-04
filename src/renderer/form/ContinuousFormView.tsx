@@ -10,6 +10,7 @@ import { NavigationBar } from '../datasheet/NavigationBar';
 import { twipsToPx } from '../designer/units';
 import { type RunCtx, readOnlyNote } from './controls/run-ctx';
 import { FormSection } from './FormSection';
+import { useAnchored } from './use-anchored';
 import type { SingleFormProps } from './SingleFormView';
 import { visibleRange } from './views';
 
@@ -21,19 +22,19 @@ export interface ContinuousFormProps extends SingleFormProps {
 /** What takes the focus on a click (its focus makes its row current, the form's goRow): the row's click leaves it alone. */
 const TAKES_FOCUS = 'input, textarea, button, label[for], [role="listbox"], [role="radio"], [role="tab"], [tabindex]:not([tabindex="-1"])';
 
-export function ContinuousFormView({ doc, x, rowCtx, root, messages, filter, onGo, onNew, onToggleFilter, onRow }: ContinuousFormProps) {
+export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, filter, onGo, onNew, onToggleFilter, onRow }: ContinuousFormProps) {
   const { t } = useTranslation();
-  const width = twipsToPx(Number(effectiveProp(doc.props, 'Width', 'form')) || 0);
+  const body = useRef<HTMLDivElement>(null);
+  const bound = design.recordSource !== null;   // an unbound form: one row, no selector, no navigation bar
+  const selectors = bound && effectiveProp(design.props, 'RecordSelectors', 'form') !== false;
+  const { doc, width, overflow } = useAnchored(design, body, false, selectors ? 18 : 0);   // horizontal anchoring only: each row keeps its height
   const shown = (kind: string) => doc.sections.find((s) => s.kind === kind && s.props.Visible !== false);
   const [header, detail, footer] = [shown('formHeader'), shown('detail'), shown('formFooter')];
-  const bound = doc.recordSource !== null;   // an unbound form: one row, no selector, no navigation bar
-  const selectors = bound && effectiveProp(doc.props, 'RecordSelectors', 'form') !== false;
   const nav = bound && effectiveProp(doc.props, 'NavigationButtons', 'form') !== false;
   const { snap } = x;
   const rowH = Math.max(1, twipsToPx(detail?.height ?? 0));
   const count = !detail ? 0 : bound ? snap.total + (snap.canAdd ? 1 : 0) : 1;
   const current = bound ? snap.index : 0;
-  const body = useRef<HTMLDivElement>(null);
   const [port, setPort] = useState({ top: 0, height: 0 });
   const armed = useRef<number | null>(null);   // the row a click began on while it was not current
 
@@ -71,7 +72,7 @@ export function ContinuousFormView({ doc, x, rowCtx, root, messages, filter, onG
   return (
     <div className="frun" ref={root} data-testid="form-run">
       {header && <div className="frun-fixed"><FormSection section={header} x={x} width={width} /></div>}
-      <div className="frun-body" ref={body} data-testid="form-rows" onScroll={(e) => setPort({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}>
+      <div className="frun-body" ref={body} style={overflow} data-testid="form-rows" onScroll={(e) => setPort({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}>
         {detail && (
           // ponytail: one spacer as tall as every row; Chromium caps an element near 33.5 M px (about 800 000 rows of 40 px),
           // beyond that the last rows cannot be scrolled to: scale the scroll position if forms ever get that many

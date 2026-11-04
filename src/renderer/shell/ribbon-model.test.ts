@@ -250,8 +250,8 @@ const HEADER_DONE = ['logo', 'title', 'dateTime'] as const;
 describe('Arrange layout commands (L1 dispositions)', () => {
   const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
   const arrange = RIBBON.find((t) => t.id === 'arrange')!.groups.flatMap((g) => g.commands);
-  const delivered = ['stacked', 'tabular', 'removeLayout', 'insertAbove', 'insertBelow', 'insertLeft', 'insertRight', 'selectLayout', 'selectColumn', 'selectRow', 'moveUp', 'moveDown'];
-  it('the 12 delivered commands are real and follow designerWritable', () => {
+  const delivered = ['stacked', 'tabular', 'removeLayout', 'insertAbove', 'insertBelow', 'insertLeft', 'insertRight', 'selectLayout', 'selectColumn', 'selectRow', 'moveUp', 'moveDown', 'merge', 'splitVertically', 'splitHorizontally'];
+  it('the 15 delivered commands are real and follow designerWritable', () => {
     for (const id of delivered) {
       const c = arrange.find((x) => x.id === id)!;
       expect(c, id).toBeDefined();
@@ -261,8 +261,12 @@ describe('Arrange layout commands (L1 dispositions)', () => {
       expect(c.enabled(ctx({ mode: 'datasheet' })), id).toBe(false);
     }
   });
-  it('the L4 commands stay planned', () => {
-    for (const id of ['layoutGridlines', 'merge', 'splitVertically', 'splitHorizontally', 'controlMargins', 'controlPadding', 'anchoring']) expect(arrange.find((x) => x.id === id)!.planned, id).toBe('later');
+  it('the four L4 popup commands are real, popup, follow designerWritable; nothing is planned in the arrange tab', () => {
+    for (const id of ['layoutGridlines', 'controlMargins', 'controlPadding', 'anchoring']) {
+      const c = arrange.find((x) => x.id === id)!;
+      expect([c.planned, c.popup, c.enabled(ctx({})), c.enabled(ctx({ readOnly: true }))], id).toEqual([undefined, true, true, false]);
+    }
+    expect(arrange.filter((x) => x.planned)).toEqual([]);
   });
 });
 
@@ -372,7 +376,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThan(110); // 12 Arrange layout commands delivered (dispositions L1)
+    expect(planned.length).toBeGreaterThan(100); // 12 Arrange layout commands delivered (dispositions L1)
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -490,7 +494,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     const preview = entry('reportDesign', 'viewPrintPreview');
     expect(preview.enabled(design)).toBe(true);
     expect(preview.enabled(ro)).toBe(true);
-    expect(preview.enabled({ ...design, isNew: true })).toBe(false);
+    expect(preview.enabled({ ...design, isNew: true })).toBe(true); // a new report runs unsaved (as a query)
     expect(preview.active!(ctx({ kind: 'report', mode: 'run' }))).toBe(true);
     expect(preview.active!(design)).toBe(false);
     for (const tab of ['pageSetup', 'printPreview'] as RibbonTabId[]) {
@@ -608,7 +612,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('View › Form View (A4): a saved form, in Design or Datasheet view; active in Form view', () => {
     const v = commands.find((c) => c.id === 'viewForm')!;
-    expect(v.enabled(ctx({ kind: 'form', mode: 'design' }))).toBe(true); expect(v.enabled(ctx({ kind: 'form', mode: 'design', isNew: true }))).toBe(false);
+    expect(v.enabled(ctx({ kind: 'form', mode: 'design' }))).toBe(true); expect(v.enabled(ctx({ kind: 'form', mode: 'design', isNew: true }))).toBe(true);
     expect(v.enabled(ctx({ kind: 'table', mode: 'datasheet' }))).toBe(false);
     expect(v.active!(ctx({ kind: 'form', mode: 'run' }))).toBe(true); expect(v.active!(ctx({ kind: 'form', mode: 'design' }))).toBe(false); });
 
@@ -640,7 +644,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(state({ kind: 'form', mode: 'run' })).toEqual([true, true, false]);
     expect(state({ kind: 'form', mode: 'datasheet' })).toEqual([true, true, false]);
     expect(state({ kind: 'form', mode: 'design', readOnly: true })).toEqual([true, true, false]);   // opens read-only
-    expect(state({ kind: 'form', mode: 'design', isNew: true })).toEqual([true, false, false]);     // saved first
+    expect(state({ kind: 'form', mode: 'design', isNew: true })).toEqual([true, false, false]);     // Form view runs it unsaved; Layout view needs the save
     expect(state({ kind: 'report', mode: 'design' })).toEqual([true, true, false]);                 // reports: L3
     expect(state({ kind: 'report', mode: 'layout' })).toEqual([true, true, true]);
     expect(state({ kind: 'report', mode: 'run' })).toEqual([true, true, false]);
@@ -706,10 +710,15 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
       expect(on(id, { ...lay, mode: 'run' }), id).toBe(false);
     }
-    for (const id of ['groupSort', 'reportTotals', 'hideDetails', 'addExistingFields', 'viewCode'] as const) {
+    for (const id of ['groupSort', 'hideDetails', 'addExistingFields', 'viewCode'] as const) {
       expect(on(id), id).toBe(false);
       if (id !== 'viewCode') expect(on(id, design), id).toBe(true);
     }
+    // Totaux : aussi en mode Page, pas en lecture seule ni hors d'un état
+    expect(on('reportTotals')).toBe(true);
+    expect(on('reportTotals', design)).toBe(true);
+    expect(on('reportTotals', { ...lay, readOnly: true })).toBe(false);
+    expect(on('reportTotals', ctx({ kind: 'form', mode: 'layout' }))).toBe(false);
     // L3c : les éléments d'en-tête et de pied modifient les sections du document, pas le canevas : aussi en mode Page
     for (const id of ['pageNumbers', 'logo', 'title', 'dateTime'] as const) {
       expect(on(id), id).toBe(true);
@@ -954,6 +963,21 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commandEnabled('viewDesign', x)).toBe(true);
     runCommand('viewDesign');
     expect(h).toHaveBeenCalledOnce();
+  });
+
+  it('Arrange in Layout view: no Remove Layout, no Sizing & Ordering (Access S4g); Design view keeps both', () => {
+    for (const kind of ['form', 'report'] as const) {
+      const tab = RIBBON.find((t) => t.id === 'arrange')!;
+      const shown = (mode: RibbonContext['mode']) => {
+        const c = ctx({ kind, mode });
+        return tab.groups.filter((g) => !g.visible || g.visible(c)).map((g) => `${g.id}: ${g.commands.filter((x) => !x.visible || x.visible(c)).map((x) => x.id).join(' ')}`);
+      };
+      const design = shown('design'), layout = shown('layout');
+      expect(design[0]).toBe('layoutTable: layoutGridlines stacked tabular removeLayout');
+      expect(design).toContain('sizingOrdering: sizeSpace align bringToFront sendToBack');
+      expect(layout[0]).toBe('layoutTable: layoutGridlines stacked tabular');
+      expect(layout.map((g) => g.split(':')[0])).toEqual(['layoutTable', 'rowsColumns', 'mergeSplit', 'move', 'position']);
+    }
   });
 
   it('keeps Access order in every tab', () => {

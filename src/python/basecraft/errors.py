@@ -1,6 +1,14 @@
 import traceback
 
 
+class BaseCraftError(Exception):
+    """A host handler failed; `.code` is the bc code (notOpen, notFound, ...), the message is the dialog's text."""
+
+    def __init__(self, message, code='Error'):
+        super().__init__(message)
+        self.code = code
+
+
 def describe(exc):
     module = line = None
     tb = exc.__traceback__

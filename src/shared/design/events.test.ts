@@ -11,7 +11,7 @@ describe('events', () => {
     expect(readEvent('MLyon.Fermer')).toEqual({ kind: 'macro', name: 'MLyon.Fermer' });
     expect(readEvent({ embedded: { formatVersion: '1.0', items: [] } })).toEqual({ kind: 'embedded', def: { formatVersion: '1.0', items: [] } });
     expect(readEvent('[Event Procedure]')).toEqual({ kind: 'other', text: '[Event Procedure]' });
-    expect(readEvent('=Fonction()')).toEqual({ kind: 'other', text: '=Fonction()' });
+    expect(readEvent('=Fonction(')).toEqual({ kind: 'other', text: '=Fonction(' });
     expect(readEvent('a.b.c')).toEqual({ kind: 'other', text: 'a.b.c' });          // not a macro name: kept, does nothing
   });
 
@@ -22,7 +22,8 @@ describe('events', () => {
 
   it('checks values', () => {
     for (const ok of [undefined, '', 'M', 'M.S', 'Macro avec espace', { embedded: { formatVersion: '1.0', items: [] } }]) expect(checkEventValue(ok), String(ok)).toBeNull();
-    for (const bad of ['a.b.c', '.S', 'M.', '[M]', '=1', ' M', 'M!S']) expect(checkEventValue(bad), bad).toBe('badMacroName');
+    for (const bad of ['a.b.c', '.S', 'M.', '[M]', ' M', 'M!S']) expect(checkEventValue(bad), bad).toBe('badMacroName');
+    expect(checkEventValue('=1')).toBe('badFunctionCall');
     expect(checkEventValue('M'.repeat(65))).toBe('badMacroName');
     expect(checkEventValue({ embedded: { formatVersion: '2.0', items: [] } })).toBe('badEmbedded');
     expect(checkEventValue({})).toBe('badEmbedded');
@@ -47,5 +48,14 @@ describe('events', () => {
     expect(sectionByName(FACTURES_REPORT.sections, 'GROUPFOOTER0')).toBe(FACTURES_REPORT.sections.findIndex((s) => s.kind === 'groupFooter'));
     expect(sectionByName(FACTURES_REPORT.sections, 'Détail')).toBe(-1);   // the invariant name, not the label (R10)
     expect(sectionByName(FACTURES_REPORT.sections, 'FormHeader')).toBe(-1);
+  });
+});
+
+describe('python events (R1)', () => {
+  it('reads a call, refuses built-ins', () => {
+    expect(readEvent('=calculer()')).toEqual({ kind: 'python', name: 'calculer', args: [], text: '=calculer()' });
+    expect(readEvent('=1+')).toEqual({ kind: 'other', text: '=1+' });
+    expect(readEvent('M.Sub')).toEqual({ kind: 'macro', name: 'M.Sub' });
+    expect(checkEventValue('=f([A])')).toBeNull(); expect(checkEventValue('=Left(1,1)')).toBe('badFunctionCall');
   });
 });

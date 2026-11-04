@@ -384,3 +384,30 @@ test('during a slow query the ribbon stays responsive', async () => {
     await app.close();
   }
 });
+
+test('a query datasheet shows its first rows before its count, as Access: 200+, counted once idle or for the last record', async () => {
+  const base = seedBase('lazycount', (db) => {
+    seedSales(db);
+    const o = db.prepare('INSERT INTO "Commandes" ("Client", "Montant", "Le") VALUES (1, 7, \'2026-10-01 00:00:00\')');
+    db.exec('BEGIN');
+    for (let i = 0; i < 445; i++) o.run();
+    db.exec('COMMIT');
+    saveObject(db, 'query', 'QToutes', { formatVersion: '1.0', sql: 'SELECT [N°], Montant FROM Commandes;' }, null);
+    saveObject(db, 'query', 'QTriees', { formatVersion: '1.0', sql: 'SELECT [N°], Montant FROM Commandes ORDER BY Montant DESC;' }, null);
+  });
+  const { app, page } = await launchApp({ args: [base], env: FR });
+  try {
+    const total = String(await page.evaluate(() => (window as unknown as Win).basecraft.rows.count('Commandes')));
+    const count = () => doc(page).getByTestId('nav-record-count');
+    await openQuery(page, 'QToutes');
+    await expect(count()).toHaveText('200+'); // the first page, not counted
+    await expect(count()).toHaveText(total); // counted once idle
+    await openQuery(page, 'QTriees');
+    await expect(count()).toHaveText('200+');
+    await doc(page).getByRole('button', { name: fr.datasheet.nav.last, exact: true }).click(); // counted at once, then the last record
+    await expect(count()).toHaveText(total);
+    await expect(doc(page).getByTestId('nav-record-input')).toHaveValue(total);
+  } finally {
+    await app.close();
+  }
+});

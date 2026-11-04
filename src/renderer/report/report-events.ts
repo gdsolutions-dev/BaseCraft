@@ -27,7 +27,7 @@ export interface ReportEvents {
   register(): () => void;
 }
 
-const bound = (b: EventBinding): boolean => b.kind === 'macro' || b.kind === 'embedded';
+const bound = (b: EventBinding): boolean => b.kind === 'macro' || b.kind === 'embedded' || b.kind === 'python';
 
 /** A bare [Name] in a section's event (and [Reports]![R]![Name]): the band's control (read so far), else a field of its row. */
 export function bandValue(e: SectionEvent, name: string): Value {

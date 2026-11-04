@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "Keine", "narrow": "Schmal", "medium": "Mittel", "wide": "Breit"}, "controlPadding": {"none": "Keine", "narrow": "Schmal", "medium": "Mittel", "wide": "Breit"}, "anchoring": {"topLeft": "Oben links", "stretchDown": "Nach unten strecken", "bottomLeft": "Unten links", "stretchTop": "Oben quer strecken", "stretchAll": "Nach unten und quer strecken", "stretchBottom": "Unten quer strecken", "topRight": "Oben rechts", "stretchDownRight": "Nach unten und rechts strecken", "bottomRight": "Unten rechts"}, "layoutGridlines": {"both": "Beide", "vertical": "Vertikal", "horizontal": "Horizontal", "top": "Oben", "bottom": "Unten", "outline": "Umriss", "none": "Keine", "width": "Breite", "style": "Format", "color": "Farbe"}},
     "scrollLeft": "Menüband nach links scrollen",
     "scrollRight": "Menüband nach rechts scrollen",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "Die Datei enthält ein Feld oder eine Zeile mit mehr als einer Million Zeichen und kann nicht importiert werden.",
       "notImplemented": "Dieses Feature ist in dieser Version noch nicht verfügbar.",
       "notFound": "Dieses Objekt ist nicht mehr vorhanden.",
+      "notOpen": "„{{detail}}“ ist nicht geöffnet.",
+      "tooManyTempVars": "Zu viele temporäre Variablen (höchstens 255).",
+      "pythonFunctionNotFound": "Kein Modul enthält eine öffentliche Funktion {{name}}.",
+      "pythonFunctionAmbiguous": "Mehrere Module enthalten eine Funktion {{name}}: {{detail}}.",
+      "badArgument": "Ungültiges Argument: {{name}}",
+      "notUpdatable": "Diese Quelle ist nicht aktualisierbar: Ihre Datensätze können nicht hinzugefügt, geändert oder gelöscht werden.",
+      "runSqlSelect": "AusführenSQL erwartet eine Aktionsabfrage (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "„{{name}}“: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "Das Argument „{{name}}“ ist erforderlich.",
+      "noSuchDocmd": "docmd.{{name}} existiert nicht.",
+      "refusedDocmd": "docmd.{{name}} ist in Python nicht verfügbar: verwenden Sie {{detail}}.",
       "corruptObject": "Die Definition dieses Objekts kann nicht gelesen werden.",
       "invalidQuery": "Diese Abfrage ist ungültig. {{reason}}",
       "queryBind": "Diese Abfrage kann nicht ausgeführt werden: {{detail}}",
@@ -737,6 +750,7 @@
     },
     "canvas": "Entwurfsfläche",
     "layoutHandle": "Layout {{id}} markieren",
+    "emptyCell": "Leere Zelle {{layout}}, Zeile {{row}}, Spalte {{col}}",
     "toolbox": "Toolbox",
     "arrange": {
       "alignLeft": "Links",
@@ -940,6 +954,8 @@
     "findCapped": "Suchen und Kopieren erfassen die ersten 100.000 Datensätze.",
     "pasteOneRow": "Das Einfügen ist auf jeweils eine Zeile beschränkt.",
     "discardTitle": "Datensatz kann nicht gespeichert werden",
+    "saveTableLayout": "Möchten Sie die Änderungen am Layout der Tabelle „{{name}}“ speichern?",
+    "saveQueryLayout": "Möchten Sie die Änderungen am Layout der Abfrage „{{name}}“ speichern?",
     "discard": "Der in „{{name}}“ bearbeitete Datensatz kann nicht gespeichert werden. Änderungen verwerfen?",
     "shapeChanged": "Die Struktur von „{{name}}“ hat sich geändert: Der bearbeitete Datensatz kann nicht gespeichert werden und wird verworfen.",
     "deleteTitle": "Datensätze löschen",
@@ -1483,6 +1499,7 @@
     "unavailable": "In dieser Version nicht verfügbar"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} ist eine integrierte Funktion, keine Python-Funktion." },
     "Caption": "Beschriftung",
     "DefaultView": "Standardansicht",
     "AllowLayoutView": "Layoutansicht zulassen",
@@ -1497,6 +1514,25 @@
     "BackColor": "Hintergrundfarbe",
     "BorderStyle": "Rahmenart",
     "BorderWidth": "Rahmenbreite",
+    "GridlineStyleTop": "Gitternetzlinienformat oben",
+    "GridlineWidthTop": "Gitternetzlinienbreite oben",
+    "TopMargin": "Rand oben",
+    "TopPadding": "Abstand oben",
+    "GridlineStyleBottom": "Gitternetzlinienformat unten",
+    "GridlineWidthBottom": "Gitternetzlinienbreite unten",
+    "BottomMargin": "Rand unten",
+    "BottomPadding": "Abstand unten",
+    "GridlineStyleLeft": "Gitternetzlinienformat links",
+    "GridlineWidthLeft": "Gitternetzlinienbreite links",
+    "LeftMargin": "Rand links",
+    "LeftPadding": "Abstand links",
+    "GridlineStyleRight": "Gitternetzlinienformat rechts",
+    "GridlineWidthRight": "Gitternetzlinienbreite rechts",
+    "RightMargin": "Rand rechts",
+    "RightPadding": "Abstand rechts",
+    "GridlineColor": "Gitternetzlinienfarbe",
+    "HorizontalAnchor": "Horizontale Verankerung",
+    "VerticalAnchor": "Vertikale Verankerung",
     "BorderColor": "Rahmenfarbe",
     "ForeColor": "Vordergrundfarbe",
     "FontName": "Schriftart",
@@ -1562,9 +1598,16 @@
     "OnNoData": "Bei fehlenden Daten",
     "OnFormat": "Beim Formatieren",
     "OnPrint": "Beim Drucken",
-    "ColumnHeads": "Spaltenüberschriften"
+    "ColumnHeads": "Spaltenüberschriften",
+    "ColumnWidth": "Spaltenbreite"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Transparent", "solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"},
+    "GridlineStyleBottom": {"transparent": "Transparent", "solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"},
+    "GridlineStyleLeft": {"transparent": "Transparent", "solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"},
+    "GridlineStyleRight": {"transparent": "Transparent", "solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"},
+    "HorizontalAnchor": {"left": "Links", "right": "Rechts", "both": "Beide"},
+    "VerticalAnchor": {"top": "Oben", "bottom": "Unten", "both": "Beide"},
     "DefaultView": {
       "single": "Einzelnes Formular",
       "continuous": "Endlosformular",
@@ -1832,6 +1875,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Generator auswählen", "macro": "Makrogenerator", "function": "Funktionsgenerator" },
+    "function": { "title": "Funktionsgenerator", "empty": "Kein Modul enthält eine öffentliche Funktion." },
     "title": "Ausdrucks-Generator",
     "expression": "Geben Sie einen Ausdruck ein:",
     "elements": "Ausdruckselemente",
@@ -1906,6 +1951,7 @@
       "unknownSource": "Keine Tabelle und keine Abfrage hat diesen Namen.",
       "pictureTooLarge": "Bild zu groß (höchstens 1 MB).",
       "notInteger": "Geben Sie eine ganze Zahl ein.",
+      "badFunctionCall": "Ein Funktionsaufruf wird als =Name(Argumente) geschrieben, mit dem Namen einer Python-Funktion eines Moduls.",
       "badMacroName": "Ungültiger Makroname: „Makro“ oder „Makro.Untermakro“, ohne weiteren Punkt oder Klammern.",
       "badEmbedded": "Ungültiges eingebettetes Makro."
     },
@@ -1926,6 +1972,7 @@
     "unbound": "Ungebunden",
     "saveFirstTitle": "Formular speichern",
     "saveFirst": "Möchten Sie die Änderungen am Formular „{{name}}“ speichern?",
+    "saveLayout": "Möchten Sie die Änderungen am Layout des Formulars „{{name}}“ speichern?",
     "mustSaveFirst": "Sie müssen das Formular „{{name}}“ zuerst speichern. Jetzt speichern?",
     "sourceError": "Datensatzherkunft „{{name}}“: {{message}}",
     "tabOrder": {
@@ -2283,6 +2330,8 @@
     }
   },
   "module": {
+    "functionClash": "Die Funktion {{fn}} gibt es auch im Modul {{other}}: Ein Aufruf ={{fn}}() ist mehrdeutig.",
+    "functionBuiltin": "{{fn}} ist der Name einer integrierten Funktion: Wählen Sie einen anderen Namen.",
     "newName": "Modul{{n}}",
     "nameLabel": "Modulname",
     "badName": "Ein Modulname muss ein Python-Name sein: Buchstaben, Ziffern und _, nicht mit einer Ziffer beginnend und kein reserviertes Python-Wort.",
@@ -2312,6 +2361,7 @@
       "Quit": "Beenden",
       "RemoveAllTempVars": "EntfernenAlleTempVars",
       "RemoveTempVar": "EntfernenTempVar",
+      "RunCode": "AusführenCode",
       "RunMacro": "AusführenMakro",
       "RunSQL": "AusführenSQL",
       "SetLocalVar": "SetzenLokaleVariable",
@@ -2344,6 +2394,7 @@
       "Title": "Titel",
       "Name": "Name",
       "Expression": "Ausdruck",
+      "FunctionName": "Funktionsname",
       "MacroName": "Makroname",
       "RepeatCount": "Wiederholungsanzahl",
       "RepeatExpression": "Wiederholungsausdruck",
@@ -2918,6 +2969,15 @@
     "target": "{{kind}} {{name}} › {{control}} („{{current}}“)"
   },
   "python": {
+    "error": {
+      "title": "Python-Fehler",
+      "text": "{{type}}: {{message}}",
+      "where": "Modul {{module}}, Zeile {{line}}",
+      "interrupted": "Ausführung unterbrochen.",
+      "debug": "Debuggen",
+      "end": "Beenden",
+      "traceback": "Details"
+    },
     "running": "Python wird ausgeführt… Strg+Untbr zum Unterbrechen.",
     "interrupt": "Unterbrechen",
     "restarted": "Python hat nicht mehr geantwortet und wurde neu gestartet. Der Zustand der Module ist verloren.",

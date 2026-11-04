@@ -22,6 +22,25 @@ function host(macros: Record<string, MacroDef>, o: { enabled?: boolean; failOn?:
 }
 const names = (h: FakeHost): string[] => h.calls.map((c) => c.action);
 
+describe('RunCode', () => {
+  const withCode = (o: { enabled?: boolean } = {}) => { const h = host({}, o); const calls: unknown[][] = []; h.runCode = async (n, a, e) => { calls.push([n, a, e]); }; return { h, calls }; };
+  const run = (h: FakeHost, fn: string) => runMacroDef(m([act('SetTempVar', { Name: 'n', Expression: '5' }), act('RunCode', { FunctionName: fn })]), 'M', h);
+  it('calls the host with evaluated arguments', async () => {
+    const { h, calls } = withCode();
+    expect(await run(h, 'f([TempVars]![n], 2)')).toEqual({ ok: true }); expect(calls).toEqual([['f', [num(5), num(2)], undefined]]);
+  });
+  it('accepts the name with a leading = like without', async () => {
+    const { h, calls } = withCode();
+    expect(await run(h, '=f([TempVars]![n], 2)')).toEqual({ ok: true }); expect(calls).toEqual([['f', [num(5), num(2)], undefined]]);
+  });
+  it('is blocked while content is disabled, unknown without host support, a bad text fails', async () => {
+    const d = withCode({ enabled: false });
+    expect(await run(d.h, 'f(1)')).toMatchObject({ ok: false, failure: { code: 'blocked' } }); expect(d.calls).toEqual([]);
+    expect(await run(host({}), 'f(1)')).toMatchObject({ ok: false, failure: { code: 'unknownAction' } });
+    expect(await run(withCode().h, 'f(')).toMatchObject({ ok: false, failure: { code: 'badDefinition' } });   // validateMacro rejects it before it runs
+  });
+});
+
 describe('runMacro', () => {
   it('runs up to the first submacro; M.Sub runs it', async () => {
     const h = host({ M: m([act('Beep'), { k: 'submacro', name: 'S', items: [act('CloseDatabase')] }]) });

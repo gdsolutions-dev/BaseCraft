@@ -184,6 +184,9 @@ export class BridgeServer {
 
   get busy(): boolean { return this.pending.size > 0 }
 
+  /** Worker calls (message box, dialog form...) whose reply is not issued yet: the worker is parked on them, not stuck (R9). */
+  pendingCalls(): number { return this.calls.length }
+
   request(req: HostRequest): Promise<unknown> {
     const id = this.nextId++
     const p = new Promise<unknown>((resolve, reject) => this.pending.set(id, { resolve, reject }))

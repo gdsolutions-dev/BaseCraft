@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 import { flattenControls, type ControlDef, type DesignDoc } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
+import { design } from '../design/entry';   // null in BaseCraft Runtime: the layout question is a design one (saving goes through a design channel)
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { sameName, type FieldDef } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
@@ -15,6 +16,7 @@ import { passThroughOf } from '../../shared/query/definition';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
 import { promptParameters } from '../query/prompt-parameters';
+import { unsavedRunDoc } from '../query/unsaved-run';
 import { i18n } from '../i18n';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from '../datasheet/filter-model';
 import { FilterMenu, type BuiltList, type FilterMenuState } from '../datasheet/FilterMenu';
@@ -29,7 +31,7 @@ import { editKey, entryCaret } from '../datasheet/edit-keys';
 import { currentSettings, fourDigitYear } from '../settings-store';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import type { DocViewProps } from '../shell/DocumentTabs';
-import type { OpenArgs } from '../state/app-state';
+import type { DocMode, OpenArgs } from '../state/app-state';
 import { bcErrorCode, errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { askWriteConflict, recordText, showRecordDeleted, type ConflictChoice } from '../shell/WriteConflictDialog';
 import { registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
@@ -51,7 +53,7 @@ import { errorsByControl, layoutLabels, prop, tabSequence } from './run-model';
 import { SingleFormView } from './SingleFormView';
 import { ContinuousFormView } from './ContinuousFormView';
 import { FormDatasheet } from './FormDatasheet';
-import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor } from './views';
+import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor, withColumnWidths } from './views';
 import './form.css';
 
 const dataApi: FormDataApi = {
@@ -76,6 +78,18 @@ const eventBase = (region: string) => ({ locale: region, lang: langOf(), now: ()
 const quiet = <T,>(p: Promise<T>, none: T): Promise<T> =>
   p.catch((e: unknown) => { if (e instanceof Error && e.message === 'bc:saveDuringEvent') return none; throw e; });
 
+/** Les largeurs de colonne tirées en Feuille de données, à la sortie de l'onglet : la question d'Access (enregistrer la mise en forme ?).
+ *  Rien tiré ou base en lecture seule : rien n'est demandé. Oui enregistre (échec : l'onglet reste), Non abandonne, Annuler reste. */
+export async function leaveSheetLayout(d: { widths: Record<string, number>; readOnly: boolean; name: string; messageKey?: string; confirm: ModalApi['confirm']; save(widths: Record<string, number>): Promise<boolean>;
+  /** les sous-formulaires en Feuille de données : leurs largeurs tirées sont enregistrées (ou oubliées) avec celles du formulaire */
+  others?: { dirty: boolean; save(): Promise<boolean>; drop(): void } }): Promise<boolean> {
+  const own = Object.keys(d.widths).length > 0;
+  if (d.readOnly || (!own && !d.others?.dirty)) return true;
+  const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: d.messageKey ?? 'form.saveLayout', params: { name: d.name }, buttons: ['yes', 'no', 'cancel'] });
+  if (r === 'no') { d.others?.drop(); return true; }
+  return r === 'yes' && (!own || (await d.save(d.widths))) && (!d.others || (await d.others.save()));
+}
+
 /** The tab's form in the registry ([Forms]!, the form actions), registered before On Open: its values and runtime properties
  *  from then on (its events'); the other actions once it shows (before: bc:actionNotRun), GoToRecord from On Load. */
 function instanceOf(name: string, tabId: string, hub: () => FormEvents | null): FormInstance {
@@ -83,6 +97,8 @@ function instanceOf(name: string, tabId: string, hub: () => FormEvents | null): 
   return {
     name, tabId,
     value: (c) => { const h = hub(); if (!h) throw new ExprRuntimeError('unknownField', c); return h.value(c); },
+    property: (c, p) => { const h = hub(); if (!h) throw new Error(`bc:notFound||${c}`); return p === 'value' ? h.value(c) : h.property(c, p); },
+    activeControl: () => hub()?.focused ?? null,
     setProperty: (c, p, v) => {
       const h = hub();
       if (!h) throw new Error('bc:actionNotRun');
@@ -122,7 +138,10 @@ export function FormRunView(p: DocViewProps) {
     // registered before On Open ([Forms]! in its own events); an OpenForm waiting for it is told when it does not open
     const release = registerForm(instanceOf(form, tab.id, () => hub));
     const cancel = () => { if (!ready) formCancelled(form); };
-    api.objects.get('form', form).then(async (r) => {
+    // a new or modified form runs as its design stands (unsaved, as a query); else its saved definition
+    const unsaved = unsavedRunDoc.get(tab.id);
+    const read: Promise<{ definition: unknown }> = unsaved ? Promise.resolve({ definition: unsaved }) : api.objects.get('form', form);
+    read.then(async (r) => {
       if (!current) return;
       let doc: DesignDoc;
       try { doc = parseFormDoc(r.definition).doc; } catch { setLoaded({ error: { key: 'form.invalidDefinition' } }); cancel(); return; }
@@ -259,6 +278,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
   const root = useRef<HTMLDivElement>(null);
   const [viewId] = useState(() => `frun${++nextViewId}`);
   const [focused, setFocused] = useState<string | null>(null);
+  hub.focused = focused;   // D2: Python's screen.active_control
   const lastFocused = useRef<string | null>(null);   // the control that has (or last had) the focus: a subform's when it is in it
   const lastOwn = useRef<string | null>(null);       // the last of this form's own controls focused
   const [calc, setCalc] = useState<{ key: string; results: Record<string, CalcResult> }>({ key: '', results: {} });
@@ -942,23 +962,62 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     return !!r?.ok;
   };
 
+  const dragged = useRef<Record<string, number>>({});   // les largeurs (px) tirées en Feuille de données de l'onglet, pas encore enregistrées
+  const [kept, setKept] = useState<Record<string, number>>({});   // celles enregistrées : la définition chargée ici est périmée jusqu'à sa relecture
+  /** Oui : la définition stockée maintenant (relue), seul ColumnWidth change. */
+  const saveWidths = async (widths: Record<string, number>): Promise<boolean> => {
+    try {
+      const def = withColumnWidths((await api.objects.get('form', name)).definition as DesignDoc, widths);
+      const r = await api.objects.save('form', name, def, name);
+      if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return false; }
+      setKept((k) => ({ ...k, ...widths }));
+      return true;
+    } catch (e) { await showError(e); return false; }
+  };
+  /** Les largeurs tirées dans ses sous-formulaires (imbriqués compris), enregistrées avec les siennes à la question du formulaire principal. */
+  const subLayout = {
+    get dirty() { return [...subs.current.values()].some((s) => s.layoutDirty()); },
+    async save() { for (const s of [...subs.current.values()]) if (!(await s.saveLayout())) return false; return true; },
+    drop() { for (const s of [...subs.current.values()]) s.dropLayout(); },
+  };
+  const ownLayout = {
+    dirty: () => Object.keys(dragged.current).length > 0 || subLayout.dirty,
+    save: async (): Promise<boolean> => {
+      if (!(await subLayout.save())) return false;
+      const w = dragged.current;
+      if (ro || !design || !Object.keys(w).length) return true;
+      dragged.current = {};   // pris avant l'attente : une fermeture qui chevauche ne redemande pas
+      if (await saveWidths(w)) return true;
+      dragged.current = { ...w, ...dragged.current };
+      return false;
+    },
+    drop: () => { subLayout.drop(); dragged.current = {}; },
+  };
   const closing = useRef(false);   // its On Close running
   /** Before the view goes: its subforms' records, then its own, are saved; refused, discarding is asked, as the datasheet does
    *  (on close: close anyway, the entry lost? — refused by an event: R8's question). Yes discards, No stays on the record in
    *  error. Closing: its On Close once its record is saved or discarded. */
-  const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
+  const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
     if (reason === 'close' && closing.current) return true;   // CloseWindow in its own On Close: closed once, On Close not raised again
     for (const s of [...subs.current.values()]) if (!(await s.leave(reason))) return false;
     const settled = await settle();
     const saved = settled ? await quiet(records.save(), null) : false;
     if (saved === null) return false;   // asked while a Before event runs: it stays
+    // Feuille de données d'un onglet : les largeurs tirées, une fois les enregistrements quittés (Oui/Non : oubliées)
+    const layoutThenGone = async () => {
+      // Formulaire <-> Feuille de données : l'onglet garde les largeurs, rien n'est demandé (Access ne demande qu'en quittant le formulaire ou vers Création/Page)
+      if (reason === 'mode' && (target === 'run' || target === 'datasheet')) return gone();
+      if (tab && !(await leaveSheetLayout({ widths: dragged.current, readOnly: ro || !design, name, confirm: modal.confirm, save: saveWidths, others: subLayout }))) return false;
+      if (tab) dragged.current = {};   // a subform's widths wait for the master's question
+      return gone();
+    };
     const gone = async () => {
       if (reason !== 'close') return true;
       closing.current = true;
       try { await hub.raise('OnClose'); } finally { closing.current = false; }
       return true;
     };
-    if (saved) return gone();
+    if (saved) return layoutThenGone();
     const byEvent = !settled || records.snapshot.refusedByEvent;   // the macro has shown its own message (R8)
     if (!byEvent) await showRefusal();
     const r = await modal.confirm({ titleKey: 'datasheet.discardTitle',
@@ -966,7 +1025,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       params: { name }, buttons: ['yes', 'no'], defaultButton: 'no' });
     if (r !== 'yes') return false;
     records.undoRecord();
-    return gone();
+    return layoutThenGone();
   };
   /** Its subforms' records, then its own: saved, or the refusal's message box (and false). */
   const saveAll = async (): Promise<boolean> => {
@@ -1111,7 +1170,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       filterAdvanced: on('filterAdvanced'), ...(focusedFilter ? { filterToggle: on('filterToggle') } : {}), refresh: on('refresh'),
     });
   }, [tabId, ro, focusedFilter, records]);
-  useEffect(() => (tabId ? registerModeGuard(tabId, (reason) => cmds.current.leave(reason)) : undefined), [tabId]);
+  useEffect(() => (tabId ? registerModeGuard(tabId, (reason, target) => cmds.current.leave(reason, target)) : undefined), [tabId]);
 
   // a subform: the master's moves save its record first; it follows the master's record (its record saved before it reads
   // again); its master drives it through `api`
@@ -1138,6 +1197,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     embed.register({
       run: (cmd) => cmds.current.run(cmd), leave: (reason) => cmds.current.leave(reason), save: () => cmds.current.saveAll(),
       focusIn: () => cmds.current.focusIn(),
+      layoutDirty: () => cmds.current.ownLayout.dirty(), saveLayout: () => cmds.current.ownLayout.save(), dropLayout: () => cmds.current.ownLayout.drop(),
       // its master's Requery: read again, unless the master's values changed and no new parameters were given (its link effect reads it then)
       requery: (ask) => cmds.current.refresh(ask, embed.childFields.length > 0 && JSON.stringify(embed.current()) !== applied.current),
     });
@@ -1219,7 +1279,7 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       document.removeEventListener('focusin', onFocus, true);
     };
   }, [records, view]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const columns = useMemo(() => datasheetColumns(shown, info ?? NO_INFO), [shown, info]);
+  const columns = useMemo(() => datasheetColumns(shown, info ?? NO_INFO).map((c) => { const w = dragged.current[c.control] ?? kept[c.control]; return w ? { ...c, width: w } : c; }), [shown, info, kept, view]);   // + les largeurs tirées : la Feuille de données se remonte au retour de l'affichage Formulaire
   // Continuous Forms: the record changed with the focus left on the row it was on (Page Down, its record selector): the same
   // control on the current record keeps it, so that typing goes on there
   useEffect(() => {
@@ -1257,8 +1317,8 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     }
     return true;
   };
-  const cmds = useRef({ leave, run, saveAll, tabFrom, enterSub, focusIn, refresh, leavePage });
-  cmds.current = { leave, run, saveAll, tabFrom, enterSub, focusIn, refresh, leavePage };
+  const cmds = useRef({ leave, run, saveAll, tabFrom, enterSub, focusIn, refresh, leavePage, ownLayout });
+  cmds.current = { leave, run, saveAll, tabFrom, enterSub, focusIn, refresh, leavePage, ownLayout };
   const sub: SubformHost = useMemo(() => ({
     records, ancestors, readOnly: ro, active, region, root,
     enter: (n) => cmds.current.enterSub(n),
@@ -1327,7 +1387,8 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
       {view === 'datasheet' && (
         <FormDatasheet columns={columns} byName={byName} x={x} rowCtx={rowCtx} root={root} focusHook={focusHook} {...nav}
           ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf}
-          onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined} />
+          onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined}
+          onWidths={ro || !design ? undefined : (c, px) => { dragged.current = { ...dragged.current, [c]: px }; }} />
       )}
       {finding > 0 && <FindDialog key={finding} find={findHere} close={() => { setFinding(0); back(); }} />}
       {menu && (

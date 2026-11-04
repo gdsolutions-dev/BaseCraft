@@ -47,7 +47,9 @@ export function QueryRunView(p: DocViewProps & { sql?: string }) {
         if (info === null) return close();
         const values = await runParameters(modal, info, region, (v) => api.sources.describe(source, v));
         if (values === null) return close();
-        await api.sources.page(source, { offset: 0, limit: 0, params: values, fresh: true });
+        // run up to its first row (its errors, and Stop, before the sheet), a pass-through's snapshot taken; not counted: the
+        // sheet counts once idle
+        await api.sources.page(source, { offset: 0, limit: 1, params: values, fresh: true, count: false });
         if (started.current === token) setParams({ values, token });
       } catch (e) {
         if (started.current !== token) return;

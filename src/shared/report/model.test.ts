@@ -229,3 +229,12 @@ describe('reportWidth: one rule for print and design (C5, final review M3)', () 
     expect(() => reportWidth({ formatVersion: '1.0', recordSource: null, props: {}, sections: [{ kind: 'detail', controls: 'x' } as never] })).not.toThrow();
   });
 });
+
+describe('margins and gridlines', () => {
+  it('readReport reads margin, gridlines and padding; none when transparent', () => {
+    const c = readReport(doc({ sections: [sec('detail', undefined, [tb('A', '[Client]', { LeftMargin: 90, GridlineStyleTop: 'dashed', GridlineWidthTop: 2, GridlineColor: '#ff0000', RightPadding: 30 }), tb('B', '[Client]')])] }), fields).detail!.controls;
+    expect(c[0]!.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 90 });
+    expect(c[0]!.gridlines).toMatchObject({ top: { width: 30, color: '#ff0000', style: 'dashed' }, bottom: null, left: null, right: null, padding: { right: 30, left: 0 } });
+    expect(c[1]!.gridlines).toBeNull();
+  });
+});

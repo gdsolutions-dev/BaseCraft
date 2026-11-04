@@ -375,6 +375,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "Aucun", "narrow": "Étroit", "medium": "Moyen", "wide": "Large"}, "controlPadding": {"none": "Aucun", "narrow": "Étroit", "medium": "Moyen", "wide": "Large"}, "anchoring": {"topLeft": "Supérieur gauche", "stretchDown": "Étirer vers le bas", "bottomLeft": "Inférieur gauche", "stretchTop": "Étirement latéral supérieur", "stretchAll": "Étirement latéral vers le bas", "stretchBottom": "Étirement latéral inférieur", "topRight": "Supérieur droit", "stretchDownRight": "Étirer vers le bas et vers la droite", "bottomRight": "Inférieur droit"}, "layoutGridlines": {"both": "Les deux", "vertical": "Vertical", "horizontal": "Horizontal", "top": "Haut", "bottom": "Bas", "outline": "Contour", "none": "Aucun", "width": "Largeur", "style": "Style", "color": "Couleur"}},
     "scrollLeft": "Faire défiler le ruban vers la gauche",
     "scrollRight": "Faire défiler le ruban vers la droite",
     "planned": {
@@ -555,6 +556,18 @@
       "fieldTooLong": "Le fichier contient un champ ou une ligne de plus d'un million de caractères : il ne peut pas être importé.",
       "notImplemented": "Cette fonction n'est pas encore disponible dans cette version.",
       "notFound": "Cet objet n'existe plus.",
+      "notOpen": "« {{detail}} » n'est pas ouvert.",
+      "tooManyTempVars": "Trop de variables temporaires (255 au plus).",
+      "pythonFunctionNotFound": "Aucun module ne contient de fonction publique {{name}}.",
+      "pythonFunctionAmbiguous": "Plusieurs modules contiennent une fonction {{name}} : {{detail}}.",
+      "badArgument": "Argument non valide : {{name}}",
+      "notUpdatable": "Cette source n'est pas modifiable : ses enregistrements ne peuvent être ni ajoutés, ni modifiés, ni supprimés.",
+      "runSqlSelect": "ExécuterSQL attend une requête action (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "« {{name}} » : {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "L'argument « {{name}} » est obligatoire.",
+      "noSuchDocmd": "docmd.{{name}} n'existe pas.",
+      "refusedDocmd": "docmd.{{name}} n'est pas disponible en Python : utilisez {{detail}}.",
       "corruptObject": "La définition de cet objet est illisible.",
       "invalidQuery": "Cette requête n'est pas valide. {{reason}}",
       "queryBind": "Cette requête ne peut pas être exécutée : {{detail}}",
@@ -727,6 +740,7 @@
     },
     "canvas": "Surface de création",
     "layoutHandle": "Sélectionner la disposition {{id}}",
+    "emptyCell": "Cellule vide de la disposition {{layout}}, ligne {{row}}, colonne {{col}}",
     "toolbox": "Boîte à outils",
     "arrange": {
       "alignLeft": "À gauche",
@@ -921,6 +935,8 @@
     "findCapped": "La recherche et la copie portent sur les 100 000 premiers enregistrements.",
     "pasteOneRow": "Le collage est limité à une seule ligne à la fois.",
     "discardTitle": "Enregistrement impossible",
+    "saveTableLayout": "Voulez-vous enregistrer les modifications apportées à la disposition de la table « {{name}} » ?",
+    "saveQueryLayout": "Voulez-vous enregistrer les modifications apportées à la disposition de la requête « {{name}} » ?",
     "discard": "L'enregistrement en cours dans « {{name}} » ne peut pas être enregistré. Abandonner les modifications ?",
     "shapeChanged": "La structure de « {{name}} » a changé : l'enregistrement en cours ne peut pas être enregistré et il est abandonné.",
     "deleteTitle": "Supprimer des enregistrements",
@@ -1458,6 +1474,7 @@
     "unavailable": "Non disponible dans cette version"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} est une fonction intégrée, pas une fonction Python." },
     "Caption": "Légende",
     "DefaultView": "Affichage par défaut",
     "AllowLayoutView": "Autoriser le mode Page",
@@ -1472,6 +1489,25 @@
     "BackColor": "Couleur fond",
     "BorderStyle": "Style bordure",
     "BorderWidth": "Épaisseur bordure",
+    "GridlineStyleTop": "Style du quadrillage supérieur",
+    "GridlineWidthTop": "Largeur du quadrillage supérieur",
+    "TopMargin": "Marge supérieure",
+    "TopPadding": "Marge intérieure supérieure",
+    "GridlineStyleBottom": "Style du quadrillage inférieur",
+    "GridlineWidthBottom": "Largeur du quadrillage inférieur",
+    "BottomMargin": "Marge inférieure",
+    "BottomPadding": "Marge intérieure inférieure",
+    "GridlineStyleLeft": "Style du quadrillage gauche",
+    "GridlineWidthLeft": "Largeur du quadrillage gauche",
+    "LeftMargin": "Marge gauche",
+    "LeftPadding": "Marge intérieure gauche",
+    "GridlineStyleRight": "Style du quadrillage droit",
+    "GridlineWidthRight": "Largeur du quadrillage droit",
+    "RightMargin": "Marge droite",
+    "RightPadding": "Marge intérieure droite",
+    "GridlineColor": "Couleur du quadrillage",
+    "HorizontalAnchor": "Ancrage horizontal",
+    "VerticalAnchor": "Ancrage vertical",
     "BorderColor": "Couleur bordure",
     "ForeColor": "Couleur texte",
     "FontName": "Nom police",
@@ -1537,9 +1573,16 @@
     "OnNoData": "Sur aucune donnée",
     "OnFormat": "Au formatage",
     "OnPrint": "Sur impression",
-    "ColumnHeads": "En-têtes colonnes"
+    "ColumnHeads": "En-têtes colonnes",
+    "ColumnWidth": "Largeur colonne"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Transparent", "solid": "Continu", "dashed": "Tirets", "dotted": "Points"},
+    "GridlineStyleBottom": {"transparent": "Transparent", "solid": "Continu", "dashed": "Tirets", "dotted": "Points"},
+    "GridlineStyleLeft": {"transparent": "Transparent", "solid": "Continu", "dashed": "Tirets", "dotted": "Points"},
+    "GridlineStyleRight": {"transparent": "Transparent", "solid": "Continu", "dashed": "Tirets", "dotted": "Points"},
+    "HorizontalAnchor": {"left": "Gauche", "right": "Droite", "both": "Les deux"},
+    "VerticalAnchor": {"top": "Haut", "bottom": "Bas", "both": "Les deux"},
     "DefaultView": {
       "single": "Formulaire unique",
       "continuous": "Formulaires continus",
@@ -1807,6 +1850,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Choisir le générateur", "macro": "Générateur de macro", "function": "Générateur de fonction" },
+    "function": { "title": "Générateur de fonction", "empty": "Aucun module ne contient de fonction publique." },
     "title": "Générateur d'expression",
     "expression": "Entrez une expression :",
     "elements": "Éléments d'expression",
@@ -1881,6 +1926,7 @@
       "unknownSource": "Aucune table ni requête ne porte ce nom.",
       "pictureTooLarge": "Image trop volumineuse (1 Mo au plus).",
       "notInteger": "Entrez un nombre entier.",
+      "badFunctionCall": "Un appel de fonction s'écrit =nom(arguments), avec le nom d'une fonction Python d'un module.",
       "badMacroName": "Nom de macro non valide : « Macro » ou « Macro.SousMacro », sans autre point ni crochets.",
       "badEmbedded": "Macro incorporée non valide."
     },
@@ -1900,6 +1946,7 @@
     "unbound": "Indépendant",
     "saveFirstTitle": "Enregistrer le formulaire",
     "saveFirst": "Enregistrer les modifications apportées au formulaire « {{name}} » ?",
+    "saveLayout": "Voulez-vous enregistrer les modifications apportées à la mise en forme du formulaire « {{name}} » ?",
     "mustSaveFirst": "Vous devez d'abord enregistrer le formulaire « {{name}} ». L'enregistrer maintenant ?",
     "sourceError": "Source d'enregistrements « {{name}} » : {{message}}",
     "tabOrder": {
@@ -2252,6 +2299,8 @@
     }
   },
   "module": {
+    "functionClash": "La fonction {{fn}} existe aussi dans le module {{other}} : un appel ={{fn}}() sera ambigu.",
+    "functionBuiltin": "{{fn}} est le nom d'une fonction intégrée : choisissez un autre nom.",
     "newName": "Module{{n}}",
     "nameLabel": "Nom du module",
     "badName": "Un nom de module doit être un nom Python : lettres, chiffres et _, sans chiffre au début, et pas un mot réservé de Python.",
@@ -2281,6 +2330,7 @@
       "Quit": "Quitter",
       "RemoveAllTempVars": "SupprimerToutesVarTemp",
       "RemoveTempVar": "SupprimerVarTemp",
+      "RunCode": "ExécuterCode",
       "RunMacro": "ExécuterMacro",
       "RunSQL": "ExécuterSQL",
       "SetLocalVar": "DéfinirVarLocale",
@@ -2313,6 +2363,7 @@
       "Title": "Titre",
       "Name": "Nom",
       "Expression": "Expression",
+      "FunctionName": "Nom de fonction",
       "MacroName": "Nom de macro",
       "RepeatCount": "Nombre de répétitions",
       "RepeatExpression": "Expression de répétition",
@@ -2796,6 +2847,15 @@
     "target": "{{kind}} {{name}} › {{control}} (« {{current}} »)"
   },
   "python": {
+    "error": {
+      "title": "Erreur Python",
+      "text": "{{type}} : {{message}}",
+      "where": "Module {{module}}, ligne {{line}}",
+      "interrupted": "Exécution interrompue.",
+      "debug": "Débogage",
+      "end": "Fin",
+      "traceback": "Détails"
+    },
     "running": "Exécution de Python… Ctrl+Pause pour interrompre.",
     "interrupt": "Interrompre",
     "restarted": "Python ne répondait plus : il a été redémarré. L'état des modules est perdu.",

@@ -36,7 +36,6 @@ const failure = (e: unknown): PyError => ({ type: 'WorkerError', message: String
 let depth = 0 // nested runs (an event during a msgbox): only the outermost one owns the interrupt cell
 
 function runSync(r: HostRequest): { ok: true; value: unknown } | { ok: false; error: PyError } {
-  if (depth === 0) Atomics.store(interrupt, 0, 0)
   depth++
   try {
     return JSON.parse(run(r.op, payload(r)))
@@ -72,8 +71,14 @@ async function request(id: number, req: HostRequest): Promise<void> {
     // Packages load asynchronously, so before the run: a synchronous pre-pass lists what the code and the user modules it reaches import.
     if (req.op === 'exec' || req.op === 'immediate' || req.op === 'call') {
       const d = JSON.parse(run('deps', JSON.stringify(req.op === 'call' ? { module: req.module } : { code: req.op === 'exec' ? req.code : req.line })))
-      if (d.ok && d.value.length) await py.loadPackagesFromImports('import ' + (d.value as string[]).join(', '))
+      if (d.ok && d.value.length) {
+        // Pyodide would consume the interrupt inside its loader and the load would fail half-way: it watches a dummy cell meanwhile,
+        // ours keeps the 2 for the check below.
+        py.setInterruptBuffer(new Int32Array(new SharedArrayBuffer(4)))
+        try { await py.loadPackagesFromImports('import ' + (d.value as string[]).join(', ')) } finally { py.setInterruptBuffer(interrupt) }
+      }
     }
+    if (Atomics.load(interrupt, 0) === 2) throw { type: 'KeyboardInterrupt' } // pressed during the pre-pass: report it, do not run
   } catch (e) {
     // An interrupt landing while packages load is consumed there: report it instead of running the code unstoppable.
     if ((e as { type?: string })?.type === 'KeyboardInterrupt') {

@@ -4,7 +4,7 @@
 import type { ControlKind } from '../../shared/design/model';
 import type { DesignerAction } from './designer-model';
 import type { Handle, Rect } from './geometry';
-import { DEFAULT_SIZE, pxToTwips, TWIPS_PER_PX } from './units';
+import { CLICK_PX, DEFAULT_SIZE, pxToTwips, TWIPS_PER_PX } from './units';
 
 type Point = { x: number; y: number };
 export type Gesture =
@@ -12,7 +12,6 @@ export type Gesture =
   | { kind: 'band'; section: number; origin: Point } | { kind: 'sectionHeight'; index: number; origin: { y: number }; start: number }
   | { kind: 'place'; tool: ControlKind; section: number; origin: Point };
 
-const CLICK_PX = 3;
 const isClick = (o: Point, at: Point): boolean => Math.abs(at.x - o.x) < CLICK_PX && Math.abs(at.y - o.y) < CLICK_PX;
 const spanned = (o: Point, at: Point): Rect => ({
   left: pxToTwips(Math.min(o.x, at.x)), top: pxToTwips(Math.min(o.y, at.y)), width: pxToTwips(Math.abs(at.x - o.x)), height: pxToTwips(Math.abs(at.y - o.y)),

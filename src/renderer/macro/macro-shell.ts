@@ -5,7 +5,7 @@
 // le registre des formulaires ouverts (form-instances).
 import { sectionName, type EventBinding } from '../../shared/design/events';
 import type { Value } from '../../shared/expr/ast';
-import { evaluate } from '../../shared/expr/evaluate';
+import { evaluate, type EvalEnv } from '../../shared/expr/evaluate';
 import { bool, fail, num, str } from '../../shared/expr/library';
 import { parseCanonical } from '../../shared/expr/parser';
 import { foldName, sameName } from '../../shared/field-types';
@@ -17,7 +17,7 @@ import { parseSql } from '../../shared/query/sql-parser';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import { parseCm } from '../designer/units';
-import { formNamed, formOfTab, formOpening, resolveObjectMember, whenFormOpened, type FormInstance, type RecordTarget, type SettableProperty } from '../form/form-instances';
+import { formNamed, formOfTab, formOpening, memberValue, resolveObjectMember, whenFormOpened, type FormInstance, type RecordTarget, type SettableProperty } from '../form/form-instances';
 import { runActionFlow } from '../query/run-action';
 import type { SectionEvent } from '../../shared/report/types';
 import { reportShown, whenReportShown } from '../report/report-events';
@@ -27,21 +27,32 @@ import { bcErrorCode, type ModalApi } from '../shell/Modal';
 import type { AppDispatch } from '../shell/nav-menu';
 import { isDoc, type DocMode, type DocTab, type OpenArgs } from '../state/app-state';
 import { FAILURE_NUMBERS, runMacro, runMacroDef, type ActionCall, type EventContext, type MacroHost, type RunOutcome, type StepInfo } from './engine';
-import { showMacroFailed } from './MacroFailedDialog';
+import { showMacroFailed as showFailed } from './MacroFailedDialog';
+import { PythonError } from '../python/python-host';
+import { showPythonError, type PythonErrorOptions } from '../python/PythonErrorDialog';
 import { showMessageBox, type MessageBoxType } from './MessageBoxDialog';
 import { askStep } from './SingleStepDialog';
+import { runPythonFunction } from '../python/run-function';
 import { tempVars } from './temp-vars';
 
 export interface MacroShellDeps {
   dispatch: AppDispatch; modal: ModalApi; tabs(): readonly DocTab[]; active(): DocTab | null; contentEnabled(): boolean;
   closeTab(tab: DocTab): Promise<boolean>; closeBase(): Promise<boolean>; quit(): Promise<boolean>; region(): LocaleInfo; lang(): 'fr' | 'en';   // false: a document kept open
   showError(e: unknown): Promise<void>;
+  /** R10: a module editor exists (the full app, not the Runtime): the Python error dialog offers « Débogage ». */
+  canDebug?(): boolean;
   /** Resolves when the tab leaves the state: OpenForm in Dialog mode waits for it (R12). Absent: the macro does not wait. */
   whenClosed?(tabId: string): Promise<void>;
 }
 
+/** R10: « Débogage » only where a module editor exists (not in the Runtime); it opens the module at the error's line. */
+const pyDebug = (d: MacroShellDeps): PythonErrorOptions => ({ debug: !!d.canDebug?.(),
+  open: (module, line, message) => { void d.dispatch({ type: 'open', kind: 'module', name: module, mode: 'design', args: { line, ...(message ? { message } : {}) } }); } });
+
 let shell: MacroShellDeps | null = null;
 export function setMacroShell(d: MacroShellDeps | null): void { shell = d; }
+/** The shell App set (Python's docmd runs through it); null: no base open. */
+export function currentShell(): MacroShellDeps | null { return shell; }
 
 export { clearTempVars } from './temp-vars';
 
@@ -90,7 +101,7 @@ async function propertyValue(p: SettableProperty, text: string, region: LocaleIn
 /** SetProperty in a report's On Format / On Print (R9, R10): on the band being formatted, a control's `visible` or `value`, the
  *  section's own `visible` or `height`; another property bc:propertyNotSupported. A name not in the band (another section, a
  *  control of another section) does nothing: R9 applies to the band being formatted only. */
-function setOnBand(e: SectionEvent | undefined, name: string, p: SettableProperty, v: Value): void {
+export function setOnBand(e: SectionEvent | undefined, name: string, p: SettableProperty, v: Value): void {
   const unsupported = () => new Error('bc:propertyNotSupported');
   if (!e) throw unsupported();   // On Open, On No Data, On Close: no band
   const on = v?.t === 'bool' && v.v;
@@ -279,6 +290,7 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
     },
     stopAll: () => { haltEpoch++; },
     tempVars,
+    runCode: runPythonFunction,   // D2: RunCode
     objectMember: resolveObjectMember,   // [Forms]! / [Reports]! in every run, an event's or not (R11)
     ...(opts.singleStep ? { step: (info: StepInfo) => askStep(d.modal, info) } : {}),   // Single Step: asked before each action
     locale: d.region().locale, lang: d.lang(), now: () => new Date(),
@@ -299,7 +311,7 @@ export async function runMacroByName(name: string, opts: { singleStep?: boolean 
     const outcome = await runMacro(name, shellHost(d, { singleStep: !!opts.singleStep }), opts);
     if (!outcome.ok && epoch === haltEpoch) {   // stopped meanwhile (the base gone): no failure shown
       if (outcome.failure.code === 'blocked') contentBlocked();
-      await showMacroFailed(d.modal, outcome.failure);
+      await showFailed(d.modal, outcome.failure, pyDebug(d));
     }
     return outcome;
   } finally { running = false; }
@@ -317,23 +329,50 @@ const embeddedLabel = (c: EventContext): string =>
 export async function runEvent(binding: EventBinding, ctx: EventContext): Promise<boolean> {
   const d = shell;
   if (!d || binding.kind === 'none' || binding.kind === 'other') return false;
+  if (binding.kind === 'python' && !d.contentEnabled()) { contentBlocked(); return false; }   // R3: disabled code does not run, the event is not cancelled
   const label = binding.kind === 'macro' ? binding.name : embeddedLabel(ctx);
+  let pyFailed = false;
   eventDepth++;   // events bypass `running` (R6): they nest instead
   const epoch = haltEpoch;
   try {
     let outcome: RunOutcome;
     if (eventDepth > MAX_EVENT_DEPTH) {
       outcome = { ok: false, failure: { macro: label, action: '', raw: {}, code: 'tooDeep', number: FAILURE_NUMBERS.tooDeep, detail: 'events' } };
+    } else if (binding.kind === 'python') {
+      outcome = { ok: true };
+      pyFailed = await runPythonEvent(d, binding, ctx);
     } else {
       const host = shellHost(d, { singleStep: false });
       outcome = binding.kind === 'macro' ? await runMacro(binding.name, host, { event: ctx }) : await runMacroDef(binding.def, label, host, { event: ctx });
     }
     if (!outcome.ok && epoch === haltEpoch) {   // stopped meanwhile (the base gone): no failure shown
       if (outcome.failure.code === 'blocked') contentBlocked();
-      await showMacroFailed(d.modal, outcome.failure);
+      await showFailed(d.modal, outcome.failure, pyDebug(d));
     }
-    return ctx.cancelled || (!outcome.ok && ctx.cancellable);
+    return ctx.cancelled || ((!outcome.ok || pyFailed) && ctx.cancellable);
   } finally { eventDepth--; }
+}
+
+/** R3: evaluates the arguments in the event's environment, runs the function; true when it failed (the failure is shown here). */
+async function runPythonEvent(d: MacroShellDeps, b: Extract<EventBinding, { kind: 'python' }>, ctx: EventContext): Promise<boolean> {
+  const host = shellHost(d, { singleStep: false });
+  const epoch = haltEpoch;
+  const env: EvalEnv = { field: (n, table) => (table !== undefined ? fail('unknownField') : ctx.field(n)), now: host.now, locale: host.locale, lang: host.lang, member: memberValue };
+  const values: Value[] = [];
+  try {
+    for (const a of b.args) values.push(await evaluate(a, env));
+  } catch (e) {
+    await showFailed(d.modal, { macro: b.text, action: '', raw: {}, code: 'expression', number: FAILURE_NUMBERS.expression, detail: e instanceof Error ? e.message : String(e) });
+    return true;
+  }
+  try {
+    await runPythonFunction(b.name, values, ctx);
+    return false;
+  } catch (e) {
+    if ((e as Error)?.message === 'bc:pythonRestarted' || epoch !== haltEpoch) return true;   // D1 already told the user / the base is gone: no dialog
+    if (e instanceof PythonError) await showPythonError(d.modal, e, pyDebug(d)); else await d.showError(e);
+    return true;
+  }
 }
 
 /** Every macro, each followed by its submacros (`M.Sub`, in their order): the Run Macro dialog, RunMacro's list. */

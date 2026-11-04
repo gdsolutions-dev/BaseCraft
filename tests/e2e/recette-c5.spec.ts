@@ -92,7 +92,7 @@ test('C5 acceptance: link SQL Server tables, a parameter query on the server, a 
     // no tables; a front-end (as Split marks one): the Runtime opens it from its local copy, never read-only behind A's lock
     const front = seedBase('Ventes', (fe) => saveStartupOptions(fe, { ...startupOptions(fe), frontEnd: true }));
     const userA = workstation(1);
-    let a = await launchApp({ args: [front], userDataDir: userA, env: ENV });
+    let a = await launchApp({ args: [front], userDataDir: userA, env: ENV, enterMovesDown: true });
     let b: App | null = null;
     try {
       // 1. External Data › SQL Server: « approuver le certificat », « Mémoriser » ticked, Clients and Commandes linked; after a
@@ -124,7 +124,7 @@ test('C5 acceptance: link SQL Server tables, a parameter query on the server, a 
         expect(Buffer.from(stored[0]!.password, 'base64').toString('latin1')).not.toContain(password);
       } else expect(existsSync(file)).toBe(false);
 
-      a = await launchApp({ args: [front], userDataDir: userA, env: ENV });
+      a = await launchApp({ args: [front], userDataDir: userA, env: ENV, enterMovesDown: true });
       await a.page.getByTestId('nav-item-Clients').dblclick();
       if (!remember) await logIn(a.page, password);
       await expect(count(a.page)).toHaveText('4');
@@ -167,7 +167,7 @@ test('C5 acceptance: link SQL Server tables, a parameter query on the server, a 
       await a.page.getByTestId('doc-tab-close-form-Clients').click();
 
       // 4. Write conflict on Clients (rowversion): B (the Runtime, its own userData: its own login) and A on Durand's Ville
-      b = await launchApp({ runtime: true, args: [front], userDataDir: workstation(1), env: { ...ENV, BASECRAFT_E2E_NETWORK_DIR: dirname(front) } });
+      b = await launchApp({ runtime: true, enterMovesDown: true, args: [front], userDataDir: workstation(1), env: { ...ENV, BASECRAFT_E2E_NETWORK_DIR: dirname(front) } });
       await b.page.getByTestId('nav-item-Clients').dblclick();
       await logIn(b.page, password);
       await expect(cell(b.page, 2, 2)).toHaveText('Lille');

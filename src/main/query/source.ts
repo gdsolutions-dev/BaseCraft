@@ -141,9 +141,10 @@ export function compile(b: BoundQuery, values: Record<string, SqlValue>, info: L
   }
 }
 
-/** Runs a statement prepared under the authorizer; a SQLite limit met while it runs is a typed error too. */
-export function run(db: DatabaseSync, sql: string, params: SqlValue[]): SqlValue[][] {
-  const stmt = authorizedPrepare(db, sql);
+/** Runs a statement prepared under the authorizer (`temp`: the snapshot it may read); a SQLite limit met while it runs is a
+ *  typed error too. */
+export function run(db: DatabaseSync, sql: string, params: SqlValue[], temp?: string): SqlValue[][] {
+  const stmt = authorizedPrepare(db, sql, temp);
   stmt.setReturnArrays(true);
   try {
     return stmt.all(...params) as unknown as SqlValue[][];
@@ -183,6 +184,48 @@ const VOLATILE = new RegExp(`\\b(${Object.keys(SQL_FUNCTIONS).filter((n) => !SQL
 const totals = new WeakMap<DatabaseSync, Map<string, { seq: number; total: number }>>();
 const MAX_TOTALS = 256;
 
+/** Snapshots by database: temp table by hash of (compiled SQL, its params), valid for one writeSeq. */
+const snapshots = new WeakMap<DatabaseSync, { seq: number; tables: Map<string, string> }>();
+const MAX_SNAPSHOTS = 4;
+let snapshotNo = 0;
+
+/**
+ * The rows of `c`, a UNION that dedups, computed once per write as Access's snapshot: a page, the count, a sort or a filter
+ * reads them instead of deduplicating the whole union again. A temp table of `db` (its columns typeless: each value kept as
+ * the query gives it), filled by the same SELECT authorizedPrepare accepted, dropped at the next write.
+ * ponytail: the 4 latest by database; an LRU by size if several big unions stay open at once.
+ */
+function snapshot(db: DatabaseSync, c: CompiledSelect, columns: number, seq: number): CompiledSelect & { temp: string } {
+  let s = snapshots.get(db);
+  const drop = (t: string) => db.exec(`DROP TABLE IF EXISTS temp."${t}"`);
+  if (s?.seq !== seq) {
+    s?.tables.forEach(drop);
+    s = { seq, tables: new Map() };
+    snapshots.set(db, s);
+  }
+  const key = createHash('sha256').update(JSON.stringify([c.sql, c.params])).digest('base64');
+  let temp = s.tables.get(key);
+  if (temp === undefined) {
+    authorizedPrepare(db, c.sql); // the INSERT below runs this very SELECT
+    if (s.tables.size >= MAX_SNAPSHOTS) {
+      const [oldest, t] = s.tables.entries().next().value!;
+      drop(t);
+      s.tables.delete(oldest);
+    }
+    temp = `bcx_snapshot${++snapshotNo}`;
+    db.exec(`CREATE TEMP TABLE "${temp}" (${Array.from({ length: columns }, (_, k) => `"c${k}"`).join(', ')})`);
+    try {
+      db.prepare(`INSERT INTO temp."${temp}" ${c.sql}`).run(...c.params);
+    } catch (e) {
+      drop(temp);
+      throw queryError(e);
+    }
+  }
+  s.tables.delete(key);
+  s.tables.set(key, temp); // the latest used last
+  return { sql: `SELECT * FROM temp."${temp}"`, params: [], hasRowid: false, temp };
+}
+
 /**
  * A page of a query or SQL source: the compiled query as a derived table, filtered by `req.filter` and `req.where` (see `filtered`), sorted
  * by `req.sort` (unknown field: bc:notFound), ties kept in the query's own order (its row position); `rowids` of the key
@@ -202,17 +245,19 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
     if (k < 0) throw new Error('bc:notFound');
     return orderKeys(`"c${k}"`, b.columns[k].type, s.dir);
   });
-  const compiled = compile(b, values, ctx.info);
+  const seq = ctx.writeSeq();
+  let compiled: CompiledSelect & { temp?: string } = compile(b, values, ctx.info);
+  const body = b.query.body;
+  if (body.k === 'union' && body.all.includes(false) && !VOLATILE.test(compiled.sql)) compiled = snapshot(db, compiled, b.columns.length, seq);
   const c = { ...filtered(b, compiled, filter, req.where, ctx.info.locale), hasRowid: compiled.hasRowid };
 
-  const seq = ctx.writeSeq();
   const cache = totals.get(db) ?? new Map<string, { seq: number; total: number }>();
   totals.set(db, cache);
   const key = createHash('sha256').update(JSON.stringify([ref, values, filter, req.where ?? null, ctx.info.locale])).digest('base64');
   const volatile = VOLATILE.test(c.sql);
-  let total = !volatile && cache.get(key)?.seq === seq ? cache.get(key)!.total : undefined;
+  let total = !volatile && cache.get(key)?.seq === seq ? cache.get(key)!.total : req.count === false ? -1 : undefined;
   if (total === undefined) {
-    total = Number(run(db, `SELECT count(*) FROM (${c.sql})`, c.params)[0][0]);
+    total = Number(run(db, `SELECT count(*) FROM (${c.sql})`, c.params, compiled.temp)[0][0]);
     if (cache.size >= MAX_TOTALS) cache.clear(); // ponytail: drop all past 256 keys; an LRU if forms page many parameter sets
     if (!volatile) cache.set(key, { seq, total });
   }
@@ -223,7 +268,7 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
   const sql = keys.length
     ? `SELECT ${out} FROM (SELECT *, row_number() OVER () AS "bcx_pos" FROM (${c.sql})) AS "bcx_q" ORDER BY ${keys.join(', ')}, "bcx_pos" LIMIT ? OFFSET ?`
     : `SELECT ${out} FROM (${c.sql}) AS "bcx_q" LIMIT ? OFFSET ?`;
-  const rows = run(db, sql, [...c.params, req.limit, req.offset]);
+  const rows = run(db, sql, [...c.params, req.limit, req.offset], compiled.temp);
   return c.hasRowid
     ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => (r[0] === null ? null : Number(r[0]))) /* an outer join's row without its key record (R5) */, total }
     : { rows, rowids: rows.map(() => null), total, ...columns };

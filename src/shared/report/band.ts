@@ -64,9 +64,14 @@ function defaultFormat(src: ControlSource, data: ReportData): string | undefined
   return a && TYPED_TOTALS.includes(a.fn) && aggregateArgType(a.arg, find).type === 'currency' ? 'currency' : undefined;
 }
 
+/** The gridlines a drawn item carries (nothing when none: the markup is then unchanged). */
+const grid = (c: ControlSpec) => (c.gridlines ? { grid: c.gridlines } : {});
+
 /** A text control's lines inside its border; Can Grow keeps every line, otherwise the lines that fit (one at least). */
 function textItem(c: ControlSpec, text: string, numeric: boolean, issues: ReportIssue[]): Extract<LaidOutItem, { kind: 'text' }> {
-  const bw = c.border?.width ?? 0, inner = c.width - 2 * bw, lh = lineHeight(c.font);
+  const bw = c.border?.width ?? 0, lh = lineHeight(c.font);
+  const { top: mt, bottom: mb, left: ml, right: mr } = c.margin;
+  const inner = Math.max(0, c.width - 2 * bw - ml - mr);   // the margins inset the text inside the border
   let { lines, missing } = wrap(text, c.font, inner);   // measure only lines: never raw text with line breaks
   // a number or a date that does not fit on one line shows as many # as fit, as Access does
   if (numeric && (lines.length > 1 || measure(lines[0] ?? '', c.font).width > inner)) {
@@ -74,14 +79,14 @@ function textItem(c: ControlSpec, text: string, numeric: boolean, issues: Report
     missing = [];
   }
   for (const ch of missing) issues.push({ code: 'glyphMissing', control: c.name, detail: ch });
-  const kept = c.canGrow ? lines : lines.slice(0, Math.max(1, Math.floor((c.height - 2 * bw) / lh)));
+  const kept = c.canGrow ? lines : lines.slice(0, Math.max(1, Math.floor((c.height - 2 * bw - mt - mb) / lh)));
   const align = c.align === 'general' ? (numeric ? 'right' : 'left') : c.align;
   return { kind: 'text', name: c.name, left: c.left, top: c.top, width: c.width,
-    height: c.canGrow ? Math.max(c.height, kept.length * lh + 2 * bw) : c.height,
-    font: c.font, color: c.color, back: c.back, border: c.border, align,
+    height: c.canGrow ? Math.max(c.height, kept.length * lh + 2 * bw + mt + mb) : c.height,
+    font: c.font, color: c.color, back: c.back, border: c.border, align, ...grid(c),
     lines: kept.map((t, i) => {
       const w = measure(t, c.font).width;
-      return { text: t, x: Math.round(align === 'right' ? inner - w : align === 'center' ? (inner - w) / 2 : 0), y: i * lh, width: Math.round(w) };
+      return { text: t, x: ml + Math.round(align === 'right' ? inner - w : align === 'center' ? (inner - w) / 2 : 0), y: mt + i * lh, width: Math.round(w) };
     }) };
 }
 
@@ -129,15 +134,15 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
       case 'checkBox': case 'optionButton': {
         let checked: boolean | null = null;
         try { checked = truthy(v, infoOf(env.locale)); } catch (e) { if (!(e instanceof ExprRuntimeError)) throw e; }   // not a truth value: neither
-        box.item = { kind: 'check', ...at, checked, color: c.color };
+        box.item = { kind: 'check', ...at, checked, color: c.color, ...grid(c) };
         break;
       }
       case 'line':
         if (c.border) box.item = { kind: 'line', name: c.name, x1: c.left, x2: c.left + c.width, border: c.border,
           y1: c.slant ? c.top + c.height : c.top, y2: c.slant ? c.top : c.top + c.height };
         break;
-      case 'rectangle': case 'subform': box.item = { kind: 'rect', ...at, border: c.border, back: c.back }; break;   // a subform: an empty frame
-      case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom' }; break;
+      case 'rectangle': case 'subform': box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) }; break;   // a subform: an empty frame
+      case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...grid(c) }; break;
       case 'pageBreak': pageBreaks.push(c.top); continue;
       default: continue;   // readReport keeps no other kind
     }

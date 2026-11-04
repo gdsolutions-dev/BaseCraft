@@ -6,7 +6,7 @@ import {
   MAX_CRITERIA_CHARS, MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type NameChange, type ObjectKind, type PropertyItem, type PageRequest, type PrintRequest, type RowRef, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
   type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions, SETTING_KEYS, type AppSettings, type SettingKey, type LinkFileInfo,
 } from '../shared/api';
-import { isValidObjectName, MAX_INDEX_FIELDS, MAX_INDEXES } from '../shared/field-types';
+import { isValidObjectName, MAX_INDEX_FIELDS, MAX_TWIPS, MAX_INDEXES } from '../shared/field-types';
 import { PROPERTY_CATALOG } from '../shared/design/properties';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
@@ -126,6 +126,7 @@ export function sourcePageRequest(v: unknown): SourcePageRequest {
   if (v.params !== undefined) r.params = queryParams(v.params);
   if (v.where !== undefined) r.where = typeof v.where === 'string' && v.where.length <= MAX_WHERE_CHARS ? v.where : bad();
   if (v.fresh !== undefined) r.fresh = typeof v.fresh === 'boolean' ? v.fresh : bad();
+  if (v.count !== undefined) r.count = v.count === false ? false : bad();
   return r;
 }
 
@@ -163,6 +164,17 @@ export function relation(v: unknown): Relation {
     childFields: fields(v.childFields),
     enforce: bool(v.enforce), cascadeUpdate: bool(v.cascadeUpdate), cascadeDelete: bool(v.cascadeDelete), joinType,
   };
+}
+
+/** Column widths by field name: integers 1..MAX_TWIPS (own keys only: a field may be named "__proto__"). */
+export function columnWidths(v: unknown): Record<string, number> {
+  if (!isObj(v)) bad();
+  const out: Record<string, number> = Object.create(null);
+  for (const [k, w] of Object.entries(v)) {
+    if (typeof w !== 'number' || !Number.isInteger(w) || w < 1 || w > MAX_TWIPS) bad();
+    out[lookupName(k)] = w;
+  }
+  return out;
 }
 
 /** Keyed by table name: a table may be named "__proto__" (IPC delivers it as an own key), so no prototype to set. */

@@ -29,7 +29,7 @@ const itemKey = (x: Item) => `${x.kind}:${x.name}`;
 const itemTestId = (x: Item) => (x.kind === 'table' ? `nav-item-${x.name}` : `nav-item-${x.kind}-${x.name}`);
 
 interface Props {
-  tables: TableSummary[]; objects: ObjectSummary[]; readOnly: boolean; active: { kind: string; name: string } | null;
+  tables: TableSummary[]; objects: ObjectSummary[]; readOnly: boolean;
   visible: boolean; onToggle(): void; dispatch: Dispatch<AppAction>;
   /** Run mode (B3 R10): the menus are the Runtime's. */
   runtime: boolean;
@@ -44,7 +44,7 @@ interface Props {
   tabs?: DocTab[];
 }
 
-export function NavPane({ tables, objects, readOnly, active, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip, openTabOf, tabs }: Props) {
+export function NavPane({ tables, objects, readOnly, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip, openTabOf, tabs }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
   const [query, setQuery] = useState('');
@@ -114,7 +114,7 @@ export function NavPane({ tables, objects, readOnly, active, visible, onToggle, 
               </summary>
               {list.map((x) => (
                 <button key={x.name} data-testid={itemTestId(x)} title={x.description || x.name}
-                  className={`nitem${active?.kind === x.kind && active.name === x.name ? ' is-active' : ''}${itemKey(x) === selected ? ' is-selected' : ''}`}
+                  className={`nitem${itemKey(x) === selected ? ' is-selected' : ''}`}
                   onClick={() => setSelected(x)}
                   onDoubleClick={() => open(x)}
                   onKeyDown={(e) => {

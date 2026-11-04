@@ -3,7 +3,7 @@
 .rd-banner { flex: none; padding: var(--bc-space-1) var(--bc-space-3); border-bottom: 1px solid var(--bc-border); color: var(--bc-warning); }
 
 .rz { position: absolute; inset: 0; box-sizing: border-box; overflow: hidden; pointer-events: none; }
-.rz-text { display: flex; align-items: flex-start; gap: 2px; padding: 0 2px; line-height: 1.15; white-space: nowrap; }
+.rz-text { --bc-ix: 2px; display: flex; align-items: flex-start; gap: 2px; padding: 0 2px; line-height: 1.15; white-space: nowrap; }
 .rz-text > svg { flex: none; margin-left: auto; align-self: center; }
 .rz-clip { overflow: hidden; text-overflow: ellipsis; }
 .rz-check { inset: auto; left: 0; top: 0; width: 12px; height: 12px; border: 1px solid var(--bc-border); }

@@ -484,6 +484,12 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await expect(sqlBox(page)).toHaveValue('');
     await expect(page.getByTestId('show-table')).toHaveCount(0);
     await sqlBox(page).fill('SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon" OR Ville = "Paris"');
+    // its datasheet, unsaved, then SQL view again: the same tab, its text kept (not a second tab reading a query never saved)
+    await page.getByTestId('status-view-datasheet').click();
+    await expect(doc(page).getByTestId('nav-record-count')).toBeVisible();
+    await page.getByTestId('status-view-sql').click();
+    await expect(sqlBox(page)).toHaveValue('SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon" OR Ville = "Paris"');
+    await expect(page.getByTestId('doc-tab-query-Requête1')).toHaveCount(1);
     await page.getByTestId('status-view-design').click();
     await expect(doc(page).getByTestId('qbe-cell-field-1')).toHaveValue('Ville');
     await expect(doc(page).getByTestId('qbe-cell-criteria1-1')).toHaveValue('"Paris"');

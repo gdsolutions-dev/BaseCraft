@@ -322,6 +322,23 @@ export function setFieldLookup(db: DatabaseSync, table: string, field: string, l
   db.prepare('UPDATE bc_fields SET props = ? WHERE table_name = ? AND field_name = ?').run(JSON.stringify({ ...parseObject(row.props), lookup }), meta!, row.field_name);
 }
 
+/** Datasheet column widths (twips) saved in each field's bc_fields row, found as tableDesign finds it. Unknown names are ignored;
+ *  `columnWidth` is not in KNOWN_KEYS, so a table save keeps it. */
+export function setColumnWidths(db: DatabaseSync, table: string, widths: Record<string, number>): void {
+  const live = liveTableNames(db);
+  const cur = pickName(live, table);
+  const meta = cur === undefined ? undefined : metaOf(db, live, cur).fields;
+  if (meta === undefined) return;
+  const rows = db.prepare('SELECT field_name, props FROM bc_fields WHERE table_name = ?').all(meta) as { field_name: string; props: string }[];
+  const upd = db.prepare('UPDATE bc_fields SET props = ? WHERE table_name = ? AND field_name = ?');
+  inTransaction(db, () => {
+    for (const [name, w] of Object.entries(widths)) {
+      const row = rows.find((r) => sameName(r.field_name, name));
+      if (row) upd.run(JSON.stringify({ ...parseObject(row.props), columnWidth: w }), meta, row.field_name);
+    }
+  });
+}
+
 // ---------- relations (bc_relations: name, props JSON) ----------
 // Read here, beside the other system tables; saved and checked by relations.ts.
 

@@ -517,26 +517,26 @@ export const viewPair = (kind: RibbonContext['kind']): [CommandId, CommandId] =>
 const resized = (c: RibbonCommand, size: RibbonCommand['size']): RibbonCommand => ({ ...c, size });
 
 const viewDatasheet: RibbonCommand = {
-  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && (!c.isNew || c.kind === 'query') && c.kind !== 'macro' && c.kind !== 'module', // a new query: the mode guard asks to save first (as Run does)
+  id: 'viewDatasheet', icon: Sheet, labelKey: 'ribbon.cmd.viewDatasheet', size: 'lg', enabled: (c) => switchable(c) && (!c.isNew || c.kind === 'query' || c.kind === 'form') && c.kind !== 'macro' && c.kind !== 'module',
   visible: (c) => c.kind !== 'report' && c.kind !== 'macro' && c.kind !== 'module', // a report, a macro or a module has no datasheet (Access)
   // an object's Run view; a form's Datasheet view is its datasheet mode (M10); a report's Run view is its Print Preview
   active: (c) => sheet(c) || (c.mode === 'run' && c.kind !== 'form' && c.kind !== 'report'),
 };
 // A4 (spec contextual tabs 4.1): View = Form, Datasheet, Design, as in Access.
 const viewForm: RibbonCommand = {
-  id: 'viewForm', icon: AppWindow, labelKey: 'ribbon.cmd.viewForm', size: 'lg', enabled: (c) => c.kind === 'form' && switchable(c) && !c.isNew,
+  id: 'viewForm', icon: AppWindow, labelKey: 'ribbon.cmd.viewForm', size: 'lg', enabled: (c) => c.kind === 'form' && switchable(c),   // a new form runs unsaved (as a query)
   visible: (c) => c.kind === 'form',
   active: (c) => c.kind === 'form' && c.mode === 'run',
 };
 // A5 Task 12 (spec contextual tabs 4.4): a report's View is Print Preview and Design (it has no datasheet).
 const viewPrintPreview: RibbonCommand = {
-  id: 'viewPrintPreview', icon: Eye, labelKey: 'ribbon.cmd.viewPrintPreview', size: 'lg', enabled: (c) => c.kind === 'report' && switchable(c) && !c.isNew,
+  id: 'viewPrintPreview', icon: Eye, labelKey: 'ribbon.cmd.viewPrintPreview', size: 'lg', enabled: (c) => c.kind === 'report' && switchable(c),
   visible: (c) => c.kind === 'report',
   active: (c) => c.kind === 'report' && c.mode === 'run',
 };
 // Mode État (Access's Report view): the report's data, every page under the other; a saved report, as the print preview
 const viewState: RibbonCommand = {
-  id: 'viewState', icon: ScrollText, labelKey: 'ribbon.cmd.viewState', size: 'lg', enabled: (c) => c.kind === 'report' && switchable(c) && !c.isNew,
+  id: 'viewState', icon: ScrollText, labelKey: 'ribbon.cmd.viewState', size: 'lg', enabled: (c) => c.kind === 'report' && switchable(c),
   visible: (c) => c.kind === 'report', active: (c) => c.kind === 'report' && c.mode === 'state',
 };
 // L2 (formulaires), L3 (états) : le mode Page d'un objet enregistré ; sa vue l'éteint quand son AllowLayoutView vaut false (état de commande).
@@ -609,6 +609,7 @@ const macroCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size'] =
 const namedMacro = (c: RibbonContext) => designOf('macro')(c) && !c.embedded;
 /** Un formulaire (L2) ou un état (L3) en mode Création ou Page : un seul éditeur, les mêmes onglets contextuels. */
 const editorOf = (kind: RibbonContext['kind']) => (c: RibbonContext) => c.kind === kind && (c.mode === 'design' || c.mode === 'layout');
+const inDesign = (c: RibbonContext) => c.mode === 'design';
 const formEditor = editorOf('form');
 const reportEditor = editorOf('report');
 const formOrReportDesign = (c: RibbonContext) => formEditor(c) || reportEditor(c);
@@ -629,6 +630,8 @@ const REPORT_CONTROLS: Delivered = {
 /** Arrange › layout commands (dispositions): handlers exist only when applicable, so a missing handler greys the command. */
 const layoutCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand =>
   ({ id, icon, labelKey: `ribbon.cmd.${id}`, size, enabled: designerWritable });
+
+const layoutPopupCmd = (id: CommandId, icon: LucideIcon): RibbonCommand => ({ ...layoutCmd(id, icon, 'lg'), popup: true });
 
 /** Arrange › Sizing & Ordering (A4): the designer's handlers come from `designerCommands`. `sizeSpace` is always registered (Snap to Grid
  *  works without a selection); `align`, `bringToFront` and `sendToBack` only with a selection. */
@@ -838,10 +841,10 @@ export const RIBBON: RibbonTab[] = [
     id: 'reportDesign', labelKey: 'ribbon.tab.reportDesign', contextual: true, visible: reportEditor, groups: [
       viewGroup(viewState, viewPrintPreview, viewLayout, viewDesign),
       themesGroup,
-      // A5 Task 13: Group & Sort shows or hides the pane (read-only: shown disabled); Totals needs one bound text box of the Detail selected;
+      // A5 Task 13: Group & Sort shows or hides the pane (read-only: shown disabled); Totals needs one bound text box of the Detail selected (Design or Layout view);
       // Group & Sort and Hide Details pressed: the pane shown, the Detail hidden (registerCommandStates)
       group('groupingTotals', { id: 'groupSort', icon: ListTree, labelKey: 'ribbon.cmd.groupSort', size: 'lg', enabled: designOf('report'), active: off },
-        { id: 'reportTotals', icon: Sigma, labelKey: 'ribbon.cmd.reportTotals', size: 'sm', popup: true, enabled: reportDesignWritable },
+        { id: 'reportTotals', icon: Sigma, labelKey: 'ribbon.cmd.reportTotals', size: 'sm', popup: true, enabled: reportHeaderWritable },
         { id: 'hideDetails', icon: EyeOff, labelKey: 'ribbon.cmd.hideDetails', size: 'sm', enabled: reportDesignWritable, active: off }),
       controls('A5', true, REPORT_CONTROLS),
       group('headerFooter', { id: 'pageNumbers', icon: Hash, labelKey: 'ribbon.cmd.pageNumbers', size: 'lg', enabled: reportHeaderWritable }, ...headerFooter('A5', {
@@ -858,16 +861,16 @@ export const RIBBON: RibbonTab[] = [
   {
     // Arrange and Format: the generic designer of A4 (Task 3), reused by A5's reports.
     id: 'arrange', labelKey: 'ribbon.tab.arrange', contextual: true, visible: formOrReportDesign, groups: [
-      group('layoutTable', plan('later', 'layoutGridlines', Grid3x3, 'lg'), layoutCmd('stacked', Rows3, 'lg'), layoutCmd('tabular', Columns3, 'lg'),
-        layoutCmd('removeLayout', Ungroup, 'lg')),
+      group('layoutTable', layoutPopupCmd('layoutGridlines', Grid3x3), layoutCmd('stacked', Rows3, 'lg'), layoutCmd('tabular', Columns3, 'lg'),
+        { ...layoutCmd('removeLayout', Ungroup, 'lg'), visible: inDesign }),   // Layout view (Access S4g): no Remove Layout
       group('rowsColumns', layoutCmd('insertAbove', ArrowUpToLine, 'lg'), layoutCmd('insertBelow', ArrowDownToLine, 'lg'),
         layoutCmd('insertLeft', ArrowLeftToLine, 'lg'), layoutCmd('insertRight', ArrowRightToLine, 'lg'),
         layoutCmd('selectLayout', SquareDashedMousePointer, 'sm'), layoutCmd('selectColumn', Columns2, 'sm'), layoutCmd('selectRow', Rows2, 'sm')),
-      group('mergeSplit', plan('later', 'merge', Merge), plan('later', 'splitVertically', SquareSplitVertical), plan('later', 'splitHorizontally', SquareSplitHorizontal)),
+      group('mergeSplit', layoutCmd('merge', Merge, 'sm'), layoutCmd('splitVertically', SquareSplitVertical, 'sm'), layoutCmd('splitHorizontally', SquareSplitHorizontal, 'sm')),
       group('move', layoutCmd('moveUp', ArrowUp, 'lg'), layoutCmd('moveDown', ArrowDown, 'lg')),
-      group('position', plan('later', 'controlMargins', Scan, 'lg'), plan('later', 'controlPadding', Expand, 'lg'), plan('later', 'anchoring', Anchor, 'lg')),
-      group('sizingOrdering', arrangeCmd('sizeSpace', Scaling, true), arrangeCmd('align', AlignStartVertical, true), arrangeCmd('bringToFront', BringToFront),
-        arrangeCmd('sendToBack', SendToBack)),
+      group('position', layoutPopupCmd('controlMargins', Scan), layoutPopupCmd('controlPadding', Expand), layoutPopupCmd('anchoring', Anchor)),
+      { ...group('sizingOrdering', arrangeCmd('sizeSpace', Scaling, true), arrangeCmd('align', AlignStartVertical, true), arrangeCmd('bringToFront', BringToFront),
+        arrangeCmd('sendToBack', SendToBack)), visible: inDesign },   // absent in Layout view
     ],
   },
   {

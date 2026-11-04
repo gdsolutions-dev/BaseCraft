@@ -1,0 +1,9 @@
+[
+  { "op": "table.create", "name": "Clients", "fields": [
+    { "name": "ID", "type": "autoNumber" },
+    { "name": "Nom", "type": "shortText", "size": 50 } ] },
+  { "op": "table.create", "name": "Commandes", "fields": [
+    { "name": "ID", "type": "autoNumber" },
+    { "name": "ClientID", "type": "number", "numberSize": "longInteger" } ] },
+  { "op": "relation.create", "parentTable": "Clients", "parentFields": ["ID"], "childTable": "Commandes", "childFields": ["ClientID"] }
+]

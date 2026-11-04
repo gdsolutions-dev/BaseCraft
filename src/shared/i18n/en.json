@@ -375,6 +375,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "None", "narrow": "Narrow", "medium": "Medium", "wide": "Wide"}, "controlPadding": {"none": "None", "narrow": "Narrow", "medium": "Medium", "wide": "Wide"}, "anchoring": {"topLeft": "Top Left", "stretchDown": "Stretch Down", "bottomLeft": "Bottom Left", "stretchTop": "Stretch Across Top", "stretchAll": "Stretch Down and Across", "stretchBottom": "Stretch Across Bottom", "topRight": "Top Right", "stretchDownRight": "Stretch Down and Right", "bottomRight": "Bottom Right"}, "layoutGridlines": {"both": "Both", "vertical": "Vertical", "horizontal": "Horizontal", "top": "Top", "bottom": "Bottom", "outline": "Outline", "none": "None", "width": "Width", "style": "Style", "color": "Color"}},
     "scrollLeft": "Scroll the ribbon left",
     "scrollRight": "Scroll the ribbon right",
     "planned": {
@@ -555,6 +556,18 @@
       "fieldTooLong": "The file has a field or line longer than one million characters: it cannot be imported.",
       "notImplemented": "This feature is not available in this version yet.",
       "notFound": "This object no longer exists.",
+      "notOpen": "“{{detail}}” is not open.",
+      "tooManyTempVars": "Too many temporary variables (255 at most).",
+      "pythonFunctionNotFound": "No module has a public function {{name}}.",
+      "pythonFunctionAmbiguous": "Several modules have a function {{name}}: {{detail}}.",
+      "badArgument": "Invalid argument: {{name}}",
+      "notUpdatable": "This source is not updatable: its records cannot be added, changed or deleted.",
+      "runSqlSelect": "RunSQL expects an action query (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "“{{name}}”: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "The argument “{{name}}” is required.",
+      "noSuchDocmd": "docmd.{{name}} does not exist.",
+      "refusedDocmd": "docmd.{{name}} is not available in Python: use {{detail}}.",
       "corruptObject": "This object's definition cannot be read.",
       "invalidQuery": "This query is not valid. {{reason}}",
       "queryBind": "This query cannot run: {{detail}}",
@@ -727,6 +740,7 @@
     },
     "canvas": "Design surface",
     "layoutHandle": "Select layout {{id}}",
+    "emptyCell": "Empty cell of layout {{layout}}, row {{row}}, column {{col}}",
     "toolbox": "Toolbox",
     "arrange": {
       "alignLeft": "Left",
@@ -921,6 +935,8 @@
     "findCapped": "Find and copy cover the first 100,000 records.",
     "pasteOneRow": "Pasting is limited to one row at a time.",
     "discardTitle": "Cannot save the record",
+    "saveTableLayout": "Do you want to save changes to the layout of table '{{name}}'?",
+    "saveQueryLayout": "Do you want to save changes to the layout of query '{{name}}'?",
     "discard": "The record being edited in “{{name}}” cannot be saved. Discard the changes?",
     "shapeChanged": "The structure of “{{name}}” has changed: the record being edited cannot be saved and is discarded.",
     "deleteTitle": "Delete records",
@@ -1458,6 +1474,7 @@
     "unavailable": "Not available in this version"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} is a built-in function, not a Python function." },
     "Caption": "Caption",
     "DefaultView": "Default View",
     "AllowLayoutView": "Allow Layout view",
@@ -1472,6 +1489,25 @@
     "BackColor": "Back Color",
     "BorderStyle": "Border Style",
     "BorderWidth": "Border Width",
+    "GridlineStyleTop": "Gridline Style Top",
+    "GridlineWidthTop": "Gridline Width Top",
+    "TopMargin": "Top Margin",
+    "TopPadding": "Top Padding",
+    "GridlineStyleBottom": "Gridline Style Bottom",
+    "GridlineWidthBottom": "Gridline Width Bottom",
+    "BottomMargin": "Bottom Margin",
+    "BottomPadding": "Bottom Padding",
+    "GridlineStyleLeft": "Gridline Style Left",
+    "GridlineWidthLeft": "Gridline Width Left",
+    "LeftMargin": "Left Margin",
+    "LeftPadding": "Left Padding",
+    "GridlineStyleRight": "Gridline Style Right",
+    "GridlineWidthRight": "Gridline Width Right",
+    "RightMargin": "Right Margin",
+    "RightPadding": "Right Padding",
+    "GridlineColor": "Gridline Color",
+    "HorizontalAnchor": "Horizontal Anchor",
+    "VerticalAnchor": "Vertical Anchor",
     "BorderColor": "Border Color",
     "ForeColor": "Fore Color",
     "FontName": "Font Name",
@@ -1537,9 +1573,16 @@
     "OnNoData": "On No Data",
     "OnFormat": "On Format",
     "OnPrint": "On Print",
-    "ColumnHeads": "Column Heads"
+    "ColumnHeads": "Column Heads",
+    "ColumnWidth": "Column Width"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Transparent", "solid": "Solid", "dashed": "Dashes", "dotted": "Dots"},
+    "GridlineStyleBottom": {"transparent": "Transparent", "solid": "Solid", "dashed": "Dashes", "dotted": "Dots"},
+    "GridlineStyleLeft": {"transparent": "Transparent", "solid": "Solid", "dashed": "Dashes", "dotted": "Dots"},
+    "GridlineStyleRight": {"transparent": "Transparent", "solid": "Solid", "dashed": "Dashes", "dotted": "Dots"},
+    "HorizontalAnchor": {"left": "Left", "right": "Right", "both": "Both"},
+    "VerticalAnchor": {"top": "Top", "bottom": "Bottom", "both": "Both"},
     "DefaultView": {
       "single": "Single Form",
       "continuous": "Continuous Forms",
@@ -1807,6 +1850,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Choose Builder", "macro": "Macro Builder", "function": "Function Builder" },
+    "function": { "title": "Function Builder", "empty": "No module has a public function." },
     "title": "Expression Builder",
     "expression": "Enter an expression:",
     "elements": "Expression Elements",
@@ -1881,6 +1926,7 @@
       "unknownSource": "No table or query has this name.",
       "pictureTooLarge": "Picture too large (1 MB at most).",
       "notInteger": "Enter a whole number.",
+      "badFunctionCall": "A function call is written =name(arguments), with the name of a Python function of a module.",
       "badMacroName": "Invalid macro name: “Macro” or “Macro.Submacro”, with no other period or brackets.",
       "badEmbedded": "Invalid embedded macro."
     },
@@ -1900,6 +1946,7 @@
     "unbound": "Unbound",
     "saveFirstTitle": "Save Form",
     "saveFirst": "Do you want to save the changes to the form “{{name}}”?",
+    "saveLayout": "Do you want to save changes to the layout of form '{{name}}'?",
     "mustSaveFirst": "You must save the form “{{name}}” first. Save it now?",
     "sourceError": "Record source “{{name}}”: {{message}}",
     "tabOrder": {
@@ -2252,6 +2299,8 @@
     }
   },
   "module": {
+    "functionClash": "Function {{fn}} also exists in module {{other}}: a call ={{fn}}() will be ambiguous.",
+    "functionBuiltin": "{{fn}} is the name of a built-in function: choose another name.",
     "newName": "Module{{n}}",
     "nameLabel": "Module Name",
     "badName": "A module name must be a Python name: letters, digits and _, not starting with a digit, and not a Python keyword.",
@@ -2281,6 +2330,7 @@
       "Quit": "Quit",
       "RemoveAllTempVars": "RemoveAllTempVars",
       "RemoveTempVar": "RemoveTempVar",
+      "RunCode": "RunCode",
       "RunMacro": "RunMacro",
       "RunSQL": "RunSQL",
       "SetLocalVar": "SetLocalVar",
@@ -2313,6 +2363,7 @@
       "Title": "Title",
       "Name": "Name",
       "Expression": "Expression",
+      "FunctionName": "Function Name",
       "MacroName": "Macro Name",
       "RepeatCount": "Repeat Count",
       "RepeatExpression": "Repeat Expression",
@@ -2796,6 +2847,15 @@
     "target": "{{kind}} {{name}} › {{control}} (“{{current}}”)"
   },
   "python": {
+    "error": {
+      "title": "Python error",
+      "text": "{{type}}: {{message}}",
+      "where": "Module {{module}}, line {{line}}",
+      "interrupted": "Execution interrupted.",
+      "debug": "Debug",
+      "end": "End",
+      "traceback": "Details"
+    },
     "running": "Python is running… Ctrl+Break to interrupt.",
     "interrupt": "Interrupt",
     "restarted": "Python stopped responding and was restarted. Module state is lost.",

@@ -39,6 +39,12 @@ const GOT_FOCUS: PropertyTarget[] = ['textBox', 'checkBox', 'comboBox', 'listBox
 const FLOWING: SectionKind[] = SECTION_KINDS.filter((s) => s !== 'pageHeader' && s !== 'pageFooter');
 /** The report sections that fire On Format and On Print. */
 const REPORT_SECTIONS: SectionKind[] = ['reportHeader', 'pageHeader', 'groupHeader', 'detail', 'groupFooter', 'pageFooter', 'reportFooter'];
+/** Every control but the page break can sit in a layout: gridlines, margins, padding and anchors (L4). */
+const LAID_OUT = CONTROL_KINDS.filter((k) => k !== 'pageBreak');
+const GRIDLINED = LAID_OUT.filter((k) => k !== 'line');   // print never drew gridlines on a line
+/** The kinds whose text inset a margin moves (the others ignore *Margin). */
+const MARGINED: PropertyTarget[] = ['label', 'textBox', 'comboBox', 'listBox'];
+const SIDES = ['Top', 'Bottom', 'Left', 'Right'];
 const each = <T>(keys: DefaultKey[], v: T): Partial<Record<DefaultKey, T>> => Object.fromEntries(keys.map((k) => [k, v]));
 
 type Tab = PropertyDescriptor['tab'];
@@ -65,6 +71,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('ColumnCount', 'format', 'number', LISTS, 1, { min: 1, max: 20, integer: true }),
   p('ColumnWidths', 'format', 'text', LISTS, ''), // integer twips separated by ';' (as Access stores them), shown in cm
   p('ColumnHeads', 'format', 'bool', LISTS, false), // a value list's first row, a table's captions (A2's Lookup tab)
+  p('ColumnWidth', 'format', 'twips', BOUND, undefined, FORM_ONLY), // a form control's Datasheet-view column width, integer twips > 0 (absent: automatic)
   p('BackStyle', 'format', 'enum', BOXED, 'normal', {
     options: ['normal', 'transparent'], defaults: { ...each(['label', 'optionGroup', 'rectangle'], 'transparent'), 'report:textBox': 'transparent', 'report:comboBox': 'transparent' },
   }),
@@ -76,6 +83,15 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   }),
   p('BorderWidth', 'format', 'number', BORDERED, 0, { min: 0, max: 6, integer: true }), // px; 0 = hairline, drawn 1 px wide as in Access
   p('BorderColor', 'format', 'color', BORDERED, 'theme:border'),
+  ...SIDES.flatMap((s) => [
+    p(`GridlineStyle${s}`, 'format', 'enum', GRIDLINED, 'transparent', { options: ['transparent', 'solid', 'dashed', 'dotted'] }),
+    p(`GridlineWidth${s}`, 'format', 'number', GRIDLINED, 1, { min: 0, max: 6, integer: true }),
+    p(`${s}Margin`, 'format', 'twips', MARGINED, 0),
+    p(`${s}Padding`, 'format', 'twips', LAID_OUT, 0),
+  ]),
+  p('GridlineColor', 'format', 'color', GRIDLINED, '#a6a6a6'),
+  p('HorizontalAnchor', 'format', 'enum', LAID_OUT, 'left', { options: ['left', 'right', 'both'] }),
+  p('VerticalAnchor', 'format', 'enum', LAID_OUT, 'top', { options: ['top', 'bottom', 'both'] }),
   p('ForeColor', 'format', 'color', TEXT, 'theme:text'),
   p('FontName', 'format', 'font', TEXT, 'Inter'), // fonts.ts: EMBEDDED_FONTS first, then any name (resolveFont: not portable)
   p('FontSize', 'format', 'number', TEXT, 10, { min: 6, max: 72, integer: true }), // pt

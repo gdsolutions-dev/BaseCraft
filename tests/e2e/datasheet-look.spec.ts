@@ -121,6 +121,7 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await page.getByTestId('opt-db-truncated').uncheck();
     await page.getByTestId('bs-back').click();
     await page.getByTestId('doc-tab-close-Commandes').click();
+    await page.getByTestId('modal-btn-no').click();   // the widths dragged: the layout is not saved
     await open(page, 'Commandes');
     await narrow();
     await clickAt(page, colLeft(2) + 20, 0, 30, 2);

@@ -83,7 +83,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     createSqlQuery: () => openSqlView(rawDispatch, newQueryName(), true),
     viewSql: () => {
       const tab = live.current.state.tabs.find((x) => x.id === live.current.state.activeId);
-      if (tab?.kind === 'query') openSqlView(dispatch, tab.name);
+      if (tab?.kind === 'query') openSqlView(dispatch, tab.name, false, tab.id);
     },
     // AutoReport (A5): a tabular report on the selected (else chosen) source, saved under a free name and opened in Print Preview.
     createReport: async () => {

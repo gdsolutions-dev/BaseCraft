@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft przywraca sposób budowania małych aplikacji danych znany z Accessa — tabele, kwerendy, formularze, raporty, makra i kod — we współczesnym interfejsie i bez przywiązania do Windows. Wszystko, co zawiera baza danych, mieści się w **jednym pliku**, który jest zwykłą bazą SQLite, nadal możliwą do otwarcia w dowolnym narzędziu SQLite.
 
-> **Status: wczesny etap rozwoju.** Etapy A, B i C są ukończone w wersji zapoznawczej 0.4.0, a etap D (Python) ma za sobą pierwszą część, czyli silnik i moduły. Przed wersją 1.0 spodziewaj się zmian łamiących zgodność.
+> **Status: wczesny etap rozwoju.** Etap A (tabele, relacje, kwerendy, formularze, raporty, import i eksport) jest ukończony w wersji zapoznawczej 0.3.1. Przed wersją 1.0 spodziewaj się zmian łamiących zgodność.
 
 ## Dlaczego
 
@@ -71,9 +71,9 @@ Cel: dobry użytkownik Excela, bez pisania kodu, w jedno popołudnie buduje mał
 | Etap | Zawartość |
 |---|---|
 | **A — Zastąp Excela** ✅ | Tabele, relacje i wyrażenia, kwerendy (QBE + SQL), formularze, raporty z eksportem do PDF, import i eksport CSV/Excel, instalatory |
-| **B — Automatyzuj i dystrybuuj** ✅ | Zdarzenia, makra, AutoExec, BaseCraft Runtime (uruchamianie bazy bez dostępu do projektowania) |
-| **C — Pracuj razem** ✅ | Tabele połączone z PostgreSQL, SQL Server, SQLite i Access; podzielona baza danych i wspólny plik danych z blokowaniem optymistycznym; kwerendy przekazujące; kreator migracji do serwera |
-| **D — Python** 🚧 | Kod w Pythonie (Pyodide) zamiast VBA, z obiektami BaseCraft. Gotowe: silnik, moduły, okno Immediate; dalej: reszta modelu obiektów |
+| **B — Automatyzuj i dystrybuuj** | Zdarzenia, makra, AutoExec, BaseCraft Runtime (uruchamianie bazy bez dostępu do projektowania) |
+| **C — Pracuj razem** | Tabele połączone z PostgreSQL, SQL Server, SQLite i Access; blokowanie optymistyczne; kreator migracji |
+| **D — Python** | Kod w Pythonie (Pyodide) zamiast VBA, z obiektami BaseCraft |
 | **E — Import z Accessa** | Tabele, dane, kwerendy, formularze, raporty i makra z plików `.mdb` / `.accdb` |
 
 Nie planujemy: zgodności z VBA, równoczesnego projektowania przez kilka osób, wersji internetowej ani mobilnej.

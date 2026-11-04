@@ -1,7 +1,7 @@
 // Modèle pur du concepteur générique (formulaires A4, états A5) : document, sélection, déplacement, organisation, annulation.
 // Tout est en twips, relatif à la section (enfants compris). Aucune clé inconnue n'est jamais retirée : on étale toujours l'ancien objet.
 import { isValidObjectName, sameName } from '../../shared/field-types';
-import { labelOf, readLayouts, reflow, sectionRef, withLayouts } from '../../shared/design/layout';
+import { cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, withLayouts } from '../../shared/design/layout';
 import { placeInLayout, pruneLayouts } from '../../shared/design/layout-edit';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
@@ -9,7 +9,9 @@ import { reportWidth } from '../../shared/report/model';
 import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
 import { gridStep, MAX_TWIPS, snap } from './units';
 
-export type Selection = { kind: 'controls'; names: string[] } | { kind: 'section'; index: number } | { kind: 'doc' };
+/** An empty layout cell (row, col = its top-left slot). */
+export interface CellRef { layout: string; row: number; col: number }
+export type Selection = { kind: 'controls'; names: string[]; cells?: CellRef[] } | { kind: 'section'; index: number } | { kind: 'doc' };
 export type PropTarget = { kind: 'doc' } | { kind: 'section'; index: number } | { kind: 'control'; name: string };
 // interne au concepteur : jamais un CommandId (le ruban montre sizeSpace / align en menus, tâche 3)
 export type ArrangeOp = 'alignLeft' | 'alignRight' | 'alignTop' | 'alignBottom' | 'alignToGrid'
@@ -20,7 +22,7 @@ export interface DesignerState { doc: DesignDoc; selection: Selection; dirty: bo
   objectKind?: 'form' | 'report' }   // posé par l'hôte au chargement ; absent : déduit des sections
 export type DesignerAction =
   | { type: 'load'; doc: DesignDoc; objectKind?: 'form' | 'report' } | { type: 'saved' }
-  | { type: 'select'; selection: Selection } | { type: 'toggleSelect'; name: string } | { type: 'selectAll' }
+  | { type: 'select'; selection: Selection } | { type: 'toggleSelect'; name: string } | { type: 'selectCell'; cell: CellRef; add: boolean } | { type: 'selectAll' }
   | { type: 'selectRect'; section: number; rect: Rect; add: boolean; enclosed?: boolean }
   | { type: 'moveBy'; dx: number; dy: number; free?: boolean }            // twips ; free = sans aimantation (Alt)
   | { type: 'changeSection'; to: number; top: number; dx?: number; free?: boolean }   // dépôt dans une autre section (dx : déplacement horizontal du même geste)
@@ -30,7 +32,7 @@ export type DesignerAction =
   | { type: 'setProp'; targets: PropTarget[]; name: string; value: unknown }   // undefined = clé retirée
   | { type: 'setSectionHeight'; index: number; height: number }
   | { type: 'arrange'; op: ArrangeOp }
-  | { type: 'edit'; apply(doc: DesignDoc): DesignDoc }                    // opération propre à l'hôte (en-tête/pied, regroupement A5)
+  | { type: 'edit'; apply(doc: DesignDoc): DesignDoc; selection?: Selection }                    // opération propre à l'hôte (en-tête/pied, regroupement A5)
   | { type: 'toggleSnap' } | { type: 'undo' } | { type: 'redo' };
 
 export const CONTAINER_KINDS: ControlKind[] = ['optionGroup', 'tabControl'];
@@ -147,7 +149,9 @@ function prune(doc: DesignDoc, sel: Selection): Selection {
   if (sel.kind === 'section') return doc.sections[sel.index] ? sel : { kind: 'doc' };
   if (sel.kind === 'doc') return sel;
   const names = sel.names.filter((n) => findControl(doc, n));
-  return names.length || !sel.names.length ? { kind: 'controls', names } : { kind: 'doc' };
+  const layouts = sel.cells?.length ? readLayouts(doc) : [];
+  const cells = (sel.cells ?? []).filter((c) => { const l = layouts.find((x) => x.id === c.layout); const x = l && cellAt(l, c.row, c.col); return x && x.control === null && x.row === c.row && x.col === c.col; });   // an empty cell's anchor slot only
+  return names.length || cells.length || !(sel.names.length || sel.cells?.length) ? { kind: 'controls', names, ...(cells.length ? { cells } : {}) } : { kind: 'doc' };
 }
 function push(s: DesignerState, doc: DesignDoc, selection: Selection = s.selection): DesignerState {
   return { ...s, doc, selection: prune(doc, selection), dirty: true, past: [...s.past, s.doc].slice(-HISTORY), future: [] };
@@ -332,8 +336,9 @@ function learnSizes(prev: DesignDoc, doc: DesignDoc): DesignDoc {
     for (const c of l.cells) {
       const was = c.control === null ? null : findControl(prev, c.control)?.control, now = c.control === null ? null : findControl(doc, c.control)?.control;
       if (!was || !now) continue;
-      if (now.width !== was.width) { cols[c.col] = now.width; changed = true; }
-      if (now.height !== was.height) { rows[c.row] = { ...rows[c.row], height: now.height }; changed = true; }
+      const [kc, kr] = [c.col + spanOf(c).cols - 1, c.row + spanOf(c).rows - 1];   // a spanning member: the change goes to the last column / row
+      if (now.width !== was.width) { cols[kc] = kc === c.col ? now.width : Math.max(0, cols[kc] + now.width - was.width); changed = true; }
+      if (now.height !== was.height) { rows[kr] = { ...rows[kr], height: kr === c.row ? now.height : Math.max(0, rows[kr].height + now.height - was.height) }; changed = true; }
     }
     return { ...l, cols, rows };
   });
@@ -419,7 +424,14 @@ export function coreReducer(s: DesignerState, a: DesignerAction): DesignerState 
     case 'select': return { ...s, selection: a.selection };
     case 'toggleSelect': {
       const names = s.selection.kind === 'controls' ? s.selection.names : [];
-      return { ...s, selection: { kind: 'controls', names: names.some((n) => sameName(n, a.name)) ? names.filter((n) => !sameName(n, a.name)) : [...names, a.name] } };
+      const cells = s.selection.kind === 'controls' ? s.selection.cells : undefined;
+      return { ...s, selection: { kind: 'controls', names: names.some((n) => sameName(n, a.name)) ? names.filter((n) => !sameName(n, a.name)) : [...names, a.name], ...(cells ? { cells } : {}) } };
+    }
+    case 'selectCell': {
+      const old = s.selection.kind === 'controls' && a.add ? s.selection : { names: [] as string[], cells: undefined };
+      const has = (c: CellRef) => c.layout === a.cell.layout && c.row === a.cell.row && c.col === a.cell.col;
+      const cells = !a.add ? [a.cell] : old.cells?.some(has) ? old.cells.filter((c) => !has(c)) : [...(old.cells ?? []), a.cell];
+      return { ...s, selection: { kind: 'controls', names: old.names, ...(cells.length ? { cells } : {}) } };
     }
     case 'selectAll': return { ...s, selection: { kind: 'controls', names: s.doc.sections.flatMap((x) => x.controls.flatMap(selectable)).map((c) => c.name) } };
     case 'selectRect': {
@@ -474,7 +486,7 @@ export function coreReducer(s: DesignerState, a: DesignerAction): DesignerState 
       return doc === s.doc ? s : push(s, doc);
     }
     case 'arrange': return arrange(s, a.op);
-    case 'edit': { const doc = a.apply(s.doc); return doc === s.doc ? s : push(s, doc); }
+    case 'edit': { const doc = a.apply(s.doc); return doc === s.doc ? s : push(s, doc, a.selection); }
     case 'toggleSnap': return { ...s, snap: !s.snap };
     case 'undo': return s.past.length ? { ...s, doc: s.past[s.past.length - 1], selection: prune(s.past[s.past.length - 1], s.selection), past: s.past.slice(0, -1), future: [s.doc, ...s.future], dirty: true } : s;
     case 'redo': return s.future.length ? { ...s, doc: s.future[0], selection: prune(s.future[0], s.selection), past: [...s.past, s.doc].slice(-HISTORY), future: s.future.slice(1), dirty: true } : s;

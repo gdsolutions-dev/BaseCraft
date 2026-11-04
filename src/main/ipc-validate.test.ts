@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
-  lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, saveRequest, sourcePageRequest, sourceRef, str,
+  lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
   strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
@@ -28,6 +28,8 @@ describe('ipc argument checks', () => {
     for (const v of ['table', 'Form', '', null, undefined]) expect(() => objectKind(v)).toThrow(INVALID);
     expect(objectKindOrAll(undefined)).toBeUndefined();
     expect(objectKindOrAll('report')).toBe('report');
+    expect(columnWidths({ A: 1, B: 31680 })).toEqual({ A: 1, B: 31680 });
+    for (const bad of [null, [], { A: 0 }, { A: 31681 }, { A: 1.5 }, { A: '5' }, { A: NaN }, { ['x'.repeat(1025)]: 5 }]) expect(() => columnWidths(bad)).toThrow(INVALID);
     expect(strOrNull(null)).toBeNull();
     expect(() => strOrNull(undefined)).toThrow(INVALID);
     const d = { formatVersion: '1.0', a: [1, { b: null }] };

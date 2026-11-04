@@ -69,6 +69,11 @@ describe('report events', () => {
     expect(JSON.stringify(r)).toBe(JSON.stringify(await layoutReport(readReport(FACTURES_REPORT, FACTURES_FIELDS), { fields: FACTURES_FIELDS, rows: FACTURES_ROWS }, frEnv())));
   });
 
+  it('a Python call on a section counts as bound (the hook exists)', () => {
+    const doc = withSectionProp(FACTURES_REPORT, 'detail', 'OnFormat', '=marquer()');
+    expect(Object.keys(reportEvents(doc, 'F').hooks).sort()).toEqual(['onBand', 'onFormat']);
+  });
+
   it('On Format hides the detail of small amounts', async () => {
     const withoutEvents = await lay(FACTURES_REPORT);
     const doc = withSectionProp(FACTURES_REPORT, 'detail', 'OnFormat', below1(act('SetProperty', { ControlName: 'Detail', Property: 'visible', Value: 'Non' })));

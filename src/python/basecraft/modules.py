@@ -44,11 +44,11 @@ def call(module, fn, args):
 
 
 def _imports(source):
+    names = ['pandas'] if 'to_pandas' in source else []
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return []
-    names = []
+        return names
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             names += [a.name.split('.')[0] for a in n.names]

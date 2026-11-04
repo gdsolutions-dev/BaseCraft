@@ -116,9 +116,9 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     await page.getByTestId('page-numbers-position-bottom').check();
     await page.getByTestId('modal-btn-ok').click();
     await expect(body(page, 'pageFooter').getByTestId('ctl-Numéro_Page1')).toBeVisible();
+    await page.keyboard.press('Control+s');   // saved first (an unsaved report previews too, without a question: de6f3a8)
+    await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
     await pickView(page, 'viewPrintPreview');
-    await expect(page.getByTestId('modal')).toContainText(fr.report.saveFirst.replace('{{name}}', 'Factures'));
-    await page.getByTestId('modal-btn-yes').click();
     await expect(pageOf(page)).toHaveText(/^Page 1 sur \d+$/);
     const n = await pages(page);
     await cur(page).getByTestId('preview-nav-last').click();

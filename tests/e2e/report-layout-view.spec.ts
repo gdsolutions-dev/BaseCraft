@@ -190,10 +190,10 @@ test('Report Layout view: one flow with groups and totals, rings on every record
     await designerTools(page, false);
     await expect(page.getByTestId('cmd-groupSort')).toHaveAttribute('aria-pressed', 'false');
 
-    // vers l'Aperçu, modifié : la question d'enregistrement ; Oui enregistre ; « Fermer » ramène au mode Page
+    // enregistré (Ctrl+S), puis vers l'Aperçu ; « Fermer » ramène au mode Page (sans enregistrer, l'Aperçu s'affiche aussi : de6f3a8)
+    await page.keyboard.press('Control+s');
+    await expect(tab(page, REPORT)).not.toContainText('•');
     await pickView(page, 'viewPrintPreview');
-    await expect(modal).toContainText(fr.report.saveFirst.replace('{{name}}', REPORT));
-    await page.getByTestId('modal-btn-yes').click();
     await expect(cur(page).getByTestId('report-preview')).toBeVisible();
     await expect(tab(page, REPORT)).not.toContainText('•');
     await page.getByTestId('cmd-closePreview').click();
@@ -254,9 +254,10 @@ test('Report Layout view: names compared without case; AllowLayoutView = false; 
     await cur(page).getByTestId('sheet-tab-format').click();
     await cur(page).getByTestId('prop-AllowLayoutView').selectOption('false');
     await expect(status(page, 'layout')).toBeDisabled();
+    await page.keyboard.press('Control+s');
+    await expect(tab(page, REPORT)).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await pickView(page, 'viewPrintPreview');
-    await page.getByTestId('modal-btn-yes').click();
     await expect(cur(page).getByTestId('report-preview')).toBeVisible();
     await page.getByTestId('cmd-closePreview').click();
     await expect(cur(page).getByTestId('toolbox')).toBeVisible();

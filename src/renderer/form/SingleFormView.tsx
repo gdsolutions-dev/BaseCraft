@@ -1,7 +1,7 @@
 // Affichage Formulaire unique : en-tête en haut, Détail défilant au milieu (sélecteur d'enregistrement à gauche), pied en bas,
 // barre de messages et barre de navigation.
 import { ChevronRight, Pencil } from 'lucide-react';
-import type { RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
@@ -9,6 +9,7 @@ import { NavigationBar } from '../datasheet/NavigationBar';
 import { twipsToPx } from '../designer/units';
 import { type RunCtx, readOnlyNote } from './controls/run-ctx';
 import { FormSection } from './FormSection';
+import { useAnchored } from './use-anchored';
 
 export interface SingleFormProps {
   doc: DesignDoc; x: RunCtx; root: RefObject<HTMLDivElement>;
@@ -17,19 +18,20 @@ export interface SingleFormProps {
   onGo(row: number): void; onNew(): void; onToggleFilter(): void;
 }
 
-export function SingleFormView({ doc, x, root, messages, filter, onGo, onNew, onToggleFilter }: SingleFormProps) {
+export function SingleFormView({ doc: design, x, root, messages, filter, onGo, onNew, onToggleFilter }: SingleFormProps) {
   const { t } = useTranslation();
-  const width = twipsToPx(Number(effectiveProp(doc.props, 'Width', 'form')) || 0);
+  const body = useRef<HTMLDivElement>(null);
+  const bound = design.recordSource !== null;   // an unbound form has no records: no selector, no navigation bar
+  const selectors = bound && effectiveProp(design.props, 'RecordSelectors', 'form') !== false;
+  const { doc, width, overflow } = useAnchored(design, body, true, selectors ? 18 : 0);   // anchoring: a derived doc, only rendered
   const shown = (kind: string) => doc.sections.find((s) => s.kind === kind && s.props.Visible !== false);
   const [header, detail, footer] = [shown('formHeader'), shown('detail'), shown('formFooter')];
-  const bound = doc.recordSource !== null;   // an unbound form has no records: no selector, no navigation bar
-  const selectors = bound && effectiveProp(doc.props, 'RecordSelectors', 'form') !== false;
   const nav = bound && effectiveProp(doc.props, 'NavigationButtons', 'form') !== false;
   const { snap } = x;
   return (
     <div className="frun" ref={root} data-testid="form-run">
       {header && <div className="frun-fixed"><FormSection section={header} x={x} width={width} /></div>}
-      <div className="frun-body">
+      <div className="frun-body" ref={body} style={overflow}>
         {detail && (
           <div className="frun-detail">
             {selectors && (

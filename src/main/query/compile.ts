@@ -77,6 +77,16 @@ export function compileLocator(level: BoundQuery, opts: CompileOptions): SqlFrag
   return compiler(level, {}, opts).select(q, level, [], { rowid: false, encoded: true, locate: level.writePlan.map((w) => w.alias) });
 }
 
+/** `r`, a column of `sel`, holds integers or Null (see nativeInt): an AutoNumber or an integer Number of a table BaseCraft
+ *  created, or such a field passed through a saved query or derived table (origin). */
+function storedInt(sel: BoundSelect, r: ResolvedRef & { kind: 'column' }): boolean {
+  if (r.props.external === true) return false;
+  const s = sel.sources.find((x) => x.alias === r.alias);
+  // a saved query's or derived table's column: only a table's field passed through (origin), raw in the source's output
+  if (s?.kind !== 'table' && !s?.inner?.columns.find((c) => sameName(c.name, r.field))?.origin) return false;
+  return r.type === 'autoNumber' || (r.type === 'number' && INT_SIZES.has(r.props.numberSize ?? 'longInteger'));
+}
+
 /** The SELECT compiler of a bound query: `select` (one SELECT node of `b`) and `body` (a whole query). */
 function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: CompileOptions) {
   let next = 0; // source aliases, unique in the statement: a correlated subquery names the enclosing ones
@@ -114,12 +124,8 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
       const p = param(r.name); // bc_val('number', n) and an untyped n both read num(n)
       return (p.type === null || p.type === 'number') && Number.isSafeInteger(p.params[0]) ? { ref: p, exact: true } : null;
     }
-    if (r?.kind !== 'column' || r.props.external === true) return null;
-    const s = stack[stack.length - 1 - r.depth].sel.sources.find((x) => x.alias === r.alias);
-    // a saved query's or derived table's column: only a table's field passed through (origin), raw in the source's output
-    if (s?.kind !== 'table' && !s?.inner?.columns.find((c) => sameName(c.name, r.field))?.origin) return null;
-    if (r.type === 'autoNumber') return { ref: column(stack, r), exact: false };
-    return r.type === 'number' && INT_SIZES.has(r.props.numberSize ?? 'longInteger') ? { ref: column(stack, r), exact: true } : null;
+    if (r?.kind !== 'column' || !storedInt(stack[stack.length - 1 - r.depth].sel, r)) return null;
+    return { ref: column(stack, r), exact: r.type !== 'autoNumber' };
   };
   /** WHERE, HAVING, ON: one bc condition (compileSql) per conjunct of the top-level And, except those that compare two
    *  native integers (Task 12), emitted as SQLite's `=` so an index serves them. A row is kept iff every conjunct is True; for two such
@@ -306,13 +312,20 @@ function compiler(b: BoundQuery, values: Record<string, SqlValue>, opts: Compile
     const q = qb.query.body;
     if (q.k === 'select') return select(q, qb, [], mode);
     if (q.k !== 'union') throw new Error('bc:notSelectQuery');
-    // each part in its own SELECT (a compound member takes no ORDER BY or LIMIT); UNION is a deduplicated UNION ALL
+    // each part in its own SELECT (a compound member takes no ORDER BY or LIMIT); UNION is a deduplicated UNION ALL. Left
+    // to right, a UNION dedups every part before it: one GROUP BY up to the last UNION, the UNION ALL parts after it appended.
     const part = (p: SelectQuery): F => cat('SELECT * FROM (', select(p, qb, [], { rowid: false, encoded: mode.encoded }), ')');
-    const dedup = qb.columns.map((_, k) => `bc_gkey("c${k}")`).join(', ');
-    let rel = part(q.parts[0]);
-    q.parts.slice(1).forEach((p, k) => {
-      rel = q.all[k] ? cat(rel, ' UNION ALL ', part(p)) : cat('SELECT * FROM (', rel, ' UNION ALL ', part(p), `) GROUP BY ${dedup}`);
-    });
+    const all = (ps: SelectQuery[]): F => cat(...ps.flatMap((p, k) => (k ? [' UNION ALL ', part(p)] : [part(p)])));
+    const last = q.all.lastIndexOf(false) + 1; // the last part a UNION reaches; 0: none
+    // a column every deduped part gives as a raw stored integer groups natively (bc_gkey would return it unchanged)
+    const int = (p: SelectQuery, k: number): boolean => {
+      const sel = qb.selects.get(p)!, r = qb.refs.get(sel.columns[k].expr);
+      return r?.kind === 'column' && r.depth === 0 && storedInt(sel, r);
+    };
+    const head = q.parts.slice(0, last + 1), tail = q.parts.slice(last + 1);
+    const dedup = qb.columns.map((_, k) => (!mode.encoded && head.every((p) => int(p, k)) ? `"c${k}"` : `bc_gkey("c${k}")`)).join(', ');
+    let rel = last ? cat('SELECT * FROM (', all(head), `) GROUP BY ${dedup}`) : all(head);
+    if (tail.length) rel = cat(rel, ' UNION ALL ', all(tail));
     if (!q.orderBy.length) return rel;
     // ORDER BY names output columns
     const c: SqlCompileCtx = {

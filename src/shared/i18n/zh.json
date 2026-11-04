@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "无", "narrow": "窄", "medium": "中", "wide": "宽"}, "controlPadding": {"none": "无", "narrow": "窄", "medium": "中", "wide": "宽"}, "anchoring": {"topLeft": "左上", "stretchDown": "向下拉伸", "bottomLeft": "左下", "stretchTop": "在顶部横向拉伸", "stretchAll": "向下并横向拉伸", "stretchBottom": "在底部横向拉伸", "topRight": "右上", "stretchDownRight": "向下并向右拉伸", "bottomRight": "右下"}, "layoutGridlines": {"both": "两者", "vertical": "垂直", "horizontal": "水平", "top": "顶部", "bottom": "底部", "outline": "轮廓", "none": "无", "width": "宽度", "style": "样式", "color": "颜色"}},
     "scrollLeft": "向左滚动功能区",
     "scrollRight": "向右滚动功能区",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "文件中有字段或行超过一百万个字符：无法导入。",
       "notImplemented": "此版本尚不提供该功能。",
       "notFound": "此对象已不存在。",
+      "notOpen": "“{{detail}}”未打开。",
+      "tooManyTempVars": "临时变量过多(最多 255 个)。",
+      "pythonFunctionNotFound": "没有任何模块包含公共函数 {{name}}。",
+      "pythonFunctionAmbiguous": "多个模块包含函数 {{name}}:{{detail}}。",
+      "badArgument": "无效参数：{{name}}",
+      "notUpdatable": "此数据源不可更新：无法添加、更改或删除其记录。",
+      "runSqlSelect": "RunSQL 需要操作查询 (INSERT、UPDATE、DELETE、SELECT … INTO)。",
+      "saveRefused": "“{{name}}”：{{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "参数“{{name}}”为必填项。",
+      "noSuchDocmd": "docmd.{{name}} 不存在。",
+      "refusedDocmd": "docmd.{{name}} 在 Python 中不可用：请使用 {{detail}}。",
       "corruptObject": "无法读取此对象的定义。",
       "invalidQuery": "此查询无效。{{reason}}",
       "queryBind": "此查询无法运行：{{detail}}",
@@ -729,6 +742,7 @@
     },
     "canvas": "设计图面",
     "layoutHandle": "选择布局 {{id}}",
+    "emptyCell": "布局 {{layout}} 的空单元格，第 {{row}} 行第 {{col}} 列",
     "toolbox": "工具箱",
     "arrange": {
       "alignLeft": "靠左",
@@ -935,6 +949,8 @@
     "findCapped": "查找和复制仅涵盖前 100,000 条记录。",
     "pasteOneRow": "一次只能粘贴一行。",
     "discardTitle": "无法保存记录",
+    "saveTableLayout": "是否保存对表“{{name}}”布局的更改?",
+    "saveQueryLayout": "是否保存对查询“{{name}}”布局的更改?",
     "discard": "无法保存“{{name}}”中正在编辑的记录。要放弃更改吗？",
     "shapeChanged": "“{{name}}”的结构已更改：正在编辑的记录无法保存，已被放弃。",
     "deleteTitle": "删除记录",
@@ -1472,6 +1488,7 @@
     "unavailable": "此版本中不可用"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} 是内置函数，不是 Python 函数。" },
     "Caption": "标题",
     "DefaultView": "默认视图",
     "AllowLayoutView": "允许布局视图",
@@ -1486,6 +1503,25 @@
     "BackColor": "背景色",
     "BorderStyle": "边框样式",
     "BorderWidth": "边框宽度",
+    "GridlineStyleTop": "网格线样式(上)",
+    "GridlineWidthTop": "网格线宽度(上)",
+    "TopMargin": "边距(上)",
+    "TopPadding": "内边距(上)",
+    "GridlineStyleBottom": "网格线样式(下)",
+    "GridlineWidthBottom": "网格线宽度(下)",
+    "BottomMargin": "边距(下)",
+    "BottomPadding": "内边距(下)",
+    "GridlineStyleLeft": "网格线样式(左)",
+    "GridlineWidthLeft": "网格线宽度(左)",
+    "LeftMargin": "边距(左)",
+    "LeftPadding": "内边距(左)",
+    "GridlineStyleRight": "网格线样式(右)",
+    "GridlineWidthRight": "网格线宽度(右)",
+    "RightMargin": "边距(右)",
+    "RightPadding": "内边距(右)",
+    "GridlineColor": "网格线颜色",
+    "HorizontalAnchor": "水平锚定",
+    "VerticalAnchor": "垂直锚定",
     "BorderColor": "边框颜色",
     "ForeColor": "前景色",
     "FontName": "字体名称",
@@ -1551,9 +1587,16 @@
     "OnNoData": "无数据时",
     "OnFormat": "格式化时",
     "OnPrint": "打印时",
-    "ColumnHeads": "列标题"
+    "ColumnHeads": "列标题",
+    "ColumnWidth": "列宽"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "透明", "solid": "实线", "dashed": "虚线", "dotted": "点线"},
+    "GridlineStyleBottom": {"transparent": "透明", "solid": "实线", "dashed": "虚线", "dotted": "点线"},
+    "GridlineStyleLeft": {"transparent": "透明", "solid": "实线", "dashed": "虚线", "dotted": "点线"},
+    "GridlineStyleRight": {"transparent": "透明", "solid": "实线", "dashed": "虚线", "dotted": "点线"},
+    "HorizontalAnchor": {"left": "左", "right": "右", "both": "两侧"},
+    "VerticalAnchor": {"top": "上", "bottom": "下", "both": "两侧"},
     "DefaultView": {
       "single": "单个窗体",
       "continuous": "连续窗体",
@@ -1820,6 +1863,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "选择生成器", "macro": "宏生成器", "function": "函数生成器" },
+    "function": { "title": "函数生成器", "empty": "没有模块包含公共函数。" },
     "title": "表达式生成器",
     "expression": "输入表达式：",
     "elements": "表达式元素",
@@ -1894,6 +1939,7 @@
       "unknownSource": "没有同名的表或查询。",
       "pictureTooLarge": "图片过大（最大 1 MB）。",
       "notInteger": "请输入整数。",
+      "badFunctionCall": "函数调用的写法为 =名称(参数)，名称为模块中某个 Python 函数的名称。",
       "badMacroName": "宏名称无效：应为“Macro”或“Macro.Submacro”，不能有其他句点或方括号。",
       "badEmbedded": "嵌入的宏无效。"
     },
@@ -1912,6 +1958,7 @@
     "unbound": "未绑定",
     "saveFirstTitle": "保存窗体",
     "saveFirst": "是否保存对窗体“{{name}}”的更改？",
+    "saveLayout": "是否保存对窗体“{{name}}”布局的更改?",
     "mustSaveFirst": "必须先保存窗体“{{name}}”。是否现在保存？",
     "sourceError": "记录源“{{name}}”：{{message}}",
     "tabOrder": {
@@ -2260,6 +2307,8 @@
     }
   },
   "module": {
+    "functionClash": "函数 {{fn}} 在模块 {{other}} 中也存在：调用 ={{fn}}() 将有歧义。",
+    "functionBuiltin": "{{fn}} 是内置函数的名称：请选择其他名称。",
     "newName": "模块{{n}}",
     "nameLabel": "模块名称",
     "badName": "模块名必须是 Python 名称：由字母、数字和 _ 组成，不能以数字开头，也不能是 Python 保留字。",
@@ -2289,6 +2338,7 @@
       "Quit": "退出",
       "RemoveAllTempVars": "删除所有临时变量",
       "RemoveTempVar": "删除临时变量",
+      "RunCode": "运行代码",
       "RunMacro": "运行宏",
       "RunSQL": "运行 SQL",
       "SetLocalVar": "设置局部变量",
@@ -2321,6 +2371,7 @@
       "Title": "标题",
       "Name": "名称",
       "Expression": "表达式",
+      "FunctionName": "函数名称",
       "MacroName": "宏名称",
       "RepeatCount": "重复次数",
       "RepeatExpression": "重复表达式",
@@ -2895,6 +2946,15 @@
     "target": "{{kind}} {{name}} › {{control}}（“{{current}}”）"
   },
   "python": {
+    "error": {
+      "title": "Python 错误",
+      "text": "{{type}}：{{message}}",
+      "where": "模块 {{module}}，第 {{line}} 行",
+      "interrupted": "执行已中断。",
+      "debug": "调试",
+      "end": "结束",
+      "traceback": "详细信息"
+    },
     "running": "Python 正在运行… 按 Ctrl+Break 中断。",
     "interrupt": "中断",
     "restarted": "Python 停止响应，已重新启动。模块状态已丢失。",

@@ -278,6 +278,7 @@ export const CH = {
   tablesSave: 'bc:tables:save',
   tablesRename: 'bc:tables:rename',
   tablesDrop: 'bc:tables:drop',
+  tablesSaveColumnWidths: 'bc:tables:saveColumnWidths',
   tablesTestRules: 'bc:tables:testRules',
   rowsCount: 'bc:rows:count',
   rowsPage: 'bc:rows:page',
@@ -441,6 +442,8 @@ export interface BasecraftApi {
     append(from: string, to: string): Promise<{ appended: number; refused: number }>;
     /** Test Validation Rules: the fields whose rule some stored rows break (an evaluation error counts), with their count. */
     testRules(name: string): Promise<{ field: string; rows: number }[]>;
+    /** Datasheet column widths (twips by field name) saved in the table's fields; bc:readOnly in read-only, bc:linkedTable for a link. */
+    saveColumnWidths(name: string, widths: Record<string, number>): Promise<void>;
   };
   rows: {
     /** The rows `filter` keeps (all without one); a criterion that cannot be compiled rejects with bc:invalidFilter. */

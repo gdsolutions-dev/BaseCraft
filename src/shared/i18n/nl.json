@@ -377,6 +377,7 @@
       "linkPostgreSql": "PostgreSQL",
       "linkSqlServer": "SQL Server"
     },
+    "layoutMenu": {"controlMargins": {"none": "Geen", "narrow": "Smal", "medium": "Gemiddeld", "wide": "Breed"}, "controlPadding": {"none": "Geen", "narrow": "Smal", "medium": "Gemiddeld", "wide": "Breed"}, "anchoring": {"topLeft": "Linksboven", "stretchDown": "Omlaag uitrekken", "bottomLeft": "Linksonder", "stretchTop": "Boven over de breedte uitrekken", "stretchAll": "Omlaag en over de breedte uitrekken", "stretchBottom": "Onder over de breedte uitrekken", "topRight": "Rechtsboven", "stretchDownRight": "Omlaag en naar rechts uitrekken", "bottomRight": "Rechtsonder"}, "layoutGridlines": {"both": "Beide", "vertical": "Verticaal", "horizontal": "Horizontaal", "top": "Boven", "bottom": "Onder", "outline": "Omtrek", "none": "Geen", "width": "Breedte", "style": "Stijl", "color": "Kleur"}},
     "scrollLeft": "Het lint naar links schuiven",
     "scrollRight": "Het lint naar rechts schuiven",
     "planned": {
@@ -562,6 +563,18 @@
       "fieldTooLong": "Het bestand bevat een veld of regel van meer dan een miljoen tekens: het kan niet worden geïmporteerd.",
       "notImplemented": "Deze functie is in deze versie nog niet beschikbaar.",
       "notFound": "Dit object bestaat niet meer.",
+      "notOpen": "“{{detail}}” is niet geopend.",
+      "tooManyTempVars": "Te veel tijdelijke variabelen (maximaal 255).",
+      "pythonFunctionNotFound": "Geen enkele module bevat een openbare functie {{name}}.",
+      "pythonFunctionAmbiguous": "Meerdere modules bevatten een functie {{name}}: {{detail}}.",
+      "badArgument": "Ongeldig argument: {{name}}",
+      "notUpdatable": "Deze bron is niet bijwerkbaar: de records kunnen niet worden toegevoegd, gewijzigd of verwijderd.",
+      "runSqlSelect": "RunSQL verwacht een actiequery (INSERT, UPDATE, DELETE, SELECT … INTO).",
+      "saveRefused": "“{{name}}”: {{detail}}",
+      "saveRefused_record": "{{detail}}",
+      "missingArgument": "Het argument “{{name}}” is verplicht.",
+      "noSuchDocmd": "docmd.{{name}} bestaat niet.",
+      "refusedDocmd": "docmd.{{name}} is niet beschikbaar in Python: gebruik {{detail}}.",
       "corruptObject": "De definitie van dit object kan niet worden gelezen.",
       "invalidQuery": "Deze query is ongeldig. {{reason}}",
       "queryBind": "Deze query kan niet worden uitgevoerd: {{detail}}",
@@ -737,6 +750,7 @@
     },
     "canvas": "Ontwerpoppervlak",
     "layoutHandle": "Indeling {{id}} selecteren",
+    "emptyCell": "Lege cel van indeling {{layout}}, rij {{row}}, kolom {{col}}",
     "toolbox": "Werkset",
     "arrange": {
       "alignLeft": "Links",
@@ -940,6 +954,8 @@
     "findCapped": "Zoeken en kopiëren gelden voor de eerste 100.000 records.",
     "pasteOneRow": "Plakken is beperkt tot één rij tegelijk.",
     "discardTitle": "Record kan niet worden opgeslagen",
+    "saveTableLayout": "Wilt u de wijzigingen in de indeling van tabel '{{name}}' opslaan?",
+    "saveQueryLayout": "Wilt u de wijzigingen in de indeling van query '{{name}}' opslaan?",
     "discard": "Het record dat in “{{name}}” wordt bewerkt, kan niet worden opgeslagen. De wijzigingen negeren?",
     "shapeChanged": "De structuur van “{{name}}” is gewijzigd: het record in bewerking kan niet worden opgeslagen en wordt genegeerd.",
     "deleteTitle": "Records verwijderen",
@@ -1483,6 +1499,7 @@
     "unavailable": "Niet beschikbaar in deze versie"
   },
   "prop": {
+    "event": { "builtinFunction": "{{name}} is een ingebouwde functie, geen Python-functie." },
     "Caption": "Bijschrift",
     "DefaultView": "Standaardweergave",
     "AllowLayoutView": "Lay-outweergave toestaan",
@@ -1497,6 +1514,25 @@
     "BackColor": "Achtergrondkleur",
     "BorderStyle": "Randstijl",
     "BorderWidth": "Randbreedte",
+    "GridlineStyleTop": "Rasterlijnstijl boven",
+    "GridlineWidthTop": "Rasterlijnbreedte boven",
+    "TopMargin": "Marge boven",
+    "TopPadding": "Opvulling boven",
+    "GridlineStyleBottom": "Rasterlijnstijl onder",
+    "GridlineWidthBottom": "Rasterlijnbreedte onder",
+    "BottomMargin": "Marge onder",
+    "BottomPadding": "Opvulling onder",
+    "GridlineStyleLeft": "Rasterlijnstijl links",
+    "GridlineWidthLeft": "Rasterlijnbreedte links",
+    "LeftMargin": "Marge links",
+    "LeftPadding": "Opvulling links",
+    "GridlineStyleRight": "Rasterlijnstijl rechts",
+    "GridlineWidthRight": "Rasterlijnbreedte rechts",
+    "RightMargin": "Marge rechts",
+    "RightPadding": "Opvulling rechts",
+    "GridlineColor": "Rasterlijnkleur",
+    "HorizontalAnchor": "Horizontale verankering",
+    "VerticalAnchor": "Verticale verankering",
     "BorderColor": "Randkleur",
     "ForeColor": "Voorgrondkleur",
     "FontName": "Lettertypenaam",
@@ -1562,9 +1598,16 @@
     "OnNoData": "Bij geen gegevens",
     "OnFormat": "Bij opmaak",
     "OnPrint": "Bij afdrukken",
-    "ColumnHeads": "Kolomkoppen"
+    "ColumnHeads": "Kolomkoppen",
+    "ColumnWidth": "Kolombreedte"
   },
   "propValue": {
+    "GridlineStyleTop": {"transparent": "Transparant", "solid": "Doorlopend", "dashed": "Streepjes", "dotted": "Stippen"},
+    "GridlineStyleBottom": {"transparent": "Transparant", "solid": "Doorlopend", "dashed": "Streepjes", "dotted": "Stippen"},
+    "GridlineStyleLeft": {"transparent": "Transparant", "solid": "Doorlopend", "dashed": "Streepjes", "dotted": "Stippen"},
+    "GridlineStyleRight": {"transparent": "Transparant", "solid": "Doorlopend", "dashed": "Streepjes", "dotted": "Stippen"},
+    "HorizontalAnchor": {"left": "Links", "right": "Rechts", "both": "Beide"},
+    "VerticalAnchor": {"top": "Boven", "bottom": "Onder", "both": "Beide"},
     "DefaultView": {
       "single": "Enkel formulier",
       "continuous": "Doorlopende formulieren",
@@ -1832,6 +1875,8 @@
     }
   },
   "builder": {
+    "choose": { "title": "Opbouwfunctie kiezen", "macro": "Macro-opbouwfunctie", "function": "Functie-opbouwfunctie" },
+    "function": { "title": "Functie-opbouwfunctie", "empty": "Geen enkele module bevat een openbare functie." },
     "title": "Expressiebouwer",
     "expression": "Voer een expressie in:",
     "elements": "Expressie-elementen",
@@ -1906,6 +1951,7 @@
       "unknownSource": "Geen enkele tabel of query heeft deze naam.",
       "pictureTooLarge": "Afbeelding te groot (maximaal 1 MB).",
       "notInteger": "Voer een geheel getal in.",
+      "badFunctionCall": "Een functieaanroep wordt geschreven als =naam(argumenten), met de naam van een Python-functie van een module.",
       "badMacroName": "Ongeldige macronaam: “Macro” of “Macro.Submacro”, zonder andere punten of haakjes.",
       "badEmbedded": "Ongeldige ingesloten macro."
     },
@@ -1926,6 +1972,7 @@
     "unbound": "Ongebonden",
     "saveFirstTitle": "Formulier opslaan",
     "saveFirst": "Wilt u de wijzigingen in het formulier “{{name}}” opslaan?",
+    "saveLayout": "Wilt u de wijzigingen in de indeling van formulier '{{name}}' opslaan?",
     "mustSaveFirst": "U moet het formulier “{{name}}” eerst opslaan. Nu opslaan?",
     "sourceError": "Recordbron “{{name}}”: {{message}}",
     "tabOrder": {
@@ -2283,6 +2330,8 @@
     }
   },
   "module": {
+    "functionClash": "De functie {{fn}} bestaat ook in module {{other}}: een aanroep ={{fn}}() is dubbelzinnig.",
+    "functionBuiltin": "{{fn}} is de naam van een ingebouwde functie: kies een andere naam.",
     "newName": "Module{{n}}",
     "nameLabel": "Modulenaam",
     "badName": "Een modulenaam moet een Python-naam zijn: letters, cijfers en _, niet beginnend met een cijfer en geen gereserveerd Python-woord.",
@@ -2312,6 +2361,7 @@
       "Quit": "Afsluiten",
       "RemoveAllTempVars": "AlleTijdelijkeVariabelenVerwijderen",
       "RemoveTempVar": "TijdelijkeVariabeleVerwijderen",
+      "RunCode": "CodeUitvoeren",
       "RunMacro": "MacroUitvoeren",
       "RunSQL": "SQLUitvoeren",
       "SetLocalVar": "LokaleVariabeleInstellen",
@@ -2344,6 +2394,7 @@
       "Title": "Titel",
       "Name": "Naam",
       "Expression": "Expressie",
+      "FunctionName": "Functienaam",
       "MacroName": "Macronaam",
       "RepeatCount": "Aantal herhalingen",
       "RepeatExpression": "Herhalingsexpressie",
@@ -2918,6 +2969,15 @@
     "target": "{{kind}} {{name}} › {{control}} („{{current}}”)"
   },
   "python": {
+    "error": {
+      "title": "Python-fout",
+      "text": "{{type}}: {{message}}",
+      "where": "Module {{module}}, regel {{line}}",
+      "interrupted": "Uitvoering onderbroken.",
+      "debug": "Foutopsporing",
+      "end": "Einde",
+      "traceback": "Details"
+    },
     "running": "Python wordt uitgevoerd… Ctrl+Break om te onderbreken.",
     "interrupt": "Onderbreken",
     "restarted": "Python reageerde niet meer en is opnieuw gestart. De status van de modules is verloren.",

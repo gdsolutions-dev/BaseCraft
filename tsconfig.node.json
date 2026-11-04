@@ -4,5 +4,5 @@
     "strict": true, "skipLibCheck": true, "noEmit": true, "types": ["node"],
     "esModuleInterop": true, "resolveJsonModule": true
   },
-  "include": ["src/main", "src/preload", "src/shared", "tests", "*.config.ts"]
+  "include": ["src/main", "src/preload", "src/shared", "src/cli", "tests", "*.config.ts"]
 }

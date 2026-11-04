@@ -10,6 +10,7 @@ import { foldName, sameName } from '../../shared/field-types';
 import type { EventName } from '../../shared/design/events';
 import type { SectionEvent } from '../../shared/report/types';
 import { actionDef, type ActionDef, type ActionName } from '../../shared/macro/catalog';
+import { parsePythonCall } from '../../shared/python/call-text';
 import { validateMacro, type MacroDef, type MacroItem } from '../../shared/macro/model';
 
 /** enum / name / text / sql / reference → string (reference: the canonical text, never evaluated); where → string (canonical, members bound);
@@ -31,6 +32,7 @@ export interface MacroHost {
   step?(s: StepInfo): Promise<'step' | 'continue' | 'stopAll'>;
   locale: string; lang: 'fr' | 'en'; now(): Date;
   objectMember?(path: string[]): Value | Promise<Value>;   // [Forms]! / [Reports]! (absent: unknownField)
+  runCode?(name: string, args: Value[], event?: EventContext): Promise<void>;   // D2: calls a Python function (absent: RunCode is unknownAction)
   stopAll?(): void;                                 // StopAllMacros ends this run: the host ends the others too
 }
 export interface StepInfo { macro: string; condition: string | null; action: string; args: Record<string, string> }
@@ -257,6 +259,16 @@ async function execute(run: Run, frame: Frame, action: ActionName, args: Resolve
   switch (action) {
     case 'StopMacro': return true;
     case 'StopAllMacros': host.stopAll?.(); throw new Halt();
+    case 'RunCode': {   // raw: FunctionName is a 'functionCall' arg, left unresolved
+      if (!host.runCode) throw new Fail('unknownAction');
+      const call = parsePythonCall(raw.FunctionName ?? '');
+      if (!call) throw new Fail('actionFailed', 'badFunctionCall');
+      const e = env(run, frame);
+      const values: Value[] = [];
+      for (const a of call.args) values.push(await evaluate(a, e));
+      await host.runCode(call.name, values, run.event);
+      return false;
+    }
     case 'RunMacro': {
       if (frame.depth >= MAX_RUN_DEPTH) throw new Fail('tooDeep');
       const countText = args.RepeatCount as string | undefined;   // a non-negative whole number in decimal digits (not 1.5, not 0x10)

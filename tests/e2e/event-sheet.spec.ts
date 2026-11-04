@@ -88,6 +88,7 @@ test('Event tab: a named macro picked and run; an embedded macro built with Â« â
     await page.getByTestId('sheet-object').selectOption('doc');
     await page.getByTestId('sheet-tab-event').click();
     await page.getByTestId('prop-BeforeUpdate-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     await expect(page.getByTestId(`doc-tab-macro-${title}`)).toBeVisible();
     await expect(page.getByTestId('macro-design')).toBeVisible();
     await expect(page.getByTestId('ribbon-tab-macroDesign')).toBeVisible();
@@ -159,6 +160,7 @@ test('Event tab: closing the form asks its embedded macro first, then the form; 
     await page.getByTestId('ctl-cmdCommandes').click();
     await page.getByTestId('sheet-tab-event').click();
     await page.getByTestId('prop-OnClick-build').click();   // an empty event: a new embedded macro
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     await expect(page.getByTestId(`doc-tab-macro-FClients : cmdCommandes : ${fr.prop.OnClick}`)).toBeVisible();
     await page.getByTestId('macro-add-root').fill(fr.macro.action.Beep);
     // closing the form asks the macro first (B1's question), then the form

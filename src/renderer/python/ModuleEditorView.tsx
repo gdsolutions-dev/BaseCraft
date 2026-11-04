@@ -12,10 +12,11 @@ import { api } from '../bridge';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
 import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
+import { functionClashes } from './function-index';
 import { pythonHost } from './python-host';
 import './module-editor.css';
 
-type SyntaxError = { line: number; col: number; message: string };
+type SyntaxError = { line: number; col: number; message: string; text?: string };   // text: a runtime error, already worded (R10)
 const setErrorLine = StateEffect.define<number | null>();
 /** The red line marker. */
 const errorLine = StateField.define<DecorationSet>({
@@ -60,6 +61,7 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
   const dirty = useRef(false);
   const busy = useRef(false);
   const [error, setError] = useState<SyntaxError | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);   // R12: after a save, exports named like another module's or a built-in's
   const live = useRef({ tab, readOnly });
   live.current = { tab, readOnly };
 
@@ -74,6 +76,16 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
     view.current = ev;
     return () => { ev.destroy(); void dispatch({ type: 'setDirty', id: live.current.tab.id, dirty: false }); };
   }, [tab.id]);   // eslint-disable-line react-hooks/exhaustive-deps -- one editor per tab
+
+  // R10: « Débogage » opens the module with a line (and the error text): cursor there, scrolled into view, red marker and bar
+  useEffect(() => {
+    const line = tab.openArgs?.line, ev = view.current;
+    if (!ev || !line || line < 1 || line > ev.state.doc.lines) return;
+    const pos = ev.state.doc.line(line).from;
+    ev.dispatch({ selection: { anchor: pos }, effects: [EditorView.scrollIntoView(pos, { y: 'center' }), setErrorLine.of(line)] });
+    ev.focus();
+    setError(tab.openArgs?.message ? { line, col: 0, message: '', text: tab.openArgs.message } : null);
+  }, [tab.openArgs]);
 
   const message = (messageKey: string) => modal.confirm({ titleKey: 'dialog.errorTitle', messageKey, buttons: ['ok'] });
   const askName = (initialName: string) => modal.prompt({ titleKey: 'designer.saveAsTitle', labelKey: 'module.nameLabel', initial: initialName,
@@ -98,6 +110,8 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
         if (r.ok) {
           if (!engineDown && pythonHost().state() !== 'off') await pythonHost().reset();   // R7: a saved module resets every user module
           setError(parsed.error);
+          functionClashes(name, parsed.exports).then((c) => setWarnings(c.map((x) => (x.other === null ? t('module.functionBuiltin', { fn: x.fn }) : t('module.functionClash', { fn: x.fn, other: x.other })))),
+            () => setWarnings([]));
           view.current!.dispatch({ effects: setErrorLine.of(parsed.error?.line ?? null) });
           if (view.current!.state.doc.toString() === source) markDirty(false);   // typed during the awaits: stay dirty
           dispatch(doc.isNew ? { type: 'objectSaved', kind: 'module', name, tabId: doc.id } : { type: 'objectSaved', kind: 'module', name });
@@ -136,7 +150,8 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
   return (
     <div className="module-editor-wrap">
       <div className="module-editor" ref={host} data-testid="module-editor" />
-      {error && <div className="module-error" role="alert" data-testid="module-error">{t('module.syntaxError', { line: error.line, message: error.message })}</div>}
+      {warnings.length > 0 && <div className="module-error" role="status" data-testid="module-warning">{warnings.map((w) => <div key={w}>{w}</div>)}</div>}
+      {error && <div className="module-error" role="alert" data-testid="module-error">{error.text ?? t('module.syntaxError', { line: error.line, message: error.message })}</div>}
     </div>
   );
 }

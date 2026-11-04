@@ -4,7 +4,7 @@
 // B2 appended the 13 form actions (R4), the `dataEntry` category and the `reference` argument type.
 
 export type ActionName = 'Beep' | 'ClearMacroError' | 'CloseDatabase' | 'CloseWindow' | 'MessageBox' | 'OnError' | 'OpenForm' | 'OpenQuery'
-  | 'OpenReport' | 'OpenTable' | 'Quit' | 'RemoveAllTempVars' | 'RemoveTempVar' | 'RunMacro' | 'RunSQL' | 'SetLocalVar' | 'SetTempVar'
+  | 'OpenReport' | 'OpenTable' | 'Quit' | 'RemoveAllTempVars' | 'RemoveTempVar' | 'RunCode' | 'RunMacro' | 'RunSQL' | 'SetLocalVar' | 'SetTempVar'
   | 'SetWarnings' | 'StopAllMacros' | 'StopMacro'
   | 'ApplyFilter'
   | 'CancelEvent'
@@ -26,7 +26,8 @@ export type ActionCategory = 'ui' | 'macro' | 'system' | 'filter' | 'window' | '
  *  `reference`: a canonical expression naming a control or field (SetValue's Item), edited as an expression, never evaluated by the engine. */
 export type ArgType = 'text' | 'expression' | 'where' | 'number' | 'enum' | 'sql' | 'formName' | 'reportName' | 'queryName' | 'tableName'
   | 'macroName' | 'objectType' | 'objectName'
-  | 'reference';
+  | 'reference'
+  | 'functionCall';   // `name(args)` or `=name(args)` of a Python function, kept raw (RunCode's FunctionName), parsed by parsePythonCall
 export interface ArgDef { name: string; type: ArgType; options?: readonly string[]; default?: string; required?: boolean }
 export interface ActionDef { name: ActionName; category: ActionCategory; unsafe: boolean; args: readonly ArgDef[] }
 
@@ -80,6 +81,7 @@ export const ACTIONS: readonly ActionDef[] = [
   act('RemoveAllTempVars', 'macro'),
   act('RemoveTempVar', 'macro', [arg('Name', 'text', required)]),
   act('Requery', 'filter', [arg('ControlName', 'text')]),
+  act('RunCode', 'macro', [arg('FunctionName', 'functionCall', required)], true),
   act('RunMacro', 'macro', [arg('MacroName', 'macroName', required), arg('RepeatCount', 'number'), arg('RepeatExpression', 'expression')]),
   act('RunSQL', 'filter', [arg('SQLStatement', 'sql', required)], true),
   act('SaveRecord', 'dataEntry'),

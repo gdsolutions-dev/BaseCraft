@@ -277,11 +277,13 @@ const sqlListeners = new Set<() => void>();
 const sqlRequested = (name: string): number => sqlRequests.findIndex((n) => sameName(n, name));
 /** Opens the query `name` in its SQL view: a one-shot request for `name`, then `open` in mode `design`; the view takes the
  *  request when it mounts, or at once when that query's tab is already open. `isNew`: a new query (Create > SQL Query). The
- *  shell's dispatch answers a promise when the open document's mode guard has its say: refused, the request goes. */
-export function openSqlView(dispatch: AppDispatch, name: string, isNew = false): void {
+ *  shell's dispatch answers a promise when the open document's mode guard has its say: refused, the request goes. `tabId`: that
+ *  query's tab, switched in place (a new query, never saved, has no name to open by). */
+export function openSqlView(dispatch: AppDispatch, name: string, isNew = false, tabId?: string): void {
   sqlRequests.push(name);
   sqlListeners.forEach((l) => l());
-  const done = dispatch(isNew ? { type: 'open', kind: 'query', name, mode: 'design', isNew: true } : { type: 'open', kind: 'query', name, mode: 'design' });
+  const done = dispatch(tabId ? { type: 'setMode', id: tabId, mode: 'design' }
+    : isNew ? { type: 'open', kind: 'query', name, mode: 'design', isNew: true } : { type: 'open', kind: 'query', name, mode: 'design' });
   if (done instanceof Promise) {
     void done.then((ok) => { const i = sqlRequested(name); if (ok === false && i >= 0) sqlRequests.splice(i, 1); });
   }
@@ -305,7 +307,7 @@ function readSql(text: string): { q: Query } | { error: SqlError } | null {
  *  property's new SQL, set when the builder closes), Run (its datasheet), Close (the tab's). */
 interface BuilderHooks { start: { design: QbeDesign | null; sql: string }; update(sql: string): void; run(sql: string): void; close(): void }
 
-export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewProps & { builder?: BuilderHooks }) {
+export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: DocViewProps & { builder?: BuilderHooks }) {
   const { t } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -771,7 +773,8 @@ export function QueryDesignView({ tab, readOnly, dispatch, builder }: DocViewPro
       : { tableNames: { active: tableRow }, ...Object.fromEntries(KIND_COMMANDS.map(([id, k]) => [id, { active: k === kind }])) });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { offCommands(); offStates(); offGuard(); };
-  }, [tab.id, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind, isPassThrough]);
+    // `active`: back from the unsaved run's datasheet (DocumentView keeps this view behind it), whose leaving cleared the tab's handlers
+  }, [tab.id, active, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind, isPassThrough]);
 
   if (!state || !ctx) return <div className="qd" ref={root} aria-busy />;
   if (view === 'sql') {

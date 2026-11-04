@@ -18,7 +18,7 @@ import { ShapeCtl } from './controls/ShapeCtl';
 import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
 import { TextBoxCtl } from './controls/TextBoxCtl';
-import { prop, tabSequence } from './run-model';
+import { gridlineStyle, prop, tabSequence } from './run-model';
 
 const BACK = PROPERTY_CATALOG.find((d) => d.name === 'BackColor')!;
 
@@ -47,10 +47,12 @@ function renderControl(c: ControlDef, x: RunCtx, origin: ControlDef | null, z?: 
   const err = x.errors[c.name];
   const listError = x.lists[c.name]?.error;
   const note = listError === undefined ? undefined : (() => { const m = errorMessage(listError); return x.t('form.list.sourceError', { message: x.t(m.key, m.params) }); })();
+  const grid = gridlineStyle(c, origin ?? undefined);
   const s = style as { left: number; top: number; height: number; width: number };
   return (
     <Fragment key={c.name}>
       {el}
+      {grid && <div aria-hidden data-testid={`form-grid-${c.name}`} style={z === undefined ? grid : { ...grid, zIndex: z }} />}
       {!container && (c.children ?? []).map((k) => renderControl(k, x, origin, z, x.id(c.name)))}
       {err !== undefined && (
         <div role="alert" id={`${x.id(c.name)}-err`} className="frun-error" data-testid={`form-error-${c.name}`}

@@ -90,6 +90,9 @@ describe('property catalog', () => {
     expect(byName('FontName').editor).toBe('font');
     expect(byName('ColumnWidths').editor).toBe('text');
     expect(byName('ColumnHeads')).toMatchObject({ editor: 'bool', default: false, appliesTo: ['comboBox', 'listBox'], tab: 'format' });
+    expect(byName('ColumnWidth')).toMatchObject({ editor: 'twips', tab: 'format', objects: ['form'], appliesTo: ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox'] });
+    expect(propertiesFor('textBox').map((d) => d.name)).toContain('ColumnWidth');
+    expect(propertiesFor('label').map((d) => d.name)).not.toContain('ColumnWidth');
     const bounds = (n: string) => [byName(n).min, byName(n).max];
     expect([bounds('GridX'), bounds('GridY'), bounds('FontSize'), bounds('BorderWidth'), bounds('BoundColumn'), bounds('ColumnCount')])
       .toEqual([[1, 16], [1, 16], [6, 72], [0, 6], [1, 20], [1, 20]]);
@@ -323,5 +326,19 @@ describe('validateDesignDoc', () => {
     expect(SECTION_KINDS).toEqual(['formHeader', 'detail', 'formFooter', 'reportHeader', 'pageHeader', 'groupHeader', 'groupFooter', 'pageFooter', 'reportFooter']);
     expect(CONTROL_KINDS).toEqual(['label', 'textBox', 'checkBox', 'optionGroup', 'optionButton', 'comboBox', 'listBox', 'commandButton', 'subform',
       'image', 'line', 'rectangle', 'pageBreak', 'tabControl']);
+  });
+});
+
+describe('L4 catalog: gridlines, margins, padding, anchors', () => {
+  const sides = ['Top', 'Bottom', 'Left', 'Right'];
+  const names = [...sides.flatMap((s) => [`GridlineStyle${s}`, `GridlineWidth${s}`, `${s}Margin`, `${s}Padding`]), 'GridlineColor', 'HorizontalAnchor', 'VerticalAnchor'];
+  it('has the 19 properties with their editors and defaults, on every control but the page break (gridlines also skip the line)', () => {
+    expect(names).toHaveLength(19);
+    const d = (n: string) => PROPERTY_CATALOG.find((x) => x.name === n)!;
+    for (const n of names) { expect(d(n), n).toBeDefined(); expect(d(n).tab).toBe('format'); expect(d(n).appliesTo).toEqual(n.endsWith('Margin') ? ['label', 'textBox', 'comboBox', 'listBox'] : CONTROL_KINDS.filter((k) => k !== 'pageBreak' && !(n.startsWith('Gridline') && k === 'line'))); }
+    expect([d('GridlineStyleTop').editor, d('GridlineStyleTop').default, d('GridlineStyleTop').options]).toEqual(['enum', 'transparent', ['transparent', 'solid', 'dashed', 'dotted']]);
+    expect([d('GridlineWidthLeft').default, d('GridlineWidthLeft').min, d('GridlineWidthLeft').max, d('GridlineWidthLeft').integer]).toEqual([1, 0, 6, true]);
+    expect([d('GridlineColor').editor, d('GridlineColor').default, d('TopMargin').editor, d('TopMargin').default, d('RightPadding').default]).toEqual(['color', '#a6a6a6', 'twips', 0, 0]);
+    expect([d('HorizontalAnchor').default, d('HorizontalAnchor').options, d('VerticalAnchor').default, d('VerticalAnchor').options]).toEqual(['left', ['left', 'right', 'both'], 'top', ['top', 'bottom', 'both']]);
   });
 });

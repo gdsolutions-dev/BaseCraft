@@ -69,6 +69,27 @@ it('sql source, sort, multi-table read-only: a many-to-many join (R7)', () => {
   expect(pageQuerySource(db, ref, { offset: 0, limit: 2, sort: [{ field: 'Montant', dir: 'desc' }] }, ctx))
     .toEqual({ rows: [['Durand', 9], ['Durand', 8]], rowids: [null, null], total: 4 }); // Lyon = LYON (Access comparison)
   expect(() => pageQuerySource(db, ref, { offset: 0, limit: 2, sort: [{ field: 'Zzz', dir: 'asc' }] }, ctx)).toThrow(/^bc:notFound$/); // contract 1.2
+  // count: false, the rows only (a datasheet counts once idle); once counted, the cached total comes back
+  const other = { kind: 'sql', sql: 'SELECT Nom FROM Clients INNER JOIN Tarifs ON Clients.Ville = Tarifs.Ville' } as const;
+  expect(pageQuerySource(db, other, { offset: 0, limit: 1, count: false }, ctx)).toMatchObject({ rows: [['Dupont']], total: -1 });
+  expect(pageQuerySource(db, other, { offset: 0, limit: 0 }, ctx).total).toBe(4);
+  expect(pageQuerySource(db, other, { offset: 0, limit: 0, count: false }, ctx).total).toBe(4);
+});
+
+it('a UNION dedups once per write: its pages, count, sort and filter read a snapshot, its values as they are', () => {
+  const ref = { kind: 'sql', sql: 'SELECT Ville FROM Clients UNION SELECT [N°] FROM Clients' } as const;
+  const snaps = () => (db.prepare("SELECT count(*) AS n FROM temp.sqlite_schema WHERE type = 'table'").get() as { n: number }).n;
+  const p = pageQuerySource(db, ref, { offset: 0, limit: 10 }, ctx);
+  expect(p.total).toBe(7); // Lyon = LYON, plus 1…4
+  expect(p.rows.flat().filter((v) => typeof v === 'number').sort()).toEqual([1, 2, 3, 4]); // not '1' in a text column
+  expect(snaps()).toBe(1);
+  expect(pageQuerySource(db, ref, { offset: 0, limit: 1, sort: [{ field: 'Ville', dir: 'desc' }] }, ctx).rows).toEqual([['Paris']]);
+  expect(pageQuerySource(db, ref, { offset: 0, limit: 10, filter: [{ field: 'Ville', criteria: '"Paris"' }] }, ctx).total).toBe(1);
+  expect(snaps()).toBe(1); // reused
+  db.exec(`INSERT INTO "Clients" ("Nom", "Ville") VALUES ('X', 'Nice')`);
+  seq++;
+  expect(pageQuerySource(db, ref, { offset: 0, limit: 10 }, ctx).total).toBe(9);
+  expect(snaps()).toBe(1); // the old one dropped
 });
 
 it("an updatable join's rowids are the key table's, also through a saved query (P2); a row without its key record has none (R5)", () => {

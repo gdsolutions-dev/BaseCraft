@@ -126,6 +126,7 @@ test('recette B2: an embedded On Click opening a form through [Formulaires]!, a 
     await expect(vis(page, 'ctl-cmdCommandes')).toHaveText('Commandes');
     await vis(page, 'sheet-tab-event').click();
     await vis(page, 'prop-OnClick-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     const onClickTab = `doc-tab-macro-FClients : cmdCommandes : ${fr.prop.OnClick}`;
     await expect(page.getByTestId(onClickTab)).toHaveAttribute('aria-selected', 'true');
     await vis(page, 'macro-add-root').fill(fr.macro.action.OpenForm);
@@ -145,6 +146,7 @@ test('recette B2: an embedded On Click opening a form through [Formulaires]!, a 
     await vis(page, 'sheet-object').selectOption('doc');
     await vis(page, 'sheet-tab-event').click();
     await vis(page, 'prop-BeforeUpdate-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     const beforeUpdateTab = `doc-tab-macro-FCommandes : ${fr.tabs.kind.form} : ${fr.prop.BeforeUpdate}`;
     await expect(page.getByTestId(beforeUpdateTab)).toHaveAttribute('aria-selected', 'true');
     await add(page, 'root', 'block-if');
@@ -191,6 +193,7 @@ test('recette B2: an embedded On Click opening a form through [Formulaires]!, a 
     await vis(page, 'sheet-object').selectOption(`s:${FACTURES_REPORT.sections.findIndex((s) => s.kind === 'detail')}`);
     await vis(page, 'sheet-tab-event').click();
     await vis(page, 'prop-OnFormat-build').click();
+    await page.getByTestId('choose-macro').click();   // an empty event asks which builder (D2 R11)
     const onFormatTab = page.locator(`[data-testid^="doc-tab-macro-${REPORT} : "][data-testid$=" : ${fr.prop.OnFormat}"]`);
     await expect(onFormatTab).toHaveAttribute('aria-selected', 'true');
     await add(page, 'root', 'block-if');

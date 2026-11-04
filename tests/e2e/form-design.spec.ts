@@ -53,7 +53,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     expect(await testIds(page.getByTestId('ribbon-group-view').locator('[data-testid^="cmd-"]'))).toEqual(['cmd-view', 'cmd-viewMenu']);
     await page.getByTestId('cmd-viewMenu').click();
     expect(await testIds(page.getByTestId('ribbon-view-menu').locator('[data-testid^="view-item-"]'))).toEqual(['view-item-viewForm', 'view-item-viewDatasheet', 'view-item-viewLayout', 'view-item-viewDesign']);
-    await expect(page.getByTestId('view-item-viewForm')).toBeDisabled();   // pas encore enregistré
+    await expect(page.getByTestId('view-item-viewForm')).toBeEnabled();   // pas encore enregistré : il s'affiche tel quel (de6f3a8)
     await page.keyboard.press('Escape');
     expect(await testIds(page.getByTestId('ribbon-group-tools').locator('[data-testid^="cmd-"]')))
       .toEqual(['cmd-addExistingFields', 'cmd-propertySheet', 'cmd-tabOrder', 'cmd-chartSettings', 'cmd-subformInNewWindow', 'cmd-viewCode']);
@@ -223,20 +223,30 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await expect(footer.locator('[data-ctl]')).toHaveCount(0);
     await expect.poll(async () => (await footer.boundingBox())?.height ?? 0).toBe(0);
 
-    // modifié : vers le mode Formulaire, Non reste en Création ; la fermeture propose Oui/Non/Annuler ; Oui enregistre puis change de mode
+    // modifié : vers le mode Formulaire, il s'affiche tel quel sans question et la modification est gardée (de6f3a8) ; retour en Création ;
+    // la fermeture propose Oui/Non/Annuler ; enregistré (Ctrl+S), puis le mode Formulaire
     await page.getByTestId('ctl-Nom').press('ArrowRight');
     await expect(page.getByTestId('doc-tab-form-Fiche client')).toContainText('•');
     await pickView(page, 'viewForm');
-    await expect(page.getByTestId('modal')).toContainText(fr.form.mustSaveFirst.replace('{{name}}', 'Fiche client'));
-    await page.getByTestId('modal-btn-no').click();
+    await expect(page.getByTestId('form-run').filter({ visible: true })).toBeVisible();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    // closing the tab there asks to save the design (as a query); Cancel stays
+    await page.getByTestId('doc-tab-close-form-Fiche client').click();
+    await expect(page.getByTestId('modal')).toContainText(fr.form.saveFirst.replace('{{name}}', 'Fiche client'));
+    await page.getByTestId('modal-btn-cancel').click();
+    await expect(page.getByTestId('form-run').filter({ visible: true })).toBeVisible();
+    await page.getByTestId('ribbon-tab-home').click();
+    await pickView(page, 'viewDesign');
     await expect(page.getByTestId('design-canvas')).toBeVisible();
+    await expect(page.getByTestId('doc-tab-form-Fiche client')).toContainText('•');   // still to be saved (as a query)
     await page.getByTestId('doc-tab-close-form-Fiche client').click();
     await expect(page.getByTestId('modal-btn-cancel')).toBeVisible();
     await page.getByTestId('modal-btn-cancel').click();
     await expect(page.getByTestId('doc-tab-form-Fiche client')).toBeVisible();
     // Mode Formulaire : la vue d'exécution
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('doc-tab-form-Fiche client')).not.toContainText('•');
     await pickView(page, 'viewForm');
-    await page.getByTestId('modal-btn-yes').click();
     await expect(page.getByTestId('form-run')).toBeVisible();
     await expect(page.getByTestId('ribbon-tab-formDesign')).toHaveCount(0);
     const after = await getForm(page, 'Fiche client');

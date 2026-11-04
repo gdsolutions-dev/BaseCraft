@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { saveObject } from '../../src/main/db/objects'
 import { seedBase, launchApp } from './helpers'
 
-type Host = { immediate(line: string): Promise<string>; state(): string; simulateStuck(): void }
+type Host = { immediate(line: string): Promise<string>; interrupt(): void; state(): string; simulateStuck(): void }
 type W = { __bcPython: Host }
 const seed = (name: string) => seedBase(name, (db) => {
   const r = saveObject(db, 'module', 'helper', { formatVersion: '1.0', source: 'def f(x):\n    return x + 1\n', exports: [{ name: 'f', params: ['x'] }] }, null)
@@ -19,7 +19,7 @@ const outcome = (page: Page) => page.evaluate(() => (window as unknown as { __ou
 
 test('Python run: boxes, veil, Ctrl+Break, restart notice', async () => {
   test.setTimeout(180_000)
-  const { app, page } = await launchApp({ args: [seed('python-run')] })
+  const { app, page } = await launchApp({ args: [seed('python-run')], env: { BASECRAFT_REGION: 'fr-FR' } }) // French boxes on any runner
   try {
     await expect(page.getByTestId('nav-item-module-helper')).toBeVisible()
     // no active content: 'none' runs what the designer types, and the module needs no macro
@@ -71,6 +71,22 @@ test('Python run: boxes, veil, Ctrl+Break, restart notice', async () => {
     await expect.poll(() => outcome(page)).toBe('err:bc:pythonRestarted')
     await start(page, '?1+1')
     await expect.poll(() => outcome(page), { timeout: 60_000 }).toBe('ok:2')
+  } finally {
+    await app.close()
+  }
+})
+
+test('Python run: Ctrl+Break while packages load interrupts the run and leaves no stale interrupt (R9)', async () => {
+  test.setTimeout(180_000)
+  const { app, page } = await launchApp({ args: [seed('python-interrupt-load')] })
+  try {
+    await expect.poll(() => page.evaluate(() => (window as unknown as W).__bcPython.state()), { timeout: 60_000 }).toBe('idle') // engine up: the call is in flight at once
+    await start(page, 'import pandas as pd') // pandas loads for seconds
+    await page.waitForTimeout(200)
+    await page.evaluate(() => (window as unknown as W).__bcPython.interrupt())
+    await expect.poll(() => outcome(page), { timeout: 60_000 }).toBe('err:KeyboardInterrupt')
+    await start(page, '?1')
+    await expect.poll(() => outcome(page), { timeout: 60_000 }).toBe('ok:1')
   } finally {
     await app.close()
   }

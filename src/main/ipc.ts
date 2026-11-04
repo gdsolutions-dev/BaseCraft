@@ -22,7 +22,7 @@ import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue, nameChanges, propertyTargetsArg,
+  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
@@ -643,6 +643,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), o === null ? null : lookupName(o))));
   handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(lookupName(n))));
   handle(CH.relationsLayout, () => need().relationsLayout());
+  handle(CH.tablesSaveColumnWidths, (n, w) => rowWrite(() => need().saveColumnWidths(lookupName(n), columnWidths(w))));
   handle(CH.relationsSaveLayout, (l) => rowWrite(() => need().saveRelationsLayout(relationsLayout(l))));
   handle(CH.relationsCascadeChildren, (t) => need().cascadeChildren(lookupName(t)));
 

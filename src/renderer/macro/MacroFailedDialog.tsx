@@ -10,6 +10,8 @@ import { api } from '../bridge';
 import { i18n } from '../i18n';
 import { bcErrorCode, errorMessage, type ModalApi } from '../shell/Modal';
 import { formulaLang } from '../../shared/i18n';
+import { PythonError } from '../python/python-host';
+import { pythonErrorText, type PythonErrorOptions } from '../python/PythonErrorDialog';
 import type { MacroFailure } from './engine';
 
 const t = (key: string, params: Record<string, unknown> = {}) => i18n.t(key, params);
@@ -26,6 +28,7 @@ export function failureMessage(f: MacroFailure): string {
   const name = (code ? detail.split('|')[2] : detail) || f.raw.MacroName || f.macro;
   switch (f.code) {
     case 'actionFailed':
+      if (f.cause instanceof PythonError) return pythonErrorText(f.cause.info);
       if (code === 'notFound') return t('macro.error.notFound', { name });
       if (code === 'runSqlSelect') return t('macro.error.runSqlSelect');
       if (code === 'actionCancelled' || code === 'actionNotRun') return t(`macro.error.${code}`, { action });
@@ -55,7 +58,7 @@ export function argText(action: string, arg: string, value: string, ctx: Display
   return value;
 }
 
-function MacroFailed({ f, ctx, onClose }: { f: MacroFailure; ctx: DisplayContext; onClose(v: true): void }) {
+function MacroFailed({ f, ctx, py, onClose }: { f: MacroFailure; ctx: DisplayContext; py?: PythonErrorOptions; onClose(v: true): void }) {
   const { t: tr } = useTranslation();
   const def = actionDef(f.action);
   const names = def ? def.args.map((a) => a.name) : Object.keys(f.raw);
@@ -69,15 +72,22 @@ function MacroFailed({ f, ctx, onClose }: { f: MacroFailure; ctx: DisplayContext
         <dt>{tr('macro.failed.number')}</dt><dd data-testid="macro-failed-number">{f.number}</dd>
       </dl>
       <p className="modal-message" role="alert" data-testid="macro-failed-message">{failureMessage(f)}</p>
+      {f.cause instanceof PythonError && py && f.cause.info.module !== null && f.cause.info.line !== null
+        && <p data-testid="python-error-where">{tr('python.error.where', { module: f.cause.info.module, line: f.cause.info.line })}</p>}
       <div className="modal-buttons">
+        {f.cause instanceof PythonError && py?.debug && f.cause.info.module !== null && f.cause.info.line !== null && (() => {
+          const i = (f.cause as PythonError).info;
+          return <button type="button" className="btn" data-testid="python-error-debug"
+            onClick={() => { onClose(true); py.open(i.module!, i.line!, pythonErrorText(i)); }}>{tr('python.error.debug')}</button>;
+        })()}
         <button type="button" className="btn btn-primary" data-testid="macro-failed-stop" onClick={() => onClose(true)}>{tr('macro.failed.stop')}</button>
       </div>
     </div>
   );
 }
 
-export async function showMacroFailed(modal: ModalApi, f: MacroFailure): Promise<void> {
+export async function showMacroFailed(modal: ModalApi, f: MacroFailure, py?: PythonErrorOptions): Promise<void> {
   const s = await api.app.getSettings();
   const ctx: DisplayContext = { lang: formulaLang(s.uiLanguage), region: localeInfo(s.region) };
-  await modal.custom<true>((close) => createElement(MacroFailed, { f, ctx, onClose: close }), { titleKey: 'macro.failed.title' });
+  await modal.custom<true>((close) => createElement(MacroFailed, { f, ctx, py, onClose: close }), { titleKey: 'macro.failed.title' });
 }

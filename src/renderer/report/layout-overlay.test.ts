@@ -3,7 +3,7 @@ import { COL_GAP, readLayouts, reflow, type Layout } from '../../shared/design/l
 import type { ControlDef, DesignDoc, SectionDef } from '../../shared/design/model';
 import type { LaidOutBand, LaidOutItem, LaidOutReport } from '../../shared/report/types';
 import { DEFAULT_SIZE } from '../designer/units';
-import { MIN_WIDTH, deleteTargets, overlayFor, placement, resizeTo, stepDrag, type WidthDrag } from './layout-overlay';
+import { MIN_WIDTH, containerAt, deleteTargets, overlayFor, placement, resizeTo, stepDrag, type WidthDrag } from './layout-overlay';
 
 const T = (name: string, left: number, top: number, width = 1000, height = 200): LaidOutItem => ({ kind: 'text', name, left, top, width, height, lines: [],
   font: { name: 'Arial', size: 10, bold: false, italic: false, underline: false }, color: '#000000', back: null, border: null } as unknown as LaidOutItem);
@@ -106,23 +106,68 @@ describe('deleteTargets', () => {
   });
 });
 
-describe('placement (click-to-place)', () => {
+describe('placement (click-to-place and drag-to-draw)', () => {
   const doc = { sections: [{ kind: 'reportHeader' }, { kind: 'detail' }] } as unknown as DesignDoc;
   const tool = { kind: 'textBox', locked: false } as const;
   const none = { kind: null, locked: false } as const;
+  const P = (x: number, y: number) => ({ x, y });
+  const click = (x: number, y: number, snap: number | null) => placement(rep(), doc, tool, P(x, y), P(x, y), snap, 1);
   it('a click in the 3rd Detail band: Detail section, band-relative rect at the default size', () => {
-    expect(placement(rep(), doc, tool, 1010, 1130, null)).toEqual({ section: 1, rect: { left: 510, top: 130, ...DEFAULT_SIZE } });
+    expect(click(1010, 1130, null)).toEqual({ section: 1, rect: { left: 510, top: 130, ...DEFAULT_SIZE } });
   });
   it('snapped to the grid, unsnapped without a step (Alt)', () => {
-    expect(placement(rep(), doc, tool, 1010, 1130, 100)?.rect).toMatchObject({ left: 500, top: 100 });
-    expect(placement(rep(), doc, tool, 1010, 1130, 0)?.rect).toMatchObject({ left: 510, top: 130 });
+    expect(click(1010, 1130, 100)?.rect).toMatchObject({ left: 500, top: 100 });
+    expect(click(1010, 1130, 0)?.rect).toMatchObject({ left: 510, top: 130 });
   });
   it('null in a gap, with no tool, or for a section absent from the document', () => {
-    expect(placement(rep(), doc, tool, 1010, 350, null)).toBeNull();
-    expect(placement(rep(), doc, none, 1010, 1130, null)).toBeNull();
-    expect(placement(rep(), { sections: [{ kind: 'reportHeader' }] } as unknown as DesignDoc, tool, 1010, 1130, null)).toBeNull();
+    expect(click(1010, 350, null)).toBeNull();
+    expect(placement(rep(), doc, none, P(1010, 1130), P(1010, 1130), null, 1)).toBeNull();
+    expect(placement(rep(), { sections: [{ kind: 'reportHeader' }] } as unknown as DesignDoc, tool, P(1010, 1130), P(1010, 1130), null, 1)).toBeNull();
   });
   it('left/top clamped at 0 when snapping rounds below the band', () => {
-    expect(placement(rep(), doc, tool, 510, 1001, 1000)?.rect).toMatchObject({ left: 0, top: 0 });
+    expect(click(510, 1001, 1000)?.rect).toMatchObject({ left: 0, top: 0 });
+  });
+  it('drag right-down: the rect from start to end in the start band', () => {
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(2010, 1230), null, 1)).toEqual({ section: 1, rect: { left: 510, top: 130, width: 1000, height: 100 } });
+  });
+  it('drag left-up: the same rect (corners swapped)', () => {
+    expect(placement(rep(), doc, tool, P(2010, 1230), P(1010, 1130), null, 1)).toEqual({ section: 1, rect: { left: 510, top: 130, width: 1000, height: 100 } });
+  });
+  it('end in the next gap or below the last band: still the start band, reaching past its bottom', () => {
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(1510, 1600), null, 1)?.rect).toEqual({ left: 510, top: 130, width: 500, height: 470 });
+    expect(placement(rep(), doc, tool, P(1010, 430), P(1510, 1130), null, 1)).toMatchObject({ section: 1, rect: { left: 510, top: 30, width: 500, height: 700 } });
+  });
+  it('a move under the click threshold is a click; the threshold is in px (scale)', () => {
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(1012, 1129), null, 1)?.rect).toMatchObject(DEFAULT_SIZE);
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(1015, 1129), null, 1 / 10)?.rect).toMatchObject(DEFAULT_SIZE);
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(1015, 1129), null, 1)?.rect).toEqual({ left: 510, top: 129, width: 5, height: 1 });
+  });
+  it('both corners snapped; a zero-size snapped drag is one grid step', () => {
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(2090, 1290), 100, 1)?.rect).toEqual({ left: 500, top: 100, width: 1100, height: 200 });
+    expect(placement(rep(), doc, tool, P(1010, 1130), P(1040, 1140), 100, 1)?.rect).toEqual({ left: 500, top: 100, width: 100, height: 100 });
+  });
+  it('start in a gap: null', () => {
+    expect(placement(rep(), doc, tool, P(1010, 350), P(1500, 1130), null, 1)).toBeNull();
+  });
+});
+
+describe('containerAt (a control drawn inside an option group or a tab control goes into it)', () => {
+  const c = (kind: ControlDef['kind'], name: string, children?: ControlDef[]): ControlDef => ({ kind, name, left: 0, top: 0, width: 1000, height: 200, props: {}, ...(children ? { children } : {}) });
+  const doc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [
+    { kind: 'reportHeader', height: 300, props: {}, controls: [c('label', 'Titre')] },
+    { kind: 'detail', height: 300, props: {}, controls: [c('optionGroup', 'Total', [c('optionButton', 'Opt')]), c('tabControl', 'Onglets')] },
+  ] } as DesignDoc;
+  const flow = (): LaidOutReport => ({ width: 11906, height: 2000, issues: [], pages: [{ number: 1, bands: [
+    band(0, [T('Titre', 100, 50)], 'reportHeader'), band(400, [T('Total', 200, 0), T('Opt', 300, 0, 100, 100), T('Onglets', 5000, 0)]),
+  ] }] });
+  it('the container under the start point, in any record', () => {
+    expect(containerAt(flow(), doc, 1300, 450)).toBe('Total');
+    expect(containerAt(flow(), doc, 5600, 450)).toBe('Onglets');
+  });
+  it('none over another control (an option button inside the group included), in a gap or outside any item', () => {
+    expect(containerAt(flow(), doc, 650, 100)).toBeUndefined();
+    expect(containerAt(flow(), doc, 850, 450)).toBeUndefined();
+    expect(containerAt(flow(), doc, 9000, 450)).toBeUndefined();
+    expect(containerAt(flow(), doc, 1300, 350)).toBeUndefined();
   });
 });

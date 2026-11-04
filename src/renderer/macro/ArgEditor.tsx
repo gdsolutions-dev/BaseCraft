@@ -92,6 +92,9 @@ export function ArgEditor({ path, action, def, args, ctx }: { path: ItemPath; ac
       return <WhereField id={id} testId={id} value={value} action={action} args={args} ctx={ctx} onCommit={set} />;
     case 'sql':
       return <textarea id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} rows={3} value={value ?? ''} onChange={(e) => set(e.target.value)} />;
+    case 'functionCall':   // plain text, not localized: the call is parsed with the canonical syntax
+      return <input id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} value={draft ?? value ?? ''}
+        onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== null) { set(draft); setDraft(null); } }} onKeyDown={(e) => { if (e.key === 'Enter' && draft !== null) { set(draft); setDraft(null); } }} />;
     case 'text': case 'number': {
       const commit = () => { if (draft !== null) { set(storedText(draft, ctx.display)); setDraft(null); } };
       return <input id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} value={draft ?? shownText(value ?? '', ctx.display)}

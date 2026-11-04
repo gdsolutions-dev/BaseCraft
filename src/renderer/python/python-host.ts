@@ -48,6 +48,7 @@ export function createPythonHost() {
   }
   let session: Session | null = null
   const flight: number[] = [] // ids of the requests in flight, oldest (the one the worker runs) first
+  const baseline = new Map<number, number>() // id -> pendingCalls() when the request started (R9: calls above it are its own)
   let seq = 0
   let killTimer: { id: number; handle: ReturnType<typeof setTimeout> } | null = null // R6: one at most
   let stuck = false // test hook: the next interrupt is not delivered
@@ -87,7 +88,7 @@ export function createPythonHost() {
         session = null
         worker.terminate()
         rejectReady(reason); kill(reason)
-        flight.length = 0; since = null
+        flight.length = 0; baseline.clear(); since = null
         clearKill()
         notify()
       },
@@ -117,6 +118,9 @@ export function createPythonHost() {
     const s = session
     if (!s) throw new Error('bc:pythonRestarted') // restart() or a crash ran while ensure() waited
     const id = ++seq
+    baseline.set(id, s.server.pendingCalls())
+    // R6/R9: a new top-level call starts with a clean cell (a stale 2 must not hit it); an interrupt sent later, even before the worker dequeues the request, stays.
+    if (flight.length === 0) Atomics.store(new Int32Array(s.interrupt), 0, 0)
     if (flight.push(id) === 1) { since = Date.now(); notify() }
     try {
       return await Promise.race([s.server.request(req), s.dead])
@@ -125,6 +129,7 @@ export function createPythonHost() {
     } finally {
       if (session === s) {
         flight.splice(flight.indexOf(id), 1)
+        baseline.delete(id)
         if (killTimer?.id === id) clearKill()
         if (flight.length === 0) { since = null; notify() }
       }
@@ -154,12 +159,20 @@ export function createPythonHost() {
       if (!s || flight.length === 0) return
       if (stuck) stuck = false
       else Atomics.store(new Int32Array(s.interrupt), 0, 2)
-      if (killTimer) return
-      const id = flight[0]!
-      killTimer = { id, handle: setTimeout(() => {
-        killTimer = null
-        if (session === s && flight[0] === id) { pushLog('python.restarted'); restart(); restartSubs.forEach((f) => f()) }
-      }, INTERRUPT_GRACE_MS) }
+      // R9: the innermost call (a dialog's button while the caller waits on the bridge); else the one the worker runs (queued ones come later)
+      const target = s.server.pendingCalls() > 0 ? flight[flight.length - 1]! : flight[0]!
+      if (killTimer?.id === target) return
+      clearKill() // re-target: a newer innermost call started since the timer was armed
+      const arm = (id: number): void => {
+        killTimer = { id, handle: setTimeout(() => {
+          killTimer = null
+          if (session !== s || !flight.includes(id)) return
+          // the call has a bridge call of its own pending (above its baseline): parked, responsive, wait on
+          if (s.server.pendingCalls() > (baseline.get(id) ?? 0)) arm(id)
+          else { pushLog('python.restarted'); restart(); restartSubs.forEach((f) => f()) }
+        }, INTERRUPT_GRACE_MS) }
+      }
+      arm(target)
     },
     /** Test hook (e2e): the next interrupt does not reach Python, so the 2 s restart path can be exercised. */
     simulateStuck(): void { stuck = true },

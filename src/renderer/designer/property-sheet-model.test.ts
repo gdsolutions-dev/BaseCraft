@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { toSourceRef } from '../../shared/record-source';
 import { CONTROL_KINDS, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { localeInfo } from '../../shared/locale-format';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
-  MIXED, readProp, sheetRows, targetKind, targetsOf, toSourceRef } from './property-sheet-model';
+  MIXED, readProp, sheetRows, targetKind, targetsOf } from './property-sheet-model';
 import type { PropTarget } from './designer-model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
 import { EVENTS } from '../../shared/design/events';
@@ -22,6 +23,7 @@ const fr = localeInfo('fr-FR');
 describe('property sheet model', () => {
   it('targets of a selection', () => {
     expect(targetsOf({ kind: 'controls', names: ['Nom', 'Ville'] })).toEqual([ctlT('Nom'), ctlT('Ville')]);
+    expect(targetsOf({ kind: 'controls', names: ['Nom'], cells: [{ layout: 'L1', row: 0, col: 2 }] })).toEqual(targetsOf({ kind: 'controls', names: ['Nom'] }));
     expect(targetsOf({ kind: 'controls', names: [] })).toEqual([{ kind: 'doc' }]);
     expect(targetsOf({ kind: 'section', index: 1 })).toEqual([{ kind: 'section', index: 1 }]);
     expect(targetKind(doc, 'report', { kind: 'doc' })).toBe('report');

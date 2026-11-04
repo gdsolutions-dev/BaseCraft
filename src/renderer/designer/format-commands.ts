@@ -16,11 +16,11 @@ const FORMAT_COMMANDS: FormatCommand[] = ['bold', 'italic', 'underline', 'alignL
 const POPUPS: FormatPopupId[] = ['objectList', 'font', 'fontSize', 'fontColor', 'backColor', 'format', 'shapeFill', 'shapeOutline'];
 const MAX_DECIMALS = 15;
 
-type Write = { targets: PropTarget[]; name: string; value: unknown };
-type Target = { t: PropTarget; props: Record<string, unknown>; kind: ControlKind };
+export type Write = { targets: PropTarget[]; name: string; value: unknown };
+export type Target = { t: PropTarget; props: Record<string, unknown>; kind: ControlKind };
 
 /** Les contrôles sélectionnés auxquels `name` s'applique, dans l'ordre de la sélection. */
-function targetsFor(doc: DesignDoc, sel: Selection, name: string): Target[] {
+export function targetsFor(doc: DesignDoc, sel: Selection, name: string): Target[] {
   if (sel.kind !== 'controls') return [];
   const applies = PROPERTY_CATALOG.find((d) => d.name === name)?.appliesTo ?? [];
   return sel.names.flatMap((n) => {
@@ -28,7 +28,7 @@ function targetsFor(doc: DesignDoc, sel: Selection, name: string): Target[] {
     return c && applies.includes(c.kind) ? [{ t: { kind: 'control' as const, name: c.name }, props: c.props, kind: c.kind }] : [];
   });
 }
-const read = (x: Target, name: string, docKind: 'form' | 'report') => effectiveProp(x.props, name, x.kind, docKind);
+export const read = (x: Target, name: string, docKind: 'form' | 'report') => effectiveProp(x.props, name, x.kind, docKind);
 
 /** La valeur de `name` commune à tous les contrôles sélectionnés auxquels elle s'applique (le choix coché d'un menu) ;
  *  undefined sans cible ou quand elles diffèrent. */
@@ -38,7 +38,7 @@ export function currentValue(doc: DesignDoc, docKind: 'form' | 'report', sel: Se
 }
 
 /** Une écriture : setProp ; plusieurs : un seul `edit` qui les rejoue par le réducteur (une seule annulation) ; aucune : null. */
-function writes(list: Write[], docKind: 'form' | 'report'): DesignerAction | null {
+export function writes(list: Write[], docKind: 'form' | 'report'): DesignerAction | null {
   const ws = list.filter((w) => w.targets.length);
   if (!ws.length) return null;
   if (ws.length === 1) return { type: 'setProp', ...ws[0] };

@@ -4,6 +4,7 @@
 // sa ligne disparaît (autre sélection, autre onglet) est validé ; refusé, il est signalé en tête de la feuille (sheet-lost).
 // Onglet Événement (B2, R1, R16) : un nom de macro (liste des macros et sous-macros, texte libre) ou « [Macro incorporée] » ; « … » ouvre
 // la macro incorporée (ou une nouvelle) dans son onglet du concepteur de macros, ou la macro nommée en mode Création.
+import { toSourceRef } from '../../shared/record-source';
 import { Ellipsis, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +17,10 @@ import { sameName } from '../../shared/field-types';
 import { parseNumber } from '../../shared/locale-format';
 import { emptyMacro } from '../../shared/macro/model';
 import type { RecordSourceRef } from '../../shared/record-source';
+import { listSeparator } from '../../shared/expr/localize';
+import { ChooseBuilder } from './ChooseBuilder';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
+import { FunctionBuilder } from '../python/FunctionBuilder';
 import { ExpressionField } from '../expr/ExpressionField';
 import { eventSession, openEmbedded } from '../macro/embedded';
 import { macroNamesWithSubs } from '../macro/macro-shell';
@@ -26,8 +30,8 @@ import { useModal } from '../shell/Modal';
 import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
-import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
-  MIXED, readProp, sheetRows, targetKind, targetsOf, toSourceRef, type SheetRow } from './property-sheet-model';
+import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontWarning, fromSourceRef,
+  MIXED, readProp, sheetRows, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
 
@@ -126,7 +130,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
             data-testid={`sheet-tab-${x}`} className={`dz-props-tab${tab === x ? ' is-active' : ''}`} onClick={() => setTab(x)}>{t(`sheet.tab.${x}`)}</button>
         ))}
       </div>
-      {lost && <div className="dz-props-lost" role="alert" data-testid="sheet-lost">{t('sheet.lost', { name: lost.label })} {t(lost.msg)}</div>}
+      {lost && <div className="dz-props-lost" role="alert" data-testid="sheet-lost">{t('sheet.lost', { name: lost.label })} {t(lost.msg.split('|')[0]!, { name: lost.msg.split('|')[1] })}</div>}
       <div className="dz-props-list" role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${tab}`}>
         {rows.map((row) => (
           <PropRow key={`${selKey}:${tab}:${row.d.name}`} row={row} id={`${uid}-${row.d.name}`} ctx={ctx} docKind={docKind} rowSourceTable={rowSourceTable}
@@ -160,11 +164,20 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
   let editor: ReactNode;
   if (d.editor === 'event') {
     const b = mixed ? null : readEvent(v);
-    const build = buildEvent && { buildTitle: t('sheet.eventBuild'), build: async (s: string) => { buildEvent(s.trim()); return null; } };
+    // « … » (R11): empty -> choose; a `=call` -> the function builder (its text read back like a typed one); anything else -> the macro builder
+    const build = buildEvent && { buildTitle: t('sheet.eventBuild'), build: async (s: string) => {
+      let kind: 'macro' | 'function' | null = s.trim() === '' ? null : s.trim().startsWith('=') ? 'function' : 'macro';
+      if (kind === null && (kind = await modal.custom<'macro' | 'function'>((close) => <ChooseBuilder close={close} />, { titleKey: 'builder.choose.title' })) === null) return null;
+      if (kind === 'macro') { buildEvent(s.trim()); return null; }
+      const text = await modal.custom<string>((close) => <FunctionBuilder sep={listSeparator(region)} close={close} />, { titleKey: 'builder.function.title' });
+      const r = text === null ? null : eventToCanonical(text, ctx.display);
+      return r?.ok ? { value: r.value } : null;
+    } };
     editor = b?.kind === 'embedded'
       ? <EmbeddedEditor id={id} testId={testId} disabled={row.readOnly} build={buildEvent && (() => buildEvent(v))} commit={commit} />
       // a name, or a text kept as imported (R1); typed or picked, it is checked by checkEventValue
-      : field({ shown: b?.kind === 'macro' ? b.name : b?.kind === 'other' ? b.text : '', options: macros, parse: text, ...build });
+      : field({ shown: b?.kind === 'macro' ? b.name : b?.kind === 'python' ? eventToDisplay(b.text, ctx.display) : b?.kind === 'other' ? b.text : '', options: macros,
+        parse: (s) => { if (!s.trim().startsWith('=')) return text(s); const r = eventToCanonical(s, ctx.display); return r.ok ? { value: r.value } : { error: r.error }; }, ...build });
   } else if (d.name === 'ColumnWidths') {   // descripteur texte, montré en cm et stocké en twips (contrat 1.4)
     editor = field({ shown: columnWidthsToDisplay(typeof v === 'string' ? v : '', region), parse: (s) => {
       const w = columnWidthsToStored(s, region);
@@ -305,7 +318,7 @@ function TextField({ id, testId, label, disabled, mixed, shown, options, parse, 
         <button type="button" className="iconbtn" data-testid={`${testId}-build`} disabled={disabled} aria-label={buildTitle ?? t('builder.title')} title={buildTitle ?? t('builder.title')}
           onMouseDown={(e) => e.preventDefault()} onClick={() => void openBuilder()}><Ellipsis className="ic ic-sm" aria-hidden /></button>
       )}
-      {msg && <div id={msgId} className={error ? 'dz-perror' : 'dz-pnote'} role={error ? 'alert' : undefined} data-testid={`${testId}-${error ? 'error' : 'note'}`}>{t(msg)}</div>}
+      {msg && <div id={msgId} className={error ? 'dz-perror' : 'dz-pnote'} role={error ? 'alert' : undefined} data-testid={`${testId}-${error ? 'error' : 'note'}`}>{t(msg.split('|')[0]!, { name: msg.split('|')[1] })}</div>}
     </div>
   );
 }

@@ -11,14 +11,18 @@ export interface FontSpec { name: string /* nom saisi */; size: number /* pt */;
 
 export interface Border { width: number /* twips */; color: string; style: 'solid' | 'dashed' | 'dotted' }
 
+/** The gridlines of a control (a side null: none) over its cell rectangle: the control grown by its own padding (twips). */
+export interface Gridlines { top: Border | null; right: Border | null; bottom: Border | null; left: Border | null;
+  padding: { top: number; right: number; bottom: number; left: number } }
+
 /** A drawn control, in twips relative to its band. A text line's `x`/`y` are relative to the box inside the border. */
 export type LaidOutItem =
   | { kind: 'text'; name: string; left: number; top: number; width: number; height: number; font: FontSpec; color: string; back: string | null;
-      border: Border | null; align: 'left' | 'center' | 'right'; lines: { text: string; x: number; y: number; width: number }[] }
-  | { kind: 'check'; name: string; left: number; top: number; width: number; height: number; checked: boolean | null; color: string }
+      border: Border | null; align: 'left' | 'center' | 'right'; lines: { text: string; x: number; y: number; width: number }[]; grid?: Gridlines }
+  | { kind: 'check'; name: string; left: number; top: number; width: number; height: number; checked: boolean | null; color: string; grid?: Gridlines }
   | { kind: 'line'; name: string; x1: number; y1: number; x2: number; y2: number; border: Border }
-  | { kind: 'rect'; name: string; left: number; top: number; width: number; height: number; border: Border | null; back: string | null }
-  | { kind: 'image'; name: string; left: number; top: number; width: number; height: number; src: string; sizeMode: 'clip' | 'stretch' | 'zoom' };
+  | { kind: 'rect'; name: string; left: number; top: number; width: number; height: number; border: Border | null; back: string | null; grid?: Gridlines }
+  | { kind: 'image'; name: string; left: number; top: number; width: number; height: number; src: string; sizeMode: 'clip' | 'stretch' | 'zoom'; grid?: Gridlines };
 export interface LaidOutBand { section: SectionKind; groupLevel?: number; top: number; left: number; width: number; height: number;
   back: string | null; repeated?: true; continued?: true; items: LaidOutItem[] }
 export interface LaidOutPage { number: number; bands: LaidOutBand[] }

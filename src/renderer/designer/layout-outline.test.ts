@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cmToTwips as cm, type ControlDef, type DesignDoc } from '../../shared/design/model';
 import { createLayout, membersOf } from '../../shared/design/layout-edit';
+import { COL_GAP, readLayouts, reflow } from '../../shared/design/layout';
 import { layoutOutlines } from './layout-outline';
 
 // Comme la capture S3 : des contrôles mal alignés, chacun avec son étiquette attachée.
@@ -37,5 +38,18 @@ describe('layoutOutlines', () => {
   it('sans disposition : rien', () => {
     expect(layoutOutlines(s3(), 1)).toEqual([]);
     expect(layoutOutlines(s3(), 9)).toEqual([]);
+  });
+});
+
+describe('layoutOutlines with a spanning member', () => {
+  it('covers the spanning member', () => {
+    const d = make('tabular');
+    const l = readLayouts(d)[0];
+    const wide = { ...l, cols: l.cols.slice(0, 2), cells: l.cells.filter((c) => c.col < 2).map((c) => (c.row === 1 && c.col === 0 ? { ...c, colSpan: 2 } : c)).filter((c) => !(c.row === 1 && c.col === 1)) };
+    const merged = reflow({ ...d, props: { Layouts: [wide] } });
+    const rect = layoutOutlines(merged, 1)[0].rect;
+    const m = merged.sections[1].controls.find((c) => c.name === 'Inscrit')!;
+    expect(rect.left + rect.width).toBeGreaterThanOrEqual(m.left + m.width);
+    expect(m.width).toBe(wide.cols[0] + COL_GAP + wide.cols[1]);
   });
 });

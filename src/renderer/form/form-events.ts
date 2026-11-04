@@ -8,6 +8,7 @@ import { CANCELLABLE, readEvent, type EventName } from '../../shared/design/even
 import { flattenControls, type ControlDef, type DesignDoc } from '../../shared/design/model';
 import { sameName } from '../../shared/field-types';
 import type { Value } from '../../shared/expr/ast';
+import { bool, num, str } from '../../shared/expr/library';
 import type { SourceInfo } from '../../shared/record-source';
 import { runEvent } from '../macro/macro-shell';
 import { controlValues, envValue, FAILED, fieldValues, type CalcResult, type CalcValue } from './calc';
@@ -20,7 +21,7 @@ const NO_INFO: SourceInfo = { fields: [], updatable: false, parameters: [] };
 const failed = (e: unknown): false => { console.error(e); return false; };
 
 /** What the running view does for a macro's form actions (the registered instance passes them on). */
-export type FormOps = Omit<FormInstance, 'name' | 'tabId' | 'value' | 'setProperty'>;
+export type FormOps = Omit<FormInstance, 'name' | 'tabId' | 'value' | 'setProperty' | 'property' | 'activeControl'>;
 /** Runtime properties (R9), by control name: a ControlDef property (`Visible`…) or its geometry (`left`…), as stored. */
 export type Overrides = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 const PROPS: Partial<Record<SettableProperty, string>> = { enabled: 'Enabled', visible: 'Visible', locked: 'Locked', foreColor: 'ForeColor', backColor: 'BackColor', caption: 'Caption' };
@@ -76,7 +77,7 @@ export class FormEvents {
   /** The form's (no control) or the control's property names a macro. */
   has(event: EventName, c?: ControlDef): boolean {
     const k = readEvent((c ?? this.doc).props[event]).kind;
-    return k === 'macro' || k === 'embedded';
+    return k === 'macro' || k === 'embedded' || k === 'python';
   }
 
   /** Runs the event's macro now; true when it cancels (R7). */
@@ -141,6 +142,20 @@ export class FormEvents {
     if (!key || (PROPS[p] && !applies(c, key))) throw new Error('bc:propertyNotSupported');
     this.overrides = { ...this.overrides, [c.name]: { ...this.overrides[c.name], [key]: v === null || v.t === 'empty' ? null : v.v } };
     this.listeners.forEach((l) => l());
+  }
+  /** The control holding the focus (the running view keeps it here). */
+  focused: string | null = null;
+  /** A runtime property as the Python objects read it: the override, else the stored property, else the geometry; throws bc:notFound||<name>. */
+  property(control: string, p: SettableProperty): Value {
+    const c = this.all.find((x) => sameName(x.name, control));
+    if (!c) throw new Error(`bc:notFound||${control}`);
+    const key = PROPS[p] ?? p;
+    const o = this.overrides[c.name];
+    const v = o && Object.hasOwn(o, key) ? o[key] : GEOMETRY.has(p) ? (c as unknown as Record<string, unknown>)[p] : c.props[key];
+    if (typeof v === 'boolean') return bool(v);
+    if (typeof v === 'number') return num(v);
+    if (typeof v === 'string') return str(v);
+    return p === 'enabled' || p === 'visible' ? bool(true) : p === 'locked' ? bool(false) : null;
   }
   subscribe(cb: () => void): () => void { this.listeners.add(cb); return () => { this.listeners.delete(cb); }; }
 

@@ -24,6 +24,7 @@
   font-size: 12px; }
 .rl-sheet { position: relative; overflow: visible; user-select: none; }   /* anneaux et poignée au bord droit : jamais rognés */
 .rl-placing { cursor: crosshair; }   /* un outil de la galerie est actif */
+.rl-draw { position: absolute; box-sizing: border-box; border: 1px dashed var(--bc-accent); pointer-events: none; }   /* le rectangle en cours de tracé */
 .rl-ring { position: absolute; box-sizing: border-box; outline: 1.5px solid var(--bc-accent); outline-offset: 1px; pointer-events: none; }
 .rl-handle { position: absolute; width: 7px; margin-left: -3px; box-sizing: border-box; background: var(--bc-surface); border: 1.5px solid var(--bc-accent);
   border-radius: 2px; cursor: ew-resize; touch-action: none; }

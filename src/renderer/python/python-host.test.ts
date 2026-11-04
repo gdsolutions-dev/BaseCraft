@@ -176,7 +176,24 @@ describe('PythonHost interrupt (R6)', () => {
     await expect(p).rejects.toThrow('bc:pythonRestarted')
   })
 
-  it('does not restart when the call ends at 1999 ms', async () => {
+  it('an interrupt sent before the worker starts the call is kept; a stale one is wiped when a top-level call is sent', async () => {
+    const h = make()
+    await h.ensure()
+    const w = FakeWorker.all[0]!
+    const init = w.received.find((m) => m.t === 'init') as Extract<HostToWorker, { t: 'init' }>
+    const cell = new Int32Array(init.interrupt)
+    cell[0] = 2 // left over
+    w.hold = true
+    const p = h.exec('loop')
+    p.catch(() => {})
+    await Promise.resolve(); await Promise.resolve()
+    expect(cell[0]).toBe(0)
+    h.interrupt() // the fake worker has not "started" the request
+    expect(cell[0]).toBe(2)
+    h.restart()
+  })
+
+  it('does not restart when the call ends before the 2000 ms grace', async () => {
     vi.useFakeTimers()
     const { h, w, p } = await running()
     const restarted = vi.fn()
@@ -206,6 +223,67 @@ describe('PythonHost interrupt (R6)', () => {
     expect(restarted).not.toHaveBeenCalled()
     w.emit({ t: 'done', id: 2, ok: true, value: null })
     await q
+  })
+
+  // outer call (id 1) parked on a bridge call that never answers; an inner call (id 2) nested above it
+  const nested = async () => {
+    const r = await running()
+    r.h.registerHandlers({ 'wait.forever': () => new Promise(() => {}) })
+    r.w.emit({ t: 'call', method: 'wait.forever', args: [] })
+    const inner = r.h.exec('inner')
+    inner.catch(() => {})
+    await Promise.resolve(); await Promise.resolve()
+    return { ...r, inner }
+  }
+
+  it('R9: an inner call that ignores the interrupt is restarted although the outer call waits on the bridge', async () => {
+    vi.useFakeTimers()
+    const { h, w, p, inner } = await nested()
+    const restarted = vi.fn()
+    h.onRestart(restarted)
+    h.interrupt()
+    vi.advanceTimersByTime(1999)
+    expect(w.terminated).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(w.terminated).toBe(true)
+    expect(restarted).toHaveBeenCalledTimes(1)
+    await expect(inner).rejects.toThrow('bc:pythonRestarted')
+    await expect(p).rejects.toThrow('bc:pythonRestarted')
+  })
+
+  it('R9: when the inner call ends, the outer call (still waiting on the bridge) is not restarted', async () => {
+    vi.useFakeTimers()
+    const { h, w, p, inner } = await nested()
+    const restarted = vi.fn()
+    h.onRestart(restarted)
+    h.interrupt()
+    w.emit({ t: 'done', id: 2, ok: true, value: null })
+    await inner
+    vi.advanceTimersByTime(2000)
+    vi.advanceTimersByTime(2000)
+    expect(w.terminated).toBe(false)
+    expect(restarted).not.toHaveBeenCalled()
+    h.restart()
+    await expect(p).rejects.toThrow('bc:pythonRestarted')
+  })
+
+  it('R9: a second interrupt re-targets the timer to the current innermost call', async () => {
+    vi.useFakeTimers()
+    const { h, w, p } = await running()
+    h.registerHandlers({ 'wait.forever': () => new Promise(() => {}) })
+    h.interrupt() // armed on the outer call (nothing nested yet)
+    vi.advanceTimersByTime(1000)
+    w.emit({ t: 'call', method: 'wait.forever', args: [] })
+    const inner = h.exec('inner')
+    inner.catch(() => {})
+    await Promise.resolve(); await Promise.resolve()
+    h.interrupt() // now targets the inner call
+    vi.advanceTimersByTime(1999) // the first timer (armed 1000 ms earlier) fires inside this advance, sees the outer call parked: no restart
+    expect(w.terminated).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(w.terminated).toBe(true)
+    await expect(inner).rejects.toThrow('bc:pythonRestarted')
+    await expect(p).rejects.toThrow('bc:pythonRestarted')
   })
 
   it('simulateStuck makes the next interrupt a no-op for the worker', async () => {

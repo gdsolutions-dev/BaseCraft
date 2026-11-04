@@ -22,9 +22,10 @@ export function queryError(e: unknown): unknown {
  * Prepares `sql` under the authorizer, which acts only while the statement is compiled. Allowed: one SELECT, reading only
  * the base's own tables (real, not virtual, not reserved: no `pragma_*`, `dbstat`,
  * `json_each`, temp or attached schema), calling only `count`, `rank`, `row_number` and the registered bc_* functions.
- * A refusal throws Error('bc:invalidQuery'); a SQLite limit `bc:invalidQuery|tooComplex|` (queryError).
+ * `temp`: the one temp table it may read too (a query's snapshot, source.ts). A refusal throws Error('bc:invalidQuery'); a
+ * SQLite limit `bc:invalidQuery|tooComplex|` (queryError).
  */
-export function authorizedPrepare(db: DatabaseSync, sql: string): StatementSync {
+export function authorizedPrepare(db: DatabaseSync, sql: string, temp?: string): StatementSync {
   const tables = new Set((db.prepare("SELECT name FROM main.sqlite_schema WHERE type = 'table' AND sql NOT LIKE 'CREATE VIRTUAL%'").all() as { name: string }[])
     .map((r) => r.name.toLowerCase()).filter((n) => !isReservedName(n)));
   let denied = false;
@@ -32,7 +33,7 @@ export function authorizedPrepare(db: DatabaseSync, sql: string): StatementSync 
   db.setAuthorizer((action, arg1, arg2, dbName) => {
     if (action === constants.SQLITE_SELECT) statement = true;
     const ok = ALLOWED.has(action)
-      && !(action === constants.SQLITE_READ && ((dbName ?? 'main') !== 'main' || !tables.has((arg1 ?? '').toLowerCase())))
+      && !(action === constants.SQLITE_READ && ((dbName ?? 'main') === 'main' ? !tables.has((arg1 ?? '').toLowerCase()) : dbName !== 'temp' || temp === undefined || arg1 !== temp))
       && !(action === constants.SQLITE_FUNCTION && !FUNCTIONS.has((arg2 ?? '').toLowerCase()));
     if (!ok) denied = true;
     return ok ? constants.SQLITE_OK : constants.SQLITE_DENY;

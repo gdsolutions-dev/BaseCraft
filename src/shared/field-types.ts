@@ -29,6 +29,7 @@ export interface FieldProps {
   // expressions en forme canonique (voir contraintes A2) ; format et inputMask dépendent du type
   defaultValue?: string; validationRule?: string; validationText?: string
   format?: string; inputMask?: string; lookup?: LookupProps
+  columnWidth?: number // datasheet column width in twips, saved by the layout question (not a design property)
   [unknownKey: string]: unknown // clés inconnues conservées (compatibilité mineure)
 }
 export interface FieldDef { name: string; props: FieldProps }

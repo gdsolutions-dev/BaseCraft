@@ -69,6 +69,9 @@ export interface RunnerApi {
   leave(reason: 'mode' | 'close'): Promise<boolean>;   // its record saved (or discarded on demand), its subforms' first
   save(): Promise<boolean>;               // its subforms' records, then its own, with the refusal message box
   focusIn(): void;                        // the focus on its last control, else its first stop
+  layoutDirty(): boolean;                 // datasheet column widths dragged here or in its subforms, not yet saved
+  saveLayout(): Promise<boolean>;         // those widths saved in each form (its subforms' first); false: a save failed
+  dropLayout(): void;                     // those widths forgotten
   requery(ask: boolean): Promise<boolean>;   // Requery (its master's): read again, its record saved first, its subforms too; ask: Shift+F9 (its parameters asked again)
 }
 

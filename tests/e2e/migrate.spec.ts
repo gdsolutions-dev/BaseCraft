@@ -83,7 +83,7 @@ test('the wizard moves the sales base: progress, report, links, front-end option
       const text = await app.evaluate(({ clipboard }) => clipboard.readText());
       expect(text.split('\n')[0]).toBe(fr.migrate.done.replace('{{backup}}', backup));
       expect(text).toContain(`\n${fr.migrate.report.relations}\n  ClientsCommandes : clé étrangère créée\n`);
-      expect(text.replaceAll(backup, '')).not.toContain(login.password); // CI's password « basecraft » is also in the backup's path
+      expect(text.replaceAll(backup, '').replaceAll(params.database, '')).not.toContain(login.password); // CI's password « basecraft » is also in the backup's path and the database's name
       await page.getByTestId('migrate-close').click();
       await expect(page.getByTestId('modal')).toHaveCount(0);
 

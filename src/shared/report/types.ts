@@ -35,6 +35,8 @@ export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; fourDigitYear?: 
   hooks?: LayoutHooks; signal?: AbortSignal; tick?(): Promise<void>;
   /** [Forms]! / [Reports]! / [TempVars]! in the report's own expressions (absent: unknownField, #Nom?). */
   member?(path: string[]): Value | Promise<Value>;
+  /** D3: Python functions in the report's expressions (absent: badArgument, #Erreur). */
+  callUser?(name: string, args: Value[]): Promise<Value>;
   /** The pages laid out so far (one array, growing), after each page of a pass whose count is known; a third pass starts a new array. */
   onPage?(pages: LaidOutPage[]): void }
 export interface SectionEvent { section: SectionKind; groupLevel?: number; formatCount: number; page: number;

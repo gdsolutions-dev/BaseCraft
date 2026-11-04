@@ -31,13 +31,14 @@ export type ExprErrorCode =
   | 'subqueryNotAllowed'
   | 'unknownField' // générateur d'expressions : un champ qui n'est pas dans sa liste
   | 'memberNotAllowed' // [TempVars]![x]… dans du SQL (requête, filtre, critère, règle de table)
+  | 'pythonNotAllowed' // a Python function name where only the data engine computes (queries, filters, table rules); `fn` carries the name
   | 'badMember' // racine inconnue ou chaîne de mauvaise longueur
   | 'aggregateContext' // saisie : un agrégat là où aucun regroupement n'existe (règle, valeur par défaut, filtre)
   // SQL dialect (A3 sql-parser)
   | 'forbiddenStatement' | 'reservedName' | 'multipleStatements' | 'badParameterType' | 'badCrosstab';
 
 export class ExprSyntaxError extends Error {
-  constructor(public code: ExprErrorCode, public span: Span) {
+  constructor(public code: ExprErrorCode, public span: Span, public fn?: string) {
     super(`${code} @${span.start}-${span.end}`);
     this.name = 'ExprSyntaxError';
   }
@@ -51,7 +52,9 @@ export type Value = null | { t: 'num'; v: number } | { t: 'str'; v: string } | {
 
 export type ExprRuntimeErrorCode = 'typeMismatch' | 'divByZero' | 'badArgument' | 'overflow' | 'unknownField'
   | 'aggregateContext' // Sum, Count… hors d'un regroupement (requête Regroupement A3, groupe d'état A5)
-  | 'notOpen'; // [Forms]![F]!… / [Reports]![R]!… : F ou R n'est pas ouvert (detail : son nom)
+  | 'notOpen' // [Forms]![F]!… / [Reports]![R]!… : F ou R n'est pas ouvert (detail : son nom)
+  // D3: a Python call (detail: the function's name, or the error's message)
+  | 'contentDisabled' | 'pythonError' | 'unknownFunction';
 
 export class ExprRuntimeError extends Error {
   constructor(public code: ExprRuntimeErrorCode, public detail?: string) {

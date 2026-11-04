@@ -3,6 +3,7 @@ import { bindMembers } from '../../shared/expr/members'
 import { parseCanonical, serialize } from '../../shared/expr/parser'
 import { foldName } from '../../shared/field-types'
 import { ACTIONS, type ActionDef } from '../../shared/macro/catalog'
+import { norm, REFUSED } from '../../shared/python/docmd-names'
 import { wireToValue } from '../../shared/python/values'
 import { memberValue } from '../form/form-instances'
 import type { MacroHost, ResolvedArgs } from '../macro/engine'
@@ -15,14 +16,6 @@ import { pythonHost, type BridgeHandler } from './python-host'
 
 export { runPythonFunction } from './run-function'
 
-/** R7: never reachable from `docmd` (Python has its own way); the replacement is named in the error. */
-const REFUSED: Record<string, string> = {
-  cancelevent: 'docmd.cancel_event()', clearmacroerror: 'try/except around the call', onerror: 'try/except',
-  removealltempvars: 'tempvars.clear()', removetempvar: 'del tempvars[name]', runmacro: 'docmd.run_macro(name)',
-  setlocalvar: 'a Python variable', settempvar: 'tempvars[name] = value', setvalue: 'the control value (forms.F.C.value = v)',
-  messagebox: 'msgbox()', stopallmacros: 'return or raise', stopmacro: 'return or raise', runcode: 'a direct call of the function',
-}
-const norm = (s: string): string => s.replace(/_/g, '').toLowerCase()
 const bad = (what: string): never => { throw new Error(`bc:badArgument|${what}`) }
 
 /** The catalog action a Python name stands for (`open_form`, `run_sql`; alias `close`). */

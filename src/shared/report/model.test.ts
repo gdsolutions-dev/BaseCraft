@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PAGE_SETUP, pageGeometry, readReport, reportWidth, type GroupLevel } from './model';
 import { readProp } from './props';
+import { setUserFunctions } from '../expr/user-functions';
 import { LIGHT_THEME_HEX, resolveColor, type ColorValue } from '../design/colors';
 import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyTarget } from '../design/properties';
@@ -236,5 +237,16 @@ describe('margins and gridlines', () => {
     expect(c[0]!.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 90 });
     expect(c[0]!.gridlines).toMatchObject({ top: { width: 30, color: '#ff0000', style: 'dashed' }, bottom: null, left: null, right: null, padding: { right: 30, left: 0 } });
     expect(c[1]!.gridlines).toBeNull();
+  });
+});
+
+describe('user functions (D3)', () => {
+  it('a registered Python name is accepted in a control source', () => {
+    const d = doc({ sections: [sec('detail', undefined, [tb('R', '=remise([Montant])')])] });
+    setUserFunctions([]);
+    expect(readReport(d, fields).issues.map((i) => i.code)).toEqual(['invalidExpression']);
+    setUserFunctions(['remise']);
+    expect(readReport(d, fields).issues).toEqual([]);
+    setUserFunctions([]);
   });
 });

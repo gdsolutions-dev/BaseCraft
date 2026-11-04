@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Value } from '../../shared/expr/ast';
+import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
 import { fail, num, str } from '../../shared/expr/library';
+import { setUserFunctions } from '../../shared/expr/user-functions';
 import type { MacroDef, MacroItem } from '../../shared/macro/model';
 import { FAILURE_NUMBERS, MAX_STEPS, MAX_TEMP_VARS, runMacro, runMacroDef, type ActionCall, type EventContext, type MacroHost, type StepInfo } from './engine';
 
@@ -250,5 +251,45 @@ describe('events', () => {
     const h = host({ M: m([act('RunMacro', { MacroName: 'N' })]), N: m([act('MessageBox', { Message: '=[Montant]' }), act('CancelEvent')]) });
     expect(await runMacro('M', h, { event: e })).toEqual({ ok: true });
     expect(e.cancelled).toBe(true); expect(h.calls[0]).toMatchObject({ macro: 'N', event: e, args: { Message: '5000' } });
+  });
+});
+
+describe('user functions in conditions (D3)', () => {
+  it('a condition calls Python through host.callUser', async () => {
+    setUserFunctions(['remise']);
+    const h = host({ M: m([act('SetTempVar', { Name: 'x', Expression: '3' }), { k: 'if', branches: [{ cond: 'remise([TempVars]![x])>1', items: [act('Beep')] }] }]) });
+    h.callUser = async (n, a) => num(n === 'remise' ? (a[0] as { v: number }).v : 0);
+    expect(await runMacro('M', h)).toEqual({ ok: true }); expect(names(h)).toEqual(['Beep']);
+    setUserFunctions([]);
+  });
+  it('a WHERE argument never calls Python: the macro is refused', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const h = host({ M: m([act('ApplyFilter', { WhereCondition: 'remise(1) > 0' })]) });
+      h.callUser = async () => num(1);
+      expect(await runMacro('M', h)).toMatchObject({ ok: false });
+      expect(names(h)).toEqual([]);
+    } finally { setUserFunctions([]); }
+  });
+});
+
+describe('Python failures in macros (D3 R3)', () => {
+  it('contentDisabled in a condition fails as blocked; another failure is an expression failure', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const mk = () => host({ M: m([act('SetTempVar', { Name: 'x', Expression: '3' }), { k: 'if', branches: [{ cond: 'remise([TempVars]![x])>1', items: [act('Beep')] }] }]) });
+      const h = mk(); h.callUser = async () => { throw new ExprRuntimeError('contentDisabled', 'remise'); };
+      expect(await runMacro('M', h)).toMatchObject({ ok: false, failure: { code: 'blocked' } });
+      const h2 = mk(); h2.callUser = async () => { throw new ExprRuntimeError('pythonError', 'x'); };
+      expect(await runMacro('M', h2)).toMatchObject({ ok: false, failure: { code: 'expression' } });
+    } finally { setUserFunctions([]); }
+  });
+  it('an expression argument takes the Python value', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const h = host({ M: m([act('SetTempVar', { Name: 'x', Expression: 'remise(10)' }), { k: 'if', branches: [{ cond: '[TempVars]![x]=9', items: [act('Beep')] }] }]) });
+      h.callUser = async () => num(9);
+      expect(await runMacro('M', h)).toEqual({ ok: true }); expect(names(h)).toEqual(['Beep']);
+    } finally { setUserFunctions([]); }
   });
 });

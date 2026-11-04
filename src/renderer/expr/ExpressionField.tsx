@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExprSyntaxError, type ExprErrorCode } from '../../shared/expr/ast';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
+import { refinedCode, withUserFunctions } from '../../shared/expr/user-functions';
+import { exprErrorText } from './error-text';
 import { named, plainField, splitAlias } from '../../shared/query/qbe';
 import type { BuilderContext } from './builder-model';
 import { useModal } from '../shell/Modal';
@@ -34,34 +36,38 @@ interface Props {
   query?: BuilderContext['query'] & { aggregates?: boolean; alias?: boolean };
   /** The input's accessible name, when no <label for={id}> names it (a grid cell). */
   label?: string;
+  /** D3: Python function names of the modules are accepted (a control's ControlSource, rule, default; a macro condition or argument). */
+  userFunctions?: boolean;
 }
 
-function shownText(value: string | undefined, ctx: DisplayContext, criteria: boolean, query: Props['query']): string {
+function shownText(value: string | undefined, ctx: DisplayContext, criteria: boolean, query: Props['query'], uf?: boolean): string {
   if (!value) return '';
   const { alias, expr } = query?.alias ? splitAlias(value) : { alias: undefined, expr: value };
   try {
-    const shown = toDisplay(expr, ctx, { ...query, criteria });
+    const shown = toDisplay(expr, ctx, { ...query, criteria, ...(uf ? { functions: withUserFunctions() } : {}) });
     // a query's Field cell shows a field as Access does (Nom), when the bare word reads back as the same field
     const same = (s: string) => { try { return toCanonical(s, ctx, { ...query, aggregates: true }) === toCanonical(shown, ctx, { ...query, aggregates: true }); } catch { return false; } };
     return named(alias, query?.alias ? plainField(shown, same, ctx.lang) : shown);
   } catch { return value; } // unreadable stored text: shown as stored
 }
 
-export function ExpressionField({ id, testId, value, criteria = false, ctx, fields, disabled, error, onCommit, onInvalid, aggregates = false, placeholder, onLostDraft, query, label }: Props) {
+export function ExpressionField({ id, testId, value, criteria = false, ctx, fields, disabled, error, onCommit, onInvalid, aggregates = false, placeholder, onLostDraft, query, label, userFunctions }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
-  const shown = useMemo(() => shownText(value, ctx, criteria, query), [value, ctx, criteria, query]);
+  const shown = useMemo(() => shownText(value, ctx, criteria, query, userFunctions), [value, ctx, criteria, query, userFunctions]);
   const [draft, setDraft] = useState<string | null>(null);
   const parts = (text: string) => (query?.alias ? splitAlias(text) : { alias: undefined, expr: text });
 
   /** The draft's canonical form, or the code that refuses it. */
   const read = (text: string): { canonical: string | undefined } | { code: ExprErrorCode } => {
+    let parsed = '';
     try {
       const { alias, expr } = parts(text);
+      parsed = expr.trim();
       // aggregates only where a group exists (a report) or a query grid cell says
-      return { canonical: text === '' ? undefined : named(alias?.trim(), toCanonical(expr.trim(), ctx, { ...query, criteria, fields, aggregates: query?.aggregates ?? aggregates })) };
+      return { canonical: text === '' ? undefined : named(alias?.trim(), toCanonical(expr.trim(), ctx, { ...query, criteria, fields, aggregates: query?.aggregates ?? aggregates, ...(userFunctions ? { functions: withUserFunctions() } : {}) })) };
     } catch (e) {
-      return { code: e instanceof ExprSyntaxError ? e.code : 'tooComplex' }; // RangeError: nesting too deep
+      return { code: e instanceof ExprSyntaxError ? refinedCode(e, parsed) : 'tooComplex' }; // RangeError: nesting too deep
     }
   };
   const commit = () => {
@@ -107,7 +113,7 @@ export function ExpressionField({ id, testId, value, criteria = false, ctx, fiel
       <button type="button" className="iconbtn" data-testid={`${testId}-build`} disabled={disabled} aria-label={t('builder.title')} title={t('builder.title')}
         tabIndex={query ? -1 : undefined}
         onClick={() => void build()}><Ellipsis className="ic ic-sm" aria-hidden /></button>
-      {error && <div id={`${id}-error`} className="pval-error" role="alert" data-testid={`${testId}-error`}>{t(`expr.error.${error}`)}</div>}
+      {error && <div id={`${id}-error`} className="pval-error" role="alert" data-testid={`${testId}-error`}>{exprErrorText(t, error)}</div>}
     </>
   );
 }

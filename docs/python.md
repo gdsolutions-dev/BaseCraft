@@ -175,6 +175,35 @@ When Python fails in an event, BaseCraft shows the **Python Error** box: the err
 
 Ctrl+Break stops the innermost running call, so a runaway button in a dialog form can be stopped while the caller keeps waiting and the dialog stays usable. A **RunCode** failure is the macro action's failure: handle it with *OnError*, or the Action Failed box appears, with **Debug** when the cause is a Python error. In the Runtime, which has no module editor, the box has no **Debug** button.
 
+### Your functions in expressions
+
+A function exported by a module can be called anywhere BaseCraft evaluates an expression, with the same `=function(args)` syntax as events. Arguments may be fields, controls and other expressions: `=remise([Prix])`. Names are resolved case-insensitively and come from the module's saved exports, so BaseCraft starts as fast as before; Python itself starts at the first real call.
+
+**Where it works**
+
+- A calculated control on a form or report (Control Source `=remise([Prix])`), including aggregates over it (`=Sum(remise([Prix]))`) and report print preview and PDF export, which show the same text.
+- Macro conditions (`If remise([TempVars]![p]) > 5`) and macro arguments.
+- A control's *Validation Rule* (a criterion with an implicit subject, so write `<remise(200)`, not `remise([Prix])<100`) and its *Default Value*.
+
+**Where it is refused, and why.** Queries (SQL view and design grid), filters, and the Validation Rule and Default Value of tables and fields are computed by the data engine, which never runs Python. Using a function there gives the message « The Python function remise cannot be used here: queries, filters and table rules are computed by the data engine », at design time when possible, otherwise when the query runs. A stored query that already calls one (for example an imported one) shows the same message when opened. Compute the value in a form or report instead, or fetch the rows with `db.open_recordset` inside a function.
+
+Name AutoCorrect does not rewrite field names inside Python calls (`=remise([Prix])`): renaming such a field reports the expression.
+
+**What you see**
+
+- A function that is missing (removed, renamed, or the module not saved) gives `#Name?`; restoring it brings the value back without reopening the form.
+- An error inside the function, or a result BaseCraft cannot show (a list, for example), gives `#Error` in the control; the traceback is not shown for an expression.
+- While content is disabled, nothing runs: a form or report shows `#Name?`, a macro stops as blocked, a control rule refuses the record and a control default stays empty, and the security bar appears. **Enable Content** recalculates open forms and reports.
+- Calls run quietly: typing in a field never waits for Python and never loses a key. Only a call that lasts longer than 2 seconds darkens the window with the Python veil; **Ctrl+Break** then interrupts it, the control shows `#Error` and the form is usable again.
+
+## Autocomplete
+
+In the module editor, typing `forms.`, `forms["`, `reports.`, `reports["` offers your forms and reports; after `forms.Name.` it offers the form's controls and methods. `docmd.` offers the macro actions, and the quoted name in `db.open_recordset("` and `docmd.run_macro("` offers your tables, queries and macros. `app.` and `tempvars.` offer their members. This is not general Python completion (no Jedi): names from your own code and the standard library are not suggested.
+
+## View Code
+
+On a form or report in Design or Layout view, the **View Code** button of the ribbon opens the module of the function used by the selected control's event (or by the form's event, when nothing is selected), with the cursor on its `def`. When the event is empty, the button first opens the « … » chooser so you can pick or create a function. It does not exist in the Runtime.
+
 ## What Python cannot do
 
 Python in BaseCraft is a closed room:
@@ -193,7 +222,7 @@ A database with no active content at all (nothing that would need to be enabled)
 
 ## BaseCraft Runtime
 
-The Runtime, which runs a database without design access, includes the Python engine, so modules keep working there. It has no module editor and no Immediate window.
+The Runtime, which runs a database without design access, includes the Python engine, so modules, events and Python functions in expressions keep working there, on Windows (checked) and Linux (built by CI, not yet confirmed). It has no module editor, no Immediate window, no builders and no **View Code**. A Python error shows its box without **Debug**.
 
 ## Size and memory
 
@@ -203,5 +232,4 @@ BaseCraft itself starts as fast as before: Python is loaded only when needed. Lo
 
 ## What comes next
 
-- **D3: Python in expressions.** Your functions in calculated controls on forms and reports, in macro conditions, and in a control's validation rule and default value; autocomplete on BaseCraft objects; *View Code* buttons.
-- Still out of reach: code behind a form (`[Event Procedure]`), recordsets in the style of DAO (`find_first`, `edit`/`update`), exporting or importing files from Python (`docmd.output_to`, `transfer_*`), and Python in queries or table rules.
+Still out of reach: code behind a form (`[Event Procedure]`), recordsets in the style of DAO (`find_first`, `edit`/`update`), exporting or importing files from Python (`docmd.output_to`, `transfer_*`), Python-language completion, and Python in queries or table rules (by design: the data engine never runs Python).

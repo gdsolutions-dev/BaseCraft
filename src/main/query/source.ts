@@ -8,6 +8,7 @@ import { defaultProps, quoteIdent, sameName, type TableDesign } from '../../shar
 import type { LocaleInfo } from '../../shared/locale-format';
 import { isSelectBody, type Query } from '../../shared/query/ast';
 import { bindQuery, QueryBindError, toSourceInfo, type BoundQuery, type QueryCatalog } from '../../shared/query/bind';
+import { ExprSyntaxError } from '../../shared/expr/ast';
 import { invalidQueryError, isSqlSource, parseQueryDefinition, passThroughOf } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import type { RecordSourceRef, SourceField, SourceInfo, SourcePage, SourcePageRequest } from '../../shared/record-source';
@@ -32,7 +33,9 @@ function storedSql(o: { name: string; definition: unknown }): string {
   try {
     return parseQueryDefinition(o.definition).sql;
   } catch (e) {
-    throw new Error(`bc:invalidQuery|storedQuery|${o.name}`, { cause: e });
+    const syntax = e instanceof Error && e.cause instanceof ExprSyntaxError ? e.cause : e;   // parseQueryDefinition wraps the parse error
+    const fn = syntax instanceof ExprSyntaxError && syntax.code === 'unknownFunction' ? syntax.fn : undefined;   // R6: the renderer tells a Python function from a typo
+    throw new Error(fn ? `bc:invalidQuery|unknownFunction|${o.name}|${fn}` : `bc:invalidQuery|storedQuery|${o.name}`, { cause: e });
   }
 }
 
@@ -166,7 +169,7 @@ function filtered(b: BoundQuery, c: CompiledSelect, filter: FieldFilter[], where
   try {
     w = compileFilter(design, filter, locale, where);
   } catch (e) {
-    if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error('bc:invalidArgument', { cause: e });
+    if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error(e.message.startsWith('bc:invalidFilter|') ? e.message.replace('invalidFilter', 'invalidArgument') : 'bc:invalidArgument', { cause: e });   // R6: the unknown function's name stays
     throw e;
   }
   // the rowid's inner name: one no output name takes (a bracketed alias may hold any character; sameName folds more than SQLite)

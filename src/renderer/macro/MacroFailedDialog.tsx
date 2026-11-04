@@ -2,7 +2,8 @@
 // affichée), le numéro et le message de l'erreur, et le seul bouton « Arrêter toutes les macros ».
 import { createElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExprRuntimeError } from '../../shared/expr/ast';
+import { ExprRuntimeError, ExprSyntaxError } from '../../shared/expr/ast';
+import { userFunctionNames, withUserFunctions } from '../../shared/expr/user-functions';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
 import { actionDef } from '../../shared/macro/catalog';
@@ -35,9 +36,15 @@ export function failureMessage(f: MacroFailure): string {
       if (code && FORM_REFUSALS.has(code)) return t('macro.error.actionFailed', { action, detail: t(`macro.error.${code}`, { name }) });
       if (code) { const m = errorMessage(f.cause ?? detail); return t('macro.error.actionFailed', { action, detail: t(m.key, m.params) }); }
       return t('macro.error.actionFailed', { action, detail });
-    case 'expression':
+    case 'expression': {
+      // R6: a Where Condition (ApplyFilter…) cannot call Python; the message names the function
+      const refused = f.cause instanceof ExprSyntaxError && f.cause.code === 'unknownFunction' && f.cause.fn && userFunctionNames().has(f.cause.fn.toLowerCase()) ? f.cause.fn : undefined;
+      if (refused) return t('macro.error.expression', { action, detail: t('expr.error.pythonNotAllowed', { name: refused }) });
+      // notOpen: the object's name; pythonError: the error's message
+      const d = f.cause instanceof ExprRuntimeError ? f.cause.detail ?? '' : '';
       return t('macro.error.expression', { action, detail: i18n.exists(`expr.error.${detail}`)
-        ? t(`expr.error.${detail}`, { name: f.cause instanceof ExprRuntimeError ? f.cause.detail : '' }) : detail });   // notOpen: the object's name
+        ? t(`expr.error.${detail}`, { name: d, detail: d }) : detail });
+    }
     case 'notFound': case 'badDefinition':
       return t(`macro.error.${f.code}`, { name: f.code === 'badDefinition' ? f.raw.MacroName || f.macro : name, detail });
     case 'tooDeep':
@@ -52,8 +59,9 @@ export function argText(action: string, arg: string, value: string, ctx: Display
   const type = actionDef(action)?.args.find((a) => a.name === arg)?.type;
   try {
     if (type === 'enum') return t(`macro.argValue.${arg}.${value || 'empty'}`);
-    if (type === 'expression' || type === 'where' || type === 'reference') return value && toDisplay(value, ctx);
-    if ((type === 'text' || type === 'number') && value.startsWith('=')) return `=${toDisplay(value.slice(1), ctx)}`;
+    if (type === 'where') return value && toDisplay(value, ctx);   // reaches SQL: no Python names
+    if (type === 'expression' || type === 'reference') return value && toDisplay(value, ctx, { functions: withUserFunctions() });
+    if ((type === 'text' || type === 'number') && value.startsWith('=')) return `=${toDisplay(value.slice(1), ctx, { functions: withUserFunctions() })}`;
   } catch { /* as stored */ }
   return value;
 }

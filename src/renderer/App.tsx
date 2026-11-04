@@ -9,6 +9,7 @@ import { api, setLoginPrompt, setPasswordPrompt } from './bridge';
 import { applyUi } from './i18n';
 import { design } from './design/entry';
 import { pythonHost } from './python/python-host';
+import { clearUserFunctions, notifyUserFunctions, refreshUserFunctions } from './python/user-function-names';
 import { PythonVeil, usePythonRunning } from './python/PythonVeil';
 import { dbHandlers } from './python/db-handlers';
 import { docmdHandlers } from './python/docmd-handlers';
@@ -103,7 +104,7 @@ function Shell() {
   const blockedAutoExec = useRef<string | null>(null);
   const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui });
   live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui };
-  const pythonRunning = usePythonRunning();
+  const pythonRunning = usePythonRunning(); // busy(): R4
 
   /** Bumped by each read and each settingsChanged broadcast: a read overtaken meanwhile is older, dropped. */
   const settingsGen = useRef(0);
@@ -176,6 +177,7 @@ function Shell() {
     if (a.type === 'tableSaved' || a.type === 'tableRenamed' || a.type === 'tableDropped' || a.type === 'listsChanged' || a.type === 'tableDescribed') void refreshTables();
     if (a.type === 'objectSaved' || a.type === 'objectRenamed' || a.type === 'objectDeleted' || a.type === 'listsChanged') void refreshObjects();
     // a renamed or deleted module must not stay importable from the running Python session
+    if (a.type === 'listsChanged' || ((a.type === 'objectSaved' || a.type === 'objectRenamed' || a.type === 'objectDeleted') && a.kind === 'module')) void refreshUserFunctions().then((changed) => { if (!changed && a.type === 'objectSaved') notifyUserFunctions() }).catch(() => {}); // R5: a saved module with the same names has new bodies: calculated controls calculate again
     if ((a.type === 'objectRenamed' || a.type === 'objectDeleted') && a.kind === 'module' && pythonHost().state() !== 'off') void pythonHost().reset().catch(() => {});
   }, [refreshTables, refreshObjects, showError]);
 
@@ -247,7 +249,7 @@ function Shell() {
     openShift.current = false;
     const stillCurrent = () => startedFor.current === run && live.current.session?.path === run.path;
     void (async () => {
-      const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro')]);
+      const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro'), refreshUserFunctions().catch(() => {})]); // R5: names known before AutoExec and the startup form
       if (!stillCurrent()) return;
       publishBaseOptions(o);
       const autoExec = macros.find((m) => sameName(m.name, 'AutoExec'))?.name ?? null;
@@ -461,6 +463,7 @@ function Shell() {
   useEffect(() => {
     const p = session === undefined ? undefined : session?.path ?? null;
     if (p === undefined) return;
+    if (lastBase.current !== undefined && lastBase.current !== p) clearUserFunctions(); // R5: the next base fills it at its own opening
     if (lastBase.current !== undefined && lastBase.current !== p && pythonHost().state() !== 'off') pythonHost().restart();
     lastBase.current = p;
   }, [session]);
@@ -478,7 +481,7 @@ function Shell() {
     const onKey = (e: KeyboardEvent) => {
       // Ctrl+Break interrupts Python, even with a dialog in front
       if (e.ctrlKey && (e.key === 'Cancel' || e.code === 'Pause') && pythonHost().state() === 'running') { e.preventDefault(); pythonHost().interrupt(); return; }
-      if (pythonHost().state() === 'running') return; // the veil makes the window inert: no shortcut runs under a Python call
+      if (pythonHost().busy()) return; // the veil makes the window inert: no shortcut runs under a Python call
       if (dialogInFront()) return; // a dialog or the backstage is in front (a Query Builder's tab is served)
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -621,6 +624,7 @@ function Shell() {
     try {
       const s = await api.base.enableContent();
       flushSync(() => setSession(s));   // committed: the macro shell reads the content enabled
+      notifyUserFunctions();   // D3: the open forms and reports calculate their Python calls again
     } catch (e) { await showError(e); return; }
     const autoExec = blockedAutoExec.current;   // R6: AutoExec stopped on a blocked action runs again from its start, once
     blockedAutoExec.current = null;

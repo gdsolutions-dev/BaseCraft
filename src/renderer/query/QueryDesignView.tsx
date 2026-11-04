@@ -11,6 +11,8 @@ import type { TFunction } from 'i18next';
 import { isServerKind, type Relation } from '../../shared/api';
 import { ExprSyntaxError, type ExprErrorCode, type Span } from '../../shared/expr/ast';
 import type { DisplayContext } from '../../shared/expr/localize';
+import { refinedCode } from '../../shared/expr/user-functions';
+import { exprErrorText } from '../expr/error-text';
 import { sameName } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { isSelectBody, type ParamDecl, type Query } from '../../shared/query/ast';
@@ -259,7 +261,7 @@ function invalidLines(m: Model, t: TFunction): string[] {
     const i = cols.findIndex((c) => String(c.uid) === id);
     const col = i >= 0 ? i + 1 : Number(id.slice(3)) + 1;
     const label = t(row === 'criteria0' ? 'query.row.criteria' : row.startsWith('criteria') ? 'query.row.or' : `query.row.${row}`);
-    return t('query.cellError', { row: label, col, message: t(`expr.error.${code}`) });
+    return t('query.cellError', { row: label, col, message: exprErrorText(t, code) });
   });
 }
 
@@ -296,7 +298,7 @@ const EMPTY: SqlError = { code: 'unexpectedEnd', span: { start: 0, end: 0 } };
 function readSql(text: string): { q: Query } | { error: SqlError } | null {
   if (!text.trim()) return null;
   try { return { q: parseSql(text) }; } catch (e) {
-    if (e instanceof ExprSyntaxError) return { error: { code: e.code, span: e.span } };
+    if (e instanceof ExprSyntaxError) return { error: { code: refinedCode(e, text), span: e.span } };
     throw e;
   }
 }

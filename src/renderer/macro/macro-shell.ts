@@ -32,6 +32,7 @@ import { PythonError } from '../python/python-host';
 import { showPythonError, type PythonErrorOptions } from '../python/PythonErrorDialog';
 import { showMessageBox, type MessageBoxType } from './MessageBoxDialog';
 import { askStep } from './SingleStepDialog';
+import { callUserFunction } from '../python/expr-call';
 import { runPythonFunction } from '../python/run-function';
 import { tempVars } from './temp-vars';
 
@@ -291,6 +292,7 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
     stopAll: () => { haltEpoch++; },
     tempVars,
     runCode: runPythonFunction,   // D2: RunCode
+    callUser: callUserFunction,   // D3: Python functions in conditions and expression arguments
     objectMember: resolveObjectMember,   // [Forms]! / [Reports]! in every run, an event's or not (R11)
     ...(opts.singleStep ? { step: (info: StepInfo) => askStep(d.modal, info) } : {}),   // Single Step: asked before each action
     locale: d.region().locale, lang: d.lang(), now: () => new Date(),

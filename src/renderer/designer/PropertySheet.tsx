@@ -350,7 +350,7 @@ function ExprEditor({ id, testId, value, mixed, criteria, disabled, ctx, commit,
   return (
     <div className="dz-pfield">
       <ExpressionField id={id} testId={testId} value={typeof value === 'string' && value ? value : undefined} criteria={criteria} ctx={ctx.display}
-        fields={ctx.fields} disabled={disabled} error={code ?? undefined} placeholder={mixed ? t('sheet.mixed') : undefined} onCommit={(c) => commit(c)} onInvalid={setCode}
+        fields={ctx.fields} disabled={disabled} error={code ?? undefined} placeholder={mixed ? t('sheet.mixed') : undefined} onCommit={(c) => commit(c)} onInvalid={setCode} userFunctions
         onLostDraft={(c) => onLost(`expr.error.${c}`)} />
     </div>
   );

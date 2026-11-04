@@ -833,7 +833,7 @@ export const RIBBON: RibbonTab[] = [
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: formEditor },
         { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: formEditor },
         { id: 'tabOrder', icon: ArrowDown, labelKey: 'ribbon.cmd.tabOrder', size: 'sm', enabled: designOf('form') },
-        plan('later', 'chartSettings', ChartPie), plan('later', 'subformInNewWindow', ExternalLink), plan('D', 'viewCode', Code)),
+        plan('later', 'chartSettings', ChartPie), plan('later', 'subformInNewWindow', ExternalLink), { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: formEditor }),
     ],
   },
   {
@@ -855,7 +855,7 @@ export const RIBBON: RibbonTab[] = [
       // in a read-only base they open read-only (the designer refuses the changes)
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: designOf('report') },
         { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: reportEditor }, plan('later', 'chartSettings', ChartPie),
-        plan('later', 'subreportInNewWindow', ExternalLink), plan('D', 'viewCode', Code)),
+        plan('later', 'subreportInNewWindow', ExternalLink), { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: reportEditor }),
     ],
   },
   {

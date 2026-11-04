@@ -1008,6 +1008,9 @@
       "badDate": "Invalid date between # signs.",
       "badNumber": "Invalid number.",
       "unknownFunction": "Unknown function.",
+      "pythonNotAllowed": "The Python function {{name}} cannot be used here: queries, filters and table rules are computed by the data engine.",
+      "contentDisabled": "Python code is blocked until the content is enabled.",
+      "pythonError": "Python error: {{detail}}",
       "arity": "Wrong number of arguments for this function.",
       "tooComplex": "Expression too complex (In list or nesting too long).",
       "maskUnclosedQuote": "The mask is missing a closing quotation mark.",
@@ -2299,8 +2302,8 @@
     }
   },
   "module": {
-    "functionClash": "Function {{fn}} also exists in module {{other}}: a call ={{fn}}() will be ambiguous.",
-    "functionBuiltin": "{{fn}} is the name of a built-in function: choose another name.",
+    "functionClash": "Function {{name}} also exists in module {{other}}: a call ={{fn}}() will be ambiguous.",
+    "functionBuiltin": "{{name}} is the name of a built-in function: choose another name.",
     "newName": "Module{{n}}",
     "nameLabel": "Module Name",
     "badName": "A module name must be a Python name: letters, digits and _, not starting with a digit, and not a Python keyword.",

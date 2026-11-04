@@ -1031,6 +1031,9 @@
       "badDate": "Ungültiges Datum zwischen #-Zeichen.",
       "badNumber": "Ungültige Zahl.",
       "unknownFunction": "Unbekannte Funktion.",
+      "pythonNotAllowed": "Die Python-Funktion {{name}} kann hier nicht verwendet werden: Abfragen, Filter und Tabellenregeln werden von der Datenengine berechnet.",
+      "contentDisabled": "Python-Code ist gesperrt, bis der Inhalt aktiviert wird.",
+      "pythonError": "Python-Fehler: {{detail}}",
       "arity": "Falsche Anzahl von Argumenten für diese Funktion.",
       "tooComplex": "Ausdruck zu komplex (In-Liste oder Schachtelung zu lang).",
       "maskUnclosedQuote": "In der Maske fehlt ein schließendes Anführungszeichen.",
@@ -2330,8 +2333,8 @@
     }
   },
   "module": {
-    "functionClash": "Die Funktion {{fn}} gibt es auch im Modul {{other}}: Ein Aufruf ={{fn}}() ist mehrdeutig.",
-    "functionBuiltin": "{{fn}} ist der Name einer integrierten Funktion: Wählen Sie einen anderen Namen.",
+    "functionClash": "Die Funktion {{name}} gibt es auch im Modul {{other}}: Ein Aufruf ={{fn}}() ist mehrdeutig.",
+    "functionBuiltin": "{{name}} ist der Name einer integrierten Funktion: Wählen Sie einen anderen Namen.",
     "newName": "Modul{{n}}",
     "nameLabel": "Modulname",
     "badName": "Ein Modulname muss ein Python-Name sein: Buchstaben, Ziffern und _, nicht mit einer Ziffer beginnend und kein reserviertes Python-Wort.",

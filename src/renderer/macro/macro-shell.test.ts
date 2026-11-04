@@ -19,7 +19,7 @@ const outputSavedReport = vi.fn(async (..._: unknown[]) => false);
 vi.mock('../report/ReportPreviewView', () => ({ outputSavedReport }));
 
 const pythonCall = vi.fn(async (..._: unknown[]): Promise<unknown> => null);
-vi.mock('../python/python-host', () => ({ PythonError: class extends Error { constructor(readonly info: { message: string }) { super(info.message); this.name = 'PythonError'; } }, pythonHost: () => ({ call: pythonCall, state: () => 'running', subscribe: () => () => {} }) }));
+vi.mock('../python/python-host', () => ({ PythonError: class extends Error { constructor(readonly info: { message: string }) { super(info.message); this.name = 'PythonError'; } }, pythonHost: () => ({ call: pythonCall, contentEnabled: () => enabled, state: () => 'running', subscribe: () => () => {} }) }));
 vi.mock('../python/function-index', () => ({ resolveFunction: async (n: string) => ({ module: 'Calculs', fn: n, params: [] }) }));
 
 const m = (items: MacroItem[]): MacroDef => ({ formatVersion: '1.0', items });
@@ -594,5 +594,16 @@ describe('Python events (D2 R3)', () => {
     pythonCall.mockImplementation(async () => null);
     expect(pythonCall).toHaveBeenCalledTimes(MAX_EVENT_DEPTH);
     expect(shown).toEqual(['macro.failed.title']);
+  });
+});
+
+describe('callUser in the shell host (D3 R3)', () => {
+  it('shellHost.callUser calls the Python function quietly; disabled content gives contentDisabled', async () => {
+    const host = shellHost(d, { singleStep: false });
+    pythonCall.mockResolvedValueOnce(4.5);
+    expect(await host.callUser!('remise', [num(5)])).toEqual(num(4.5));
+    expect(pythonCall).toHaveBeenCalledWith('Calculs', 'remise', [5], { quiet: true });
+    enabled = false;
+    await expect(host.callUser!('remise', [num(5)])).rejects.toMatchObject({ code: 'contentDisabled' });
   });
 });

@@ -16,6 +16,8 @@ export { truthy } from './library';
 export interface EvalEnv {
   field(name: string, table?: string): Value | Promise<Value>; subject?: Value; now(): Date; locale: string; lang?: 'fr' | 'en';
   member?(path: string[]): Value | Promise<Value>;
+  /** D3: a function the library does not have is a Python function of a module (absent: badArgument). */
+  callUser?(name: string, args: Value[]): Promise<Value>;
 }
 
 /** `field` d'un environnement sur un objet : nom résolu comme Access (casse ignorée), champ inconnu -> unknownField. */
@@ -131,8 +133,9 @@ export async function evaluate(e: Expr, env: EvalEnv): Promise<Value> {
       if (e.name === 'IIf' && e.args.length === 3) return truthy(await ev(e.args[0]!), infoOf(env.locale)) === true ? ev(e.args[1]!) : ev(e.args[2]!);
       const args: Value[] = [];
       for (const a of e.args) args.push(await ev(a));
-      const fn = LIBRARY[e.name] ?? fail('badArgument');
-      return fn(args, env);
+      const fn = LIBRARY[e.name];
+      if (fn && Object.hasOwn(LIBRARY, e.name)) return fn(args, env);
+      return env.callUser ? env.callUser(e.name, args) : fail('badArgument');
     }
   }
 }

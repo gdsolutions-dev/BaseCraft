@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
+import { withUserFunctions } from '../../shared/expr/user-functions';
 import { actionDef } from '../../shared/macro/catalog';
 import { api } from '../bridge';
 import type { ModalApi } from '../shell/Modal';
@@ -17,7 +18,7 @@ type StepAnswer = 'step' | 'continue' | 'stopAll';
 function SingleStep({ s, ctx, onClose }: { s: StepInfo; ctx: DisplayContext; onClose(v: StepAnswer): void }) {
   const { t } = useTranslation();
   let condition = t('macro.step.none');
-  if (s.condition) { try { condition = toDisplay(s.condition, ctx); } catch { condition = s.condition; } }
+  if (s.condition) { try { condition = toDisplay(s.condition, ctx, { functions: withUserFunctions() }); } catch { condition = s.condition; } }
   const names = actionDef(s.action)?.args.map((a) => a.name) ?? Object.keys(s.args);
   const args = names.map((n) => argText(s.action, n, s.args[n] ?? '', ctx)).join(', ');
   const button = (answer: StepAnswer, testId: string, key: string, primary = false) => (

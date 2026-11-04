@@ -9,6 +9,8 @@ import { formatValue } from '../../shared/expr/format';
 import { fail, infoOf, num, str, toText } from '../../shared/expr/library';
 import { parseNumber } from '../../shared/locale-format';
 import { fieldRefs, parseCanonical } from '../../shared/expr/parser';
+import { userFunctionsVersion, withUserFunctions } from '../../shared/expr/user-functions';
+import { i18n } from '../i18n';
 import type { SourceInfo } from '../../shared/record-source';
 import { boundField, dp, isUnbound } from './control-values';
 import type { RecordError } from './record-controller';
@@ -19,17 +21,19 @@ export const FAILED: unique symbol = Symbol('failed');
 export type CalcValue = Value | typeof FAILED;
 export interface CalcEnv { fields: Record<string, CalcValue>; controls: Record<string, CalcValue>; locale: string; lang: 'fr' | 'en'; fourDigitYear?: boolean; now(): Date;
   /** [Forms]! / [TempVars]! (B2 R11; absent: unknownField). */
-  member?(path: string[]): Value | Promise<Value> }
+  member?(path: string[]): Value | Promise<Value>;
+  /** D3: Python functions (absent: badArgument). */
+  callUser?(name: string, args: Value[]): Promise<Value> }
 type BaseEnv = Omit<CalcEnv, 'fields' | 'controls'>;
 
 // ponytail: unbounded, one entry per distinct expression text of the open forms; an LRU if definitions ever churn.
 const parsed = new Map<string, Expr | { failed: unknown }>();
 /** parseCanonical, once per text and mode: recalculation runs on every record change. A parse failure is rethrown as is. */
 export function parseExpr(text: string, criteria: boolean): Expr {
-  const key = `${criteria ? 'c' : 'e'}:${text}`;
+  const key = `${criteria ? 'c' : 'e'}${userFunctionsVersion()}:${text}`;
   let r = parsed.get(key);
   if (!r) {
-    try { r = parseCanonical(text, { criteria }); } catch (e) { r = { failed: e }; }
+    try { r = parseCanonical(text, { criteria, functions: withUserFunctions() }); } catch (e) { r = { failed: e }; }
     parsed.set(key, r);
   }
   if ('failed' in r) throw r.failed;
@@ -39,6 +43,8 @@ export function parseExpr(text: string, criteria: boolean): Expr {
 const noField = (): Value => fail('unknownField');
 const prop = (c: ControlDef, name: string): string => (typeof c.props[name] === 'string' ? c.props[name] as string : '');
 const calcExpr = (c: ControlDef): Expr => parseExpr(prop(c, 'ControlSource').replace(/^=/, ''), false);
+/** Failures shown as #Nom?: an unknown field or function, or Python called while content is disabled (D3 R3). */
+const NAME_CODES = new Set<string>(['unknownField', 'unknownFunction', 'contentDisabled']);
 const CIRCULAR: CalcResult = { ok: false, code: 'error' }; // a circular reference shows #Erreur, as in Access
 
 /** `[name]` in the environment: a control first, even a Null one; a field only when no control has the name (unknownField,
@@ -61,9 +67,9 @@ export async function evalControlSource(c: ControlDef, env: CalcEnv): Promise<Ca
   try {
     const e = calcExpr(c);
     if (fieldRefs(e).some((n) => sameName(n, c.name))) return CIRCULAR; // a control is never in its own environment
-    value = await evaluate(e, { field, now: env.now, locale: env.locale, lang: env.lang, member: env.member });
+    value = await evaluate(e, { field, now: env.now, locale: env.locale, lang: env.lang, member: env.member, callUser: env.callUser });
   } catch (e) {
-    return { ok: false, code: e instanceof ExprSyntaxError || (e instanceof ExprRuntimeError && e.code === 'unknownField') ? 'name' : 'error' };
+    return { ok: false, code: e instanceof ExprSyntaxError || (e instanceof ExprRuntimeError && NAME_CODES.has(e.code)) ? 'name' : 'error' };
   }
   const format = prop(c, 'Format') || (value?.t === 'bool' ? 'trueFalse' : '');
   const text = format ? formatValue(value, format, { locale: env.locale, lang: env.lang, decimalPlaces: dp(c.props.DecimalPlaces), ...(env.fourDigitYear ? { fourDigitYear: true } : {}) })
@@ -145,7 +151,7 @@ export async function controlDefaults(controls: ControlDef[], info: SourceInfo, 
     seen.add(f.name);
     const own = prop(c, 'DefaultValue');
     try {
-      if (own) out[f.name] = toStored(f, await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member }), region);
+      if (own) out[f.name] = toStored(f, await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member, callUser: env.callUser }), region);
       else if (f.props.defaultValue) out[f.name] = await defaultInput(f, region, env.now);
     } catch {
       if (own) out[f.name] = null; // the write layer reports a bad field default itself on insert
@@ -166,7 +172,7 @@ export async function unboundDefaults(controls: ControlDef[], env: BaseEnv): Pro
   const out: Record<string, Value> = {};
   for (const c of flattenControls(controls).filter(isUnbound)) {
     const own = prop(c, 'DefaultValue');
-    try { out[c.name] = own ? await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member }) : null; }
+    try { out[c.name] = own ? await evaluate(parseExpr(own, false), { field: noField, now: env.now, locale: env.locale, lang: env.lang, member: env.member, callUser: env.callUser }) : null; }
     catch { out[c.name] = null; }
   }
   return out;
@@ -177,10 +183,11 @@ export async function checkControlRule(c: ControlDef, value: Value, info: Source
   const rule = prop(c, 'ValidationRule');
   if (!rule) return null;
   try {
-    const r = await evaluate(parseExpr(rule, true), { field: noField, subject: value, now: env.now, locale: env.locale, lang: env.lang, member: env.member });
+    const r = await evaluate(parseExpr(rule, true), { field: noField, subject: value, now: env.now, locale: env.locale, lang: env.lang, member: env.member, callUser: env.callUser });
     if (truthy(r, infoOf(env.locale)) !== false) return null;
-  } catch {
+  } catch (e) {
     // a rule that cannot be evaluated (unreadable, unknown name, type mismatch) blocks, as a False one does
+    if (e instanceof ExprRuntimeError && e.code === 'contentDisabled') return { field: boundField(c, info)?.name ?? c.name, code: 'controlValidation', message: i18n.t('python.contentDisabled') };
   }
   const message = prop(c, 'ValidationText');
   return { field: boundField(c, info)?.name ?? c.name, code: 'controlValidation', ...(message ? { message } : {}) };

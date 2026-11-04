@@ -7,6 +7,7 @@ import { checkEventValue } from '../../shared/design/events';
 import { ExprSyntaxError, type ExprErrorCode } from '../../shared/expr/ast';
 import { FUNCTION_TABLE } from '../../shared/expr/catalog';
 import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/localize';
+import { withUserFunctions } from '../../shared/expr/user-functions';
 import { parsePythonCall, pythonCallFunctions } from '../../shared/python/call-text';
 import { columnWidthsText, isValidObjectName, parseColumnWidths, sameName } from '../../shared/field-types';
 import { resolveFont } from '../../shared/fonts';
@@ -104,7 +105,7 @@ export function checkPropValue(doc: DesignDoc, t: PropTarget, d: PropertyDescrip
 export function controlSourceToDisplay(stored: string | undefined, ctx: DisplayContext): string {
   if (!stored) return '';
   if (!stored.startsWith('=')) return stored;
-  try { return `=${toDisplay(stored.slice(1), ctx)}`; } catch { return stored; }
+  try { return `=${toDisplay(stored.slice(1), ctx, { functions: withUserFunctions() })}`; } catch { return stored; }
 }
 
 /** Le texte saisi : '=…' en forme canonique, sinon un nom de champ ; vide = retiré. Un agrégat n'est accepté qu'avec `aggregates`
@@ -114,7 +115,7 @@ export function controlSourceToCanonical(text: string, ctx: DisplayContext, opts
   const s = text.trim();
   if (!s) return { ok: true, value: undefined };
   if (!s.startsWith('=')) return { ok: true, value: s };
-  try { return { ok: true, value: `=${toCanonical(s.slice(1), ctx, { aggregates: opts.aggregates ?? false })}` }; } catch (e) {
+  try { return { ok: true, value: `=${toCanonical(s.slice(1), ctx, { aggregates: opts.aggregates ?? false, functions: withUserFunctions() })}` }; } catch (e) {
     return { ok: false, code: e instanceof ExprSyntaxError ? e.code : 'tooComplex' };   // RangeError : imbrication trop profonde
   }
 }

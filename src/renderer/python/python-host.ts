@@ -18,6 +18,7 @@ export class PythonError extends Error {
 
 const LOG_MAX = 1000
 const INTERRUPT_GRACE_MS = 2000 // R6
+const SLOW_MS = 2000 // R4
 
 /** One worker with its bridge and shared memory; dropped as a whole when the worker dies. */
 type Session = {
@@ -49,6 +50,7 @@ export function createPythonHost() {
   let session: Session | null = null
   const flight: number[] = [] // ids of the requests in flight, oldest (the one the worker runs) first
   const baseline = new Map<number, number>() // id -> pendingCalls() when the request started (R9: calls above it are its own)
+  const quiet = new Map<number, { slow: boolean; timer: ReturnType<typeof setTimeout> }>() // R4: quiet calls in flight (expression calls), with their start
   let seq = 0
   let killTimer: { id: number; handle: ReturnType<typeof setTimeout> } | null = null // R6: one at most
   let stuck = false // test hook: the next interrupt is not delivered
@@ -89,6 +91,7 @@ export function createPythonHost() {
         worker.terminate()
         rejectReady(reason); kill(reason)
         flight.length = 0; baseline.clear(); since = null
+        quiet.forEach((q) => clearTimeout(q.timer)); quiet.clear()
         clearKill()
         notify()
       },
@@ -113,12 +116,13 @@ export function createPythonHost() {
     return session.whenReady
   }
 
-  async function send(req: HostRequest): Promise<unknown> {
+  async function send(req: HostRequest, isQuiet = false): Promise<unknown> {
     await ensure()
     const s = session
     if (!s) throw new Error('bc:pythonRestarted') // restart() or a crash ran while ensure() waited
     const id = ++seq
     baseline.set(id, s.server.pendingCalls())
+    if (isQuiet) { const q = { slow: false, timer: setTimeout(() => { q.slow = true; notify() }, SLOW_MS) }; quiet.set(id, q) } // crossing 2 s makes the host busy
     // R6/R9: a new top-level call starts with a clean cell (a stale 2 must not hit it); an interrupt sent later, even before the worker dequeues the request, stays.
     if (flight.length === 0) Atomics.store(new Int32Array(s.interrupt), 0, 0)
     if (flight.push(id) === 1) { since = Date.now(); notify() }
@@ -130,14 +134,16 @@ export function createPythonHost() {
       if (session === s) {
         flight.splice(flight.indexOf(id), 1)
         baseline.delete(id)
+        const q = quiet.get(id)
+        if (q) { clearTimeout(q.timer); quiet.delete(id); if (flight.length > 0) notify() }
         if (killTimer?.id === id) clearKill()
         if (flight.length === 0) { since = null; notify() }
       }
     }
   }
 
-  const gated = (req: HostRequest): Promise<unknown> =>
-    contentEnabled() ? send(req) : Promise.reject(new Error('bc:contentDisabled')) // R9
+  const gated = (req: HostRequest, isQuiet = false): Promise<unknown> =>
+    contentEnabled() ? send(req, isQuiet) : Promise.reject(new Error('bc:contentDisabled')) // R9
 
   function restart(): void { session?.end(new Error('bc:pythonRestarted')) }
 
@@ -146,11 +152,12 @@ export function createPythonHost() {
       contentEnabled = o.contentEnabled
       if (o.createWorker) createWorker = o.createWorker
     },
+    contentEnabled: (): boolean => contentEnabled(),
     registerHandlers(h: Record<string, BridgeHandler>): void { Object.assign(handlers, h) },
     ensure,
     immediate: (line: string) => gated({ op: 'immediate', line }) as Promise<string>,
     exec: async (code: string) => { await gated({ op: 'exec', code }) },
-    call: (module: string, fn: string, args: unknown[]) => gated({ op: 'call', module, fn, args }),
+    call: (module: string, fn: string, args: unknown[], opts?: { quiet?: boolean }) => gated({ op: 'call', module, fn, args }, !!opts?.quiet),
     exports: (source: string) => send({ op: 'exports', source }) as Promise<ExportsResult>,
     reset: async () => { await send({ op: 'reset' }) },
     /** R6: asks Python to stop; a call still running 2 s later costs the worker (restarted by the next need). */
@@ -180,6 +187,8 @@ export function createPythonHost() {
     onRestart(fn: () => void): () => void { restartSubs.add(fn); return () => { restartSubs.delete(fn) } },
     restart,
     state: (): PythonState => (!session ? 'off' : !session.ready ? 'loading' : flight.length > 0 ? 'running' : 'idle'),
+    /** R4: a non-quiet call in flight, or a quiet one running for 2 s or more: the window stands back (veil, inert). */
+    busy: (): boolean => flight.some((id) => !quiet.has(id)) || [...quiet.values()].some((q) => q.slow),
     subscribe(fn: () => void): () => void { subs.add(fn); return () => { subs.delete(fn) } },
     runningSince: (): number | null => since,
     log: (): readonly string[] => lines,

@@ -21,7 +21,7 @@ function validLayout(v: unknown): boolean {
 /** A parse or compile error (ExprSyntaxError) as `bc:invalidQuery|<code>|<position>` (no position: `withPosition` false,
  *  a compile limit such as tooComplex); null for any other error. */
 export function invalidQueryError(e: unknown, withPosition = true): Error | null {
-  return e instanceof ExprSyntaxError ? new Error(`bc:invalidQuery|${e.code}|${withPosition ? e.span.start : ''}`, { cause: e }) : null;
+  return e instanceof ExprSyntaxError ? new Error(`bc:invalidQuery|${e.code}|${withPosition ? e.span.start : ''}${e.code === 'unknownFunction' && e.fn ? `|${e.fn}` : ''}`, { cause: e }) : null;
 }
 
 /**

@@ -6,12 +6,16 @@ import { evaluate, truthy, type EvalEnv } from '../../shared/expr/evaluate';
 import { fail, infoOf, num, str, toText } from '../../shared/expr/library';
 import { bindMembers } from '../../shared/expr/members';
 import { parseCanonical, serialize } from '../../shared/expr/parser';
+import { withUserFunctions } from '../../shared/expr/user-functions';
 import { foldName, sameName } from '../../shared/field-types';
 import type { EventName } from '../../shared/design/events';
 import type { SectionEvent } from '../../shared/report/types';
 import { actionDef, type ActionDef, type ActionName } from '../../shared/macro/catalog';
 import { parsePythonCall } from '../../shared/python/call-text';
+
 import { validateMacro, type MacroDef, type MacroItem } from '../../shared/macro/model';
+
+const UF = () => ({ functions: withUserFunctions() });
 
 /** enum / name / text / sql / reference → string (reference: the canonical text, never evaluated); where → string (canonical, members bound);
  *  expression → Value; number → string. */
@@ -32,6 +36,7 @@ export interface MacroHost {
   step?(s: StepInfo): Promise<'step' | 'continue' | 'stopAll'>;
   locale: string; lang: 'fr' | 'en'; now(): Date;
   objectMember?(path: string[]): Value | Promise<Value>;   // [Forms]! / [Reports]! (absent: unknownField)
+  callUser?(name: string, args: Value[]): Promise<Value>;   // D3: a Python function called from an expression (absent: badArgument)
   runCode?(name: string, args: Value[], event?: EventContext): Promise<void>;   // D2: calls a Python function (absent: RunCode is unknownAction)
   stopAll?(): void;                                 // StopAllMacros ends this run: the host ends the others too
 }
@@ -132,7 +137,7 @@ async function runItems(run: Run, frame: Frame, items: MacroItem[], condition: s
         let chosen: { cond: string | null; items: MacroItem[] } = { cond: null, items: item.else ?? [] };
         try {
           for (const b of item.branches) {
-            if (truthy(await evaluate(parseCanonical(b.cond), env(run, frame)), infoOf(run.host.locale)) === true) { chosen = b; break; }
+            if (truthy(await evaluate(parseCanonical(b.cond, UF()), env(run, frame)), infoOf(run.host.locale)) === true) { chosen = b; break; }
           }
         } catch (e) {
           if (await handle(run, frame, failureOf(frame, 'If', {}, e))) return true;
@@ -189,6 +194,7 @@ async function handle(run: Run, frame: Frame, failure: MacroFailure): Promise<bo
 
 function failureOf(frame: { name: string }, action: string, raw: Record<string, string>, e: unknown): MacroFailure {
   const [code, detail, cause]: [FailureCode, string | undefined, unknown] = e instanceof Fail ? [e.code, e.detail, e.cause]
+    : e instanceof ExprRuntimeError && e.code === 'contentDisabled' ? ['blocked', undefined, e]   // D3 R3: Python called while content is disabled
     : e instanceof ExprSyntaxError || e instanceof ExprRuntimeError ? ['expression', e.code, e]
     : e instanceof Error && e.message === 'bc:contentDisabled' ? ['blocked', undefined, e]   // the host found the content disabled (an action query)
     : ['actionFailed', e instanceof Error ? e.message : String(e), e];
@@ -199,7 +205,7 @@ function env(run: Run, frame: Frame): EvalEnv {
   const { host } = run;
   const ev = run.event;
   // a qualified [T].[F] (not parsed in macros today, a guard should they be): the event object has no tables
-  return { field: ev ? (name, table) => (table !== undefined ? fail('unknownField') : ev.field(name)) : () => fail('unknownField'), now: () => host.now(), locale: host.locale, lang: host.lang, member: (path) => member(run, frame, path) };
+  return { field: ev ? (name, table) => (table !== undefined ? fail('unknownField') : ev.field(name)) : () => fail('unknownField'), now: () => host.now(), locale: host.locale, lang: host.lang, member: (path) => member(run, frame, path), callUser: host.callUser?.bind(host) };
 }
 
 function member(run: Run, frame: Frame, path: string[]): Value | Promise<Value> {
@@ -220,7 +226,7 @@ function member(run: Run, frame: Frame, path: string[]): Value | Promise<Value> 
   }
 }
 
-const evalText = async (run: Run, frame: Frame, text: string): Promise<Value> => evaluate(parseCanonical(text), env(run, frame));
+const evalText = async (run: Run, frame: Frame, text: string): Promise<Value> => evaluate(parseCanonical(text, UF()), env(run, frame));
 
 async function resolveArgs(run: Run, frame: Frame, def: ActionDef, raw: Record<string, string>): Promise<ResolvedArgs> {
   const args: ResolvedArgs = {};
@@ -274,7 +280,7 @@ async function execute(run: Run, frame: Frame, action: ActionName, args: Resolve
       const countText = args.RepeatCount as string | undefined;   // a non-negative whole number in decimal digits (not 1.5, not 0x10)
       if (countText !== undefined && !/^\s*\d+\s*$/.test(countText)) throw new Fail('actionFailed', 'RepeatCount');
       const times = countText === undefined ? undefined : Number(countText);
-      const repeat: Expr | undefined = isBlank(raw.RepeatExpression) ? undefined : parseCanonical(raw.RepeatExpression!);
+      const repeat: Expr | undefined = isBlank(raw.RepeatExpression) ? undefined : parseCanonical(raw.RepeatExpression!, UF());
       const target = await load(host, nameArg(args, 'MacroName'));
       const once = times === undefined && !repeat;
       for (let i = 0; once ? i < 1 : times === undefined || i < times; i++) {

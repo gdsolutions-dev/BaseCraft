@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useTranslation } from 'react-i18next';
 import { i18n } from '../i18n';
 import { contentBlocked } from './Banners';
+import { userFunctionNames } from '../../shared/expr/user-functions';
 
 export type ModalButton = 'yes' | 'no' | 'cancel' | 'ok';
 /** defaultButton: focused and highlighted (default: the first); destructive questions put it on 'no'. */
@@ -80,6 +81,9 @@ export function errorMessage(e: unknown): { key: string; params: { name: string;
   const msg = (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']*': (\w*Error: )?/, '');
   const code = bcErrorCode(e);
   const [, sub = '', ...rest] = msg.split('|');
+  // R6: the data process names an unknown function (`bc:…|unknownFunction|…|<name>`); a Python one gets its clear refusal
+  const fn = sub === 'unknownFunction' ? rest[rest.length - 1] : undefined;
+  if (fn && userFunctionNames().has(fn.toLowerCase())) return { key: 'expr.error.pythonNotAllowed', params: { name: fn, detail: '', reason: '' } };
   const key = [code && sub && `dialog.error.${code}_${sub}`, code && `dialog.error.${code}`].find((k) => k && i18n.exists(k)) || 'dialog.error.unknown';
   const reason = sub && i18n.exists(`expr.error.${sub}`) ? i18n.t(`expr.error.${sub}`) : '';
   const detail = msg.includes('|') ? rest.join('|') : msg;

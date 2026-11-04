@@ -27,7 +27,7 @@ function total(a: AggSpec, data: ReportData, ctx: BandContext, env: LayoutEnv): 
   if (c?.data !== data || c.env !== env) totalsCache.set(ctx.scope, c = { data, env, totals: new Map() });
   let p = c.totals.get(a);
   if (!p) c.totals.set(a, p = computeAggregate(a, { fields: data.fields, rows: data.rows, scope: ctx.scope,
-    env: { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}) } }));
+    env: { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}), ...(env.callUser ? { callUser: env.callUser } : {}) } }));
   return p;
 }
 
@@ -42,14 +42,14 @@ async function valueOf(src: Exclude<ControlSource, { kind: 'none' }>, data: Repo
   try {
     if (src.kind === 'error') return env.errorText.error;
     if (src.kind === 'field') return field(src.name);
-    const base = { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}) };
+    const base = { now: () => env.now(), locale: env.locale, lang: env.lang, ...(env.member ? { member: env.member } : {}), ...(env.callUser ? { callUser: env.callUser } : {}) };
     const totals = new Map<string, Value>();
     for (const a of src.aggs) totals.set(a.id, await total(a, data, ctx, env));
     const page = (name: string, p: string) => sameName(name, p) && column(name) < 0;
     return await evaluate(src.expr, { ...base, field: (name) => totals.has(name) ? totals.get(name)!
       : page(name, 'Page') ? num(ctx.page) : page(name, 'Pages') ? num(ctx.pages ?? 0) : field(name) });
   } catch (e) {
-    if (e instanceof ExprRuntimeError) return e.code === 'unknownField' ? env.errorText.name : env.errorText.error;
+    if (e instanceof ExprRuntimeError) return e.code === 'unknownField' || e.code === 'unknownFunction' || e.code === 'contentDisabled' ? env.errorText.name : env.errorText.error;
     if (e instanceof ExprSyntaxError) return env.errorText.error;
     throw e;
   }

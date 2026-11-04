@@ -306,7 +306,7 @@ class Parser {
 
   private call(name: Token): Expr {
     const f = this.fns.get(name.v.toLowerCase());
-    if (!f) throw new ExprSyntaxError('unknownFunction', { start: name.start, end: name.end });
+    if (!f) throw new ExprSyntaxError('unknownFunction', { start: name.start, end: name.end }, name.v);   // the name travels (R6: the renderer tells a Python function from a typo)
     this.p++; this.depth++; // '('
     const args: Expr[] = [];
     if (f[0] === 'Count' && this.isOp('*') && this.isOp(')', this.peek())) { this.p++; args.push({ k: 'star' }); }

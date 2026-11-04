@@ -1008,6 +1008,9 @@
       "badDate": "Date invalide entre dièses.",
       "badNumber": "Nombre invalide.",
       "unknownFunction": "Fonction inconnue.",
+      "pythonNotAllowed": "La fonction Python {{name}} ne peut pas être utilisée ici : les requêtes, les filtres et les règles des tables sont calculés par le moteur de données.",
+      "contentDisabled": "Le code Python est bloqué tant que le contenu n'est pas activé.",
+      "pythonError": "Erreur Python : {{detail}}",
       "arity": "Nombre d'arguments incorrect pour cette fonction.",
       "tooComplex": "Expression trop complexe (liste In ou imbrication trop longue).",
       "maskUnclosedQuote": "Il manque un guillemet fermant dans le masque.",
@@ -2299,8 +2302,8 @@
     }
   },
   "module": {
-    "functionClash": "La fonction {{fn}} existe aussi dans le module {{other}} : un appel ={{fn}}() sera ambigu.",
-    "functionBuiltin": "{{fn}} est le nom d'une fonction intégrée : choisissez un autre nom.",
+    "functionClash": "La fonction {{name}} existe aussi dans le module {{other}} : un appel ={{fn}}() sera ambigu.",
+    "functionBuiltin": "{{name}} est le nom d'une fonction intégrée : choisissez un autre nom.",
     "newName": "Module{{n}}",
     "nameLabel": "Nom du module",
     "badName": "Un nom de module doit être un nom Python : lettres, chiffres et _, sans chiffre au début, et pas un mot réservé de Python.",

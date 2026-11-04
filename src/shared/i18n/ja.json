@@ -1022,6 +1022,9 @@
       "badDate": "# 記号で囲まれた日付が正しくありません。",
       "badNumber": "数値が正しくありません。",
       "unknownFunction": "不明な関数です。",
+      "pythonNotAllowed": "Python 関数 {{name}} はここでは使用できません。クエリ、フィルター、テーブルの規則はデータエンジンが計算します。",
+      "contentDisabled": "コンテンツが有効になるまで、Python コードはブロックされます。",
+      "pythonError": "Python エラー: {{detail}}",
       "arity": "この関数の引数の数が正しくありません。",
       "tooComplex": "式が複雑すぎます (In リストまたは入れ子が長すぎます)。",
       "maskUnclosedQuote": "定型入力に閉じる引用符がありません。",
@@ -2307,8 +2310,8 @@
     }
   },
   "module": {
-    "functionClash": "関数 {{fn}} はモジュール {{other}} にも存在します。={{fn}}() の呼び出しはあいまいになります。",
-    "functionBuiltin": "{{fn}} は組み込み関数の名前です。別の名前を選択してください。",
+    "functionClash": "関数 {{name}} はモジュール {{other}} にも存在します。={{fn}}() の呼び出しはあいまいになります。",
+    "functionBuiltin": "{{name}} は組み込み関数の名前です。別の名前を選択してください。",
     "newName": "モジュール{{n}}",
     "nameLabel": "モジュール名",
     "badName": "モジュール名は Python の名前である必要があります。英数字と _ を使用し、先頭に数字は使えず、Python の予約語も使えません。",

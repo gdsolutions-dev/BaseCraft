@@ -1,5 +1,7 @@
 // Mise en forme d'une bande : valeurs, texte en lignes, Peut augmenter / Peut réduire, points de coupe, points d'accroche.
 import { describe, expect, it } from 'vitest';
+import { ExprRuntimeError } from '../expr/ast';
+import { setUserFunctions } from '../expr/user-functions';
 import { formatBand, type BandContext } from './band';
 import { readReport } from './model';
 import { lineHeight, measure } from './text';
@@ -47,9 +49,9 @@ const stored = (v: Record<string, SqlValue>) => FIELDS.map((f) => v[f.name] ?? n
 const row = (v: Record<string, SqlValue> = {}): ReportData => ({ fields: FIELDS, rows: [stored(v)] });
 const rows = (list: Record<string, SqlValue>[]): ReportData => ({ fields: FIELDS, rows: list.map(stored) });
 
-async function fmt(s: SectionDef, data: ReportData, o: { ctx?: Partial<BandContext>; hooks?: LayoutHooks } = {}) {
+async function fmt(s: SectionDef, data: ReportData, o: { ctx?: Partial<BandContext>; hooks?: LayoutHooks; callUser?: LayoutEnv['callUser'] } = {}) {
   const spec = readReport({ formatVersion: '1.0', recordSource: null, props: {}, sections: [s] }, FIELDS).detail!;
-  const env: LayoutEnv = { ...fr, now: () => new Date(0), errorText: { error: '#Erreur', name: '#Nom?' }, ...(o.hooks ? { hooks: o.hooks } : {}) };
+  const env: LayoutEnv = { ...fr, now: () => new Date(0), errorText: { error: '#Erreur', name: '#Nom?' }, ...(o.hooks ? { hooks: o.hooks } : {}), ...(o.callUser ? { callUser: o.callUser } : {}) };
   return formatBand(spec, data, { row: 0, scope: data.rows.map((_, i) => i), page: 1, pages: null, formatCount: 1, ...o.ctx }, env);
 }
 type Band = Awaited<ReturnType<typeof fmt>>;
@@ -258,5 +260,21 @@ describe('formatBand (Task 6 carry-overs)', () => {
   it('a page break inside a freed band moves up with the shrink', async () => {
     const b = await fmt(sec([tb('A', '[Note]', { top: 300, height: 300, CanShrink: true }), pb('P', { top: 450 }), tb('B', '[Client]', { top: 600 })], { CanShrink: true, height: 900 }), row());
     expect(item(b, 'B').top).toBe(300); expect(b!.breaks).toEqual([300]);
+  });
+});
+
+describe('formatBand: Python functions (D3 R3)', () => {
+  const remise = async (_n: string, a: Value[]): Promise<Value> => num((a[0] as { v: number }).v * 0.9);
+  const failing = (code: ConstructorParameters<typeof ExprRuntimeError>[0]) => async (): Promise<Value> => { throw new ExprRuntimeError(code, 'remise'); };
+  it('a band control shows the value; a total aggregates the Python values; failures show #Nom? / #Erreur', async () => {
+    setUserFunctions(['remise']);
+    try {
+      const callUser = remise;
+      expect(text(await fmt(sec([tb('R', '=remise([Montant])', { Format: 'Standard', width: 2000 })]), row({ Montant: 100 }), { callUser }), 'R')).toBe('90,00');
+      expect(text(await fmt(sec([tb('S', '=Sum(remise([Montant]))', { Format: 'Standard', width: 2000 })]), rows([{ Montant: 100 }, { Montant: 200 }]), { callUser }), 'S')).toBe('270,00');
+      expect(text(await fmt(sec([tb('R', '=remise([Montant])', { width: 2000 })]), row({ Montant: 1 }), { callUser: failing('contentDisabled') }), 'R')).toBe('#Nom?');
+      expect(text(await fmt(sec([tb('R', '=remise([Montant])', { width: 2000 })]), row({ Montant: 1 }), { callUser: failing('unknownFunction') }), 'R')).toBe('#Nom?');
+      expect(text(await fmt(sec([tb('R', '=remise([Montant])', { width: 2000 })]), row({ Montant: 1 }), { callUser: failing('pythonError') }), 'R')).toBe('#Erreur');
+    } finally { setUserFunctions([]); }
   });
 });

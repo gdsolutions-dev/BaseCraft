@@ -2,6 +2,7 @@
 // lecture de la valeur effective, contrôle d'une valeur saisie, textes affichés <-> valeurs stockées.
 import type { DesignDoc } from '../../shared/design/model';
 import { isColorValue } from '../../shared/design/colors';
+import { emptyCellRank, emptyCellsOf, type CellRef } from '../../shared/design/layout';
 import { effectiveProp, PROPERTY_CATALOG, type PropertyDescriptor, type PropertyTarget } from '../../shared/design/properties';
 import { checkEventValue } from '../../shared/design/events';
 import { ExprSyntaxError, type ExprErrorCode } from '../../shared/expr/ast';
@@ -30,22 +31,33 @@ const GEOMETRY = ['Left', 'Top', 'Width', 'Height'];
 export function targetsOf(sel: Selection): PropTarget[] {
   if (sel.kind === 'section') return [{ kind: 'section', index: sel.index }];
   if (sel.kind === 'controls' && sel.names.length) return sel.names.map((name) => ({ kind: 'control', name }));
+  if (sel.kind === 'controls' && sel.cells?.length) return sel.cells.map((c) => ({ kind: 'cell', layout: c.layout, row: c.row, col: c.col }));
   return [{ kind: 'doc' }];
 }
 
+const emptyCellOf = (doc: DesignDoc, c: CellRef) => emptyCellsOf(doc).find((e) => e.layout === c.layout && e.row === c.row && e.col === c.col);
+/** The derived name of an empty cell: localized prefix + its rank among the document's empty cells (never stored). */
+export const cellName = (doc: DesignDoc, c: CellRef, prefix: string): string => `${prefix}${emptyCellRank(doc, c)}`;
+
 export const targetExists = (doc: DesignDoc, t: PropTarget): boolean =>
-  t.kind === 'doc' || (t.kind === 'section' ? !!doc.sections[t.index] : !!findControl(doc, t.name));
+  t.kind === 'doc' || (t.kind === 'cell' ? !!emptyCellOf(doc, t) : (t.kind === 'section' ? !!doc.sections[t.index] : !!findControl(doc, t.name)));
 
 /** Le genre d'une cible ; une cible disparue (section, contrôle) retombe sur le document (sheetRows l'écarte avant). */
 export function targetKind(doc: DesignDoc, docKind: 'form' | 'report', t: PropTarget): PropertyTarget {
   if (t.kind === 'section') return doc.sections[t.index]?.kind ?? docKind;
   if (t.kind === 'control') return findControl(doc, t.name)?.control.kind ?? docKind;
-  return docKind;
+  return t.kind === 'cell' ? 'emptyCell' : docKind;
 }
 
 /** La valeur effective (C5) : géométrie et Name depuis ControlDef / SectionDef, RecordSource depuis doc.recordSource, le reste par effectiveProp. */
-export function readProp(doc: DesignDoc, docKind: 'form' | 'report', t: PropTarget, d: PropertyDescriptor): unknown {
+export function readProp(doc: DesignDoc, docKind: 'form' | 'report', t: PropTarget, d: PropertyDescriptor, cellPrefix = ''): unknown {
   if (d.name === 'RecordSource') return doc.recordSource;
+  if (t.kind === 'cell') {   // L5: an empty cell reads like a label (its defaults), size and position from its rectangle
+    const e = emptyCellOf(doc, t);
+    if (!e) return undefined;
+    if (d.name === 'Name') return cellName(doc, t, cellPrefix);
+    return ({ Left: e.rect.left, Top: e.rect.top, Width: e.rect.width, Height: e.rect.height } as Record<string, number | undefined>)[d.name] ?? effectiveProp(e.props, d.name, 'label', docKind);
+  }
   if (t.kind === 'control') {
     const c = findControl(doc, t.name)?.control;
     if (!c) return undefined;
@@ -65,14 +77,14 @@ const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.string
 
 /** Une ligne par descripteur qui s'applique au genre de **chaque** cible (et au genre du document : `objects`), dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
  *  Des valeurs différentes donnent MIXED. Nom en lecture seule dans une sélection multiple. */
-export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean): SheetRow[] {
+export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean, cellPrefix = ''): SheetRow[] {
   if (!targets.length || !targets.every((t) => targetExists(doc, t))) return [];
   const kinds = targets.map((t) => targetKind(doc, docKind, t));
   return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k))))
     .map((d) => {
-      const values = targets.map((t) => readProp(doc, docKind, t, d));
+      const values = targets.map((t) => readProp(doc, docKind, t, d, cellPrefix));
       return { d, value: values.every((v) => same(v, values[0])) ? values[0] : MIXED,
-        readOnly: readOnly || (d.name === 'Name' && targets.length > 1) };
+        readOnly: readOnly || (d.name === 'Name' && targets.length > 1) || (['Name', 'Top', 'Left'].includes(d.name) && targets[0].kind === 'cell') };
     });
 }
 

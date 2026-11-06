@@ -3,15 +3,17 @@
 // contrôles sélectionnés et, pour un seul contrôle, une poignée de largeur au bord droit de sa première occurrence. Un clic
 // sélectionne le contrôle sous le pointeur (Ctrl/Maj : ajoute ou retire) ; ailleurs, la sélection revient à l'état. Pas de
 // déplacement de contrôle : la Feuille de propriétés et les commandes Organiser s'en chargent.
+// ponytail: pas de saisie dans une cellule vide depuis le mode Page (sélection, mise en forme, Suppr, outil seulement) ; à ajouter si demandé.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cellItemName } from '../../shared/design/layout';
 import { itemAt } from '../../shared/report/flow';
 import { renderFlowHtml, reportCss } from '../../shared/report/render';
 import type { CanvasProps } from '../designer/Designer';
 import { findControl } from '../designer/designer-model';
 import { CLICK_PX, gridStep, twipsToPx } from '../designer/units';
 import { FLOW_ROWS, type FlowData } from './layout-flow';
-import { containerAt, deleteTargets, overlayFor, placement, resizeTo, stepDrag, type DragStep, type WidthDrag } from './layout-overlay';
+import { containerAt, deleteTargets, overlayFor, placement, resizeTo, selectionAt, stepDrag, type DragStep, type WidthDrag } from './layout-overlay';
 import { faces } from './ReportPreviewView';
 import './preview.css';
 
@@ -45,7 +47,8 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
   }, [fontList]);
 
   const names = state.selection.kind === 'controls' ? state.selection.names : [];
-  const overlay = report ? overlayFor(report, names, SCALE) : { rings: [], handle: null };
+  const cells = state.selection.kind === 'controls' ? state.selection.cells ?? [] : [];
+  const overlay = report ? overlayFor(report, [...names, ...cells.map(cellItemName)], SCALE) : { rings: [], handle: null };
   // pendant le glisser (et jusqu'à la mise en page suivante) : les anneaux du contrôle suivent la largeur visée
   const dw = (name: string) => (drag && drag.name === name ? (drag.w - drag.base) * SCALE : 0);
   const handle = overlay.handle && !readOnly ? overlay.handle : null;
@@ -73,8 +76,8 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
     }
     const x = (e.clientX - r.left) / SCALE, y = (e.clientY - r.top) / SCALE;
     const name = itemAt(report, x, y) || null;   // '' : un élément sans nom
-    if (e.ctrlKey || e.shiftKey || e.metaKey) { if (name) dispatch({ type: 'toggleSelect', name }); return; }
-    dispatch({ type: 'select', selection: name ? { kind: 'controls', names: [name] } : { kind: 'doc' } });
+    const a = selectionAt(name, e.ctrlKey || e.shiftKey || e.metaKey);
+    if (a) dispatch(a);
   };
   const drawMove = (e: PointerEvent<HTMLDivElement>) => {
     const d = drawRef.current;

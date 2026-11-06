@@ -30,7 +30,7 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
   const { snap } = x;
   return (
     <div className="frun" ref={root} data-testid="form-run">
-      {header && <div className="frun-fixed"><FormSection section={header} x={x} width={width} /></div>}
+      {header && <div className="frun-fixed"><FormSection doc={doc} section={header} x={x} width={width} /></div>}
       <div className="frun-body" ref={body} style={overflow}>
         {detail && (
           <div className="frun-detail">
@@ -41,11 +41,11 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
                   : <ChevronRight className="ic ic-sm" aria-hidden />}
               </div>
             )}
-            <FormSection section={detail} x={x} width={width} />
+            <FormSection doc={doc} section={detail} x={x} width={width} />
           </div>
         )}
       </div>
-      {footer && <div className="frun-fixed"><FormSection section={footer} x={x} width={width} /></div>}
+      {footer && <div className="frun-fixed"><FormSection doc={doc} section={footer} x={x} width={width} /></div>}
       {messages.length > 0 && (
         <div className="frun-message" role="alert" aria-label={t('form.message')} data-testid="form-message">
           {messages.map((m, i) => <div key={i}>{m}</div>)}

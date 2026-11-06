@@ -741,6 +741,7 @@
     "canvas": "Design surface",
     "layoutHandle": "Select layout {{id}}",
     "emptyCell": "Empty cell of layout {{layout}}, row {{row}}, column {{col}}",
+    "emptyCellPrefix": "EmptyCell",
     "toolbox": "Toolbox",
     "arrange": {
       "alignLeft": "Left",
@@ -1553,6 +1554,7 @@
     "LineSlant": "Line Slant",
     "Pages": "Pages",
     "Name": "Name",
+    "Tag": "Tag",
     "TabStop": "Tab Stop",
     "TabIndex": "Tab Index",
     "ControlTipText": "Control Tip Text",
@@ -1897,6 +1899,7 @@
       "comboBox": "Combo Box",
       "listBox": "List Box",
       "commandButton": "Command Button",
+      "emptyCell": "Empty cell",
       "subform": "Subform/Subreport",
       "image": "Image",
       "line": "Line",

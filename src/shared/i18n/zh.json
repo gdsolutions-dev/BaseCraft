@@ -743,6 +743,7 @@
     "canvas": "设计图面",
     "layoutHandle": "选择布局 {{id}}",
     "emptyCell": "布局 {{layout}} 的空单元格，第 {{row}} 行第 {{col}} 列",
+    "emptyCellPrefix": "空单元格",
     "toolbox": "工具箱",
     "arrange": {
       "alignLeft": "靠左",
@@ -1567,6 +1568,7 @@
     "LineSlant": "线条倾斜",
     "Pages": "页",
     "Name": "名称",
+    "Tag": "标记",
     "TabStop": "Tab 键停靠点",
     "TabIndex": "Tab 键索引",
     "ControlTipText": "控件提示文本",
@@ -1910,6 +1912,7 @@
       "comboBox": "组合框",
       "listBox": "列表框",
       "commandButton": "命令按钮",
+      "emptyCell": "空单元格",
       "subform": "子窗体/子报表",
       "image": "图像",
       "line": "直线",

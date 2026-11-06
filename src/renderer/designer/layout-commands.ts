@@ -1,8 +1,8 @@
 // Ruban › Disposition (Tableau) : Empilé, Tabulaire, insérer, sélectionner, déplacer -> actions du concepteur.
 // Sans contrôle sélectionné rien n'est enregistré ; sans membre de disposition dans la sélection, seuls Empilé et Tabulaire le sont
 // (le ruban désactive les autres).
-import { cellAt, layoutOf, MARGIN_PRESETS, PADDING_PRESETS, readLayouts, sectionRef } from '../../shared/design/layout';
-import { canMerge, createLayout, insertCells, mergeCells, splitCell, membersOf, moveRow, removeLayout, selectionOf } from '../../shared/design/layout-edit';
+import { cellAt, cellItemName, layoutOf, MARGIN_PRESETS, PADDING_PRESETS, readLayouts, sectionRef } from '../../shared/design/layout';
+import { canMerge, createLayout, insertCells, mergeCells, splitCell, membersOf, moveRow, removeLayout, selectionIn, slotOf } from '../../shared/design/layout-edit';
 import type { DesignDoc } from '../../shared/design/model';
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { documentKind, type DesignerAction, type DesignerState, type Selection } from './designer-model';
@@ -17,10 +17,12 @@ export interface FormHeader { shown(doc: DesignDoc): boolean; toggle(doc: Design
 const CREATE: LayoutCommand[] = ['stacked', 'tabular'];
 const MEMBER: LayoutCommand[] = ['removeLayout', 'insertAbove', 'insertBelow', 'insertLeft', 'insertRight',
   'selectLayout', 'selectColumn', 'selectRow', 'moveUp', 'moveDown'];
+const SELECT: LayoutCommand[] = ['selectLayout', 'selectColumn', 'selectRow'];
 const SCOPE = { selectLayout: 'layout', selectColumn: 'column', selectRow: 'row' } as const;
 const WHERE = { insertAbove: 'above', insertBelow: 'below', insertLeft: 'left', insertRight: 'right' } as const;
 
 const names = (s: DesignerState): string[] => (s.selection.kind === 'controls' ? s.selection.names : []);
+const cellsOf = (s: DesignerState) => (s.selection.kind === 'controls' ? s.selection.cells ?? [] : []);
 /** Le premier contrôle sélectionné qui appartient à une disposition. */
 const firstMember = (s: DesignerState): string | undefined => names(s).find((n) => layoutOf(s.doc, n));
 
@@ -40,7 +42,7 @@ const mergeable = (s: DesignerState): boolean => { const p = pickedCells(s); ret
 const splittable = (s: DesignerState): boolean => { const p = pickedCells(s); return !!p && p.slots.length === 1; };
 
 /** Changes when the set of registered layout handlers changes: the views re-register on it. */
-export const layoutKey = (s: DesignerState): string => `${!names(s).length ? 0 : firstMember(s) ? 2 : 1}${mergeable(s) ? 'm' : ''}${splittable(s) ? 's' : ''}`;
+export const layoutKey = (s: DesignerState): string => `${firstMember(s) ? 2 : names(s).length ? `1${cellsOf(s).length ? 'c' : ''}` : cellsOf(s).length ? 3 : 0}${mergeable(s) ? 'm' : ''}${splittable(s) ? 's' : ''}`;
 
 /** The four Arrange popups (Gridlines, Control Margins, Control Padding, Anchoring), opened by their command. */
 export type LayoutPopup = 'layoutGridlines' | 'controlMargins' | 'controlPadding' | 'anchoring';
@@ -53,7 +55,7 @@ const PRESET_SIDES: Record<Exclude<GridlinePreset, 'outline'>, Side[]> = {
   none: [], both: [...SIDES], horizontal: ['Top', 'Bottom'], vertical: ['Left', 'Right'], top: ['Top'], bottom: ['Bottom'],
 };
 
-/** One value written to the same property of every selected control (empty cells are ignored); null without a selected control. */
+/** One value written to the same property of every selected control and empty cell (Margins and Anchoring never reach cells); null without a target. */
 function writeAll(s: DesignerState, values: Record<string, unknown>): DesignerAction | null {
   const kind = documentKind(s);
   return writes(Object.entries(values).map(([name, value]) => ({ targets: targetsFor(s.doc, s.selection, name).map((x) => x.t), name, value })), kind);
@@ -77,19 +79,19 @@ export const gridlineStyleAction = (s: DesignerState, style: 'solid' | 'dashed' 
 
 /** The sides of each selected control that lie on the bounding rectangle of the selected cells of its layout. */
 function outlineSides(s: DesignerState): Map<string, Set<Side>> {
-  const picks = new Map<string, { row: number; col: number; rows: number; cols: number; control: string | null }[]>();
+  const picks = new Map<string, { row: number; col: number; rows: number; cols: number; key: string }[]>();
   const layouts = readLayouts(s.doc);
   const add = (layout: string, row: number, col: number) => {
     const c = cellAt(layouts.find((l) => l.id === layout)!, row, col);
-    if (c) picks.set(layout, [...(picks.get(layout) ?? []), { row: c.row, col: c.col, rows: c.rowSpan ?? 1, cols: c.colSpan ?? 1, control: c.control }]);
+    if (c) picks.set(layout, [...(picks.get(layout) ?? []), { row: c.row, col: c.col, rows: c.rowSpan ?? 1, cols: c.colSpan ?? 1, key: (c.control ?? cellItemName({ layout, row: c.row, col: c.col })).toLowerCase() }]);
   };
   for (const n of names(s)) { const l = layoutOf(s.doc, n); const c = l?.cells.find((x) => x.control?.toLowerCase() === n.toLowerCase()); if (l && c) add(l.id, c.row, c.col); }
-  for (const c of s.selection.kind === 'controls' ? s.selection.cells ?? [] : []) add(c.layout, c.row, c.col);
+  for (const c of cellsOf(s)) add(c.layout, c.row, c.col);
   const out = new Map<string, Set<Side>>();
   for (const cells of picks.values()) {
     const r0 = Math.min(...cells.map((c) => c.row)), c0 = Math.min(...cells.map((c) => c.col));
     const r1 = Math.max(...cells.map((c) => c.row + c.rows - 1)), c1 = Math.max(...cells.map((c) => c.col + c.cols - 1));
-    for (const c of cells) if (c.control) out.set(c.control.toLowerCase(), new Set<Side>([
+    for (const c of cells) out.set(c.key, new Set<Side>([
       ...(c.row === r0 ? ['Top' as const] : []), ...(c.row + c.rows - 1 === r1 ? ['Bottom' as const] : []),
       ...(c.col === c0 ? ['Left' as const] : []), ...(c.col + c.cols - 1 === c1 ? ['Right' as const] : [])]));
   }
@@ -104,7 +106,7 @@ export function gridlinesAction(s: DesignerState, preset: GridlinePreset): Desig
   for (const x of SIDES) {
     const name = `GridlineStyle${x}`;
     const ts = targetsFor(s.doc, s.selection, name);
-    const on = (t: (typeof ts)[number]) => (outline ? (outline.get((t.t.kind === 'control' ? t.t.name : '').toLowerCase()) ?? new Set<Side>(SIDES)).has(x) : PRESET_SIDES[preset as keyof typeof PRESET_SIDES].includes(x));
+    const on = (t: (typeof ts)[number]) => (outline ? (outline.get((t.t.kind === 'control' ? t.t.name : t.t.kind === 'cell' ? cellItemName(t.t) : '').toLowerCase()) ?? new Set<Side>(SIDES)).has(x) : PRESET_SIDES[preset as keyof typeof PRESET_SIDES].includes(x));
     const hidden = (t: (typeof ts)[number]) => read(t, name, kind) === 'transparent';
     list.push({ name, value: 'solid', targets: ts.filter((t) => on(t) && hidden(t)).map((t) => t.t) },
       { name, value: 'transparent', targets: ts.filter((t) => !on(t) && !hidden(t)).map((t) => t.t) });
@@ -137,8 +139,13 @@ export function layoutAction(state: DesignerState, cmd: LayoutCommand, formHeade
       : splitCell(doc, p.layout, p.slots[0], cmd === 'splitVertically' ? 'vertical' : 'horizontal')) };
   }
   const m = firstMember(state);
+  if (cmd in SCOPE) {   // from the first member's slot, else from the first selected empty cell
+    const from = (m && slotOf(state.doc, m)) || cellsOf(state)[0];
+    if (!from) return null;
+    const r = selectionIn(state.doc, from, SCOPE[cmd as keyof typeof SCOPE]);
+    return { type: 'select', selection: { kind: 'controls', names: r.names, ...(r.cells.length ? { cells: r.cells } : {}) } };
+  }
   if (!m) return null;
-  if (cmd in SCOPE) return { type: 'select', selection: { kind: 'controls', names: selectionOf(state.doc, m, SCOPE[cmd as keyof typeof SCOPE]) } };
   if (cmd === 'removeLayout') return { type: 'edit', apply: (doc) => { const l = layoutOf(doc, m); return l ? removeLayout(doc, l.id) : doc; } };
   if (cmd === 'moveUp' || cmd === 'moveDown') return { type: 'edit', apply: (doc) => moveRow(doc, m, cmd === 'moveUp' ? -1 : 1) };
   return { type: 'edit', apply: (doc) => insertCells(doc, m, WHERE[cmd as keyof typeof WHERE]) };
@@ -149,9 +156,10 @@ export function layoutCommands(current: () => DesignerState, dispatch: (a: Desig
   openPopup?: (id: LayoutPopup) => void): CommandHandlers {
   const s = current();
   const h: CommandHandlers = {};
-  const cmds: LayoutCommand[] = [...(names(s).length ? CREATE : []), ...(firstMember(s) ? MEMBER : []),
+  const cmds: LayoutCommand[] = [...(names(s).length ? CREATE : []), ...(firstMember(s) ? MEMBER : cellsOf(s).length ? SELECT : []),
     ...(mergeable(s) ? ['merge' as const] : []), ...(splittable(s) ? ['splitVertically' as const, 'splitHorizontally' as const] : [])];
   for (const cmd of cmds) h[cmd] = () => { const a = layoutAction(current(), cmd, formHeader); if (a) dispatch(a); };
-  if (openPopup && names(s).length) for (const id of POPUPS) h[id] = () => openPopup(id);   // popups: at least one control (empty cells alone do not count)
+  // popups: Gridlines and Padding with a control or an empty cell; Margins and Anchoring need a control
+  if (openPopup) for (const id of POPUPS) if (names(s).length || (cellsOf(s).length && (id === 'layoutGridlines' || id === 'controlPadding'))) h[id] = () => openPopup(id);
   return h;
 }

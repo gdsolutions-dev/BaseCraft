@@ -743,6 +743,7 @@
     "canvas": "デザイン サーフェス",
     "layoutHandle": "レイアウト {{id}} を選択",
     "emptyCell": "レイアウト {{layout}} の空のセル、{{row}} 行 {{col}} 列",
+    "emptyCellPrefix": "空のセル",
     "toolbox": "ツールボックス",
     "arrange": {
       "alignLeft": "左",
@@ -1567,6 +1568,7 @@
     "LineSlant": "線の傾き",
     "Pages": "ページ",
     "Name": "名前",
+    "Tag": "タグ",
     "TabStop": "タブ ストップ",
     "TabIndex": "タブ オーダー",
     "ControlTipText": "コントロール ヒント テキスト",
@@ -1910,6 +1912,7 @@
       "comboBox": "コンボ ボックス",
       "listBox": "リスト ボックス",
       "commandButton": "コマンド ボタン",
+      "emptyCell": "空のセル",
       "subform": "サブフォーム/サブレポート",
       "image": "イメージ",
       "line": "線",

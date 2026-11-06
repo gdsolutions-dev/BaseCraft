@@ -47,7 +47,7 @@ export async function loadFlowData(doc: DesignDoc, ask: AskParameters, api?: Flo
  *  `onPage` de `env` sont écartés : le mode Page n'exécute ni Sur formatage ni Sur impression. */
 export async function layoutFlow(doc: DesignDoc, source: FlowSource, env: LayoutEnv, signal: AbortSignal): Promise<LaidOutReport> {
   const { hooks: _hooks, onPage: _onPage, ...rest } = env;
-  return layoutReport(readReport(doc, source.data.fields), source.data, { ...rest, signal }, { flow: true });
+  return layoutReport(readReport(doc, source.data.fields, { allCells: true }), source.data, { ...rest, signal }, { flow: true });
 }
 
 /** Une seule mise en page à la fois : `schedule` lance `job` `delay` ms après le dernier appel, annule la précédente (son

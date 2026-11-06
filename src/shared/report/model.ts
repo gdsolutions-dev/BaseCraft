@@ -1,7 +1,8 @@
 // Définition normalisée d'un état (pur) : le DesignDoc (contrat 1.3) lu par le catalogue (props.ts), sections rangées,
 // sources analysées, avertissements. readReport ne lève jamais : une valeur invalide prend son défaut, une structure
 // invalide est ignorée, et chaque écart devient un ReportIssue.
-import { CONTROL_KINDS, type ControlKind, type DesignDoc, type SectionKind } from '../design/model';
+import { CONTROL_KINDS, type ControlKind, type DesignDoc, type SectionDef, type SectionKind } from '../design/model';
+import { cellControl, cellItemName, emptyCellsOf, sectionRef } from '../design/layout';
 import type { Expr } from '../expr/ast';
 import { fieldRefs, parseCanonical } from '../expr/parser';
 import { withUserFunctions } from '../expr/user-functions';
@@ -83,7 +84,9 @@ export function reportWidth(doc: DesignDoc): number {
 const NOT_DRAWN: ControlKind[] = ['commandButton', 'optionGroup', 'listBox', 'tabControl'];
 const SINGLE = ['reportHeader', 'pageHeader', 'detail', 'pageFooter', 'reportFooter'] as const;
 
-export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
+/** `allCells`: every empty layout cell becomes a rectangle (the report Layout view selects them); otherwise only those carrying
+ *  stored formatting do, so a report saved before L5 reads and prints as before. */
+export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean } = {}): ReportSpec {
   const issues: ReportIssue[] = [];
   const add = (code: ReportIssue['code'], control?: string, detail?: string): void => {
     if (issues.some((i) => i.code === code && i.control === control && i.detail === detail)) return;
@@ -164,6 +167,11 @@ export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
     return [control(c, kind, name, pageSection), ...controls(c.children, pageSection)];
   });
 
+  /** The section's empty layout cells as borderless, sourceless rectangles: the engine draws their back colour and gridlines. */
+  const cells = (s: Obj, pageSection: boolean): ControlSpec[] => emptyCellsOf(doc, sectionRef(s as unknown as SectionDef))
+    .filter((c) => opts.allCells || Object.keys(c.props).length > 0)
+    .map((c) => ({ ...control(cellControl(c) as unknown as Obj, 'label', cellItemName(c), pageSection), kind: 'rectangle' as const, border: null, source: { kind: 'none' as const } }));
+
   const section = (s: Obj, kind: SectionKind, groupLevel?: number): SectionSpec => {
     const p = obj(s.props), r = (prop: string) => readProp(p, prop, kind);
     return {
@@ -171,7 +179,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[]): ReportSpec {
       visible: r('Visible') as boolean, canGrow: r('CanGrow') as boolean, canShrink: r('CanShrink') as boolean,
       keepTogether: r('KeepTogether') as boolean, repeatSection: r('RepeatSection') as boolean,
       forceNewPage: r('ForceNewPage') as SectionSpec['forceNewPage'], back: readColor(p, 'BackColor', kind),
-      controls: controls(s.controls, kind === 'pageHeader' || kind === 'pageFooter'),
+      controls: [...cells(s, kind === 'pageHeader' || kind === 'pageFooter'), ...controls(s.controls, kind === 'pageHeader' || kind === 'pageFooter')],
     };
   };
 

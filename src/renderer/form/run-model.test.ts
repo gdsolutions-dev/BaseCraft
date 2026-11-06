@@ -1,4 +1,7 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { EmptyCells } from './EmptyCells';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
 import { defaultProps, type FieldProps, type FieldType } from '../../shared/field-types';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
@@ -165,4 +168,19 @@ describe('margins and gridlines', () => {
     expect(g.borderBottom).toBeUndefined();
     expect(g).toMatchObject({ position: 'absolute', pointerEvents: 'none', left: twipsToPx(910), top: twipsToPx(470), width: twipsToPx(1090), height: twipsToPx(330) });
   });
+});
+
+describe('empty cells in Form view (L5)', () => {
+  const lay = { id: 'L1', kind: 'stacked', left: 200, tops: { detail: 100 }, cols: [1000], rows: [{ section: 'detail', height: 300 }, { section: 'detail', height: 300 }],
+    cells: [{ row: 0, col: 0, control: null, props: { BackStyle: 'normal', BackColor: '#ff0000', GridlineStyleTop: 'solid' } }, { row: 1, col: 0, control: null }] };
+  const d = { formatVersion: '1.0', recordSource: null, props: { Layouts: [lay] }, sections: [{ kind: 'detail', height: 2000, props: {}, controls: [ctl('textBox', 'A')] }] } as unknown as DesignDoc;
+  const html = renderToStaticMarkup(createElement(EmptyCells, { doc: d, section: d.sections[0] }));
+  it('a formatted cell draws its back colour and a gridline sibling; a bare one nothing', () => {
+    expect(html).toContain('data-testid="form-cell-L1-0-0"');
+    expect(html).toContain('form-cell-grid-L1-0-0');
+    expect(html).toContain('background:#ff0000');
+    expect(html).not.toContain('L1-1-0');
+    expect(html).not.toMatch(/tabindex|role=/i);
+  });
+  it('no tab stop is added', () => expect(tabSequence(d.sections[0])).toEqual(['A']));
 });

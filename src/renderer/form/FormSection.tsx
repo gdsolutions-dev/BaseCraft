@@ -2,7 +2,7 @@
 // chaque étiquette attachée liée à son contrôle, chaque erreur sous le contrôle lié au champ.
 import { Fragment, type ReactNode } from 'react';
 import { colorCss, type ColorValue } from '../../shared/design/colors';
-import type { ControlDef, SectionDef } from '../../shared/design/model';
+import type { ControlDef, DesignDoc, SectionDef } from '../../shared/design/model';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
 import { twipsToPx } from '../designer/units';
 import { errorMessage } from '../shell/Modal';
@@ -18,6 +18,7 @@ import { ShapeCtl } from './controls/ShapeCtl';
 import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
 import { TextBoxCtl } from './controls/TextBoxCtl';
+import { EmptyCells } from './EmptyCells';
 import { gridlineStyle, prop, tabSequence } from './run-model';
 
 const BACK = PROPERTY_CATALOG.find((d) => d.name === 'BackColor')!;
@@ -66,7 +67,7 @@ function renderControl(c: ControlDef, x: RunCtx, origin: ControlDef | null, z?: 
   );
 }
 
-export function FormSection({ section, x, width }: { section: SectionDef; x: RunCtx; width: number }) {
+export function FormSection({ doc, section, x, width }: { doc: DesignDoc; section: SectionDef; x: RunCtx; width: number }) {
   const back = colorCss(effectiveProp(section.props, 'BackColor', section.kind, 'form'), (defaultFor(BACK, section.kind, 'form') ?? 'theme:surface') as ColorValue);
   // DOM order: the tab stops in tab order, then the rest; the paint order stays the document's (z-index)
   const seq = tabSequence(section, x.pages);
@@ -77,6 +78,7 @@ export function FormSection({ section, x, width }: { section: SectionDef; x: Run
     <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, background: back }}
       onClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnClick'); }}
       onDoubleClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnDblClick'); }}>
+      <EmptyCells doc={doc} section={section} />
       {order.map((i) => {   // a layout label: linked to its control (<label for>), hidden with it
         const to = labelTarget(section.controls[i], section, x);
         return to && prop(to, 'Visible') === false ? null : renderControl(section.controls[i], x, null, i, to && x.id(to.name));

@@ -746,6 +746,7 @@
     "canvas": "Area di progettazione",
     "layoutHandle": "Seleziona il layout {{id}}",
     "emptyCell": "Cella vuota del layout {{layout}}, riga {{row}}, colonna {{col}}",
+    "emptyCellPrefix": "CellaVuota",
     "toolbox": "Casella degli strumenti",
     "arrange": {
       "alignLeft": "A sinistra",
@@ -1589,6 +1590,7 @@
     "LineSlant": "Inclinazione linea",
     "Pages": "Pagine",
     "Name": "Nome",
+    "Tag": "Nota",
     "TabStop": "Punto di tabulazione",
     "TabIndex": "Indice di tabulazione",
     "ControlTipText": "Testo descrizione comando",
@@ -1934,6 +1936,7 @@
       "comboBox": "Casella combinata",
       "listBox": "Casella di riepilogo",
       "commandButton": "Pulsante di comando",
+      "emptyCell": "Cella vuota",
       "subform": "Sottomaschera/Sottoreport",
       "image": "Immagine",
       "line": "Linea",

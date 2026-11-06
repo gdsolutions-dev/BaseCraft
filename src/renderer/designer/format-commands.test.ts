@@ -80,3 +80,11 @@ describe('Format tab commands', () => {
     expect(Object.keys(formatCommands(() => initDesigner(doc), () => {}, () => {}, 1))).toEqual(expect.arrayContaining(['bold', 'font', 'shapeOutline', 'decreaseDecimals']));
   });
 });
+
+describe('empty cells', () => {
+  const cell = { layout: 'L1', row: 0, col: 0 };
+  it('Fill is registered for a cells-only selection, the other formats are not', () => {
+    const s = { ...initDesigner(doc), selection: { kind: 'controls' as const, names: [], cells: [cell] } };
+    expect(Object.keys(formatCommands(() => s, () => {}, () => {}, 0)).sort()).toEqual(['backColor', 'objectList', 'selectAll']);
+  });
+});

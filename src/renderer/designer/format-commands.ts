@@ -2,6 +2,7 @@
 // auxquels elles s'appliquent (setProp ; plusieurs écritures = une seule annulation). Sans contrôle qui convienne : rien.
 import type { ColorValue } from '../../shared/design/colors';
 import type { ControlKind, DesignDoc } from '../../shared/design/model';
+import { readLayouts } from '../../shared/design/layout';
 import { effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { designerReducer, documentKind, findControl, initDesigner, type DesignerAction, type DesignerState, type PropTarget, type Selection } from './designer-model';
@@ -19,14 +20,21 @@ const MAX_DECIMALS = 15;
 export type Write = { targets: PropTarget[]; name: string; value: unknown };
 export type Target = { t: PropTarget; props: Record<string, unknown>; kind: ControlKind };
 
-/** Les contrôles sélectionnés auxquels `name` s'applique, dans l'ordre de la sélection. */
+/** Les contrôles sélectionnés auxquels `name` s'applique, dans l'ordre de la sélection, puis les cellules vides sélectionnées
+ *  si le catalogue les y autorise (une cellule se lit et s'écrit comme une étiquette). */
 export function targetsFor(doc: DesignDoc, sel: Selection, name: string): Target[] {
   if (sel.kind !== 'controls') return [];
   const applies = PROPERTY_CATALOG.find((d) => d.name === name)?.appliesTo ?? [];
-  return sel.names.flatMap((n) => {
+  const ctl = sel.names.flatMap((n) => {
     const c = findControl(doc, n)?.control;
     return c && applies.includes(c.kind) ? [{ t: { kind: 'control' as const, name: c.name }, props: c.props, kind: c.kind }] : [];
   });
+  if (!sel.cells?.length || !applies.includes('emptyCell')) return ctl;
+  const layouts = readLayouts(doc);
+  return [...ctl, ...sel.cells.flatMap((r): Target[] => {
+    const c = layouts.find((l) => l.id === r.layout)?.cells.find((x) => x.row === r.row && x.col === r.col && x.control === null);
+    return c ? [{ t: { kind: 'cell', layout: r.layout, row: r.row, col: r.col }, props: c.props ?? {}, kind: 'label' }] : [];
+  })];
 }
 export const read = (x: Target, name: string, docKind: 'form' | 'report') => effectiveProp(x.props, name, x.kind, docKind);
 
@@ -102,6 +110,8 @@ export function fillAction(doc: DesignDoc, docKind: 'form' | 'report', sel: Sele
 export function formatCommands(current: () => DesignerState, dispatch: (a: DesignerAction) => void, openPopup: (id: FormatPopupId) => void,
   selected: number): CommandHandlers {
   const h: CommandHandlers = { selectAll: () => dispatch({ type: 'selectAll' }), objectList: () => openPopup('objectList') };
+  const s0 = current().selection;
+  if (!selected && s0.kind === 'controls' && s0.cells?.length) h.backColor = () => openPopup('backColor');   // empty cells alone: Fill only
   if (!selected) return h;
   for (const id of POPUPS) h[id] = () => openPopup(id);
   for (const cmd of FORMAT_COMMANDS) {

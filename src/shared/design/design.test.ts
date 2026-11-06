@@ -26,7 +26,7 @@ describe('property catalog', () => {
   it('one descriptor per invariant name, with a known tab, editor, target and label in both languages', () => {
     const names = PROPERTY_CATALOG.map((p) => p.name);
     expect(new Set(names).size).toBe(names.length);
-    const targets = ['form', 'report', ...SECTION_KINDS, ...CONTROL_KINDS];
+    const targets = ['form', 'report', 'emptyCell', ...SECTION_KINDS, ...CONTROL_KINDS];
     for (const p of PROPERTY_CATALOG) {
       expect(p.name).toMatch(/^[A-Z][A-Za-z]+$/);
       expect(['format', 'data', 'event', 'other']).toContain(p.tab);
@@ -335,10 +335,21 @@ describe('L4 catalog: gridlines, margins, padding, anchors', () => {
   it('has the 19 properties with their editors and defaults, on every control but the page break (gridlines also skip the line)', () => {
     expect(names).toHaveLength(19);
     const d = (n: string) => PROPERTY_CATALOG.find((x) => x.name === n)!;
-    for (const n of names) { expect(d(n), n).toBeDefined(); expect(d(n).tab).toBe('format'); expect(d(n).appliesTo).toEqual(n.endsWith('Margin') ? ['label', 'textBox', 'comboBox', 'listBox'] : CONTROL_KINDS.filter((k) => k !== 'pageBreak' && !(n.startsWith('Gridline') && k === 'line'))); }
+    for (const n of names) { expect(d(n), n).toBeDefined(); expect(d(n).tab).toBe('format'); expect(d(n).appliesTo.filter((k) => k !== 'emptyCell')).toEqual(n.endsWith('Margin') ? ['label', 'textBox', 'comboBox', 'listBox'] : CONTROL_KINDS.filter((k) => k !== 'pageBreak' && !(n.startsWith('Gridline') && k === 'line'))); }
     expect([d('GridlineStyleTop').editor, d('GridlineStyleTop').default, d('GridlineStyleTop').options]).toEqual(['enum', 'transparent', ['transparent', 'solid', 'dashed', 'dotted']]);
     expect([d('GridlineWidthLeft').default, d('GridlineWidthLeft').min, d('GridlineWidthLeft').max, d('GridlineWidthLeft').integer]).toEqual([1, 0, 6, true]);
     expect([d('GridlineColor').editor, d('GridlineColor').default, d('TopMargin').editor, d('TopMargin').default, d('RightPadding').default]).toEqual(['color', '#a6a6a6', 'twips', 0, 0]);
     expect([d('HorizontalAnchor').default, d('HorizontalAnchor').options, d('VerticalAnchor').default, d('VerticalAnchor').options]).toEqual(['left', ['left', 'right', 'both'], 'top', ['top', 'bottom', 'both']]);
+  });
+});
+
+describe('L5 catalog: empty cell', () => {
+  it('Tag exists on every control; an empty cell takes size, position, name, Tag, background, gridlines and padding only', () => {
+    const tag = PROPERTY_CATALOG.find((x) => x.name === 'Tag')!;
+    expect([tag.tab, tag.editor, tag.default, tag.appliesTo]).toEqual(['other', 'text', '', [...CONTROL_KINDS, 'emptyCell']]);
+    const sides = ['Top', 'Bottom', 'Left', 'Right'];
+    expect(propertiesFor('emptyCell').map((d) => d.name).sort()).toEqual(['Width', 'Height', 'Top', 'Left', 'Name', 'Tag', 'BackStyle', 'BackColor', 'GridlineColor',
+      ...sides.flatMap((s) => [`GridlineStyle${s}`, `GridlineWidth${s}`, `${s}Padding`])].sort());
+    for (const n of ['TopMargin', 'HorizontalAnchor', 'ControlSource', 'Caption']) expect(PROPERTY_CATALOG.find((x) => x.name === n)!.appliesTo).not.toContain('emptyCell');
   });
 });

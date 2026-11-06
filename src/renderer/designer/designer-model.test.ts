@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { validateDesignDoc, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { MAX_TWIPS } from './units';
-import { ROW_GAP, readLayouts, reflow, withLayouts } from '../../shared/design/layout';
-import { createLayout, insertCells, removeLayout, membersOf, selectionOf } from '../../shared/design/layout-edit';
+import { INSERT_ROW_HEIGHT, ROW_GAP, emptyCellsOf, readLayouts, reflow, withLayouts } from '../../shared/design/layout';
+import { createLayout, insertCells, removeLayout, membersOf, selectionIn, selectionOf } from '../../shared/design/layout-edit';
 import { CONTAINER_KINDS, controlRect, coreReducer, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, syncLayouts,
   uniqueName, type DesignerAction, type DesignerState } from './designer-model';
 
@@ -363,8 +363,8 @@ describe('layouts stay in step with coordinates', () => {
     const d = structuredClone(stack); d.sections[1].height = 900;
     const below: DesignerAction = { type: 'edit', apply: (x) => insertCells(x, 'Nom', 'below') };
     const s = act(initDesigner(d), below, below, below);
-    expect(rect(s, 'Ville').top + rect(s, 'Ville').height).toBe(4 * (340 + ROW_GAP) + 340);
-    expect(s.doc.sections[1].height).toBe(4 * (340 + ROW_GAP) + 340);
+    expect(rect(s, 'Ville').top + rect(s, 'Ville').height).toBe(2 * 340 + 4 * ROW_GAP + 3 * INSERT_ROW_HEIGHT);
+    expect(s.doc.sections[1].height).toBe(2 * 340 + 4 * ROW_GAP + 3 * INSERT_ROW_HEIGHT);
     expect(s.past).toHaveLength(3);
   });
   it('a resize that makes a member taller grows the section within the same single history entry', () => {
@@ -506,5 +506,116 @@ describe('dispositions d\'un état : un contrôle posé en devient membre (L3c)'
       const s = act(initDesigner(d), { type: 'selectCell', cell, add: false }, { type: 'edit', apply: (x) => removeLayout(x, l.id) });
       expect(s.selection).toEqual({ kind: 'doc' });
     });
+  });
+});
+
+describe('L5 cellules vides dans le concepteur', () => {
+  const base = (): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props: { Width: 20000 }, sections: [
+    section('formHeader', 567, []),
+    section('detail', 3000, [ctl('textBox', 'Nom', 1134, 0, 2268, 340, [ctl('label', 'Étiquette_Nom', 0, 0, 1000, 340)]),
+      ctl('textBox', 'Ville', 1134, 567, 2268, 340, [ctl('label', 'Étiquette_Ville', 0, 567, 1000, 340)]), ctl('textBox', 'Libre', 9000, 2500, 1000, 340)]),
+    section('formFooter', 0, []),
+  ] });
+  const stack = createLayout(base(), membersOf(base(), ['Nom', 'Ville']), 'stacked', { headerSection: 'formHeader' });
+  const d = insertCells(stack, 'Ville', 'below');   // row 2 : two empty cells
+  const empties = emptyCellsOf(d);
+  const ref = (col: number) => ({ layout: readLayouts(d)[0].id, row: 2, col });
+  const mid = (col: number) => { const r = empties.find((e) => e.row === 2 && e.col === col)!.rect; return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  const neuf = () => ctl('label', 'Neuf', 8000, 100, 500, 200);
+  const field = () => ctl('textBox', 'Champ', 8000, 100, 2000, 400, [ctl('label', 'Étiquette_Champ', 6500, 100, 1400, 340)]);
+  const cellOf = (s: DesignerState, name: string) => readLayouts(s.doc)[0].cells.find((c) => c.control === name);
+
+  it('insert at an empty cell fills it, one undo step', () => {
+    const s0 = initDesigner(d);
+    const s = act(s0, { type: 'insert', section: 1, controls: [neuf()], at: mid(1) });
+    const r = empties.find((e) => e.row === 2 && e.col === 1)!.rect;
+    expect(rect(s, 'Neuf')).toMatchObject({ left: r.left, top: r.top, width: r.width });
+    expect(findControl(s.doc, 'Neuf')!.control.props.LayoutID).toBe(readLayouts(d)[0].id);
+    expect(cellOf(s, 'Neuf')).toMatchObject({ row: 2, col: 1 });
+    expect(s.selection).toEqual({ kind: 'controls', names: ['Neuf'] });
+    expect(s.past).toHaveLength(1);
+    expect(act(s, { type: 'undo' }).doc).toBe(d);
+  });
+  it('insert of a field at the right cell: text box there, label in the left cell', () => {
+    const s = act(initDesigner(d), { type: 'insert', section: 1, controls: [field()], at: mid(1) });
+    expect(cellOf(s, 'Champ')).toMatchObject({ row: 2, col: 1 });
+    expect(cellOf(s, 'Étiquette_Champ')).toMatchObject({ row: 2, col: 0 });
+    expect(readLayouts(s.doc)[0].rows).toHaveLength(3);
+  });
+  it('insert at a gap or on an occupied cell keeps the L4 placement', () => {
+    const nom = rect(initDesigner(d), 'Nom');
+    const occ = act(initDesigner(d), { type: 'insert', section: 1, controls: [neuf()], at: { x: nom.left + 10, y: nom.top + 10 } });
+    expect(readLayouts(occ.doc)[0].rows).toHaveLength(4);
+    const gap = act(initDesigner(d), { type: 'insert', section: 1, controls: [neuf()], at: { x: 12000, y: 10 } });
+    expect(readLayouts(gap.doc)).toEqual(readLayouts(d));
+  });
+  it('insert of an option group at a cell: L4 behaviour', () => {
+    const og = ctl('optionGroup', 'Groupe', 8000, 100, 2000, 1000);
+    const s = act(initDesigner(d), { type: 'insert', section: 1, controls: [og], at: mid(1) });
+    expect(cellOf(s, 'Groupe')).toBeUndefined();
+  });
+  it('moveBy with drop in an empty cell: the member fills it, its old cell is empty', () => {
+    const s = act(selIn(d, 'Ville'), { type: 'moveBy', dx: 100, dy: 600, free: true, drop: mid(1) });
+    expect(cellOf(s, 'Ville')).toMatchObject({ row: 2, col: 1 });
+    expect(readLayouts(s.doc)[0].cells.find((c) => c.row === 1 && c.col === 1)!.control).toBeNull();
+    const r = empties.find((e) => e.row === 2 && e.col === 1)!.rect;
+    expect(rect(s, 'Ville')).toMatchObject({ left: r.left, top: r.top });
+  });
+  it('moveBy with drop: a loose control joins the layout', () => {
+    const s = act(selIn(d, 'Libre'), { type: 'moveBy', dx: -3000, dy: -300, free: true, drop: mid(1) });
+    expect(cellOf(s, 'Libre')).toMatchObject({ row: 2, col: 1 });
+    expect(findControl(s.doc, 'Libre')!.control.props.LayoutID).toBe(readLayouts(d)[0].id);
+  });
+  it('moveBy with drop on an occupied cell or outside: the member returns to its cell', () => {
+    const nom = rect(initDesigner(d), 'Nom');
+    for (const drop of [{ x: nom.left + 10, y: nom.top + 10 }, { x: 15000, y: 10 }]) {
+      const s = act(selIn(d, 'Ville'), { type: 'moveBy', dx: 100, dy: 600, free: true, drop });
+      expect(cellOf(s, 'Ville')).toMatchObject({ row: 1, col: 1 });
+      expect(readLayouts(s.doc)[0].cells.find((c) => c.row === 2 && c.col === 1)!.control).toBeNull();
+    }
+  });
+  it('changeSection with drop in an empty cell of the target section fills it', () => {
+    const s0 = selIn({ ...d, sections: d.sections.map((x, i) => (i === 0 ? { ...x, controls: [ctl('textBox', 'Haut', 0, 0, 1000, 340)] } : x)) }, 'Haut');
+    const s = act(s0, { type: 'changeSection', to: 1, top: 2000, free: true, drop: mid(1) });
+    expect(cellOf(s, 'Haut')).toMatchObject({ row: 2, col: 1 });
+    expect(s.doc.sections[1].controls.some((c) => c.name === 'Haut')).toBe(true);
+  });
+  describe('deleteSelection with cells', () => {
+    const both = [ref(0), ref(1)];
+    it('both cells of the empty row: row removed, selection doc, one undo step', () => {
+      const s = act(initDesigner(d), { type: 'select', selection: { kind: 'controls', names: [], cells: both } }, { type: 'deleteSelection' });
+      expect(readLayouts(s.doc)[0].rows).toHaveLength(2);
+      expect(s.selection).toEqual({ kind: 'doc' });
+      expect(s.past).toHaveLength(1);
+      expect(act(s, { type: 'undo' }).doc).toBe(d);
+    });
+    it('one cell only: nothing changes', () => {
+      const s0 = act(initDesigner(d), { type: 'select', selection: { kind: 'controls', names: [], cells: [ref(1)] } });
+      const s = act(s0, { type: 'deleteSelection' });
+      expect(s.doc).toBe(d);
+      expect(s.past).toHaveLength(0);
+    });
+    it('names only (control and label row): the empty row stays', () => {
+      const s = act(selIn(d, 'Ville'), { type: 'deleteSelection' });
+      expect(readLayouts(s.doc)[0].rows).toHaveLength(3);
+      expect(findControl(s.doc, 'Étiquette_Ville')).toBeFalsy();
+    });
+    it('Select Row result (names and cells) removes the row and its label', () => {
+      const sr = selectionIn(d, { layout: readLayouts(d)[0].id, row: 1, col: 1 }, 'row');
+      const s = act(initDesigner(d), { type: 'select', selection: { kind: 'controls', ...sr } }, { type: 'deleteSelection' });
+      expect(readLayouts(s.doc)[0].rows).toHaveLength(2);
+      expect(findControl(s.doc, 'Ville')).toBeFalsy();
+      expect(findControl(s.doc, 'Étiquette_Ville')).toBeFalsy();
+    });
+  });
+  it('setProp on a cell target: BackColor in props, Width changes the column, Name ignored', () => {
+    const t = [{ kind: 'cell' as const, ...ref(1) }];
+    const s = act(initDesigner(d), { type: 'setProp', targets: t, name: 'BackColor', value: 255 });
+    expect(readLayouts(s.doc)[0].cells.find((c) => c.row === 2 && c.col === 1)!.props).toEqual({ BackColor: 255 });
+    const w = act(initDesigner(d), { type: 'setProp', targets: t, name: 'Width', value: 3000 });
+    expect(readLayouts(w.doc)[0].cols[1]).toBe(3000);
+    expect(rect(w, 'Ville').width).toBe(3000);
+    const n = act(initDesigner(d), { type: 'setProp', targets: t, name: 'Name', value: 'X' });
+    expect(n.doc).toBe(d);
   });
 });

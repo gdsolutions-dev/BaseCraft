@@ -3,7 +3,7 @@ import { COL_GAP, readLayouts, reflow, type Layout } from '../../shared/design/l
 import type { ControlDef, DesignDoc, SectionDef } from '../../shared/design/model';
 import type { LaidOutBand, LaidOutItem, LaidOutReport } from '../../shared/report/types';
 import { DEFAULT_SIZE } from '../designer/units';
-import { MIN_WIDTH, containerAt, deleteTargets, overlayFor, placement, resizeTo, stepDrag, type WidthDrag } from './layout-overlay';
+import { MIN_WIDTH, containerAt, deleteTargets, overlayFor, selectionAt, placement, resizeTo, stepDrag, type WidthDrag } from './layout-overlay';
 
 const T = (name: string, left: number, top: number, width = 1000, height = 200): LaidOutItem => ({ kind: 'text', name, left, top, width, height, lines: [],
   font: { name: 'Arial', size: 10, bold: false, italic: false, underline: false }, color: '#000000', back: null, border: null } as unknown as LaidOutItem);
@@ -169,5 +169,31 @@ describe('containerAt (a control drawn inside an option group or a tab control g
     expect(containerAt(flow(), doc, 850, 450)).toBeUndefined();
     expect(containerAt(flow(), doc, 9000, 450)).toBeUndefined();
     expect(containerAt(flow(), doc, 1300, 350)).toBeUndefined();
+  });
+});
+
+describe('empty cells in the flow (L5)', () => {
+  const cell = { layout: 'L1', row: 0, col: 1 };
+  const name = 'cell!L1!0!1';
+  it('overlayFor rings an item named as a selected cell', () => {
+    const r: LaidOutReport = { ...rep(), pages: [{ number: 1, bands: [band(0, [T(name, 100, 20)])] }] };
+    expect(overlayFor(r, [name], 1).rings).toEqual([{ name, left: 600, top: 20, width: 1000, height: 200 }]);
+  });
+  it('a lone selected cell rings but gets no width handle; a lone control keeps its handle', () => {
+    const r: LaidOutReport = { ...rep(), pages: [{ number: 1, bands: [band(0, [T(name, 100, 20), T('Titre', 100, 50)])] }] };
+    expect(overlayFor(r, [name], 1)).toEqual({ rings: [{ name, left: 600, top: 20, width: 1000, height: 200 }], handle: null });
+    expect(overlayFor(r, ['Titre'], 1).handle).toEqual({ name: 'Titre', left: 1600, top: 50, height: 200 });
+  });
+  it('deleteTargets holds the selected cells', () => {
+    expect(deleteTargets({ kind: 'controls', names: [], cells: [cell] })).toEqual([name]);
+    expect(deleteTargets({ kind: 'controls', names: ['A'] })).toEqual(['A']);
+  });
+  it('selectionAt maps a click', () => {
+    expect(selectionAt(name, true)).toEqual({ type: 'selectCell', cell, add: true });
+    expect(selectionAt(name, false)).toEqual({ type: 'selectCell', cell, add: false });
+    expect(selectionAt('A', false)).toEqual({ type: 'select', selection: { kind: 'controls', names: ['A'] } });
+    expect(selectionAt('A', true)).toEqual({ type: 'toggleSelect', name: 'A' });
+    expect(selectionAt(null, false)).toEqual({ type: 'select', selection: { kind: 'doc' } });
+    expect(selectionAt(null, true)).toBeNull();
   });
 });

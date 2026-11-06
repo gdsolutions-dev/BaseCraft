@@ -200,3 +200,22 @@ describe('gridlines', () => {
   });
   it('no overlay without gridlines', () => expect(renderPageHtml(pageWithText('a'), report([]))).not.toContain('bc-grid'));
 });
+
+describe('empty layout cells (L5)', () => {
+  const env = { locale: 'fr-FR', lang: 'fr', now: () => new Date(Date.UTC(2026, 9, 22)), errorText: { error: '#Erreur', name: '#Nom?' } } as const;
+  const withCell = (props?: Record<string, unknown>) => ({ ...FACTURES_REPORT, props: { ...FACTURES_REPORT.props, Layouts: [{ id: 'L1', kind: 'stacked', left: 200, tops: { reportHeader: 100 }, cols: [1000],
+    rows: [{ section: 'reportHeader', height: 300 }], cells: [{ row: 0, col: 0, control: null, ...(props ? { props } : {}) }] }] } });
+  const html = async (d: typeof FACTURES_REPORT) => {
+    const r = await layoutReport(readReport(d, FACTURES_FIELDS), { fields: FACTURES_FIELDS, rows: FACTURES_ROWS }, env);
+    return renderPageHtml(r.pages[0], r);
+  };
+  it('a formatted cell draws its back colour and one gridline overlay', async () => {
+    const out = await html(withCell({ BackStyle: 'normal', BackColor: '#ff0000', GridlineStyleTop: 'solid' }));
+    expect(out).toContain('#ff0000');
+    expect(out.match(/class="bc-grid"/g)).toHaveLength(1);
+    expect(out).toContain('border-top');
+  });
+  it('a pre-L5 report with a bare cell renders byte-identically', async () => {
+    expect(await html(withCell())).toBe(await html(FACTURES_REPORT));
+  });
+});

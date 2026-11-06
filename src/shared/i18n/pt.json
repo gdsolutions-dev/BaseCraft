@@ -756,6 +756,7 @@
     "canvas": "Superfície de design",
     "layoutHandle": "Selecionar o layout {{id}}",
     "emptyCell": "Célula vazia do layout {{layout}}, linha {{row}}, coluna {{col}}",
+    "emptyCellPrefix": "CelulaVazia",
     "toolbox": "Caixa de ferramentas",
     "arrange": {
       "alignLeft": "Esquerda",
@@ -1589,6 +1590,7 @@
     "LineSlant": "Inclinação da Linha",
     "Pages": "Páginas",
     "Name": "Nome",
+    "Tag": "Marca",
     "TabStop": "Parada de Tabulação",
     "TabIndex": "Índice de Tabulação",
     "ControlTipText": "Texto da Dica do Controle",
@@ -1934,6 +1936,7 @@
       "comboBox": "Caixa de Combinação",
       "listBox": "Caixa de Listagem",
       "commandButton": "Botão de Comando",
+      "emptyCell": "Célula vazia",
       "subform": "Subformulário/Subrelatório",
       "image": "Imagem",
       "line": "Linha",

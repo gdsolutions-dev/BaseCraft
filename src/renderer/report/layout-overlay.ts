@@ -5,7 +5,8 @@ import { itemAt, occurrences, sectionPointAt } from '../../shared/report/flow';
 import type { LaidOutReport } from '../../shared/report/types';
 import type { Rect } from '../designer/geometry';
 import type { ToolState } from '../designer/Designer';
-import { CONTAINER_KINDS, designerReducer, findControl, initDesigner, type Selection } from '../designer/designer-model';
+import { cellItemName, parseCellItemName } from '../../shared/design/layout';
+import { CONTAINER_KINDS, designerReducer, type DesignerAction, findControl, initDesigner, type Selection } from '../designer/designer-model';
 import { CLICK_PX, DEFAULT_SIZE, snap as snapTo } from '../designer/units';
 
 export const MIN_WIDTH = 100;   // twips
@@ -17,7 +18,7 @@ export interface Handle { name: string; left: number; top: number; height: numbe
 export function overlayFor(report: LaidOutReport, selectedNames: string[], scale: number): { rings: Ring[]; handle: Handle | null } {
   const rings = selectedNames.flatMap((name) => occurrences(report, name).map((o) =>
     ({ name, left: o.left * scale, top: o.top * scale, width: o.width * scale, height: o.height * scale })));
-  const first = selectedNames.length === 1 ? rings[0] : undefined;
+  const first = selectedNames.length === 1 && !parseCellItemName(selectedNames[0]!) ? rings[0] : undefined;   // une cellule vide n'a pas de largeur à poser
   return { rings, handle: first ? { name: first.name, left: first.left + first.width, top: first.top, height: first.height } : null };
 }
 
@@ -45,7 +46,17 @@ export function stepDrag(d: WidthDrag | null, s: DragStep, scale: number): { dra
 }
 
 /** Les contrôles que Suppr retire : ceux de la sélection ; vide pour l'état ou une section (on ne supprime ni l'un ni l'autre ici). */
-export const deleteTargets = (selection: Selection): string[] => (selection.kind === 'controls' ? selection.names : []);
+export const deleteTargets = (selection: Selection): string[] =>
+  (selection.kind === 'controls' ? [...selection.names, ...(selection.cells ?? []).map(cellItemName)] : []);
+
+/** The selection action of a click on the item `name` (null: none there; '' an unnamed element): an empty cell selects the cell,
+ *  a control (re)selects or, with `add`, toggles; empty ground goes back to the document; with `add` nothing happens there. */
+export function selectionAt(name: string | null, add: boolean): DesignerAction | null {
+  const cell = name ? parseCellItemName(name) : null;
+  if (cell) return { type: 'selectCell', cell, add };
+  if (add) return name ? { type: 'toggleSelect', name } : null;
+  return { type: 'select', selection: name ? { kind: 'controls', names: [name] } : { kind: 'doc' } };
+}
 
 /** Poser un contrôle sur le flux : `from` (appui) et `to` (relâchement) en twips absolus du flux ; la section est celle sous `from`, le
  *  rectangle relatif à sa bande (`to` y est ramené même hors de la bande), left/top ≥ 0. Un clic (moins de CLICK_PX en px, `scale` px par

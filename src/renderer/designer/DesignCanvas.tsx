@@ -6,7 +6,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flattenControls, TWIPS_PER_CM, type ControlDef, type SectionDef } from '../../shared/design/model';
-import { readLayouts } from '../../shared/design/layout';
+import { cellControl, readLayouts, type CellRef } from '../../shared/design/layout';
 import { selectionOf } from '../../shared/design/layout-edit';
 import { sameName } from '../../shared/field-types';
 import type { DesignerHost, ToolState } from './Designer';
@@ -15,7 +15,8 @@ import { gestureAllowed, type DesignerRestrict } from './designer-restrict';
 import { CONTAINER_KINDS, designerReducer, docWidth, documentKind, findControl, type DesignerAction, type DesignerState } from './designer-model';
 import type { Handle } from './geometry';
 import { emptyCells, layoutOutlines } from './layout-outline';
-import { gestureEnd, keyAction, placeRect, type Gesture } from './pointer';
+import type { EmptyCell } from '../../shared/design/layout';
+import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Gesture } from './pointer';
 import { currentSettings } from '../settings-store';
 import { fieldDrop } from './FieldList';
 import { PopupMenu } from './RibbonPopup';
@@ -64,10 +65,13 @@ export function extraRowCount(rows: number, detailHeight: number, viewport: numb
 type ExtraRows = NonNullable<DesignerHost['extraDetailRows']>;
 /** Les copies en lecture seule sous le Détail : ni data-ctl, ni data-section-body, ni poignée, ni pointeur ; les gestes les ignorent.
  *  Elles dessinent le même document : modifier le Détail les met à jour. */
-export const DetailCopies = memo(function DetailCopies({ s, count, render }: { s: SectionDef; count: number; render: ExtraRows['render'] }) {
+export const DetailCopies = memo(function DetailCopies({ s, count, render, cells = [] }: { s: SectionDef; count: number; render: ExtraRows['render']; cells?: EmptyCell[] }) {
   const controls = flattenControls(s.controls);
   return <>{Array.from({ length: count }, (_, k) => (
     <div key={k} className="dz-body dz-copy" aria-hidden style={{ height: px(s.height), pointerEvents: 'none', backgroundImage: 'none' }}>
+      {cells.map((c) => (   // le fond, les lignes et les marges des cellules vides
+        <div key={cellControl(c).name} className="dz-ctl dz-cellfill" style={{ left: px(c.rect.left), top: px(c.rect.top), width: px(c.rect.width), height: px(c.rect.height) }}>{render(cellControl(c), s, k + 1)}</div>
+      ))}
       {controls.map((c) => (
         <div key={c.name} className="dz-ctl" style={{ left: px(c.left), top: px(c.top), width: px(c.width), height: px(c.height) }}>{render(c, s, k + 1)}</div>
       ))}
@@ -88,6 +92,10 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const bodies = useRef<(HTMLDivElement | null)[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [menu, setMenu] = useState<SectionMenu | null>(null);
+  const [typing, setTyping] = useState<{ cell: CellRef; text: string } | null>(null);   // la légende en cours de saisie dans une cellule vide ; rien n'est créé avant la validation
+  const typingRef = useRef(typing);
+  typingRef.current = typing;
+  const typingInput = useRef<HTMLInputElement>(null);
   const pointing = useRef(false);   // un clic donne le focus : il ne doit pas réduire une multi-sélection
 
   // Aperçu du geste en cours : le relâchement, appliqué sans être enregistré.
@@ -108,6 +116,10 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const detailAt = doc.sections.findIndex((s) => s.kind === 'detail');
   // ponytail: la hauteur de la fenêtre borne la hauteur de la surface ; quelques copies de trop au pire (au plus count)
   const copies = extra && detailAt >= 0 ? extraRowCount(extra.count + 1, twipsToPx(doc.sections[detailAt].height), window.innerHeight, Infinity) : 0;
+  useLayoutEffect(() => {   // le curseur à la fin, tout de suite : les touches suivantes y arrivent
+    const i = typingInput.current;
+    if (i && document.activeElement !== i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  }, [typing?.cell.layout, typing?.cell.row, typing?.cell.col]);
   const names = shown.selection.kind === 'controls' ? shown.selection.names : [];   // un rectangle de sélection sélectionne en direct
   const isSel = (name: string) => names.some((n) => sameName(n, name));
   const typeLabel = (k: ControlDef['kind']) => { const d = host.tools.find((x) => x.kind === k); return d ? t(d.labelKey) : k; };
@@ -262,8 +274,26 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     add({ section, left, top });
   };
 
+  const endTyping = (commit: boolean) => {   // Entrée ou perte du focus valide ; Échap ou un texte vide ne crée rien (aucune entrée d'historique)
+    const ty = typingRef.current;
+    if (!ty) return;
+    typingRef.current = null;
+    setTyping(null);
+    const cell = empties.flat().find((c) => c.layout === ty.cell.layout && c.row === ty.cell.row && c.col === ty.cell.col);
+    if (!commit || !cell || !ty.text.trim()) return;
+    const section = state.doc.sections.findIndex((_, i) => empties[i].includes(cell));
+    dispatch({ type: 'insert', section, controls: typedLabel(host.newControls('label', cell.rect, section, state.doc), ty.text),
+      at: { x: cell.rect.left + cell.rect.width / 2, y: cell.rect.top + cell.rect.height / 2 } });
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
-    if ((e.target as HTMLElement).closest('[role="menu"]')) return;
+    const el = e.target as HTMLElement;
+    if (el.closest('[role="menu"]')) return;
+    if (!readOnly && !tool.kind && !typing && isTypingKey(e) && !names.length && cellsSel.length === 1 && (e.target === e.currentTarget || el.closest('[data-layout-cell]'))) {
+      e.preventDefault();   // seule la surface elle-même (ou la cellule) : jamais la feuille de propriétés ni un éditeur
+      setTyping({ cell: cellsSel[0], text: e.key });
+      return;
+    }
     if (e.key === 'Escape' && drag) { e.preventDefault(); cancel(); return; }
     const clip = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey ? ({ c: 'copy', x: 'cut', v: 'paste' } as const)[e.key.toLowerCase() as 'c'] : undefined;
     if (clip) {   // Ctrl+C, Ctrl+X, Ctrl+V : les contrôles (Accueil › Presse-papiers passe par l'hôte)
@@ -335,6 +365,11 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                   aria-label={t('designer.layoutHandle', { id })} title={t('designer.layoutHandle', { id })}
                   style={{ left: Math.max(0, twipsToPx(rect.left) - 14), top: Math.max(0, twipsToPx(rect.top) - 14) }} onClick={() => selectLayout(id)} />
               ))}
+              {empties[i].map((c) => (   // sous les boutons des cellules : fond, lignes et marges par le code de l'aperçu
+                <div key={cellControl(c).name} className="dz-ctl dz-cellfill" aria-hidden style={{ left: px(c.rect.left), top: px(c.rect.top), width: px(c.rect.width), height: px(c.rect.height) }}>
+                  {host.renderControl(cellControl(c), s)}
+                </div>
+              ))}
               {empties[i].map(({ layout, row, col, rect }) => {   // ponytail: ni glisser ni rectangle sur une cellule vide ; la vue Disposition d'un état n'en montre pas (à ajouter si la fusion s'y fait)
                 const on = cellsSel.some((c) => c.layout === layout && c.row === row && c.col === col);
                 return (
@@ -344,6 +379,15 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                     onClick={(e) => dispatch({ type: 'selectCell', cell: { layout, row, col }, add: e.ctrlKey || e.metaKey })} />
                 );
               })}
+              {typing && empties[i].map((c) => c.layout === typing.cell.layout && c.row === typing.cell.row && c.col === typing.cell.col && (
+                <input key="typing" ref={typingInput} className="dz-cell-input" data-testid="cell-input" value={typing.text} aria-label={t('designer.emptyCell', { layout: c.layout, row: c.row + 1, col: c.col + 1 })}
+                  style={{ left: px(c.rect.left), top: px(c.rect.top), width: px(c.rect.width), height: px(c.rect.height) }}
+                  onChange={(e) => setTyping({ cell: typing.cell, text: e.target.value })} onBlur={() => endTyping(true)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();   // Suppr, Retour arrière, flèches… éditent le texte, pas la sélection du concepteur
+                    if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); endTyping(e.key === 'Enter'); root.current?.focus(); }
+                  }} />
+              ))}
               {flattenControls(s.controls).map((c) => (   // un parent sous ses enfants
                 <CanvasControl key={c.name} c={c} s={s} sel={isSel(c.name)} label={typeLabel(c.kind)} render={host.renderControl} onFocusCtl={onFocusCtl} />
               ))}
@@ -352,7 +396,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                   width: Math.abs(rubber.at.x - rubber.o.x), height: Math.abs(rubber.at.y - rubber.o.y) }} />
               )}
             </div>
-            {i === detailAt && copies > 0 && <DetailCopies s={s} count={copies} render={extra!.render} />}
+            {i === detailAt && copies > 0 && <DetailCopies s={s} count={copies} render={extra!.render} cells={empties[i]} />}
             {!sizable ? <div className="dz-sresize is-fixed" aria-hidden /> /* même place, sans poignée ni clavier */ : <div className="dz-sresize" data-section-resize={i} data-testid={`section-resize-${i}`} role="separator" aria-orientation="horizontal"
               aria-label={host.sectionLabel(s, i)} tabIndex={readOnly ? undefined : 0} aria-valuemin={0} aria-valuemax={MAX_TWIPS} aria-valuenow={s.height}
               aria-valuetext={formatCm(s.height, host.sheet.display.region)}

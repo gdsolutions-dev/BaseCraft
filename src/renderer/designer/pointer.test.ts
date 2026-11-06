@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gestureEnd, keyAction, placeRect, type Gesture } from './pointer';
+import type { ControlDef } from '../../shared/design/model';
+import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Gesture } from './pointer';
 
 const noMods = { alt: false, shift: false };
 const none = { ctrl: false, shift: false };
@@ -8,11 +9,11 @@ const bandFrom = (section: number): Gesture => ({ kind: 'band', section, origin:
 
 describe('pointer gestures', () => {
   it('drag converts px to twips (the reducer snaps)', () => expect(gestureEnd(moveFrom(1), { x: 10, y: 1, section: 1 }, noMods))
-    .toEqual([{ type: 'moveBy', dx: 150, dy: 15 }]));
+    .toEqual([{ type: 'moveBy', dx: 150, dy: 15, drop: { x: 150, y: 15 } }]));
   it('drop in another section', () => expect(gestureEnd(moveFrom(1), { x: 0, y: 40, section: 0 }, noMods)).toContainEqual(expect.objectContaining({ type: 'changeSection', to: 0 })));
   it('drop in another section is one action: the anchor lands at the point, with the horizontal move; Alt = free', () => {
-    expect(gestureEnd(moveFrom(1), { x: 10, y: 40, section: 0 }, noMods)).toEqual([{ type: 'changeSection', to: 0, top: 600, dx: 150 }]);
-    expect(gestureEnd(moveFrom(1), { x: 0, y: 40, section: 0 }, { alt: true, shift: false })).toEqual([{ type: 'changeSection', to: 0, top: 600, free: true }]); });
+    expect(gestureEnd(moveFrom(1), { x: 10, y: 40, section: 0 }, noMods)).toEqual([{ type: 'changeSection', to: 0, top: 600, dx: 150, drop: { x: 150, y: 600 } }]);
+    expect(gestureEnd(moveFrom(1), { x: 0, y: 40, section: 0 }, { alt: true, shift: false })).toEqual([{ type: 'changeSection', to: 0, top: 600, free: true, drop: { x: 0, y: 600 } }]); });
   it('alt = free', () => expect(gestureEnd(moveFrom(1), { x: 10, y: 0, section: 1 }, { alt: true, shift: false })[0]).toMatchObject({ free: true }));
   it('a tiny move is a click', () => expect(gestureEnd(moveFrom(1), { x: 2, y: 2, section: 1 }, noMods)).toEqual([]));
   it('tiny band = click (no rect select)', () => expect(gestureEnd(bandFrom(1), { x: 2, y: 1, section: 1 }, noMods)).toEqual([{ type: 'select', selection: { kind: 'doc' } }]));
@@ -49,5 +50,24 @@ describe('gestureEnd enclosed', () => {
   it('carries enclosed into selectRect only when true', () => {
     expect(gestureEnd({ kind: 'band', section: 1, origin: { x: 0, y: 0 } }, { x: 100, y: 30, section: 1 }, { alt: false, shift: false, enclosed: true }))
       .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 0, width: 1500, height: 450 }, add: false, enclosed: true }]);
+  });
+});
+
+describe('isTypingKey', () => {
+  const k = (key: string, m: Partial<{ ctrlKey: boolean; altKey: boolean; metaKey: boolean }> = {}) => isTypingKey({ key, ctrlKey: false, altKey: false, metaKey: false, ...m });
+  it('printable characters, space included', () => { for (const key of ['a', 'é', ' ', '1']) expect(k(key)).toBe(true); });
+  it('named keys are not typing', () => { for (const key of ['Enter', 'Escape', 'Delete', 'ArrowLeft', 'F2', 'Tab']) expect(k(key)).toBe(false); });
+  it('AltGr characters (reported as Ctrl+Alt on Windows) are typing; Ctrl+letter stays a shortcut', () => {
+    const altGr = (key: string, ctrlKey = true, altKey = true) => isTypingKey({ key, ctrlKey, altKey, metaKey: false, getModifierState: (m) => m === 'AltGraph' });
+    for (const key of ['@', '€', '#', '{', '[']) expect(altGr(key)).toBe(true);
+    expect(isTypingKey({ key: 'a', ctrlKey: true, altKey: true, metaKey: false, getModifierState: () => false })).toBe(false);
+  });
+  it('Ctrl, Alt or Meta is a shortcut', () => { for (const m of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }]) expect(k('a', m)).toBe(false); });
+});
+
+describe('typedLabel', () => {
+  it('sets the Caption and keeps the host label name and rect', () => {
+    const l: ControlDef = { kind: 'label', name: 'Etiquette1', left: 10, top: 20, width: 300, height: 240, props: { FontSize: 9 } };
+    expect(typedLabel([l], 'Bonjour')).toEqual([{ ...l, props: { FontSize: 9, Caption: 'Bonjour' } }]);
   });
 });

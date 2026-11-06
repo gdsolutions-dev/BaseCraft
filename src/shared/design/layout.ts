@@ -8,7 +8,9 @@ export const sectionRef = (s: SectionDef): SectionRef => (s.groupLevel === undef
 
 export interface LayoutRow { section: SectionRef; height: number }
 /** rowSpan / colSpan: slots covered from (row, col); absent = 1, written only when > 1. */
-export interface LayoutCell { row: number; col: number; rowSpan?: number; colSpan?: number; control: string | null }
+/** Formatting of an empty cell (Access cell properties: BackColor, Gridline*, *Padding, Tag...); written only when non-empty, never on a member cell. */
+export type CellProps = Record<string, string | number>;
+export interface LayoutCell { row: number; col: number; rowSpan?: number; colSpan?: number; control: string | null; props?: CellProps }
 export interface Layout {
   id: string; kind: 'stacked' | 'tabular'; left: number;
   tops: Record<SectionRef, number>;   // top of the first row of each section the layout spans
@@ -25,6 +27,12 @@ export function cellAt(l: Layout, row: number, col: number): LayoutCell | undefi
 // Calibration constants (twips): gap between two rows / two columns of a grid.
 export const ROW_GAP = 170;
 export const COL_GAP = 57;
+/** Height of a row inserted above / below a cell (twips). */
+export const INSERT_ROW_HEIGHT = 240;
+/** The properties an empty cell may carry. */
+export const CELL_PROPS: string[] = ['BackStyle', 'BackColor', 'GridlineStyleTop', 'GridlineStyleBottom', 'GridlineStyleLeft', 'GridlineStyleRight',
+  'GridlineWidthTop', 'GridlineWidthBottom', 'GridlineWidthLeft', 'GridlineWidthRight', 'GridlineColor',
+  'TopPadding', 'BottomPadding', 'LeftPadding', 'RightPadding', 'Tag'];
 /** Control Margins and Control Padding menu presets, in twips (measured in Access 16 through RunCommand, 2026-11-04). */
 export const MARGIN_PRESETS = { none: 0, narrow: 22, medium: 45, wide: 90 };
 export const PADDING_PRESETS = { none: 0, narrow: 30, medium: 90, wide: 180 };
@@ -58,7 +66,23 @@ export function readLayouts(doc: DesignDoc): Layout[] {
       return true;
     });
     return cellsOk && seen.every(Boolean);
-  });
+  }).map(cleanProps);
+}
+
+/** props survive on empty cells only, reduced to CELL_PROPS keys holding a string or a finite number (none left: dropped);
+ *  the same layout object when nothing changes. */
+function cleanProps(l: Layout): Layout {
+  const clean = (c: LayoutCell): LayoutCell => {
+    if (!('props' in c)) return c;
+    const { props, ...rest } = c;
+    const kept = c.control === null && isObj(props)
+      ? Object.entries(props).filter(([k, v]) => CELL_PROPS.includes(k) && (typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v))))
+      : [];
+    if (kept.length && kept.length === Object.keys(props as object).length) return c;
+    return kept.length ? { ...rest, props: Object.fromEntries(kept) as CellProps } : rest;
+  };
+  const cells = l.cells.map(clean);
+  return cells.every((c, i) => c === l.cells[i]) ? l : { ...l, cells };
 }
 
 /** The document with these layouts; the key is removed when there are none. */
@@ -93,7 +117,7 @@ export function ownLabel(doc: DesignDoc, control: string): ControlDef | null {
 }
 
 export interface Pads { left: number[]; right: number[]; top: number[]; bottom: number[] }
-const padOf = (c: ControlDef | undefined, side: string) => { const v = c?.props[`${side}Padding`]; return isUint(v) ? v : 0; };
+const padOf = (props: Record<string, unknown> | undefined, side: string) => { const v = props?.[`${side}Padding`]; return isUint(v) ? v : 0; };
 const noPads = (l: Layout): Pads => ({ left: l.cols.map(() => 0), right: l.cols.map(() => 0), top: l.rows.map(() => 0), bottom: l.rows.map(() => 0) });
 
 /** Control Padding is column-wide and row-wide: each column / row takes the largest padding among its non-spanning members, in all sections.
@@ -102,10 +126,10 @@ export function layoutPads(doc: DesignDoc, l: Layout): Pads {
   const p = noPads(l), all = topLevel(doc);
   for (const c of l.cells) {
     const sp = spanOf(c);
-    const ctl = c.control === null ? undefined : all.find((x) => sameName(x.name, c.control!));
-    if (!ctl) continue;
-    if (sp.cols === 1) { p.left[c.col] = Math.max(p.left[c.col], padOf(ctl, 'Left')); p.right[c.col] = Math.max(p.right[c.col], padOf(ctl, 'Right')); }
-    if (sp.rows === 1) { p.top[c.row] = Math.max(p.top[c.row], padOf(ctl, 'Top')); p.bottom[c.row] = Math.max(p.bottom[c.row], padOf(ctl, 'Bottom')); }
+    const props = c.control === null ? c.props : all.find((x) => sameName(x.name, c.control!))?.props;   // an empty cell's padding counts like a member's
+    if (!props) continue;
+    if (sp.cols === 1) { p.left[c.col] = Math.max(p.left[c.col], padOf(props, 'Left')); p.right[c.col] = Math.max(p.right[c.col], padOf(props, 'Right')); }
+    if (sp.rows === 1) { p.top[c.row] = Math.max(p.top[c.row], padOf(props, 'Top')); p.bottom[c.row] = Math.max(p.bottom[c.row], padOf(props, 'Bottom')); }
   }
   return p;
 }
@@ -160,3 +184,35 @@ export function reflow(doc: DesignDoc): DesignDoc {
   });
   return changed ? { ...doc, sections } : doc;
 }
+
+/** A layout slot: the top-left slot of a cell. */
+export interface CellRef { layout: string; row: number; col: number }
+export interface EmptyCell extends CellRef { rect: { left: number; top: number; width: number; height: number }; props: CellProps; section: SectionRef }
+
+/** Every empty cell (layout, row, column order), with its rectangle (clamped to 0) and section; only this section's when given. */
+export function emptyCellsOf(doc: DesignDoc, section?: SectionRef): EmptyCell[] {
+  return readLayouts(doc).flatMap((l) => {
+    const pads = layoutPads(doc, l);
+    return l.cells.filter((c) => c.control === null && (section === undefined || l.rows[c.row].section === section))
+      .sort((a, b) => a.row - b.row || a.col - b.col)
+      .map((c): EmptyCell => {
+        const r = cellRect(l, c, pads);
+        return { layout: l.id, row: c.row, col: c.col, props: c.props ?? {}, section: l.rows[c.row].section,
+          rect: { left: Math.max(0, r.left), top: Math.max(0, r.top), width: Math.max(0, r.width), height: Math.max(0, r.height) } };
+      });
+  });
+}
+
+/** 1-based rank among all the document's empty cells; 0 when ref is not an empty cell's top-left slot. */
+export const emptyCellRank = (doc: DesignDoc, ref: CellRef): number =>
+  emptyCellsOf(doc).findIndex((c) => c.layout === ref.layout && c.row === ref.row && c.col === ref.col) + 1;
+
+/** The reserved item name of an empty cell; '!' is refused in object names, so it never collides with a control. */
+export const cellItemName = (r: CellRef): string => `cell!${r.layout}!${r.row}!${r.col}`;
+export function parseCellItemName(name: string): CellRef | null {
+  const m = /^cell!([^!]+)!(\d+)!(\d+)$/.exec(name);
+  return m ? { layout: m[1], row: Number(m[2]), col: Number(m[3]) } : null;
+}
+
+/** A pseudo label control standing for an empty cell, so that every surface draws it like a control. */
+export const cellControl = (c: EmptyCell): ControlDef => ({ kind: 'label', name: cellItemName(c), ...c.rect, props: c.props });

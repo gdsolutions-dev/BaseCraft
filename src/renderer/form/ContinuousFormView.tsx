@@ -71,7 +71,7 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
   };
   return (
     <div className="frun" ref={root} data-testid="form-run">
-      {header && <div className="frun-fixed"><FormSection section={header} x={x} width={width} /></div>}
+      {header && <div className="frun-fixed"><FormSection doc={doc} section={header} x={x} width={width} /></div>}
       <div className="frun-body" ref={body} style={overflow} data-testid="form-rows" onScroll={(e) => setPort({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}>
         {detail && (
           // ponytail: one spacer as tall as every row; Chromium caps an element near 33.5 M px (about 800 000 rows of 40 px),
@@ -95,13 +95,13 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
                   armed.current = null;
                 }}>
                 {selectors && selectorOf(i)}
-                <FormSection section={detail} x={i === current ? x : rowCtx(i)} width={width} />
+                <FormSection doc={doc} section={detail} x={i === current ? x : rowCtx(i)} width={width} />
               </div>
             ))}
           </div>
         )}
       </div>
-      {footer && <div className="frun-fixed"><FormSection section={footer} x={x} width={width} /></div>}
+      {footer && <div className="frun-fixed"><FormSection doc={doc} section={footer} x={x} width={width} /></div>}
       {messages.length > 0 && (
         <div className="frun-message" role="alert" aria-label={t('form.message')} data-testid="form-message">
           {messages.map((m, i) => <div key={i}>{m}</div>)}

@@ -751,6 +751,7 @@
     "canvas": "Ontwerpoppervlak",
     "layoutHandle": "Indeling {{id}} selecteren",
     "emptyCell": "Lege cel van indeling {{layout}}, rij {{row}}, kolom {{col}}",
+    "emptyCellPrefix": "LegeCel",
     "toolbox": "Werkset",
     "arrange": {
       "alignLeft": "Links",
@@ -1578,6 +1579,7 @@
     "LineSlant": "Lijnhelling",
     "Pages": "Pagina's",
     "Name": "Naam",
+    "Tag": "Tag",
     "TabStop": "Tabstop",
     "TabIndex": "Tabvolgorde",
     "ControlTipText": "Knopinfo",
@@ -1922,6 +1924,7 @@
       "comboBox": "Keuzelijst met invoervak",
       "listBox": "Keuzelijst",
       "commandButton": "Opdrachtknop",
+      "emptyCell": "Lege cel",
       "subform": "Subformulier/subrapport",
       "image": "Afbeelding",
       "line": "Lijn",

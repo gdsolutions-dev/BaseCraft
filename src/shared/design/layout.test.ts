@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_TWIPS } from '../field-types';
 import type { ControlDef, DesignDoc, SectionDef } from './model';
-import { COL_GAP, ROW_GAP, labelOf, layoutOf, readLayouts, reflow, withLayouts, type Layout } from './layout';
+import { isValidObjectName } from '../field-types';
+import { COL_GAP, ROW_GAP, cellControl, cellItemName, emptyCellRank, emptyCellsOf, labelOf, parseCellItemName, layoutOf, readLayouts, reflow, withLayouts, type Layout, type LayoutCell } from './layout';
 
 const ctl = (name: string, kind: ControlDef['kind'] = 'textBox'): ControlDef => ({ kind, name, left: 0, top: 0, width: 10, height: 10, props: {} });
 const sec = (kind: SectionDef['kind'], ...names: string[]): SectionDef => ({ kind, height: 2000, props: {}, controls: names.map((n) => ctl(n)) });
@@ -155,5 +156,59 @@ describe('padding', () => {
     const d0 = mk([sec('detail', 'A', 'C', 'D')], [{ ...stacked(), cells: [{ row: 0, col: 0, colSpan: 2, control: 'A' }, { row: 1, col: 0, control: 'C' }, { row: 1, col: 1, control: 'D' }] }]);
     const d = reflow(pad(pad(d0, 'A', { LeftPadding: 500 }), 'C', { LeftPadding: 100 }));
     expect(byName(d, 'A')).toMatchObject({ left: 200 + 100, width: 1000 + COL_GAP + 3000 });
+  });
+});
+
+describe('empty cells', () => {
+  const two = (): DesignDoc => mk([sec('detail', 'A', 'B'), sec('formFooter')], [
+    { id: 'L1', kind: 'stacked', left: 0, tops: { detail: 0 }, cols: [1000, 1000], rows: [{ section: 'detail', height: 300 }, { section: 'detail', height: 300 }],
+      cells: [{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: null }, { row: 1, col: 0, control: null }, { row: 1, col: 1, control: 'B' }] },
+    { id: 'L2', kind: 'stacked', left: 0, tops: { formFooter: 0 }, cols: [1000], rows: [{ section: 'formFooter', height: 300 }],
+      cells: [{ row: 0, col: 0, control: null, props: { BackColor: '#ff0000' } }] }]);
+  it('readLayouts keeps props on an empty cell, drops it elsewhere or when malformed, keeps the layout', () => {
+    const l = (cells: unknown[]) => mk([sec('detail', 'A')], [{ ...stacked(), cols: [1000], rows: [{ section: 'detail', height: 300 }], cells }]);
+    const fmt = { BackColor: '#ff0000', TopPadding: 180 };
+    expect(readLayouts(l([{ row: 0, col: 0, control: null, props: fmt }]))[0].cells[0].props).toEqual(fmt);
+    expect(readLayouts(l([{ row: 0, col: 0, control: 'A', props: fmt }]))[0].cells[0]).toEqual({ row: 0, col: 0, control: 'A' });
+    expect(readLayouts(l([{ row: 0, col: 0, control: null, props: 'x' }]))[0].cells[0]).toEqual({ row: 0, col: 0, control: null });
+    expect(readLayouts(l([{ row: 0, col: 0, control: null, props: { A: {} } }]))[0].cells[0]).toEqual({ row: 0, col: 0, control: null });
+  });
+  it('readLayouts filters cell props to CELL_PROPS and finite numbers, drops empty props, keeps identity when clean', () => {
+    const l = (props: unknown) => mk([sec('detail', 'A')], [{ ...stacked(), cols: [1000], rows: [{ section: 'detail', height: 300 }], cells: [{ row: 0, col: 0, control: null, props }] }]);
+    const cell = (props: unknown) => readLayouts(l(props))[0].cells[0];
+    expect(cell({ BackColor: '#f00', Caption: 'x', ControlSource: 'y' }).props).toEqual({ BackColor: '#f00' });
+    expect(cell({ TopPadding: NaN, LeftPadding: Infinity, RightPadding: 180 }).props).toEqual({ RightPadding: 180 });
+    expect(cell({ TopPadding: NaN })).toEqual({ row: 0, col: 0, control: null });
+    expect(cell({})).toEqual({ row: 0, col: 0, control: null });
+    const d = l({ BackColor: '#f00' });
+    expect(readLayouts(d)[0]).toBe(readLayouts(d)[0] && (d.props.Layouts as Layout[])[0]);
+  });
+  it('ranks empty cells in layout, row, column order and filters by section', () => {
+    const d = two();
+    expect([[0, 1], [1, 0]].map(([row, col]) => emptyCellRank(d, { layout: 'L1', row, col }))).toEqual([1, 2]);
+    expect(emptyCellRank(d, { layout: 'L2', row: 0, col: 0 })).toBe(3);
+    expect(emptyCellRank(d, { layout: 'L1', row: 0, col: 0 })).toBe(0);
+    expect(emptyCellsOf(d, 'detail')).toHaveLength(2);
+    expect(emptyCellsOf(d, 'formFooter')[0]).toMatchObject({ layout: 'L2', section: 'formFooter', props: { BackColor: '#ff0000' }, rect: { left: 0, top: 0, width: 1000, height: 300 } });
+  });
+  it('names a cell with a reserved item name', () => {
+    const r = { layout: 'L1', row: 2, col: 3 };
+    expect(parseCellItemName(cellItemName(r))).toEqual(r);
+    expect(parseCellItemName('Nom')).toBeNull();
+    expect(isValidObjectName(cellItemName(r))).toBe(false);
+    expect(cellControl(emptyCellsOf(two(), 'formFooter')[0])).toMatchObject({ kind: 'label', name: 'cell!L2!0!0', width: 1000, props: { BackColor: '#ff0000' } });
+  });
+  it('an empty cell padding shifts its column like a member padding; a spanning one does not', () => {
+    const grid = (d: Partial<LayoutCell>): DesignDoc => reflow(mk([sec('detail', 'A', 'B', 'D')], [{ ...stacked(), cells: [
+      { row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 0, control: null, ...d }, { row: 1, col: 1, control: 'D' }].filter((c) => !(d.colSpan && c.col === 1 && c.row === 1)) }]));
+    const plain = byName(grid({}), 'B').left;
+    expect(byName(grid({ props: { LeftPadding: 180 } }), 'B').left).toBe(plain + 180);
+    expect(byName(grid({ props: { RightPadding: 180 } }), 'B').left).toBe(plain + 180);
+    expect(byName(grid({ colSpan: 2, props: { RightPadding: 180 } }), 'B').left).toBe(plain);
+  });
+  it('an L4 layout with null cells keeps its stored form', () => {
+    const d = reflow(mk([sec('detail', 'A', 'B', 'C')], [{ ...stacked(), cells: stacked().cells.map((c) => (c.control === 'D' ? { ...c, control: null } : c)) }]));
+    expect(reflow(d)).toBe(d);
+    expect(JSON.stringify(readLayouts(d))).toBe(JSON.stringify(d.props.Layouts));
   });
 });

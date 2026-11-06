@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ControlDef, SectionDef } from '../../shared/design/model';
 import { DetailCopies, extraRowCount } from './DesignCanvas';
+import type { EmptyCell } from '../../shared/design/layout';
 import { twipsToPx } from './units';
 
 describe('extraRowCount (copies of a continuous Detail in Layout view)', () => {
@@ -27,5 +28,22 @@ describe('DetailCopies', () => {
     expect(html).not.toContain('data-handle');
     expect(html).not.toContain('data-section-body');
     expect(html).toContain('pointer-events:none');
+  });
+});
+
+describe('DetailCopies empty cells', () => {
+  const c: ControlDef = { kind: 'textBox', name: 'Nom', left: 15, top: 30, width: 1500, height: 300, props: {} };
+  const s: SectionDef = { kind: 'detail', height: 600, props: {}, controls: [c] };
+  const cell = (col: number): EmptyCell => ({ layout: 'L1', row: 0, col, section: 'detail' as EmptyCell['section'], props: { BackColor: '#ff0000' }, rect: { left: 1600 * col, top: 0, width: 1500, height: 240 } });
+  const render = (_c: ControlDef, _s: SectionDef, row: number) => `rec${row}:${_c.name}`;
+  it('draws one fill per empty cell in every copy', () => {
+    const html = renderToStaticMarkup(createElement(DetailCopies, { s, count: 2, render, cells: [cell(1), cell(2)] }));
+    expect(html.match(/dz-cellfill/g)).toHaveLength(4);
+    expect(html).toContain('rec1:cell!L1!0!1');
+  });
+  it('no cells: same markup as before', () => {
+    const a = renderToStaticMarkup(createElement(DetailCopies, { s, count: 2, render }));
+    expect(renderToStaticMarkup(createElement(DetailCopies, { s, count: 2, render, cells: [] }))).toBe(a);
+    expect(a).not.toContain('dz-cellfill');
   });
 });

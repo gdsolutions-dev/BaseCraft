@@ -741,6 +741,7 @@
     "canvas": "Surface de création",
     "layoutHandle": "Sélectionner la disposition {{id}}",
     "emptyCell": "Cellule vide de la disposition {{layout}}, ligne {{row}}, colonne {{col}}",
+    "emptyCellPrefix": "CelluleVide",
     "toolbox": "Boîte à outils",
     "arrange": {
       "alignLeft": "À gauche",
@@ -1553,6 +1554,7 @@
     "LineSlant": "Pente de ligne",
     "Pages": "Pages",
     "Name": "Nom",
+    "Tag": "Remarque",
     "TabStop": "Arrêt tabulation",
     "TabIndex": "Index tabulation",
     "ControlTipText": "Texte d'info-bulle",
@@ -1897,6 +1899,7 @@
       "comboBox": "Zone de liste déroulante",
       "listBox": "Zone de liste",
       "commandButton": "Bouton de commande",
+      "emptyCell": "Cellule vide",
       "subform": "Sous-formulaire/Sous-état",
       "image": "Image",
       "line": "Trait",

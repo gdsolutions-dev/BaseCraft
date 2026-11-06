@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PAGE_SETUP, pageGeometry, readReport, reportWidth, type GroupLevel } from './model';
 import { readProp } from './props';
+import { cellItemName } from '../design/layout';
 import { setUserFunctions } from '../expr/user-functions';
 import { LIGHT_THEME_HEX, resolveColor, type ColorValue } from '../design/colors';
 import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../design/model';
@@ -248,5 +249,28 @@ describe('user functions (D3)', () => {
     setUserFunctions(['remise']);
     expect(readReport(d, fields).issues).toEqual([]);
     setUserFunctions([]);
+  });
+});
+
+describe('readReport: empty layout cells (L5)', () => {
+  const lay = (cells: unknown[]) => [{ id: 'L1', kind: 'stacked', left: 200, tops: { detail: 100 }, cols: [1000, 3000], rows: [{ section: 'detail', height: 400 }, { section: 'detail', height: 300 }], cells }];
+  const withCells = (cells: unknown[]) => doc({ sections: [sec('detail')], props: { Layouts: lay(cells) } });
+  const formatted = { row: 0, col: 1, control: null, props: { BackStyle: 'normal', BackColor: '#ff0000', GridlineStyleTop: 'solid', LeftPadding: 180 } };
+  const bare = { row: 1, col: 0, control: null };
+  const cells = [{ row: 0, col: 0, control: null, props: { BackStyle: 'normal', BackColor: '#00ff00' } }, formatted, bare, { row: 1, col: 1, control: null }];
+  it('a formatted empty cell becomes a rectangle before the controls; a bare one nothing', () => {
+    const c = readReport(withCells(cells), fields).detail!.controls;
+    expect(c).toHaveLength(3);
+    expect(c[1]).toMatchObject({ kind: 'rectangle', name: cellItemName({ layout: 'L1', row: 0, col: 1 }), border: null, source: { kind: 'none' }, back: '#ff0000',
+      gridlines: { top: { style: 'solid' }, padding: { left: 180 } } });
+    expect(c[2].name).toBe('detail');
+  });
+  it('allCells emits every cell', () => {
+    expect(readReport(withCells(cells), fields, { allCells: true }).detail!.controls).toHaveLength(5);
+    expect(readReport(withCells(cells), fields).detail!.controls).toHaveLength(3);
+  });
+  it('pre-L5: no layouts or only bare cells give the same spec', () => {
+    const plain = readReport(doc({ sections: [sec('detail')] }), fields);
+    expect(readReport(withCells([bare, { row: 0, col: 0, control: null }, { row: 0, col: 1, control: null }, { row: 1, col: 1, control: null }]), fields)).toEqual(plain);
   });
 });

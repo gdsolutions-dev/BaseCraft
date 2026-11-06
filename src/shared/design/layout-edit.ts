@@ -1,6 +1,6 @@
 // Row/column editing of control layouts (doc.props.Layouts). Pure: every function returns the same doc when nothing changes.
 import { MAX_TWIPS, sameName } from '../field-types';
-import { COL_GAP, ROW_GAP, cellAt, gridGeometry, labelOf, layoutOf, layoutPads, readLayouts, reflow, sectionRef, spanOf, withLayouts, type Layout, type LayoutCell, type Pads, type LayoutRow, type SectionRef } from './layout';
+import { CELL_PROPS, COL_GAP, INSERT_ROW_HEIGHT, ROW_GAP, cellAt, cellRect, emptyCellsOf, gridGeometry, labelOf, layoutOf, layoutPads, readLayouts, reflow, sectionRef, spanOf, withLayouts, type CellProps, type CellRef, type Layout, type LayoutCell, type Pads, type LayoutRow, type SectionRef } from './layout';
 import type { ControlDef, DesignDoc } from './model';
 
 const members = (l: Layout): string[] => l.cells.flatMap((c) => (c.control === null ? [] : [c.control]));
@@ -47,7 +47,7 @@ export function insertCells(doc: DesignDoc, control: string, where: 'above' | 'b
   if (where === 'above' || where === 'below') {
     const at = where === 'below' ? ref.row + sp.rows : ref.row;
     const copy = where === 'below' ? ref.row + sp.rows - 1 : ref.row;
-    const rows = [...l.rows.slice(0, at), { ...l.rows[copy] }, ...l.rows.slice(at)];
+    const rows = [...l.rows.slice(0, at), { section: l.rows[copy].section, height: INSERT_ROW_HEIGHT }, ...l.rows.slice(at)];
     const { cells, free } = openLine(l, 'row', at);
     l.cols.forEach((_, col) => { if (free(col)) cells.push({ row: at, col, control: null }); });
     return replaceLayout(doc, { ...l, rows, cells });
@@ -72,15 +72,36 @@ export function moveRow(doc: DesignDoc, control: string, delta: 1 | -1): DesignD
   return replaceLayout(doc, { ...l, rows, cells });
 }
 
-/** Names of the controls in the whole layout, the control's row, or the control's column (a Tabular column spans header and detail). */
-export function selectionOf(doc: DesignDoc, control: string, scope: 'layout' | 'row' | 'column'): string[] {
+/** The cell of a layout member. */
+export function slotOf(doc: DesignDoc, control: string): CellRef | null {
   const l = layoutOf(doc, control);
-  if (!l) return [];
-  const ref = l.cells.find((c) => c.control !== null && sameName(c.control, control))!;
+  const c = l?.cells.find((x) => x.control !== null && sameName(x.control, control));
+  return l && c ? { layout: l.id, row: c.row, col: c.col } : null;
+}
+
+/** The empty cell of that section whose rectangle holds the point (edges included), the first in order. */
+export function emptyCellAt(doc: DesignDoc, at: { section: SectionRef; x: number; y: number }): CellRef | null {
+  const e = emptyCellsOf(doc, at.section).find(({ rect: r }) => at.x >= r.left && at.x <= r.left + r.width && at.y >= r.top && at.y <= r.top + r.height);
+  return e ? { layout: e.layout, row: e.row, col: e.col } : null;
+}
+
+/** Members and empty cells (anchor slots) of the whole layout, the rows or the columns of `from`'s cell (a Tabular column spans header and detail). */
+export function selectionIn(doc: DesignDoc, from: CellRef, scope: 'layout' | 'row' | 'column'): { names: string[]; cells: CellRef[] } {
+  const l = readLayouts(doc).find((x) => x.id === from.layout);
+  const ref = l && cellAt(l, from.row, from.col);
+  if (!l || !ref) return { names: [], cells: [] };
   const sp = spanOf(ref);   // the reference's own span: a row/column scope covers every row/column it spans
   const hit = (c: LayoutCell) => scope === 'layout'
     || (scope === 'row' ? c.row < ref.row + sp.rows && ref.row < c.row + spanOf(c).rows : c.col < ref.col + sp.cols && ref.col < c.col + spanOf(c).cols);
-  return l.cells.flatMap((c) => (c.control !== null && hit(c) ? [c.control] : []));
+  const cs = l.cells.filter(hit);
+  return { names: cs.flatMap((c) => (c.control === null ? [] : [c.control])),
+    cells: cs.filter((c) => c.control === null).map((c) => ({ layout: l.id, row: c.row, col: c.col })) };
+}
+
+/** Names of the controls in the whole layout, the control's row, or the control's column (a Tabular column spans header and detail). */
+export function selectionOf(doc: DesignDoc, control: string, scope: 'layout' | 'row' | 'column'): string[] {
+  const s = slotOf(doc, control);
+  return s ? selectionIn(doc, s, scope).names : [];
 }
 
 /** Drops a layout and its members' LayoutID; positions untouched. Stacked: each column-0 label becomes again the attached label
@@ -371,7 +392,7 @@ export function mergeCells(doc: DesignDoc, layoutId: string, slots: { row: numbe
   const l = readLayouts(doc).find((x) => x.id === layoutId);
   if (!l || !canMerge(doc, layoutId, slots)) return doc;
   const p = picked(l, slots)!;
-  const keep = p.cells.find((c) => c.control !== null) ?? p.cells[0];
+  const keep = p.cells.find((c) => c.control !== null) ?? [...p.cells].sort((a, b) => a.row - b.row || a.col - b.col)[0];   // the control's cell, else the top-left one (and its props)
   const first = Math.min(...p.cells.map((c) => l.cells.indexOf(c)));
   const merged = withSpan({ ...keep, row: p.r0, col: p.c0 }, p.rows, p.cols);
   let cells = l.cells.flatMap((c, i) => (i === first ? [merged] : p.cells.includes(c) ? [] : [c]));
@@ -397,10 +418,11 @@ export function splitCell(doc: DesignDoc, layoutId: string, slot: { row: number;
   const c = l && cellAt(l, slot.row, slot.col);
   if (!l || !c) return doc;
   const v = dir === 'vertical', sp = spanOf(c);
+  const inherit = c.control === null && c.props ? { props: { ...c.props } } : {};   // both parts of a formatted empty cell keep its format
   if ((v ? sp.rows : sp.cols) > 1) {   // cut the span
     const n = v ? sp.rows : sp.cols, a = Math.ceil(n / 2);
     const [r, k] = v ? [c.row + a, c.col] : [c.row, c.col + a];
-    const head = v ? withSpan(c, a, sp.cols) : withSpan(c, sp.rows, a), tail = v ? withSpan({ row: r, col: k, control: null }, n - a, sp.cols) : withSpan({ row: r, col: k, control: null }, sp.rows, n - a);
+    const head = v ? withSpan(c, a, sp.cols) : withSpan(c, sp.rows, a), tail = v ? withSpan({ row: r, col: k, control: null, ...inherit }, n - a, sp.cols) : withSpan({ row: r, col: k, control: null, ...inherit }, sp.rows, n - a);
     return replaceLayout(doc, { ...l, cells: l.cells.flatMap((x) => (x === c ? [head, tail] : [x])) });
   }
   const size = v ? l.rows[c.row].height : l.cols[c.col], gap = v ? ROW_GAP : COL_GAP;
@@ -413,9 +435,107 @@ export function splitCell(doc: DesignDoc, layoutId: string, slot: { row: number;
     if (pos >= line) return v ? { ...x, row: x.row + 1 } : { ...x, col: x.col + 1 };
     return pos + n > line - 1 ? (v ? withSpan(x, n + 1, spanOf(x).cols) : withSpan(x, spanOf(x).rows, n + 1)) : x;   // covers the split line: spans both halves
   });
-  const fresh: LayoutCell = v ? withSpan({ row: line, col: c.col, control: null }, 1, sp.cols) : withSpan({ row: c.row, col: line, control: null }, sp.rows, 1);
+  const fresh: LayoutCell = v ? withSpan({ row: line, col: c.col, control: null, ...inherit }, 1, sp.cols) : withSpan({ row: c.row, col: line, control: null, ...inherit }, sp.rows, 1);
   const cellsNext = shifted.flatMap((x) => (x === c ? [c, fresh] : [x]));
   return replaceLayout(doc, v
     ? { ...l, rows: [...l.rows.slice(0, c.row), { ...l.rows[c.row], height: size - gap - half }, { ...l.rows[c.row], height: half }, ...l.rows.slice(c.row + 1)], cells: cellsNext }
     : { ...l, cols: [...l.cols.slice(0, c.col), size - gap - half, half, ...l.cols.slice(c.col + 1)], cells: cellsNext });
+}
+
+/**
+ * Puts a top-level control into an empty anchor cell (no row is added). `fresh` (typing, toolbox, field drop): the cell's props are
+ * merged over the control's and its attached label moves to the label slot when empty (Stacked: the cell to the left; Tabular: the
+ * same column in the nearest earlier row of another section), else is dropped; otherwise (a moved control) the control's props stay
+ * and the cell's are discarded. A member of the same layout leaves its former cell. The doc is unchanged for a cell that is not an
+ * empty anchor, a control not top-level in the cell's section, one membersOf refuses or a member of another layout.
+ */
+export function fillCell(doc: DesignDoc, cell: CellRef, control: string, opts: { fresh: boolean }): DesignDoc {
+  const l = readLayouts(doc).find((x) => x.id === cell.layout);
+  const c = l?.cells.find((x) => x.row === cell.row && x.col === cell.col && x.control === null);
+  if (!l || !c) return doc;
+  const si = doc.sections.findIndex((s) => sectionRef(s) === l.rows[c.row].section);
+  const ctl = si < 0 ? undefined : doc.sections[si].controls.find((x) => sameName(x.name, control));
+  const other = layoutOf(doc, control);
+  if (!ctl || !membersOf(doc, [ctl.name]).length || (other && other.id !== l.id)) return doc;
+  const label = opts.fresh ? attachedLabel(ctl) : undefined;
+  let slot: LayoutCell | undefined, labelAt = -1;
+  if (label && l.kind === 'stacked') { slot = c.col > 0 ? cellAt(l, c.row, c.col - 1) : undefined; labelAt = si; }
+  else if (label) {
+    const head = l.rows.map((_, i) => i).filter((i) => i < c.row && l.rows[i].section !== l.rows[c.row].section).pop();
+    slot = head === undefined ? undefined : cellAt(l, head, c.col);
+    labelAt = head === undefined ? -1 : doc.sections.findIndex((s) => sectionRef(s) === l.rows[head].section);
+  }
+  const put = slot && slot.control === null && labelAt >= 0 ? slot : undefined;   // an occupied or missing slot drops the label
+  const bare = (x: LayoutCell, control: string | null): LayoutCell => ({ row: x.row, col: x.col, ...(x.rowSpan ? { rowSpan: x.rowSpan } : {}), ...(x.colSpan ? { colSpan: x.colSpan } : {}), control });
+  const cells = l.cells.map((x) => (x === c ? bare(x, ctl.name) : x === put ? bare(x, label!.name)
+    : x.control !== null && sameName(x.control, ctl.name) ? bare(x, null) : x));
+  const tag = (x: ControlDef, over: CellProps | undefined): ControlDef => ({ ...x, props: { ...x.props, ...(opts.fresh ? over : {}), LayoutID: l.id } });
+  const sections = doc.sections.map((s, i) => {
+    let controls = s.controls;
+    if (i === si) controls = controls.map((x) => {
+      if (x !== ctl) return x;
+      const { children, ...rest } = x;
+      const kids = label ? children?.filter((k) => k !== label) : children;
+      return tag(kids?.length ? { ...rest, children: kids } : rest, c.props);
+    });
+    if (put && i === labelAt) controls = [...controls, tag(label!, put.props)];
+    return controls === s.controls ? s : { ...s, controls };
+  });
+  return grow(replaceLayout({ ...doc, sections }, { ...l, cells }));
+}
+
+/** Removes every row and column of the layout whose slots are all covered by `slots` (a spanning cell covers the slots it spans):
+ *  cells lying only in a removed line go, spans crossing it shrink, later cells move back, section tops stay. A layout left with no
+ *  row or no column is removed like removeLayout. The same doc when nothing is removed. */
+export function deleteLines(doc: DesignDoc, slots: CellRef[]): DesignDoc {
+  let out = doc;
+  for (const l of readLayouts(doc)) {
+    const cov = new Set<string>();
+    for (const s of slots) {
+      const c = s.layout === l.id ? cellAt(l, s.row, s.col) : undefined;
+      if (c) for (let r = 0; r < spanOf(c).rows; r++) for (let k = 0; k < spanOf(c).cols; k++) cov.add(`${c.row + r},${c.col + k}`);
+    }
+    const lines = (n: number, f: (i: number) => string[]) => Array.from({ length: n }, (_, i) => i).filter((i) => f(i).every((k) => cov.has(k)));
+    const rs = lines(l.rows.length, (r) => l.cols.map((_, k) => `${r},${k}`)), cs = lines(l.cols.length, (k) => l.rows.map((_, r) => `${r},${k}`));
+    if (!rs.length && !cs.length) continue;
+    if (rs.length === l.rows.length || cs.length === l.cols.length) { out = removeLayout(out, l.id); continue; }
+    const squeeze = (pos: number, n: number, gone: number[]) => {   // new start and span of [pos, pos + n) once `gone` lines are removed
+      const kept = Array.from({ length: n }, (_, i) => pos + i).filter((i) => !gone.includes(i));
+      return kept.length ? { at: kept[0] - gone.filter((g) => g < kept[0]).length, n: kept.length } : null;
+    };
+    const cells = l.cells.flatMap((c) => {
+      const r = squeeze(c.row, spanOf(c).rows, rs), k = squeeze(c.col, spanOf(c).cols, cs);
+      return r && k ? [withSpan({ ...c, row: r.at, col: k.at }, r.n, k.n)] : [];
+    });
+    const rows = l.rows.filter((_, i) => !rs.includes(i));
+    const tops = Object.fromEntries(Object.entries(l.tops).filter(([k]) => rows.some((r) => r.section === k)));
+    out = replaceLayout(out, { ...l, tops, rows, cols: l.cols.filter((_, i) => !cs.includes(i)), cells });
+  }
+  return out;
+}
+
+/** Sets (or, with undefined, removes) one property of an empty cell; only a name of CELL_PROPS, a string or a finite number.
+ *  The props key goes when emptied. The same doc when nothing changes. */
+export function setCellProp(doc: DesignDoc, cell: CellRef, name: string, value: string | number | undefined): DesignDoc {
+  const l = readLayouts(doc).find((x) => x.id === cell.layout);
+  const c = l?.cells.find((x) => x.row === cell.row && x.col === cell.col && x.control === null);
+  if (!l || !c || !CELL_PROPS.includes(name) || (typeof value === 'number' && !Number.isFinite(value))) return doc;
+  const { [name]: old, ...rest } = c.props ?? {};
+  if (old === value) return doc;
+  const { props: _p, ...bare } = c;
+  const props = value === undefined ? rest : { ...rest, [name]: value };
+  return replaceLayout(doc, { ...l, cells: l.cells.map((x) => (x === c ? { ...bare, ...(Object.keys(props).length ? { props } : {}) } : x)) });
+}
+
+/** Resizes an anchor cell to `value` twips (its rectangle): the last column / row of its span takes the difference. */
+export function setCellSize(doc: DesignDoc, cell: CellRef, dim: 'Width' | 'Height', value: number): DesignDoc {
+  const l = readLayouts(doc).find((x) => x.id === cell.layout);
+  const c = l?.cells.find((x) => x.row === cell.row && x.col === cell.col);
+  if (!l || !c || !Number.isFinite(value)) return doc;
+  const r = cellRect(l, c, layoutPads(doc, l)), sp = spanOf(c);
+  const diff = Math.min(Math.max(value, 0), MAX_TWIPS) - (dim === 'Width' ? r.width : r.height);
+  if (!diff) return doc;
+  if (dim === 'Width') { const k = c.col + sp.cols - 1; return replaceLayout(doc, { ...l, cols: l.cols.map((w, i) => (i === k ? Math.max(0, w + diff) : w)) }); }
+  const k = c.row + sp.rows - 1;
+  return replaceLayout(doc, { ...l, rows: l.rows.map((x, i) => (i === k ? { ...x, height: Math.max(0, x.height + diff) } : x)) });
 }

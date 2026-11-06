@@ -16,6 +16,7 @@ import { designerReducer, findControl, initDesigner, type DesignerAction } from 
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../designer/layout-commands';
+import { deleteKeyAllowed } from '../designer/delete-guard';
 import { fromSourceRef } from '../designer/property-sheet-model';
 import type { PropertySheetContext } from '../designer/sheet-types';
 import type { DocViewProps } from '../shell/DocumentTabs';
@@ -294,19 +295,21 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     return () => window.removeEventListener('keydown', onKey, true);
   }, [active]);
 
-  // Ctrl+Z / Ctrl+Y (Access) : annuler, rétablir dans le document où que soit le focus dans la vue ou sur le ruban (la surface
+  // Suppr, Ctrl+Z / Ctrl+Y (Access) : annuler, rétablir dans le document où que soit le focus dans la vue ou sur le ruban (la surface
   // les traite elle-même) ; jamais dans une zone de saisie, qui garde sa propre annulation
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || (k !== 'z' && k !== 'y')) return;
+      const del = e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;   // Suppr après un bouton du ruban (Sélectionner la ligne…) : le focus n'est pas sur la surface
+      if (e.defaultPrevented || (!del && (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || (k !== 'z' && k !== 'y')))) return;
       const el = e.target as HTMLElement;
       if (live.current.readOnly || document.querySelector('[aria-modal="true"]') || el.isContentEditable || el instanceof HTMLTextAreaElement
         || (el instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'color', 'file', 'range'].includes(el.type))) return;
       if (el !== document.body && !root.current?.contains(el) && !el.closest('.ribbon')) return;
+      if (del && !deleteKeyAllowed(el)) return;   // Suppr depuis un select, une case, un onglet… : pas de suppression de la sélection
       e.preventDefault();
-      send({ type: k === 'z' ? 'undo' : 'redo' });
+      send({ type: del ? 'deleteSelection' : k === 'z' ? 'undo' : 'redo' });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

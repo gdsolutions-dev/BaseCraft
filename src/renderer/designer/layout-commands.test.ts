@@ -94,7 +94,7 @@ describe('merge and split commands', () => {
   it('split: one empty cell selected keeps the selection on it; two cells do not split', () => {
     const doc = laid();
     const s = withCells(doc, [], [{ row: 0, col: 2 }]);
-    expect(Object.keys(layoutCommands(() => s, () => {})).sort()).toEqual(['splitHorizontally', 'splitVertically']);
+    expect(Object.keys(layoutCommands(() => s, () => {})).sort()).toEqual(['selectColumn', 'selectLayout', 'selectRow', 'splitHorizontally', 'splitVertically']);
     const after = designerReducer(s, layoutAction(s, 'splitHorizontally')!);
     expect(after.selection).toEqual({ kind: 'controls', names: [], cells: [{ layout: 'L1', row: 0, col: 2 }] });
     expect(layoutAction(withCells(doc, [], [{ row: 0, col: 2 }, { row: 1, col: 2 }]), 'splitVertically')).toBeNull();
@@ -139,14 +139,77 @@ describe('L4 popup writers', () => {
     expect(props(run(gridlineStyleAction(sel(doc, ['A']), 'dashed')), 'A')).toMatchObject({ GridlineStyleTop: 'dashed' });
     expect(props(run(gridlineColorAction(sel(doc, ['A']), '#ff0000')), 'A')).toMatchObject({ GridlineColor: '#ff0000' });
   });
-  it('null without a selected control, empty cells ignored; popups registered only with a control', () => {
+  it('null without any selection; popups registered with a control, Gridlines and Padding also with cells', () => {
     const none = initDesigner(formDoc());
-    const cells = { ...none, selection: { kind: 'controls' as const, names: [], cells: [{ layout: 'x', row: 0, col: 0 }] } };
-    for (const s of [none, cells]) expect([marginsAction(s, 'wide'), paddingAction(s, 'wide'), anchorAction(s, 'left', 'top'), gridlinesAction(s, 'both')]).toEqual([null, null, null, null]);
+    expect([marginsAction(none, 'wide'), paddingAction(none, 'wide'), anchorAction(none, 'left', 'top'), gridlinesAction(none, 'both')]).toEqual([null, null, null, null]);
     const opened: string[] = [];
-    expect(Object.keys(layoutCommands(() => cells, () => {}, undefined, (id) => opened.push(id)))).not.toContain('anchoring');
     const h = layoutCommands(() => sel(formDoc(), ['A']), () => {}, undefined, (id) => opened.push(id));
     h.anchoring!();
     expect(opened).toEqual(['anchoring']);
+  });
+});
+
+describe('L5 empty cells', () => {
+  // A | B stacked, with an empty cell right of A (col 2) and of B
+  const laid = () => insertCells(createLayout(formDoc(), membersOf(formDoc(), ['A', 'B']), 'stacked', { headerSection: 'formHeader' }), 'A', 'right');
+  const cellsOnly = (doc: DesignDoc, cells: { row: number; col: number }[], names: string[] = []): DesignerState =>
+    ({ ...initDesigner(doc, 'form'), selection: { kind: 'controls', names, cells: cells.map((c) => ({ layout: 'L1', ...c })) } });
+  const cp = (d: DesignDoc, row: number, col: number) => readLayouts(d)[0].cells.find((c) => c.row === row && c.col === col)!.props ?? {};
+  const SIDES = ['Top', 'Bottom', 'Left', 'Right'];
+  it('Select Row/Column/Layout start from a selected empty cell and include empty cells', () => {
+    const doc = laid(), s = cellsOnly(doc, [{ row: 0, col: 2 }]);
+    const a = layoutAction(s, 'selectRow') as { selection: { names: string[]; cells?: unknown[] } };
+    expect(a.selection.names).toContain('A');
+    expect(a.selection.cells).toEqual([{ layout: 'L1', row: 0, col: 2 }]);
+    const c = layoutAction(s, 'selectColumn') as { selection: { cells: unknown[] } };
+    expect(c.selection.cells).toHaveLength(2);
+    expect(layoutAction(s, 'selectLayout')).not.toBeNull();
+    expect(layoutAction(s, 'insertLeft')).toBeNull();
+  });
+  it('from a member, cells are included; omitted when there are none', () => {
+    const a = layoutAction(sel(laid(), ['A']), 'selectRow') as { selection: { cells?: unknown[] } };
+    expect(a.selection.cells).toEqual([{ layout: 'L1', row: 0, col: 2 }]);
+    const plain = createLayout(formDoc(), membersOf(formDoc(), ['A', 'B']), 'stacked', { headerSection: 'formHeader' });
+    expect((layoutAction(sel(plain, ['A']), 'selectRow') as { selection: object }).selection).not.toHaveProperty('cells');
+  });
+  it('layoutKey distinguishes none / cells only / member; cells-only handlers', () => {
+    const doc = laid();
+    const keys = [layoutKey(initDesigner(doc)), layoutKey(cellsOnly(doc, [{ row: 0, col: 2 }])), layoutKey(sel(doc, ['A']))];
+    expect(new Set(keys).size).toBe(3);
+    const s = cellsOnly(doc, [{ row: 0, col: 2 }, { row: 1, col: 2 }]);
+    expect(Object.keys(layoutCommands(() => s, () => {}, undefined, () => {})).filter((k) => k !== 'merge').sort())
+      .toEqual(['selectLayout', 'selectColumn', 'selectRow', 'layoutGridlines', 'controlPadding'].sort());
+  });
+  it('layoutKey differs when cells join a loose-control selection', () => {
+    const doc = laid();
+    const loose = (cells: unknown[]) => ({ ...sel(doc, ['A']), selection: { kind: 'controls', names: ['Z'], cells } }) as DesignerState;
+    expect(layoutKey(loose([{ layout: 'L1', row: 0, col: 2 }]))).not.toBe(layoutKey(loose([])));
+  });
+  it('gridlines both and padding wide write the cells; margins and anchors do not apply', () => {
+    const doc = laid(), s = cellsOnly(doc, [{ row: 0, col: 2 }]);
+    const g = edited(gridlinesAction(s, 'both'), doc);
+    for (const x of SIDES) expect(cp(g, 0, 2)[`GridlineStyle${x}`]).toBe('solid');
+    const p = edited(paddingAction(s, 'wide'), doc);
+    for (const x of SIDES) expect(cp(p, 0, 2)[`${x}Padding`]).toBe(180);
+    expect(marginsAction(s, 'wide')).toBeNull();
+    expect(anchorAction(s, 'left', 'top')).toBeNull();
+  });
+  it('mixed selection: padding writes control and cell in one edit; width skips transparent sides', () => {
+    const doc = laid(), s = cellsOnly(doc, [{ row: 0, col: 2 }], ['A']);
+    const p = edited(paddingAction(s, 'wide'), doc);
+    expect(cp(p, 0, 2).TopPadding).toBe(180);
+    expect(p.sections.flatMap((x) => x.controls).find((c) => c.name === 'A')!.props.TopPadding).toBe(180);
+    const c0 = cellsOnly(doc, [{ row: 0, col: 2 }]);
+    const g = designerReducer(c0, gridlinesAction(c0, 'top')!).doc;
+    const c1 = cellsOnly(g, [{ row: 0, col: 2 }]);
+    const w = designerReducer(c1, gridlineWidthAction(c1, 3)!).doc;
+    expect(cp(w, 0, 2)).toMatchObject({ GridlineWidthTop: 3 });
+    expect(cp(w, 0, 2)).not.toHaveProperty('GridlineWidthLeft');
+  });
+  it('outline of two selected cells gives each its outer sides', () => {
+    const doc = laid(), s = cellsOnly(doc, [{ row: 0, col: 2 }, { row: 1, col: 2 }]);
+    const d = edited(gridlinesAction(s, 'outline'), doc);
+    const solid = (r: number) => SIDES.filter((x) => cp(d, r, 2)[`GridlineStyle${x}`] === 'solid');
+    expect([solid(0), solid(1)]).toEqual([['Top', 'Left', 'Right'], ['Bottom', 'Left', 'Right']]);
   });
 });

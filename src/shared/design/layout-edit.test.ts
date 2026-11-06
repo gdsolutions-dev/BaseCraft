@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ControlDef, DesignDoc, SectionDef } from './model';
 import { cmToTwips as cm } from './model';
-import { COL_GAP, ROW_GAP, labelOf, readLayouts, reflow, withLayouts, type Layout } from './layout';
-import { canMerge, createLayout, insertCells, mergeCells, splitCell, joinColumn, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
+import { COL_GAP, INSERT_ROW_HEIGHT, ROW_GAP, emptyCellsOf, labelOf, readLayouts, reflow, withLayouts, type Layout } from './layout';
+import { canMerge, createLayout, deleteLines, emptyCellAt, fillCell, selectionIn, setCellProp, setCellSize, slotOf, insertCells, mergeCells, splitCell, joinColumn, membersOf, moveRow, placeInLayout, pruneLayouts, remapSections, removeLayout, selectionOf } from './layout-edit';
 
 const ctl = (name: string, layoutId?: string): ControlDef =>
   ({ kind: 'textBox', name, left: 0, top: 0, width: 10, height: 10, props: layoutId ? { LayoutID: layoutId } : {} });
@@ -27,12 +27,14 @@ describe('insertCells', () => {
     const l = readLayouts(d)[0];
     expect(l.rows).toHaveLength(3);
     expect(l.cells.filter((c) => c.row === 1).every((c) => c.control === null)).toBe(true);
-    expect(byName(d, 'C').top).toBe(100 + 400 + ROW_GAP + 300 + ROW_GAP);
+    expect(byName(d, 'C').top).toBe(100 + 400 + ROW_GAP + INSERT_ROW_HEIGHT + ROW_GAP);
     expect(byName(d, 'A').top).toBe(100);
   });
-  it('below uses the reference row height', () => {
-    const l = readLayouts(insertCells(stackedDoc(), 'A', 'below'))[0];
-    expect(l.rows[1]).toEqual({ section: 'detail', height: 400 });
+  it('below inserts a row of INSERT_ROW_HEIGHT and shifts the rows under it', () => {
+    const d = insertCells(stackedDoc(), 'A', 'below');
+    expect(readLayouts(d)[0].rows[1]).toEqual({ section: 'detail', height: INSERT_ROW_HEIGHT });
+    expect(INSERT_ROW_HEIGHT).toBe(240);
+    expect(byName(d, 'C').top).toBe(100 + 400 + ROW_GAP + 240 + ROW_GAP);
   });
   it('left adds an empty column, widening the layout', () => {
     const d = insertCells(stackedDoc(), 'B', 'left');
@@ -721,5 +723,165 @@ describe('padded layouts (L4 review fixes)', () => {
     const d: DesignDoc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [{ kind: 'detail', height: 5000, props: {}, controls: [at('A', 200), at('B', 600)] }] };
     const out = createLayout(d, [{ control: 'A' }, { control: 'B' }], 'stacked', { headerSection: 'formHeader' });
     expect([byName(out, 'A').left, byName(out, 'A').top]).toEqual([300, 200]);
+  });
+});
+
+describe('empty cell props', () => {
+  const fmt = { BackColor: '#ff0000', TopPadding: 180 };
+  const withProps = (cells: Layout['cells']) => mk([sec('detail', 'L1', 'A', 'B')], [{ id: 'L1', kind: 'stacked', left: 0, tops: { detail: 0 }, cols: [1000, 1000],
+    rows: [{ section: 'detail', height: 300 }, { section: 'detail', height: 300 }], cells }]);
+  it('merging two empty cells keeps the top-left cell props', () => {
+    const d = withProps([{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 0, control: null, props: fmt }, { row: 1, col: 1, control: null, props: { Tag: 'x' } }]);
+    const m = readLayouts(mergeCells(d, 'L1', [{ row: 1, col: 1 }, { row: 1, col: 0 }]))[0];
+    expect(m.cells.find((c) => c.control === null)).toMatchObject({ row: 1, col: 0, colSpan: 2, props: fmt });
+  });
+  it('merging a control with a formatted empty cell leaves no props', () => {
+    const d = withProps([{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: null, props: fmt }, { row: 1, col: 0, control: 'B' }, { row: 1, col: 1, control: null }]);
+    const c = readLayouts(mergeCells(d, 'L1', [{ row: 0, col: 0 }, { row: 0, col: 1 }]))[0].cells.find((x) => x.control === 'A')!;
+    expect(c.props).toBeUndefined();
+  });
+  it('splitting a formatted empty cell gives both parts its props', () => {
+    const d = withProps([{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 0, control: null, props: fmt, colSpan: 2 }]);
+    const h = readLayouts(splitCell(d, 'L1', { row: 1, col: 0 }, 'horizontal'))[0].cells.filter((c) => c.control === null);
+    expect(h).toHaveLength(2);
+    for (const c of h) expect(c.props).toEqual(fmt);
+    const d2 = withProps([{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: 'B' }, { row: 1, col: 0, control: null, props: fmt }, { row: 1, col: 1, control: null }]);
+    const v = readLayouts(splitCell(d2, 'L1', { row: 1, col: 0 }, 'vertical'))[0].cells.filter((c) => c.control === null && c.col === 0);
+    expect(v).toHaveLength(2);
+    for (const c of v) expect(c.props).toEqual(fmt);
+  });
+  it('moveRow keeps the props of the cells it moves', () => {
+    const d = withProps([{ row: 0, col: 0, control: 'A' }, { row: 0, col: 1, control: null, props: fmt }, { row: 1, col: 0, control: 'B' }, { row: 1, col: 1, control: null }]);
+    expect(readLayouts(moveRow(d, 'A', 1))[0].cells.find((c) => c.props)).toMatchObject({ row: 1, col: 1, props: fmt });
+  });
+  it('an L4 layout with null cells reflows identically and round-trips', () => {
+    for (const d of [stackedDoc(), tabDoc(), insertCells(stackedDoc(), 'A', 'below')]) {
+      expect(reflow(d)).toBe(d);
+      expect(JSON.stringify(readLayouts(d))).toBe(JSON.stringify(d.props.Layouts));
+    }
+  });
+});
+
+describe('empty cell fill, delete, select', () => {
+  // Stacked Nom, Ville, Inscrit with an empty row 2 inserted below Ville
+  const base = () => insertCells(stack(s3([]), ['Nom', 'Ville', 'Inscrit']), 'Ville', 'below');
+  const ref = (row: number, col: number) => ({ layout: 'L1', row, col });
+  const cellsOf = (d: DesignDoc) => readLayouts(d)[0].cells;
+  const at = (d: DesignDoc, row: number, col: number) => cellsOf(d).find((c) => c.row === row && c.col === col)!;
+  const props = { BackColor: '#ff0000', GridlineStyleTop: 'solid', TopPadding: 180 };
+  const withProps = (d: DesignDoc) => withLayouts(d, readLayouts(d).map((l) => ({ ...l, cells: l.cells.map((c) => (c.row === 2 && c.col === 1 ? { ...c, props } : c)) })));
+  const add = (d: DesignDoc, c: ControlDef) => ({ ...d, sections: d.sections.map((s) => (s.kind === 'detail' ? { ...s, controls: [...s.controls, c] } : s)) });
+
+  it('slotOf and emptyCellAt', () => {
+    const d = base();
+    expect(slotOf(d, 'Nom')).toEqual(ref(0, 1));
+    expect(slotOf(d, 'Zed')).toBeNull();
+    const r = emptyCellsOf(d).find((e) => e.row === 2 && e.col === 1)!.rect;
+    expect(emptyCellAt(d, { section: 'detail', x: r.left + r.width / 2, y: r.top + r.height / 2 })).toEqual(ref(2, 1));
+    expect(emptyCellAt(d, { section: 'detail', x: r.left, y: r.top + r.height + 10 })).toBeNull();
+    expect(emptyCellAt(d, { section: 'formHeader', x: r.left + 1, y: r.top + 1 })).toBeNull();
+  });
+  it('fresh fill: rectangle, LayoutID, props merged, cell loses its props', () => {
+    const d = withProps(base());
+    const out = fillCell(add(d, lbl('Neuf', 0, 0, 100)), ref(2, 1), 'Neuf', { fresh: true });
+    const n = byName(out, 'Neuf'), r = emptyCellsOf(d).find((e) => e.row === 2 && e.col === 1)!.rect;
+    expect({ left: n.left, top: n.top, width: n.width, height: n.height }).toEqual(r);
+    expect(n.props).toEqual({ Caption: 'Neuf:', LayoutID: 'L1', ...props });
+    expect(at(out, 2, 1)).toEqual({ row: 2, col: 1, control: 'Neuf' });
+  });
+  it('fresh: false keeps the control props and discards the cell ones', () => {
+    const out = fillCell(add(withProps(base()), lbl('Neuf', 0, 0, 100)), ref(2, 1), 'Neuf', { fresh: false });
+    expect(byName(out, 'Neuf').props).toEqual({ Caption: 'Neuf:', LayoutID: 'L1' });
+    expect(at(out, 2, 1)).toEqual({ row: 2, col: 1, control: 'Neuf' });
+  });
+  it('a member of the same layout leaves its cell', () => {
+    const out = fillCell(base(), ref(2, 1), 'Inscrit', { fresh: false });
+    expect(at(out, 3, 1)).toEqual({ row: 3, col: 1, control: null });
+    expect(at(out, 2, 1).control).toBe('Inscrit');
+    expect(readLayouts(out)).toHaveLength(1);
+  });
+  it('unchanged for refused fills', () => {
+    const d = add(base(), box('textBox', 'Neuf', 0, 0, 100, 100));
+    expect(fillCell(d, ref(1, 1), 'Neuf', { fresh: true })).toBe(d);
+    expect(fillCell(d, { layout: 'Z', row: 2, col: 1 }, 'Neuf', { fresh: true })).toBe(d);
+    const og = add(d, box('optionGroup', 'Grp', 0, 0, 100, 100));
+    expect(fillCell(og, ref(2, 1), 'Grp', { fresh: true })).toBe(og);
+    const other = { ...d, sections: [...d.sections, sec('formFooter', undefined, 'Pied')] };
+    expect(fillCell(other, ref(2, 1), 'Pied', { fresh: true })).toBe(other);
+    const l2: Layout = { id: 'L2', kind: 'stacked', left: 0, tops: { detail: 0 }, cols: [100], rows: [{ section: 'detail', height: 100 }], cells: [{ row: 0, col: 0, control: 'Autre' }] };
+    const two = withLayouts(add(d, ctl('Autre', 'L2')), [...readLayouts(d), l2]);
+    expect(fillCell(two, ref(2, 1), 'Autre', { fresh: true })).toBe(two);
+  });
+  it('a field with a label: label goes left when empty, dropped when occupied', () => {
+    const f = box('textBox', 'Neuf', 0, 0, 100, 100, lbl('LNeuf', 0, 0, 50));
+    const out = fillCell(add(base(), f), ref(2, 1), 'Neuf', { fresh: true });
+    expect(at(out, 2, 0).control).toBe('LNeuf');
+    expect(byName(out, 'LNeuf').props.LayoutID).toBe('L1');
+    expect(byName(out, 'Neuf').children).toBeUndefined();
+    const busy = fillCell(add(base(), lbl('X', 0, 0, 50)), ref(2, 0), 'X', { fresh: true });
+    const taken = fillCell(add(busy, f), ref(2, 1), 'Neuf', { fresh: true });
+    expect(top(taken).some((c) => c.name === 'LNeuf')).toBe(false);
+    expect(at(taken, 2, 1).control).toBe('Neuf');
+  });
+  it('Tabular: label goes to the header row cell of the column', () => {
+    const t = insertCells(tab(s3([]), ['Nom', 'Ville']), 'Nom', 'right');
+    const f = box('textBox', 'Neuf', 0, 0, 100, 100, lbl('LNeuf', 0, 0, 50));
+    const out = fillCell(add(t, f), ref(1, 1), 'Neuf', { fresh: true });
+    expect(at(out, 0, 1).control).toBe('LNeuf');
+    expect(sectionOf(out, 'LNeuf')).toBe('formHeader');
+  });
+  it('deleteLines', () => {
+    const d = base(), before = stack(s3([]), ['Nom', 'Ville', 'Inscrit']);
+    const out = deleteLines(d, [ref(2, 0), ref(2, 1)]);
+    expect(readLayouts(out)[0].rows).toHaveLength(3);
+    expect(byName(out, 'Inscrit').top).toBe(byName(before, 'Inscrit').top);
+    expect(deleteLines(d, [ref(2, 1)])).toBe(d);
+    expect(deleteLines(d, [ref(1, 1)])).toBe(d);
+    const col = deleteLines(d, [0, 1, 2, 3].map((r) => ref(r, 0)));
+    expect(readLayouts(col)[0].cols).toHaveLength(1);
+    expect(readLayouts(col)[0].cells.every((c) => c.col === 0)).toBe(true);
+  });
+  it('deleteLines: a cell inside a rowSpan removes a row only when the row is fully covered', () => {
+    const d = base();
+    const span = withLayouts(d, readLayouts(d).map((l) => ({ ...l, cells: l.cells.filter((c) => !(c.row === 3 && c.col === 0)).map((c) => (c.row === 2 && c.col === 0 ? { ...c, rowSpan: 2 } : c)) })));
+    expect(deleteLines(span, [ref(2, 0)])).toBe(span);
+    const out = deleteLines(span, [ref(2, 1), ref(2, 0)]);
+    expect(readLayouts(out)[0].rows).toHaveLength(3);
+    expect(readLayouts(out)[0].cells.find((c) => c.control === 'Inscrit')).toMatchObject({ row: 2, col: 1 });
+  });
+  it('deleteLines Tabular column and whole layout', () => {
+    const t = insertCells(tab(s3([]), ['Nom', 'Ville']), 'Nom', 'right');
+    const out = deleteLines(t, [ref(0, 1), ref(1, 1)]);
+    expect(readLayouts(out)[0].cols).toHaveLength(2);
+    const gone = deleteLines(t, readLayouts(t)[0].cells.map((c) => ref(c.row, c.col)));
+    expect(readLayouts(gone)).toHaveLength(0);
+    expect(top(gone).some((c) => 'LayoutID' in c.props)).toBe(false);
+  });
+  it('selectionIn', () => {
+    const d = base();
+    const row = selectionIn(d, ref(2, 0), 'row');
+    expect(row.names).toEqual([]);
+    expect(row.cells).toEqual([ref(2, 0), ref(2, 1)]);
+    const col = selectionIn(d, slotOf(d, 'Nom')!, 'column');
+    expect(col.names).toHaveLength(3);
+    expect(col.cells).toEqual([ref(2, 1)]);
+    const all = selectionIn(d, ref(2, 0), 'layout');
+    expect(all.names).toHaveLength(6);
+    expect(all.cells).toHaveLength(2);
+  });
+  it('setCellProp and setCellSize', () => {
+    const d = base();
+    expect(setCellProp(d, ref(2, 1), 'Name', 'x')).toBe(d);
+    expect(setCellProp(d, ref(2, 1), 'Width', 5)).toBe(d);
+    expect(setCellProp(d, ref(1, 1), 'BackColor', '#fff')).toBe(d);
+    const p = setCellProp(d, ref(2, 1), 'BackColor', '#00ff00');
+    expect(at(p, 2, 1).props).toEqual({ BackColor: '#00ff00' });
+    expect('props' in at(setCellProp(p, ref(2, 1), 'BackColor', undefined), 2, 1)).toBe(false);
+    const l0 = readLayouts(d)[0];
+    expect(readLayouts(setCellSize(d, ref(2, 1), 'Width', 3000))[0].cols).toEqual([l0.cols[0], 3000]);
+    expect(readLayouts(setCellSize(d, ref(2, 0), 'Height', 500))[0].rows[2].height).toBe(500);
+    const sp = withLayouts(d, readLayouts(d).map((l) => ({ ...l, cells: l.cells.filter((c) => !(c.row === 2 && c.col === 1)).map((c) => (c.row === 2 && c.col === 0 ? { ...c, colSpan: 2 } : c)) })));
+    const s = readLayouts(setCellSize(sp, ref(2, 0), 'Width', 5000))[0];
+    expect(s.cols).toEqual([l0.cols[0], 5000 - l0.cols[0] - COL_GAP]);
   });
 });

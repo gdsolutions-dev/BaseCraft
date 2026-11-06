@@ -70,6 +70,8 @@
   background-size: 6px 1px, 1px 6px; background-position: center; background-repeat: no-repeat; }
 .dz-layout-handle:focus-visible { outline: 2px solid var(--dz-layout); outline-offset: 1px; }
 
+.dz-cellfill { pointer-events: none; }
+.dz-cell-input { position: absolute; box-sizing: border-box; z-index: 2; font: inherit; padding: 0 2px; margin: 0; border: 1px solid var(--dz-layout, #e8710a); background: #fff; color: #000; }
 .dz-cell { position: absolute; padding: 0; box-sizing: border-box; cursor: pointer; background: transparent; border: 1px dotted var(--dz-layout, #e8710a); }
 .dz-cell.is-sel { background: var(--accent-soft); border-style: solid; }
 .dz-cell:focus-visible { outline: 2px solid var(--dz-layout, #e8710a); outline-offset: 1px; }

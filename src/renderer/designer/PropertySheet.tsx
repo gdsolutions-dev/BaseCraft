@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { colorCss, isColorValue, THEME_COLORS, type ColorValue } from '../../shared/design/colors';
 import { readEvent } from '../../shared/design/events';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
+import { emptyCellRank } from '../../shared/design/layout';
 import { PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { EMBEDDED_FONTS } from '../../shared/fonts';
 import { sameName } from '../../shared/field-types';
@@ -54,7 +55,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
   const [lost, setLost] = useState<Lost | null>(null);
   const { doc } = state;
   const targets = useMemo(() => targetsOf(state.selection), [state.selection]);
-  const allRows = useMemo(() => sheetRows(doc, docKind, targets, tab, readOnly), [doc, docKind, targets, tab, readOnly]);
+  const allRows = useMemo(() => sheetRows(doc, docKind, targets, tab, readOnly, t('designer.emptyCellPrefix')), [doc, docKind, targets, tab, readOnly, t]);
   const rows = p.restrict?.events ? allRows.filter((r) => shownTabs.includes(r.d.tab)) : allRows;   // Toutes aussi, sans les événements
   const selKey = JSON.stringify(targets);   // une autre sélection, un autre onglet : de nouveaux éditeurs (un brouillon en cours est validé)
   const [macros, setMacros] = useState<string[]>([]);   // la liste d'une propriété d'événement : les macros et leurs sous-macros
@@ -63,6 +64,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
     macroNamesWithSubs().then((m) => { if (current) setMacros(m); }, () => { /* une base fermée entre-temps : liste vide */ });
     return () => { current = false; };
   }, []);
+  const cellLabel = (c: { layout: string; row: number; col: number }) => `${t('designer.emptyCellPrefix')}${emptyCellRank(doc, c)}`;
   const sectionText = (s: SectionDef, i: number) => (p.sectionLabel ? p.sectionLabel(s, i) : t(`designer.section.${s.kind}`));
 
   /** « … » d'un événement (R16) : la macro nommée en mode Création ; sinon sa macro incorporée, ou une nouvelle, dans son onglet. */
@@ -71,7 +73,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
     const b = readEvent(value);
     if (b.kind === 'macro') { void shellDispatch({ type: 'open', kind: 'macro', name: b.name.split('.')[0]!, mode: 'design' }); return; }
     const target = targets[0]!;
-    const where = target.kind === 'doc' ? t(`tabs.kind.${docKind}`) : target.kind === 'section' ? sectionText(doc.sections[target.index]!, target.index) : target.name;
+    const where = target.kind === 'doc' ? t(`tabs.kind.${docKind}`) : target.kind === 'section' ? sectionText(doc.sections[target.index]!, target.index) : target.kind === 'cell' ? cellLabel(target) : target.name;
     openEmbedded(shellDispatch, eventSession({ owner: owner.tabId, title: t('macro.embedded.title', { object: owner.name, control: where, event: t(d.labelKey) }),
       def: b.kind === 'embedded' ? b.def : emptyMacro(), target, event: d.name, doc: owner.doc, dispatch }));
   } : undefined;
@@ -84,10 +86,12 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
   };
 
   const objValue = state.selection.kind === 'doc' ? 'doc' : state.selection.kind === 'section' ? `s:${state.selection.index}`
-    : state.selection.names.length === 1 ? `c:${state.selection.names[0]}` : state.selection.names.length ? 'multi' : 'doc';
+    : state.selection.names.length === 1 ? `c:${state.selection.names[0]}` : state.selection.names.length ? 'multi'
+      : state.selection.cells?.length === 1 ? `cell:${state.selection.cells[0].layout}:${state.selection.cells[0].row}:${state.selection.cells[0].col}` : state.selection.cells?.length ? 'multi' : 'doc';
   const pickObject = (v: string) => {
     if (v === 'doc') dispatch({ type: 'select', selection: { kind: 'doc' } });
     else if (v.startsWith('s:')) dispatch({ type: 'select', selection: { kind: 'section', index: Number(v.slice(2)) } });
+    else if (v.startsWith('cell:')) { const m = /^cell:(.+):(\d+):(\d+)$/.exec(v); if (m) dispatch({ type: 'selectCell', cell: { layout: m[1], row: Number(m[2]), col: Number(m[3]) }, add: false }); }
     else if (v.startsWith('c:')) dispatch({ type: 'select', selection: { kind: 'controls', names: [v.slice(2)] } });
   };
   const k = targets.length > 1 ? null : targetKind(doc, docKind, targets[0]);
@@ -123,6 +127,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
         <option value="doc">{t(`tabs.kind.${docKind}`)}</option>
         {doc.sections.map((s, i) => <option key={`s${i}`} value={`s:${i}`}>{sectionText(s, i)}</option>)}
         {doc.sections.flatMap((s) => flattenControls(s.controls)).map((c) => <option key={`c:${c.name}`} value={`c:${c.name}`}>{c.name}</option>)}
+        {objValue.startsWith('cell:') && <option value={objValue}>{cellLabel(targets[0] as { layout: string; row: number; col: number })}</option>}
       </select>
       <div className="dz-props-tabs" role="tablist" aria-label={t('sheet.title')} onKeyDown={tabKey}>
         {tabs.map((x) => (

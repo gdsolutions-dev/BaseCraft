@@ -1,7 +1,7 @@
 // Geste de souris ou touche du clavier -> actions du modèle du concepteur. Module pur.
 // Coordonnées en px (100 %) relatives à la section : pour 'move', le coin haut gauche de la sélection (son ancre) au départ
 // et à l'arrivée, l'arrivée dans le repère de la section survolée ; pour 'band' et 'place', l'arrivée dans le repère de départ.
-import type { ControlKind } from '../../shared/design/model';
+import type { ControlDef, ControlKind } from '../../shared/design/model';
 import type { DesignerAction } from './designer-model';
 import type { Handle, Rect } from './geometry';
 import { CLICK_PX, DEFAULT_SIZE, pxToTwips, TWIPS_PER_PX } from './units';
@@ -22,11 +22,11 @@ export function gestureEnd(g: Gesture, at: Point & { section: number }, mods: { 
   switch (g.kind) {
     case 'move': {
       if (at.section === g.section && isClick(g.origin, at)) return [];
-      const dx = pxToTwips(at.x - g.origin.x);
+      const dx = pxToTwips(at.x - g.origin.x), drop = { x: pxToTwips(at.x), y: pxToTwips(at.y) };
       if (at.section !== g.section) {   // dépôt dans une autre section, une seule action : l'ancre arrive au point visé (le réducteur aimante)
-        return [{ type: 'changeSection', to: at.section, top: Math.max(0, pxToTwips(at.y)), ...(dx ? { dx } : {}), ...free(mods.alt) }];
+        return [{ type: 'changeSection', to: at.section, top: Math.max(0, pxToTwips(at.y)), ...(dx ? { dx } : {}), ...free(mods.alt), drop }];
       }
-      return [{ type: 'moveBy', dx, dy: pxToTwips(at.y - g.origin.y), ...free(mods.alt) }];
+      return [{ type: 'moveBy', dx, dy: pxToTwips(at.y - g.origin.y), ...free(mods.alt), drop }];
     }
     case 'resize':
       return isClick(g.origin, at) ? [] : [{ type: 'resize', handle: g.handle, dx: pxToTwips(at.x - g.origin.x), dy: pxToTwips(at.y - g.origin.y), ...free(mods.alt) }];
@@ -64,3 +64,11 @@ export function keyAction(key: string, mods: { ctrl: boolean; shift: boolean }, 
   }
   return ({ a: { type: 'selectAll' }, z: { type: 'undo' }, y: { type: 'redo' } } as Record<string, DesignerAction>)[key.toLowerCase()] ?? null;
 }
+
+/** Une touche qui commence une saisie dans une cellule vide : un seul caractère imprimable (espace compris), sans Ctrl, Alt ni Méta (AltGr accepté). */
+export const isTypingKey = (e: { key: string; ctrlKey: boolean; altKey: boolean; metaKey: boolean; getModifierState?: (k: 'AltGraph') => boolean }): boolean =>
+  [...e.key].length === 1 && !e.metaKey && (e.getModifierState?.('AltGraph') || (!e.ctrlKey && !e.altKey));   // AltGr (@, €, # au clavier français) rapporte Ctrl+Alt sous Windows
+
+/** L'étiquette de l'hôte, avec le texte saisi pour légende. */
+export const typedLabel = (controls: ControlDef[], text: string): ControlDef[] =>
+  controls.map((c) => ({ ...c, props: { ...c.props, Caption: text } }));

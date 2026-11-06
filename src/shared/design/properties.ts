@@ -5,7 +5,7 @@
 // A4 et A5 ajoutent leurs entrées en fin de tableau, seulement si le nom n'existe pas : un nom n'a qu'un descripteur.
 import { CONTROL_KINDS, SECTION_KINDS, type ControlKind, type SectionKind } from './model';
 
-export type PropertyTarget = 'form' | 'report' | SectionKind | ControlKind;
+export type PropertyTarget = 'form' | 'report' | 'emptyCell' | SectionKind | ControlKind;
 export type PropertyEditorKind = 'text' | 'number' | 'twips' | 'bool' | 'enum' | 'color' | 'expression' | 'criteria'
   | 'controlSource' | 'recordSource' | 'rowSource' | 'objectName' | 'fieldList' | 'picture' | 'textList' | 'event' | 'font';
 /** A per-target default key: a target, or a target inside a form or a report (C5; sections allowed too, e.g. `report:detail`). */
@@ -134,6 +134,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('LineSlant', 'format', 'bool', ['line'], false),
   p('Pages', 'format', 'textList', ['tabControl']),
   p('Name', 'other', 'text', [...CONTROL_KINDS]),
+  p('Tag', 'other', 'text', [...CONTROL_KINDS], ''),   // Access's Tag (Remarque): free text the application may read
   p('TabStop', 'other', 'bool', [...INPUTS, 'subform'], true),
   p('TabIndex', 'other', 'number', [...INPUTS, 'subform'], undefined, { min: 0, integer: true }),
   p('ControlTipText', 'other', 'text', [...CONTROL_KINDS]),
@@ -160,6 +161,10 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('OnFormat', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
   p('OnPrint', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
 ];
+
+// L5: what an empty cell shows (size, position, name, Tag, background, gridlines, padding; no margins, no anchors), defaults as a label's.
+const CELL_NAMES = /^(Width|Height|Top|Left|Name|Tag|BackStyle|BackColor|Gridline(Style|Width)(Top|Bottom|Left|Right)|GridlineColor|(Top|Bottom|Left|Right)Padding)$/;
+for (const d of PROPERTY_CATALOG) if (CELL_NAMES.test(d.name)) d.appliesTo = [...d.appliesTo, 'emptyCell'];   // a new array: LAID_OUT and co. are shared
 
 export const propertiesFor = (target: PropertyTarget): PropertyDescriptor[] => PROPERTY_CATALOG.filter((x) => x.appliesTo.includes(target));
 

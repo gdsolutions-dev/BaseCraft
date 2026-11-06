@@ -746,6 +746,7 @@
     "canvas": "디자인 화면",
     "layoutHandle": "레이아웃 {{id}} 선택",
     "emptyCell": "레이아웃 {{layout}}의 빈 셀, {{row}}행 {{col}}열",
+    "emptyCellPrefix": "빈셀",
     "toolbox": "도구 상자",
     "arrange": {
       "alignLeft": "왼쪽",
@@ -1567,6 +1568,7 @@
     "LineSlant": "선 기울기",
     "Pages": "페이지",
     "Name": "이름",
+    "Tag": "태그",
     "TabStop": "탭 정지",
     "TabIndex": "탭 인덱스",
     "ControlTipText": "컨트롤 팁 텍스트",
@@ -1910,6 +1912,7 @@
       "comboBox": "콤보 상자",
       "listBox": "목록 상자",
       "commandButton": "명령 단추",
+      "emptyCell": "빈 셀",
       "subform": "하위 양식/하위 보고서",
       "image": "이미지",
       "line": "선",

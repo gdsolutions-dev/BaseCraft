@@ -8,6 +8,8 @@ import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSou
 import type { PropTarget } from './designer-model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
 import { EVENTS } from '../../shared/design/events';
+import { emptyCellsOf, readLayouts } from '../../shared/design/layout';
+import { createLayout, insertCells, membersOf, setCellProp } from '../../shared/design/layout-edit';
 
 const ctl = (kind: ControlKind, name: string, left = 0, top = 0, children?: ControlDef[]): ControlDef =>
   ({ kind, name, left, top, width: 2268, height: 340, props: {}, ...(children ? { children } : {}) });
@@ -154,4 +156,49 @@ describe('property sheet model', () => {
     expect(columnWidthsToDisplay('a;b', fr)).toBe('a;b');   // valeur écrite hors de BaseCraft : montrée telle quelle
   });
   it('font portability', () => { expect(fontWarning('Comic Sans MS')).toBe('sheet.fontNotPortable'); expect(fontWarning('carlito')).toBeNull(); expect(fontWarning('Arial')).toBeNull(); });
+});
+
+describe('empty cell sheet (L5)', () => {
+  const d0 = insertCells(insertCells(createLayout(doc, membersOf(doc, ['Nom', 'Ville']), 'stacked', { headerSection: 'formHeader' }), 'Nom', 'right'), 'Ville', 'right');
+  const cells = emptyCellsOf(d0);
+  const cellT = (i: number): PropTarget => ({ kind: 'cell', layout: cells[i].layout, row: cells[i].row, col: cells[i].col });
+  const names = (tab: 'format' | 'other', ts: PropTarget[], d = d0) => sheetRows(d, 'form', ts, tab, false, 'CV').map((r) => r.d.name);
+  it('two empty cells to work with', () => { expect(cells.length).toBeGreaterThanOrEqual(2); });
+  it('targets, kind, existence', () => {
+    expect(targetsOf({ kind: 'controls', names: [], cells: [cells[0]] })).toEqual([cellT(0)]);
+    expect(targetKind(d0, 'form', cellT(0))).toBe('emptyCell');
+    expect(sheetRows(d0, 'form', [{ kind: 'cell', layout: 'zz', row: 0, col: 0 }], 'format', false)).toEqual([]);
+    expect(sheetRows(d0, 'form', [{ kind: 'cell', layout: cells[0].layout, row: 0, col: 0 }], 'format', false)).toEqual([]);   // not an empty cell
+  });
+  it('catalog: Tag on controls and emptyCell, margins and anchors not', () => {
+    expect(desc('Tag').appliesTo).toEqual(expect.arrayContaining([...CONTROL_KINDS, 'emptyCell']));
+    for (const n of ['TopMargin', 'HorizontalAnchor', 'ControlSource', 'Caption']) expect(desc(n).appliesTo).not.toContain('emptyCell');
+  });
+  it('rows of the format and other tabs', () => {
+    const sides = ['Top', 'Bottom', 'Left', 'Right'];
+    expect(names('format', [cellT(0)]).sort()).toEqual(['Width', 'Height', 'Top', 'Left', 'BackStyle', 'BackColor', 'GridlineColor',
+      ...sides.flatMap((x) => [`GridlineStyle${x}`, `GridlineWidth${x}`, `${x}Padding`])].sort());
+    expect(names('other', [cellT(0)])).toEqual(['Name', 'Tag']);
+    const ro = sheetRows(d0, 'form', [cellT(0)], 'all', false).filter((r) => r.readOnly).map((r) => r.d.name).sort();
+    expect(ro).toEqual(['Left', 'Name', 'Top']);
+  });
+  it('values: defaults, stored props, derived name, mixed', () => {
+    const val = (dd: DesignDoc, t: PropTarget, n: string) => readProp(dd, 'form', t, desc(n), 'CV');
+    expect(val(d0, cellT(0), 'BackStyle')).toBe('transparent'); expect(val(d0, cellT(0), 'TopPadding')).toBe(0);
+    expect(val(d0, cellT(0), 'Width')).toBe(cells[0].rect.width);
+    expect(val(d0, cellT(1), 'Name')).toBe('CV2');
+    const d1 = setCellProp(d0, cells[0], 'BackColor', '#ff0000');
+    expect(val(d1, cellT(0), 'BackColor')).toBe('#ff0000');
+    expect(sheetRows(d1, 'form', [cellT(0), cellT(1)], 'format', false).find((r) => r.d.name === 'BackColor')!.value).toBe(MIXED);
+    expect(readLayouts(d1)).toHaveLength(1);
+  });
+  it('a mixed selection shows the controls only', () => {
+    const t = targetsOf({ kind: 'controls', names: ['Nom'], cells: [cells[0]] });
+    expect(t).toEqual([ctlT('Nom')]);
+    expect(() => sheetRows(d0, 'form', t, 'format', false)).not.toThrow();
+  });
+  it('checkPropValue: a cell width is 0..MAX_TWIPS', () => {
+    expect(checkPropValue(d0, cellT(0), desc('Width'), 0)).toBeNull();
+    expect(checkPropValue(d0, cellT(0), desc('Width'), -1)).not.toBeNull();
+  });
 });

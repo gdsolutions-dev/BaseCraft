@@ -751,6 +751,7 @@
     "canvas": "Entwurfsfläche",
     "layoutHandle": "Layout {{id}} markieren",
     "emptyCell": "Leere Zelle {{layout}}, Zeile {{row}}, Spalte {{col}}",
+    "emptyCellPrefix": "LeereZelle",
     "toolbox": "Toolbox",
     "arrange": {
       "alignLeft": "Links",
@@ -1578,6 +1579,7 @@
     "LineSlant": "Linienneigung",
     "Pages": "Seiten",
     "Name": "Name",
+    "Tag": "Bemerkung",
     "TabStop": "Tabstopp",
     "TabIndex": "Aktivierreihenfolge",
     "ControlTipText": "QuickInfo-Text",
@@ -1922,6 +1924,7 @@
       "comboBox": "Kombinationsfeld",
       "listBox": "Listenfeld",
       "commandButton": "Befehlsschaltfläche",
+      "emptyCell": "Leere Zelle",
       "subform": "Unterformular/Unterbericht",
       "image": "Bild",
       "line": "Linie",

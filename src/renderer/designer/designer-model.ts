@@ -1,18 +1,18 @@
 // Modèle pur du concepteur générique (formulaires A4, états A5) : document, sélection, déplacement, organisation, annulation.
 // Tout est en twips, relatif à la section (enfants compris). Aucune clé inconnue n'est jamais retirée : on étale toujours l'ancien objet.
 import { isValidObjectName, sameName } from '../../shared/field-types';
-import { cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, withLayouts } from '../../shared/design/layout';
-import { placeInLayout, pruneLayouts } from '../../shared/design/layout-edit';
+import { CELL_PROPS, cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, withLayouts, type CellRef } from '../../shared/design/layout';
+import { deleteLines, emptyCellAt, fillCell, placeInLayout, pruneLayouts, setCellProp, setCellSize, slotOf } from '../../shared/design/layout-edit';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
 import { reportWidth } from '../../shared/report/model';
 import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
 import { gridStep, MAX_TWIPS, snap } from './units';
 
-/** An empty layout cell (row, col = its top-left slot). */
-export interface CellRef { layout: string; row: number; col: number }
+export type { CellRef };
 export type Selection = { kind: 'controls'; names: string[]; cells?: CellRef[] } | { kind: 'section'; index: number } | { kind: 'doc' };
-export type PropTarget = { kind: 'doc' } | { kind: 'section'; index: number } | { kind: 'control'; name: string };
+export type PropTarget = { kind: 'doc' } | { kind: 'section'; index: number } | { kind: 'control'; name: string }
+  | { kind: 'cell'; layout: string; row: number; col: number };
 // interne au concepteur : jamais un CommandId (le ruban montre sizeSpace / align en menus, tâche 3)
 export type ArrangeOp = 'alignLeft' | 'alignRight' | 'alignTop' | 'alignBottom' | 'alignToGrid'
   | 'sizeToWidest' | 'sizeToNarrowest' | 'sizeToTallest' | 'sizeToShortest' | 'sizeToGrid'
@@ -24,8 +24,8 @@ export type DesignerAction =
   | { type: 'load'; doc: DesignDoc; objectKind?: 'form' | 'report' } | { type: 'saved' }
   | { type: 'select'; selection: Selection } | { type: 'toggleSelect'; name: string } | { type: 'selectCell'; cell: CellRef; add: boolean } | { type: 'selectAll' }
   | { type: 'selectRect'; section: number; rect: Rect; add: boolean; enclosed?: boolean }
-  | { type: 'moveBy'; dx: number; dy: number; free?: boolean }            // twips ; free = sans aimantation (Alt)
-  | { type: 'changeSection'; to: number; top: number; dx?: number; free?: boolean }   // dépôt dans une autre section (dx : déplacement horizontal du même geste)
+  | { type: 'moveBy'; dx: number; dy: number; free?: boolean; drop?: { x: number; y: number } }   // twips ; free = sans aimantation (Alt) ; drop : point de dépôt, relatif à la section
+  | { type: 'changeSection'; to: number; top: number; dx?: number; free?: boolean; drop?: { x: number; y: number } }   // dépôt dans une autre section (dx : déplacement horizontal du même geste)
   | { type: 'resize'; handle: Handle; dx: number; dy: number; free?: boolean }
   | { type: 'insert'; section: number; controls: ControlDef[]; parent?: string; at?: { x: number; y: number } }   // at : point de dépôt (twips, relatif à la section)
   | { type: 'deleteSelection'; keep?: string[] }                         // keep : étiquettes de disposition laissées en place (Couper)
@@ -180,6 +180,10 @@ const sameRef = (a: DesignDoc['recordSource'], b: DesignDoc['recordSource']): bo
   || (!!a && !!b && a.kind === b.kind && ('name' in a ? a.name : undefined) === ('name' in b ? b.name : undefined) && ('sql' in a ? a.sql : undefined) === ('sql' in b ? b.sql : undefined));
 
 function setProp(doc: DesignDoc, t: PropTarget, name: string, value: unknown): DesignDoc {
+  if (t.kind === 'cell') {   // cellule vide : sa taille et sa mise en forme ; le reste (Name, Top, Left) ne lui appartient pas
+    if (name === 'Width' || name === 'Height') return typeof value === 'number' ? setCellSize(doc, t, name, value) : doc;
+    return CELL_PROPS.includes(name) ? setCellProp(doc, t, name, value as string | number | undefined) : doc;
+  }
   if (name === 'RecordSource') { const ref = (value ?? null) as DesignDoc['recordSource']; return sameRef(ref, doc.recordSource) ? doc : { ...doc, recordSource: ref }; }
   if (t.kind === 'doc' && name === 'Width') {   // jamais plus étroit que le contrôle le plus à droite, comme `fit`
     if (typeof value !== 'number' || !Number.isFinite(value)) return doc;
@@ -298,7 +302,11 @@ function insert(s: DesignerState, a: Extract<DesignerAction, { type: 'insert' }>
   let doc = parent ? updateControl(s.doc, parent.name, (c) => ({ ...c, children: [...(c.children ?? []), ...added] }))
     : mapLists(s.doc, (list, owner, si) => (owner === null && si === section ? [...list, ...added] : list));
   // posé sur une disposition (point de dépôt `at`) : il en devient membre, dans la même entrée d'historique
-  if (a.at && !parent) doc = placeInLayout(doc, added.map((c) => c.name), { section: sectionRef(doc.sections[section]), ...a.at });
+  if (a.at && !parent) {
+    const ref = sectionRef(doc.sections[section]), cell = added.length === 1 ? emptyCellAt(doc, { section: ref, ...a.at }) : null;
+    const filled = cell ? fillCell(doc, cell, added[0].name, { fresh: true }) : doc;
+    doc = filled !== doc ? filled : placeInLayout(doc, added.map((c) => c.name), { section: ref, ...a.at });
+  }
   return push(s, fit(doc, s.objectKind), { kind: 'controls', names: added.map((c) => c.name) });
 }
 
@@ -379,7 +387,8 @@ function detachMoved(doc: DesignDoc, moved: string[]): DesignDoc {
 /** Après l'étape du réducteur : la grille et les coordonnées des membres restent cohérentes, dans la même entrée d'historique.
  *  Un document sans disposition ressort intact (le même état). */
 export function syncLayouts(prev: DesignerState, a: DesignerAction, next: DesignerState): DesignerState {
-  if (next.doc === prev.doc || UNTOUCHED.includes(a.type) || (!readLayouts(prev.doc).length && !readLayouts(next.doc).length)) return next;
+  const cellDelete = a.type === 'deleteSelection' && prev.selection.kind === 'controls' && !!prev.selection.cells?.length;   // la suppression de cellules vides ne change pas le doc du cœur
+  if ((next.doc === prev.doc && !cellDelete) || UNTOUCHED.includes(a.type) || (!readLayouts(prev.doc).length && !readLayouts(next.doc).length)) return next;
   let doc = next.doc;
   if (a.type === 'setProp' && a.name === 'Name' && a.targets.length === 1 && a.targets[0].kind === 'control') {   // le renommage suit dans la grille
     const from = a.targets[0].name, to = String(a.value);
@@ -390,13 +399,24 @@ export function syncLayouts(prev: DesignerState, a: DesignerAction, next: Design
     const labels = gone.flatMap((n) => labelOf(prev.doc, n) ?? []).filter((l) => !a.keep?.some((k) => sameName(k, l.name)));
     if (labels.length) doc = mapLists(doc, (list) => list.filter((c) => !labels.includes(c)));
   }
+  if (a.type === 'deleteSelection' && prev.selection.kind === 'controls') {   // les lignes et colonnes entièrement couvertes par la sélection disparaissent
+    const slots = [...prev.selection.names.flatMap((n) => slotOf(prev.doc, n) ?? []), ...(prev.selection.cells ?? [])];
+    doc = deleteLines(pruneLayouts(doc), slots);   // readLayouts refuse une grille qui nomme un contrôle supprimé : on la met d'abord d'aplomb
+  }
   if (a.type === 'resize' || (a.type === 'setProp' && (a.name === 'Width' || a.name === 'Height'))) doc = learnSizes(prev.doc, doc);
   // ponytail: free drag of a member does nothing in Design view; Access moves the whole row. Add row drag with the Layout view gestures (L2).
-  const geometry = ['moveBy', 'changeSection', 'arrange', 'resize'].includes(a.type)
+  let filled = false;   // déposé dans une cellule vide : elle prend le contrôle, ni bloc déplacé ni détachement
+  if ((a.type === 'moveBy' || a.type === 'changeSection') && a.drop && prev.selection.kind === 'controls' && prev.selection.names.length === 1) {
+    const name = prev.selection.names[0], si = a.type === 'moveBy' ? findControl(doc, name)?.section : a.to;
+    const cell = si === undefined || !doc.sections[si] ? null : emptyCellAt(doc, { section: sectionRef(doc.sections[si]), ...a.drop });
+    const f = cell ? fillCell(doc, cell, name, { fresh: false }) : doc;
+    if (f !== doc) { doc = unfit(prev.doc, f); filled = true; }
+  }
+  const geometry = !filled && ['moveBy', 'changeSection', 'arrange', 'resize'].includes(a.type)
     || (a.type === 'setProp' && ['Left', 'Top', 'Width', 'Height'].includes(a.name) && a.targets.every((t) => t.kind === 'control'));
   if (geometry) doc = moveBlocks(prev.doc, unfit(prev.doc, doc));
   // fit toujours : le recalcul a pu descendre des lignes sous la section (insertion de lignes, ligne plus haute)
-  if (a.type === 'changeSection' && prev.selection.kind === 'controls') doc = detachMoved(pruneLayouts(doc), prev.selection.names);
+  if (!filled && a.type === 'changeSection' && prev.selection.kind === 'controls') doc = detachMoved(pruneLayouts(doc), prev.selection.names);
   const out = fit(reflow(pruneLayouts(doc)), next.objectKind);
   const json = JSON.stringify(out);
   if (json === JSON.stringify(prev.doc)) return prev;
@@ -472,7 +492,7 @@ export function coreReducer(s: DesignerState, a: DesignerAction): DesignerState 
     case 'insert': return insert(s, a);
     case 'deleteSelection': {
       const gone = selected(s).map((e) => e.control);
-      if (!gone.length) return s;
+      if (!gone.length && !(s.selection.kind === 'controls' && s.selection.cells?.length)) return s;
       return push(s, mapLists(s.doc, (list) => list.filter((c) => !gone.includes(c))), { kind: 'doc' });
     }
     case 'setProp': {

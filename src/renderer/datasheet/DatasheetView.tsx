@@ -155,7 +155,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [stored, setStored] = useState<Record<string, number>>({});
   const dragged = useRef<Record<string, number>>({});
   const passThrough = useRef(false);
-  const onColumnResize = (c: GridColumn, w: number) => { resize(c, w); if (c.id !== undefined) dragged.current[c.id] = w; };
+  // A drag of a column's edge ends on the column's new right edge, where its menu button now is: Glide then opens the filter menu
+  // on the mouse-up. A press that resized a column opens no menu (Access's header has none to open).
+  const resizing = useRef(false);
+  const onColumnResize = (c: GridColumn, w: number) => { resizing.current = true; resize(c, w); if (c.id !== undefined) dragged.current[c.id] = w; };
   const [version, bump] = useReducer((n: number) => n + 1, 0); // rows or pending edits changed: redraw
   const [, scrolled] = useReducer((n: number) => n + 1, 0);
   // Synchronous state (read right after an await, before React renders): saved rows count, new record's row shown. `more`:
@@ -1127,14 +1130,14 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   return (
     <div className="datasheet">
       <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
-        onPointerDownCapture={() => { appendClick.current = false; }}>
+        onPointerDownCapture={() => { appendClick.current = false; resizing.current = false; }}>
         <DataEditor ref={editor} theme={theme} verticalBorder={look.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={columns} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
           gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited} onFinishedEditing={() => refreshIfMissed(false)}
           onRowAppended={ro || more ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro || more ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
           onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={look.rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
-          onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => void cmds.current.filterMenu(col, { x: b.x, y: b.y + b.height })}
+          onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => { if (!resizing.current) void cmds.current.filterMenu(col, { x: b.x, y: b.y + b.height }); }}
           onVisibleRegionChanged={() => { idle(); if (buffer.pending) scrolled(); }}
           width="100%" height="100%" />
         {(popup === 'goTo' || popup === 'select') && (

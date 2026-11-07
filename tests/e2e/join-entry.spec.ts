@@ -234,7 +234,7 @@ test('datasheet: leaving the row waits for AutoLookup; a failed lookup keeps the
 
     // 3. a lookup that succeeds lifts it: the row is saved, Durand still keeps his name
     await lookupFails(false);
-    await clickCell(page, X.client, row, COL.client);
+    await expect(cell(page, COL.client, row)).toBeFocused(); // the refused row stays selected (Access): no click, it would open the editor
     await page.keyboard.press('3');
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.press('Enter');

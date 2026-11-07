@@ -93,7 +93,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('HorizontalAnchor', 'format', 'enum', LAID_OUT, 'left', { options: ['left', 'right', 'both'] }),
   p('VerticalAnchor', 'format', 'enum', LAID_OUT, 'top', { options: ['top', 'bottom', 'both'] }),
   p('ForeColor', 'format', 'color', TEXT, 'theme:text'),
-  p('FontName', 'format', 'font', TEXT, 'Inter'), // fonts.ts: EMBEDDED_FONTS first, then any name (resolveFont: not portable)
+  p('FontName', 'format', 'font', TEXT, '(Body)'), // '(Body)' / '(Headings)' : polices du thème (fonts.ts resolveThemeFont); fonts.ts: EMBEDDED_FONTS first, then any name (resolveFont: not portable)
   p('FontSize', 'format', 'number', TEXT, 10, { min: 6, max: 72, integer: true }), // pt
   p('FontWeight', 'format', 'enum', TEXT, 'normal', { options: ['normal', 'bold'] }),
   p('FontItalic', 'format', 'bool', TEXT, false),
@@ -136,7 +136,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('Name', 'other', 'text', [...CONTROL_KINDS]),
   p('Tag', 'other', 'text', [...CONTROL_KINDS], ''),   // Access's Tag (Remarque): free text the application may read
   p('TabStop', 'other', 'bool', [...INPUTS, 'subform'], true),
-  p('TabIndex', 'other', 'number', [...INPUTS, 'subform'], undefined, { min: 0, integer: true }),
+  p('TabIndex', 'other', 'number', [...INPUTS, 'subform', 'tabControl'], undefined, { min: 0, integer: true }),
   p('ControlTipText', 'other', 'text', [...CONTROL_KINDS]),
   p('StatusBarText', 'other', 'text', INPUTS),
   // Events (A4: read-only, proprietes.md section 9; B2: the closed list of events.ts, rulings R2); one descriptor per name, targets as in Access.

@@ -4,6 +4,7 @@
 import type { BasecraftApi } from '../../shared/api';
 import type { DesignDoc } from '../../shared/design/model';
 import { layoutReport } from '../../shared/report/layout';
+import type { Theme } from '../../shared/design/theme';
 import { readReport } from '../../shared/report/model';
 import type { LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
 import type { LiveNotice } from '../form/live-records';
@@ -45,9 +46,9 @@ export async function loadFlowData(doc: DesignDoc, ask: AskParameters, api?: Flo
 
 /** La définition courante mise en page en un seul flux sur les lignes déjà lues. Les crochets d'événements (`hooks`) et
  *  `onPage` de `env` sont écartés : le mode Page n'exécute ni Sur formatage ni Sur impression. */
-export async function layoutFlow(doc: DesignDoc, source: FlowSource, env: LayoutEnv, signal: AbortSignal): Promise<LaidOutReport> {
+export async function layoutFlow(doc: DesignDoc, source: FlowSource, env: LayoutEnv, signal: AbortSignal, theme?: Theme): Promise<LaidOutReport> {
   const { hooks: _hooks, onPage: _onPage, ...rest } = env;
-  return layoutReport(readReport(doc, source.data.fields, { allCells: true }), source.data, { ...rest, signal }, { flow: true });
+  return layoutReport(readReport(doc, source.data.fields, { allCells: true, theme }), source.data, { ...rest, signal }, { flow: true });
 }
 
 /** Une seule mise en page à la fois : `schedule` lance `job` `delay` ms après le dernier appel, annule la précédente (son

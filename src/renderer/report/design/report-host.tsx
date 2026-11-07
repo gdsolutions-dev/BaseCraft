@@ -13,7 +13,8 @@ import { EMBEDDED_FONTS, resolveFont } from '../../../shared/fonts';
 import type { DesignerHost, ToolDef } from '../../designer/Designer';
 import { controlSourceToDisplay } from '../../designer/property-sheet-model';
 import type { PropertySheetContext } from '../../designer/sheet-types';
-import { gridlineStyle, marginInset } from '../../form/run-model';
+import { gridlineStyle, marginInset, themedFamily, type ThemeCtx } from '../../form/run-model';
+import { useDocTheme } from '../../design/doc-theme';
 import { i18n } from '../../i18n';
 import { newReportControls, sectionLabel, togglePageHeaderFooter, toggleReportHeaderFooter } from './report-sections';
 import './report-design.css';
@@ -33,21 +34,22 @@ export const REPORT_TOOLBOX: ToolDef[] = [
 
 const desc = (name: string) => PROPERTY_CATALOG.find((d) => d.name === name)!;
 const prop = (c: ControlDef, name: string) => effectiveProp(c.props, name, c.kind, 'report');
-const color = (c: ControlDef, name: string) => colorCss(prop(c, name), (defaultFor(desc(name), c.kind, 'report') ?? 'transparent') as ColorValue | 'transparent');
+const color = (c: ControlDef, name: string, tc: ThemeCtx) => colorCss(prop(c, name), (defaultFor(desc(name), c.kind, 'report') ?? 'transparent') as ColorValue | 'transparent', tc);
 const applies = (c: ControlDef, name: string) => desc(name).appliesTo.includes(c.kind);
 
-function boxStyle(c: ControlDef): CSSProperties {
+function boxStyle(c: ControlDef, tc: ThemeCtx): CSSProperties {
   const st: CSSProperties = {};
-  if (applies(c, 'BackStyle')) st.background = prop(c, 'BackStyle') === 'transparent' ? 'transparent' : color(c, 'BackColor');
+  if (applies(c, 'BackStyle')) st.background = prop(c, 'BackStyle') === 'transparent' ? 'transparent' : color(c, 'BackColor', tc);
   if (applies(c, 'BorderStyle')) {
     const b = String(prop(c, 'BorderStyle'));
     st.border = b === 'transparent' ? '1px dotted var(--bc-border)' /* repère du mode Création, non imprimé */
-      : `${Math.max(1, Number(prop(c, 'BorderWidth')) || 0)}px ${b} ${color(c, 'BorderColor')}`;
+      : `${Math.max(1, Number(prop(c, 'BorderWidth')) || 0)}px ${b} ${color(c, 'BorderColor', tc)}`;
   }
   if (applies(c, 'FontName')) {
-    const f = resolveFont(String(prop(c, 'FontName') || 'Inter'));
+    const name = String(prop(c, 'FontName') || 'Inter');
+    const f = resolveFont(name, tc.theme);
     const generic = EMBEDDED_FONTS.find((x) => x.family === f.family)?.generic ?? 'sans-serif';
-    Object.assign(st, { fontFamily: `"${f.family}", ${generic}`, fontSize: `${Number(prop(c, 'FontSize')) || 10}pt`, color: color(c, 'ForeColor'),
+    Object.assign(st, { fontFamily: themedFamily(name, f, generic) ?? `"${f.family}", ${generic}`, fontSize: `${Number(prop(c, 'FontSize')) || 10}pt`, color: color(c, 'ForeColor', tc),
       fontWeight: prop(c, 'FontWeight') === 'bold' ? 700 : 400, fontStyle: prop(c, 'FontItalic') ? 'italic' : 'normal',
       textDecoration: prop(c, 'FontUnderline') ? 'underline' : 'none' });
   }
@@ -61,20 +63,23 @@ function boxStyle(c: ControlDef): CSSProperties {
 /** L'aperçu d'un contrôle en mode Création ; ne dépend que de `display` (règle de stabilité d'A4 : jamais du document). */
 export function reportRenderControl(display: DisplayContext): DesignerHost['renderControl'] {
   const unbound = i18n.getFixedT(display.lang)('report.unbound');
-  return (c: ControlDef): ReactNode => {
-    const grid = gridlineStyle(c, c);   // a sibling over the cell rectangle, relative to the control's box
-    const body = draw(c);
+  return (c: ControlDef): ReactNode => <Draw c={c} />;
+  /** Un composant : il lit le thème du contexte (toujours le mode clair pour un état) et se redessine quand il change. */
+  function Draw({ c }: { c: ControlDef }): ReactNode {
+    const tc = useDocTheme();
+    const grid = gridlineStyle(c, c, tc);   // a sibling over the cell rectangle, relative to the control's box
+    const body = draw(c, tc);
     return grid ? <>{body}<div aria-hidden data-testid={`grid-${c.name}`} style={grid} /></> : body;
-  };
-  function draw(c: ControlDef): ReactNode {
-    const st = boxStyle(c);
+  }
+  function draw(c: ControlDef, tc: ThemeCtx): ReactNode {
+    const st = boxStyle(c, tc);
     const source = () => controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound;
     switch (c.kind) {
       case 'label': return <div className="rz rz-text" style={st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
       case 'textBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span></div>;
       case 'comboBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
-      case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor') }} />;
-      case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor') }} />;
+      case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
+      case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'image': {
         const pic = prop(c, 'Picture');
         const fit = ({ clip: 'none', stretch: 'fill', zoom: 'contain' } as Record<string, CSSProperties['objectFit']>)[String(prop(c, 'SizeMode'))] ?? 'contain';
@@ -85,7 +90,7 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
       case 'rectangle': return <div className="rz" style={st} />;
       case 'line': {
         const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)
-        const stroke = prop(c, 'BorderStyle') === 'transparent' ? 'var(--bc-border)' : color(c, 'BorderColor');
+        const stroke = prop(c, 'BorderStyle') === 'transparent' ? 'var(--bc-border)' : color(c, 'BorderColor', tc);
         const w = Math.max(1, Number(prop(c, 'BorderWidth')) || 0);
         const dash = ({ dashed: '6 3', dotted: '1 3' } as Record<string, string>)[String(prop(c, 'BorderStyle'))];
         const [y1, y2] = c.height === 0 ? [0.5, 0.5] : slant ? [1, 0] : [0, 1];

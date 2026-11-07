@@ -167,25 +167,25 @@ test('Format tab on a report: Bold, Font Color and Background Color on a text bo
     await page.getByTestId('cmd-bold').click();
     await expect(page.getByTestId('prop-FontWeight')).toHaveValue('bold');
     await page.getByTestId('cmd-fontColor').click();
-    await page.getByTestId('format-popup-fontColor-colors-danger').click();
-    await expect(page.getByTestId('prop-ForeColor')).toHaveText('Danger');
+    await page.getByTestId('colorpicker-theme-accent2').click();
+    await expect(page.getByTestId('prop-ForeColor')).toHaveText('Accent 2');
     // Background Color: a report's text box is transparent by default, so it becomes normal too (one undo step)
     await page.getByTestId('cmd-backColor').click();
-    await page.getByTestId('format-popup-backColor-colors-warning').click();
-    await expect(page.getByTestId('prop-BackColor')).toHaveText('Avertissement');
+    await page.getByTestId('colorpicker-theme-accent3').click();
+    await expect(page.getByTestId('prop-BackColor')).toHaveText('Accent 3');
     await page.keyboard.press('Control+s');
     await expect(page.getByTestId(`doc-tab-report-${REPORT}`)).not.toContainText('•');
     const saved = await page.evaluate((n) => (window as unknown as { basecraft: BasecraftApi }).basecraft.objects.get('report', n), REPORT)
       .then((r) => r.definition as DesignDoc);
     expect(saved.sections.find((x) => x.kind === 'detail')!.controls.find((c) => c.name === 'Montant')!.props)
-      .toMatchObject({ FontWeight: 'bold', ForeColor: 'theme:danger', BackColor: 'theme:warning', BackStyle: 'normal' });
+      .toMatchObject({ FontWeight: 'bold', ForeColor: 'theme:accent2', BackColor: 'theme:accent3', BackStyle: 'normal' });
 
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await pickView(page, 'viewPrintPreview');
     const amount = visiblePages(page).first().locator('.bc-band[data-section="detail"] .bc-text', { hasText: '€' }).first();
     await expect(amount).toHaveCSS('font-weight', '700');
-    await expect(amount).toHaveCSS('color', hexToRgb(resolveColor('theme:danger', 'light')));
-    await expect(amount).toHaveCSS('background-color', hexToRgb(resolveColor('theme:warning', 'light')));
+    await expect(amount).toHaveCSS('color', hexToRgb(resolveColor('theme:accent2', 'light')));
+    await expect(amount).toHaveCSS('background-color', hexToRgb(resolveColor('theme:accent3', 'light')));
   } finally {
     await app.close();
   }

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { createBaseFile, openBaseFile } from './file-format';
-import { copyObject, deleteObject, getObject, listObjects, renameObject, saveObject } from './objects';
+import { clearThemeOverrides, copyObject, deleteObject, getObject, listObjects, renameObject, saveObject } from './objects';
 import { createTable, listTables, NameExistsError, renameTable } from './schema';
 import { alterTable } from './alter';
 import { clients, f, t } from '../../shared/test-fixtures';
@@ -146,5 +146,25 @@ describe('objects', () => {
 
   it('the schema refuses an unknown kind', () => {
     expect(() => db.exec("INSERT INTO bc_objects VALUES ('table', 'x', '{}', NULL, NULL, 'a', 'a')")).toThrow(/CHECK/);
+  });
+});
+
+describe('clearThemeOverrides', () => {
+  const themed = { formatVersion: '1.0', recordSource: null, props: { Theme: { name: 'X' }, Width: 8000 }, sections: [] };
+  const plainDoc = { formatVersion: '1.0', recordSource: null, props: { Width: 5000 }, sections: [] };
+  const mod = (kind: string, name: string) => (db.prepare('SELECT modified FROM bc_objects WHERE kind = ? AND name = ?').get(kind, name) as { modified: string }).modified;
+
+  it('removes props.Theme from the forms only, skips open ones, keeps other props, counts', () => {
+    saveObject(db, 'form', 'Fiche', themed, null);
+    saveObject(db, 'form', 'Ouvert', themed, null);
+    saveObject(db, 'form', 'Simple', plainDoc, null);
+    saveObject(db, 'report', 'Etat', themed, null);
+    const before = mod('form', 'Simple');
+    expect(clearThemeOverrides(db, 'form', ['ouvert'])).toBe(1);
+    expect(getObject(db, 'form', 'Fiche')!.definition).toEqual({ ...themed, props: { Width: 8000 } });
+    expect(getObject(db, 'form', 'Ouvert')!.definition).toEqual(themed);
+    expect(getObject(db, 'form', 'Simple')!.definition).toEqual(plainDoc);
+    expect(mod('form', 'Simple')).toBe(before);
+    expect(getObject(db, 'report', 'Etat')!.definition).toEqual(themed);
   });
 });

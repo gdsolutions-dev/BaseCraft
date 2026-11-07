@@ -8,6 +8,8 @@ import { sameName } from '../../../shared/field-types';
 import { localeInfo } from '../../../shared/locale-format';
 import type { SourceField } from '../../../shared/record-source';
 import { uniqueReportName } from '../../../shared/report/instant';
+import { effectiveTheme } from '../../../shared/design/theme';
+import { DocThemeProvider, useBaseTheme } from '../../design/theme-context';
 import { readReport, type PageSetup } from '../../../shared/report/model';
 import { api } from '../../bridge';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type CanvasProps, type ToolState } from '../../designer/Designer';
@@ -16,7 +18,9 @@ import { designerCommands, selectedCount, type ArrangeMenu } from '../../designe
 import { formatCommands, type FormatPopupId } from '../../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../../designer/layout-commands';
 import { deleteKeyAllowed } from '../../designer/delete-guard';
-import { designerReducer, findControl, initDesigner, sectionBottomLimit, type DesignerAction } from '../../designer/designer-model';
+import { designerReducer, findControl, initDesigner, sectionBottomLimit, setDocProp, type DesignerAction } from '../../designer/designer-model';
+import { registerOpenDesign } from '../../designer/open-designs';
+import { ThemeGallery } from '../../designer/ThemeGallery';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { FieldList } from '../../designer/FieldList';
 import { fromSourceRef } from '../../designer/property-sheet-model';
@@ -96,6 +100,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const [fieldList, setFieldList] = useState(() => takeFieldListRequest(tab.name));
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
+  const [themesOpen, setThemesOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const [pageMenu, setPageMenu] = useState<'margins' | 'pageSize' | null>(null);
   const [grouping, setGrouping] = useState(false);
@@ -115,12 +120,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const sheet = useMemo<PropertySheetContext>(() => ({ display, fields: fieldNames, tables: lists.tables, queries: lists.queries,
     objects: (k) => (k === 'form' ? lists.forms : lists.reports), owner: { tabId: tab.id, name: tab.name, doc: () => live.current.state.doc } }),
     [display, fieldNames, lists, tab.id, tab.name]);
+  const theme = effectiveTheme(state.doc.props, useBaseTheme());   // les états se dessinent toujours en mode clair
   const renderControl = useMemo(() => reportRenderControl(display), [display]);
   const host = useMemo(() => reportHost({ doc: state.doc, sheet, t, renderControl }), [state.doc, sheet, t, renderControl]);
   // les avertissements du moteur, une fois les champs de la source connus
   // (une source illisible : ses champs inconnus ne sont pas répétés champ par champ, le bandeau le dit)
-  const issues = useMemo(() => (described.key === sourceKey ? readReport(state.doc, described.fields).issues : [])
-    .filter((i) => !sourceError || i.code !== 'unknownField'), [state.doc, described, sourceKey, sourceError]);
+  const issues = useMemo(() => (described.key === sourceKey ? readReport(state.doc, described.fields, { theme }).issues : [])
+    .filter((i) => !sourceError || i.code !== 'unknownField'), [state.doc, described, sourceKey, sourceError, theme]);
   // Totaux : une seule zone de texte du Détail liée à un champ de la source est sélectionnée
   const totalTarget = useMemo(() => {
     const sel = state.selection;
@@ -329,11 +335,16 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   // (closing the tab there asks to save the design, as a query does). A tab merely in the
   // background still registers, its close guard above all (else a modified report closed from another tab is lost unasked)
   const behind = !editsDesign(tab.mode);
+  // la galerie des thèmes retrouve ce concepteur pour lui retirer son thème propre
+  useEffect(() => registerOpenDesign({ kind: 'report', name: tab.name, clearTheme: () => {
+    if (live.current.state.doc.props.Theme !== undefined) send({ type: 'edit', apply: (d) => setDocProp(d, 'Theme', undefined) });
+  } }), [tab.name]);
   useEffect(() => {
     if (behind) return registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
     const tools: CommandHandlers = Object.fromEntries(Object.entries(TOOL_COMMANDS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })]));
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
+      themes: () => setThemesOpen(true),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
       ...layoutCommands(() => live.current.state, guarded, undefined, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, guarded, () => clipContext(liveHost.current, t)),
@@ -376,6 +387,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     send({ type: 'insert', section: where.section, controls: boundControlWithLabel(s.doc, f, where, { objectKind: 'report', labelSuffix: t('designer.ctlPrefix.label') }) });
   }, [t]);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const closeThemes = useCallback(() => setThemesOpen(false), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
   const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
   const closePageMenu = useCallback(() => setPageMenu(null), []);
@@ -389,7 +401,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   // ni événement ni macro (useReportFlow), rien n'est écrit tant que l'utilisateur ne modifie rien
   const layout = tab.mode === 'layout';
   const view = reportView(tab.mode);
-  const { flow, busy: flowBusy } = useReportFlow(state.doc, layout && phase === 'ready');
+  const { flow, busy: flowBusy } = useReportFlow(state.doc, layout && phase === 'ready', theme);
   useEffect(() => { if (layout) setTool({ kind: null, locked: false }); }, [layout]);   // l'outil ne passe pas d'un mode à l'autre
   const noticeKey = layoutNoticeKey(flow.notice, !!sourceError);
   const canvas = view.canvas === 'flow'
@@ -406,6 +418,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }
   if (phase === 'loading' || region === null) return <div className="rd" ref={root} />;
   return (
+    <DocThemeProvider docProps={state.doc.props} mode="light">
     <div className="rd" ref={root} data-testid="report-design">
       {sourceError && <div className="rd-banner" role="status" data-testid="report-source-error">{sourceError}</div>}
       {/* en Page : pas de surface de section, donc ni menu contextuel de section ni dépôt de la Liste des champs (Global Constraints) */}
@@ -415,6 +428,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       <ReportIssues issues={issues} />
       {menu && <ArrangePopup menu={menu} state={state} dispatch={guarded} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={guarded} onClose={closeLayoutMenu} readOnly={readOnly} />}
+      {themesOpen && <ThemeGallery kind="report" dispatch={guarded} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={guarded} docKind="report" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       {pageMenu && <PageSetupMenu menu={pageMenu} page={readReport(state.doc, []).page} onClose={closePageMenu}
         onPick={(v) => (v === 'custom' ? void cmds.current.pageSetupDialog() : setup(v))} />}
@@ -428,5 +442,6 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       <input ref={logoInput} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="report-logo-file"
         onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
+    </DocThemeProvider>
   );
 }

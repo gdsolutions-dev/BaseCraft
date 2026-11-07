@@ -1656,7 +1656,33 @@
     "accent": "アクセント",
     "accentContrast": "アクセント上のテキスト",
     "danger": "危険",
-    "warning": "警告"
+    "warning": "警告",
+    "lt1": "背景 1",
+    "dk1": "テキスト 1",
+    "lt2": "背景 2",
+    "dk2": "テキスト 2",
+    "accent1": "アクセント 1",
+    "accent2": "アクセント 2",
+    "accent3": "アクセント 3",
+    "accent4": "アクセント 4",
+    "accent5": "アクセント 5",
+    "accent6": "アクセント 6",
+    "hlink": "ハイパーリンク",
+    "folHlink": "表示済みのハイパーリンク",
+    "lighter": "{{pct}}% 明るく",
+    "darker": "{{pct}}% 暗く"
+  },
+  "colorpicker": {
+    "automatic": "自動",
+    "themeColors": "テーマの色",
+    "standardColors": "標準の色",
+    "recent": "最近使った色",
+    "transparent": "透明",
+    "more": "その他の色…"
+  },
+  "font": {
+    "body": "本文",
+    "headings": "見出し"
   },
   "sourcePicker": {
     "label": "テーブルとクエリ",
@@ -1971,8 +1997,12 @@
       "up": "上へ移動",
       "down": "下へ移動",
       "auto": "自動設定",
-      "hint": "Alt+上 と Alt+下 で、選択したコントロールを移動します。",
-      "empty": "コントロールなし"
+      "hint": "行セレクターをドラッグするか、Alt+上 と Alt+下 を使って、選択したコントロールを移動します。Shift+クリックで複数選択できます。",
+      "empty": "コントロールなし",
+      "rowSelector": "{{name}} を選択",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "タブオーダー…",
+      "pageMenu": "タブページ"
     },
     "headerFooterConfirm": "フォーム ヘッダーとフッターを削除しますか? 含まれているコントロールも削除されます。",
     "calc": {
@@ -2976,5 +3006,13 @@
     "placeholder": "Python のステートメントまたは ?式 を入力",
     "errorAt": "(モジュール {{module}}、{{line}} 行目)",
     "splitter": "イミディエイトウィンドウのサイズを変更"
+  },
+  "themeGallery": {
+    "current": "このデータベース内",
+    "custom": "ユーザー設定",
+    "builtin": "BaseCraft のテーマ",
+    "all": "一致するすべてのオブジェクトにテーマを適用",
+    "object": "このオブジェクトのみにテーマを適用",
+    "default": "このデータベースの既定のテーマに設定"
   }
 }

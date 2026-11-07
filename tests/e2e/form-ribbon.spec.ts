@@ -112,20 +112,21 @@ test('Form ribbon: Controls gallery, Header/Footer, Format tab, Blank Form', asy
     await page.getByTestId('cmd-fontColor').click();
     await expect(page.getByTestId('format-popup-fontColor')).toHaveAttribute('role', 'dialog');   // colour choices, no menu items
     await expect(page.getByTestId('cmd-fontColor')).toHaveAttribute('aria-haspopup', 'dialog');
-    const swatch = (tok: string) => page.getByTestId(`format-popup-fontColor-colors-${tok}`);
-    await expect(swatch('text')).toBeFocused();
-    await page.keyboard.press('ArrowDown'); await expect(swatch('textMuted')).toBeFocused();
-    await page.keyboard.press('ArrowRight'); await expect(swatch('border')).toBeFocused();
-    await page.keyboard.press('ArrowUp'); await expect(swatch('textMuted')).toBeFocused();
-    await page.keyboard.press('End'); await expect(swatch('custom')).toBeFocused();
-    await page.keyboard.press('ArrowDown'); await expect(swatch('background')).toBeFocused();
-    await page.keyboard.press('ArrowLeft'); await expect(swatch('custom')).toBeFocused();
-    await page.keyboard.press('Home'); await expect(swatch('background')).toBeFocused();
+    const swatch = (id: string) => page.getByTestId(`colorpicker-${id}`);
+    await expect(swatch('auto')).toBeFocused();   // the stored ForeColor is a UI token: nothing in the grid is current
+    await page.keyboard.press('ArrowRight'); await expect(swatch('theme-lt1')).toBeFocused();
+    await page.keyboard.press('ArrowRight'); await expect(swatch('theme-dk1')).toBeFocused();
+    await page.keyboard.press('ArrowDown'); await expect(page.locator('[data-testid^="colorpicker-theme-dk1-"]').first()).toBeFocused();   // same column, next row
+    await page.keyboard.press('ArrowUp'); await expect(swatch('theme-dk1')).toBeFocused();
+    await page.keyboard.press('End'); await expect(page.getByTestId('format-popup-fontColor-colors-custom')).toBeFocused();
+    await page.keyboard.press('ArrowRight'); await expect(swatch('auto')).toBeFocused();
+    await page.keyboard.press('ArrowLeft'); await expect(page.getByTestId('format-popup-fontColor-colors-custom')).toBeFocused();
+    await page.keyboard.press('Home'); await expect(swatch('auto')).toBeFocused();
     await page.keyboard.press('Escape'); await expect(page.getByTestId('format-popup-fontColor')).toHaveCount(0);
-    for (const [cmd, token, prop, label] of [['fontColor', 'accent', 'ForeColor', 'Accent'], ['backColor', 'danger', 'BackColor', 'Danger'],
-      ['shapeFill', 'warning', 'BackColor', 'Avertissement'], ['shapeOutline', 'accent', 'BorderColor', 'Accent']]) {
+    for (const [cmd, token, prop, label] of [['fontColor', 'accent1', 'ForeColor', 'Accent 1'], ['backColor', 'accent2', 'BackColor', 'Accent 2'],
+      ['shapeFill', 'accent3', 'BackColor', 'Accent 3'], ['shapeOutline', 'accent1', 'BorderColor', 'Accent 1']]) {
       await page.getByTestId(`cmd-${cmd}`).click();
-      await page.getByTestId(`format-popup-${cmd}-colors-${token}`).click();
+      await page.getByTestId(`colorpicker-theme-${token}`).click();
       await expect(page.getByTestId(`prop-${prop}`), cmd).toHaveText(label);
     }
     await page.getByTestId('cmd-format').click();
@@ -157,8 +158,8 @@ test('Form ribbon: Controls gallery, Header/Footer, Format tab, Blank Form', asy
     await expect(page.getByTestId('doc-tab-form-Fiche')).not.toContainText('•');
     const saved = await getForm(page, 'Fiche');
     expect(saved.sections[1].controls.find((c) => c.name === 'Nom')!.props).toMatchObject({ FontWeight: 'bold', FontItalic: true, FontUnderline: true,
-      TextAlign: 'center', FontName: 'Carlito', FontSize: 14, ForeColor: 'theme:accent', BackColor: 'theme:warning', BackStyle: 'normal',
-      BorderColor: 'theme:accent', Format: 'standard', DecimalPlaces: '3' });
+      TextAlign: 'center', FontName: 'Carlito', FontSize: 14, ForeColor: 'theme:accent1', BackColor: 'theme:accent3', BackStyle: 'normal',
+      BorderColor: 'theme:accent1', Format: 'standard', DecimalPlaces: '3' });
     expect(saved.sections[0]).toMatchObject({ kind: 'formHeader', props: { Visible: true } });
     expect(saved.sections[0].controls.map((c) => [c.kind, c.props.ControlSource ?? c.props.Caption ?? c.props.SizeMode]))
       .toEqual([['label', 'Fiche'], ['textBox', '=Date()'], ['textBox', '=Time()'], ['image', 'zoom']]);

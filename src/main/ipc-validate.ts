@@ -8,6 +8,7 @@ import {
 } from '../shared/api';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_TWIPS, MAX_INDEXES } from '../shared/field-types';
 import { PROPERTY_CATALOG } from '../shared/design/properties';
+import { isTheme, type Theme } from '../shared/design/theme';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
 import type { CellInput, SqlValue } from '../shared/coerce';
@@ -190,6 +191,19 @@ export function relationsLayout(v: unknown): RelationsLayout {
 
 const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile', 'fourDigitYear', 'checkTruncatedNumbers', 'filterListIndexed', 'filterListNonIndexed', 'trackNameAutoCorrect', 'performNameAutoCorrect', 'logNameAutoCorrect'] as const;
 const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', 'filterListMax', ...BOOLEAN_STARTUP_KEYS];
+/** A theme to save as the base default (F2). */
+export function themeArg(v: unknown): Theme {
+  if (!isTheme(v)) throw new TypeError('bc:invalidTheme');
+  return v;
+}
+
+/** Arguments of theme.applyToAll: a theme, a document kind, the names of the open documents. */
+export function themeApplyArgs(t: unknown, kind: unknown, names: unknown): { theme: Theme; kind: 'form' | 'report'; names: string[] } {
+  if (kind !== 'form' && kind !== 'report') throw new TypeError('bc:invalidArgument');
+  if (!Array.isArray(names) || names.length > 1000 || !names.every((n) => typeof n === 'string' && n.length <= 1000)) throw new TypeError('bc:invalidArgument');
+  return { theme: themeArg(t), kind, names: names as string[] };
+}
+
 /** The startup options to save: exactly the twenty-four keys, each of its exact type, and already in the form readStartup reads back
  *  (a title that cleanTitle would change, an icon that is no PNG, a form that is no object name are refused, never repaired). */
 export function startupOptions(v: unknown): StartupOptions {

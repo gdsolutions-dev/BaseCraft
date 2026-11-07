@@ -1667,7 +1667,33 @@
     "accent": "Accent",
     "accentContrast": "Tekst op accent",
     "danger": "Gevaar",
-    "warning": "Waarschuwing"
+    "warning": "Waarschuwing",
+    "lt1": "Achtergrond 1",
+    "dk1": "Tekst 1",
+    "lt2": "Achtergrond 2",
+    "dk2": "Tekst 2",
+    "accent1": "Accent 1",
+    "accent2": "Accent 2",
+    "accent3": "Accent 3",
+    "accent4": "Accent 4",
+    "accent5": "Accent 5",
+    "accent6": "Accent 6",
+    "hlink": "Hyperlink",
+    "folHlink": "Gevolgde hyperlink",
+    "lighter": "Lichter {{pct}}%",
+    "darker": "Donkerder {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatisch",
+    "themeColors": "Themakleuren",
+    "standardColors": "Standaardkleuren",
+    "recent": "Recente kleuren",
+    "transparent": "Transparant",
+    "more": "Meer kleuren…"
+  },
+  "font": {
+    "body": "Hoofdtekst",
+    "headings": "Koppen"
   },
   "sourcePicker": {
     "label": "Tabellen en query's",
@@ -1985,8 +2011,12 @@
       "up": "Omhoog",
       "down": "Omlaag",
       "auto": "Automatische volgorde",
-      "hint": "Met Alt+Omhoog en Alt+Omlaag verplaatst u het geselecteerde besturingselement.",
-      "empty": "Geen besturingselementen"
+      "hint": "Sleep de rijselectors of gebruik Alt+Omhoog en Alt+Omlaag om de geselecteerde besturingselementen te verplaatsen. Met Shift+klik selecteert u er meerdere.",
+      "empty": "Geen besturingselementen",
+      "rowSelector": "{{name}} selecteren",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Tabvolgorde…",
+      "pageMenu": "Tabbladpagina"
     },
     "headerFooterConfirm": "De formulierkop en -voet verwijderen? De besturingselementen die ze bevatten, worden verwijderd.",
     "calc": {
@@ -2999,5 +3029,13 @@
     "placeholder": "Typ een Python-instructie of ?expressie",
     "errorAt": "(Module {{module}}, regel {{line}})",
     "splitter": "Grootte van het Direct-venster wijzigen"
+  },
+  "themeGallery": {
+    "current": "In deze database",
+    "custom": "Aangepast",
+    "builtin": "BaseCraft-thema's",
+    "all": "Thema toepassen op alle overeenkomende objecten",
+    "object": "Thema alleen op dit object toepassen",
+    "default": "Instellen als standaardthema van deze database"
   }
 }

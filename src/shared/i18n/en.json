@@ -1642,7 +1642,33 @@
     "accent": "Accent",
     "accentContrast": "Text on accent",
     "danger": "Danger",
-    "warning": "Warning"
+    "warning": "Warning",
+    "lt1": "Background 1",
+    "dk1": "Text 1",
+    "lt2": "Background 2",
+    "dk2": "Text 2",
+    "accent1": "Accent 1",
+    "accent2": "Accent 2",
+    "accent3": "Accent 3",
+    "accent4": "Accent 4",
+    "accent5": "Accent 5",
+    "accent6": "Accent 6",
+    "hlink": "Hyperlink",
+    "folHlink": "Followed hyperlink",
+    "lighter": "Lighter {{pct}}%",
+    "darker": "Darker {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatic",
+    "themeColors": "Theme Colors",
+    "standardColors": "Standard Colors",
+    "recent": "Recent Colors",
+    "transparent": "Transparent",
+    "more": "More Colors…"
+  },
+  "font": {
+    "body": "Body",
+    "headings": "Headings"
   },
   "sourcePicker": {
     "label": "Tables and queries",
@@ -1959,8 +1985,12 @@
       "up": "Move Up",
       "down": "Move Down",
       "auto": "Auto Order",
-      "hint": "Alt+Up and Alt+Down move the selected control.",
-      "empty": "No controls"
+      "hint": "Drag the row selectors, or use Alt+Up and Alt+Down, to move the selected controls. Shift+click selects several.",
+      "empty": "No controls",
+      "rowSelector": "Select {{name}}",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Tab Order…",
+      "pageMenu": "Tab page"
     },
     "headerFooterConfirm": "Delete the form header and footer? The controls they contain will be deleted.",
     "calc": {
@@ -2877,5 +2907,13 @@
     "placeholder": "Type a Python statement, or ?expression",
     "errorAt": "(Module {{module}}, line {{line}})",
     "splitter": "Resize the Immediate window"
+  },
+  "themeGallery": {
+    "current": "In this database",
+    "custom": "Custom",
+    "builtin": "BaseCraft themes",
+    "all": "Apply Theme to All Matching Objects",
+    "object": "Apply Theme to This Object Only",
+    "default": "Set as Default Theme for This Database"
   }
 }

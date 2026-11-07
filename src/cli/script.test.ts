@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,8 +11,8 @@ import { newBase } from './new-base';
 import { applyScript } from './script';
 import { OP_HANDLERS } from './ops';
 import { run } from './main';
+import { tmp } from './test-tmp';
 
-const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bccli-')), 'x.basecraft');
 const names = (p: string) => { const db = new DatabaseSync(p); registerFunctions(db); const n = listTables(db).map((t) => t.name); db.close(); return n; };
 const id = { name: 'ID', type: 'autoNumber' };
 
@@ -56,6 +56,20 @@ describe('applyScript', () => {
     expect(r).toMatchObject({ ok: false, index: -1, op: 'lock' });
     expect(fs.readFileSync(p).equals(before)).toBe(true);
     if (l.status === 'acquired') l.lock.release();
+  });
+  it('refuses to run when the lock file cannot be created (read-only folder)', () => {
+    const p = tmp(); newBase(p, '0.3.1');
+    const before = fs.readFileSync(p);
+    const real = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(((f: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+      if (String(f).endsWith('.lock')) throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      return (real as (...a: unknown[]) => void)(f, ...rest);
+    }) as typeof fs.writeFileSync);
+    try {
+      const r = applyScript(p, [{ op: 'table.create', name: 'A', fields: [id] }], CANON);
+      expect(r).toMatchObject({ ok: false, index: -1, op: 'lock', message: expect.stringContaining('EACCES') });
+    } finally { spy.mockRestore(); }
+    expect(fs.readFileSync(p).equals(before)).toBe(true);
   });
   it('overwrites a stale temp file', () => {
     const p = tmp(); newBase(p, '0.3.1');

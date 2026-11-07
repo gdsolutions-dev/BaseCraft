@@ -11,7 +11,9 @@ import { toCanonical, toDisplay, type DisplayContext } from '../../shared/expr/l
 import { withUserFunctions } from '../../shared/expr/user-functions';
 import { parsePythonCall, pythonCallFunctions } from '../../shared/python/call-text';
 import { columnWidthsText, isValidObjectName, parseColumnWidths, sameName } from '../../shared/field-types';
-import { resolveFont } from '../../shared/fonts';
+import type { TFunction } from 'i18next';
+import type { Theme } from '../../shared/design/theme';
+import { resolveFont, resolveThemeFont } from '../../shared/fonts';
 import { reportWidth } from '../../shared/report/model';
 import type { LocaleInfo } from '../../shared/locale-format';
 import type { RecordSourceRef } from '../../shared/record-source';
@@ -162,5 +164,15 @@ export function columnWidthsToDisplay(stored: string, info: LocaleInfo): string 
 export function columnWidthsToStored(text: string, _info: LocaleInfo): string | null {
   return parseColumnWidths(text)?.join(';') ?? null;
 }
+
+/** Police affichée : « Inter (Détail) » / « Inter (En-têtes) » pour une police du thème, un nom explicite tel quel. */
+export const fontLabel = (value: string, theme: Theme, t: TFunction): string =>
+  value === '(Body)' ? `${resolveThemeFont(value, theme)} (${t('font.body')})` : value === '(Headings)' ? `${resolveThemeFont(value, theme)} (${t('font.headings')})` : value;
+
+/** Les deux polices du thème, en tête des listes (comme Access) : leur libellé affiché et la référence enregistrée. */
+export const themeFontChoices = (theme: Theme, t: TFunction): { label: string; ref: '(Headings)' | '(Body)' }[] =>
+  (['(Headings)', '(Body)'] as const).map((ref) => ({ label: fontLabel(ref, theme, t), ref }));
+/** Un libellé choisi dans la liste devient la référence du thème ; tout autre texte reste tel quel. */
+export const fontFromLabel = (s: string, theme: Theme, t: TFunction): string => themeFontChoices(theme, t).find((c) => c.label === s)?.ref ?? s;
 
 export const fontWarning = (name: string): string | null => (name.trim() && !resolveFont(name.trim()).portable ? 'sheet.fontNotPortable' : null);

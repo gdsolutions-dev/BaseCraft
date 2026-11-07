@@ -4,6 +4,8 @@ import { DEFAULT_PAGE_SETUP, pageGeometry, readReport, reportWidth, type GroupLe
 import { readProp } from './props';
 import { cellItemName } from '../design/layout';
 import { setUserFunctions } from '../expr/user-functions';
+import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../design/theme';
+import { FACTURES_REPORT } from './fixtures/factures';
 import { LIGHT_THEME_HEX, resolveColor, type ColorValue } from '../design/colors';
 import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyTarget } from '../design/properties';
@@ -33,7 +35,7 @@ describe('readReport (brief)', () => {
   it('orders sections and reads catalog defaults', () => {
     const s = readReport(doc({ grouping: [g('Client')], sections: [sec('detail'), sec('groupFooter', 0), sec('reportHeader'), sec('groupHeader', 0)] }), fields);
     expect(s.reportHeader?.kind).toBe('reportHeader'); expect(s.groupHeaders[0]?.keepTogether).toBe(def('KeepTogether', 'groupHeader')); expect(s.detail?.keepTogether).toBe(def('KeepTogether', 'detail'));
-    expect(s.detail?.controls[0]!.font).toEqual({ name: def('FontName', 'textBox'), size: def('FontSize', 'textBox'), bold: false, italic: false, underline: false });
+    expect(s.detail?.controls[0]!.font).toEqual({ name: DEFAULT_THEME.fonts.minor, size: def('FontSize', 'textBox'), bold: false, italic: false, underline: false });
     expect(s.page).toEqual(DEFAULT_PAGE_SETUP); expect(s.issues).toEqual([]);
   });
   it('expressions, aggregates, page refs', () => {
@@ -272,5 +274,27 @@ describe('readReport: empty layout cells (L5)', () => {
   it('pre-L5: no layouts or only bare cells give the same spec', () => {
     const plain = readReport(doc({ sections: [sec('detail')] }), fields);
     expect(readReport(withCells([bare, { row: 0, col: 0, control: null }, { row: 0, col: 1, control: null }, { row: 1, col: 1, control: null }]), fields)).toEqual(plain);
+  });
+});
+
+describe('readReport with a theme (F2)', () => {
+  const ocean = BUILTIN_THEMES.find((t) => t.name === 'Océan')!;
+  const themed = doc({ sections: [sec('detail', undefined, [tb('T', '[Client]', { ForeColor: 'theme:accent1@-25', FontName: '(Headings)' })])] });
+  const first = (r: ReturnType<typeof readReport>) => r.detail!.controls[0]!;
+  it('theme font and light shade; the dark palette is never used', () => {
+    const c = first(readReport(themed, fields, { theme: ocean }));
+    expect(c.font.name).toBe(ocean.fonts.major);
+    expect(c.color).toBe(shade(ocean.colors.light.accent1, 0.25));
+  });
+  it('without a theme: the default theme, the fixture is unchanged', () => {
+    expect(first(readReport(themed, fields)).font.name).toBe(DEFAULT_THEME.fonts.major);
+    expect(readReport(FACTURES_REPORT, [])).toEqual(readReport(FACTURES_REPORT, [], { theme: DEFAULT_THEME }));
+    expect(JSON.stringify(readReport(FACTURES_REPORT, []))).not.toContain('(Body)');
+  });
+  it('a non-embedded theme font is reported and kept by name', () => {
+    const odd = { ...ocean, fonts: { name: 'x', major: 'Comic Sans MS', minor: 'Comic Sans MS' } };
+    const r = readReport(themed, fields, { theme: odd });
+    expect(first(r).font.name).toBe('Comic Sans MS');
+    expect(r.issues.map((i) => i.code)).toContain('fontNotPortable');
   });
 });

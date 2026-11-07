@@ -2,15 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { CliUsageError } from './errors';
 import { parseScript, applyScript } from './script';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { CANON } from '../shared/coerce';
 import { registerFunctions } from '../main/db/file-format';
 import { listRelations } from '../main/db/relations';
 import { newBase } from './new-base';
+import { tmp } from './test-tmp';
 
-const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bccli-')), 'x.basecraft');
 
 describe('parseScript', () => {
   it('parses an array of ops', () => {
@@ -24,6 +22,20 @@ describe('parseScript', () => {
   });
   it('rejects invalid JSON with the position of the error', () => {
     expect(() => parseScript('[')).toThrow(/JSON/);
+  });
+});
+
+describe('table.create', () => {
+  it('refuses a name a dangling foreign key still references, naming the referencing table', () => {
+    const p = tmp(); newBase(p, '0.3.1');
+    const raw = new DatabaseSync(p);
+    raw.exec('CREATE TABLE "Ghost" ("id" INTEGER PRIMARY KEY); CREATE TABLE "Orph" ("g" INTEGER REFERENCES "Ghost" ("id"))');
+    raw.exec('PRAGMA foreign_keys=OFF; DROP TABLE "Ghost"');
+    raw.close();
+    const before = fs.readFileSync(p);
+    const r = applyScript(p, [{ op: 'table.create', name: 'Ghost', fields: [{ name: 'ID', type: 'autoNumber' }] }], CANON);
+    expect(r).toMatchObject({ ok: false, index: 0, op: 'table.create', message: expect.stringContaining('"Orph"') });
+    expect(fs.readFileSync(p).equals(before)).toBe(true);
   });
 });
 

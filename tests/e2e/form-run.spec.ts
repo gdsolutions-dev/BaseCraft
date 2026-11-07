@@ -643,3 +643,82 @@ test('a formatted box (Currency) entered by Tab has its whole edit text selected
     expect(start).toBe(end);
   }, 'Commandes');
 });
+
+/** Drags the row selector of `from` in the Tab Order dialog above the row `to` (already selected: a drag on a selected row moves its block). */
+async function dragAbove(page: Page, from: string, to: string) {
+  const a = (await page.getByTestId(`taborder-sel-${from}`).boundingBox())!;
+  const b = (await page.getByTestId(`taborder-item-${to}`).boundingBox())!;
+  const x = a.x + a.width / 2, y0 = a.y + a.height / 2, y1 = b.y + 1;
+  await page.mouse.move(x, y0);
+  await page.mouse.down();
+  await page.mouse.move(x, (y0 + y1) / 2, { steps: 4 });
+  await page.mouse.move(x, y1, { steps: 4 });
+  await page.mouse.up();
+}
+
+test('F1 Tab Order: a block dragged to the top in Design view, then Tab in Form view follows it; a page order changes that page only', async () => {
+  const letters = (names: string[], top = 100): ControlDef[] => names.map((n, i) => box('textBox', n, top + i * 500, { TabIndex: i }));
+  const plain: DesignDoc = { ...formFor('Clients', []), sections: [
+    { kind: 'formHeader', height: 0, props: { Visible: false }, controls: [] },
+    { kind: 'detail', height: 2268, props: {}, controls: letters(['A', 'B', 'C', 'D']) },
+    { kind: 'formFooter', height: 0, props: { Visible: false }, controls: [] }] };
+  const paged: DesignDoc = { ...plain, sections: [plain.sections[0], { kind: 'detail', height: 3402, props: {}, controls: [
+    box('textBox', 'Nom', 100, { TabIndex: 0 }),
+    { kind: 'tabControl', name: 'Onglets', left: 4300, top: 100, width: 3402, height: 3000, props: { Pages: ['Un', 'Deux'], TabIndex: 1 }, children: [
+      box('textBox', 'P0a', 500, { TabIndex: 0 }, 4400), box('textBox', 'P0b', 1000, { TabIndex: 1 }, 4400),
+      box('textBox', 'P1a', 500, { TabIndex: 0, PageIndex: 1 }, 4400), box('textBox', 'P1b', 1000, { TabIndex: 1, PageIndex: 1 }, 4400),
+      box('textBox', 'P1c', 1500, { TabIndex: 2, PageIndex: 1 }, 4400)] },
+    box('textBox', 'Fin', 2800, { TabIndex: 2 })] }, plain.sections[2]] };
+  const base = seedBase('f1-recette', (db) => { createTable(db, table); seedForm(db, 'Plain', plain); seedForm(db, 'Paged', paged); });
+  const { app, page } = await launchApp({ args: [base], env: FR });
+  try {
+    const { ctl } = locators(page);
+    const tabs = async (first: string, expected: string[]) => {
+      await ctl(first).click();
+      for (const n of expected) { await page.keyboard.press('Tab'); await expect(ctl(n)).toBeFocused(); }
+    };
+    const designView = async (form: string) => {
+      await page.getByTestId(`nav-item-form-${form}`).dblclick();
+      await pickView(page, 'viewDesign');
+      await expect(page.getByTestId('form-design').filter({ visible: true })).toBeVisible();
+    };
+    const saveAndRun = async (form: string, first: string) => {
+      await page.getByTestId(`ctl-${first}`).click();
+      await page.keyboard.press('Control+s');
+      await expect(page.getByTestId(`doc-tab-form-${form}`)).not.toContainText('•');
+      await page.keyboard.press('F5');
+      await expect(page.getByTestId('form-run').filter({ visible: true })).toBeVisible();
+    };
+
+    // the block C, D dragged to the top (C, then Shift+click D select it)
+    await designView('Plain');
+    await page.getByTestId('ribbon-tab-formDesign').click();
+    await page.getByTestId('cmd-tabOrder').click();
+    await page.getByTestId('taborder-item-C').click();
+    await page.getByTestId('taborder-item-D').click({ modifiers: ['Shift'] });
+    await dragAbove(page, 'C', 'A');
+    await expect(page.getByTestId('taborder-list-detail').locator('[role="option"]')).toHaveText(['C', 'D', 'A', 'B']);
+    await page.getByTestId('taborder-ok').click();
+    await saveAndRun('Plain', 'A');
+    await tabs('C', ['D', 'A', 'B']);
+
+    // a page's order: P1c to the top of page 2 only
+    await designView('Paged');
+    await page.getByTestId('tabpage-Onglets-1').click({ button: 'right' });
+    await page.getByTestId('page-menu-taborder').click();
+    await expect(page.getByTestId('taborder-list-page').locator('[role="option"]')).toHaveText(['P1a', 'P1b', 'P1c']);
+    await page.getByTestId('taborder-sel-P1c').click();
+    await dragAbove(page, 'P1c', 'P1a');
+    await page.getByTestId('taborder-ok').click();
+    await saveAndRun('Paged', 'Nom');
+    const run = page.getByTestId('form-run').filter({ visible: true });
+    await ctl('Nom').click();
+    await page.keyboard.press('Tab');
+    await expect(run.getByRole('tab', { name: 'Un' })).toBeFocused();
+    for (const n of ['P0a', 'P0b', 'Fin']) { await page.keyboard.press('Tab'); await expect(ctl(n)).toBeFocused(); }   // page 1 and the section order unchanged
+    await run.getByRole('tab', { name: 'Deux' }).click();
+    for (const n of ['P1c', 'P1a', 'P1b', 'Fin']) { await page.keyboard.press('Tab'); await expect(ctl(n)).toBeFocused(); }
+  } finally {
+    await app.close();
+  }
+});

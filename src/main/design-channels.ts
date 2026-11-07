@@ -6,7 +6,7 @@ import { CH } from '../shared/api';
  *  call from the page rejects. Data entry is not design: rows, action queries, source saves, exports, printing, Enable Content,
  *  open and close, and every read stay. */
 export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
-  CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup,
+  CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme,
   CH.tablesSave, CH.tablesRename, CH.tablesDrop, CH.tablesCopy, CH.tablesAppend, CH.tablesSaveColumnWidths,
   CH.relationsSave, CH.relationsDelete, CH.relationsSaveLayout,
   CH.importPick, CH.importPreview, CH.importRun, CH.importExcelPick, CH.importExcelPreview, CH.importExcelRun, CH.importSaveSpec, CH.importDeleteSpec,

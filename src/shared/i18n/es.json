@@ -1678,7 +1678,33 @@
     "accent": "Acento",
     "accentContrast": "Texto sobre el acento",
     "danger": "Peligro",
-    "warning": "Advertencia"
+    "warning": "Advertencia",
+    "lt1": "Fondo 1",
+    "dk1": "Texto 1",
+    "lt2": "Fondo 2",
+    "dk2": "Texto 2",
+    "accent1": "Énfasis 1",
+    "accent2": "Énfasis 2",
+    "accent3": "Énfasis 3",
+    "accent4": "Énfasis 4",
+    "accent5": "Énfasis 5",
+    "accent6": "Énfasis 6",
+    "hlink": "Hipervínculo",
+    "folHlink": "Hipervínculo visitado",
+    "lighter": "Más claro {{pct}}%",
+    "darker": "Más oscuro {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automático",
+    "themeColors": "Colores del tema",
+    "standardColors": "Colores estándar",
+    "recent": "Colores recientes",
+    "transparent": "Transparente",
+    "more": "Más colores…"
+  },
+  "font": {
+    "body": "Cuerpo",
+    "headings": "Encabezados"
   },
   "sourcePicker": {
     "label": "Tablas y consultas",
@@ -1998,8 +2024,12 @@
       "up": "Subir",
       "down": "Bajar",
       "auto": "Orden automático",
-      "hint": "Alt+Arriba y Alt+Abajo mueven el control seleccionado.",
-      "empty": "Sin controles"
+      "hint": "Arrastre los selectores de fila, o use Alt+Arriba y Alt+Abajo, para mover los controles seleccionados. Mayús+clic selecciona varios.",
+      "empty": "Sin controles",
+      "rowSelector": "Seleccionar {{name}}",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Orden de tabulación…",
+      "pageMenu": "Página de pestaña"
     },
     "headerFooterConfirm": "¿Desea eliminar el encabezado y el pie del formulario? Se eliminarán los controles que contienen.",
     "calc": {
@@ -3022,5 +3052,13 @@
     "placeholder": "Escriba una instrucción de Python o ?expresión",
     "errorAt": "(Módulo {{module}}, línea {{line}})",
     "splitter": "Cambiar el tamaño de la ventana Inmediato"
+  },
+  "themeGallery": {
+    "current": "En esta base de datos",
+    "custom": "Personalizado",
+    "builtin": "Temas de BaseCraft",
+    "all": "Aplicar tema a todos los objetos coincidentes",
+    "object": "Aplicar tema solo a este objeto",
+    "default": "Establecer como tema predeterminado de esta base de datos"
   }
 }

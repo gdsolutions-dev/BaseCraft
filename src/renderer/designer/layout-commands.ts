@@ -66,7 +66,7 @@ export const paddingAction = (s: DesignerState, preset: keyof typeof PADDING_PRE
   writeAll(s, Object.fromEntries(SIDES.map((x) => [`${x}Padding`, PADDING_PRESETS[preset]])));
 export const anchorAction = (s: DesignerState, h: 'left' | 'right' | 'both', v: 'top' | 'bottom' | 'both'): DesignerAction | null =>
   writeAll(s, { HorizontalAnchor: h, VerticalAnchor: v });
-export const gridlineColorAction = (s: DesignerState, color: string): DesignerAction | null => writeAll(s, { GridlineColor: color });
+export const gridlineColorAction = (s: DesignerState, color: string | undefined): DesignerAction | null => writeAll(s, { GridlineColor: color });
 
 /** Width and Style only touch the sides that are not transparent. */
 function visibleSides(s: DesignerState, name: 'Width' | 'Style', value: unknown): DesignerAction | null {

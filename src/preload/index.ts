@@ -65,6 +65,16 @@ const api: BasecraftApi = {
     startup: () => ipcRenderer.invoke(CH.baseStartup),
     saveStartup: (o) => ipcRenderer.invoke(CH.baseSaveStartup, o),
   },
+  theme: {
+    get: () => ipcRenderer.invoke(CH.baseTheme),
+    set: (t) => ipcRenderer.invoke(CH.baseSaveTheme, t),
+    applyToAll: (t, kind, openNames) => ipcRenderer.invoke(CH.baseApplyTheme, t, kind, openNames),
+    onChange: (cb) => {
+      const listener = () => cb();
+      ipcRenderer.on(CH.baseThemeChanged, listener);
+      return () => { ipcRenderer.removeListener(CH.baseThemeChanged, listener); };
+    },
+  },
   tables: {
     list: () => ipcRenderer.invoke(CH.tablesList),
     design: (name) => ipcRenderer.invoke(CH.tablesDesign, name),

@@ -16,7 +16,8 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import { MAX_TWIPS } from '../designer/units';
 import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
-import { applies, color, controlLook, gridlineStyle, prop } from './run-model';
+import { applies, color, controlLook, gridlineStyle, prop, type ThemeCtx } from './run-model';
+import { useDocTheme } from '../design/doc-theme';
 
 /** Dans l'ordre de la maquette ; libellés : l'entrée de la galerie Contrôles du ruban. */
 export const FORM_TOOLS: ToolDef[] = [
@@ -83,8 +84,8 @@ export const formSectionMenu: NonNullable<DesignerHost['sectionMenu']> = (index,
 
 // ---- aperçu
 
-function boxStyle(c: ControlDef): CSSProperties {
-  const st = controlLook(c);   // as in Form view
+function boxStyle(c: ControlDef, tc: ThemeCtx): CSSProperties {
+  const st = controlLook(c, tc);   // as in Form view
   if (applies(c, 'TextAlign')) {
     const a = String(prop(c, 'TextAlign'));
     st.justifyContent = a === 'center' ? 'center' : a === 'right' ? 'flex-end' : 'flex-start';
@@ -94,13 +95,19 @@ function boxStyle(c: ControlDef): CSSProperties {
 
 /** L'aperçu d'un contrôle ; `live` (mode Page) : le texte de l'enregistrement courant au lieu de la source, l'état de la case. */
 export function preview(c: ControlDef, display: PropertySheetContext['display'], unbound: string, live?: { text?: string; checked?: boolean }): ReactNode {
-  const grid = gridlineStyle(c, c);   // relative to the control's own box (the canvas wrapper), a sibling of the preview
-  const body = previewBody(c, display, unbound, live);
+  return <Preview c={c} display={display} unbound={unbound} live={live} />;
+}
+
+/** Un composant (pas un appel) : il lit le thème effectif et le mode du contexte, et se redessine quand ils changent. */
+function Preview({ c, display, unbound, live }: { c: ControlDef; display: PropertySheetContext['display']; unbound: string; live?: { text?: string; checked?: boolean } }) {
+  const tc = useDocTheme();
+  const grid = gridlineStyle(c, c, tc);   // relative to the control's own box (the canvas wrapper), a sibling of the preview
+  const body = previewBody(c, display, unbound, tc, live);
   return grid ? <>{body}<div aria-hidden data-testid={`grid-${c.name}`} style={grid} /></> : body;
 }
 
-function previewBody(c: ControlDef, display: PropertySheetContext['display'], unbound: string, live?: { text?: string; checked?: boolean }): ReactNode {
-  const st = boxStyle(c);
+function previewBody(c: ControlDef, display: PropertySheetContext['display'], unbound: string, tc: ThemeCtx, live?: { text?: string; checked?: boolean }): ReactNode {
+  const st = boxStyle(c, tc);
   const source = () => live?.text ?? (controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound);
   const on = live?.checked ? ' is-on' : '';
   switch (c.kind) {
@@ -108,7 +115,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'textBox': return <div className="fz fz-text" style={st}><span className="fz-clip">{source()}</span></div>;
     case 'comboBox': return <div className="fz fz-text fz-combo" style={st}><span className="fz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
     case 'listBox': return <div className="fz fz-list" style={st}><span className="fz-clip">{source()}</span></div>;
-    case 'checkBox': return <div className={`fz fz-check${on}`} style={{ borderColor: color(c, 'BorderColor') }} />;
+    case 'checkBox': return <div className={`fz fz-check${on}`} style={{ borderColor: color(c, 'BorderColor', tc) }} />;
     case 'optionButton': return <div className={`fz fz-check fz-radio${on}`} />;
     case 'optionGroup': return <fieldset className="fz fz-group" style={st}><legend>{String(prop(c, 'Caption') ?? '')}</legend></fieldset>;
     case 'commandButton': return <div className="fz fz-text fz-button" style={st}>{String(prop(c, 'Caption') ?? '')}</div>;
@@ -123,7 +130,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'rectangle': return <div className="fz" style={st} />;
     case 'line': {
       const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)
-      const stroke = prop(c, 'BorderStyle') === 'transparent' ? 'transparent' : color(c, 'BorderColor');
+      const stroke = prop(c, 'BorderStyle') === 'transparent' ? 'transparent' : color(c, 'BorderColor', tc);
       const w = Math.max(1, Number(prop(c, 'BorderWidth')) || 0);
       const dash = ({ dashed: '6 3', dotted: '1 3' } as Record<string, string>)[String(prop(c, 'BorderStyle'))];
       const [y1, y2] = c.height === 0 ? [0.5, 0.5] : slant ? [1, 0] : [0, 1];
@@ -136,14 +143,14 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'tabControl': {
       const v = prop(c, 'Pages');
       const pages = Array.isArray(v) ? v.map(String) : [];
-      return <div className="fz fz-tabs" style={st}><div className="fz-tabstrip">{pages.map((x, i) => <span key={i} className={i === 0 ? 'is-on' : ''}>{x}</span>)}</div></div>;
+      return <div className="fz fz-tabs" style={st}><div className="fz-tabstrip">{pages.map((x, i) => <span key={i} className={i === 0 ? 'is-on' : ''} data-tab-page={i} data-testid={`tabpage-${c.name}-${i}`}>{x}</span>)}</div></div>;
     }
   }
 }
 
 /** L'hôte des formulaires. `renderControl` ne dépend que de l'affichage (langue, région) et du texte « Indépendant » : de nouveaux
  *  champs ou de nouvelles listes dans la feuille ne redessinent aucun contrôle (CanvasControl compare la fonction). */
-export function useFormHost(sheet: PropertySheetContext): { host: DesignerHost; labels: FormLabels } {
+export function useFormHost(sheet: PropertySheetContext, onPageTabOrder?: (control: string, page: number) => void): { host: DesignerHost; labels: FormLabels } {
   const { t } = useTranslation();
   const unbound = t('form.unbound');
   const { display } = sheet;
@@ -156,7 +163,8 @@ export function useFormHost(sheet: PropertySheetContext): { host: DesignerHost; 
     renderControl,
     newControls: (kind, rect, section, doc) => newFormControls(kind, rect, section, doc, labels),
     sectionMenu: formSectionMenu,
+    ...(onPageTabOrder && { pageMenu: (control: string, page: number) => [{ id: 'taborder', labelKey: 'form.tabOrder.pageItem', run: () => onPageTabOrder(control, page) }] }),
     sheet,
-  }), [t, sheet, renderControl, labels]);
+  }), [t, sheet, renderControl, labels, onPageTabOrder]);
   return { host, labels };
 }

@@ -21,7 +21,7 @@ import { planAutoCorrect, propertyTargets, type AutoCorrectPlan, type AutoCorrec
 import { saveTableChanges } from '../shared/autocorrect/sql';
 import { compactBase, vacuumInto, type CopyDeps } from './db/copy-file';
 import { backupCopy, BaseFileError, createBaseFile, openBaseFile } from './db/file-format';
-import { copyObject, deleteObject, getObject, listObjects, renameObject, saveObject, setObjectDescription } from './db/objects';
+import { clearThemeOverrides, copyObject, deleteObject, getObject, listObjects, renameObject, saveObject, setObjectDescription } from './db/objects';
 import { acquireLock, peekLock, takeOverStaleLock, type HeldLock, type LockDeps, type LockInfo } from './db/lock';
 import { detectLocationRisk, type LocationRisk, type RiskProbe } from './db/location-risk';
 import { acquireExclusive, dataFileInUse, joinPresence, othersPresent, presenceEntry, sharedRefusal, type ExclusiveResult, type PresenceDeps } from './db/presence';
@@ -36,6 +36,8 @@ import { copyRows, deleteRows, insertRow, updateRow, type RowWriteResult } from 
 import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
+import { baseTheme, saveBaseTheme } from './db/theme';
+import type { Theme } from '../shared/design/theme';
 import { peekStartup, saveStartupOptions, startupOptions } from './db/startup';
 import type { StartupOptions } from '../shared/startup';
 import { writeTextExport } from './exchange/export-text';
@@ -1336,6 +1338,15 @@ export class Session {
    *  the plain-base path (exclusive lock, reconcile) beside them. */
   saveStartup(o: StartupOptions): void {
     saveStartupOptions(o.dataFile !== startupOptions(this.conn()).dataFile ? this.structureDb() : this.writeDb(), o);
+  }
+  /** Default theme of the base (F2): read-only allowed; an invalid stored value reads as the built-in theme. */
+  baseTheme(): Theme { return baseTheme(this.conn()); }
+  saveBaseTheme(t: Theme): void { saveBaseTheme(this.writeDb(), t); }
+  /** Theme "all matching objects": the base default and the removal of every saved override of `kind`, in one transaction
+   *  (the open documents in `skip` get the removal as an edit of their own). */
+  applyThemeToAll(t: Theme, kind: 'form' | 'report', skip: string[]): { cleared: number } {
+    const db = this.writeDb();
+    return inTransaction(db, () => { saveBaseTheme(db, t); return { cleared: clearThemeOverrides(db, kind, skip) }; });
   }
   activeContent(): ActiveContent { return activeContent(this.conn()); }
   dbUuid(): string {

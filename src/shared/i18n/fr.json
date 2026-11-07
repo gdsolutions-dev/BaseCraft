@@ -1642,7 +1642,33 @@
     "accent": "Accent",
     "accentContrast": "Texte sur accent",
     "danger": "Danger",
-    "warning": "Avertissement"
+    "warning": "Avertissement",
+    "lt1": "Arrière-plan 1",
+    "dk1": "Texte 1",
+    "lt2": "Arrière-plan 2",
+    "dk2": "Texte 2",
+    "accent1": "Accent 1",
+    "accent2": "Accent 2",
+    "accent3": "Accent 3",
+    "accent4": "Accent 4",
+    "accent5": "Accent 5",
+    "accent6": "Accent 6",
+    "hlink": "Lien hypertexte",
+    "folHlink": "Lien hypertexte visité",
+    "lighter": "Plus clair {{pct}}%",
+    "darker": "Plus sombre {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatique",
+    "themeColors": "Couleurs du thème",
+    "standardColors": "Couleurs standard",
+    "recent": "Couleurs récentes",
+    "transparent": "Transparent",
+    "more": "Autres couleurs…"
+  },
+  "font": {
+    "body": "Détail",
+    "headings": "En-têtes"
   },
   "sourcePicker": {
     "label": "Tables et requêtes",
@@ -1959,8 +1985,12 @@
       "up": "Monter",
       "down": "Descendre",
       "auto": "Ordre automatique",
-      "hint": "Alt+Haut et Alt+Bas déplacent le contrôle choisi.",
-      "empty": "Aucun contrôle"
+      "hint": "Faites glisser les sélecteurs de lignes, ou utilisez Alt+Haut et Alt+Bas, pour déplacer les contrôles choisis. Maj+clic en choisit plusieurs.",
+      "empty": "Aucun contrôle",
+      "rowSelector": "Sélectionner {{name}}",
+      "pageLabel": "{{control}} : {{page}}",
+      "pageItem": "Ordre de tabulation…",
+      "pageMenu": "Page d'onglets"
     },
     "headerFooterConfirm": "Supprimer l'en-tête et le pied de formulaire ? Les contrôles qu'ils contiennent seront supprimés.",
     "calc": {
@@ -2877,5 +2907,13 @@
     "placeholder": "Tapez une instruction Python, ou ?expression",
     "errorAt": "(Module {{module}}, ligne {{line}})",
     "splitter": "Redimensionner la fenêtre Exécution"
+  },
+  "themeGallery": {
+    "current": "Dans cette base de données",
+    "custom": "Personnalisé",
+    "builtin": "Thèmes de BaseCraft",
+    "all": "Appliquer le thème à tous les objets correspondants",
+    "object": "Appliquer le thème à cet objet uniquement",
+    "default": "Définir ce thème comme valeur par défaut de la base de données"
   }
 }

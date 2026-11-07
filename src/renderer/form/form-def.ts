@@ -1,15 +1,16 @@
 // Définition d'un formulaire (module pur) : lecture tolérante d'une définition stockée, formulaire vierge, contrôles d'un champ,
 // ordre de tabulation, en-tête et pied de formulaire. Aucune clé inconnue n'est retirée : on étale toujours l'objet lu.
-import type { ControlDef, ControlKind, DesignDoc, SectionDef, SectionKind } from '../../shared/design/model';
-import { createLayout, membersOf } from '../../shared/design/layout-edit';
-import { cmToTwips, validateDesignDoc } from '../../shared/design/model';
+import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../../shared/design/model';
+import { validateDesignDoc } from '../../shared/design/model';
 import { sameName } from '../../shared/field-types';
-import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
-import { sectionBottomLimit } from '../designer/designer-model';
-import { boundControlWithLabel, TAB_KINDS } from '../designer/field-controls';
+import type { RecordSourceRef } from '../../shared/record-source';
+import { findControl, sectionBottomLimit, updateControl } from '../designer/designer-model';
+import { TAB_KINDS } from '../designer/field-controls';
+import { autoForm, autoWidth, emptyFormDoc, fieldControls, hidden, withTabOrder, type FormLabels } from '../../shared/design/auto-form';
 import { MAX_TWIPS } from '../designer/units';
 
 export { controlKindFor, nextTabIndex } from '../designer/field-controls';
+export { autoForm, autoWidth, emptyFormDoc, fieldControls, withTabOrder, type FormLabels };
 
 export const FORM_SECTIONS: SectionKind[] = ['formHeader', 'detail', 'formFooter'];
 const HEADER_HEIGHT = 567;   // 1 cm, comme Access quand il affiche l'en-tête et le pied
@@ -20,15 +21,11 @@ export class FormDefError extends Error {
   constructor(readonly code: 'invalidDefinition') { super(code); }
 }
 
-/** Préfixe des noms de contrôles (designer.ctlPrefix.<genre>) et nom d'une page d'onglet (form.tabPage), traduits par la vue. */
-export interface FormLabels { prefix(kind: ControlKind): string; tabPage(n: number): string }
 /** Les FormLabels de la langue de l'interface (`t` d'i18next). */
 export const formLabels = (t: (key: string, opts?: Record<string, unknown>) => string): FormLabels =>
   ({ prefix: (k) => t(`designer.ctlPrefix.${k}`), tabPage: (n) => t('form.tabPage', { n }) });
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-const hidden = (kind: SectionKind): SectionDef => ({ kind, height: 0, props: { Visible: false }, controls: [] });
-
 /** Une hauteur de section illisible ou hors limites est réparée : entier de twips dans [0, MAX_TWIPS], 0 si ce n'est pas un nombre. */
 const twipsIn = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(0, Math.round(v)), MAX_TWIPS) + 0 : 0);
 
@@ -73,45 +70,57 @@ export function parseFormDoc(def: unknown): { doc: DesignDoc; dropped: number; b
  *  n'a rien de modifié. La vue retient le jeton que produit son propre enregistrement (objectSaved l'augmente) ; un renommage le garde. */
 export const shouldReload = (prev: { token: number } | null, token: number, dirty: boolean): boolean => !prev || (prev.token !== token && !dirty);
 
-/** Un formulaire vierge : Détail de 4 cm, en-tête et pied masqués à 0, largeur 16 cm. */
-export function emptyFormDoc(source: RecordSourceRef | null): DesignDoc {
-  return { formatVersion: '1.0', recordSource: source, props: { Width: 9072 },
-    sections: [hidden('formHeader'), { kind: 'detail', height: 2268, props: {}, controls: [] }, hidden('formFooter')] };
-}
-
-/** Le contrôle lié d'un champ et son étiquette attachée (boundControlWithLabel, partagé avec A5). */
-export function fieldControls(doc: DesignDoc, f: SourceField, at: { section: number; left: number; top: number }, labels: FormLabels): ControlDef[] {
-  return boundControlWithLabel(doc, f, at, { objectKind: 'form', labelSuffix: labels.prefix('label') });
-}
-
 /** Sous le contrôle le plus bas de la section, + 0,2 cm ; 0 dans une section vide. */
 export const nextFreeTop = (s: SectionDef): number => (s.controls.length ? Math.min(sectionBottomLimit(s) + FIELD_GAP, MAX_TWIPS) : 0);
 
 const tabbable = (s: SectionDef): ControlDef[] => s.controls.filter((c) => TAB_KINDS.includes(c.kind));
 
-/** TabIndex 0…n dans l'ordre donné ; les autres contrôles restent tels quels. Rien ne change : la même section. */
-export function withTabOrder(s: SectionDef, names: string[]): SectionDef {
-  const index = new Map(names.map((n, i) => [n, i]));
-  const controls = s.controls.map((c) => (index.has(c.name) && c.props.TabIndex !== index.get(c.name) ? { ...c, props: { ...c.props, TabIndex: index.get(c.name) } } : c));
-  return controls.every((c, i) => c === s.controls[i]) ? s : { ...s, controls };
-}
-
-/** Les contrôles à arrêt de tabulation de la section, dans leur ordre de tabulation (TabIndex, puis ordre du document). */
-export function tabOrder(s: SectionDef): string[] {
-  const list = tabbable(s);
+const byTabIndex = (list: ControlDef[]): string[] => {
   const key = (c: ControlDef) => (typeof c.props.TabIndex === 'number' ? c.props.TabIndex : Number.MAX_SAFE_INTEGER);
   return list.map((c, i) => ({ c, i })).sort((a, b) => key(a.c) - key(b.c) || a.i - b.i).map((x) => x.c.name);
-}
+};
 
-/** Ordre automatique d'Access : de haut en bas, puis de gauche à droite sur une même ligne (à 0,1 cm près). */
-export function autoTabOrder(s: SectionDef): SectionDef {
-  const byTop = [...tabbable(s)].sort((a, b) => a.top - b.top);
+/** Les contrôles à arrêt de tabulation de la section (le contrôle onglet compris), dans leur ordre de tabulation (TabIndex, puis ordre du document). */
+export const tabOrder = (s: SectionDef): string[] => byTabIndex(tabbable(s));
+
+/** Haut en bas, puis de gauche à droite sur une même ligne (à 0,1 cm près). */
+function autoNames(list: ControlDef[]): string[] {
   const rows: ControlDef[][] = [];
-  for (const c of byTop) {
+  for (const c of [...list].sort((a, b) => a.top - b.top)) {
     const row = rows[rows.length - 1];
     if (row && c.top - row[0].top <= ROW_SLACK) row.push(c); else rows.push([c]);
   }
-  return withTabOrder(s, rows.flatMap((r) => r.sort((a, b) => a.left - b.left)).map((c) => c.name));
+  return rows.flatMap((r) => r.sort((a, b) => a.left - b.left)).map((c) => c.name);
+}
+
+/** Ordre automatique d'Access : de haut en bas, puis de gauche à droite sur une même ligne (à 0,1 cm près). */
+export const autoTabOrder = (s: SectionDef): SectionDef => withTabOrder(s, autoNames(tabbable(s)));
+
+const pageControls = (doc: DesignDoc, tabControl: string, page: number): ControlDef[] =>
+  (findControl(doc, tabControl)?.control.children ?? []).filter((k) => TAB_KINDS.includes(k.kind) && (typeof k.props.PageIndex === 'number' ? k.props.PageIndex : 0) === page);
+
+/** Les contrôles à arrêt de tabulation d'une page du contrôle onglet, dans leur ordre de tabulation. */
+export const pageTabOrder = (doc: DesignDoc, tabControl: string, page: number): string[] => byTabIndex(pageControls(doc, tabControl, page));
+
+/** Ordre automatique d'une page (haut en bas, puis gauche à droite). */
+export const autoPageOrder = (doc: DesignDoc, tabControl: string, page: number): string[] => autoNames(pageControls(doc, tabControl, page));
+
+/** TabIndex 0…n sur les contrôles de cette page seulement ; rien ne change : le même document. */
+export function withPageTabOrder(doc: DesignDoc, tabControl: string, page: number, names: string[]): DesignDoc {
+  const index = new Map(names.map((n, i) => [n, i]));
+  const mine = new Set(pageControls(doc, tabControl, page));
+  return updateControl(doc, tabControl, (t) => {
+    const kids = (t.children ?? []).map((k) => (mine.has(k) && index.has(k.name) && k.props.TabIndex !== index.get(k.name) ? { ...k, props: { ...k.props, TabIndex: index.get(k.name) } } : k));
+    return kids.every((k, i) => k === t.children![i]) ? t : { ...t, children: kids };
+  });
+}
+
+/** Déplace le bloc lo..hi devant la position `gap` (0..n, dans la liste d'origine) ; `gap` dans [lo, hi + 1] : rien ne bouge. */
+export function moveBlock(names: string[], lo: number, hi: number, gap: number): { names: string[]; lo: number; hi: number } {
+  if (gap < 0 || gap > names.length || (gap >= lo && gap <= hi + 1)) return { names, lo, hi };   // hors liste ou sur le bloc : rien ne bouge
+  const block = names.slice(lo, hi + 1), rest = [...names.slice(0, lo), ...names.slice(hi + 1)];
+  const at = gap > hi ? gap - block.length : gap;
+  return { names: [...rest.slice(0, at), ...block, ...rest.slice(at)], lo: at, hi: at + block.length - 1 };
 }
 
 /** L'en-tête de formulaire est affiché : il décide pour les deux (le menu de section, toggleHeaderFooter, les éléments d'en-tête du ruban). */
@@ -129,64 +138,6 @@ export function toggleHeaderFooter(doc: DesignDoc): DesignDoc {
     if (show) return { ...s, height: Math.max(s.height, HEADER_HEIGHT), props: { ...s.props, Visible: true } };
     return { ...s, height: 0, props: { ...s.props, Visible: false }, controls: [] };
   }) };
-}
-
-const AUTO = { gap: cmToTwips(0.15), label: cmToTwips(0.5), control: cmToTwips(3.5), header: cmToTwips(1.2), footer: cmToTwips(0.5) };
-
-/** Largeur du contrôle d'un champ dans un formulaire instantané ; undefined : celle de boundControlWithLabel (case à cocher…). */
-export function autoWidth(f: SourceField): { width: number; height?: number } | undefined {
-  switch (f.type) {
-    case 'shortText': return { width: Math.min(Math.max(cmToTwips(Math.min(f.props.size ?? 255, 50) * 0.2), cmToTwips(2)), cmToTwips(8)) };
-    case 'longText': return { width: cmToTwips(8), height: cmToTwips(1.8) };
-    case 'autoNumber': case 'number': case 'currency': case 'dateTime': return { width: cmToTwips(3) };
-    default: return undefined;
-  }
-}
-
-/**
- * Formulaire instantané (Créer › Formulaire), en colonne comme celui d'Access : en-tête de 1,2 cm avec le nom de la source en titre
- * (16 pt, gras ; couleurs du catalogue), un contrôle lié et son étiquette par champ, empilés à 0,15 cm (étiquettes à 0,5 cm du bord,
- * contrôles à 3,5 cm ; une autre colonne au-delà de 55,88 cm), pied de 0,5 cm vide ; Mode par défaut Formulaire unique, ordre de
- * tabulation colonne par colonne, largeur ajustée
- * au contrôle le plus large + 0,5 cm. Couleurs de thème seulement (aucune n'est écrite).
- */
-export function autoForm(ref: RecordSourceRef, title: string, info: SourceInfo, labels: FormLabels): DesignDoc {
-  const base = emptyFormDoc(ref);
-  const titleLabel: ControlDef = { kind: 'label', name: 'Auto_Header0', left: AUTO.label, top: cmToTwips(0.2), width: cmToTwips(9), height: cmToTwips(0.8),
-    props: { Caption: title, FontSize: 16, FontWeight: 'bold' } };
-  let doc: DesignDoc = { ...base, sections: [
-    { kind: 'formHeader', height: AUTO.header, props: { Visible: true }, controls: [titleLabel] },
-    { ...base.sections[1], controls: [] },
-    { kind: 'formFooter', height: AUTO.footer, props: { Visible: true }, controls: [] },
-  ] };
-  let top = AUTO.gap;
-  let x0 = 0;          // bord gauche de la colonne : une autre commence après son contrôle le plus large quand le Détail dépasserait la limite d'Access
-  let colRight = 0;
-  for (const f of info.fields) {
-    const [c] = fieldControls(doc, f, { section: 1, left: AUTO.control, top }, labels);
-    const ctl0: ControlDef = { ...c, ...autoWidth(f) };
-    if (top > AUTO.gap && top + ctl0.height > MAX_TWIPS) { x0 = colRight; top = AUTO.gap; }
-    // ponytail: au-delà de 55,88 cm de colonnes (des centaines de champs Texte long), la dernière est ramenée dans la limite et peut chevaucher
-    const left = Math.min(x0 + AUTO.control, MAX_TWIPS - ctl0.width);
-    const ctl: ControlDef = { ...ctl0, left, top,
-      children: c.children!.map((l) => ({ ...l, left: left - AUTO.control + AUTO.label, top, width: AUTO.control - AUTO.label - (c.left - l.left - l.width) })) };
-    const detail = doc.sections[1];
-    doc = { ...doc, sections: doc.sections.map((s, i) => (i === 1 ? { ...detail, controls: [...detail.controls, ctl] } : s)) };
-    colRight = Math.max(colRight, left + ctl.width);
-    top += ctl.height + AUTO.gap;
-  }
-  // Une seule colonne : les champs forment une disposition Empilée (comme Access) ; elle remplace l'espacement de 0,15 cm par ROW_GAP.
-  // ponytail: several columns would need one layout each; add when asked
-  if (!x0) {
-    const laid = createLayout(doc, membersOf(doc, doc.sections[1].controls.map((c) => c.name)), 'stacked', { headerSection: 'detail' });
-    if (laid.sections[1].controls.every((c) => c.top + c.height <= MAX_TWIPS)) doc = laid;
-  }
-  const bottom = Math.max(0, ...doc.sections[1].controls.map((c) => c.top + c.height));
-  // ordre de tabulation : la première colonne de haut en bas, puis la suivante (une colonne : l'ordre automatique d'Access)
-  const placed = doc.sections[1];
-  const detail = withTabOrder({ ...placed, height: info.fields.length ? Math.min(bottom + AUTO.gap, MAX_TWIPS) : base.sections[1].height }, placed.controls.filter((c) => TAB_KINDS.includes(c.kind)).map((c) => c.name));
-  const right = Math.max(...doc.sections.flatMap((s) => s.controls.map((c) => c.left + c.width)));
-  return { ...doc, props: { ...doc.props, Width: Math.min(right + AUTO.label, MAX_TWIPS), DefaultView: 'single' }, sections: doc.sections.map((s, i) => (i === 1 ? detail : s)) };
 }
 
 /** Le nom d'un nouveau formulaire : `base` s'il est libre, sinon base1, base2… (sans tenir compte de la casse, comme les noms d'objets). */

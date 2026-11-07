@@ -1,6 +1,7 @@
 // Chargement d'un état enregistré (définition, données, mise en page), pour l'aperçu, l'impression et l'export PDF ; zoom.
 import { MAX_PRINT_HTML_CHARS, type BasecraftApi, type CellInput, type PrintRequest, type RecordSourceRef } from '../../shared/api';
 import { validateDesignDoc, type DesignDoc } from '../../shared/design/model';
+import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import type { SourceInfo } from '../../shared/record-source';
 import { layoutReport } from '../../shared/report/layout';
 import { readReport } from '../../shared/report/model';
@@ -66,7 +67,7 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
  *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
-export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'>, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
+export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
   ready?: () => void, where?: string, events?: (doc: DesignDoc) => ReportEvents): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
   const ev = events?.(doc), release = ev?.register();
@@ -78,7 +79,8 @@ export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sou
     if (!ev?.layoutMacros) ready?.();
     const data = await loadDocData(api, doc, params, signal, where);
     if (!data.rows.length && await ev?.noData()) throw reportCancelled();
-    return await layoutReport(readReport(doc, data.fields), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
+    const theme = effectiveTheme(doc.props, await api.theme?.get().catch(() => DEFAULT_THEME) ?? DEFAULT_THEME);
+    return await layoutReport(readReport(doc, data.fields, { theme }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
   } finally { release?.(); }
 }
 

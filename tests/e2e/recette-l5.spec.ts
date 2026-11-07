@@ -8,6 +8,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createTable } from '../../src/main/db/schema';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
+import { resolveColor } from '../../src/shared/design/colors';
 import { createLayout, membersOf } from '../../src/shared/design/layout-edit';
 import { emptyCellsOf, readLayouts } from '../../src/shared/design/layout';
 import { clients, t } from '../../src/shared/test-fixtures';
@@ -69,15 +70,15 @@ test('recette L5: empty cells, typing, deleting, dropping, reopening, Form view'
     expect(await name('cell:L1:2:0')).toBe('CelluleVide1');
     await right.click();
 
-    // 3. Remplissage (danger), Quadrillage Les deux, Marges Large sur la cellule de droite
+    // 3. Remplissage (accent 2), Quadrillage Les deux, Marges Large sur la cellule de droite
     await page.getByTestId('ribbon-tab-format').click();
     await page.getByTestId('cmd-backColor').click();
-    await page.getByTestId('format-popup-backColor-colors-danger').click();
+    await page.getByTestId('colorpicker-theme-accent2').click();
     await page.getByTestId('ribbon-tab-arrange').click();
     await choose('layoutGridlines', 'both');
     await choose('controlPadding', 'wide');
     await save();
-    await expect.poll(async () => rightCell(await getDoc(page))?.props).toMatchObject({ BackColor: 'theme:danger', BackStyle: 'normal', LeftPadding: 180, GridlineStyleTop: 'solid' });
+    await expect.poll(async () => rightCell(await getDoc(page))?.props).toMatchObject({ BackColor: 'theme:accent2', BackStyle: 'normal', LeftPadding: 180, GridlineStyleTop: 'solid' });
     const cellRect = rightCell(await getDoc(page))!.rect;
 
     // 4. Saisie : « aaaaa » puis Entrée remplit la cellule d'une étiquette ; Ctrl+Z la retire (la cellule retrouve sa mise en forme) ;
@@ -92,14 +93,14 @@ test('recette L5: empty cells, typing, deleting, dropping, reopening, Form view'
     await page.keyboard.press('Control+z');
     await expect(d.getByTestId('ctl-Étiquette1')).toHaveCount(0);
     await save();
-    await expect.poll(async () => rightCell(await getDoc(page))?.props).toMatchObject({ BackColor: 'theme:danger', LeftPadding: 180 });
+    await expect.poll(async () => rightCell(await getDoc(page))?.props).toMatchObject({ BackColor: 'theme:accent2', LeftPadding: 180 });
     expect(byCaption(await getDoc(page), 'aaaaa')).toBeUndefined();
     await type();
     await save();
     await expect.poll(async () => byCaption(await getDoc(page), 'aaaaa')?.props.Caption).toBe('aaaaa');
     const lab = byCaption(await getDoc(page), 'aaaaa')!;
     expect([lab.kind, lab.left, lab.top, lab.width, lab.height]).toEqual(['label', cellRect.left, cellRect.top, cellRect.width, cellRect.height]);
-    expect(lab.props).toMatchObject({ BackColor: 'theme:danger', GridlineStyleTop: 'solid', GridlineStyleBottom: 'solid', GridlineStyleLeft: 'solid', GridlineStyleRight: 'solid',
+    expect(lab.props).toMatchObject({ BackColor: 'theme:accent2', GridlineStyleTop: 'solid', GridlineStyleBottom: 'solid', GridlineStyleLeft: 'solid', GridlineStyleRight: 'solid',
       TopPadding: 180, BottomPadding: 180, LeftPadding: 180, RightPadding: 180 });
 
     // 5. Cellule de gauche, Sélectionner la ligne, Suppr : étiquette et ligne disparaissent, Ville remonte
@@ -146,11 +147,11 @@ test('recette L5: empty cells, typing, deleting, dropping, reopening, Form view'
     await page.waitForTimeout(300);
     expect(await getDoc(page)).toEqual(beforeDelete);
     await page.getByTestId('prop-BackColor').click();
-    await page.getByTestId('prop-BackColor-colors-warning').click();
+    await page.getByTestId('colorpicker-theme-accent3').click();
 
     // 7. Enregistrer, fermer, rouvrir : tout est conservé ; mode Formulaire : le fond de la cellule, pas d'arrêt de tabulation en plus
     await save();
-    await expect.poll(async () => rightCell(await getDoc(page))?.props.BackColor).toBe('theme:warning');
+    await expect.poll(async () => rightCell(await getDoc(page))?.props.BackColor).toBe('theme:accent3');
     const saved = await getDoc(page);
     await app.close();
     ({ app, page } = await launchApp({ args: [base], userDataDir: first.userDataDir, env }));
@@ -164,8 +165,8 @@ test('recette L5: empty cells, typing, deleting, dropping, reopening, Form view'
     const shade = run.getByTestId('form-cell-L1-2-1');
     await expect(shade).toBeVisible();
     const colour = (e: Element) => getComputedStyle(e).backgroundColor;
-    const warning = await page.evaluate(() => { const p = document.createElement('i'); p.style.color = 'var(--bc-warning)'; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; });
-    await expect.poll(() => shade.evaluate(colour)).toBe(warning);   // the colour set in the property sheet
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(resolveColor('theme:accent3', 'light').slice(i, i + 2), 16));
+    await expect.poll(() => shade.evaluate(colour)).toBe(`rgb(${r}, ${g}, ${b})`);   // the colour set in the property sheet
     await expect(run.getByTestId('form-cell-L1-2-0')).toHaveCount(0);   // an unformatted empty cell draws nothing
     await run.getByTestId('form-ctl-Num').focus();
     const seen: string[] = [];

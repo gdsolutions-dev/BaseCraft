@@ -1,9 +1,12 @@
+import i18next from 'i18next';
 import { describe, expect, it } from 'vitest';
+import frJson from '../../shared/i18n/fr.json';
+import { DEFAULT_THEME } from '../../shared/design/theme';
 import { toSourceRef } from '../../shared/record-source';
 import { CONTROL_KINDS, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { localeInfo } from '../../shared/locale-format';
-import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontWarning, fromSourceRef,
+import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontLabel, fontWarning, fromSourceRef,
   MIXED, readProp, sheetRows, targetKind, targetsOf } from './property-sheet-model';
 import type { PropTarget } from './designer-model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
@@ -200,5 +203,16 @@ describe('empty cell sheet (L5)', () => {
   it('checkPropValue: a cell width is 0..MAX_TWIPS', () => {
     expect(checkPropValue(d0, cellT(0), desc('Width'), 0)).toBeNull();
     expect(checkPropValue(d0, cellT(0), desc('Width'), -1)).not.toBeNull();
+  });
+});
+
+describe('fontLabel', () => {
+  const i18n = i18next.createInstance();
+  void i18n.init({ resources: { fr: { translation: frJson } }, lng: 'fr', interpolation: { escapeValue: false }, initAsync: false });
+  const t = i18n.t.bind(i18n);
+  it('les polices du thème montrent leur famille et leur rôle', () => {
+    expect(fontLabel('(Body)', DEFAULT_THEME, t)).toBe('Inter (Détail)');
+    expect(fontLabel('(Headings)', DEFAULT_THEME, t)).toBe('Inter (En-têtes)');
+    expect(fontLabel('Carlito', DEFAULT_THEME, t)).toBe('Carlito');
   });
 });

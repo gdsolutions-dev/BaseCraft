@@ -2,6 +2,7 @@
 // Valeur absente, de mauvais type, hors min/max ou d'une propriété qui ne s'applique pas à la cible -> défaut d'état
 // du catalogue, defaultFor(d, cible, 'report') : la feuille de propriétés et l'impression sont toujours d'accord.
 import { isColorValue, resolveColor, type ColorValue } from '../design/colors';
+import type { Theme } from '../design/theme';
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor, type PropertyTarget } from '../design/properties';
 
 const valid = (d: PropertyDescriptor, v: unknown): boolean => {
@@ -25,7 +26,7 @@ export function readProp(props: Record<string, unknown>, name: string, target: P
 }
 
 /** A color property as printed: `#rrggbb`, a theme token resolved in the light theme (reports always print light). */
-export function readColor(props: Record<string, unknown>, name: string, target: PropertyTarget): string {
+export function readColor(props: Record<string, unknown>, name: string, target: PropertyTarget, theme?: Theme): string {
   const d = PROPERTY_CATALOG.find((x) => x.name === name)!;
-  return resolveColor(readProp(props, name, target), 'light', defaultFor(d, target, 'report') as ColorValue);
+  return resolveColor(readProp(props, name, target), 'light', defaultFor(d, target, 'report') as ColorValue, theme);
 }

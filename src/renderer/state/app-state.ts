@@ -45,6 +45,7 @@ export type AppAction =
   | { type: 'toggleNav' } | { type: 'setNav'; visible: boolean; strip: boolean } | { type: 'reset' }
   | { type: 'objectRenamed'; kind: ObjectKind; from: string; to: string } | { type: 'objectDeleted'; kind: ObjectKind; name: string }
   | { type: 'objectSaved'; kind: ObjectKind; name: string; tabId?: string } // tabId: the new-object tab just saved under `name`
+  | { type: 'objectsReloaded'; kind: ObjectKind; except: string[] } // les onglets ouverts du genre, sauf ceux nommés, relisent la base (thèmes de tous les objets)
   | { type: 'listsChanged' } // a description (Properties dialog): only the navigation pane's lists are read again
   | { type: 'tableDescribed'; name: string; description: string } // Properties dialog: a table's tabs take it, never dirtied
   | { type: 'queryDataChanged' }; // A3: an action query wrote rows: every query datasheet re-reads its rows
@@ -139,6 +140,8 @@ export function appReducer(s: AppState, a: AppAction): AppState {
     case 'tableDataChanged':
       return { ...s, tabs: s.tabs.map((t) => (isTable(t, a.name) && t.mode === 'datasheet' ? { ...t, dataToken: (t.dataToken ?? 0) + 1 } : t)) };
     case 'tablesChanged': return relationsReload(s);
+    case 'objectsReloaded':
+      return { ...s, tabs: s.tabs.map((t) => (t.kind === a.kind && !t.isNew && !t.embedded && !a.except.some((n) => sameName(n, t.name)) ? { ...t, reloadToken: t.reloadToken + 1 } : t)) };
     case 'listsChanged': return s;
     case 'queryDataChanged':
       return { ...s, tabs: s.tabs.map((t) => (t.kind === 'query' && t.mode === 'run' ? { ...t, dataToken: (t.dataToken ?? 0) + 1 } : t)) };

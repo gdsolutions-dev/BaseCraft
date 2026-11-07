@@ -1667,7 +1667,33 @@
     "accent": "Akzent",
     "accentContrast": "Text auf Akzent",
     "danger": "Gefahr",
-    "warning": "Warnung"
+    "warning": "Warnung",
+    "lt1": "Hintergrund 1",
+    "dk1": "Text 1",
+    "lt2": "Hintergrund 2",
+    "dk2": "Text 2",
+    "accent1": "Akzent 1",
+    "accent2": "Akzent 2",
+    "accent3": "Akzent 3",
+    "accent4": "Akzent 4",
+    "accent5": "Akzent 5",
+    "accent6": "Akzent 6",
+    "hlink": "Link",
+    "folHlink": "Besuchter Link",
+    "lighter": "Heller {{pct}}%",
+    "darker": "Dunkler {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatisch",
+    "themeColors": "Designfarben",
+    "standardColors": "Standardfarben",
+    "recent": "Zuletzt verwendete Farben",
+    "transparent": "Transparent",
+    "more": "Weitere Farben…"
+  },
+  "font": {
+    "body": "Text",
+    "headings": "Überschriften"
   },
   "sourcePicker": {
     "label": "Tabellen und Abfragen",
@@ -1985,8 +2011,12 @@
       "up": "Nach oben",
       "down": "Nach unten",
       "auto": "Automatische Reihenfolge",
-      "hint": "Mit Alt+Nach-oben und Alt+Nach-unten verschieben Sie das ausgewählte Steuerelement.",
-      "empty": "Keine Steuerelemente"
+      "hint": "Ziehen Sie die Zeilenmarkierer oder verwenden Sie Alt+Nach-oben und Alt+Nach-unten, um die ausgewählten Steuerelemente zu verschieben. Mit Umschalt+Klick wählen Sie mehrere aus.",
+      "empty": "Keine Steuerelemente",
+      "rowSelector": "{{name}} auswählen",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Aktivierreihenfolge…",
+      "pageMenu": "Registerseite"
     },
     "headerFooterConfirm": "Formularkopf und -fuß löschen? Die darin enthaltenen Steuerelemente werden gelöscht.",
     "calc": {
@@ -2999,5 +3029,13 @@
     "placeholder": "Python-Anweisung oder ?Ausdruck eingeben",
     "errorAt": "(Modul {{module}}, Zeile {{line}})",
     "splitter": "Größe des Direktfensters ändern"
+  },
+  "themeGallery": {
+    "current": "In dieser Datenbank",
+    "custom": "Benutzerdefiniert",
+    "builtin": "BaseCraft-Designs",
+    "all": "Design auf alle passenden Objekte anwenden",
+    "object": "Design nur auf dieses Objekt anwenden",
+    "default": "Als Standarddesign dieser Datenbank festlegen"
   }
 }

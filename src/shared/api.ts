@@ -9,6 +9,7 @@ import type { UiLanguage } from './i18n';
 import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { StartupOptions } from './startup';
+import type { Theme } from './design/theme';
 
 export type { CellInput, TableDesign };
 export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
@@ -331,6 +332,10 @@ export const CH = {
   baseEnableContent: 'bc:base:enableContent',
   baseStartup: 'bc:base:startup',
   baseSaveStartup: 'bc:base:saveStartup',
+  baseTheme: 'bc:base:theme',
+  baseSaveTheme: 'bc:base:saveTheme',
+  baseApplyTheme: 'bc:base:applyTheme',
+  baseThemeChanged: 'bc:base:themeChanged', // main → renderer: the base's default theme was saved (open views refetch)
   linksPick: 'bc:links:pick',
   linksInspect: 'bc:links:inspect',
   linksCreate: 'bc:links:create',
@@ -428,6 +433,18 @@ export interface BasecraftApi {
     startup(): Promise<StartupOptions>;
     /** Saves the six options (the other keys of the stored section are kept). Rejects bc:readOnly. */
     saveStartup(o: StartupOptions): Promise<void>;
+  };
+  /** Default theme of the base (F2). */
+  theme: {
+    /** Tolerant read (invalid or absent = the built-in theme). Allowed read-only. */
+    get(): Promise<Theme>;
+    /** Rejects bc:invalidTheme (not a theme) and bc:readOnly. */
+    set(t: Theme): Promise<void>;
+    /** Makes `t` the default and removes the saved override of every form or report except those in `openNames` (open documents
+     *  clear theirs by an edit), in one transaction. Rejects bc:invalidTheme, bc:invalidArgument and bc:readOnly. */
+    applyToAll(t: Theme, kind: 'form' | 'report', openNames: string[]): Promise<{ cleared: number }>;
+    /** The default changed (set by this window): open views refetch with get(). */
+    onChange(cb: () => void): () => void;
   };
   tables: {
     list(): Promise<TableSummary[]>;

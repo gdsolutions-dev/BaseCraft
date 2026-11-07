@@ -8,7 +8,8 @@ import { fieldRefs, parseCanonical } from '../expr/parser';
 import { withUserFunctions } from '../expr/user-functions';
 import { MAX_TWIPS, sameName } from '../field-types';
 import { defaultFor, PROPERTY_CATALOG } from '../design/properties';
-import { resolveFont } from '../fonts';
+import { resolveFont, resolveThemeFont } from '../fonts';
+import { DEFAULT_THEME, type Theme } from '../design/theme';
 import type { SourceField } from '../record-source';
 import { readColor, readProp } from './props';
 import { extractAggregates, type AggSpec } from './totals';
@@ -86,7 +87,8 @@ const SINGLE = ['reportHeader', 'pageHeader', 'detail', 'pageFooter', 'reportFoo
 
 /** `allCells`: every empty layout cell becomes a rectangle (the report Layout view selects them); otherwise only those carrying
  *  stored formatting do, so a report saved before L5 reads and prints as before. */
-export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean } = {}): ReportSpec {
+export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean; theme?: Theme } = {}): ReportSpec {
+  const theme = opts.theme ?? DEFAULT_THEME;
   const issues: ReportIssue[] = [];
   const add = (code: ReportIssue['code'], control?: string, detail?: string): void => {
     if (issues.some((i) => i.code === code && i.control === control && i.detail === detail)) return;
@@ -130,7 +132,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
     // a combo box prints as a text box showing its value: same properties, same report defaults (no border, no back)
     const target = kind === 'comboBox' ? 'textBox' : kind;
     const r = (prop: string, fallback?: unknown) => readProp(p, prop, target, fallback);
-    const font: FontSpec = { name: r('FontName') as string, size: r('FontSize') as number, bold: r('FontWeight') === 'bold',
+    const font: FontSpec = { name: resolveThemeFont(r('FontName') as string, theme), size: r('FontSize') as number, bold: r('FontWeight') === 'bold',
       italic: r('FontItalic') as boolean, underline: r('FontUnderline') as boolean };
     if (!resolveFont(font.name).portable) add('fontNotPortable', undefined, font.name);
     const format = r('Format') as string, places = r('DecimalPlaces') as string, picture = r('Picture'), sizeMode = r('SizeMode', 'zoom');
@@ -138,18 +140,18 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
     const four = <T,>(f: (s: (typeof sides)[number]) => T) => ({ top: f('Top'), right: f('Right'), bottom: f('Bottom'), left: f('Left') });
     const margin = four((s) => (kind === 'pageBreak' ? 0 : r(`${s}Margin`) as number));
     const line = (s: (typeof sides)[number]): Border | null => kind === 'pageBreak' || r(`GridlineStyle${s}`) === 'transparent' ? null   // GridlineWidth: px, 0 = hairline
-      : { width: Math.round(Math.max(1, r(`GridlineWidth${s}`) as number) * 15), color: readColor(p, 'GridlineColor', target), style: r(`GridlineStyle${s}`) as Border['style'] };
+      : { width: Math.round(Math.max(1, r(`GridlineWidth${s}`) as number) * 15), color: readColor(p, 'GridlineColor', target, theme), style: r(`GridlineStyle${s}`) as Border['style'] };
     const lines = four(line);
     return {
       kind, name, left: twips(c.left, name), top: twips(c.top, name), width: twips(c.width, name), height: twips(c.height, name),
       source: source(r('ControlSource') as string, name, 'invalidExpression', pageSection ? 'aggregateNotAllowed' : undefined),
       caption: r('Caption') as string, ...(format === '' ? {} : { format }), decimalPlaces: places === 'auto' ? 'auto' : Number(places),
       visible: r('Visible') as boolean, canGrow: r('CanGrow') as boolean, canShrink: r('CanShrink') as boolean,
-      font, color: readColor(p, 'ForeColor', target),
-      back: r('BackStyle') === 'transparent' ? null : readColor(p, 'BackColor', target),
+      font, color: readColor(p, 'ForeColor', target, theme),
+      back: r('BackStyle') === 'transparent' ? null : readColor(p, 'BackColor', target, theme),
       // BorderWidth: px 0–6; 0 = hairline, drawn 1 px (15 twips) wide, as in A4
       border: r('BorderStyle') === 'transparent' ? null
-        : { width: Math.round(Math.max(1, r('BorderWidth') as number) * 15), color: readColor(p, 'BorderColor', target), style: r('BorderStyle') as Border['style'] },
+        : { width: Math.round(Math.max(1, r('BorderWidth') as number) * 15), color: readColor(p, 'BorderColor', target, theme), style: r('BorderStyle') as Border['style'] },
       align: r('TextAlign') as ControlSpec['align'],
       margin, gridlines: Object.values(lines).some(Boolean) ? { ...lines, padding: four((s) => r(`${s}Padding`) as number) } : null,
       // Picture, SizeMode and LineSlant come with A4: read raw until then; only an embedded image is ever drawn.
@@ -178,7 +180,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
       kind, ...(groupLevel === undefined ? {} : { groupLevel }), height: twips(s.height, undefined, kind),
       visible: r('Visible') as boolean, canGrow: r('CanGrow') as boolean, canShrink: r('CanShrink') as boolean,
       keepTogether: r('KeepTogether') as boolean, repeatSection: r('RepeatSection') as boolean,
-      forceNewPage: r('ForceNewPage') as SectionSpec['forceNewPage'], back: readColor(p, 'BackColor', kind),
+      forceNewPage: r('ForceNewPage') as SectionSpec['forceNewPage'], back: readColor(p, 'BackColor', kind, theme),
       controls: [...cells(s, kind === 'pageHeader' || kind === 'pageFooter'), ...controls(s.controls, kind === 'pageHeader' || kind === 'pageFooter')],
     };
   };

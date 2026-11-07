@@ -1656,7 +1656,33 @@
     "accent": "강조",
     "accentContrast": "강조색 위의 텍스트",
     "danger": "위험",
-    "warning": "경고"
+    "warning": "경고",
+    "lt1": "배경 1",
+    "dk1": "텍스트 1",
+    "lt2": "배경 2",
+    "dk2": "텍스트 2",
+    "accent1": "강조 1",
+    "accent2": "강조 2",
+    "accent3": "강조 3",
+    "accent4": "강조 4",
+    "accent5": "강조 5",
+    "accent6": "강조 6",
+    "hlink": "하이퍼링크",
+    "folHlink": "방문한 하이퍼링크",
+    "lighter": "{{pct}}% 더 밝게",
+    "darker": "{{pct}}% 더 어둡게"
+  },
+  "colorpicker": {
+    "automatic": "자동",
+    "themeColors": "테마 색",
+    "standardColors": "표준 색",
+    "recent": "최근 사용한 색",
+    "transparent": "투명",
+    "more": "다른 색…"
+  },
+  "font": {
+    "body": "본문",
+    "headings": "제목"
   },
   "sourcePicker": {
     "label": "테이블 및 쿼리",
@@ -1972,8 +1998,12 @@
       "up": "위로 이동",
       "down": "아래로 이동",
       "auto": "자동 순서",
-      "hint": "Alt+위쪽 화살표와 Alt+아래쪽 화살표로 선택한 컨트롤을 이동합니다.",
-      "empty": "컨트롤 없음"
+      "hint": "행 선택기를 끌거나 Alt+위쪽 화살표와 Alt+아래쪽 화살표를 사용하여 선택한 컨트롤을 이동합니다. Shift+클릭으로 여러 개를 선택할 수 있습니다.",
+      "empty": "컨트롤 없음",
+      "rowSelector": "{{name}} 선택",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "탭 순서…",
+      "pageMenu": "탭 페이지"
     },
     "headerFooterConfirm": "양식 머리글과 바닥글을 삭제하시겠습니까? 포함된 컨트롤도 삭제됩니다.",
     "calc": {
@@ -2976,5 +3006,13 @@
     "placeholder": "Python 문 또는 ?식을 입력하세요",
     "errorAt": "(모듈 {{module}}, {{line}}행)",
     "splitter": "직접 실행 창 크기 조정"
+  },
+  "themeGallery": {
+    "current": "이 데이터베이스",
+    "custom": "사용자 지정",
+    "builtin": "BaseCraft 테마",
+    "all": "일치하는 모든 개체에 테마 적용",
+    "object": "이 개체에만 테마 적용",
+    "default": "이 데이터베이스의 기본 테마로 설정"
   }
 }

@@ -2,7 +2,10 @@
 // Les états s'impriment toujours en clair : resolveColor(v, 'light'). Libellés : color.<jeton>.
 export type ThemeColor = 'background' | 'surface' | 'surface2' | 'text' | 'textMuted' | 'border' | 'accent' | 'accentContrast' | 'danger' | 'warning';
 export const THEME_COLORS: ThemeColor[] = ['background', 'surface', 'surface2', 'text', 'textMuted', 'border', 'accent', 'accentContrast', 'danger', 'warning'];
-export type ColorValue = `theme:${ThemeColor}` | `#${string}`;
+import { DEFAULT_THEME, parseSlotRef, shade, tint, type Mode, type Theme, type ThemeSlot } from './theme';
+
+/** `theme:<emplacement>` ou `theme:<emplacement>@+n` (plus clair) / `@-n` (plus sombre), n de 1 à 99 : voir theme.ts. */
+export type ColorValue = `theme:${ThemeColor}` | `theme:${ThemeSlot}` | `theme:${ThemeSlot}@${'+' | '-'}${number}` | `#${string}`;
 
 const CSS_VAR: Record<ThemeColor, string> = {
   background: '--bc-bg', surface: '--bc-surface', surface2: '--bc-surface-2', text: '--bc-text', textMuted: '--bc-text-muted',
@@ -22,7 +25,8 @@ const token = (v: string): ThemeColor | null =>
   v.startsWith('theme:') && (THEME_COLORS as string[]).includes(v.slice(6)) ? (v.slice(6) as ThemeColor) : null;
 
 /** `#rrggbb` in lower case, or a known `theme:` token. */
-export const isColorValue = (v: unknown): v is ColorValue => typeof v === 'string' && (/^#[0-9a-f]{6}$/.test(v) || token(v) !== null);
+export const isColorValue = (v: unknown): v is ColorValue =>
+  typeof v === 'string' && (/^#[0-9a-f]{6}$/.test(v) || token(v) !== null || parseSlotRef(v) !== null);
 
 /** A valid value, else the caller's fallback (normally the property's catalog default), else 'transparent'. */
 const valid = (v: unknown, fallback: unknown): ColorValue | null => (isColorValue(v) ? v : isColorValue(fallback) ? fallback : null);
@@ -31,17 +35,25 @@ const valid = (v: unknown, fallback: unknown): ColorValue | null => (isColorValu
  * For the screen: a token follows the live theme through its CSS variable; `#rrggbb` as is. Total: an invalid value (an
  * external edit, '#ABCDEF', 'theme:nope', any text) gives `fallback`, never raw text into CSS.
  */
-export function colorCss(v: unknown, fallback: ColorValue | 'transparent' = 'transparent'): string {
+export function colorCss(v: unknown, fallback: ColorValue | 'transparent' = 'transparent', ctx?: { theme: Theme; mode: Mode }): string {
   const c = valid(v, fallback);
   if (c === null) return 'transparent';
+  if (parseSlotRef(c)) return resolveColor(c, ctx?.mode ?? 'light', 'transparent', ctx?.theme);
   const t = token(c);
   return t ? `var(${CSS_VAR[t]})` : c;
 }
 
 /** A fixed `#rrggbb` for a given theme (print, PDF). Total like colorCss: 'transparent' only when nothing valid is given. */
-export function resolveColor(v: unknown, theme: 'light' | 'dark', fallback: ColorValue | 'transparent' = 'transparent'): string {
+export function resolveColor(v: unknown, mode: Mode, fallback: ColorValue | 'transparent' = 'transparent', theme: Theme = DEFAULT_THEME): string {
   const c = valid(v, fallback);
   if (c === null) return 'transparent';
+  const ref = parseSlotRef(c);
+  if (ref) {
+    // Un thème modifié à la main peut avoir un emplacement invalide : celui du thème par défaut.
+    const h = theme.colors?.[mode]?.[ref.slot];
+    const hex = typeof h === 'string' && /^#[0-9a-f]{6}$/.test(h) ? h : DEFAULT_THEME.colors[mode][ref.slot];
+    return ref.mode === 'tint' ? tint(hex, ref.pct / 100) : ref.mode === 'shade' ? shade(hex, ref.pct / 100) : hex;
+  }
   const t = token(c);
-  return t ? (theme === 'light' ? LIGHT_THEME_HEX : DARK_THEME_HEX)[t] : c;
+  return t ? (mode === 'light' ? LIGHT_THEME_HEX : DARK_THEME_HEX)[t] : c;
 }

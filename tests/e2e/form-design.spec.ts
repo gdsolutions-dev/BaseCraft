@@ -31,6 +31,18 @@ async function dragBy(page: Page, l: Locator, dx: number, dy: number) {
   await page.mouse.move(x + dx, y + dy, { steps: 3 });
   await page.mouse.up();
 }
+/** Glisse le sélecteur de la ligne `from` de la boîte Ordre de tabulation : au-dessus / au-dessous de la ligne `to`, ou jusqu'à son sélecteur (`select`). */
+async function dragSelector(page: Page, from: string, to: string, where: 'above' | 'below' | 'select') {
+  const a = (await page.getByTestId(`taborder-sel-${from}`).boundingBox())!;
+  const t = (await page.getByTestId(where === 'select' ? `taborder-sel-${to}` : `taborder-item-${to}`).boundingBox())!;
+  const x = a.x + a.width / 2, y0 = a.y + a.height / 2;
+  const y1 = where === 'above' ? t.y + 1 : where === 'below' ? t.y + t.height - 1 : t.y + t.height / 2;
+  await page.mouse.move(x, y0);
+  await page.mouse.down();
+  await page.mouse.move(x, (y0 + y1) / 2, { steps: 4 });
+  await page.mouse.move(x, y1, { steps: 4 });
+  await page.mouse.up();
+}
 /** Choisit un contrôle ; la feuille montre sa propriété Left (assertion web-first : la feuille se redessine après le clic). */
 async function expectLeft(page: Page, name: string, value: string, not = false) {
   await page.getByTestId(`ctl-${name}`).click();
@@ -154,9 +166,16 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     // Ordre de tabulation : Nom (premier) descend d'un cran
     await page.getByTestId('ribbon-tab-formDesign').click();
     await page.getByTestId('cmd-tabOrder').click();
-    await expect(page.getByTestId('taborder-list-detail').locator('[role="option"]')).toHaveText(['Nom', 'Email', 'Ville', 'Ville2']);
-    await page.getByTestId('taborder-down').click();
     const order = page.getByTestId('taborder-list-detail').locator('[role="option"]');
+    await expect(order).toHaveText(['Nom', 'Email', 'Ville', 'Ville2']);
+    // un glissement de sélecteur suivi d'Annuler ne change rien
+    await page.getByTestId('taborder-item-Ville').click();
+    await dragSelector(page, 'Ville', 'Nom', 'above');
+    await expect(order).toHaveText(['Ville', 'Nom', 'Email', 'Ville2']);
+    await page.getByTestId('taborder-cancel').click();
+    await page.getByTestId('cmd-tabOrder').click();
+    await expect(order).toHaveText(['Nom', 'Email', 'Ville', 'Ville2']);
+    await page.getByTestId('taborder-down').click();
     await expect(order).toHaveText(['Email', 'Nom', 'Ville', 'Ville2']);
     // au clavier : Alt+Haut / Alt+Bas déplacent le contrôle choisi (Nom), Bas seul change le choix
     await page.getByTestId('taborder-list-detail').focus();
@@ -168,6 +187,33 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('Alt+ArrowDown');   // Ville, choisi, redescend
     await expect(order).toHaveText(['Email', 'Nom', 'Ville', 'Ville2']);
+    // plage : clic + Maj+clic, Monter déplace le bloc, Alt+Bas le ramène, Maj+Haut/Bas change l'étendue
+    const item = (n: string) => page.getByTestId(`taborder-item-${n}`);
+    await item('Ville').click();
+    await item('Ville2').click({ modifiers: ['Shift'] });
+    await expect(item('Ville')).toHaveAttribute('aria-selected', 'true');
+    await expect(item('Ville2')).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('taborder-up').click();
+    await expect(order).toHaveText(['Email', 'Ville', 'Ville2', 'Nom']);
+    await page.getByTestId('taborder-list-detail').focus();
+    await page.keyboard.press('Alt+ArrowDown');
+    await expect(order).toHaveText(['Email', 'Nom', 'Ville', 'Ville2']);
+    await page.keyboard.press('Shift+ArrowUp');
+    await expect(item('Ville2')).toHaveAttribute('aria-selected', 'false');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(item('Ville2')).toHaveAttribute('aria-selected', 'true');
+    // pointeur : une ligne glissée en tête, puis deux lignes sélectionnées au glissé et déplacées en tête
+    await item('Ville').click();
+    await dragSelector(page, 'Ville', 'Email', 'above');
+    await expect(order).toHaveText(['Ville', 'Email', 'Nom', 'Ville2']);
+    await dragSelector(page, 'Nom', 'Ville2', 'select');
+    await expect(item('Nom')).toHaveAttribute('aria-selected', 'true');
+    await expect(item('Ville2')).toHaveAttribute('aria-selected', 'true');
+    await expect(item('Email')).toHaveAttribute('aria-selected', 'false');
+    await dragSelector(page, 'Nom', 'Ville', 'above');
+    await expect(order).toHaveText(['Nom', 'Ville2', 'Ville', 'Email']);
+    await page.getByTestId('taborder-auto').click();
+    await expect(order).toHaveText(['Nom', 'Ville2', 'Email', 'Ville']);   // de haut en bas
     await page.getByTestId('taborder-ok').click();
     await expect(page.getByTestId('doc-tab-form-Formulaire1')).toContainText('•');   // modifié
 
@@ -189,7 +235,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     const d = saved.sections[1].controls;
     expect(d.map((c) => c.name)).toEqual(['Ville', 'Email', 'Ville2', 'Nom']);
     expect(d.find((c) => c.name === 'Ville2')!.props).toMatchObject({ ControlSource: '=Left([Nom], 2)', FontName: 'Comic Sans MS' });
-    expect(Object.fromEntries(d.map((c) => [c.name, c.props.TabIndex]))).toEqual({ Email: 0, Nom: 1, Ville: 2, Ville2: 3 });
+    expect(Object.fromEntries(d.map((c) => [c.name, c.props.TabIndex]))).toEqual({ Nom: 0, Ville2: 1, Email: 2, Ville: 3 });
     expect(d.find((c) => c.name === 'Ville')!.left).toBe(1701 + 150);
     expect(d.find((c) => c.name === 'Nom')!.children![0]).toMatchObject({ kind: 'label', name: 'Nom_Étiquette', props: { Caption: 'Nom du client :' } });
 
@@ -433,6 +479,87 @@ test('read-only base: Design view opens for viewing, a drag moves nothing, Arran
     await expect(page.getByTestId('cmd-tabOrder')).toBeEnabled();   // ouvert en lecture seule
     await page.getByTestId('cmd-tabOrder').click();
     await expect(page.getByTestId('taborder-down')).toBeDisabled();
+    await expect(page.getByTestId('taborder-up')).toBeDisabled();
+    const ro = page.getByTestId('taborder-list-detail').locator('[role="option"]');
+    const roOrder = await ro.allTextContents();
+    await dragSelector(page, roOrder[0], roOrder[roOrder.length - 1], 'below');
+    expect(await ro.allTextContents()).toEqual(roOrder);
+    await page.getByTestId('taborder-cancel').click();
+  } finally {
+    await b.app.close();
+    await a.app.close();
+  }
+});
+
+const tb = (name: string, top: number, props: Record<string, unknown>) =>
+  ({ kind: 'textBox' as const, name, left: 1701, top, width: 2268, height: 340, props });
+/** Detail : Nom, Email et un contrôle à onglets (Un : P0a, P0b ; Deux : P1a, P1b, P1c), tous avec un TabIndex. */
+const paged: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'table', name: 'Clients' }, props: { Width: 9072 }, sections: [
+  { kind: 'formHeader', height: 0, props: { Visible: false }, controls: [] },
+  { kind: 'detail', height: 4536, props: {}, controls: [
+    tb('Nom', 100, { ControlSource: 'Nom', TabIndex: 0 }), tb('Email', 600, { ControlSource: 'Email', TabIndex: 1 }),
+    { kind: 'tabControl', name: 'Onglets', left: 4300, top: 100, width: 3402, height: 3000, props: { Pages: ['Un', 'Deux'], TabIndex: 2 }, children: [
+      tb('P0a', 500, { TabIndex: 0 }), tb('P0b', 1000, { TabIndex: 1 }),
+      tb('P1a', 500, { TabIndex: 0, PageIndex: 1 }), tb('P1b', 1000, { TabIndex: 1, PageIndex: 1 }), tb('P1c', 1500, { TabIndex: 2, PageIndex: 1 })] }] },
+  { kind: 'formFooter', height: 0, props: { Visible: false }, controls: [] }] };
+
+test('a tab control page: its context menu opens its own Tab Order, one undo step, the ribbon dialog lists the control, read-only base views only', async () => {
+  const base = seedBase('formulaire-ordre-page', (db) => { createTable(db, table); seedForm(db, 'Fiche', paged); });
+  const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    await page.getByTestId('nav-item-form-Fiche').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    const items = page.getByTestId('taborder-list-page').locator('[role="option"]');
+    const openPage = async () => {
+      await page.getByTestId('tabpage-Onglets-1').click({ button: 'right' });
+      await expect(page.getByTestId('page-menu')).toBeVisible();
+      await page.getByTestId('page-menu-taborder').click();
+    };
+    // the ribbon dialog lists the control among the Detail items
+    await page.getByTestId('ribbon-tab-formDesign').click();
+    await page.getByTestId('cmd-tabOrder').click();
+    await expect(page.getByTestId('taborder-list-detail').locator('[role="option"]')).toHaveText(['Nom', 'Email', 'Onglets']);
+    await page.getByTestId('taborder-cancel').click();
+    // the page's own order, P1c dragged to the top
+    await openPage();
+    await expect(items).toHaveText(['P1a', 'P1b', 'P1c']);
+    await page.getByTestId('taborder-item-P1c').click();
+    await dragSelector(page, 'P1c', 'P1a', 'above');
+    await expect(items).toHaveText(['P1c', 'P1a', 'P1b']);
+    await page.getByTestId('taborder-ok').click();
+    // one undo step restores it
+    await page.getByTestId('ctl-Nom').click();
+    await page.keyboard.press('Control+z');
+    await openPage();
+    await expect(items).toHaveText(['P1a', 'P1b', 'P1c']);
+    await page.getByTestId('taborder-item-P1c').click();
+    await dragSelector(page, 'P1c', 'P1a', 'above');
+    await page.getByTestId('taborder-ok').click();
+    await page.getByTestId('ctl-Nom').click();
+    await page.keyboard.press('Control+s');
+    await expect.poll(async () => {
+      const ctl = (await getForm(page, 'Fiche')).sections[1].controls;
+      const own = Object.fromEntries(ctl.flatMap((c) => [c, ...(c.children ?? [])]).map((c) => [c.name, c.props.TabIndex]));
+      return own;
+    }).toEqual({ Nom: 0, Email: 1, Onglets: 2, P0a: 0, P0b: 1, P1c: 0, P1a: 1, P1b: 2 });
+  } finally {
+    await app.close();
+  }
+});
+
+test('read-only base: the page menu opens the page Tab Order for viewing only', async () => {
+  const base = seedBase('formulaire-ordre-page-ro', (db) => { createTable(db, table); seedForm(db, 'Fiche', paged); });
+  const a = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  const b = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    const page = b.page;
+    await page.getByTestId('nav-item-form-Fiche').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await page.getByTestId('tabpage-Onglets-1').click({ button: 'right' });
+    await page.getByTestId('page-menu-taborder').click();
+    await expect(page.getByTestId('taborder-list-page').locator('[role="option"]')).toHaveText(['P1a', 'P1b', 'P1c']);
+    await expect(page.getByTestId('taborder-down')).toBeDisabled();
+    await expect(page.getByTestId('taborder-up')).toBeDisabled();
     await page.getByTestId('taborder-cancel').click();
   } finally {
     await b.app.close();

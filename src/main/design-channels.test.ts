@@ -8,7 +8,7 @@ const DATA_CHANNELS: string[] = [
   CH.getSettings, CH.setLocale, CH.setTheme, CH.setSetting, CH.pickFolder, CH.settingsChanged, CH.appInfo, CH.appLicenses, CH.appSetIcon, CH.openExternal, CH.edit, CH.beep, CH.appWriteClipboard,
   CH.closeRequested, CH.closeAllowed, CH.closeAck,
   CH.baseOpen, CH.baseClose, CH.baseState, CH.baseTakeOverLock, CH.baseStateChanged, CH.baseHostCrashed, CH.baseDataChanged, CH.baseOpenFailure,
-  CH.baseEnableContent, CH.baseStartup,
+  CH.baseEnableContent, CH.baseStartup, CH.baseTheme, CH.baseThemeChanged,
   CH.tablesList, CH.tablesDesign, CH.tablesTestRules,
   CH.rowsCount, CH.rowsPage, CH.rowsInsert, CH.rowsUpdate, CH.rowsDelete, CH.rowsLookup,
   CH.relationsList, CH.relationsLayout, CH.relationsCascadeChildren,
@@ -27,7 +27,7 @@ describe('design channels', () => {
     for (const ch of DATA_CHANNELS) expect(isDesignChannel(ch)).toBe(false);
   });
   it('what writes the base design is a design channel', () => {
-    for (const ch of [CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSaveStartup, CH.tablesSave, CH.relationsSave, CH.importRun, CH.objectsSave, CH.objectsSetDescription])
+    for (const ch of [CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme, CH.tablesSave, CH.relationsSave, CH.importRun, CH.objectsSave, CH.objectsSetDescription])
       expect(isDesignChannel(ch)).toBe(true);
   });
   it('link design channels are design, refresh is not', () => { // R15

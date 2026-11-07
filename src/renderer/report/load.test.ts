@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_PRINT_HTML_CHARS, type RecordSourceRef, type SourceInfo, type SourcePage, type SourcePageRequest } from '../../shared/api';
 import type { LayoutEnv } from '../../shared/report/types';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../shared/report/fixtures/factures';
+import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../../shared/design/theme';
 import { DATA_PAGE, docParameters, layoutSavedReport, loadDocData, loadReportData, printRequestFor, zoomFor } from './load';
 
 const FIELDS = [{ name: 'N', type: 'number' as const, props: { type: 'number' as const } }] as unknown as SourceInfo['fields'];
@@ -131,6 +132,32 @@ describe('layoutSavedReport', () => {
       () => steps.push('ready'));
     expect(steps).toEqual(['ask Client voulu', 'ready', 'page {"Client voulu":"Martin"}']);
     expect(r.pages.length).toBeGreaterThan(0);
+  });
+});
+
+describe('layoutSavedReport theme (F2)', () => {
+  const env: LayoutEnv = { locale: 'fr-FR', lang: 'fr', now: () => new Date(Date.UTC(2026, 9, 22)), errorText: { error: '#Erreur', name: '#Nom?' } };
+  const [, ardoise, , , ocean] = BUILTIN_THEMES as unknown as typeof BUILTIN_THEMES[number][];
+  const reportWith = (props: Record<string, unknown>) => ({ ...FACTURES_REPORT, props: { ...FACTURES_REPORT.props, ...props },
+    sections: FACTURES_REPORT.sections.map((s) => ({ ...s, controls: s.controls.map((c) => ({ ...c, props: { ...c.props, ForeColor: 'theme:accent1@-25', FontName: '(Headings)' } })) })) });
+  const api = (definition: unknown, base = ocean!) => ({
+    objects: { get: async (_k: string, name: string) => ({ name, definition }) },
+    sources: {
+      describe: async (): Promise<SourceInfo> => ({ fields: FACTURES_FIELDS, updatable: false, parameters: [] }),
+      page: async (_: RecordSourceRef, r: SourcePageRequest): Promise<SourcePage> => ({ rows: FACTURES_ROWS.slice(r.offset, r.offset + r.limit), rowids: [], total: FACTURES_ROWS.length }),
+    },
+    theme: { get: async () => base },
+  });
+  const colors = (r: Awaited<ReturnType<typeof layoutSavedReport>>) => new Set(r.pages.flatMap((p) => p.bands.flatMap((b) => b.items.map((i) => i.color))));
+  it('lays out with the base default theme', async () => {
+    const r = await layoutSavedReport(api(reportWith({})), 'x', env, async () => null);
+    expect(colors(r).has(shade(ocean!.colors.light.accent1, 0.25))).toBe(true);
+    expect(colors(r).has(shade(DEFAULT_THEME.colors.light.accent1, 0.25))).toBe(false);
+  });
+  it("an override in doc.props.Theme wins over the base's", async () => {
+    const r = await layoutSavedReport(api(reportWith({ Theme: ardoise })), 'x', env, async () => null);
+    expect(colors(r).has(shade(ardoise!.colors.light.accent1, 0.25))).toBe(true);
+    expect(colors(r).has(shade(ocean!.colors.light.accent1, 0.25))).toBe(false);
   });
 });
 

@@ -117,6 +117,13 @@
 .dz-colors > button[aria-pressed="true"] { color: var(--bc-accent); font-weight: 600; }
 .dz-color-custom:focus-within { box-shadow: inset 0 0 0 2px var(--bc-accent); }
 .dz-color-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.dz-cp-title { padding: 4px 4px 2px; font-size: 11px; color: var(--bc-text-muted); }
+.dz-cp-grid { display: grid; grid-template-columns: repeat(10, 18px); gap: 3px; padding: 2px 4px; }
+.dz-colors > .dz-cp-grid > button.dz-cp-sw, .dz-cp-sw { width: 18px; height: 18px; padding: 0; border: 1px solid var(--bc-border); border-radius: 3px; cursor: pointer; }
+.dz-cp-sw:hover { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+.dz-cp-sw[aria-pressed="true"] { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+.dz-cp-sw:focus-visible, .dz-cp button:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
+.dz-swatch-none { background: repeating-linear-gradient(45deg, var(--bc-border) 0 3px, transparent 3px 6px); }
 .dz-fields-list { flex: 1; overflow: auto; margin: 0; padding: var(--bc-space-1) 0; list-style: none; }
 .dz-fields-list button { display: block; width: 100%; padding: 4px var(--bc-space-3); font-size: 12px; text-align: left; cursor: grab; }
 .dz-fields-list button:hover:not(:disabled) { background: var(--hover); }
@@ -127,3 +134,15 @@
 .dz-format-font input { flex: 1; min-width: 0; }
 .ctxmenu .dz-format-font .cbx-toggle { width: 24px; height: 26px; padding: 0; }
 .ctxmenu .dz-colors > button { height: 24px; font-size: 12px; }
+
+/* Galerie des thèmes (ruban › Thèmes) */
+.ctxmenu .tg { padding: 4px; }
+.tg-title { margin: 4px 0; font-size: 12px; font-weight: 600; color: var(--muted, inherit); }
+.tg-grid { display: grid; grid-template-columns: repeat(3, 92px); gap: 6px; }
+.ctxmenu button.tg-item { display: flex; flex-direction: column; align-items: stretch; height: auto; padding: 4px; gap: 4px; border: 1px solid transparent; }
+.ctxmenu button.tg-item[aria-current="true"] { border-color: var(--accent, currentColor); }
+.tg-thumb { display: flex; flex-direction: column; justify-content: space-between; height: 56px; padding: 4px; border: 1px solid var(--bc-border, #ccc); border-radius: 3px; }
+.tg-aa { font-size: 20px; line-height: 1; }
+.tg-sw { display: flex; gap: 2px; }
+.tg-sw i { flex: 1; height: 8px; }
+.tg-name { font-size: 12px; text-align: center; }

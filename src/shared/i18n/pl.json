@@ -557,6 +557,9 @@
       "needsRecovery": "Ta baza danych musi zostać odzyskana, zanim będzie można jej użyć.",
       "unsupportedTable": "Ta tabela nie jest obsługiwana przez BaseCraft.",
       "noBase": "Żadna baza danych nie jest otwarta.",
+      "invalidName": "Nazwa motywu ma od 1 do 60 znaków i nie zawiera znaków sterujących.",
+      "themeReserved": "Ta nazwa należy do motywu dostarczanego z BaseCraft: wybierz inną.",
+      "themeExists": "Motyw niestandardowy ma już tę nazwę.",
       "unknown": "Wystąpił nieoczekiwany błąd: {{detail}}",
       "fileTooLarge": "Plik jest większy niż 2 GB: nie można go zaimportować.",
       "importInterrupted": "Import został przerwany (baza danych została zamknięta lub stała się tylko do odczytu). Nic nie zostało zaimportowane.",
@@ -3082,6 +3085,40 @@
     "builtin": "Motywy BaseCraft",
     "all": "Zastosuj motyw do wszystkich pasujących obiektów",
     "object": "Zastosuj motyw tylko do tego obiektu",
-    "default": "Ustaw jako domyślny motyw bazy danych"
+    "default": "Ustaw jako domyślny motyw bazy danych",
+    "save": "Zapisz bieżący motyw…",
+    "browse": "Wyszukaj motywy…",
+    "delete": "Usuń ten motyw niestandardowy",
+    "saveTitle": "Zapisz bieżący motyw",
+    "nameLabel": "Nazwa motywu:",
+    "replace": "Motyw niestandardowy o nazwie „{{name}}” już istnieje. Zastąpić go?",
+    "deleteTitle": "Usuń motyw",
+    "deleteConfirm": "Trwale usunąć motyw niestandardowy „{{name}}”?"
+  },
+  "colorsGallery": {
+    "all": "Zastosuj kolory do wszystkich pasujących obiektów",
+    "object": "Zastosuj kolory tylko do tego obiektu",
+    "default": "Ustaw kolory jako domyślne dla tej bazy danych",
+    "customize": "Dostosuj kolory…",
+    "title": "Dostosuj kolory",
+    "name": "Nazwa:",
+    "light": "Jasny",
+    "dark": "Ciemny",
+    "save": "Zapisz",
+    "reset": "Resetuj"
+  },
+  "fontsGallery": {
+    "all": "Zastosuj czcionki do wszystkich pasujących obiektów",
+    "object": "Zastosuj czcionki tylko do tego obiektu",
+    "default": "Ustaw czcionki jako domyślne dla tej bazy danych",
+    "customize": "Dostosuj czcionki…",
+    "title": "Dostosuj czcionki",
+    "major": "Czcionka nagłówków:",
+    "minor": "Czcionka tekstu:",
+    "name": "Nazwa:",
+    "save": "Zapisz"
+  },
+  "themes": {
+    "browseLater": "Wkrótce."
   }
 }

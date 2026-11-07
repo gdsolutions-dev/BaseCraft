@@ -550,6 +550,9 @@
       "needsRecovery": "Cette base doit être récupérée avant d'être utilisée.",
       "unsupportedTable": "Cette table n'est pas prise en charge par BaseCraft.",
       "noBase": "Aucune base n'est ouverte.",
+      "invalidName": "Un nom de thème compte de 1 à 60 caractères, sans caractère de contrôle.",
+      "themeReserved": "Ce nom est celui d'un thème fourni avec BaseCraft : choisissez-en un autre.",
+      "themeExists": "Un thème personnalisé porte déjà ce nom.",
       "unknown": "Une erreur inattendue s'est produite : {{detail}}",
       "fileTooLarge": "Le fichier dépasse 2 Go : il ne peut pas être importé.",
       "importInterrupted": "L'importation a été interrompue (base fermée ou passée en lecture seule). Rien n'a été importé.",
@@ -2914,6 +2917,40 @@
     "builtin": "Thèmes de BaseCraft",
     "all": "Appliquer le thème à tous les objets correspondants",
     "object": "Appliquer le thème à cet objet uniquement",
-    "default": "Définir ce thème comme valeur par défaut de la base de données"
+    "default": "Définir ce thème comme valeur par défaut de la base de données",
+    "save": "Enregistrer le thème actif…",
+    "browse": "Rechercher des thèmes…",
+    "delete": "Supprimer ce thème personnalisé",
+    "saveTitle": "Enregistrer le thème actif",
+    "nameLabel": "Nom du thème :",
+    "replace": "Un thème personnalisé nommé « {{name}} » existe déjà. Le remplacer ?",
+    "deleteTitle": "Supprimer le thème",
+    "deleteConfirm": "Supprimer définitivement le thème personnalisé « {{name}} » ?"
+  },
+  "colorsGallery": {
+    "all": "Appliquer les couleurs à tous les objets correspondants",
+    "object": "Appliquer les couleurs à cet objet uniquement",
+    "default": "Définir ces couleurs comme valeur par défaut de la base de données",
+    "customize": "Personnaliser les couleurs…",
+    "title": "Personnaliser les couleurs",
+    "name": "Nom :",
+    "light": "Clair",
+    "dark": "Sombre",
+    "save": "Enregistrer",
+    "reset": "Réinitialiser"
+  },
+  "fontsGallery": {
+    "all": "Appliquer les polices à tous les objets correspondants",
+    "object": "Appliquer les polices à cet objet uniquement",
+    "default": "Définir ces polices comme valeur par défaut de la base de données",
+    "customize": "Personnaliser les polices…",
+    "title": "Personnaliser les polices",
+    "major": "Police des titres :",
+    "minor": "Police du corps :",
+    "name": "Nom :",
+    "save": "Enregistrer"
+  },
+  "themes": {
+    "browseLater": "Bientôt disponible."
   }
 }

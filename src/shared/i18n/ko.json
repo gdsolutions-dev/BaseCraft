@@ -557,6 +557,9 @@
       "needsRecovery": "이 데이터베이스를 사용하려면 먼저 복구해야 합니다.",
       "unsupportedTable": "이 테이블은 BaseCraft에서 지원되지 않습니다.",
       "noBase": "열려 있는 데이터베이스가 없습니다.",
+      "invalidName": "테마 이름은 1~60자이며 제어 문자를 포함할 수 없습니다.",
+      "themeReserved": "이 이름은 BaseCraft 기본 테마의 이름입니다. 다른 이름을 선택하십시오.",
+      "themeExists": "이 이름의 사용자 지정 테마가 이미 있습니다.",
       "unknown": "예기치 않은 오류가 발생했습니다: {{detail}}",
       "fileTooLarge": "파일이 2GB보다 커서 가져올 수 없습니다.",
       "importInterrupted": "가져오기가 중단되었습니다(데이터베이스가 닫혔거나 읽기 전용이 되었습니다). 가져온 항목이 없습니다.",
@@ -3013,6 +3016,40 @@
     "builtin": "BaseCraft 테마",
     "all": "일치하는 모든 개체에 테마 적용",
     "object": "이 개체에만 테마 적용",
-    "default": "이 데이터베이스의 기본 테마로 설정"
+    "default": "이 데이터베이스의 기본 테마로 설정",
+    "save": "현재 테마 저장…",
+    "browse": "테마 찾기…",
+    "delete": "이 사용자 지정 테마 삭제",
+    "saveTitle": "현재 테마 저장",
+    "nameLabel": "테마 이름:",
+    "replace": "'{{name}}'(이)라는 사용자 지정 테마가 이미 있습니다. 바꾸시겠습니까?",
+    "deleteTitle": "테마 삭제",
+    "deleteConfirm": "사용자 지정 테마 '{{name}}'을(를) 영구적으로 삭제하시겠습니까?"
+  },
+  "colorsGallery": {
+    "all": "일치하는 모든 개체에 색 적용",
+    "object": "이 개체에만 색 적용",
+    "default": "색을 이 데이터베이스의 기본값으로 설정",
+    "customize": "색 사용자 지정…",
+    "title": "색 사용자 지정",
+    "name": "이름:",
+    "light": "밝게",
+    "dark": "어둡게",
+    "save": "저장",
+    "reset": "원래대로"
+  },
+  "fontsGallery": {
+    "all": "일치하는 모든 개체에 글꼴 적용",
+    "object": "이 개체에만 글꼴 적용",
+    "default": "이 데이터베이스의 기본값으로 글꼴 설정",
+    "customize": "글꼴 사용자 지정…",
+    "title": "글꼴 사용자 지정",
+    "major": "제목 글꼴:",
+    "minor": "본문 글꼴:",
+    "name": "이름:",
+    "save": "저장"
+  },
+  "themes": {
+    "browseLater": "곧 제공됩니다."
   }
 }

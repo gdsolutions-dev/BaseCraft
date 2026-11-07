@@ -2,12 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PAGE_SETUP, pageGeometry, readReport, reportWidth, type GroupLevel } from './model';
 import { readProp } from './props';
-import { cellItemName } from '../design/layout';
 import { setUserFunctions } from '../expr/user-functions';
 import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../design/theme';
 import { FACTURES_REPORT } from './fixtures/factures';
 import { LIGHT_THEME_HEX, resolveColor, type ColorValue } from '../design/colors';
 import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../design/model';
+import { cellItemName } from '../design/layout';
 import { defaultFor, PROPERTY_CATALOG, type PropertyTarget } from '../design/properties';
 import { defaultProps, MAX_TWIPS, type FieldType } from '../field-types';
 import type { SourceField } from '../record-source';

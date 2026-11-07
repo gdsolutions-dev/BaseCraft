@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_TWIPS } from '../field-types';
+import { isValidObjectName, MAX_TWIPS } from '../field-types';
 import type { ControlDef, DesignDoc, SectionDef } from './model';
-import { isValidObjectName } from '../field-types';
 import { COL_GAP, ROW_GAP, cellControl, cellItemName, emptyCellRank, emptyCellsOf, labelOf, parseCellItemName, layoutOf, readLayouts, reflow, withLayouts, type Layout, type LayoutCell } from './layout';
 
 const ctl = (name: string, kind: ControlDef['kind'] = 'textBox'): ControlDef => ({ kind, name, left: 0, top: 0, width: 10, height: 10, props: {} });
@@ -142,7 +141,7 @@ describe('padding', () => {
     expect(byName(d, 'B')).toMatchObject({ left: 200 + 1000 + COL_GAP + 180, top: 100 + 180, width: 3000, height: 400 });
     expect(byName(d, 'D').left).toBe(200 + 1000 + COL_GAP + 180);
     expect(byName(d, 'A')).toMatchObject({ left: 200, top: 100 + 180, height: 400 });   // same row: shifted by the row's top padding
-    expect(byName(d, 'C').top).toBe(100 + 400 + 360 + ROW_GAP + 0);
+    expect(byName(d, 'C').top).toBe(100 + 400 + 360 + ROW_GAP);
   });
   it('a header label’s left padding shifts that column’s Detail control (tabular)', () => {
     const l: Layout = { id: 'T', kind: 'tabular', left: 0, tops: { formHeader: 50, detail: 70 }, cols: [800, 900],

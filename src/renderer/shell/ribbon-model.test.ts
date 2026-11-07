@@ -280,6 +280,18 @@ describe('Themes command (F2)', () => {
       expect(themes.enabled(ctx({ kind, mode, readOnly: true })), `${kind} ${mode} ro`).toBe(true);
     }
   });
+  it('Colors is a real popup, enabled like Themes, also read-only', () => {
+    const colors = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((x) => x.id === 'themeColors')!;
+    expect([colors.planned, colors.popup]).toEqual([undefined, true]);
+    expect(colors.enabled(ctx({ readOnly: true }))).toBe(true);
+    expect(colors.enabled(ctx({ mode: 'run' }))).toBe(false);
+  });
+  it('Fonts is a real popup, enabled like Themes, also read-only', () => {
+    const fonts = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((x) => x.id === 'themeFonts')!;
+    expect([fonts.planned, fonts.popup]).toEqual([undefined, true]);
+    expect(fonts.enabled(ctx({ readOnly: true }))).toBe(true);
+    expect(fonts.enabled(ctx({ mode: 'run' }))).toBe(false);
+  });
   it('is disabled in Form/Report views and with no document', () => {
     expect(themes.enabled(ctx({ mode: 'run' }))).toBe(false);
     expect(themes.enabled(ctx({ kind: 'report', mode: 'run' }))).toBe(false);

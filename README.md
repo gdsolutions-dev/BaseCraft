@@ -69,6 +69,7 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - Move to a server: Database Tools › Move Data › « Vers un serveur » moves every local table (structure, data, keys, indexes, relationships) to PostgreSQL or SQL Server after a backup copy, replaces them with linked tables that keep their captions, formats and rules, and shows a report; External Data › Import › PostgreSQL / SQL Server copies server tables into local ones (see [Move to a server](#move-to-a-server))
 - Pass-through queries: Query Type › SQL direct sends a text in PostgreSQL's or SQL Server's own language to the server as typed, with a read-only result for datasheets, forms and reports or an action run with « Activer le contenu » (see [Pass-through queries](docs/postgresql.md#pass-through-queries))
 - Python (Pyodide, offline, numpy and pandas included): modules, Immediate window (Ctrl+G), `msgbox` and `inputbox`, Ctrl+Break (see [Python](docs/python.md))
+- Themes: six built-in themes with light and dark palettes, Themes, Colors and Fonts galleries (all matching objects, this object only, default), your own saved themes (see [Themes](docs/themes.md))
 - Layouts and Layout view (Mode Page) for forms and reports: Stacked and Tabular layouts, merge and split, gridlines, margins, padding, anchoring, empty cells (see [Layout view](docs/layout-view.md))
 - Save As, Compact and Repair; `.basecraft` file association
 - Ribbon, navigation pane, tabs, light and dark themes

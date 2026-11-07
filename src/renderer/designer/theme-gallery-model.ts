@@ -3,15 +3,19 @@ import type { DesignDoc } from '../../shared/design/model';
 import type { Theme } from '../../shared/design/theme';
 import { setDocProp } from './designer-model';
 
-export interface GalleryEntry { section: 'current' | 'custom' | 'builtin'; theme: Theme }
+/** `key`: unique in the gallery (a custom theme never shares a React key with a built-in of the same name). */
+export interface GalleryEntry { section: 'current' | 'custom' | 'builtin'; theme: Theme; key: string }
 
 export const sameTheme = (a: Theme, b: Theme): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** Un thème personnalisé du même nom (sans tenir compte de la casse) que `t`, s'il existe. */
+export const customNamed = (custom: Theme[], t: Theme): Theme | undefined => custom.find((c) => c.name.toLowerCase() === t.name.toLowerCase());
 
 /** Le thème actuel d'abord (une seule fois), puis les thèmes personnalisés, puis ceux fournis. */
 export function themeSections(current: Theme, custom: Theme[], builtin: readonly Theme[]): GalleryEntry[] {
   const rest = (list: readonly Theme[], section: 'custom' | 'builtin'): GalleryEntry[] =>
-    list.filter((t) => !sameTheme(t, current)).map((theme) => ({ section, theme }));
-  return [{ section: 'current', theme: current }, ...rest(custom, 'custom'), ...rest(builtin, 'builtin')];
+    list.filter((t) => !sameTheme(t, current)).map((theme) => ({ section, theme, key: `${section}:${theme.name}` }));
+  return [{ section: 'current', theme: current, key: 'current' }, ...rest(custom, 'custom'), ...rest(builtin, 'builtin')];
 }
 
 /** « Cet objet uniquement » : écrit `props.Theme` ; le même document s'il le porte déjà. */

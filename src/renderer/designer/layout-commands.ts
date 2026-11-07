@@ -6,7 +6,7 @@ import { canMerge, createLayout, insertCells, mergeCells, splitCell, membersOf, 
 import type { DesignDoc } from '../../shared/design/model';
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { documentKind, type DesignerAction, type DesignerState, type Selection } from './designer-model';
-import { read, targetsFor, writes, type Write } from './format-commands';
+import { read, selectionSet, targetsFor, writes, type Write } from './format-commands';
 
 export type LayoutCommand = 'stacked' | 'tabular' | 'removeLayout' | 'insertAbove' | 'insertBelow' | 'insertLeft' | 'insertRight'
   | 'selectLayout' | 'selectColumn' | 'selectRow' | 'moveUp' | 'moveDown' | 'merge' | 'splitVertically' | 'splitHorizontally';
@@ -56,10 +56,7 @@ const PRESET_SIDES: Record<Exclude<GridlinePreset, 'outline'>, Side[]> = {
 };
 
 /** One value written to the same property of every selected control and empty cell (Margins and Anchoring never reach cells); null without a target. */
-function writeAll(s: DesignerState, values: Record<string, unknown>): DesignerAction | null {
-  const kind = documentKind(s);
-  return writes(Object.entries(values).map(([name, value]) => ({ targets: targetsFor(s.doc, s.selection, name).map((x) => x.t), name, value })), kind);
-}
+const writeAll = (s: DesignerState, values: Record<string, unknown>): DesignerAction | null => selectionSet(s.doc, documentKind(s), s.selection, values);
 export const marginsAction = (s: DesignerState, preset: keyof typeof MARGIN_PRESETS): DesignerAction | null =>
   writeAll(s, Object.fromEntries(SIDES.map((x) => [`${x}Margin`, MARGIN_PRESETS[preset]])));
 export const paddingAction = (s: DesignerState, preset: keyof typeof PADDING_PRESETS): DesignerAction | null =>

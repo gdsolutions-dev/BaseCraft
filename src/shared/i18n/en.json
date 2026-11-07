@@ -550,6 +550,9 @@
       "needsRecovery": "This database must be recovered before it can be used.",
       "unsupportedTable": "This table is not supported by BaseCraft.",
       "noBase": "No database is open.",
+      "invalidName": "A theme name has 1 to 60 characters and no control character.",
+      "themeReserved": "This name belongs to a theme shipped with BaseCraft: choose another one.",
+      "themeExists": "A custom theme already has this name.",
       "unknown": "An unexpected error occurred: {{detail}}",
       "fileTooLarge": "The file is larger than 2 GB: it cannot be imported.",
       "importInterrupted": "The import was interrupted (the database was closed or became read-only). Nothing was imported.",
@@ -2914,6 +2917,40 @@
     "builtin": "BaseCraft themes",
     "all": "Apply Theme to All Matching Objects",
     "object": "Apply Theme to This Object Only",
-    "default": "Set as Default Theme for This Database"
+    "default": "Set as Default Theme for This Database",
+    "save": "Save Current Theme…",
+    "browse": "Browse for Themes…",
+    "delete": "Delete this custom theme",
+    "saveTitle": "Save Current Theme",
+    "nameLabel": "Theme name:",
+    "replace": "A custom theme named “{{name}}” already exists. Replace it?",
+    "deleteTitle": "Delete theme",
+    "deleteConfirm": "Permanently delete the custom theme “{{name}}”?"
+  },
+  "colorsGallery": {
+    "all": "Apply Colors to All Matching Objects",
+    "object": "Apply Colors to This Object Only",
+    "default": "Set Colors as Default for This Database",
+    "customize": "Customize Colors…",
+    "title": "Customize Colors",
+    "name": "Name:",
+    "light": "Light",
+    "dark": "Dark",
+    "save": "Save",
+    "reset": "Reset"
+  },
+  "fontsGallery": {
+    "all": "Apply Fonts to All Matching Objects",
+    "object": "Apply Fonts to This Object Only",
+    "default": "Set Fonts as Default for This Database",
+    "customize": "Customize Fonts…",
+    "title": "Customize Fonts",
+    "major": "Headings font:",
+    "minor": "Body font:",
+    "name": "Name:",
+    "save": "Save"
+  },
+  "themes": {
+    "browseLater": "Coming soon."
   }
 }

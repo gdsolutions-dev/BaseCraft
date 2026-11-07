@@ -283,7 +283,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     typingRef.current = null;
     setTyping(null);
     const cell = empties.flat().find((c) => c.layout === ty.cell.layout && c.row === ty.cell.row && c.col === ty.cell.col);
-    if (!commit || !cell || !ty.text.trim()) return;
+    if (!commit || readOnly || !cell || !ty.text.trim()) return;
     const section = state.doc.sections.findIndex((_, i) => empties[i].includes(cell));
     dispatch({ type: 'insert', section, controls: typedLabel(host.newControls('label', cell.rect, section, state.doc), ty.text),
       at: { x: cell.rect.left + cell.rect.width / 2, y: cell.rect.top + cell.rect.height / 2 } });
@@ -292,7 +292,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const onKeyDown = (e: KeyboardEvent) => {
     const el = e.target as HTMLElement;
     if (el.closest('[role="menu"]')) return;
-    if (!readOnly && !tool.kind && !typing && isTypingKey(e) && !names.length && cellsSel.length === 1 && (e.target === e.currentTarget || el.closest('[data-layout-cell]'))) {
+    if (!readOnly && !tool.kind && !typingRef.current && isTypingKey(e) && !names.length && cellsSel.length === 1 && (e.target === e.currentTarget || el.closest('[data-layout-cell]'))) {
       e.preventDefault();   // seule la surface elle-même (ou la cellule) : jamais la feuille de propriétés ni un éditeur
       setTyping({ cell: cellsSel[0], text: e.key });
       return;

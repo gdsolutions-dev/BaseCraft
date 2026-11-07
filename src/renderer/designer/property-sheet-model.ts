@@ -86,7 +86,7 @@ export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: P
     .map((d) => {
       const values = targets.map((t) => readProp(doc, docKind, t, d, cellPrefix));
       return { d, value: values.every((v) => same(v, values[0])) ? values[0] : MIXED,
-        readOnly: readOnly || (d.name === 'Name' && targets.length > 1) || (['Name', 'Top', 'Left'].includes(d.name) && targets[0].kind === 'cell') };
+        readOnly: readOnly || (d.name === 'Name' && targets.length > 1) || (['Name', 'Top', 'Left'].includes(d.name) && targets.some((t) => t.kind === 'cell')) };
     });
 }
 

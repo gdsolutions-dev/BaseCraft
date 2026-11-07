@@ -557,6 +557,9 @@
       "needsRecovery": "Deze database moet worden hersteld voordat deze kan worden gebruikt.",
       "unsupportedTable": "Deze tabel wordt niet ondersteund door BaseCraft.",
       "noBase": "Er is geen database geopend.",
+      "invalidName": "Een themanaam heeft 1 tot 60 tekens en geen stuurtekens.",
+      "themeReserved": "Deze naam is die van een thema dat met BaseCraft wordt geleverd: kies een andere.",
+      "themeExists": "Er is al een aangepast thema met deze naam.",
       "unknown": "Er is een onverwachte fout opgetreden: {{detail}}",
       "fileTooLarge": "Het bestand is groter dan 2 GB: het kan niet worden geïmporteerd.",
       "importInterrupted": "De import is onderbroken (de database is gesloten of alleen-lezen geworden). Er is niets geïmporteerd.",
@@ -3036,6 +3039,40 @@
     "builtin": "BaseCraft-thema's",
     "all": "Thema toepassen op alle overeenkomende objecten",
     "object": "Thema alleen op dit object toepassen",
-    "default": "Instellen als standaardthema van deze database"
+    "default": "Instellen als standaardthema van deze database",
+    "save": "Huidig thema opslaan…",
+    "browse": "Thema's zoeken…",
+    "delete": "Dit aangepaste thema verwijderen",
+    "saveTitle": "Huidig thema opslaan",
+    "nameLabel": "Themanaam:",
+    "replace": "Er bestaat al een aangepast thema met de naam ‘{{name}}’. Vervangen?",
+    "deleteTitle": "Thema verwijderen",
+    "deleteConfirm": "Het aangepaste thema ‘{{name}}’ definitief verwijderen?"
+  },
+  "colorsGallery": {
+    "all": "Kleuren toepassen op alle overeenkomende objecten",
+    "object": "Kleuren alleen toepassen op dit object",
+    "default": "Kleuren instellen als standaard voor deze database",
+    "customize": "Kleuren aanpassen…",
+    "title": "Kleuren aanpassen",
+    "name": "Naam:",
+    "light": "Licht",
+    "dark": "Donker",
+    "save": "Opslaan",
+    "reset": "Opnieuw instellen"
+  },
+  "fontsGallery": {
+    "all": "Lettertypen toepassen op alle overeenkomende objecten",
+    "object": "Lettertypen alleen op dit object toepassen",
+    "default": "Lettertypen instellen als standaard voor deze database",
+    "customize": "Lettertypen aanpassen…",
+    "title": "Lettertypen aanpassen",
+    "major": "Lettertype voor koppen:",
+    "minor": "Lettertype voor hoofdtekst:",
+    "name": "Naam:",
+    "save": "Opslaan"
+  },
+  "themes": {
+    "browseLater": "Binnenkort beschikbaar."
   }
 }

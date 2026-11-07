@@ -557,6 +557,9 @@
       "needsRecovery": "Questo database deve essere ripristinato prima di poter essere usato.",
       "unsupportedTable": "Questa tabella non è supportata da BaseCraft.",
       "noBase": "Nessun database aperto.",
+      "invalidName": "Il nome di un tema ha da 1 a 60 caratteri e nessun carattere di controllo.",
+      "themeReserved": "Questo nome è quello di un tema fornito con BaseCraft: sceglierne un altro.",
+      "themeExists": "Un tema personalizzato ha già questo nome.",
       "unknown": "Si è verificato un errore imprevisto: {{detail}}",
       "fileTooLarge": "Il file supera i 2 GB: non può essere importato.",
       "importInterrupted": "L'importazione è stata interrotta (il database è stato chiuso o è diventato di sola lettura). Non è stato importato nulla.",
@@ -3059,6 +3062,40 @@
     "builtin": "Temi di BaseCraft",
     "all": "Applica il tema a tutti gli oggetti corrispondenti",
     "object": "Applica il tema solo a questo oggetto",
-    "default": "Imposta come tema predefinito del database"
+    "default": "Imposta come tema predefinito del database",
+    "save": "Salva il tema corrente…",
+    "browse": "Cerca temi…",
+    "delete": "Elimina questo tema personalizzato",
+    "saveTitle": "Salva il tema corrente",
+    "nameLabel": "Nome del tema:",
+    "replace": "Esiste già un tema personalizzato chiamato «{{name}}». Sostituirlo?",
+    "deleteTitle": "Elimina il tema",
+    "deleteConfirm": "Eliminare definitivamente il tema personalizzato «{{name}}»?"
+  },
+  "colorsGallery": {
+    "all": "Applica i colori a tutti gli oggetti corrispondenti",
+    "object": "Applica i colori solo a questo oggetto",
+    "default": "Imposta i colori come predefiniti per questo database",
+    "customize": "Personalizza colori…",
+    "title": "Personalizza colori",
+    "name": "Nome:",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "save": "Salva",
+    "reset": "Reimposta"
+  },
+  "fontsGallery": {
+    "all": "Applica i tipi di carattere a tutti gli oggetti corrispondenti",
+    "object": "Applica i tipi di carattere solo a questo oggetto",
+    "default": "Imposta i tipi di carattere come predefiniti per questo database",
+    "customize": "Personalizza tipi di carattere…",
+    "title": "Personalizza tipi di carattere",
+    "major": "Carattere dei titoli:",
+    "minor": "Carattere del corpo:",
+    "name": "Nome:",
+    "save": "Salva"
+  },
+  "themes": {
+    "browseLater": "Prossimamente."
   }
 }

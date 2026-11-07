@@ -14,7 +14,7 @@ import { ColorPicker } from './ColorPicker';
 import { colorLabel } from './color-picker-model';
 import { readEvent } from '../../shared/design/events';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
-import { emptyCellRank } from '../../shared/design/layout';
+import type { CellRef } from '../../shared/design/layout';
 import { PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { EMBEDDED_FONTS, isThemeFontRef } from '../../shared/fonts';
 import { sameName } from '../../shared/field-types';
@@ -35,7 +35,7 @@ import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontFromLabel, fontLabel, fontWarning, fromSourceRef, themeFontChoices,
-  MIXED, readProp, sheetRows, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
+  MIXED, cellName, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
 
@@ -67,7 +67,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
     macroNamesWithSubs().then((m) => { if (current) setMacros(m); }, () => { /* une base fermée entre-temps : liste vide */ });
     return () => { current = false; };
   }, []);
-  const cellLabel = (c: { layout: string; row: number; col: number }) => `${t('designer.emptyCellPrefix')}${emptyCellRank(doc, c)}`;
+  const cellLabel = (c: CellRef) => cellName(doc, c, t('designer.emptyCellPrefix'));
   const sectionText = (s: SectionDef, i: number) => (p.sectionLabel ? p.sectionLabel(s, i) : t(`designer.section.${s.kind}`));
 
   /** « … » d'un événement (R16) : la macro nommée en mode Création ; sinon sa macro incorporée, ou une nouvelle, dans son onglet. */
@@ -130,7 +130,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
         <option value="doc">{t(`tabs.kind.${docKind}`)}</option>
         {doc.sections.map((s, i) => <option key={`s${i}`} value={`s:${i}`}>{sectionText(s, i)}</option>)}
         {doc.sections.flatMap((s) => flattenControls(s.controls)).map((c) => <option key={`c:${c.name}`} value={`c:${c.name}`}>{c.name}</option>)}
-        {objValue.startsWith('cell:') && <option value={objValue}>{cellLabel(targets[0] as { layout: string; row: number; col: number })}</option>}
+        {objValue.startsWith('cell:') && targetExists(doc, targets[0]) && <option value={objValue}>{cellLabel(targets[0] as CellRef)}</option>}
       </select>
       <div className="dz-props-tabs" role="tablist" aria-label={t('sheet.title')} onKeyDown={tabKey}>
         {tabs.map((x) => (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
+import { createLayout, insertCells, membersOf } from '../../shared/design/layout-edit';
 import { designerReducer, findControl, initDesigner, type Selection } from './designer-model';
 import { currentValue, decimalStep, fillAction, formatAction, formatCommands, outlineAction, selectionSet } from './format-commands';
 
@@ -86,5 +87,13 @@ describe('empty cells', () => {
   it('Fill is registered for a cells-only selection, the other formats are not', () => {
     const s = { ...initDesigner(doc), selection: { kind: 'controls' as const, names: [], cells: [cell] } };
     expect(Object.keys(formatCommands(() => s, () => {}, () => {}, 0)).sort()).toEqual(['backColor', 'objectList', 'selectAll']);
+  });
+  it('fillAction and currentValue work on a cell target', () => {
+    const d = insertCells(createLayout(doc, membersOf(doc, ['Nom', 'Titre']), 'stacked', { headerSection: 'formHeader' }), 'Nom', 'below');
+    const c = { layout: 'L1', row: 1, col: 0 };
+    const sc = { kind: 'controls' as const, names: [] as string[], cells: [c] };
+    const a = fillAction(d, 'form', sc, '#ff0000')!;
+    const next = designerReducer(initDesigner(d, 'form'), a).doc;
+    expect(currentValue(next, 'form', sc, 'BackColor')).toBe('#ff0000');
   });
 });

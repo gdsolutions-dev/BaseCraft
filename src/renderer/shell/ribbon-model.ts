@@ -613,9 +613,9 @@ const formEditor = editorOf('form');
 const reportEditor = editorOf('report');
 const formOrReportDesign = (c: RibbonContext) => formEditor(c) || reportEditor(c);
 const designerWritable = (c: RibbonContext) => formOrReportDesign(c) && !c.readOnly;
-// F2 : la galerie des thèmes s'ouvre aussi en lecture seule (pour regarder) ; ses actions se désactivent d'elles-mêmes. Couleurs et Polices : F2b.
+// F2 : la galerie des thèmes s'ouvre aussi en lecture seule (pour regarder) ; ses actions se désactivent d'elles-mêmes.
 const themesGroup = group('themes', { id: 'themes', icon: Palette, labelKey: 'ribbon.cmd.themes', size: 'lg', popup: true, enabled: formOrReportDesign },
-  plan('later', 'themeColors', SwatchBook), plan('later', 'themeFonts', Type));
+  { id: 'themeColors', icon: SwatchBook, labelKey: 'ribbon.cmd.themeColors', size: 'sm', popup: true, enabled: formOrReportDesign }, { id: 'themeFonts', icon: Type, labelKey: 'ribbon.cmd.themeFonts', size: 'sm', popup: true, enabled: formOrReportDesign });
 const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.readOnly;
 /** Les éléments d'en-tête et de pied (L3c) : les sections du document, donc aussi en mode Page. */
 const reportHeaderWritable = (c: RibbonContext) => reportEditor(c) && !c.readOnly;

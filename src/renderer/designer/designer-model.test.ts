@@ -561,6 +561,25 @@ describe('L5 cellules vides dans le concepteur', () => {
     const r = empties.find((e) => e.row === 2 && e.col === 1)!.rect;
     expect(rect(s, 'Ville')).toMatchObject({ left: r.left, top: r.top });
   });
+  it('moveBy with drop in an empty cell fills it even when the snapped delta is 0', () => {
+    const s0 = selIn(d, 'Ville');
+    const s = act(s0, { type: 'moveBy', dx: 0, dy: 0, drop: mid(1) });
+    expect(cellOf(s, 'Ville')).toMatchObject({ row: 2, col: 1 });
+    expect([s.dirty, s.past.length]).toEqual([true, s0.past.length + 1]);   // one undo step
+  });
+  it('selectRect with add keeps the selected empty cells', () => {
+    const s0 = act(initDesigner(d), { type: 'selectCell', cell: ref(1), add: false });
+    const s = act(s0, { type: 'selectRect', section: 1, rect: { left: 0, top: 0, width: 20000, height: 400 }, add: true });
+    expect(s.selection).toMatchObject({ kind: 'controls', cells: [ref(1)] });
+    expect((s.selection as { names: string[] }).names.length).toBeGreaterThan(0);
+  });
+  it('setProp on an empty cell refuses an invalid value', () => {
+    const s0 = act(initDesigner(d), { type: 'selectCell', cell: ref(1), add: false });
+    const t = [{ kind: 'cell' as const, ...ref(1) }];
+    expect(act(s0, { type: 'setProp', targets: t, name: 'BackColor', value: 42 }).doc).toBe(d);
+    expect(act(s0, { type: 'setProp', targets: t, name: 'Width', value: Number.NaN }).doc).toBe(d);
+    expect(act(s0, { type: 'setProp', targets: t, name: 'Width', value: 1234 }).doc).not.toBe(d);
+  });
   it('moveBy with drop: a loose control joins the layout', () => {
     const s = act(selIn(d, 'Libre'), { type: 'moveBy', dx: -3000, dy: -300, free: true, drop: mid(1) });
     expect(cellOf(s, 'Libre')).toMatchObject({ row: 2, col: 1 });
@@ -610,8 +629,8 @@ describe('L5 cellules vides dans le concepteur', () => {
   });
   it('setProp on a cell target: BackColor in props, Width changes the column, Name ignored', () => {
     const t = [{ kind: 'cell' as const, ...ref(1) }];
-    const s = act(initDesigner(d), { type: 'setProp', targets: t, name: 'BackColor', value: 255 });
-    expect(readLayouts(s.doc)[0].cells.find((c) => c.row === 2 && c.col === 1)!.props).toEqual({ BackColor: 255 });
+    const s = act(initDesigner(d), { type: 'setProp', targets: t, name: 'BackColor', value: '#ff0000' });
+    expect(readLayouts(s.doc)[0].cells.find((c) => c.row === 2 && c.col === 1)!.props).toEqual({ BackColor: '#ff0000' });
     const w = act(initDesigner(d), { type: 'setProp', targets: t, name: 'Width', value: 3000 });
     expect(readLayouts(w.doc)[0].cols[1]).toBe(3000);
     expect(rect(w, 'Ville').width).toBe(3000);

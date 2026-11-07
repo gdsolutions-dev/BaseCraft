@@ -557,6 +557,9 @@
       "needsRecovery": "Este banco de dados precisa ser recuperado antes de poder ser usado.",
       "unsupportedTable": "Esta tabela não é compatível com o BaseCraft.",
       "noBase": "Nenhum banco de dados está aberto.",
+      "invalidName": "O nome de um tema tem de 1 a 60 carateres e nenhum caráter de controlo.",
+      "themeReserved": "Este nome é o de um tema fornecido com o BaseCraft: escolha outro.",
+      "themeExists": "Já existe um tema personalizado com este nome.",
       "unknown": "Ocorreu um erro inesperado: {{detail}}",
       "fileTooLarge": "O arquivo tem mais de 2 GB: não é possível importá-lo.",
       "importInterrupted": "A importação foi interrompida (o banco de dados foi fechado ou passou a ser somente leitura). Nada foi importado.",
@@ -3059,6 +3062,40 @@
     "builtin": "Temas do BaseCraft",
     "all": "Aplicar o tema a todos os objetos correspondentes",
     "object": "Aplicar o tema apenas a este objeto",
-    "default": "Definir como tema predefinido da base de dados"
+    "default": "Definir como tema predefinido da base de dados",
+    "save": "Guardar o tema atual…",
+    "browse": "Procurar temas…",
+    "delete": "Eliminar este tema personalizado",
+    "saveTitle": "Guardar o tema atual",
+    "nameLabel": "Nome do tema:",
+    "replace": "Já existe um tema personalizado com o nome «{{name}}». Substituí-lo?",
+    "deleteTitle": "Eliminar o tema",
+    "deleteConfirm": "Eliminar definitivamente o tema personalizado «{{name}}»?"
+  },
+  "colorsGallery": {
+    "all": "Aplicar as cores a todos os objetos correspondentes",
+    "object": "Aplicar as cores somente a este objeto",
+    "default": "Definir as cores como padrão para esta base de dados",
+    "customize": "Personalizar cores…",
+    "title": "Personalizar cores",
+    "name": "Nome:",
+    "light": "Claro",
+    "dark": "Escuro",
+    "save": "Salvar",
+    "reset": "Redefinir"
+  },
+  "fontsGallery": {
+    "all": "Aplicar as fontes a todos os objetos correspondentes",
+    "object": "Aplicar as fontes somente a este objeto",
+    "default": "Definir as fontes como padrão para este banco de dados",
+    "customize": "Personalizar fontes…",
+    "title": "Personalizar fontes",
+    "major": "Fonte dos títulos:",
+    "minor": "Fonte do corpo:",
+    "name": "Nome:",
+    "save": "Salvar"
+  },
+  "themes": {
+    "browseLater": "Em breve."
   }
 }

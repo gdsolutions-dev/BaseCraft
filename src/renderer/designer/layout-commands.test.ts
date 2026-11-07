@@ -50,6 +50,14 @@ describe('layoutAction', () => {
     expect(a).toEqual({ type: 'select', selection: { kind: 'controls', names: expect.arrayContaining(['A', 'B']) } });
     expect((a as { selection: { names: string[] } }).selection.names).not.toContain('L_A');
   });
+  it('Tabular selectColumn started from a control includes the empty cells of its column', () => {
+    const doc = insertCells(createLayout(formDoc(), membersOf(formDoc(), ['A', 'B']), 'tabular', { headerSection: 'formHeader' }), 'A', 'below');
+    const a = layoutAction(sel(doc, ['A']), 'selectColumn') as { selection: { names: string[]; cells?: { row: number; col: number }[] } };
+    expect(a.selection.names).toContain('A');
+    expect(a.selection.names).not.toContain('B');
+    expect(a.selection.cells?.length).toBeGreaterThan(0);
+    expect(new Set(a.selection.cells!.map((c) => c.col)).size).toBe(1);
+  });
   it('returns null without selection or member, except stacked/tabular', () => {
     expect(layoutAction(initDesigner(formDoc()), 'stacked')).toBeNull();
     expect(layoutAction(sel(formDoc(), ['A']), 'insertLeft')).toBeNull();

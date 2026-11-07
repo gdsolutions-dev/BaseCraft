@@ -14,6 +14,8 @@ import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
 import { designerReducer, findControl, initDesigner, setDocProp, type DesignerAction } from '../designer/designer-model';
 import { registerOpenDesign } from '../designer/open-designs';
+import { ColorsGallery } from '../designer/ColorsGallery';
+import { FontsGallery } from '../designer/FontsGallery';
 import { ThemeGallery } from '../designer/ThemeGallery';
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
@@ -83,6 +85,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
+  const [colorsOpen, setColorsOpen] = useState(false);
+  const [fontsOpen, setFontsOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const logoFile = useRef<HTMLInputElement>(null);
@@ -277,6 +281,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
       themes: () => setThemesOpen(true),
+      themeColors: () => setColorsOpen(true),
+      themeFonts: () => setFontsOpen(true),
       ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, send, () => clipContext(live.current.host, t)),
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
@@ -376,6 +382,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
   const closeThemes = useCallback(() => setThemesOpen(false), []);
+  const closeColors = useCallback(() => setColorsOpen(false), []);
+  const closeFonts = useCallback(() => setFontsOpen(false), []);
   const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
   const closeSheet = useCallback(() => setSheetVisible(false), []);
 
@@ -396,6 +404,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={send} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       {themesOpen && <ThemeGallery kind="form" dispatch={send} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
+      {colorsOpen && <ColorsGallery kind="form" appDispatch={dispatch} dispatch={send} onClose={closeColors} readOnly={readOnly} />}
+      {fontsOpen && <FontsGallery kind="form" appDispatch={dispatch} dispatch={send} onClose={closeFonts} readOnly={readOnly} />}
       <input ref={logoFile} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="form-logo-file"
         onChange={(e) => { readLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>

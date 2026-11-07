@@ -557,6 +557,9 @@
       "needsRecovery": "此数据库必须先恢复才能使用。",
       "unsupportedTable": "BaseCraft 不支持此表。",
       "noBase": "未打开任何数据库。",
+      "invalidName": "主题名称为 1 到 60 个字符,且不含控制字符。",
+      "themeReserved": "此名称是 BaseCraft 自带主题的名称,请选择其他名称。",
+      "themeExists": "已有同名的自定义主题。",
       "unknown": "发生意外错误：{{detail}}",
       "fileTooLarge": "文件大于 2 GB：无法导入。",
       "importInterrupted": "导入已中断（数据库已关闭或变为只读）。未导入任何内容。",
@@ -3013,6 +3016,40 @@
     "builtin": "BaseCraft 主题",
     "all": "将主题应用于所有匹配的对象",
     "object": "仅将主题应用于此对象",
-    "default": "设为此数据库的默认主题"
+    "default": "设为此数据库的默认主题",
+    "save": "保存当前主题…",
+    "browse": "搜索主题…",
+    "delete": "删除此自定义主题",
+    "saveTitle": "保存当前主题",
+    "nameLabel": "主题名称:",
+    "replace": "已存在名为“{{name}}”的自定义主题。要替换它吗?",
+    "deleteTitle": "删除主题",
+    "deleteConfirm": "要永久删除自定义主题“{{name}}”吗?"
+  },
+  "colorsGallery": {
+    "all": "将颜色应用于所有匹配的对象",
+    "object": "仅将颜色应用于此对象",
+    "default": "将颜色设置为此数据库的默认值",
+    "customize": "自定义颜色…",
+    "title": "自定义颜色",
+    "name": "名称:",
+    "light": "浅色",
+    "dark": "深色",
+    "save": "保存",
+    "reset": "重置"
+  },
+  "fontsGallery": {
+    "all": "将字体应用于所有匹配的对象",
+    "object": "仅将字体应用于此对象",
+    "default": "将字体设为此数据库的默认值",
+    "customize": "自定义字体…",
+    "title": "自定义字体",
+    "major": "标题字体：",
+    "minor": "正文字体：",
+    "name": "名称：",
+    "save": "保存"
+  },
+  "themes": {
+    "browseLater": "即将推出。"
   }
 }

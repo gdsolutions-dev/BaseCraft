@@ -557,6 +557,9 @@
       "needsRecovery": "Diese Datenbank muss wiederhergestellt werden, bevor sie verwendet werden kann.",
       "unsupportedTable": "Diese Tabelle wird von BaseCraft nicht unterstützt.",
       "noBase": "Es ist keine Datenbank geöffnet.",
+      "invalidName": "Ein Designname hat 1 bis 60 Zeichen und kein Steuerzeichen.",
+      "themeReserved": "Dieser Name gehört zu einem mit BaseCraft gelieferten Design: Wählen Sie einen anderen.",
+      "themeExists": "Ein benutzerdefiniertes Design trägt bereits diesen Namen.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten: {{detail}}",
       "fileTooLarge": "Die Datei ist größer als 2 GB und kann nicht importiert werden.",
       "importInterrupted": "Der Import wurde unterbrochen (die Datenbank wurde geschlossen oder ist schreibgeschützt geworden). Es wurde nichts importiert.",
@@ -3036,6 +3039,40 @@
     "builtin": "BaseCraft-Designs",
     "all": "Design auf alle passenden Objekte anwenden",
     "object": "Design nur auf dieses Objekt anwenden",
-    "default": "Als Standarddesign dieser Datenbank festlegen"
+    "default": "Als Standarddesign dieser Datenbank festlegen",
+    "save": "Aktuelles Design speichern…",
+    "browse": "Nach Designs suchen…",
+    "delete": "Dieses benutzerdefinierte Design löschen",
+    "saveTitle": "Aktuelles Design speichern",
+    "nameLabel": "Designname:",
+    "replace": "Ein benutzerdefiniertes Design namens „{{name}}“ existiert bereits. Ersetzen?",
+    "deleteTitle": "Design löschen",
+    "deleteConfirm": "Das benutzerdefinierte Design „{{name}}“ endgültig löschen?"
+  },
+  "colorsGallery": {
+    "all": "Farben auf alle passenden Objekte anwenden",
+    "object": "Farben nur auf dieses Objekt anwenden",
+    "default": "Farben als Standard für diese Datenbank festlegen",
+    "customize": "Farben anpassen…",
+    "title": "Farben anpassen",
+    "name": "Name:",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "save": "Speichern",
+    "reset": "Zurücksetzen"
+  },
+  "fontsGallery": {
+    "all": "Schriftarten auf alle passenden Objekte anwenden",
+    "object": "Schriftarten nur auf dieses Objekt anwenden",
+    "default": "Schriftarten als Standard für diese Datenbank festlegen",
+    "customize": "Schriftarten anpassen…",
+    "title": "Schriftarten anpassen",
+    "major": "Schriftart für Überschriften:",
+    "minor": "Schriftart für Text:",
+    "name": "Name:",
+    "save": "Speichern"
+  },
+  "themes": {
+    "browseLater": "Demnächst verfügbar."
   }
 }

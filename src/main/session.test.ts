@@ -89,6 +89,22 @@ describe('session (brief)', () => {
     expect(b.baseTheme()).toEqual(mine);
   });
 
+  it('apply theme to all: sets the base default and clears the overrides of the kind, skipping open ones; refused read-only', () => {
+    const a = create();
+    const doc = (th: boolean) => ({ formatVersion: '1.0', recordSource: null, props: th ? { Theme: { name: 'X' } } : {}, sections: [] });
+    for (const n of ['Fiche', 'Ouvert']) a.saveObject('form', n, doc(true), null);
+    a.saveObject('report', 'Etat', doc(true), null);
+    const mine = { ...a.baseTheme(), name: 'Mine' };
+    expect(a.applyThemeToAll(mine, 'form', ['ouvert'])).toEqual({ cleared: 1 });
+    expect(a.baseTheme()).toEqual(mine);
+    expect(a.getObject('form', 'Fiche')!.definition).toEqual(doc(false));
+    expect(a.getObject('form', 'Ouvert')!.definition).toEqual(doc(true));
+    expect(a.getObject('report', 'Etat')!.definition).toEqual(doc(true));
+    const b = open({ sessionId: 'b' });
+    expect(() => b.applyThemeToAll({ ...mine, name: 'Other' }, 'form', [])).toThrow(ReadOnlyError);
+    expect(b.baseTheme()).toEqual(mine);
+  });
+
   it('stale lock can be taken over', async () => {
     const a = create();
     t = 31_000;

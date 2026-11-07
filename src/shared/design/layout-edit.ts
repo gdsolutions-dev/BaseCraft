@@ -396,6 +396,7 @@ export function mergeCells(doc: DesignDoc, layoutId: string, slots: { row: numbe
   const first = Math.min(...p.cells.map((c) => l.cells.indexOf(c)));
   const merged = withSpan({ ...keep, row: p.r0, col: p.c0 }, p.rows, p.cols);
   let cells = l.cells.flatMap((c, i) => (i === first ? [merged] : p.cells.includes(c) ? [] : [c]));
+  // ponytail: props of the merged-away empty cells are lost (only the kept cell's survive, spec §6), so pads of padded layouts may change; split then merge is exact on rows and columns only
   const rows = [...l.rows], cols = [...l.cols];
   for (let k = rows.length - 1; k > 0; k--) {   // ponytail: one pass from the end; enough as merges only create such lines one at a time
     if (cells.some((c) => c.row === k) || rows[k].section !== rows[k - 1].section) continue;
@@ -422,7 +423,7 @@ export function splitCell(doc: DesignDoc, layoutId: string, slot: { row: number;
   if ((v ? sp.rows : sp.cols) > 1) {   // cut the span
     const n = v ? sp.rows : sp.cols, a = Math.ceil(n / 2);
     const [r, k] = v ? [c.row + a, c.col] : [c.row, c.col + a];
-    const head = v ? withSpan(c, a, sp.cols) : withSpan(c, sp.rows, a), tail = v ? withSpan({ row: r, col: k, control: null, ...inherit }, n - a, sp.cols) : withSpan({ row: r, col: k, control: null, ...inherit }, sp.rows, n - a);
+    const head = v ? withSpan(c, a, sp.cols) : withSpan(c, sp.rows, a), tail = withSpan({ row: r, col: k, control: null, ...inherit }, v ? n - a : sp.rows, v ? sp.cols : n - a);
     return replaceLayout(doc, { ...l, cells: l.cells.flatMap((x) => (x === c ? [head, tail] : [x])) });
   }
   const size = v ? l.rows[c.row].height : l.cols[c.col], gap = v ? ROW_GAP : COL_GAP;
@@ -458,14 +459,14 @@ export function fillCell(doc: DesignDoc, cell: CellRef, control: string, opts: {
   const other = layoutOf(doc, control);
   if (!ctl || !membersOf(doc, [ctl.name]).length || (other && other.id !== l.id)) return doc;
   const label = opts.fresh ? attachedLabel(ctl) : undefined;
-  let slot: LayoutCell | undefined, labelAt = -1;
-  if (label && l.kind === 'stacked') { slot = c.col > 0 ? cellAt(l, c.row, c.col - 1) : undefined; labelAt = si; }
+  let slot: LayoutCell | undefined, labelAt = -1, want = [-1, -1];   // want: the label slot, which must be anchored exactly there
+  if (label && l.kind === 'stacked') { slot = c.col > 0 ? cellAt(l, c.row, c.col - 1) : undefined; labelAt = si; want = [c.row, c.col - 1]; }
   else if (label) {
     const head = l.rows.map((_, i) => i).filter((i) => i < c.row && l.rows[i].section !== l.rows[c.row].section).pop();
-    slot = head === undefined ? undefined : cellAt(l, head, c.col);
+    slot = head === undefined ? undefined : cellAt(l, head, c.col); want = [head ?? -1, c.col];
     labelAt = head === undefined ? -1 : doc.sections.findIndex((s) => sectionRef(s) === l.rows[head].section);
   }
-  const put = slot && slot.control === null && labelAt >= 0 ? slot : undefined;   // an occupied or missing slot drops the label
+  const put = slot && slot.control === null && labelAt >= 0 && slot.row === want[0] && slot.col === want[1] ? slot : undefined;   // an occupied, spanning (not anchored there) or missing slot drops the label
   const bare = (x: LayoutCell, control: string | null): LayoutCell => ({ row: x.row, col: x.col, ...(x.rowSpan ? { rowSpan: x.rowSpan } : {}), ...(x.colSpan ? { colSpan: x.colSpan } : {}), control });
   const cells = l.cells.map((x) => (x === c ? bare(x, ctl.name) : x === put ? bare(x, label!.name)
     : x.control !== null && sameName(x.control, ctl.name) ? bare(x, null) : x));
@@ -519,7 +520,7 @@ export function deleteLines(doc: DesignDoc, slots: CellRef[]): DesignDoc {
 export function setCellProp(doc: DesignDoc, cell: CellRef, name: string, value: string | number | undefined): DesignDoc {
   const l = readLayouts(doc).find((x) => x.id === cell.layout);
   const c = l?.cells.find((x) => x.row === cell.row && x.col === cell.col && x.control === null);
-  if (!l || !c || !CELL_PROPS.includes(name) || (typeof value === 'number' && !Number.isFinite(value))) return doc;
+  if (!l || !c || !CELL_PROPS.includes(name) || (value !== undefined && typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value)))) return doc;
   const { [name]: old, ...rest } = c.props ?? {};
   if (old === value) return doc;
   const { props: _p, ...bare } = c;
@@ -533,7 +534,7 @@ export function setCellSize(doc: DesignDoc, cell: CellRef, dim: 'Width' | 'Heigh
   const c = l?.cells.find((x) => x.row === cell.row && x.col === cell.col);
   if (!l || !c || !Number.isFinite(value)) return doc;
   const r = cellRect(l, c, layoutPads(doc, l)), sp = spanOf(c);
-  const diff = Math.min(Math.max(value, 0), MAX_TWIPS) - (dim === 'Width' ? r.width : r.height);
+  const diff = Math.round(Math.min(Math.max(value, 0), MAX_TWIPS)) - (dim === 'Width' ? r.width : r.height);
   if (!diff) return doc;
   if (dim === 'Width') { const k = c.col + sp.cols - 1; return replaceLayout(doc, { ...l, cols: l.cols.map((w, i) => (i === k ? Math.max(0, w + diff) : w)) }); }
   const k = c.row + sp.rows - 1;

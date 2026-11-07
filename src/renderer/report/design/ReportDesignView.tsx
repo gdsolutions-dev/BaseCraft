@@ -20,6 +20,8 @@ import { layoutCommands, layoutKey, type LayoutPopup } from '../../designer/layo
 import { deleteKeyAllowed } from '../../designer/delete-guard';
 import { designerReducer, findControl, initDesigner, sectionBottomLimit, setDocProp, type DesignerAction } from '../../designer/designer-model';
 import { registerOpenDesign } from '../../designer/open-designs';
+import { ColorsGallery } from '../../designer/ColorsGallery';
+import { FontsGallery } from '../../designer/FontsGallery';
 import { ThemeGallery } from '../../designer/ThemeGallery';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { FieldList } from '../../designer/FieldList';
@@ -101,6 +103,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
+  const [colorsOpen, setColorsOpen] = useState(false);
+  const [fontsOpen, setFontsOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const [pageMenu, setPageMenu] = useState<'margins' | 'pageSize' | null>(null);
   const [grouping, setGrouping] = useState(false);
@@ -345,6 +349,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
       themes: () => setThemesOpen(true),
+      themeColors: () => setColorsOpen(true),
+      themeFonts: () => setFontsOpen(true),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
       ...layoutCommands(() => live.current.state, guarded, undefined, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, guarded, () => clipContext(liveHost.current, t)),
@@ -388,6 +394,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }, [t]);
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeThemes = useCallback(() => setThemesOpen(false), []);
+  const closeColors = useCallback(() => setColorsOpen(false), []);
+  const closeFonts = useCallback(() => setFontsOpen(false), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
   const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
   const closePageMenu = useCallback(() => setPageMenu(null), []);
@@ -429,6 +437,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       {menu && <ArrangePopup menu={menu} state={state} dispatch={guarded} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={guarded} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {themesOpen && <ThemeGallery kind="report" dispatch={guarded} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
+      {colorsOpen && <ColorsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeColors} readOnly={readOnly} />}
+      {fontsOpen && <FontsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeFonts} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={guarded} docKind="report" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       {pageMenu && <PageSetupMenu menu={pageMenu} page={readReport(state.doc, []).page} onClose={closePageMenu}
         onPick={(v) => (v === 'custom' ? void cmds.current.pageSetupDialog() : setup(v))} />}

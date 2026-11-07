@@ -99,6 +99,14 @@ describe('appReducer', () => {
     expect(appReducer(s, { type: 'tableDropped', name: 'Été' }).tabs.map((x) => x.name)).toEqual(['Autre']);
   });
 
+  it('objectsReloaded: reloads the open saved tabs of the kind, except the named ones and other kinds', () => {
+    let s = appReducer(init, { type: 'open', kind: 'form', name: 'Fiche', mode: 'design' });
+    s = appReducer(s, { type: 'open', kind: 'form', name: 'Autre', mode: 'design' });
+    s = appReducer(s, { type: 'open', kind: 'report', name: 'Etat', mode: 'design' });
+    s = appReducer(s, { type: 'objectsReloaded', kind: 'form', except: ['AUTRE'] });
+    expect(s.tabs.map((x) => [x.name, x.reloadToken])).toEqual([['Fiche', 1], ['Autre', 0], ['Etat', 0]]);
+  });
+
   it('closing the active tab activates its neighbour; closing the last leaves none', () => {
     let s = appReducer(s1, { type: 'open', kind: 'table', name: 'A', mode: 'datasheet' });
     s = appReducer(s, { type: 'open', kind: 'table', name: 'B', mode: 'datasheet' });

@@ -335,6 +335,9 @@ export const CH = {
   baseTheme: 'bc:base:theme',
   baseSaveTheme: 'bc:base:saveTheme',
   baseApplyTheme: 'bc:base:applyTheme',
+  themesList: 'bc:themes:list',
+  themesSave: 'bc:themes:save',
+  themesRemove: 'bc:themes:remove',
   baseThemeChanged: 'bc:base:themeChanged', // main → renderer: the base's default theme was saved (open views refetch)
   linksPick: 'bc:links:pick',
   linksInspect: 'bc:links:inspect',
@@ -445,6 +448,14 @@ export interface BasecraftApi {
     applyToAll(t: Theme, kind: 'form' | 'report', openNames: string[]): Promise<{ cleared: number }>;
     /** The default changed (set by this window): open views refetch with get(). */
     onChange(cb: () => void): () => void;
+  };
+  /** The user's own themes (F2b), kept per user in <userData>/themes.json (never in the base; works read-only). */
+  themes: {
+    list(): Promise<Theme[]>;
+    /** Rejects bc:invalidTheme, bc:invalidName (trimmed, 1..60 characters, no control character), bc:themeReserved (a built-in name,
+     *  case-insensitive) and bc:themeExists (same name, case-insensitive, unless `replace`). */
+    save(t: Theme, replace?: boolean): Promise<void>;
+    remove(name: string): Promise<void>;
   };
   tables: {
     list(): Promise<TableSummary[]>;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_THEMES, DEFAULT_THEME } from '../../shared/design/theme';
 import type { DesignDoc } from '../../shared/design/model';
-import { applyThemeToDoc, sameTheme, themeSections } from './theme-gallery-model';
+import { applyThemeToDoc, customNamed, sameTheme, themeSections } from './theme-gallery-model';
 
 const doc = (props: Record<string, unknown> = {}): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props, sections: [] });
 const [base, slate, forest] = BUILTIN_THEMES;
@@ -15,6 +15,17 @@ describe('themeSections', () => {
   });
   it('a custom theme equal to the current one is not repeated', () => {
     expect(themeSections(custom, [custom], BUILTIN_THEMES).filter((x) => x.theme.name === 'Mien')).toHaveLength(1);
+  });
+});
+
+describe('keys and custom lookup', () => {
+  it('every entry has a unique key, even a custom theme named like a built-in', () => {
+    const e = themeSections(slate!, [{ ...forest!, name: BUILTIN_THEMES[3]!.name }], BUILTIN_THEMES);
+    expect(new Set(e.map((x) => x.key)).size).toBe(e.length);
+  });
+  it('customNamed finds a user theme by name, ignoring case', () => {
+    expect(customNamed([custom], { ...forest!, name: 'MIEN' })).toBe(custom);
+    expect(customNamed([custom], slate!)).toBeUndefined();
   });
 });
 

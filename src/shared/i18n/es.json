@@ -557,6 +557,9 @@
       "needsRecovery": "Esta base de datos debe recuperarse antes de poder usarla.",
       "unsupportedTable": "BaseCraft no admite esta tabla.",
       "noBase": "No hay ninguna base de datos abierta.",
+      "invalidName": "El nombre de un tema tiene de 1 a 60 caracteres y ningún carácter de control.",
+      "themeReserved": "Este nombre es el de un tema incluido en BaseCraft: elija otro.",
+      "themeExists": "Ya existe un tema personalizado con este nombre.",
       "unknown": "Se produjo un error inesperado: {{detail}}",
       "fileTooLarge": "El archivo supera los 2 GB: no se puede importar.",
       "importInterrupted": "La importación se interrumpió (la base de datos se cerró o pasó a solo lectura). No se importó nada.",
@@ -3059,6 +3062,40 @@
     "builtin": "Temas de BaseCraft",
     "all": "Aplicar tema a todos los objetos coincidentes",
     "object": "Aplicar tema solo a este objeto",
-    "default": "Establecer como tema predeterminado de esta base de datos"
+    "default": "Establecer como tema predeterminado de esta base de datos",
+    "save": "Guardar el tema actual…",
+    "browse": "Buscar temas…",
+    "delete": "Eliminar este tema personalizado",
+    "saveTitle": "Guardar el tema actual",
+    "nameLabel": "Nombre del tema:",
+    "replace": "Ya existe un tema personalizado llamado «{{name}}». ¿Reemplazarlo?",
+    "deleteTitle": "Eliminar el tema",
+    "deleteConfirm": "¿Eliminar definitivamente el tema personalizado «{{name}}»?"
+  },
+  "colorsGallery": {
+    "all": "Aplicar los colores a todos los objetos coincidentes",
+    "object": "Aplicar los colores solo a este objeto",
+    "default": "Establecer los colores como predeterminados de esta base de datos",
+    "customize": "Personalizar colores…",
+    "title": "Personalizar colores",
+    "name": "Nombre:",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "save": "Guardar",
+    "reset": "Restablecer"
+  },
+  "fontsGallery": {
+    "all": "Aplicar las fuentes a todos los objetos coincidentes",
+    "object": "Aplicar las fuentes solo a este objeto",
+    "default": "Establecer las fuentes como predeterminadas para esta base de datos",
+    "customize": "Personalizar fuentes…",
+    "title": "Personalizar fuentes",
+    "major": "Fuente de los títulos:",
+    "minor": "Fuente del cuerpo:",
+    "name": "Nombre:",
+    "save": "Guardar"
+  },
+  "themes": {
+    "browseLater": "Próximamente."
   }
 }

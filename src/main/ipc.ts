@@ -28,6 +28,7 @@ import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
+import { readUserThemes, removeUserTheme, saveUserTheme } from './user-themes';
 import { CredentialStore, refusedKey } from './credentials';
 import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, trustsFile, type TrustConfig } from './trust';
 
@@ -641,6 +642,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
 
   // Default theme (F2): a read-only base reads it; saving rejects like any write; open views refetch on the broadcast.
   handle(CH.baseTheme, () => need().baseTheme());
+  // The user's themes (F2b): per user, in userData; no base needed, allowed read-only.
+  handle(CH.themesList, () => readUserThemes(dir));
+  handle(CH.themesSave, (t, replace) => saveUserTheme(dir, themeArg(t), replace === true));
+  handle(CH.themesRemove, (name) => removeUserTheme(dir, lookupName(name)));
   handle(CH.baseSaveTheme, async (t) => {
     await rowWrite(() => need().saveBaseTheme(themeArg(t)));
     const w = mainWindow();

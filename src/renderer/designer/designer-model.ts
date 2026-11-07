@@ -4,7 +4,8 @@ import { isValidObjectName, sameName } from '../../shared/field-types';
 import { CELL_PROPS, cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, withLayouts, type CellRef } from '../../shared/design/layout';
 import { deleteLines, emptyCellAt, fillCell, placeInLayout, pruneLayouts, setCellProp, setCellSize, slotOf } from '../../shared/design/layout-edit';
 import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
-import { effectiveProp } from '../../shared/design/properties';
+import { effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
+import { checkPropValue } from './property-sheet-model';
 import { reportWidth } from '../../shared/report/model';
 import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
 import { gridStep, MAX_TWIPS, snap } from './units';
@@ -154,6 +155,8 @@ const sameRef = (a: DesignDoc['recordSource'], b: DesignDoc['recordSource']): bo
 
 function setProp(doc: DesignDoc, t: PropTarget, name: string, value: unknown): DesignDoc {
   if (t.kind === 'cell') {   // cellule vide : sa taille et sa mise en forme ; le reste (Name, Top, Left) ne lui appartient pas
+    const d = PROPERTY_CATALOG.find((x) => x.name === name);
+    if (!d || checkPropValue(doc, t, d, value)) return doc;   // la même validation que la feuille de propriétés
     if (name === 'Width' || name === 'Height') return typeof value === 'number' ? setCellSize(doc, t, name, value) : doc;
     return CELL_PROPS.includes(name) ? setCellProp(doc, t, name, value as string | number | undefined) : doc;
   }
@@ -361,7 +364,8 @@ function detachMoved(doc: DesignDoc, moved: string[]): DesignDoc {
  *  Un document sans disposition ressort intact (le même état). */
 export function syncLayouts(prev: DesignerState, a: DesignerAction, next: DesignerState): DesignerState {
   const cellDelete = a.type === 'deleteSelection' && prev.selection.kind === 'controls' && !!prev.selection.cells?.length;   // la suppression de cellules vides ne change pas le doc du cœur
-  if ((next.doc === prev.doc && !cellDelete) || UNTOUCHED.includes(a.type) || (!readLayouts(prev.doc).length && !readLayouts(next.doc).length)) return next;
+  const dropped = (a.type === 'moveBy' || a.type === 'changeSection') && !!a.drop;   // un dépôt dans une cellule vide la remplit même si le delta aimanté est nul
+  if ((next.doc === prev.doc && !cellDelete && !dropped) || UNTOUCHED.includes(a.type) || (!readLayouts(prev.doc).length && !readLayouts(next.doc).length)) return next;
   let doc = next.doc;
   if (a.type === 'setProp' && a.name === 'Name' && a.targets.length === 1 && a.targets[0].kind === 'control') {   // le renommage suit dans la grille
     const from = a.targets[0].name, to = String(a.value);
@@ -385,6 +389,8 @@ export function syncLayouts(prev: DesignerState, a: DesignerAction, next: Design
     const f = cell ? fillCell(doc, cell, name, { fresh: false }) : doc;
     if (f !== doc) { doc = unfit(prev.doc, f); filled = true; }
   }
+  if (next.doc === prev.doc && !cellDelete && !filled) return next;   // dépôt à delta nul hors d'une cellule vide : rien n'a bougé
+  if (filled && next.doc === prev.doc) return push(next, fit(reflow(pruneLayouts(doc)), next.objectKind));   // delta nul : le cœur n'a pas empilé d'entrée, le remplissage en fait une
   const geometry = !filled && ['moveBy', 'changeSection', 'arrange', 'resize'].includes(a.type)
     || (a.type === 'setProp' && ['Left', 'Top', 'Width', 'Height'].includes(a.name) && a.targets.every((t) => t.kind === 'control'));
   if (geometry) doc = moveBlocks(prev.doc, unfit(prev.doc, doc));
@@ -433,7 +439,8 @@ export function coreReducer(s: DesignerState, a: DesignerAction): DesignerState 
       const hit = sec.controls.flatMap(selectable).filter((c) => (a.enclosed ? contains(a.rect, controlRect(c)) : intersects(controlRect(c), a.rect))).map((c) => c.name);
       const old = a.add && s.selection.kind === 'controls' ? s.selection.names : [];
       const names = [...old, ...hit.filter((n) => !old.some((o) => sameName(o, n)))];
-      return names.length ? { ...s, selection: { kind: 'controls', names } } : a.add ? s : { ...s, selection: { kind: 'section', index: a.section } };
+      const cells = a.add && s.selection.kind === 'controls' ? s.selection.cells : undefined;   // Ctrl + lasso keep the empty cells already selected
+      return names.length ? { ...s, selection: { kind: 'controls', names, ...(cells ? { cells } : {}) } } : a.add ? s : { ...s, selection: { kind: 'section', index: a.section } };
     }
     case 'moveBy': {
       const sel = selected(s);

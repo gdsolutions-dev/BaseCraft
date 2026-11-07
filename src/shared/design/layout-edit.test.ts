@@ -830,6 +830,36 @@ describe('empty cell fill, delete, select', () => {
     expect(at(out, 0, 1).control).toBe('LNeuf');
     expect(sectionOf(out, 'LNeuf')).toBe('formHeader');
   });
+  it('fillCell: a label slot covered by a cell anchored elsewhere is not used', () => {
+    const d = insertCells(base(), 'Ville', 'below');   // rows 2 and 3 empty
+    const m = mergeCells(d, 'L1', [ref(2, 0), ref(3, 0)]);   // col 0: one cell anchored at row 2, spanning row 3
+    const out = fillCell(add(m, box('textBox', 'Neuf', 0, 0, 100, 100, lbl('LNeuf', 0, 0, 50))), ref(3, 1), 'Neuf', { fresh: true });
+    expect(at(out, 3, 1).control).toBe('Neuf');
+    expect(at(out, 2, 0).control).toBeNull();
+    expect(top(out).some((c) => c.name === 'LNeuf')).toBe(false);
+  });
+  it('Tabular fillCell: an occupied header slot drops the label', () => {
+    const t = insertCells(tab(s3([]), ['Nom', 'Ville']), 'Nom', 'right');
+    const swapped = withLayouts(t, readLayouts(t).map((l) => { const h = l.cells.find((c) => c.row === 0 && c.col === 2)!;
+      return { ...l, cells: l.cells.map((c) => (c.row === 0 && c.col === 1 ? { ...c, control: h.control } : c === h ? { ...c, control: null } : c)) }; }));
+    const out = fillCell(add(swapped, box('textBox', 'Neuf', 0, 0, 100, 100, lbl('LNeuf', 0, 0, 50))), ref(1, 1), 'Neuf', { fresh: true });
+    expect(at(out, 1, 1).control).toBe('Neuf');
+    expect(top(out).some((c) => c.name === 'LNeuf')).toBe(false);
+  });
+  it('deleteLines with a row and a column together', () => {
+    const t = insertCells(tab(s3([]), ['Nom', 'Ville']), 'Nom', 'right');
+    const l = readLayouts(t)[0];
+    const out = readLayouts(deleteLines(t, [...l.rows.map((_, r) => ref(r, 1)), ...l.cols.map((_, k) => ref(1, k))]))[0];
+    expect(out.cols).toHaveLength(l.cols.length - 1);
+    expect(out.rows).toHaveLength(l.rows.length - 1);
+  });
+  it('mergeCells: a vertical merge that empties a row folds it into the previous one', () => {
+    const d = insertCells(insertCells(base(), 'Ville', 'below'), 'Ville', 'below');   // rows 2, 3, 4 empty
+    const once = mergeCells(d, 'L1', [ref(2, 0), ref(3, 0)]);
+    const out = readLayouts(mergeCells(once, 'L1', [ref(2, 1), ref(3, 1)]))[0], l0 = readLayouts(d)[0];
+    expect(out.rows).toHaveLength(l0.rows.length - 1);
+    expect(out.rows[2].height).toBe(l0.rows[2].height + ROW_GAP + l0.rows[3].height);
+  });
   it('deleteLines', () => {
     const d = base(), before = stack(s3([]), ['Nom', 'Ville', 'Inscrit']);
     const out = deleteLines(d, [ref(2, 0), ref(2, 1)]);
@@ -877,6 +907,10 @@ describe('empty cell fill, delete, select', () => {
     const p = setCellProp(d, ref(2, 1), 'BackColor', '#00ff00');
     expect(at(p, 2, 1).props).toEqual({ BackColor: '#00ff00' });
     expect('props' in at(setCellProp(p, ref(2, 1), 'BackColor', undefined), 2, 1)).toBe(false);
+    expect(setCellProp(d, ref(2, 1), 'TopPadding', Number.NaN)).toBe(d);
+    expect(setCellProp(d, ref(2, 1), 'TopPadding', Infinity)).toBe(d);
+    expect(setCellProp(d, ref(2, 1), 'BackColor', true as unknown as string)).toBe(d);
+    expect(readLayouts(setCellSize(d, ref(2, 1), 'Width', 3000.6))[0].cols[1]).toBe(3001);
     const l0 = readLayouts(d)[0];
     expect(readLayouts(setCellSize(d, ref(2, 1), 'Width', 3000))[0].cols).toEqual([l0.cols[0], 3000]);
     expect(readLayouts(setCellSize(d, ref(2, 0), 'Height', 500))[0].rows[2].height).toBe(500);

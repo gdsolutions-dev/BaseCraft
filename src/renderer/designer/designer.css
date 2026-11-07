@@ -142,7 +142,14 @@
 .ctxmenu button.tg-item { display: flex; flex-direction: column; align-items: stretch; height: auto; padding: 4px; gap: 4px; border: 1px solid transparent; }
 .ctxmenu button.tg-item[aria-current="true"] { border-color: var(--accent, currentColor); }
 .tg-thumb { display: flex; flex-direction: column; justify-content: space-between; height: 56px; padding: 4px; border: 1px solid var(--bc-border, #ccc); border-radius: 3px; }
+.tg-footer { display: flex; flex-direction: column; margin-top: 6px; border-top: 1px solid var(--bc-border, #ccc); padding-top: 4px; }
 .tg-aa { font-size: 20px; line-height: 1; }
 .tg-sw { display: flex; gap: 2px; }
 .tg-sw i { flex: 1; height: 8px; }
 .tg-name { font-size: 12px; text-align: center; }
+.cs-sw i { height: 20px; }
+.cc-grid { display: grid; gap: 4px; margin-bottom: 8px; }
+.cc-row { display: grid; grid-template-columns: 1fr 64px 64px; align-items: center; gap: 8px; }
+.cc-row input[type="color"] { width: 100%; height: 24px; padding: 0; }
+.fs-aa { font-size: 26px; line-height: 1; }
+.fs-pair { opacity: 0.7; font-size: 11px; }

@@ -8,7 +8,7 @@ const DATA_CHANNELS: string[] = [
   CH.getSettings, CH.setLocale, CH.setTheme, CH.setSetting, CH.pickFolder, CH.settingsChanged, CH.appInfo, CH.appLicenses, CH.appSetIcon, CH.openExternal, CH.edit, CH.beep, CH.appWriteClipboard,
   CH.closeRequested, CH.closeAllowed, CH.closeAck,
   CH.baseOpen, CH.baseClose, CH.baseState, CH.baseTakeOverLock, CH.baseStateChanged, CH.baseHostCrashed, CH.baseDataChanged, CH.baseOpenFailure,
-  CH.baseEnableContent, CH.baseStartup, CH.baseTheme, CH.baseThemeChanged,
+  CH.baseEnableContent, CH.baseStartup, CH.baseTheme, CH.baseThemeChanged, CH.themesList, CH.themesSave, CH.themesRemove,
   CH.tablesList, CH.tablesDesign, CH.tablesTestRules,
   CH.rowsCount, CH.rowsPage, CH.rowsInsert, CH.rowsUpdate, CH.rowsDelete, CH.rowsLookup,
   CH.relationsList, CH.relationsLayout, CH.relationsCascadeChildren,

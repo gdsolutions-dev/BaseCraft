@@ -1,11 +1,11 @@
 // Mode Page des états (L3) : géométrie pure de la surcouche du flux (anneaux de sélection, poignée de largeur) et la largeur
 // posée par cette poignée. Tout est en twips dans le document, en px (× scale) à l'écran.
 import type { DesignDoc } from '../../shared/design/model';
+import { cellItemName, parseCellItemName } from '../../shared/design/layout';
 import { itemAt, occurrences, sectionPointAt } from '../../shared/report/flow';
 import type { LaidOutReport } from '../../shared/report/types';
 import type { Rect } from '../designer/geometry';
 import type { ToolState } from '../designer/Designer';
-import { cellItemName, parseCellItemName } from '../../shared/design/layout';
 import { CONTAINER_KINDS, designerReducer, type DesignerAction, findControl, initDesigner, type Selection } from '../designer/designer-model';
 import { CLICK_PX, DEFAULT_SIZE, snap as snapTo } from '../designer/units';
 

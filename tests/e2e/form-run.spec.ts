@@ -165,6 +165,9 @@ test('navigate, edit and save; a refused save: message box, error under the cont
     // an unbound control's error is the form's, not the record's: the record is still saved (Page Down from the control)
     await ctl('Nom').fill('Dupont');
     await ctl('Note').fill('non');
+    // a CI-only failure read Dupond below: these tell whether the typing or the save was lost
+    await expect(ctl('Nom')).toHaveValue('Dupont');
+    await expect(ctl('Note')).toBeFocused();
     await page.keyboard.press('PageDown');
     await expect(input).toHaveValue('2');
     expect((await bc(page).rows())[0]![1]).toBe('Dupont');

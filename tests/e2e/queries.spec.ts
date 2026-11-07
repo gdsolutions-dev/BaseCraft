@@ -352,6 +352,40 @@ test('a datasheet row saved behind a slow query: Ctrl+Break stops the query, the
   }
 });
 
+test('a row left upward behind a slow query: Ctrl+Break stops its save, the row stays selected and to be saved', async () => {
+  const base = seedSlow('file');
+  const { app, page } = await launchApp({ args: [base], env: FR });
+  try {
+    await page.getByTestId('nav-item-Clients').dblclick();
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('4');
+    await page.getByTestId('nav-item-query-QLente').dblclick();
+    await expect(page.getByTestId('running-notice')).toBeVisible();
+    await page.getByTestId('doc-tab-Clients').click();
+    const b = await grid(page);
+    await page.mouse.click(b.x + colLeft(1) + 30, b.y + HEADER + 4 * ROW + ROW / 2); // the new record row's Nom
+    await expect(cellEditor(page)).toBeFocused();
+    await page.keyboard.type('Zoe');
+    await page.keyboard.press('Enter'); // the next field of the same row (Access's default): the row is not left yet
+    await expect(cellEditor(page)).toHaveCount(0);
+    await expect(cell(page, 2, 4)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowUp'); // leaves the row straight up: its insert waits behind the query
+    await expect(doc(page).getByTestId('datasheet')).toHaveAttribute('aria-busy', 'true');
+    await page.keyboard.press('Control+Pause');
+    await expect(page.getByTestId('modal')).toContainText(fr.dialog.error.cancelled); // once: the query, the row's save, a refresh
+    await page.waitForTimeout(300); // read by a person: longer than Glide's delay before it moves the focus to the selected cell
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as Win).basecraft.rows.count('Clients'))).toBe(4); // never written
+    await expect(cell(page, 1, 4)).toHaveText('Zoe'); // the row stays, still to be saved
+    await expect(cell(page, 2, 4)).toBeFocused(); // a refused save keeps the row selected (as Access), not the row above
+    await page.keyboard.press('ArrowUp'); // leaving it again saves it
+    await expect.poll(() => page.evaluate(() => (window as unknown as Win).basecraft.rows.count('Clients'))).toBe(5);
+    await expect(doc(page).getByTestId('nav-record-count')).toHaveText('5');
+  } finally {
+    await app.close();
+  }
+});
+
 test('a slow action query shows the same Stop: its count is cancelled, nothing is written', async () => {
   const { app, page } = await launchApp({ enterMovesDown: true, args: [seedSlow('action')], env: FR });
   try {

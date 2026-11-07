@@ -792,7 +792,11 @@ function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mo
     if (!at.detail) { tryFrom(around); return true; }
     if (stop || tabOut(dir)) return true;
     void userAttempt(() => (dir < 0 ? records.previous() : records.snapshot.isNew ? records.newRecord() : records.next())).then((ok) => {
-      if (ok) requestAnimationFrame(() => tryFrom(dir > 0 ? at.seq : [...at.seq].reverse()));
+      // unless the focus has left this form since (Enter out of a subform, pressed before this frame, placed it in the master)
+      if (ok) requestAnimationFrame(() => {
+        const now = document.activeElement;
+        if (now === document.body || !!root.current?.contains(now)) tryFrom(dir > 0 ? at.seq : [...at.seq].reverse());
+      });
     });
     return true;
   };

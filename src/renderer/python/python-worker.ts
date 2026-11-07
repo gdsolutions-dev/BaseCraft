@@ -70,13 +70,13 @@ async function request(id: number, req: HostRequest): Promise<void> {
   try {
     // Packages load asynchronously, so before the run: a synchronous pre-pass lists what the code and the user modules it reaches import.
     if (req.op === 'exec' || req.op === 'immediate' || req.op === 'call') {
-      const d = JSON.parse(run('deps', JSON.stringify(req.op === 'call' ? { module: req.module } : { code: req.op === 'exec' ? req.code : req.line })))
-      if (d.ok && d.value.length) {
-        // Pyodide would consume the interrupt inside its loader and the load would fail half-way: it watches a dummy cell meanwhile,
-        // ours keeps the 2 for the check below.
-        py.setInterruptBuffer(new Int32Array(new SharedArrayBuffer(4)))
-        try { await py.loadPackagesFromImports('import ' + (d.value as string[]).join(', ')) } finally { py.setInterruptBuffer(interrupt) }
-      }
+      // The pre-pass watches a dummy cell, ours keeps the 2 for the check below: the deps run (which waits on the bridge for module
+      // sources) would swallow the interrupt in its except, and Pyodide's loader would consume it and fail half-way.
+      py.setInterruptBuffer(new Int32Array(new SharedArrayBuffer(4)))
+      try {
+        const d = JSON.parse(run('deps', JSON.stringify(req.op === 'call' ? { module: req.module } : { code: req.op === 'exec' ? req.code : req.line })))
+        if (d.ok && d.value.length) await py.loadPackagesFromImports('import ' + (d.value as string[]).join(', '))
+      } finally { py.setInterruptBuffer(interrupt) }
     }
     if (Atomics.load(interrupt, 0) === 2) throw { type: 'KeyboardInterrupt' } // pressed during the pre-pass: report it, do not run
   } catch (e) {

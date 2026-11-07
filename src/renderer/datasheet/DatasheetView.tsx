@@ -325,8 +325,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         }
         return true;
       } catch (e) {
+        // The row stays to be saved, selected (Access): back on it when it was left for another row (its save failed there).
+        const p = buffer.pending;
+        const col = live.current.selection.current?.cell[0] ?? 0;
+        if (p && rowOf(live.current.selection) !== p.rowIndex) setSelection(cellSelection(col, p.rowIndex));
         await writeError(e);
-        const at = live.current.selection.current?.cell; // the row stays to be saved, selected (Access)
+        const at = live.current.selection.current?.cell;
         if (at) focusCell(at[0], at[1]);
         return false;
       } finally {

@@ -138,6 +138,30 @@ test('Python in calculated controls, rules, reports and macros; typing never los
   } finally { await app.close() }
 })
 
+// Ctrl+Break while the call is still in its import pre-pass (here the module's source is slow to come): the pre-pass must not
+// swallow the interrupt, else the function runs unstoppable and the engine is restarted with a dialog (seen on the Windows CI).
+test('Ctrl+Break during the import pre-pass stops the call: #Erreur, no restart dialog', async () => {
+  test.setTimeout(240_000)
+  const { app, page } = await launchApp({ args: [base()], env: ENV })
+  try {
+    await page.evaluate((src) => {
+      const w = window as unknown as { __bcPython: { registerHandlers(h: Record<string, (a: unknown[]) => Promise<unknown>>): void } }
+      w.__bcPython.registerHandlers({ 'modules.source': async ([name]) => {
+        await new Promise((r) => setTimeout(r, 5000))
+        return String(name).toLowerCase() === 'calculs' ? src : null
+      } })
+    }, SOURCE)
+    await open(page, 'form', 'FBoucle')
+    await expect(page.getByTestId('python-interrupt')).toBeVisible({ timeout: 150_000 })
+    await page.keyboard.press('Control+Pause')
+    await expect(ctl(page, 'CBoucle')).toHaveValue('#Erreur', { timeout: 30_000 })
+    await expect(page.getByTestId('python-veil')).toHaveCount(0)
+    await expect(page.getByTestId('modal')).toHaveCount(0)
+    await page.waitForTimeout(3000) // past the 2 s restart grace: still no dialog
+    await expect(page.getByTestId('modal')).toHaveCount(0)
+  } finally { await app.close() }
+})
+
 test('disabled content: #Nom? in the form and the report, the security bar; enabling shows the values without reopening', async () => {
   test.setTimeout(300_000)
   const { app, page } = await launchApp({ args: [base()], env: ENV, untrusted: true })

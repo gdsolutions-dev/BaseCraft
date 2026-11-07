@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { registerFunctions } from '../main/db/file-format';
 import { listRelations } from '../main/db/relations';
 import { listTables } from '../main/db/schema';
 import { run } from './main';
+import { tmp } from './test-tmp';
 
-const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bccli-')), 'x.basecraft');
 const sample = fileURLToPath(new URL('../../tests/cli/example-script.json', import.meta.url));
 
 describe('end to end', () => {

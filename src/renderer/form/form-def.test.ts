@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlDef, ControlKind, SectionDef } from '../../shared/design/model';
+import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
 import { readLayouts, reflow } from '../../shared/design/layout';
 import { validateDesignDoc } from '../../shared/design/model';
 import type { FieldProps, FieldType } from '../../shared/field-types';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
 import { clients } from '../../shared/test-fixtures';
 import { findControl } from '../designer/designer-model';
-import { autoForm, autoTabOrder, firstFreeName, formLabels, controlKindFor, emptyFormDoc, fieldControls, nextFreeTop, nextTabIndex, parseFormDoc, shouldReload, toggleHeaderFooter, uniqueFormName, type FormLabels } from './form-def';
+import { autoForm, autoPageOrder, autoTabOrder, moveBlock, pageTabOrder, tabOrder, withPageTabOrder, withTabOrder, firstFreeName, formLabels, controlKindFor, emptyFormDoc, fieldControls, nextFreeTop, nextTabIndex, parseFormDoc, shouldReload, toggleHeaderFooter, uniqueFormName, type FormLabels } from './form-def';
 
 const PREFIX: Record<ControlKind, string> = { label: 'Étiquette', textBox: 'Texte', checkBox: 'Case', optionGroup: 'Cadre', optionButton: 'Option',
   comboBox: 'Modifiable', listBox: 'Liste', commandButton: 'Commande', subform: 'Enfant', image: 'Image', line: 'Trait', rectangle: 'Rectangle',
@@ -174,4 +174,44 @@ describe('form definition', () => {
   });
   it('form labels from i18next', () => { const l = formLabels((k, o) => `${k}${o ? JSON.stringify(o) : ''}`);
     expect([l.prefix('textBox'), l.tabPage(2)]).toEqual(['designer.ctlPrefix.textBox', 'form.tabPage{"n":2}']); });
+});
+
+describe('tab order lists (F1)', () => {
+  it('moveBlock moves a block before a gap', () => {
+    const l = ['a', 'b', 'c', 'd'];
+    expect(moveBlock(l, 1, 2, 0)).toEqual({ names: ['b', 'c', 'a', 'd'], lo: 0, hi: 1 });
+    expect(moveBlock(l, 0, 1, 4)).toEqual({ names: ['c', 'd', 'a', 'b'], lo: 2, hi: 3 });
+    expect(moveBlock(l, 1, 2, 1)).toEqual({ names: l, lo: 1, hi: 2 });
+    expect(moveBlock(l, 1, 2, 3)).toEqual({ names: l, lo: 1, hi: 2 });
+    expect(moveBlock(l, 3, 3, 0)).toEqual({ names: ['d', 'a', 'b', 'c'], lo: 0, hi: 0 });
+    // Alt+Haut en tête, Alt+Bas en fin : rien ne bouge (même tableau)
+    expect(moveBlock(l, 0, 1, -1).names).toBe(l);
+    expect(moveBlock(l, 2, 3, 5).names).toBe(l);
+  });
+  const tabs: ControlDef = { ...ctl('tabControl', 'Onglets'), children: [
+    ctl('textBox', 'B', { TabIndex: 1 }, { left: 0, top: 0 }), ctl('textBox', 'A', { TabIndex: 0 }, { left: 900, top: 0 }), ctl('label', 'L'),
+    ctl('textBox', 'P2b', { PageIndex: 1, TabIndex: 0 }, { top: 500 }), ctl('textBox', 'P2a', { PageIndex: 1, TabIndex: 1 }, { top: 0 })] };
+  const doc = (...c: ControlDef[]): DesignDoc => ({ ...emptyFormDoc(null), sections: [sectionWith(...c)] });
+  it('pageTabOrder / autoPageOrder', () => {
+    const d = doc(tabs);
+    expect(pageTabOrder(d, 'Onglets', 0)).toEqual(['A', 'B']);
+    expect(pageTabOrder(d, 'Onglets', 1)).toEqual(['P2b', 'P2a']);
+    expect(autoPageOrder(d, 'Onglets', 0)).toEqual(['B', 'A']);
+    expect(autoPageOrder(d, 'Onglets', 1)).toEqual(['P2a', 'P2b']);
+  });
+  it('withPageTabOrder rewrites only that page', () => {
+    const d = doc(tabs, ctl('textBox', 'X', { TabIndex: 5 }));
+    const n = withPageTabOrder(d, 'Onglets', 0, ['B', 'A']);
+    const kids = n.sections[0].controls[0].children!;
+    expect(kids.map((k) => k.props.TabIndex)).toEqual([0, 1, undefined, 0, 1]);
+    expect(kids[3]).toBe(tabs.children![3]); expect(kids[4]).toBe(tabs.children![4]); expect(n.sections[0].controls[1]).toBe(d.sections[0].controls[1]);
+    expect(withPageTabOrder(n, 'Onglets', 0, ['B', 'A'])).toBe(n);
+  });
+  it('a tab control is in the section order', () => {
+    const t = ctl('tabControl', 'Onglets'), x = ctl('textBox', 'X');
+    expect(tabOrder(sectionWith(t, x))).toEqual(['Onglets', 'X']);
+    expect(tabOrder(sectionWith({ ...t, props: { TabIndex: 0 } }, ctl('textBox', 'X', { TabIndex: 1 })))).toEqual(['Onglets', 'X']);
+    expect(tabOrder(sectionWith(t, ctl('textBox', 'X', { TabIndex: 0 })))).toEqual(['X', 'Onglets']);
+    expect(withTabOrder(sectionWith(t, x), ['X', 'Onglets']).controls[0].props.TabIndex).toBe(1);
+  });
 });

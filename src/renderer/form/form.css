@@ -29,11 +29,15 @@
 
 /* Ordre de tabulation */
 .taborder { display: flex; flex-direction: column; gap: var(--bc-space-2); min-width: 360px; }
-.taborder-lists { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bc-space-2); }
+.taborder-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: var(--bc-space-2); }
 .taborder-section h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--bc-text-muted); }
 .taborder-section ul { list-style: none; margin: 0; padding: 2px 0; height: 160px; overflow: auto; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); }
 .taborder-section ul:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: 1px; }
-.taborder-section li { padding: 2px 8px; font-size: 12px; cursor: default; }
+.taborder-section li { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 0; font-size: 12px; cursor: default; user-select: none; }
+.taborder-sel { flex: none; align-self: stretch; width: 12px; margin: -2px 0; background: var(--bc-surface-2); border-right: 1px solid var(--bc-border); cursor: grab; touch-action: none; }
+.taborder-section li[aria-selected="true"] .taborder-sel { background: var(--bc-accent); }
+.taborder-section li.drop-after { box-shadow: 0 2px 0 var(--bc-accent); }
+.taborder-section li.drop-before { box-shadow: 0 -2px 0 var(--bc-accent); }
 .taborder-section li[aria-selected="true"] { background: var(--accent-soft); color: var(--bc-accent); }
 .taborder-hint { margin: 0; font-size: 12px; }
 .taborder-actions { display: flex; gap: var(--bc-space-2); }

@@ -8,12 +8,15 @@ import { toSourceRef } from '../../shared/record-source';
 import { Ellipsis, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { colorCss, isColorValue, THEME_COLORS, type ColorValue } from '../../shared/design/colors';
+import { colorCss } from '../../shared/design/colors';
+import { useDocTheme } from '../design/theme-context';
+import { ColorPicker } from './ColorPicker';
+import { colorLabel } from './color-picker-model';
 import { readEvent } from '../../shared/design/events';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
 import { emptyCellRank } from '../../shared/design/layout';
 import { PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
-import { EMBEDDED_FONTS } from '../../shared/fonts';
+import { EMBEDDED_FONTS, isThemeFontRef } from '../../shared/fonts';
 import { sameName } from '../../shared/field-types';
 import { parseNumber } from '../../shared/locale-format';
 import { emptyMacro } from '../../shared/macro/model';
@@ -31,7 +34,7 @@ import { useModal } from '../shell/Modal';
 import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
-import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontWarning, fromSourceRef,
+import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontFromLabel, fontLabel, fontWarning, fromSourceRef, themeFontChoices,
   MIXED, readProp, sheetRows, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
@@ -140,7 +143,8 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
         {rows.map((row) => (
           <PropRow key={`${selKey}:${tab}:${row.d.name}`} row={row} id={`${uid}-${row.d.name}`} ctx={ctx} docKind={docKind} rowSourceTable={rowSourceTable}
             commit={(v) => commit(row.d, v)} onLost={(msg) => setLost({ label: t(row.d.labelKey), msg })} macros={macros}
-            buildEvent={buildEvent && ((v) => buildEvent(row.d, v))} />
+            buildEvent={buildEvent && ((v) => buildEvent(row.d, v))}
+            transparent={row.d.name === 'BackColor' && targets.every((x) => x.kind === 'control') ? () => dispatch({ type: 'setProp', targets, name: 'BackStyle', value: 'transparent' }) : undefined} />
         ))}
       </div>
     </aside>
@@ -148,12 +152,15 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 }
 
 interface RowProps { row: SheetRow; id: string; ctx: PropertySheetContext; docKind: 'form' | 'report'; rowSourceTable: boolean;
-  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void }
+  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void; transparent?(): void }
 
-function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent }: RowProps) {
+function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent, transparent }: RowProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const { d } = row;
+  const { theme } = useDocTheme();
+  const shownFont = typeof row.value === 'string' ? fontLabel(row.value, theme, t) : '';
+  const themed = typeof row.value === 'string' && isThemeFontRef(row.value);   // « Inter (Détail) » n'est pas un nom de police à vérifier
   const mixed = row.value === MIXED;
   const v = mixed ? undefined : row.value;
   const testId = `prop-${d.name}`;
@@ -201,7 +208,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
         editor = field({ shown: typeof v === 'number' ? formatCm(v, region) : '', parse: (s) => ({ value: s.trim() === '' ? undefined : parseCm(s, region) ?? Number.NaN }) });
         break;
       case 'font':
-        editor = field({ shown: typeof v === 'string' ? v : '', options: EMBEDDED_FONTS.map((f) => f.family), parse: text, note: fontWarning });
+        editor = field({ shown: typeof v === 'string' ? fontLabel(v, theme, t) : '', options: [...themeFontChoices(theme, t).map((c) => c.label), ...EMBEDDED_FONTS.map((f) => f.family)], parse: (s) => text(fontFromLabel(s, theme, t)), note: (s) => (themed && s === shownFont ? null : fontWarning(s)) });
         break;
       case 'controlSource':
         editor = field({ shown: controlSourceToDisplay(typeof v === 'string' ? v : undefined, ctx.display), options: ctx.fields,
@@ -251,7 +258,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
           </select>
         );
         break;
-      case 'color': editor = <ColorEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
+      case 'color': editor = <ColorEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} fill={!!transparent} commit={commit} transparent={transparent} />; break;
       case 'picture': editor = <PictureEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
       case 'textList': editor = <TextListEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
       case 'expression': case 'criteria':
@@ -412,9 +419,11 @@ function PictureEditor({ id, testId, value, mixed, disabled, commit }: { id: str
   );
 }
 
-/** Échap ou un clic dehors referme le choix des couleurs ; le focus revient au bouton. */
-function ColorEditor({ id, testId, value, mixed, disabled, commit }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean; commit(v: unknown): string | null }) {
+/** Échap ou un clic dehors referme le choix des couleurs ; le focus revient au bouton. La cellule montre « Accent 2, Plus clair 80% » (aussi en infobulle). */
+function ColorEditor({ id, testId, value, mixed, disabled, fill, commit, transparent }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean; fill: boolean;
+  commit(v: unknown): string | null; transparent?(): void }) {
   const { t } = useTranslation();
+  const ctx = useDocTheme();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -424,64 +433,16 @@ function ColorEditor({ id, testId, value, mixed, disabled, commit }: { id: strin
     window.addEventListener('pointerdown', outside, true);
     return () => window.removeEventListener('pointerdown', outside, true);
   }, [open]);
-  const label = mixed ? t('sheet.mixed') : isColorValue(value) ? (value.startsWith('theme:') ? t(`color.${value.slice(6)}`) : value) : String(value ?? '');
+  const label = mixed ? t('sheet.mixed') : colorLabel(value, t);
   return (
     <div ref={box} className="dz-pfield" onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); button.current?.focus(); } }}>
-      <button ref={button} type="button" id={id} data-testid={testId} className="dz-pcolor" disabled={disabled} aria-expanded={open} onClick={() => setOpen(!open)}>
-        {!mixed && <i className="dz-swatch" style={{ background: colorCss(value) }} aria-hidden />}<span>{label}</span>
+      <button ref={button} type="button" id={id} data-testid={testId} className="dz-pcolor" disabled={disabled} aria-expanded={open} title={label} onClick={() => setOpen(!open)}>
+        {!mixed && <i className="dz-swatch" style={{ background: colorCss(value, 'transparent', ctx) }} aria-hidden />}<span>{label}</span>
       </button>
       {open && !disabled && (
-        <ColorChoices value={value} testId={`${testId}-colors`} onPick={(c) => { commit(c); setOpen(false); button.current?.focus(); }} />
+        <ColorPicker value={mixed ? undefined : value} fill={fill} theme={ctx.theme} mode={ctx.mode} testId={`${testId}-colors`}
+          onPick={(c) => { if (c === 'transparent') transparent?.(); else commit(c ?? undefined); setOpen(false); button.current?.focus(); }} />
       )}
-    </div>
-  );
-}
-
-const ROVE: Record<string, (i: number, n: number) => number> = {
-  ArrowDown: (i, n) => (i + 1) % n, ArrowRight: (i, n) => (i + 1) % n, ArrowUp: (i, n) => (i + n - 1) % n, ArrowLeft: (i, n) => (i + n - 1) % n,
-  Home: () => 0, End: (_i, n) => n - 1,
-};
-
-/** Les couleurs du thème (pastille et libellé color.<jeton>), puis « Couleur personnalisée… » (<input type="color"> natif, validé à sa fermeture).
- *  Un seul arrêt de tabulation (la couleur actuelle, sinon la première) ; Haut/Bas/Gauche/Droite/Début/Fin passent d'une pastille à l'autre.
- *  Réutilisé par l'onglet Format (tâche 5b). */
-export function ColorChoices(p: { value: unknown; testId: string; onPick(v: ColorValue): void }) {
-  const { t } = useTranslation();
-  const custom = useRef<HTMLInputElement>(null);
-  const hex = typeof p.value === 'string' && /^#[0-9a-f]{6}$/.test(p.value) ? p.value : null;
-  const current = hex ? THEME_COLORS.length : Math.max(0, THEME_COLORS.findIndex((tok) => p.value === `theme:${tok}`));
-  const [stop, setStop] = useState(current);
-  const rove = (e: KeyboardEvent) => {
-    const go = ROVE[e.key];
-    const items = [...e.currentTarget.querySelectorAll<HTMLElement>('button, input')];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    if (!go || i < 0) return;
-    e.preventDefault(); e.stopPropagation();
-    const next = go(i, items.length);
-    setStop(next);
-    items[next].focus();
-  };
-  const pick = useRef(p.onPick);
-  pick.current = p.onPick;
-  useEffect(() => {   // « change », pas « input » : un seul choix quand le sélecteur se ferme, pas un par mouvement
-    const el = custom.current!;
-    const h = () => pick.current(el.value.toLowerCase() as ColorValue);
-    el.addEventListener('change', h);
-    return () => el.removeEventListener('change', h);
-  }, [hex]);   // l'élément est recréé quand la valeur change (key)
-  return (
-    <div className="dz-colors" role="group" aria-label={t('sheet.colors')} data-testid={p.testId} onKeyDown={rove}>
-      {THEME_COLORS.map((tok, i) => (
-        <button key={tok} type="button" aria-pressed={p.value === `theme:${tok}`} data-testid={`${p.testId}-${tok}`} tabIndex={i === stop ? 0 : -1}
-          onClick={() => p.onPick(`theme:${tok}`)}>
-          <i className="dz-swatch" style={{ background: colorCss(`theme:${tok}`) }} aria-hidden />{t(`color.${tok}`)}
-        </button>
-      ))}
-      <label className="dz-color-custom">
-        <i className="dz-swatch" style={{ background: hex ?? 'transparent' }} aria-hidden />{t('sheet.customColor')}
-        <input ref={custom} key={hex ?? ''} type="color" defaultValue={hex ?? '#000000'} data-testid={`${p.testId}-custom`}
-          tabIndex={stop === THEME_COLORS.length ? 0 : -1} />
-      </label>
     </div>
   );
 }

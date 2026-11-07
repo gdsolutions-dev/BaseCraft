@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { ColorValue } from '../../shared/design/colors';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
 import { FORMATS_BY_TYPE } from '../../shared/expr/format';
-import { EMBEDDED_FONTS } from '../../shared/fonts';
+import { EMBEDDED_FONTS, isThemeFontRef } from '../../shared/fonts';
 import { ComboBox } from '../shell/ComboBox';
 import type { Rect } from './geometry';
 import { DesignCanvas } from './DesignCanvas';
@@ -18,7 +18,10 @@ import { currentValue, fillAction, outlineAction, selectionSet, type FormatPopup
 import { anchorAction, gridlineColorAction, gridlineStyleAction, gridlinesAction, gridlineWidthAction, marginsAction, paddingAction, type GridlinePreset, type LayoutPopup } from './layout-commands';
 import { fontWarning } from './property-sheet-model';
 import { RibbonPopup } from './RibbonPopup';
-import { ColorChoices, PropertySheet } from './PropertySheet';
+import { ColorPicker } from './ColorPicker';
+import { PropertySheet } from './PropertySheet';
+import { fontFromLabel, fontLabel, themeFontChoices } from './property-sheet-model';
+import { useDocTheme } from '../design/theme-context';
 import type { PropertySheetContext } from './sheet-types';
 import { Toolbox } from './Toolbox';
 import { FONT_SIZES } from './units';
@@ -37,6 +40,8 @@ export interface DesignerHost {
   /** Menu contextuel de la barre de section. `confirmKey` : une question (Oui/Non, Non par défaut) posée avant l'action, par exemple
    *  quand elle supprime des contrôles (En-tête/pied de formulaire, d'état, de page). */
   sectionMenu?(index: number, doc: DesignDoc): { id: string; labelKey: string; action: DesignerAction; confirmKey?: string }[];
+  /** Menu contextuel d'une page d'un contrôle à onglets (clic droit sur son onglet) ; reste ouvert en lecture seule (consultation). */
+  pageMenu?(control: string, page: number): { id: string; labelKey: string; run(): void }[];
   sheet: PropertySheetContext;
   /** Mode Page d'un formulaire continu : `count` copies en lecture seule du corps du Détail sous celui qu'on modifie ; `row` = 1…count,
    *  l'écart avec l'enregistrement courant. Absent (mode Création, formulaire simple) : rien de plus n'est dessiné. */
@@ -103,6 +108,7 @@ export function LayoutPopupMenu(p: { id: LayoutPopup; state: DesignerState; disp
   const { t } = useTranslation();
   const { id, readOnly, onClose, state } = p;
   const [sub, setSub] = useState<'width' | 'style' | 'color' | null>(null);
+  const { theme, mode } = useDocTheme();
   useEffect(() => { if (readOnly) onClose(); }, [readOnly, onClose]);
   const testId = `layout-popup-${id}`;
   const run = (a: DesignerAction | null) => { onClose(); if (a) p.dispatch(a); };
@@ -116,7 +122,8 @@ export function LayoutPopupMenu(p: { id: LayoutPopup; state: DesignerState; disp
       {ANCHOR_ITEMS.map(([k, h, v]) => item(k, label(k), () => run(anchorAction(state, h, v))))}</div>;
   } else if (sub === 'width') body = [0, 1, 2, 3, 4, 5, 6].map((w) => item(String(w), String(w), () => run(gridlineWidthAction(state, w))));
   else if (sub === 'style') body = (['solid', 'dashed', 'dotted'] as const).map((k) => item(k, t(`propValue.GridlineStyleTop.${k}`), () => run(gridlineStyleAction(state, k))));
-  else if (sub === 'color') body = <ColorChoices value={currentValue(state.doc, documentKind(state), state.selection, 'GridlineColor')} testId={`${testId}-colors`} onPick={(c) => run(gridlineColorAction(state, c))} />;
+  else if (sub === 'color') body = <ColorPicker value={currentValue(state.doc, documentKind(state), state.selection, 'GridlineColor')} fill={false} theme={theme} mode={mode} testId={`${testId}-colors`}
+    onPick={(c) => run(gridlineColorAction(state, c === 'transparent' ? undefined : c ?? undefined))} />;
   else body = [...GRID_PRESETS.map((k) => item(k, label(k), () => run(gridlinesAction(state, k)))), <div key="sep" className="ctxmenu-sep" role="separator" />,
     ...(['width', 'style', 'color'] as const).map((k) => item(k, label(k), () => setSub(k)))];
   return <RibbonPopup anchor={id} testId={testId} labelKey={`ribbon.cmd.${id}`} onClose={onClose} role={sub === 'color' ? 'dialog' : 'menu'}>{body}</RibbonPopup>;
@@ -131,6 +138,7 @@ export function FormatPopup(p: { id: FormatPopupId; state: DesignerState; dispat
   sectionLabel(s: SectionDef, index: number): string; onClose(): void; readOnly?: boolean }) {
   const { t } = useTranslation();
   const { id, readOnly, onClose, docKind } = p;
+  const { theme, mode } = useDocTheme();
   useEffect(() => { if (readOnly && id !== 'objectList') onClose(); }, [readOnly, id, onClose]);   // ses éléments changent le document
   const { doc, selection } = p.state;
   const testId = `format-popup-${id}`;
@@ -152,7 +160,7 @@ export function FormatPopup(p: { id: FormatPopupId; state: DesignerState; dispat
     ];
   } else if (id === 'font') {
     const v = currentValue(doc, docKind, selection, 'FontName');
-    body = <FontPicker initial={typeof v === 'string' ? v : ''} testId={`${testId}-name`} label={t('designer.format.font')} onPick={(name) => set({ FontName: name })} />;
+    body = <FontPicker themed={typeof v === 'string' && isThemeFontRef(v)} initial={typeof v === 'string' ? fontLabel(v, theme, t) : ''} testId={`${testId}-name`} label={t('designer.format.font')} onPick={(name) => set({ FontName: fontFromLabel(name, theme, t) })} options={[...themeFontChoices(theme, t).map((c) => c.label), ...EMBEDDED_FONTS.map((f) => f.family)]} />;
   } else if (id === 'fontSize') {
     const v = currentValue(doc, docKind, selection, 'FontSize');
     body = FONT_SIZES.map((n) => item(String(n), String(n), () => set({ FontSize: n }), v === n));
@@ -160,11 +168,12 @@ export function FormatPopup(p: { id: FormatPopupId; state: DesignerState; dispat
     const v = currentValue(doc, docKind, selection, 'Format');
     body = NAMED_FORMATS.map((f) => item(f, t(`format.${f}`), () => set({ Format: f }), v === f));
   } else {
-    const onPick = (c: ColorValue) => (id === 'shapeOutline' ? run(outlineAction(doc, docKind, selection, c))
+    const prop = COLOR_PROP[id]!;
+    const onPick = (c: ColorValue | 'transparent' | null) => (c === 'transparent' ? set({ BackStyle: 'transparent' }) : c === null ? set({ [prop]: undefined }) : id === 'shapeOutline' ? run(outlineAction(doc, docKind, selection, c))
       : id === 'shapeFill' ? set({ BackColor: c, BackStyle: 'normal' })   // une boîte transparente cacherait le remplissage
         : id === 'backColor' ? run(fillAction(doc, docKind, selection, c))   // de même, seulement là où le fond est transparent
           : set({ [COLOR_PROP[id]!]: c }));
-    body = <ColorChoices value={currentValue(doc, docKind, selection, COLOR_PROP[id]!)} testId={`${testId}-colors`} onPick={onPick} />;
+    body = <ColorPicker value={currentValue(doc, docKind, selection, prop)} fill={id === 'backColor' || id === 'shapeFill'} theme={theme} mode={mode} testId={`${testId}-colors`} onPick={onPick} />;
   }
   const labelKey = `designer.format.${COLOR_PROP[id] ? 'colors' : id}`;
   const dialog = id === 'font' || !!COLOR_PROP[id];   // a field, colour choices: no menu items
@@ -172,16 +181,16 @@ export function FormatPopup(p: { id: FormatPopupId; state: DesignerState; dispat
 }
 
 /** Police : les polices embarquées, ou un nom libre (signalé non portable) validé par Entrée ; un choix dans la liste vaut aussitôt. */
-function FontPicker(p: { initial: string; testId: string; label: string; onPick(name: string): void }) {
+function FontPicker(p: { options: string[]; initial: string; themed: boolean; testId: string; label: string; onPick(name: string): void }) {
   const { t } = useTranslation();
   const id = useId();
   const [draft, setDraft] = useState(p.initial);
   const typing = useRef(false);
-  const note = fontWarning(draft);
+  const note = p.themed && draft === p.initial ? null : fontWarning(draft);
   return (
     <div className="dz-pfield dz-format-font" onInputCapture={() => { typing.current = true; }}
-      onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) { e.preventDefault(); p.onPick(draft.trim()); } }}>
-      <ComboBox id={id} testId={p.testId} label={p.label} value={draft} options={EMBEDDED_FONTS.map((f, i) => ({ id: `o${i}`, label: f.family }))}
+      onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim() && !(p.themed && draft === p.initial)) { e.preventDefault(); p.onPick(draft.trim()); } }}>
+      <ComboBox id={id} testId={p.testId} label={p.label} value={draft} options={p.options.map((f, i) => ({ id: `o${i}`, label: f }))}
         onChange={(s) => { if (typing.current) setDraft(s); else p.onPick(s); typing.current = false; }} describedBy={note ? `${id}-msg` : undefined} />
       {note && <div id={`${id}-msg`} className="dz-pnote" data-testid={`${p.testId}-note`}>{t(note)}</div>}
     </div>

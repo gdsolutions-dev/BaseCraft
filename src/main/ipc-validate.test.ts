@@ -4,9 +4,10 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
+  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
+import { BUILTIN_THEMES } from '../shared/design/theme';
 import { DEFAULT_STARTUP } from '../shared/startup';
 import { localeInfo } from '../shared/locale-format';
 import { clients } from '../shared/test-fixtures';
@@ -555,5 +556,12 @@ describe('propertyTargetsArg (O4)', () => {
     const dp = (value: string) => [{ kind: 'form', name: 'F', control: 'M', prop: 'DecimalPlaces', value }];
     for (const v of ['auto', '0', '15']) expect(propertyTargetsArg(dp(v))).toEqual(dp(v));
     for (const v of ['16', '-1', '2.5', 'Auto ', '', 'x'.repeat(200)]) expect(() => propertyTargetsArg(dp(v))).toThrow('bc:invalidArgument');
+  });
+});
+
+describe('themeArg', () => {
+  it('accepts a theme, refuses anything else with bc:invalidTheme', () => {
+    expect(themeArg(BUILTIN_THEMES[2])).toEqual(BUILTIN_THEMES[2]);
+    for (const v of [{}, null, 'x', { ...BUILTIN_THEMES[0], fonts: 1 }]) expect(() => themeArg(v)).toThrow('bc:invalidTheme');
   });
 });

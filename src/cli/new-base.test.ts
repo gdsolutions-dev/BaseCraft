@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { newBase } from './new-base';
+import { tmp } from './test-tmp';
 
-const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bccli-')), 'x.basecraft');
 
 describe('newBase', () => {
   it('creates a BaseCraft file with its format metadata', () => {

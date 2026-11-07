@@ -3,11 +3,12 @@
 import type { CSSProperties } from 'react';
 import type { SqlValue } from '../../shared/coerce';
 import { colorCss, type ColorValue } from '../../shared/design/colors';
+import type { Mode, Theme } from '../../shared/design/theme';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
 import { ownLabel } from '../../shared/design/layout';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
 import { sameName } from '../../shared/field-types';
-import { EMBEDDED_FONTS, resolveFont } from '../../shared/fonts';
+import { cssFamily, EMBEDDED_FONTS, isThemeFontRef, resolveFont } from '../../shared/fonts';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
 import { twipsToPx } from '../designer/units';
 import { boundField, isUnbound } from './control-values';
@@ -17,8 +18,16 @@ import { writableField, type RecordError, type RecordSnapshot } from './record-c
 export const prop = (c: ControlDef, name: string): unknown => effectiveProp(c.props, name, c.kind, 'form');
 const desc = (name: string) => PROPERTY_CATALOG.find((d) => d.name === name)!;
 export const applies = (c: ControlDef, name: string): boolean => desc(name).appliesTo.includes(c.kind);
-export const color = (c: ControlDef, name: string): string =>
-  colorCss(prop(c, name), (defaultFor(desc(name), c.kind, 'form') ?? 'transparent') as ColorValue | 'transparent');
+/** Le thème et le mode avec lesquels une couleur ou une police de thème se résout (absent : le thème intégré, clair). */
+export type ThemeCtx = { theme: Theme; mode: Mode };
+export const color = (c: ControlDef, name: string, ctx?: ThemeCtx): string =>
+  colorCss(prop(c, name), (defaultFor(desc(name), c.kind, 'form') ?? 'transparent') as ColorValue | 'transparent', ctx);
+
+/** La liste `font-family` d'une référence `(Headings)` / `(Body)` : la police embarquée du thème sous son nom « BC … » (voir
+ *  DocThemeProvider), puis son nom ; null pour tout autre nom (même rendu qu'avant), et pour Inter (la police de l'application). */
+export function themedFamily(name: string, f: { family: string }, generic: string): string | null {
+  return isThemeFontRef(name) && f.family !== 'Inter' ? `"${cssFamily(f.family)}", "${f.family}", ${generic}` : null;
+}
 
 const pageOf = (c: ControlDef): number => (typeof c.props.PageIndex === 'number' ? c.props.PageIndex : 0);
 const stops = (c: ControlDef): boolean => (TAB_KINDS.includes(c.kind) || c.kind === 'tabControl')
@@ -55,9 +64,9 @@ export function errorsByControl(errs: RecordError[], doc: DesignDoc, info: Sourc
 }
 
 /** Position (twips -> px), the look (controlLook) and alignment, every value read through effectiveProp. */
-export function controlStyle(c: ControlDef): CSSProperties {
+export function controlStyle(c: ControlDef, ctx?: ThemeCtx): CSSProperties {
   const st: CSSProperties = { position: 'absolute', left: twipsToPx(c.left), top: twipsToPx(c.top), width: twipsToPx(c.width), height: twipsToPx(c.height), boxSizing: 'border-box',
-    ...controlLook(c) };
+    ...controlLook(c, ctx) };
   if (applies(c, 'TextAlign')) {
     const a = String(prop(c, 'TextAlign'));
     if (a === 'left' || a === 'center' || a === 'right') st.textAlign = a;
@@ -66,21 +75,21 @@ export function controlStyle(c: ControlDef): CSSProperties {
 }
 
 /** Colours, border and font: the same in Form view and in the Design view's preview (form-host). */
-export function controlLook(c: ControlDef): CSSProperties {
+export function controlLook(c: ControlDef, ctx?: ThemeCtx): CSSProperties {
   const st: CSSProperties = {};
-  if (applies(c, 'BackStyle')) st.background = prop(c, 'BackStyle') === 'transparent' ? 'transparent' : color(c, 'BackColor');
+  if (applies(c, 'BackStyle')) st.background = prop(c, 'BackStyle') === 'transparent' ? 'transparent' : color(c, 'BackColor', ctx);
   if (applies(c, 'BorderStyle') && c.kind !== 'line') {   // a line draws its own stroke
     const b = String(prop(c, 'BorderStyle'));
     if (b === 'transparent') st.borderStyle = 'none';
-    else Object.assign(st, { borderStyle: b, borderWidth: Math.max(1, Number(prop(c, 'BorderWidth')) || 0), borderColor: color(c, 'BorderColor') });   // 0: a hairline (A5)
+    else Object.assign(st, { borderStyle: b, borderWidth: Math.max(1, Number(prop(c, 'BorderWidth')) || 0), borderColor: color(c, 'BorderColor', ctx) });   // 0: a hairline (A5)
   }
   if (applies(c, 'FontName')) {
     const name = String(prop(c, 'FontName') || 'Inter');
-    const f = resolveFont(name);
+    const f = resolveFont(name, ctx?.theme);
     const generic = EMBEDDED_FONTS.find((x) => x.family === f.family)?.generic ?? 'sans-serif';
     Object.assign(st, {
-      fontFamily: f.family === 'Inter' ? '"Inter Variable", "Inter", sans-serif' : `"${f.family}", ${generic}`,   // the app's Inter (L9)
-      fontSize: (Number(prop(c, 'FontSize')) || 10) * 4 / 3, color: color(c, 'ForeColor'),
+      fontFamily: themedFamily(name, f, generic) ?? (f.family === 'Inter' ? '"Inter Variable", "Inter", sans-serif' : `"${f.family}", ${generic}`),   // the app's Inter (L9)
+      fontSize: (Number(prop(c, 'FontSize')) || 10) * 4 / 3, color: color(c, 'ForeColor', ctx),
       fontWeight: prop(c, 'FontWeight') === 'bold' ? 700 : 400, fontStyle: prop(c, 'FontItalic') === true ? 'italic' : 'normal',
       textDecoration: prop(c, 'FontUnderline') === true ? 'underline' : 'none',
     });
@@ -104,7 +113,7 @@ const SIDE_KEYS = [['Top', 'paddingTop'], ['Bottom', 'paddingBottom'], ['Left', 
 /** The gridline overlay of a control, null when its four sides are transparent: an absolutely positioned box at the cell rectangle
  *  (the control grown by its own padding), positioned relative to `origin` (the section's corner by default), drawn as a sibling of
  *  the control so its size and text do not change. ponytail: a cell padded less than its column's maximum draws its lines at its own padding. */
-export function gridlineStyle(c: ControlDef, origin: { left: number; top: number } = { left: 0, top: 0 }): CSSProperties | null {
+export function gridlineStyle(c: ControlDef, origin: { left: number; top: number } = { left: 0, top: 0 }, ctx?: ThemeCtx): CSSProperties | null {
   if (!applies(c, 'GridlineColor')) return null;
   const pad = (side: string) => Number(prop(c, `${side}Padding`)) || 0;
   const st: CSSProperties = {};
@@ -113,7 +122,7 @@ export function gridlineStyle(c: ControlDef, origin: { left: number; top: number
     const style = String(prop(c, `GridlineStyle${side}`));
     if (style === 'transparent') continue;
     any = true;
-    (st as Record<string, string>)[`border${side}`] = `${Math.max(1, Number(prop(c, `GridlineWidth${side}`)) || 0)}px ${style} ${color(c, 'GridlineColor')}`;
+    (st as Record<string, string>)[`border${side}`] = `${Math.max(1, Number(prop(c, `GridlineWidth${side}`)) || 0)}px ${style} ${color(c, 'GridlineColor', ctx)}`;
   }
   if (!any) return null;
   const [t, b, l, r] = [pad('Top'), pad('Bottom'), pad('Left'), pad('Right')];

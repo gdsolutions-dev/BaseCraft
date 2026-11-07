@@ -29,6 +29,8 @@ type At = Point & { section: number };
 interface Drag { g: Gesture; at: At; alt: boolean; shift: boolean; toAt(p: Point): At; parent?: string; focus?: string }
 interface SectionMenu { x: number; y: number; kind: SectionDef['kind']; items: NonNullable<ReturnType<NonNullable<DesignerHost['sectionMenu']>>> }
 
+interface PageMenu { x: number; y: number; items: NonNullable<ReturnType<NonNullable<DesignerHost['pageMenu']>>> }
+
 const px = (tw: number): string => `${twipsToPx(tw)}px`;
 const CM_PX = twipsToPx(TWIPS_PER_CM);
 
@@ -92,6 +94,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const bodies = useRef<(HTMLDivElement | null)[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [menu, setMenu] = useState<SectionMenu | null>(null);
+  const [pageMenu, setPageMenu] = useState<PageMenu | null>(null);
   const [typing, setTyping] = useState<{ cell: CellRef; text: string } | null>(null);   // la légende en cours de saisie dans une cellule vide ; rien n'est créé avant la validation
   const typingRef = useRef(typing);
   typingRef.current = typing;
@@ -320,6 +323,18 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     setMenu({ x: e.clientX || r.left, y: e.clientY || r.bottom, kind: state.doc.sections[index].kind, items });
   };
 
+  /** Clic droit sur l'onglet d'une page d'un contrôle à onglets : le contrôle est choisi, le menu de l'hôte s'ouvre (même en lecture seule : il consulte). */
+  const openPageMenu = (e: MouseEvent) => {
+    const tab = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-page]');
+    const control = tab?.closest<HTMLElement>('[data-ctl]')?.dataset.ctl;
+    if (!tab || !control) return;
+    const items = host.pageMenu?.(control, Number(tab.dataset.tabPage)) ?? [];
+    if (!items.length) return;
+    e.preventDefault();
+    dispatch({ type: 'select', selection: { kind: 'controls', names: [control] } });
+    setPageMenu({ x: e.clientX, y: e.clientY, items });
+  };
+
   const runSectionItem = async (m: SectionMenu['items'][number]) => {
     setMenu(null);
     if (m.confirmKey && (await modal.confirm({ titleKey: m.labelKey, messageKey: m.confirmKey, buttons: ['yes', 'no'], defaultButton: 'no' })) !== 'yes') return;
@@ -347,7 +362,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
       onScroll={followScroll} onFocus={(e) => { lastFocus.current = e.target as HTMLElement; }}>
       <div ref={sheet} className={`dz-sheet${placing ? ' is-placing' : ''}`} style={{ width: px(width) }}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancel} onLostPointerCapture={() => drag && cancel()}
-        onDragStart={(e) => e.preventDefault()} onDragOver={onDragOver} onDrop={onDrop}>   {/* une image d'un aperçu ne part pas en glisser-déposer natif */}
+        onContextMenu={openPageMenu} onDragStart={(e) => e.preventDefault()} onDragOver={onDragOver} onDrop={onDrop}>   {/* une image d'un aperçu ne part pas en glisser-déposer natif */}
         {doc.sections.map((s: SectionDef, i) => (
           <div key={i} ref={(el) => { blocks.current[i] = el; }} className="dz-block">
             <button type="button" className={`dz-band${state.selection.kind === 'section' && state.selection.index === i ? ' is-sel' : ''}`}
@@ -409,6 +424,13 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
           </div>
         ))}
       </div>
+      {pageMenu && (
+        <PopupMenu x={pageMenu.x} y={pageMenu.y} testId="page-menu" labelKey="form.tabOrder.pageMenu" onClose={() => setPageMenu(null)}>
+          {pageMenu.items.map((m) => (
+            <button key={m.id} type="button" role="menuitem" data-testid={`page-menu-${m.id}`} onClick={() => { setPageMenu(null); m.run(); }}>{t(m.labelKey)}</button>
+          ))}
+        </PopupMenu>
+      )}
       {menu && (
         <PopupMenu x={menu.x} y={menu.y} testId="section-menu" labelKey={`designer.section.${menu.kind}`} onClose={() => setMenu(null)}>
           {menu.items.map((m) => (

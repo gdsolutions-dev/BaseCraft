@@ -19,15 +19,16 @@ import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
 import { TextBoxCtl } from './controls/TextBoxCtl';
 import { EmptyCells } from './EmptyCells';
-import { gridlineStyle, prop, tabSequence } from './run-model';
+import { useDocTheme } from '../design/doc-theme';
+import { gridlineStyle, prop, tabSequence, type ThemeCtx } from './run-model';
 
 const BACK = PROPERTY_CATALOG.find((d) => d.name === 'BackColor')!;
 
 /** One control (and its attached labels), placed relative to `origin` (a container) or to the section. */
-function renderControl(c: ControlDef, x: RunCtx, origin: ControlDef | null, z?: number, forId?: string): ReactNode {
+function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDef | null, z?: number, forId?: string): ReactNode {
   if (prop(c, 'Visible') === false) return null;
-  const style = { ...placed(c, origin), ...(z === undefined ? {} : { zIndex: z }) };
-  const child = (k: ControlDef, o: ControlDef, id?: string) => renderControl(k, x, o, undefined, id);
+  const style = { ...placed(c, origin, tc), ...(z === undefined ? {} : { zIndex: z }) };
+  const child = (k: ControlDef, o: ControlDef, id?: string) => renderControl(k, x, tc, o, undefined, id);
   const p = { c, x, style };
   let el: ReactNode;
   switch (c.kind) {
@@ -48,13 +49,13 @@ function renderControl(c: ControlDef, x: RunCtx, origin: ControlDef | null, z?: 
   const err = x.errors[c.name];
   const listError = x.lists[c.name]?.error;
   const note = listError === undefined ? undefined : (() => { const m = errorMessage(listError); return x.t('form.list.sourceError', { message: x.t(m.key, m.params) }); })();
-  const grid = gridlineStyle(c, origin ?? undefined);
+  const grid = gridlineStyle(c, origin ?? undefined, tc);
   const s = style as { left: number; top: number; height: number; width: number };
   return (
     <Fragment key={c.name}>
       {el}
       {grid && <div aria-hidden data-testid={`form-grid-${c.name}`} style={z === undefined ? grid : { ...grid, zIndex: z }} />}
-      {!container && (c.children ?? []).map((k) => renderControl(k, x, origin, z, x.id(c.name)))}
+      {!container && (c.children ?? []).map((k) => renderControl(k, x, tc, origin, z, x.id(c.name)))}
       {err !== undefined && (
         <div role="alert" id={`${x.id(c.name)}-err`} className="frun-error" data-testid={`form-error-${c.name}`}
           style={{ left: s.left, top: s.top + s.height + 2, minWidth: s.width }}>{err}</div>
@@ -68,7 +69,8 @@ function renderControl(c: ControlDef, x: RunCtx, origin: ControlDef | null, z?: 
 }
 
 export function FormSection({ doc, section, x, width }: { doc: DesignDoc; section: SectionDef; x: RunCtx; width: number }) {
-  const back = colorCss(effectiveProp(section.props, 'BackColor', section.kind, 'form'), (defaultFor(BACK, section.kind, 'form') ?? 'theme:surface') as ColorValue);
+  const tc = useDocTheme();
+  const back = colorCss(effectiveProp(section.props, 'BackColor', section.kind, 'form'), (defaultFor(BACK, section.kind, 'form') ?? 'theme:surface') as ColorValue, tc);
   // DOM order: the tab stops in tab order, then the rest; the paint order stays the document's (z-index)
   const seq = tabSequence(section, x.pages);
   const rank = (i: number) => { const k = seq.indexOf(section.controls[i].name); return k < 0 ? seq.length + i : k; };
@@ -81,7 +83,7 @@ export function FormSection({ doc, section, x, width }: { doc: DesignDoc; sectio
       <EmptyCells doc={doc} section={section} />
       {order.map((i) => {   // a layout label: linked to its control (<label for>), hidden with it
         const to = labelTarget(section.controls[i], section, x);
-        return to && prop(to, 'Visible') === false ? null : renderControl(section.controls[i], x, null, i, to && x.id(to.name));
+        return to && prop(to, 'Visible') === false ? null : renderControl(section.controls[i], x, tc, null, i, to && x.id(to.name));
       })}
     </div>
   );

@@ -9,6 +9,8 @@ import type { RecordSnapshot } from './record-controller';
 import { createLayout, membersOf } from '../../shared/design/layout-edit';
 import { ctlAttrs, hasLabel, labelTarget, type RunCtx } from './controls/run-ctx';
 import { twipsToPx } from '../designer/units';
+import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../../shared/design/theme';
+import { cssFamily } from '../../shared/fonts';
 import { controlEnabled, controlLook, controlStyle, gridlineStyle, errorsByControl, layoutLabels, optionGroupValue, tabSequence } from './run-model';
 
 const ctl = (kind: ControlKind, name: string, props: Record<string, unknown> = {}, at = { left: 0, top: 0, width: 1000, height: 300 }): ControlDef =>
@@ -34,6 +36,14 @@ describe('run model', () => {
   it('tab sequence: no disabled control; combo and list boxes and subforms stop', () =>
     expect(tabSequence(sectionWith(ctl('textBox', 'A'), ctl('textBox', 'B', { Enabled: false }), ctl('comboBox', 'C'), ctl('listBox', 'D'), ctl('subform', 'E'),
       ctl('checkBox', 'F'), ctl('subform', 'G', { TabStop: false })))).toEqual(['A', 'C', 'D', 'E', 'F']));
+
+  it('tab sequence: page-1 TabIndex order is its own and leaves page 0 alone', () => {
+    const mk = (a: number, b: number): SectionDef => sectionWith({ ...ctl('tabControl', 'Onglets'), children: [
+      ctl('textBox', 'P0', { TabIndex: 0 }), ctl('textBox', 'Q1', { PageIndex: 1, TabIndex: a }), ctl('textBox', 'Q2', { PageIndex: 1, TabIndex: b })] });
+    expect(tabSequence(mk(1, 0), { Onglets: 1 })).toEqual(['Onglets', 'Q2', 'Q1']);
+    expect(tabSequence(mk(0, 1), { Onglets: 1 })).toEqual(['Onglets', 'Q1', 'Q2']);
+    expect(tabSequence(mk(1, 0))).toEqual(tabSequence(mk(0, 1)));
+  });
 
   it('tab sequence: a tab control is its strip, then the controls of its page shown, in their TabIndex order', () => {
     const tabs: ControlDef = { ...ctl('tabControl', 'Onglets', { Pages: ['Un', 'Deux'] }), children: [
@@ -183,4 +193,27 @@ describe('empty cells in Form view (L5)', () => {
     expect(html).not.toMatch(/tabindex|role=/i);
   });
   it('no tab stop is added', () => expect(tabSequence(d.sections[0])).toEqual(['A']));
+});
+
+describe('style with the effective theme (F2)', () => {
+  const second = BUILTIN_THEMES.find((t) => t.name === 'Océan')!;
+  const box = ctl('textBox', 'T', { ForeColor: 'theme:accent1@-25', FontName: '(Headings)' });
+  it('a slot reference follows the theme and the mode; the headings font follows the theme', () => {
+    const light = controlStyle(box, { theme: second, mode: 'light' }), dark = controlStyle(box, { theme: second, mode: 'dark' });
+    expect(light.color).toBe(shade(second.colors.light.accent1, 0.25));
+    expect(dark.color).toBe(shade(second.colors.dark.accent1, 0.25));
+    expect(String(light.fontFamily)).toContain(cssFamily(second.fonts.major));
+    expect(controlStyle(box, { theme: DEFAULT_THEME, mode: 'light' }).color).not.toBe(light.color);
+    expect(controlStyle(box, { theme: DEFAULT_THEME, mode: 'light' }).fontFamily).toBe('"Inter Variable", "Inter", sans-serif');
+  });
+  it('a hex stays, a UI token stays a variable, without a context too', () => {
+    const hex = ctl('textBox', 'H', { ForeColor: '#abcdef' });
+    expect(controlStyle(hex, { theme: second, mode: 'dark' }).color).toBe('#abcdef');
+    expect(controlStyle(hex, { theme: second, mode: 'light' }).color).toBe('#abcdef');
+    expect(controlStyle(ctl('textBox', 'U'), { theme: second, mode: 'dark' }).background).toBe('var(--bc-surface)');
+  });
+  it('a theme font that is not embedded falls back without throwing', () => {
+    const odd = { ...second, fonts: { name: 'x', major: 'Comic Sans MS', minor: 'Comic Sans MS' } };
+    expect(() => controlStyle(box, { theme: odd, mode: 'light' })).not.toThrow();
+  });
 });

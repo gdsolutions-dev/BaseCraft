@@ -1678,7 +1678,33 @@
     "accent": "Destaque",
     "accentContrast": "Texto sobre o destaque",
     "danger": "Perigo",
-    "warning": "Aviso"
+    "warning": "Aviso",
+    "lt1": "Plano de fundo 1",
+    "dk1": "Texto 1",
+    "lt2": "Plano de fundo 2",
+    "dk2": "Texto 2",
+    "accent1": "Destaque 1",
+    "accent2": "Destaque 2",
+    "accent3": "Destaque 3",
+    "accent4": "Destaque 4",
+    "accent5": "Destaque 5",
+    "accent6": "Destaque 6",
+    "hlink": "Hiperlink",
+    "folHlink": "Hiperlink seguido",
+    "lighter": "Mais claro {{pct}}%",
+    "darker": "Mais escuro {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automático",
+    "themeColors": "Cores do tema",
+    "standardColors": "Cores padrão",
+    "recent": "Cores recentes",
+    "transparent": "Transparente",
+    "more": "Mais cores…"
+  },
+  "font": {
+    "body": "Corpo",
+    "headings": "Títulos"
   },
   "sourcePicker": {
     "label": "Tabelas e consultas",
@@ -1998,8 +2024,12 @@
       "up": "Mover para Cima",
       "down": "Mover para Baixo",
       "auto": "Ordem Automática",
-      "hint": "Alt+Seta para Cima e Alt+Seta para Baixo movem o controle selecionado.",
-      "empty": "Nenhum controle"
+      "hint": "Arraste os seletores de linha, ou use Alt+Seta para Cima e Alt+Seta para Baixo, para mover os controles selecionados. Shift+clique seleciona vários.",
+      "empty": "Nenhum controle",
+      "rowSelector": "Selecionar {{name}}",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Ordem de tabulação…",
+      "pageMenu": "Página de guia"
     },
     "headerFooterConfirm": "Excluir o cabeçalho e o rodapé do formulário? Os controles que eles contêm serão excluídos.",
     "calc": {
@@ -3022,5 +3052,13 @@
     "placeholder": "Digite uma instrução Python ou ?expressão",
     "errorAt": "(Módulo {{module}}, linha {{line}})",
     "splitter": "Redimensionar a janela Imediata"
+  },
+  "themeGallery": {
+    "current": "Nesta base de dados",
+    "custom": "Personalizado",
+    "builtin": "Temas do BaseCraft",
+    "all": "Aplicar o tema a todos os objetos correspondentes",
+    "object": "Aplicar o tema apenas a este objeto",
+    "default": "Definir como tema predefinido da base de dados"
   }
 }

@@ -3,7 +3,7 @@
 import { isValidObjectName, sameName } from '../../shared/field-types';
 import { CELL_PROPS, cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, withLayouts, type CellRef } from '../../shared/design/layout';
 import { deleteLines, emptyCellAt, fillCell, placeInLayout, pruneLayouts, setCellProp, setCellSize, slotOf } from '../../shared/design/layout-edit';
-import type { ControlDef, ControlKind, DesignDoc, SectionDef } from '../../shared/design/model';
+import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
 import { reportWidth } from '../../shared/report/model';
 import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
@@ -48,43 +48,10 @@ const bounds = (rs: Rect[]): Rect => {
   return { left, top, width: Math.max(...rs.map((r) => r.left + r.width)) - left, height: Math.max(...rs.map((r) => r.top + r.height)) - top };
 };
 
-// ---- arbre
-interface Entry { control: ControlDef; section: number; parent: string | null }
-function entries(doc: DesignDoc): Entry[] {
-  const out: Entry[] = [];
-  const rec = (list: ControlDef[], section: number, parent: string | null): void => {
-    for (const control of list) { out.push({ control, section, parent }); if (control.children) rec(control.children, section, control.name); }
-  };
-  doc.sections.forEach((s, i) => rec(s.controls, i, null));
-  return out;
-}
-const subtree = (c: ControlDef): ControlDef[] => [c, ...(c.children ?? []).flatMap(subtree)];
+import { entries, findControl, mapLists, same, sectionBottomLimit, subtree, uniqueIn, uniqueName, updateControl, type Entry } from '../../shared/design/control-tree';
 
-export function findControl(doc: DesignDoc, name: string): { control: ControlDef; section: number; parent: string | null } | null {
-  return entries(doc).find((e) => sameName(e.control.name, name)) ?? null;
-}
-export const sectionBottomLimit = (s: SectionDef): number => Math.max(0, ...s.controls.flatMap(subtree).map((c) => c.top + c.height));
-
-function uniqueIn(names: string[], base: string): string {
-  if (!names.some((n) => sameName(n, base))) return base;
-  for (let i = 1; ; i++) if (!names.some((n) => sameName(n, base + i))) return base + i;
-}
-export const uniqueName = (doc: DesignDoc, base: string): string => uniqueIn(entries(doc).map((e) => e.control.name), base);
-
-/** Mêmes éléments dans le même ordre : une liste intacte est gardée telle quelle (le canevas ne redessine que ce qui change). */
-const same = <T,>(a: T[], b: T[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
-/** Reconstruit les listes de contrôles, de haut en bas : `fn` voit la liste d'origine d'une section (owner null) ou d'un conteneur. */
-function mapLists(doc: DesignDoc, fn: (list: ControlDef[], owner: ControlDef | null, section: number) => ControlDef[]): DesignDoc {
-  const rec = (list: ControlDef[], owner: ControlDef | null, si: number): ControlDef[] =>
-    fn(list, owner, si).map((c) => { if (!c.children) return c; const kids = rec(c.children, c, si); return same(kids, c.children) ? c : { ...c, children: kids }; });
-  return { ...doc, sections: doc.sections.map((s, i) => { const cs = rec(s.controls, null, i); return same(cs, s.controls) ? s : { ...s, controls: cs }; }) };
-}
-function updateControl(doc: DesignDoc, name: string, fn: (c: ControlDef) => ControlDef): DesignDoc {
-  const e = findControl(doc, name);
-  if (!e) return doc;
-  const n = fn(e.control);
-  return n === e.control ? doc : mapLists(doc, (list) => list.map((c) => (c === e.control ? n : c)));
-}
+// Déplacés dans shared/design (utilisés aussi par basecraft-cli) ; les noms restent exportés d'ici.
+export { findControl, sectionBottomLimit, uniqueName, updateControl };
 
 // ---- positions : un contrôle déplacé emmène ses descendants (sauf ceux qui ont leur propre cible)
 type Patches = Map<ControlDef, Partial<Rect>>;
@@ -174,6 +141,12 @@ function applyPatches(s: DesignerState, patches: Patches, follow: (c: ControlDef
 function setIn(props: Record<string, unknown>, name: string, value: unknown): Record<string, unknown> {
   if (value === undefined) { if (!Object.hasOwn(props, name)) return props; const { [name]: _gone, ...rest } = props; return rest; }
   return Object.hasOwn(props, name) && Object.is(props[name], value) ? props : { ...props, [name]: value };
+}
+
+/** Une propriété du document (`undefined` la retire) ; le même document si rien ne change. */
+export function setDocProp(doc: DesignDoc, name: string, value: unknown): DesignDoc {
+  const props = setIn(doc.props, name, value);
+  return props === doc.props ? doc : { ...doc, props };
 }
 
 const sameRef = (a: DesignDoc['recordSource'], b: DesignDoc['recordSource']): boolean => a === b

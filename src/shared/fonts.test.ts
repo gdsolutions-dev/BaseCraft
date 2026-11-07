@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { EMBEDDED_FONTS, FONT_FILES, cssFamily, fontFaceCss, fontFile } from './fonts';
+import { EMBEDDED_FONTS, FONT_FILES, cssFamily, fontFaceCss, fontFile, isThemeFontRef, resolveFont, resolveThemeFont } from './fonts';
+import { BUILTIN_THEMES, DEFAULT_THEME } from './design/theme';
+import { PROPERTY_CATALOG } from './design/properties';
+
+describe('theme fonts', () => {
+  const t = BUILTIN_THEMES[1]!;
+  it('references', () => {
+    expect(isThemeFontRef('(Body)')).toBe(true);
+    expect(isThemeFontRef('(Headings)')).toBe(true);
+    expect(isThemeFontRef('(body)')).toBe(false);
+    expect(resolveThemeFont('(Headings)', t)).toBe(t.fonts.major);
+    expect(resolveThemeFont('(Body)', t)).toBe(t.fonts.minor);
+    expect(resolveThemeFont('Carlito', t)).toBe('Carlito');
+    expect(PROPERTY_CATALOG.find((p) => p.name === 'FontName')!.default).toBe('(Body)');
+  });
+  it('resolveFont maps references through the default theme when none is given', () => {
+    expect(resolveFont('(Body)')).toEqual({ family: DEFAULT_THEME.fonts.minor, portable: true });
+    expect(resolveFont('(Headings)', BUILTIN_THEMES[3]!)).toEqual({ family: BUILTIN_THEMES[3]!.fonts.major, portable: true });
+  });
+});
 
 describe('embedded font files (A5)', () => {
   it('every embedded family has its four files', () => {

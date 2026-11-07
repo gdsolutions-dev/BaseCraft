@@ -79,6 +79,16 @@ describe('session (brief)', () => {
     expect(a.startup()).toEqual(mine);
   });
 
+  it('base theme: read in a read-only session, saved only by the writer', () => {
+    const a = create();
+    const mine = { ...a.baseTheme(), name: 'Mine' };
+    a.saveBaseTheme(mine);
+    const b = open({ sessionId: 'b' });
+    expect(b.state.readOnly).toBe(true);
+    expect(() => b.saveBaseTheme({ ...mine, name: 'Other' })).toThrow(ReadOnlyError);
+    expect(b.baseTheme()).toEqual(mine);
+  });
+
   it('stale lock can be taken over', async () => {
     const a = create();
     t = 31_000;

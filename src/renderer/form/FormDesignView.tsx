@@ -12,7 +12,9 @@ import { unsavedRunDoc } from '../query/unsaved-run';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type ToolState } from '../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
-import { designerReducer, findControl, initDesigner, type DesignerAction } from '../designer/designer-model';
+import { designerReducer, findControl, initDesigner, setDocProp, type DesignerAction } from '../designer/designer-model';
+import { registerOpenDesign } from '../designer/open-designs';
+import { ThemeGallery } from '../designer/ThemeGallery';
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../designer/layout-commands';
@@ -25,7 +27,8 @@ import { nameErrorKey } from '../shell/nav-menu-items';
 import { firstPythonCall, viewCode } from '../designer/view-code';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
 import { editsDesign, sameView, type DocMode } from '../state/app-state';
-import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withTabOrder } from './form-def';
+import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withPageTabOrder, withTabOrder } from './form-def';
+import { DocThemeProvider, useAppMode } from '../design/theme-context';
 import { useFormHost } from './form-host';
 import { viewHost } from './layout-host';
 import { LayoutRecordBar } from './LayoutRecordBar';
@@ -33,7 +36,7 @@ import { loadLive, type LiveData } from './live-records';
 import { proposeLinks } from './links';
 import { GALLERY_TOOLS, headerItem } from './form-ribbon';
 import './form-nav-menu';
-import { TabOrderDialog } from './TabOrderDialog';
+import { pageGroup, sectionGroups, TabOrderDialog } from './TabOrderDialog';
 import { allowsLayout, firstRun } from './views';
 import './form.css';
 
@@ -79,6 +82,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const [fieldList, setFieldList] = useState(() => !!tab.isNew && fieldListFor === tab.name);
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
+  const [themesOpen, setThemesOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const logoFile = useRef<HTMLInputElement>(null);
@@ -88,13 +92,15 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
 
   useEffect(() => { if (fieldListFor === tab.name) fieldListFor = null; }, [tab.name]);
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
+  const appMode = useAppMode();
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
   const display = useMemo<DisplayContext>(() => ({ lang, region: localeInfo(region ?? 'en-US') }), [lang, region]);
   const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
   const sheet = useMemo<PropertySheetContext>(() => ({ display, fields: fieldNames, tables: lists.tables, queries: lists.queries,
     objects: (k) => (k === 'form' ? lists.forms : lists.reports), owner: { tabId: tab.id, name: tab.name, doc: () => live.current.state.doc } }),
     [display, fieldNames, lists, tab.id, tab.name]);
-  const { host, labels } = useFormHost(sheet);
+  const pageTabOrder = useCallback((control: string, page: number) => void cmds.current.tabOrder({ control, page }), []);   // cmds : plus bas, lu au clic
+  const { host, labels } = useFormHost(sheet, tab.mode === 'layout' ? undefined : pageTabOrder);   // pas d'Ordre de tabulation en mode Page (Access)
 
   const live = useRef({ state, readOnly, tab, extra, phase, labels, host });
   live.current = { state, readOnly, tab, extra, phase, labels, host };
@@ -224,11 +230,16 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     },
   });
 
-  const tabOrder = async () => {
+  /** Sans `scope` : l'ordre de chaque section ; avec : celui d'une page d'un contrôle à onglets. Une seule étape d'annulation. */
+  const tabOrder = async (scope?: { control: string; page: number }) => {
     const { state: s, readOnly: ro } = live.current;
-    const orders = await modal.custom<string[][]>((close) => <TabOrderDialog doc={s.doc} sectionLabel={host.sectionLabel} readOnly={ro} close={close} />,
+    const groups = scope
+      ? pageGroup(s.doc, scope.control, scope.page, t('form.tabOrder.pageLabel', { control: scope.control, page: String((findControl(s.doc, scope.control)?.control.props.Pages as unknown[] | undefined)?.[scope.page] || scope.page + 1) }))
+      : sectionGroups(s.doc, host.sectionLabel);
+    const orders = await modal.custom<string[][]>((close) => <TabOrderDialog groups={groups} readOnly={ro} close={close} />,
       { titleKey: 'ribbon.cmd.tabOrder' });
     if (!orders || live.current.readOnly) return;
+    if (scope) { send({ type: 'edit', apply: (d) => withPageTabOrder(d, scope.control, scope.page, orders[0]) }); return; }
     send({ type: 'edit', apply: (d) => {
       const sections = d.sections.map((x, i) => (orders[i] ? withTabOrder(x, orders[i]) : x));
       return sections.every((x, i) => x === d.sections[i]) ? d : { ...d, sections };
@@ -256,11 +267,16 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   // (closing the tab there asks to save the design, as a query does). A tab merely in the
   // background still registers, its close guard above all (else a modified form closed from another tab is lost unasked)
   const behind = !editsDesign(tab.mode);
+  // la galerie des thèmes retrouve ce concepteur (même derrière la vue Formulaire) pour lui retirer son thème propre
+  useEffect(() => registerOpenDesign({ kind: 'form', name: tab.name, clearTheme: () => {
+    if (live.current.state.doc.props.Theme !== undefined) send({ type: 'edit', apply: (d) => setDocProp(d, 'Theme', undefined) });
+  } }), [tab.name]);
   useEffect(() => {
     if (behind) return registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
     const off = registerCommands(tab.id, {
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
+      themes: () => setThemesOpen(true),
       ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, send, () => clipContext(live.current.host, t)),
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
@@ -359,12 +375,14 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   }, []);
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
+  const closeThemes = useCallback(() => setThemesOpen(false), []);
   const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
   const closeSheet = useCallback(() => setSheetVisible(false), []);
 
   if (typeof phase === 'object') return <div className="doc-empty muted" role="alert" data-testid="form-load-error">{phase.error}</div>;
   if (phase === 'loading' || region === null) return <div className="form-design" ref={root} />;
   return (
+    <DocThemeProvider docProps={state.doc.props} mode={appMode}>
     <div className="form-design" ref={root} data-testid="form-design">
       {notice.dropped > 0 && <div className="fz-banner" role="status" data-testid="form-dropped">{t('form.dropped', { count: notice.dropped })}</div>}
       {notice.badSource && <div className="fz-banner" role="status" data-testid="form-bad-source">{t('form.badSource')}</div>}
@@ -377,8 +395,10 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       {menu && <ArrangePopup menu={menu} state={state} dispatch={send} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={send} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
+      {themesOpen && <ThemeGallery kind="form" dispatch={send} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       <input ref={logoFile} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="form-logo-file"
         onChange={(e) => { readLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
+    </DocThemeProvider>
   );
 }

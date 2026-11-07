@@ -569,7 +569,6 @@ const exportText: RibbonCommand = { id: 'exportText', icon: FileText, labelKey: 
 const exportPdf: RibbonCommand = { id: 'exportPdf', icon: FileType, labelKey: 'ribbon.cmd.exportPdf', size: 'lg', enabled: doc };
 const exportMore = plan('later', 'exportMore', Ellipsis);
 const relationshipsGroup = group('relationships', relationships, objectDependencies);
-const themesGroup = group('themes', plan('later', 'themes', Palette, 'lg'), plan('later', 'themeColors', SwatchBook), plan('later', 'themeFonts', Type));
 // A5 Task 12: Design view and Print Preview save the page setup into the definition (a read-only base cannot).
 const pageSize: RibbonCommand = { id: 'pageSize', icon: File, labelKey: 'ribbon.cmd.pageSize', size: 'lg', popup: true, enabled: writable };
 const margins: RibbonCommand = { id: 'margins', icon: Scan, labelKey: 'ribbon.cmd.margins', size: 'lg', popup: true, enabled: writable };
@@ -614,6 +613,9 @@ const formEditor = editorOf('form');
 const reportEditor = editorOf('report');
 const formOrReportDesign = (c: RibbonContext) => formEditor(c) || reportEditor(c);
 const designerWritable = (c: RibbonContext) => formOrReportDesign(c) && !c.readOnly;
+// F2 : la galerie des thèmes s'ouvre aussi en lecture seule (pour regarder) ; ses actions se désactivent d'elles-mêmes. Couleurs et Polices : F2b.
+const themesGroup = group('themes', { id: 'themes', icon: Palette, labelKey: 'ribbon.cmd.themes', size: 'lg', popup: true, enabled: formOrReportDesign },
+  plan('later', 'themeColors', SwatchBook), plan('later', 'themeFonts', Type));
 const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.readOnly;
 /** Les éléments d'en-tête et de pied (L3c) : les sections du document, donc aussi en mode Page. */
 const reportHeaderWritable = (c: RibbonContext) => reportEditor(c) && !c.readOnly;

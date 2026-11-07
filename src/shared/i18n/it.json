@@ -1678,7 +1678,33 @@
     "accent": "Colore di risalto",
     "accentContrast": "Testo sul colore di risalto",
     "danger": "Pericolo",
-    "warning": "Avviso"
+    "warning": "Avviso",
+    "lt1": "Sfondo 1",
+    "dk1": "Testo 1",
+    "lt2": "Sfondo 2",
+    "dk2": "Testo 2",
+    "accent1": "Colore 1",
+    "accent2": "Colore 2",
+    "accent3": "Colore 3",
+    "accent4": "Colore 4",
+    "accent5": "Colore 5",
+    "accent6": "Colore 6",
+    "hlink": "Collegamento ipertestuale",
+    "folHlink": "Collegamento visitato",
+    "lighter": "Più chiaro {{pct}}%",
+    "darker": "Più scuro {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatico",
+    "themeColors": "Colori del tema",
+    "standardColors": "Colori standard",
+    "recent": "Colori recenti",
+    "transparent": "Trasparente",
+    "more": "Altri colori…"
+  },
+  "font": {
+    "body": "Corpo",
+    "headings": "Titoli"
   },
   "sourcePicker": {
     "label": "Tabelle e query",
@@ -1996,8 +2022,12 @@
       "up": "Sposta su",
       "down": "Sposta giù",
       "auto": "Ordine automatico",
-      "hint": "Alt+Su e Alt+Giù spostano il controllo selezionato.",
-      "empty": "Nessun controllo"
+      "hint": "Trascina i selettori di riga, oppure usa Alt+Su e Alt+Giù, per spostare i controlli selezionati. Maiusc+clic ne seleziona più di uno.",
+      "empty": "Nessun controllo",
+      "rowSelector": "Seleziona {{name}}",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Ordine di tabulazione…",
+      "pageMenu": "Pagina della scheda"
     },
     "headerFooterConfirm": "Eliminare l'intestazione e il piè di pagina della maschera? I controlli che contengono verranno eliminati.",
     "calc": {
@@ -3022,5 +3052,13 @@
     "placeholder": "Digitare un'istruzione Python o ?espressione",
     "errorAt": "(Modulo {{module}}, riga {{line}})",
     "splitter": "Ridimensiona la finestra Immediata"
+  },
+  "themeGallery": {
+    "current": "In questo database",
+    "custom": "Personalizzato",
+    "builtin": "Temi di BaseCraft",
+    "all": "Applica il tema a tutti gli oggetti corrispondenti",
+    "object": "Applica il tema solo a questo oggetto",
+    "default": "Imposta come tema predefinito del database"
   }
 }

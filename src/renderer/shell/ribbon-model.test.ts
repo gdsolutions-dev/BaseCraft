@@ -270,6 +270,23 @@ describe('Arrange layout commands (L1 dispositions)', () => {
   });
 });
 
+describe('Themes command (F2)', () => {
+  const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
+  const themes = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((x) => x.id === 'themes')!;
+  it('is a real popup, enabled in Design and Layout views of forms and reports, also read-only', () => {
+    expect([themes.planned, themes.popup]).toEqual([undefined, true]);
+    for (const kind of ['form', 'report'] as const) for (const mode of ['design', 'layout'] as const) {
+      expect(themes.enabled(ctx({ kind, mode })), `${kind} ${mode}`).toBe(true);
+      expect(themes.enabled(ctx({ kind, mode, readOnly: true })), `${kind} ${mode} ro`).toBe(true);
+    }
+  });
+  it('is disabled in Form/Report views and with no document', () => {
+    expect(themes.enabled(ctx({ mode: 'run' }))).toBe(false);
+    expect(themes.enabled(ctx({ kind: 'report', mode: 'run' }))).toBe(false);
+    expect(themes.enabled(ctx({ kind: null, mode: null }))).toBe(false);
+  });
+});
+
 describe('ribbon catalog (C11: every Access tab, group and command; placeholders name their batch)', () => {
   const PLANNED: PlannedIn[] = ['A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'C', 'D', 'E', 'later']; // A2 is merged: nothing waits for it
   const get = (o: unknown, k: string) => k.split('.').reduce<unknown>((a, p) => (a as Record<string, unknown> | undefined)?.[p], o);

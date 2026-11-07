@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { CellInput, SqlValue } from '../../shared/coerce';
 import { flattenControls, type ControlDef, type DesignDoc } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
+import { DocThemeProvider, useAppMode } from '../design/theme-context';
 import { design } from '../design/entry';   // null in BaseCraft Runtime: the layout question is a design one (saving goes through a design channel)
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
 import { sameName, type FieldDef } from '../../shared/field-types';
@@ -266,7 +267,13 @@ interface RunnerProps {
   embed?: EmbedLink;                                   // a subform
 }
 
-function FormRunner({ tab, active, readOnly, doc, records, hub, region, name, mode, ancestors, embed }: RunnerProps) {
+/** Le formulaire (ou le sous-formulaire) dessiné avec son thème effectif, dans le mode clair ou sombre de l'application. */
+function FormRunner(p: RunnerProps) {
+  const mode = useAppMode();
+  return <DocThemeProvider docProps={p.doc.props} mode={mode}><FormRunnerBody {...p} /></DocThemeProvider>;
+}
+
+function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name, mode, ancestors, embed }: RunnerProps) {
   const { t, i18n: i18 } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();

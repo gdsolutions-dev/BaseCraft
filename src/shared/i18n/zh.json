@@ -1656,7 +1656,33 @@
     "accent": "强调色",
     "accentContrast": "强调色上的文本",
     "danger": "危险",
-    "warning": "警告"
+    "warning": "警告",
+    "lt1": "背景 1",
+    "dk1": "文字 1",
+    "lt2": "背景 2",
+    "dk2": "文字 2",
+    "accent1": "着色 1",
+    "accent2": "着色 2",
+    "accent3": "着色 3",
+    "accent4": "着色 4",
+    "accent5": "着色 5",
+    "accent6": "着色 6",
+    "hlink": "超链接",
+    "folHlink": "已访问的超链接",
+    "lighter": "淡色 {{pct}}%",
+    "darker": "深色 {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "自动",
+    "themeColors": "主题颜色",
+    "standardColors": "标准色",
+    "recent": "最近使用的颜色",
+    "transparent": "透明",
+    "more": "其他颜色…"
+  },
+  "font": {
+    "body": "正文",
+    "headings": "标题"
   },
   "sourcePicker": {
     "label": "表和查询",
@@ -1971,8 +1997,12 @@
       "up": "上移",
       "down": "下移",
       "auto": "自动次序",
-      "hint": "Alt+上 和 Alt+下 可移动所选控件。",
-      "empty": "没有控件"
+      "hint": "拖动行选择器，或使用 Alt+上 和 Alt+下，移动所选控件。Shift+单击可选择多个。",
+      "empty": "没有控件",
+      "rowSelector": "选择 {{name}}",
+      "pageLabel": "{{control}}：{{page}}",
+      "pageItem": "Tab 键次序…",
+      "pageMenu": "选项卡页"
     },
     "headerFooterConfirm": "要删除窗体页眉和页脚吗？其中包含的控件也将被删除。",
     "calc": {
@@ -2976,5 +3006,13 @@
     "placeholder": "输入 Python 语句，或 ?表达式",
     "errorAt": "(模块 {{module}}，第 {{line}} 行)",
     "splitter": "调整即时窗口大小"
+  },
+  "themeGallery": {
+    "current": "此数据库中",
+    "custom": "自定义",
+    "builtin": "BaseCraft 主题",
+    "all": "将主题应用于所有匹配的对象",
+    "object": "仅将主题应用于此对象",
+    "default": "设为此数据库的默认主题"
   }
 }

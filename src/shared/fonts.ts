@@ -1,6 +1,7 @@
 // Polices embarquées (spec 4.7, contrat 1.5) : mêmes mesures sur les trois systèmes. Noms seulement ; le lot A5 ajoute les
 // fichiers et les tables de mesure dans ce module, sans changer ces deux exports.
 import { sameName } from './field-types';
+import { DEFAULT_THEME, type Theme } from './design/theme';
 
 export const EMBEDDED_FONTS: { family: string; generic: 'sans-serif' | 'serif' | 'monospace' }[] = [
   { family: 'Liberation Sans', generic: 'sans-serif' },
@@ -24,8 +25,16 @@ export const FONT_ALIASES: Record<string, string> = {
   Cambria: 'Caladea',
 };
 
+/** `(Headings)` / `(Body)` : police de titres ou de corps du thème. */
+export const isThemeFontRef = (name: string): boolean => name === '(Headings)' || name === '(Body)';
+
+/** A theme reference becomes the theme's font; any other name is unchanged. */
+export const resolveThemeFont = (name: string, theme: Theme): string =>
+  name === '(Headings)' ? theme.fonts.major : name === '(Body)' ? theme.fonts.minor : name;
+
 /** The family to draw with; portable when it is embedded or aliased to an embedded font. "Not portable" in the UI = !portable. */
-export function resolveFont(name: string): { family: string; portable: boolean } {
+export function resolveFont(ref: string, theme: Theme = DEFAULT_THEME): { family: string; portable: boolean } {
+  const name = resolveThemeFont(ref, theme);
   const embedded = EMBEDDED_FONTS.find((f) => sameName(f.family, name));
   if (embedded) return { family: embedded.family, portable: true };
   const alias = Object.keys(FONT_ALIASES).find((a) => sameName(a, name));

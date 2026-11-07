@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { cssFamily, resolveFont } from '../../shared/fonts';
+import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import { layoutReport } from '../../shared/report/layout';
 import { fourDigitYear } from '../settings-store';
 import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
@@ -16,6 +17,7 @@ import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { DocMode } from '../state/app-state';
 import { allowsLayout } from '../form/views';
+import { useBaseTheme } from '../design/theme-context';
 import { errorMessage as dialogError, useModal, type ModalApi } from '../shell/Modal';
 import { RibbonPopup } from '../designer/RibbonPopup';
 import { exportSource } from '../exchange/export';
@@ -233,7 +235,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       reportShown(tab.name, true);
       const env = await layoutEnv();
       if (!live()) return;
-      const spec = readReport(d, data.current.fields), { width, height } = pageGeometry(spec.page);
+      const theme = effectiveTheme(d.props, (await api.theme?.get().catch(() => undefined)) ?? DEFAULT_THEME);   // un état se dessine toujours en clair
+      if (!live()) return;
+      const spec = readReport(d, data.current.fields, { theme }), { width, height } = pageGeometry(spec.page);
       let shownAt = 0;
       const onPage = (pages: LaidOutPage[]) => {   // page 1 at once, then at most twice a second
         if (pages.length > 1 && Date.now() - shownAt < 500) return;
@@ -301,6 +305,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     await exportSource(modal, { ref: src, ...(where !== undefined ? { where } : {}) }, tab.name, format);
   };
 
+  const baseTheme = useBaseTheme();
   const cmds = useRef({ run, pageSetup, applySetup, output, closePreview, exportData });
   cmds.current = { run, pageSetup, applySetup, output, closePreview, exportData };
 
@@ -308,6 +313,12 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     void cmds.current.run('object');
     return () => ctl.current?.abort();   // closing during its macros: the layout stops, no message (a message box shown finishes)
   }, [tab.name, tab.reloadToken]);
+  const seenTheme = useRef(baseTheme);
+  useEffect(() => {   // le thème par défaut change (sans rouvrir l'état) : la mise en page est refaite, sans rejouer les événements d'ouverture
+    if (seenTheme.current === baseTheme) return;
+    seenTheme.current = baseTheme;
+    if (doc.current && data.current) void cmds.current.run('layout');
+  }, [baseTheme]);
   useEffect(() => onUserFunctionsChanged(() => { if (doc.current && data.current) void cmds.current.run('layout'); }), []);   // D3 R5: Python functions added, removed or edited
   useEffect(() => () => { reportShown(name.current, false); void events.current?.close(); }, []);   // the preview closes
 

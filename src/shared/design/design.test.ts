@@ -4,6 +4,7 @@ import en from '../i18n/en.json';
 import { CONTROL_KINDS, cmToTwips, SECTION_KINDS, twipsToCm, validateDesignDoc, type DesignDoc } from './model';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { DEFAULT_THEME, shade } from './theme';
 import { colorCss, DARK_THEME_HEX, isColorValue, LIGHT_THEME_HEX, resolveColor, THEME_COLORS } from './colors';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG, propertiesFor, type PropertyDescriptor } from './properties';
 import { EMBEDDED_FONTS, FONT_ALIASES, isEmbeddedFont, resolveFont } from '../fonts';
@@ -240,12 +241,28 @@ describe('colors', () => {
   });
 });
 
+describe('slot colours', () => {
+  it('isColorValue / resolveColor / colorCss', () => {
+    expect(isColorValue('theme:accent2@+80')).toBe(true);
+    expect(isColorValue('theme:accent2@+0')).toBe(false);
+    const { light, dark } = DEFAULT_THEME.colors;
+    expect(resolveColor('theme:accent1@-25', 'light', 'transparent', DEFAULT_THEME)).toBe(shade(light.accent1, 0.25));
+    expect(resolveColor('theme:accent1@-25', 'dark', 'transparent', DEFAULT_THEME)).toBe(shade(dark.accent1, 0.25));
+    expect(resolveColor('theme:accent1', 'dark')).toBe(dark.accent1);
+    expect(resolveColor('theme:text', 'dark')).toBe(DARK_THEME_HEX.text);
+    expect(resolveColor('theme:accent9', 'light', '#112233')).toBe('#112233');
+    expect(colorCss('theme:accent1@+40', undefined, { theme: DEFAULT_THEME, mode: 'dark' })).toMatch(/^#[0-9a-f]{6}$/);
+    expect(colorCss('theme:accent1')).toBe(light.accent1);
+    expect(colorCss('theme:text')).toBe('var(--bc-text)');
+  });
+});
+
 describe('fonts', () => {
   it('embedded fonts, case ignored', () => {
     expect(EMBEDDED_FONTS.map((f) => f.family)).toEqual(['Liberation Sans', 'Liberation Serif', 'Liberation Mono', 'Carlito', 'Caladea', 'Inter']);
     expect(isEmbeddedFont('carlito')).toBe(true);
     expect(isEmbeddedFont('Arial')).toBe(false);
-    expect(isEmbeddedFont(String(PROPERTY_CATALOG.find((p) => p.name === 'FontName')!.default))).toBe(true);
+    expect(PROPERTY_CATALOG.find((p) => p.name === 'FontName')!.default).toBe('(Body)'); // theme reference, resolved by resolveFont
   });
 
   it('aliases: an Office font maps to its metric-compatible embedded font', () => {

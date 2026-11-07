@@ -3,6 +3,7 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { ControlDef } from '../../../shared/design/model';
 import { num } from '../../../shared/expr/library';
+import { useDocTheme } from '../../design/doc-theme';
 import { isUnbound } from '../control-values';
 import { controlEnabled, optionGroupValue, prop } from '../run-model';
 import { fieldOf, hasLabel, placed, tipOf, type CtlProps } from './run-ctx';
@@ -10,6 +11,7 @@ import { fieldOf, hasLabel, placed, tipOf, type CtlProps } from './run-ctx';
 const isOption = (k: ControlDef): boolean => (k.kind === 'optionButton' || k.kind === 'checkBox') && typeof k.props.OptionValue === 'number' && prop(k, 'Visible') !== false;
 
 export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { renderChild(k: ControlDef, origin: ControlDef, forId?: string): ReactNode }) {
+  const tc = useDocTheme();
   const b = fieldOf(c, x);
   const { disabled, readOnly } = controlEnabled(c, x.snap, b?.f ?? null);
   const unbound = isUnbound(c);
@@ -46,7 +48,7 @@ export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { render
         const i = options.indexOf(k);
         return [
           <div key={k.name} role="radio" id={x.id(k.name)} data-testid={`form-ctl-${k.name}`} aria-checked={chosen === k.name}
-            className={`frun-radio${k.kind === 'checkBox' ? ' frun-square' : ''}`} style={placed(k, c)}
+            className={`frun-radio${k.kind === 'checkBox' ? ' frun-square' : ''}`} style={placed(k, c, tc)}
             tabIndex={k.name === target && x.stops.has(c.name) ? 0 : -1} aria-disabled={disabled || prop(k, 'Enabled') === false || undefined}
             {...(hasLabel(k, x) ? { 'aria-labelledby': `${x.id(k.name)}-label` } : { 'aria-label': k.name })} {...tipOf(k)}
             onClick={() => choose(k)} onKeyDown={(e) => keys(e, i)} />,

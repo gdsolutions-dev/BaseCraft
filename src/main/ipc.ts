@@ -22,7 +22,7 @@ import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, iconBytes, settingValue, nameChanges, propertyTargetsArg,
+  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, iconBytes, settingValue, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
@@ -638,6 +638,21 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   // Startup options (B3): a read-only base reads them; saving rejects (ReadOnlyError) like any write.
   handle(CH.baseStartup, () => need().startup());
   handle(CH.baseSaveStartup, (o) => rowWrite(() => need().saveStartup(startupOptions(o))));
+
+  // Default theme (F2): a read-only base reads it; saving rejects like any write; open views refetch on the broadcast.
+  handle(CH.baseTheme, () => need().baseTheme());
+  handle(CH.baseSaveTheme, async (t) => {
+    await rowWrite(() => need().saveBaseTheme(themeArg(t)));
+    const w = mainWindow();
+    if (w && !w.isDestroyed()) w.webContents.send(CH.baseThemeChanged);
+  });
+  handle(CH.baseApplyTheme, async (t, kind, names) => {
+    const a = themeApplyArgs(t, kind, names);
+    const r = await rowWrite(() => need().applyThemeToAll(a.theme, a.kind, a.names));
+    const w = mainWindow();
+    if (w && !w.isDestroyed()) w.webContents.send(CH.baseThemeChanged);
+    return r;
+  });
 
   handle(CH.relationsList, (o) => need().listRelations(relationsListOptions(o)));
   handle(CH.relationsSave, (r, o) => tableOp(() => need().saveRelation(relation(r), o === null ? null : lookupName(o))));

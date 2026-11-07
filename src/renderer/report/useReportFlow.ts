@@ -3,6 +3,7 @@
 // après sa dernière modification ; la mise en page précédente est annulée, un résultat périmé n'est jamais montré.
 import { useEffect, useRef, useState } from 'react';
 import type { DesignDoc } from '../../shared/design/model';
+import type { Theme } from '../../shared/design/theme';
 import type { LaidOutReport } from '../../shared/report/types';
 import { useModal } from '../shell/Modal';
 import { flowKey, keptOutOfLayout, latestRun, layoutFlow, loadFlowData, type FlowData, type FlowSource } from './layout-flow';
@@ -13,7 +14,7 @@ const RELAYOUT_DELAY = 150;   // ms
 
 /** `active` faux (autre mode) : rien n'est lu ni mis en page, la mise en page en cours est annulée. Ne rejette jamais : un
  *  échec de la mise en page donne `notice: 'layoutFailed'`. `busy` : ce qui est montré n'est pas encore celui de `doc`. */
-export function useReportFlow(doc: DesignDoc, active: boolean): { flow: FlowData; busy: boolean } {
+export function useReportFlow(doc: DesignDoc, active: boolean, theme?: Theme): { flow: FlowData; busy: boolean } {
   const modal = useModal();
   const [runs] = useState(() => latestRun(RELAYOUT_DELAY));
   const key = flowKey(doc);
@@ -42,9 +43,9 @@ export function useReportFlow(doc: DesignDoc, active: boolean): { flow: FlowData
   const source = src?.key === key ? src.source : null;
   useEffect(() => {
     if (!active || !source) return;
-    runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal)), (report) => setLaid({ doc, source, report }));
+    runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal, theme)), (report) => setLaid({ doc, source, report }));
     return runs.cancel;
-  }, [active, doc, source, runs, fnTick]);
+  }, [active, doc, source, runs, fnTick, theme]);
 
   const failed = laid !== null && laid.source === source && !laid.report;
   return {

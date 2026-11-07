@@ -155,3 +155,27 @@ export function copyObject(db: DatabaseSync, kind: ObjectKind, name: string, new
     return { ok: true };
   });
 }
+
+/** Theme "all matching objects" (F2): removes `props.Theme` from every saved object of `kind` ('form' | 'report') in one transaction,
+ *  except those named in `skip` (open documents, which get the removal as an edit of their own). Objects without an override, or
+ *  whose definition is unreadable, are left untouched (`modified` unchanged). Returns the number of objects rewritten. */
+export function clearThemeOverrides(db: DatabaseSync, kind: 'form' | 'report', skip: string[]): number {
+  return inTransaction(db, () => {
+    const rows = db.prepare(`SELECT name, definition FROM bc_objects WHERE kind = ? AND ${TEXT_NAME}`).all(kind) as unknown as { name: string; definition: unknown }[];
+    const now = new Date().toISOString();
+    let n = 0;
+    for (const r of rows) {
+      if (skip.some((s) => sameName(s, r.name)) || typeof r.definition !== 'string' || !r.definition.includes('"Theme"')) continue;
+      let def: unknown;
+      try { def = JSON.parse(r.definition); } catch { continue; }
+      const props = plain(def) ? def.props : undefined;
+      if (!plain(props) || !Object.hasOwn(props, 'Theme')) continue;
+      delete props.Theme;
+      const json = definitionJson(def);
+      if (json === null) continue;
+      db.prepare('UPDATE bc_objects SET definition = ?, modified = ? WHERE kind = ? AND name = ?').run(json, now, kind, r.name);
+      n++;
+    }
+    return n;
+  });
+}

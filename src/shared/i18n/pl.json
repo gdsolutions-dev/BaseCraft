@@ -1689,7 +1689,33 @@
     "accent": "Akcent",
     "accentContrast": "Tekst na akcencie",
     "danger": "Zagrożenie",
-    "warning": "Ostrzeżenie"
+    "warning": "Ostrzeżenie",
+    "lt1": "Tło 1",
+    "dk1": "Tekst 1",
+    "lt2": "Tło 2",
+    "dk2": "Tekst 2",
+    "accent1": "Akcent 1",
+    "accent2": "Akcent 2",
+    "accent3": "Akcent 3",
+    "accent4": "Akcent 4",
+    "accent5": "Akcent 5",
+    "accent6": "Akcent 6",
+    "hlink": "Hiperłącze",
+    "folHlink": "Odwiedzone hiperłącze",
+    "lighter": "Jaśniejszy {{pct}}%",
+    "darker": "Ciemniejszy {{pct}}%"
+  },
+  "colorpicker": {
+    "automatic": "Automatycznie",
+    "themeColors": "Kolory motywu",
+    "standardColors": "Kolory standardowe",
+    "recent": "Ostatnio używane kolory",
+    "transparent": "Przezroczysty",
+    "more": "Więcej kolorów…"
+  },
+  "font": {
+    "body": "Treść",
+    "headings": "Nagłówki"
   },
   "sourcePicker": {
     "label": "Tabele i kwerendy",
@@ -2011,8 +2037,12 @@
       "up": "Przesuń w górę",
       "down": "Przesuń w dół",
       "auto": "Kolejność automatyczna",
-      "hint": "Alt+Strzałka w górę i Alt+Strzałka w dół przesuwają zaznaczony formant.",
-      "empty": "Brak formantów"
+      "hint": "Przeciągnij selektory wierszy lub użyj Alt+Strzałka w górę i Alt+Strzałka w dół, aby przesunąć zaznaczone formanty. Shift+kliknięcie zaznacza kilka.",
+      "empty": "Brak formantów",
+      "rowSelector": "Zaznacz {{name}}",
+      "pageLabel": "{{control}}: {{page}}",
+      "pageItem": "Kolejność tabulacji…",
+      "pageMenu": "Strona karty"
     },
     "headerFooterConfirm": "Usunąć nagłówek i stopkę formularza? Zawarte w nich formanty zostaną usunięte.",
     "calc": {
@@ -3045,5 +3075,13 @@
     "placeholder": "Wpisz instrukcję Pythona lub ?wyrażenie",
     "errorAt": "(Moduł {{module}}, wiersz {{line}})",
     "splitter": "Zmień rozmiar okna poleceń"
+  },
+  "themeGallery": {
+    "current": "W tej bazie danych",
+    "custom": "Niestandardowe",
+    "builtin": "Motywy BaseCraft",
+    "all": "Zastosuj motyw do wszystkich pasujących obiektów",
+    "object": "Zastosuj motyw tylko do tego obiektu",
+    "default": "Ustaw jako domyślny motyw bazy danych"
   }
 }

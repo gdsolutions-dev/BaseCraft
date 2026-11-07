@@ -16,7 +16,7 @@ import { boundField, controlTexts, isUnbound } from '../control-values';
 import { rowOfText, rowOfValue } from '../row-source';
 import type { FormRecords, RecordSnapshot } from '../record-controller';
 import { twipsToPx } from '../../designer/units';
-import { controlStyle, prop } from '../run-model';
+import { controlStyle, prop, type ThemeCtx } from '../run-model';
 
 export interface RunCtx {
   snap: RecordSnapshot;
@@ -186,7 +186,7 @@ export const tipOf = (c: ControlDef): { title?: string } => {
 };
 
 /** The control's style inside a container (option group, tab control): positions relative to it. */
-export function placed(c: ControlDef, origin: { left: number; top: number } | null): CSSProperties {
-  const st = controlStyle(c);
+export function placed(c: ControlDef, origin: { left: number; top: number } | null, tc?: ThemeCtx): CSSProperties {
+  const st = controlStyle(c, tc);
   return origin ? { ...st, left: twipsToPx(c.left - origin.left), top: twipsToPx(c.top - origin.top) } : st;
 }

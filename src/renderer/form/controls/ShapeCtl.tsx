@@ -1,16 +1,18 @@
 // Trait et rectangle (un saut de page ne dessine rien) : rectangle en bordure CSS, trait en SVG, du coin haut droit au coin bas
 // gauche quand Trait oblique (LineSlant) est vrai.
 import { colorCss } from '../../../shared/design/colors';
+import { useDocTheme } from '../../design/doc-theme';
 import { prop } from '../run-model';
 import { tipOf, type CtlProps } from './run-ctx';
 
 const DASH: Record<string, string> = { dashed: '6 3', dotted: '1 3' };
 
 export function ShapeCtl({ c, style }: CtlProps) {
+  const tc = useDocTheme();
   if (c.kind === 'pageBreak') return null;
   if (c.kind === 'rectangle') return <div className="frun-shape" style={style} data-testid={`form-ctl-${c.name}`} {...tipOf(c)} />;
   const b = String(prop(c, 'BorderStyle'));
-  const stroke = b === 'transparent' ? 'transparent' : colorCss(prop(c, 'BorderColor'), 'theme:border');
+  const stroke = b === 'transparent' ? 'transparent' : colorCss(prop(c, 'BorderColor'), 'theme:border', tc);
   const w = Math.max(1, Number(prop(c, 'BorderWidth')) || 0);
   const slant = prop(c, 'LineSlant') === true;
   const [y1, y2] = c.height === 0 ? [0.5, 0.5] : [0, 1];

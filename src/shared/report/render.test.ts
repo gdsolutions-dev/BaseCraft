@@ -23,6 +23,8 @@ const textItem = (text: string, o: Partial<Extract<LaidOutItem, { kind: 'text' }
 const pageWithText = (text: string, o: Partial<Extract<LaidOutItem, { kind: 'text' }>> = {}) => page([textItem(text, o)]);
 const pageWithImage = (src: string, sizeMode: 'clip' | 'stretch' | 'zoom' = 'clip') =>
   page([{ kind: 'image', name: 'I', left: 0, top: 0, width: 1000, height: 1000, src, sizeMode }]);
+const imgItem = (o: Partial<Extract<LaidOutItem, { kind: 'image' }>>): LaidOutItem =>
+  ({ kind: 'image', name: 'I', left: 0, top: 0, width: 1000, height: 1000, src: 'data:image/png;base64,AA==', sizeMode: 'clip', ...o });
 const rep = report([pageWithText('a')]);
 const landscapeRep = report([pageWithText('a')], true);
 const repWith = (font: Partial<FontSpec>) => report([page([textItem('a', { font: { ...FONT, ...font } })])]);
@@ -41,6 +43,13 @@ describe('render (brief)', () => {
   it('aliased font uses its embedded face', () => expect(reportCss(repWith({ name: 'Arial' }), 'fonts/')).toContain('LiberationSans-Regular.ttf'));
   it('page size and orientation', () => {
     expect(renderDocumentHtml(rep)).toContain('size: 210mm 297mm'); expect(renderDocumentHtml(landscapeRep)).toContain('size: 297mm 210mm');
+  });
+  it('image alignment prints object-position, tiling prints a div; neither prop keeps the old img', () => {
+    expect(renderPageHtml(page([imgItem({ pictureAlign: 'bottomRight' })]), rep)).toContain(';object-position:right bottom">');
+    const tiled = renderPageHtml(page([imgItem({ tiling: true })]), rep);
+    expect(tiled).toContain('background-repeat:repeat'); expect(tiled).not.toContain('<img');
+    expect(renderPageHtml(page([imgItem({})]), rep)).not.toContain('object-position');
+    expect(renderPageHtml(page([imgItem({})]), rep)).toContain('<img class="bc-img" alt="" src="data:image/png;base64,AA==" style="left:0pt;top:0pt;width:50pt;height:50pt;object-fit:none">');
   });
   it('only data images, object-fit from size mode', () => {
     expect(renderPageHtml(pageWithImage('https://x/y.png'), rep)).not.toContain('<img');
@@ -217,5 +226,27 @@ describe('empty layout cells (L5)', () => {
   });
   it('a pre-L5 report with a bare cell renders byte-identically', async () => {
     expect(await html(withCell())).toBe(await html(FACTURES_REPORT));
+  });
+});
+
+describe("image d'arrière-plan de l'état (F3 Task 8)", () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const withBg = { ...report([pageWithText('a'), pageWithText('b', {})].map((p, i) => ({ ...p, number: i + 1 }))), background: { src: png, sizeMode: 'clip' as const, alignment: 'center' as const, tiling: true } };
+  it('un .bc-bg par page, premier enfant, mosaïque', () => {
+    const html = withBg.pages.map((p) => renderPageHtml(p, withBg)).join('');
+    expect(html.match(/class="bc-bg"/g)).toHaveLength(2);
+    expect(reportCss(withBg, 'f/')).toContain('background-repeat:repeat');
+    expect(renderPageHtml(withBg.pages[0]!, withBg)).toMatch(/^<div class="bc-page"[^>]*><div class="bc-bg"/);
+    expect(renderDocumentHtml(withBg)).toContain('.bc-bg{position:absolute;inset:0;background-image:url("data:');
+  });
+  it("sans image : identique à avant (aucun bc-bg)", () => {
+    expect(renderPageHtml(rep.pages[0]!, rep)).not.toContain('bc-bg');
+    expect(reportCss(rep, 'f/')).not.toContain('bc-bg');
+  });
+  it("déterministe : le même HTML d'impression à chaque appel", () => {
+    expect(renderDocumentHtml(withBg)).toBe(renderDocumentHtml(withBg));
+  });
+  it('renderFlowHtml aussi', () => {
+    expect(renderFlowHtml(withBg)).toContain('<div class="bc-bg"');
   });
 });

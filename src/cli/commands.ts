@@ -49,4 +49,10 @@ export const COMMANDS: CommandInfo[] = [
     params: 'name: string; code: string; description?: string',
     description: "Creates a Python module holding the source in code. The name must be a Python identifier that is not a Python keyword (letters, digits, underscore; no dot or space) and not already used by another module (case-insensitive). The source is stored as written and is NOT syntax-checked: basecraft-cli has no Python engine, and BaseCraft shows a syntax error when the module is opened. Its exported functions (public, top-level def or async def, names not starting with _) are listed from the source so that form and report events can call them as =Name(...). BaseCraft recomputes this list when the module is saved in the editor. The base then holds active content (any module does): BaseCraft asks to enable it when the file is opened, and the CLI never enables it.",
   },
+  {
+    id: 'resource.add',
+    label: 'Add a shared image',
+    params: 'file: string; name?: string',
+    description: "Adds a PNG, JPEG, GIF or WebP image (at most 1 MB, checked by its signature, not its extension) from a path to the base's shared image gallery. name defaults to the file's base name without extension; a taken name becomes 'name (2)'. A form or report then draws it with { PictureType: 'shared', Picture: name }.",
+  },
 ];

@@ -18,11 +18,13 @@ import { designerCommands, selectedCount, type ArrangeMenu } from '../../designe
 import { formatCommands, type FormatPopupId } from '../../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../../designer/layout-commands';
 import { deleteKeyAllowed } from '../../designer/delete-guard';
-import { designerReducer, findControl, initDesigner, sectionBottomLimit, setDocProp, type DesignerAction } from '../../designer/designer-model';
+import { designerReducer, findControl, initDesigner, sectionBottomLimit, setDocPicture, setDocProp, type DesignerAction } from '../../designer/designer-model';
 import { registerOpenDesign } from '../../designer/open-designs';
 import { ColorsGallery } from '../../designer/ColorsGallery';
 import { FontsGallery } from '../../designer/FontsGallery';
 import { ThemeGallery } from '../../designer/ThemeGallery';
+import { ImageGallery } from '../../designer/ImageGallery';
+import { armedTool, readPictureFile, sectionBackground } from '../../designer/image-gallery-model';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { FieldList } from '../../designer/FieldList';
 import { fromSourceRef } from '../../designer/property-sheet-model';
@@ -50,10 +52,11 @@ import { reportHost, reportRenderControl } from './report-host';
 import { printMargins } from '../../settings-store';
 import { blankReport, detailHidden, removesControls, reportDesignStates } from './report-sections';
 import { layoutNoticeKey, reportView } from './report-view';
+import { useDocPicture, useResources } from '../../design/resources';
+import { PICTURE_ACCEPT, usedResourceNames } from '../../../shared/pictures';
 
 const FIELD_LEFT = 1418;   // 2,5 cm : un champ ajouté sans point de dépôt, son étiquette à gauche
 const FIELD_GAP = 113;     // 0,2 cm sous le contrôle le plus bas
-const PICTURE_MAX = 1024 * 1024;   // un logo de 1 Mo au plus, comme la propriété Image (feuille de propriétés)
 interface Lists { tables: string[]; queries: string[]; forms: string[]; reports: string[] }
 const NO_LISTS: Lists = { tables: [], queries: [], forms: [], reports: [] };
 /** La galerie Contrôles du ruban choisit l'outil de la boîte à outils. */
@@ -103,6 +106,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
+  const [imagesOpen, setImagesOpen] = useState(false);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [colorsOpen, setColorsOpen] = useState(false);
   const [fontsOpen, setFontsOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
@@ -129,8 +134,10 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const host = useMemo(() => reportHost({ doc: state.doc, sheet, t, renderControl }), [state.doc, sheet, t, renderControl]);
   // les avertissements du moteur, une fois les champs de la source connus
   // (une source illisible : ses champs inconnus ne sont pas répétés champ par champ, le bandeau le dit)
-  const issues = useMemo(() => (described.key === sourceKey ? readReport(state.doc, described.fields, { theme }).issues : [])
-    .filter((i) => !sourceError || i.code !== 'unknownField'), [state.doc, described, sourceKey, sourceError, theme]);
+  const { map: resources, ready: resourcesReady } = useResources(usedResourceNames(state.doc));
+  const issues = useMemo(() => (described.key === sourceKey ? readReport(state.doc, described.fields, { theme, resources }).issues : [])
+    .filter((i) => resourcesReady || i.code !== 'pictureMissing')   // pas d'avertissement tant que la galerie n'est pas lue
+    .filter((i) => !sourceError || i.code !== 'unknownField'), [state.doc, described, sourceKey, sourceError, theme, resources, resourcesReady]);
   // Totaux : une seule zone de texte du Détail liée à un champ de la source est sélectionnée
   const totalTarget = useMemo(() => {
     const sel = state.selection;
@@ -315,10 +322,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   };
   const pickLogo = (f: File | undefined) => {
     if (!f) return;
-    if (f.size > PICTURE_MAX) { void modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'sheet.error.pictureTooLarge', buttons: ['ok'] }); return; }
-    const r = new FileReader();
-    r.onload = () => headerItem('logo', String(r.result));
-    r.readAsDataURL(f);
+    readPictureFile(f).then((url) => headerItem('logo', url), (e: unknown) => { void showError(e); });
   };
   /** Le total choisi, sous la zone de texte sélectionnée ; le premier contrôle ajouté est sélectionné (la feuille le montre). */
   const total = (fn: TotalFn) => {
@@ -349,6 +353,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
       themes: () => setThemesOpen(true),
+      insertImage: () => setImagesOpen(true),
+      backgroundImage: () => setBackgroundOpen(true),
       themeColors: () => setColorsOpen(true),
       themeFonts: () => setFontsOpen(true),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
@@ -394,6 +400,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }, [t]);
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeThemes = useCallback(() => setThemesOpen(false), []);
+  const closeImages = useCallback(() => setImagesOpen(false), []);
+  const closeBackground = useCallback(() => setBackgroundOpen(false), []);
+  const pickBackground = useCallback((name: string | null) => {
+    setBackgroundOpen(false);
+    guarded({ type: 'edit', apply: (d) => setDocPicture(d, name === null ? null : { type: 'shared', value: name }) });
+  }, [guarded]);
+  const pickImage = useCallback((name: string) => { setImagesOpen(false); setTool(armedTool(name)); }, []);
   const closeColors = useCallback(() => setColorsOpen(false), []);
   const closeFonts = useCallback(() => setFontsOpen(false), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
@@ -408,6 +421,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   // L3, mode Page : le même concepteur (état du réducteur, modifications, annulations) sur le flux mis en page avec les données ;
   // ni événement ni macro (useReportFlow), rien n'est écrit tant que l'utilisateur ne modifie rien
   const layout = tab.mode === 'layout';
+  const picture = useDocPicture(state.doc.props);
   const view = reportView(tab.mode);
   const { flow, busy: flowBusy } = useReportFlow(state.doc, layout && phase === 'ready', theme);
   useEffect(() => { if (layout) setTool({ kind: null, locked: false }); }, [layout]);   // l'outil ne passe pas d'un mode à l'autre
@@ -431,11 +445,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       {sourceError && <div className="rd-banner" role="status" data-testid="report-source-error">{sourceError}</div>}
       {/* en Page : pas de surface de section, donc ni menu contextuel de section ni dépôt de la Liste des champs (Global Constraints) */}
       <Designer state={state} dispatch={guarded} host={host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && !layout && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} canvas={canvas} />
+        side={fieldList && !layout && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} canvas={canvas} background={sectionBackground(picture, state.doc, layout)} />
       {grouping && !layout && <GroupingPane doc={state.doc} fields={fields} display={display} readOnly={readOnly} dispatch={guarded} onClose={closeGrouping} />}
       <ReportIssues issues={issues} />
       {menu && <ArrangePopup menu={menu} state={state} dispatch={guarded} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={guarded} onClose={closeLayoutMenu} readOnly={readOnly} />}
+      {backgroundOpen && <ImageGallery mode="background" readOnly={readOnly} onPick={pickBackground} onNone={() => pickBackground(null)} onClose={closeBackground} />}
+      {imagesOpen && <ImageGallery mode="insert" readOnly={readOnly} onPick={pickImage} onClose={closeImages} />}
       {themesOpen && <ThemeGallery kind="report" dispatch={guarded} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       {colorsOpen && <ColorsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeColors} readOnly={readOnly} />}
       {fontsOpen && <FontsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeFonts} readOnly={readOnly} />}
@@ -449,7 +465,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
           ))}
         </RibbonPopup>
       )}
-      <input ref={logoInput} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="report-logo-file"
+      <input ref={logoInput} type="file" hidden accept={PICTURE_ACCEPT} data-testid="report-logo-file"
         onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
     </DocThemeProvider>

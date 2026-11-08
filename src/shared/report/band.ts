@@ -142,7 +142,7 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
           y1: c.slant ? c.top + c.height : c.top, y2: c.slant ? c.top : c.top + c.height };
         break;
       case 'rectangle': case 'subform': box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) }; break;   // a subform: an empty frame
-      case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...grid(c) }; break;
+      case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...(c.pictureAlign ? { pictureAlign: c.pictureAlign } : {}), ...(c.tiling ? { tiling: true } : {}), ...grid(c) }; break;
       case 'pageBreak': pageBreaks.push(c.top); continue;
       default: continue;   // readReport keeps no other kind
     }

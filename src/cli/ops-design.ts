@@ -9,6 +9,8 @@ import { bareName } from '../shared/report/model';
 import { getObject, saveObject, setObjectDescription } from '../main/db/objects';
 import { isTableName, tableDesign } from '../main/db/schema';
 import { describeQuerySource } from '../main/query/source';
+import { listResources } from '../main/db/resources';
+import { usedResourceNames } from '../shared/pictures';
 import type { OpOutcome } from './ops';
 import { checkEventBindings } from './ops-macro';
 
@@ -84,6 +86,9 @@ function create(kind: Kind, db: DatabaseSync, args: Record<string, unknown>, inf
       if (typeof d === 'string') return refuse(d);
       fields = d.info.fields;
     }
+    const gallery = listResources(db).map((r) => r.name);
+    const absent = usedResourceNames(design).find((n) => !gallery.includes(n));
+    if (absent !== undefined) return refuse(`shared picture not in the gallery: ${absent}`);
     for (const c of design.sections.flatMap((s) => flattenControls(s.controls))) {
       const src = c.props.ControlSource;
       if (src === undefined || src === '') continue;

@@ -131,6 +131,9 @@ Names of forms, reports and controls are used as stored and are not case-sensiti
 | `docmd.cancel_event()` | Cancels the event being handled (when it can be cancelled). |
 | `docmd.run_macro("M")` | Runs a saved macro. |
 | `tempvars["x"]`, `tempvars["x"] = v`, `del tempvars["x"]`, `"x" in tempvars`, `len(tempvars)`, `keys()`, `items()`, `clear()` | Temporary variables, shared with macros. An absent variable is `None`. |
+| `eval_expr("[TempVars]![n] & \"x\"")` | Evaluates a BaseCraft expression as a macro would and returns the value. |
+| `eval_cond("[TempVars]![n] > 3")` | Evaluates an expression as a macro's `If` condition: `True` only when the macro would take the branch (Null and `False` give `False`). |
+| `eval_text("[TempVars]![n]")` | Evaluates an expression and converts it to text as a macro argument is (Null gives `""`, numbers use the regional format). |
 | `app.current_project.name`, `app.quit()` | The open database's name; quits BaseCraft. |
 | `db.open_recordset(source, params=None)`, `db.execute(sql, params=None)` | Data (below). |
 
@@ -195,6 +198,21 @@ Name AutoCorrect does not rewrite field names inside Python calls (`=remise([Pri
 - An error inside the function, or a result BaseCraft cannot show (a list, for example), gives `#Error` in the control; the traceback is not shown for an expression.
 - While content is disabled, nothing runs: a form or report shows `#Name?`, a macro stops as blocked, a control rule refuses the record and a control default stays empty, and the security bar appears. **Enable Content** recalculates open forms and reports.
 - Calls run quietly: typing in a field never waits for Python and never loses a key. Only a call that lasts longer than 2 seconds darkens the window with the Python veil; **Ctrl+Break** then interrupts it, the control shows `#Error` and the form is usable again.
+
+## Converting macros to Python
+
+In **Macro Design**, the **Convert Macros to Python** button (Tools group) turns the open macro into Python. It is available for a saved or new macro in a database you can change; it is disabled for the macro embedded in a form or report event (converting form and report macros waits for code-behind modules). A macro that is new or modified is saved first (BaseCraft asks).
+
+A dialog offers two options, both ticked: **Add error handling to generated functions** (the body of each function runs in a `try` and a failure shows a message box) and **Include macro comments** (comments and group names become `#` lines). The result is a new module named `Converted_Macro_<macro>` (a number is added if the name is taken; an existing module is never overwritten). The macro itself is not changed, and the module is not opened.
+
+- The macro becomes a function named after it, and each submacro a function `<macro>_<submacro>`. Characters that Python does not allow in a name become `_`, and a name that is a Python keyword, a built-in expression function or one of `msgbox`, `docmd`, `tempvars`... gets a trailing `_`.
+- Most actions become `docmd.<action>(...)` with keyword arguments (arguments left at their default are omitted). `SetTempVar`, `RemoveTempVar` and `RemoveAllTempVars` become `tempvars[...]`; `SetValue` becomes `forms["F"]["C"].value = ...` (or `me["C"].value`); `MessageBox` becomes `msgbox(...)`; `RunMacro` becomes `docmd.run_macro(...)` (with a `for` or `while` loop for a repeat count or condition); `RunCode` becomes a call of the module's function; `StopMacro` becomes `return`; `SetLocalVar` becomes `localvars["name"] = ...`. `If`, `Else If` and `Else` become `if`, `elif` and `else`.
+- Python only writes what is identical in BaseCraft: literals (numbers, text, `True`, `False`, `None`) and a plain reference (`TempVars`, a form control, a local variable) given straight to an argument. Every expression that applies an operator or a function, and every `If` or repeat condition, is kept as `eval_expr("...")` or `eval_cond("...")`, so Null, type coercion and truthiness behave as in the macro. A `=` text argument becomes `eval_text("...")`, which gives the text the macro would use. A literal text argument stays a plain string.
+- Local variables of a function are kept in a dictionary `localvars`; a variable that was never set reads `None` (Null). An expression that combines a local variable with an operator, a `WhereCondition` that mentions `[LocalVars]` or `[MacroError]` cannot be evaluated by Python: it is marked as a TODO.
+- A `RunCode` call is written with the function name exactly as the module exports it.
+- **OnError**: `OnError Next` wraps each following action in `with suppress(Exception):`, and `OnError` to a submacro wraps the rest of the list in `try ... except Exception:` that calls the submacro's function and returns. It applies to the rest of its own list and the lists nested in it, and then stops; in the macro engine an `OnError` inside an `If` branch stays in force after the `If`.
+- **To finish by hand**: what cannot be converted (an unknown action, a `[MacroError]` reference, an expression or filter that reads a local variable or `[MacroError]`, a `SetValue` on something other than a control) is written as `# TODO(convert): ...` followed by `raise NotImplementedError(...)`, so a run fails visibly instead of skipping the step. `StopAllMacros` becomes `return` (it does not stop the macros that called it) and a `RunCode` whose function is in no module is written as a plain call; both are marked. BaseCraft ends with a message that counts these items: search the module for `TODO`.
+
 
 ## Autocomplete
 

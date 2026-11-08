@@ -37,6 +37,7 @@ import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
 import { baseTheme, saveBaseTheme } from './db/theme';
+import { addResource, getResources, listResources, removeResource, replaceResource, type ResourceInfo } from './db/resources';
 import type { Theme } from '../shared/design/theme';
 import { peekStartup, saveStartupOptions, startupOptions } from './db/startup';
 import type { StartupOptions } from '../shared/startup';
@@ -1342,6 +1343,12 @@ export class Session {
   /** Default theme of the base (F2): read-only allowed; an invalid stored value reads as the built-in theme. */
   baseTheme(): Theme { return baseTheme(this.conn()); }
   saveBaseTheme(t: Theme): void { saveBaseTheme(this.writeDb(), t); }
+  /** Shared image gallery (F3): reads work read-only; add, replace and remove need the write handle. */
+  listResources(): ResourceInfo[] { return listResources(this.conn()); }
+  getResources(names: string[]): Record<string, string> { return getResources(this.conn(), names); }
+  addResource(name: string, dataUrl: string): string { return addResource(this.writeDb(), name, dataUrl); }
+  replaceResource(name: string, dataUrl: string): void { replaceResource(this.writeDb(), name, dataUrl); }
+  removeResource(name: string): void { removeResource(this.writeDb(), name); }
   /** Theme "all matching objects": the base default and the removal of every saved override of `kind`, in one transaction
    *  (the open documents in `skip` get the removal as an edit of their own). */
   applyThemeToAll(t: Theme, kind: 'form' | 'report', skip: string[]): { cleared: number } {

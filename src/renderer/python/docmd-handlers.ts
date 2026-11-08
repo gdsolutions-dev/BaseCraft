@@ -1,10 +1,14 @@
 // Python's `docmd` (D2 R7): the same rule set as macros. `docmd.<action>()` goes through the macro shell's `perform`.
+import { ExprRuntimeError, type Value } from '../../shared/expr/ast'
+import { evaluate, truthy, type EvalEnv } from '../../shared/expr/evaluate'
+import { infoOf, toText } from '../../shared/expr/library'
 import { bindMembers } from '../../shared/expr/members'
 import { parseCanonical, serialize } from '../../shared/expr/parser'
+import { withUserFunctions } from '../../shared/expr/user-functions'
 import { foldName } from '../../shared/field-types'
 import { ACTIONS, type ActionDef } from '../../shared/macro/catalog'
 import { norm, REFUSED } from '../../shared/python/docmd-names'
-import { wireToValue } from '../../shared/python/values'
+import { valueToWire, wireToValue } from '../../shared/python/values'
 import { memberValue } from '../form/form-instances'
 import type { MacroHost, ResolvedArgs } from '../macro/engine'
 import { runMacro } from '../macro/engine'
@@ -72,6 +76,19 @@ function callHost(): MacroHost {
   return h
 }
 
+/** `eval_expr(text)`: the environment of a macro's expression (R3): the running event's fields, TempVars, Forms/Reports, user functions. */
+function exprEnv(h: MacroHost): EvalEnv {
+  const ev = topEvent()
+  const unknown = (): never => { throw new ExprRuntimeError('unknownField') }
+  const member = (path: string[]): Value | Promise<Value> => {
+    const [root, key = ''] = path
+    if (root === 'TempVars') return h.tempVars.get(foldName(key)) ?? null
+    if ((root === 'Forms' || root === 'Reports') && h.objectMember) return h.objectMember(path)
+    return unknown()
+  }
+  return { field: ev ? (name, table) => (table !== undefined ? unknown() : ev.field(name)) : unknown, now: () => h.now(), locale: h.locale, lang: h.lang, member, callUser: h.callUser?.bind(h) }
+}
+
 export function docmdHandlers(): Record<string, BridgeHandler> {
   return {
     'docmd.run': handled(async ([name, pos, kw]) => {
@@ -81,6 +98,13 @@ export function docmdHandlers(): Record<string, BridgeHandler> {
       const { args, raw } = await argsFor(def, Array.isArray(pos) ? pos : [], (kw ?? {}) as Record<string, unknown>)
       await h.perform({ macro: '(Python)', action: def.name, args, raw, event: topEvent() ?? undefined })
       return null
+    }),
+    // mode 'bool': the macro engine's If / repeat condition (truthy() === true); 'text': the engine's text conversion of an argument (Null -> "", locale number format)
+    'expr.eval': handled(async ([text, mode]) => {
+      const h = callHost(), v = await evaluate(parseCanonical(String(text), { functions: withUserFunctions() }), exprEnv(h))
+      if (mode === 'bool') return truthy(v, infoOf(h.locale)) === true
+      if (mode === 'text') return v === null ? '' : toText(v, infoOf(h.locale))
+      return valueToWire(v)
     }),
     'docmd.runMacro': async ([name]) => {
       let outcome

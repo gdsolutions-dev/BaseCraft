@@ -169,3 +169,27 @@ describe('English form labels', () => {
     expect(LABELS.tabPage(3)).toBe(en.form.tabPage.replace('{{n}}', '3'));
   });
 });
+
+describe('shared pictures in form.create / report.create', () => {
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const png = (): string => { const f = tmp().replace('x.basecraft', 'logo.png'); fs.writeFileSync(f, PNG); return f; };
+  const withPic = (Picture: string): unknown => docOf([{ kind: 'image', name: 'Image1', left: 0, top: 0, width: 1000, height: 1000, props: { PictureType: 'shared', Picture } }], null);
+  it('refuses a shared picture that is not in the gallery, naming it', async () => {
+    for (const kind of ['form', 'report'] as const) {
+      const { r } = await run([{ op: `${kind}.create`, name: 'F', layout: 'doc', doc: withPic('absent') }]);
+      expect(r.ok).toBe(false);
+      expect(message(r)).toContain('absent');
+    }
+  });
+  it('looks the gallery name up exactly: Picture "logo" is refused when the gallery holds "Logo"', async () => {
+    const f = tmp().replace('x.basecraft', 'Logo.png'); fs.writeFileSync(f, PNG);
+    const { r } = await run([{ op: 'resource.add', file: f }, { op: 'form.create', name: 'F', layout: 'doc', doc: withPic('logo') }]);
+    expect(r.ok).toBe(false);
+    expect(message(r)).toContain('logo');
+  });
+  it('accepts it once resource.add ran before it in the same script', async () => {
+    const { p, r } = await run([{ op: 'resource.add', file: png() }, { op: 'form.create', name: 'F', layout: 'doc', doc: withPic('logo') }]);
+    expect(r).toMatchObject({ ok: true, applied: 2 });
+    expect(read(p, 'form', 'F')).not.toBeNull();
+  });
+});

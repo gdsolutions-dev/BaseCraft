@@ -27,3 +27,15 @@ describe('end to end', () => {
     expect(fs.readFileSync(p).equals(before)).toBe(true);
   });
 });
+
+describe('format', () => {
+  it('a fresh new base passes checkTarget at the current format (1.4)', async () => {
+    const { checkTarget } = await import('./script');
+    const p = tmp();
+    expect(await run(['new', p], { out: () => {}, err: () => {} })).toBe(0);
+    expect(() => checkTarget(p)).not.toThrow();
+    const db = new DatabaseSync(p);
+    expect((db.prepare("SELECT value FROM bc_meta WHERE key='format_minor'").get() as { value: string }).value).toBe('4');
+    db.close();
+  });
+});

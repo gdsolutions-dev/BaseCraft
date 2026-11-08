@@ -1,7 +1,7 @@
 import type { BasecraftApi } from '../shared/api';
 import { track } from './shell/running';
 
-const raw = (window as unknown as { basecraft: BasecraftApi }).basecraft;
+const raw = typeof window === 'undefined' ? (undefined as unknown as BasecraftApi) : (window as unknown as { basecraft: BasecraftApi }).basecraft;   // undefined hors navigateur (tests purs)
 
 /** The group with these methods tracked (running.ts): a call that lasts shows « Exécution… » with Stop. */
 function tracked<G extends object>(g: G | undefined, names: (keyof G & string)[]): G | undefined {

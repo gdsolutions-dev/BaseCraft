@@ -3,7 +3,7 @@
 // résultat du réducteur sur les actions que donnerait le relâchement (même aimantation, mêmes bornes), sans rien enregistrer.
 // Règles en cm autour de la surface, comme Access : la règle horizontale part du bord gauche de la feuille, la verticale repart de 0
 // à chaque section ; elles suivent le défilement (décalées par transform, sans redessin).
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flattenControls, TWIPS_PER_CM, type ControlDef, type SectionDef } from '../../shared/design/model';
 import { cellControl, readLayouts, type CellRef } from '../../shared/design/layout';
@@ -18,6 +18,7 @@ import { emptyCells, layoutOutlines } from './layout-outline';
 import type { EmptyCell } from '../../shared/design/layout';
 import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Gesture } from './pointer';
 import { currentSettings } from '../settings-store';
+import { withToolProps } from './image-gallery-model';
 import { fieldDrop } from './FieldList';
 import { PopupMenu } from './RibbonPopup';
 import { useModal } from '../shell/Modal';
@@ -82,8 +83,8 @@ export const DetailCopies = memo(function DetailCopies({ s, count, render, cells
 });
 
 export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerAction): void; host: DesignerHost; readOnly: boolean; tool: ToolState; onTool(t: ToolState): void;
-  restrict?: DesignerRestrict }) {
-  const { state, dispatch, host, readOnly, tool, restrict } = p;
+  restrict?: DesignerRestrict; background?: CSSProperties }) {
+  const { state, dispatch, host, readOnly, tool, restrict, background } = p;
   const placing = !readOnly && !!tool.kind && gestureAllowed(restrict, 'place');   // Mode Page d'un état : pas de placement d'outil (restrict.toolbox)
   const sizable = gestureAllowed(restrict, 'sectionHeight');   // Mode Page : la hauteur des sections ne se tire pas
   const { t } = useTranslation();
@@ -229,7 +230,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     if (d.g.kind === 'place') {
       const { section, rect } = placeRect(d.g, at);
       if (state.snap && !e.altKey) { const g = gridStep(state.doc); rect.left = snap(rect.left, g); rect.top = snap(rect.top, g); }   // comme Access : le coin s'aimante
-      const controls = host.newControls(d.g.tool, rect, section, state.doc);
+      const controls = withToolProps(host.newControls(d.g.tool, rect, section, state.doc), tool.props);
       // le centre du rectangle posé : sur une disposition, le contrôle en devient membre
       if (controls.length) dispatch({ type: 'insert', section, controls, at: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }, ...(d.parent ? { parent: d.parent } : {}) });
       if (!tool.locked) p.onTool({ kind: null, locked: false });
@@ -371,7 +372,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
               {host.sectionLabel(s, i)}
             </button>
             <div ref={(el) => { bodies.current[i] = el; }} className="dz-body" data-section-body={i}
-              style={{ height: px(s.height), backgroundSize: `${step}px ${step}px` }}>
+              style={{ height: px(s.height), backgroundSize: `${step}px ${step}px`, ...background }}>
               {outlines[i].map(({ id, rect }) => (   // avant les contrôles : dessiné dessous ; la poignée au coin haut gauche, au-dessus
                 <div key={id} className="dz-layout" aria-hidden style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }} />
               ))}

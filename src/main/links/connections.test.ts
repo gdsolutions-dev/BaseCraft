@@ -165,7 +165,7 @@ describe('LinkedSources (R3, R4)', () => {
 
   it('an older minor (1.2) is used as it is: its missing bc_ tables are TEMP, the file keeps format 1.2', () => {
     const d = new DatabaseSync(data);
-    d.exec(`DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value = '2' WHERE key = 'format_minor'`);
+    d.exec(`DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value = '2' WHERE key = 'format_minor'`);
     d.close();
     const c = sources().open(idOf('basecraft'), true);
     expect(c.state).toBe('ok');

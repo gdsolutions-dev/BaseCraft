@@ -12,11 +12,14 @@ import { unsavedRunDoc } from '../query/unsaved-run';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type ToolState } from '../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
 import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
-import { designerReducer, findControl, initDesigner, setDocProp, type DesignerAction } from '../designer/designer-model';
+import { designerReducer, findControl, initDesigner, setDocPicture, setDocProp, type DesignerAction } from '../designer/designer-model';
 import { registerOpenDesign } from '../designer/open-designs';
 import { ColorsGallery } from '../designer/ColorsGallery';
 import { FontsGallery } from '../designer/FontsGallery';
 import { ThemeGallery } from '../designer/ThemeGallery';
+import { ImageGallery } from '../designer/ImageGallery';
+import { useDocPicture } from '../design/resources';
+import { armedTool, readPictureFile, sectionBackground } from '../designer/image-gallery-model';
 import { FieldList } from '../designer/FieldList';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../designer/layout-commands';
@@ -41,11 +44,11 @@ import './form-nav-menu';
 import { pageGroup, sectionGroups, TabOrderDialog } from './TabOrderDialog';
 import { allowsLayout, firstRun } from './views';
 import './form.css';
+import { PICTURE_ACCEPT } from '../../shared/pictures';
 
 const FIELD_LEFT = 1701;   // 3 cm : un champ ajouté sans point de dépôt, son étiquette à gauche
 interface Lists { tables: string[]; queries: string[]; forms: string[]; reports: string[] }
 const NO_LISTS: Lists = { tables: [], queries: [], forms: [], reports: [] };
-const PICTURE_MAX = 1024 * 1024;   // comme la Feuille de propriétés
 
 /** Formulaire vierge (Créer › Formulaire vierge) : le nouvel onglet de ce nom provisoire s'ouvre avec la Liste des champs (lu une fois). */
 let fieldListFor: string | null = null;
@@ -85,6 +88,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
+  const [imagesOpen, setImagesOpen] = useState(false);
+  const [backgroundOpen, setBackgroundOpen] = useState(false);
   const [colorsOpen, setColorsOpen] = useState(false);
   const [fontsOpen, setFontsOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
@@ -177,6 +182,9 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   useEffect(() => { if (layout) setTool({ kind: null, locked: false }); }, [layout]);   // l'outil choisi en Création ne passe pas au mode Page
   const liveData = liveRows?.key === liveKey ? liveRows.data : null;
   const view = viewHost(tab.mode, host, liveData, row, state.doc);
+  const picture = useDocPicture(state.doc.props);
+  // Image d'arrière-plan : Page = l'image seule ; Création = les points de la grille par-dessus l'image (comme Access)
+  const bgPicture = sectionBackground(picture, state.doc, layout);
 
   // `tab.mode`: back from the form view (this design stays mounted behind it), whose unmount cleared the tab's flag (as a query)
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty: state.dirty }); }, [state.dirty, tab.id, tab.mode, dispatch]);
@@ -257,10 +265,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   };
   const readLogo = (f: File | undefined) => {
     if (!f) return;
-    if (f.size > PICTURE_MAX) { void message('sheet.error.pictureTooLarge'); return; }
-    const r = new FileReader();
-    r.onload = () => addHeaderItem('logo', String(r.result));
-    r.readAsDataURL(f);
+    readPictureFile(f).then((url) => addHeaderItem('logo', url), (e: unknown) => { void showError(e); });
   };
 
   const cmds = useRef({ save, leave, tabOrder, addHeaderItem });
@@ -281,6 +286,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       ...designerCommands(send, setMenu, selected),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
       themes: () => setThemesOpen(true),
+      insertImage: () => setImagesOpen(true),
+      backgroundImage: () => setBackgroundOpen(true),
       themeColors: () => setColorsOpen(true),
       themeFonts: () => setFontsOpen(true),
       ...layoutCommands(() => live.current.state, send, { shown: headerFooterShown, toggle: toggleHeaderFooter }, setLayoutMenu),
@@ -382,6 +389,13 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const closeMenu = useCallback(() => setMenu(null), []);
   const closeFormatMenu = useCallback(() => setFormatMenu(null), []);
   const closeThemes = useCallback(() => setThemesOpen(false), []);
+  const closeImages = useCallback(() => setImagesOpen(false), []);
+  const closeBackground = useCallback(() => setBackgroundOpen(false), []);
+  const pickBackground = useCallback((name: string | null) => {
+    setBackgroundOpen(false);
+    send({ type: 'edit', apply: (d) => setDocPicture(d, name === null ? null : { type: 'shared', value: name }) });
+  }, [send]);
+  const pickImage = useCallback((name: string) => { setImagesOpen(false); setTool(armedTool(name)); }, []);
   const closeColors = useCallback(() => setColorsOpen(false), []);
   const closeFonts = useCallback(() => setFontsOpen(false), []);
   const closeLayoutMenu = useCallback(() => setLayoutMenu(null), []);
@@ -398,15 +412,17 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       {linked && <div className="fz-banner" role="status" data-testid="form-subform-linked">{linked}</div>}
       {layout && liveData?.notice && !(liveData.notice === 'unreadable' && sourceError) && <div className="fz-banner" role="status" data-testid="layout-notice">{t(`layoutView.notice.${liveData.notice}`)}</div>}
       <Designer state={state} dispatch={dispatchDesign} host={view.host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} />
+        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} background={bgPicture} />
       {layout && <LayoutRecordBar row={row} count={liveData?.rows.length ?? 0} onGo={setRow} />}
       {menu && <ArrangePopup menu={menu} state={state} dispatch={send} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={send} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
+      {imagesOpen && <ImageGallery mode="insert" readOnly={readOnly} onPick={pickImage} onClose={closeImages} />}
+      {backgroundOpen && <ImageGallery mode="background" readOnly={readOnly} onPick={pickBackground} onNone={() => pickBackground(null)} onClose={closeBackground} />}
       {themesOpen && <ThemeGallery kind="form" dispatch={send} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       {colorsOpen && <ColorsGallery kind="form" appDispatch={dispatch} dispatch={send} onClose={closeColors} readOnly={readOnly} />}
       {fontsOpen && <FontsGallery kind="form" appDispatch={dispatch} dispatch={send} onClose={closeFonts} readOnly={readOnly} />}
-      <input ref={logoFile} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid="form-logo-file"
+      <input ref={logoFile} type="file" hidden accept={PICTURE_ACCEPT} data-testid="form-logo-file"
         onChange={(e) => { readLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
     </DocThemeProvider>

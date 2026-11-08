@@ -156,6 +156,20 @@ test('navigate, edit and save; a refused save: message box, error under the cont
     await expect(page.getByTestId('form-error-Note')).toHaveText('Pas non');
     await ctl('Nom').click();
     await expect(page.getByTestId('modal')).toContainText(pasNon);
+    // CI-only failure (Nom read Dupond after its fill below): focus moves, inputs and Escapes from here on, shown if it fails again
+    await page.evaluate(() => {
+      const w = window as unknown as { __trace: string[] };
+      const t0 = performance.now();
+      w.__trace = [];
+      const name = (e: Event) => (e.target as Element | null)?.closest?.('[data-ctl], [data-testid]')?.getAttribute('data-ctl')
+        ?? (e.target as Element | null)?.closest?.('[data-testid]')?.getAttribute('data-testid') ?? (e.target as Element | null)?.tagName;
+      for (const type of ['focusin', 'input', 'keydown'])
+        document.addEventListener(type, (e) => {
+          if (type === 'keydown' && (e as KeyboardEvent).key !== 'Escape') return;
+          w.__trace.push(`${Math.round(performance.now() - t0)}ms ${type} ${name(e)} ${(e.target as HTMLInputElement).value ?? ''}`);
+        }, true);
+    });
+    const trace = () => page.evaluate(() => (window as unknown as { __trace: string[] }).__trace.join('\n'));
     await page.getByTestId('modal-btn-ok').click();
     await expect(ctl('Note')).toBeFocused();
     await page.keyboard.press('Escape');
@@ -164,9 +178,10 @@ test('navigate, edit and save; a refused save: message box, error under the cont
 
     // an unbound control's error is the form's, not the record's: the record is still saved (Page Down from the control)
     await ctl('Nom').fill('Dupont');
+    if ((await ctl('Nom').inputValue()) !== 'Dupont') throw new Error(`Nom lost Dupont at its fill:\n${await trace()}`);
     await ctl('Note').fill('non');
-    // a CI-only failure read Dupond below: these tell whether the typing or the save was lost
-    await expect(ctl('Nom')).toHaveValue('Dupont');
+    // a CI-only failure read Dupond here (the typing lost, not the save): the trace says where it went
+    if ((await ctl('Nom').inputValue()) !== 'Dupont') throw new Error(`Nom lost Dupont after Note's fill:\n${await trace()}`);
     await expect(ctl('Note')).toBeFocused();
     await page.keyboard.press('PageDown');
     await expect(input).toHaveValue('2');

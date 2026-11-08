@@ -17,8 +17,9 @@ import { resolveFont, resolveThemeFont } from '../../shared/fonts';
 import { reportWidth } from '../../shared/report/model';
 import type { LocaleInfo } from '../../shared/locale-format';
 import type { RecordSourceRef } from '../../shared/record-source';
-import { findControl, type PropTarget, type Selection } from './designer-model';
+import { findControl, setProps, type PropTarget, type Selection } from './designer-model';
 import type { SheetTab } from './sheet-types';
+import { readPictureType } from '../../shared/pictures';
 import { MAX_TWIPS } from './units';
 
 export type { SheetTab, PropertySheetContext } from './sheet-types';
@@ -27,6 +28,7 @@ export const MIXED: unique symbol = Symbol('mixed');
 export interface SheetRow { d: PropertyDescriptor; value: unknown | typeof MIXED; readOnly: boolean }
 
 const TABS = ['format', 'data', 'event', 'other'] as const;
+const PICTURE_ROWS = ['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode'];
 const GEOMETRY = ['Left', 'Top', 'Width', 'Height'];
 
 /** Rien de sélectionné : le document, comme Access montre le formulaire. */
@@ -82,12 +84,26 @@ const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.string
 export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean, cellPrefix = ''): SheetRow[] {
   if (!targets.length || !targets.every((t) => targetExists(doc, t))) return [];
   const kinds = targets.map((t) => targetKind(doc, docKind, t));
-  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k))))
+  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name)))))
     .map((d) => {
       const values = targets.map((t) => readProp(doc, docKind, t, d, cellPrefix));
       return { d, value: values.every((v) => same(v, values[0])) ? values[0] : MIXED,
         readOnly: readOnly || (d.name === 'Name' && targets.length > 1) || (['Name', 'Top', 'Left'].includes(d.name) && targets.some((t) => t.kind === 'cell')) };
     });
+}
+
+/** Les lignes du groupe Image, dans l'ordre d'Access. Le contrôle Image montre les cinq lignes (ordre de la capture 16) ; le formulaire et l'état aussi
+ *  la mosaïque, l'alignement et le mode d'affichage ; le bouton de commande le type et l'image. */
+export function pictureRows(_props: Record<string, unknown>, target: PropertyTarget): string[] {
+  if (target === 'image') return ['PictureType', 'Picture', 'PictureTiling', 'SizeMode', 'PictureAlignment'];
+  if (target === 'commandButton') return ['PictureType', 'Picture'];
+  return target === 'form' || target === 'report' ? [...PICTURE_ROWS] : [];
+}
+/** Ce que la cellule Image affiche : le nom de l'image partagée, « (Incorporé) » pour une image incorporée, sinon rien. */
+export function pictureLabel(props: Record<string, unknown>, embedded = '(Embedded)'): string {
+  const pic = props.Picture;
+  if (typeof pic !== 'string' || pic === '') return '';
+  return readPictureType(props.PictureType) === 'shared' ? pic : embedded;
 }
 
 const err = (code: string): string => `sheet.error.${code}`;
@@ -176,3 +192,12 @@ export const themeFontChoices = (theme: Theme, t: TFunction): { label: string; r
 export const fontFromLabel = (s: string, theme: Theme, t: TFunction): string => themeFontChoices(theme, t).find((c) => c.label === s)?.ref ?? s;
 
 export const fontWarning = (name: string): string | null => (name.trim() && !resolveFont(name.trim()).portable ? 'sheet.fontNotPortable' : null);
+
+/** Changer le Type d'image en une seule édition (une annulation) : il ne convertit jamais l'image, il change la lecture de `Picture`.
+ *  Vers Partagé (`names` = galerie), `Picture` est effacée sauf si elle nomme une image de la galerie ; vers Incorporé, un nom est effacé (une URL de données reste). */
+export function setPictureType(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], type: 'shared' | 'embedded', names: Set<string> | null): DesignDoc {
+  const shared = type === 'shared';
+  const pic = PROPERTY_CATALOG.find((d) => d.name === 'Picture')!;
+  const clear = targets.filter((x) => { const v = readProp(doc, docKind, x, pic); return typeof v === 'string' && v !== '' && (shared ? !names?.has(v) : !v.startsWith('data:image/')); });
+  return setProps(setProps(doc, targets, 'PictureType', shared ? 'shared' : undefined), clear, 'Picture', undefined);
+}

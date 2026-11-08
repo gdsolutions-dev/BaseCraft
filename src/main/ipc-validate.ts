@@ -8,6 +8,8 @@ import {
 } from '../shared/api';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_TWIPS, MAX_INDEXES } from '../shared/field-types';
 import { PROPERTY_CATALOG } from '../shared/design/properties';
+import { checkedPicture } from './db/resources';
+import { isResourceName } from '../shared/pictures';
 import { isTheme, type Theme } from '../shared/design/theme';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
@@ -195,6 +197,24 @@ const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', 'filterLis
 export function themeArg(v: unknown): Theme {
   if (!isTheme(v)) throw new TypeError('bc:invalidTheme');
   return v;
+}
+
+/** The name of a gallery image (F3). */
+export function resourceNameArg(v: unknown): string {
+  if (!isResourceName(v)) throw new TypeError('bc:invalidName');
+  return v;
+}
+
+/** The names to read from the gallery: unknown ones are simply omitted from the answer. */
+export function resourceNamesArg(v: unknown): string[] {
+  if (!Array.isArray(v) || v.length > 100 || !v.every((n) => typeof n === 'string' && n.length <= 255)) throw new TypeError('bc:invalidArgument');
+  return v as string[];
+}
+
+/** A picture as a data URL (F3): bc:invalidPicture / bc:pictureTooLarge before main touches the base. */
+export function pictureDataUrlArg(v: unknown): string {
+  checkedPicture(v);
+  return v as string;
 }
 
 /** Arguments of theme.applyToAll: a theme, a document kind, the names of the open documents. */

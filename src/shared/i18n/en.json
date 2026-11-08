@@ -359,6 +359,7 @@
       "closePreview": "Close Print Preview",
       "macroRun": "Run",
       "singleStep": "Single Step",
+      "convertMacros": "Convert Macros to Python",
       "expandActions": "Expand Actions",
       "collapseActions": "Collapse Actions",
       "expandAll": "Expand All",
@@ -553,6 +554,8 @@
       "invalidName": "A theme name has 1 to 60 characters and no control character.",
       "themeReserved": "This name belongs to a theme shipped with BaseCraft: choose another one.",
       "themeExists": "A custom theme already has this name.",
+      "invalidPicture": "The file is not a PNG, JPEG, GIF or WebP picture.",
+      "pictureTooLarge": "Picture too large (1 MB at most).",
       "unknown": "An unexpected error occurred: {{detail}}",
       "fileTooLarge": "The file is larger than 2 GB: it cannot be imported.",
       "importInterrupted": "The import was interrupted (the database was closed or became read-only). Nothing was imported.",
@@ -1553,7 +1556,11 @@
     "Top": "Top",
     "Height": "Height",
     "Picture": "Picture",
+    "PictureType": "Picture type",
     "SizeMode": "Size Mode",
+    "PictureTiling": "Picture tiling",
+    "PictureAlignment": "Picture alignment",
+    "PictureSizeMode": "Picture size mode",
     "LineSlant": "Line Slant",
     "Pages": "Pages",
     "Name": "Name",
@@ -1629,10 +1636,29 @@
       "tableQuery": "Table/Query",
       "valueList": "Value List"
     },
+    "PictureType": {
+      "embedded": "Embedded",
+      "shared": "Shared"
+    },
     "SizeMode": {
       "clip": "Clip",
       "stretch": "Stretch",
       "zoom": "Zoom"
+    },
+    "PictureAlignment": {
+      "topLeft": "Top left",
+      "topRight": "Top right",
+      "center": "Center",
+      "bottomLeft": "Bottom left",
+      "bottomRight": "Bottom right",
+      "formCenter": "Form center"
+    },
+    "PictureSizeMode": {
+      "clip": "Clip",
+      "stretch": "Stretch",
+      "zoom": "Zoom",
+      "stretchH": "Stretch horizontal",
+      "stretchV": "Stretch vertical"
     }
   },
   "color": {
@@ -1699,6 +1725,7 @@
       "glyphMissing": "The character \"{{detail}}\" is missing from the font.",
       "fontNotPortable": "The font \"{{detail}}\" is not embedded: text is measured and printed in Liberation Sans.",
       "unsupportedControl": "This kind of control is not printed.",
+      "pictureMissing": "The shared image \"{{detail}}\" is no longer in the gallery: the image is neither shown nor printed.",
       "aggregateNotAllowed": "A total is not allowed in this section.",
       "sizeClamped": "A size exceeds 55.88 cm, Access's limit: it is reduced to that limit.",
       "groupingMalformed": "A grouping level is empty or malformed: it groups nothing.",
@@ -1951,6 +1978,8 @@
     "colors": "Colors",
     "customColor": "Custom color…",
     "pickPicture": "Choose…",
+    "pickShared": "Choose from the gallery…",
+    "pictureType": { "embedded": "(Embedded)" },
     "fontNotPortable": "Not a portable font: on another computer, the text may look different.",
     "error": {
       "nameInvalid": "Invalid name: 1 to 64 characters, without a period (.), exclamation point (!), grave accent (`) or brackets ([ ]), and not starting with a space.",
@@ -2349,6 +2378,14 @@
     "saveFirst": "Do you want to save changes to the module '{{name}}'?"
   },
   "macro": {
+    "convert": {
+      "title": "Convert Macro",
+      "errorHandling": "Add error handling to generated functions",
+      "comments": "Include macro comments",
+      "saveFirst": "The macro must be saved before it is converted. Save it now?",
+      "done": "Finished converting macro '{{macro}}': module '{{module}}' created.",
+      "todo": "{{count}} item(s) need your attention: search the module for TODO."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Delete the embedded macro?",
@@ -2910,6 +2947,15 @@
     "placeholder": "Type a Python statement, or ?expression",
     "errorAt": "(Module {{module}}, line {{line}})",
     "splitter": "Resize the Immediate window"
+  },
+  "imageGallery": {
+    "none": "None",
+    "title": "Image gallery",
+    "empty": "No image in this database yet.",
+    "browse": "Browse...",
+    "replace": "Replace image…",
+    "delete": "Delete",
+    "deleteInUse": "This image is used by {{count}} saved form(s) or report(s): it cannot be deleted."
   },
   "themeGallery": {
     "current": "In this database",

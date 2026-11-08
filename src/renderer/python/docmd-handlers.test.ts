@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { num } from '../../shared/expr/library'
+import { num, str } from '../../shared/expr/library'
 import { registerForm, type FormInstance } from '../form/form-instances'
 import type { EventContext, MacroHost } from '../macro/engine'
 import { tempVars } from '../macro/temp-vars'
@@ -95,5 +95,27 @@ describe('docmd handlers', () => {
     performSpy.mockRejectedValueOnce(new Error('boom'))
     await expect(h['docmd.runMacro']!(['M'])).rejects.toThrow(/actionFailed/)
     await expect(h['docmd.runMacro']!(['Absent'])).rejects.toThrow(/notFound/)
+  })
+  it('expr.eval evaluates a canonical expression like a macro', async () => {
+    const h = docmdHandlers()
+    tempVars.set('n', num(2))
+    expect(await h['expr.eval']!(['[TempVars]![n] + 1'])).toBe(3)
+    const pop = pushEvent({ ...ctx(), field: () => str('V') })
+    expect(await h['expr.eval']!(['"a" & [x]'])).toBe('aV')
+    pop()
+    expect(await h['expr.eval']!(['Null'])).toBeNull()
+    await expect(h['expr.eval']!(['[Nope]![x]'])).rejects.toThrow()
+    await expect(h['expr.eval']!(['[x]'])).rejects.toThrow()
+  })
+  it('expr.eval modes: bool follows the engine truthiness, text its conversion of an argument', async () => {
+    const h = docmdHandlers()
+    expect(await h['expr.eval']!(['[TempVars]![absent] <> 0', 'bool'])).toBe(false)   // Null: the If is not taken
+    expect(await h['expr.eval']!(['"False"', 'bool'])).toBe(false)
+    expect(await h['expr.eval']!(['"True"', 'bool'])).toBe(true)
+    expect(await h['expr.eval']!(['2', 'bool'])).toBe(true)
+    await expect(h['expr.eval']!(['"abc"', 'bool'])).rejects.toThrow()
+    expect(await h['expr.eval']!(['Null', 'text'])).toBe('')
+    expect(await h['expr.eval']!(['True', 'text'])).toBe('True')
+    expect(await h['expr.eval']!(['3', 'text'])).toBe('3')
   })
 })

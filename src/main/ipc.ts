@@ -22,7 +22,7 @@ import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, iconBytes, settingValue, nameChanges, propertyTargetsArg,
+  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
@@ -651,6 +651,13 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     const w = mainWindow();
     if (w && !w.isDestroyed()) w.webContents.send(CH.baseThemeChanged);
   });
+  // Shared image gallery (F3): reads allowed read-only; writes are design channels (the Runtime has no handler) and broadcast.
+  handle(CH.resourcesList, () => need().listResources());
+  handle(CH.resourcesGet, (names) => need().getResources(resourceNamesArg(names)));
+  const resourcesChanged = () => { const w = mainWindow(); if (w && !w.isDestroyed()) w.webContents.send(CH.resourcesChanged); };
+  handle(CH.resourcesAdd, async (name, url) => { const n = await rowWrite(() => need().addResource(resourceNameArg(name), pictureDataUrlArg(url))); resourcesChanged(); return n; });
+  handle(CH.resourcesReplace, async (name, url) => { await rowWrite(() => need().replaceResource(resourceNameArg(name), pictureDataUrlArg(url))); resourcesChanged(); });
+  handle(CH.resourcesRemove, async (name) => { await rowWrite(() => need().removeResource(resourceNameArg(name))); resourcesChanged(); });
   handle(CH.baseApplyTheme, async (t, kind, names) => {
     const a = themeApplyArgs(t, kind, names);
     const r = await rowWrite(() => need().applyThemeToAll(a.theme, a.kind, a.names));

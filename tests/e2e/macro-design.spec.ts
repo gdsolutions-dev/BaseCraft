@@ -197,7 +197,7 @@ test('Macro Design tab: selected on opening, in Access order; Run saves a new ma
     const layout = await page.locator('.rbody [data-testid^="ribbon-group-"]').evaluateAll((gs) => gs.map((g) =>
       `${g.getAttribute('data-testid')}: ${[...g.querySelectorAll('[data-testid^="cmd-"]')].map((c) => c.getAttribute('data-testid')).join(' ')}`));
     expect(layout).toEqual([
-      'ribbon-group-tools: cmd-macroRun cmd-singleStep',
+      'ribbon-group-tools: cmd-macroRun cmd-singleStep cmd-convertMacros',
       'ribbon-group-expandCollapse: cmd-expandActions cmd-collapseActions cmd-expandAll cmd-collapseAll',
       'ribbon-group-showHide: cmd-actionCatalog cmd-showAllActions',
     ]);

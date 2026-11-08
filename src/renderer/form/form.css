@@ -67,6 +67,7 @@ textarea.frun-text { --bc-iy: 2px; padding: 2px 4px; resize: none; }
 .frun-radio[aria-checked="true"] { border-color: var(--bc-accent); box-shadow: inset 0 0 0 3px var(--bc-surface); background: var(--bc-accent); }
 .frun-button { border: 1px solid var(--bc-border); border-radius: var(--bc-radius); cursor: default; font-weight: 500; }
 .frun-image { display: block; }
+.frun-button-pic { height: 16px; width: auto; vertical-align: middle; margin-right: 4px; object-fit: none; }
 .frun-line { overflow: visible; }
 .frun-tabs { display: flex; flex-direction: column; }
 .frun-tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--bc-border); }

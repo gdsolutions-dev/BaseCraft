@@ -7,6 +7,7 @@ import { CH } from '../shared/api';
  *  open and close, and every read stay. */
 export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme,
+  CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove, // F3: the shared image gallery
   CH.tablesSave, CH.tablesRename, CH.tablesDrop, CH.tablesCopy, CH.tablesAppend, CH.tablesSaveColumnWidths,
   CH.relationsSave, CH.relationsDelete, CH.relationsSaveLayout,
   CH.importPick, CH.importPreview, CH.importRun, CH.importExcelPick, CH.importExcelPreview, CH.importExcelRun, CH.importSaveSpec, CH.importDeleteSpec,

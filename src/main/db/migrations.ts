@@ -22,8 +22,17 @@ export const BC_OBJECTS_DDL = `CREATE TABLE bc_objects (
 export const BC_SOURCES_DDL = `CREATE TABLE bc_sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}')`;
 export const BC_LINKS_DDL = `CREATE TABLE bc_links (name TEXT PRIMARY KEY, source_id TEXT NOT NULL, remote_name TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}')`;
 
+// Format 1.4: the shared image gallery (F3). Names are compared by sameName in resources.ts (the PRIMARY KEY is binary), as bc_objects.
+export const BC_RESOURCES_DDL = `CREATE TABLE bc_resources (
+  name TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('png','jpeg','gif','webp')),
+  data BLOB NOT NULL,
+  created TEXT NOT NULL, modified TEXT NOT NULL
+)`;
+
 export const MIGRATIONS: Migration[] = [
   { toMajor: 1, toMinor: 1, up: (db) => db.exec(BC_RELATIONS_DDL) },
   { toMajor: 1, toMinor: 2, up: (db) => db.exec(BC_OBJECTS_DDL) },
   { toMajor: 1, toMinor: 3, up: (db) => { db.exec(BC_SOURCES_DDL); db.exec(BC_LINKS_DDL); } },
+  { toMajor: 1, toMinor: 4, up: (db) => db.exec(BC_RESOURCES_DDL) },
 ];

@@ -4,6 +4,7 @@ import { validateDesignDoc, type DesignDoc } from '../../shared/design/model';
 import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import type { SourceInfo } from '../../shared/record-source';
 import { layoutReport } from '../../shared/report/layout';
+import { usedResourceNames, type ResourceMap } from '../../shared/pictures';
 import { readReport } from '../../shared/report/model';
 import { renderDocumentHtml } from '../../shared/report/render';
 import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData } from '../../shared/report/types';
@@ -42,6 +43,13 @@ export async function loadReportDoc(api: Pick<BasecraftApi, 'objects'>, name: st
   return def as DesignDoc;
 }
 
+/** Les images partagées que le document utilise ({} s'il n'en utilise aucune ; un appel refusé se lit {}). */
+export async function loadDocResources(api: Pick<BasecraftApi, 'resources'>, doc: DesignDoc): Promise<ResourceMap> {
+  const names = usedResourceNames(doc);
+  if (!names.length) return {};
+  try { return await api.resources.get(names); } catch { return {}; }
+}
+
 /** « Entrer une valeur de paramètre » (promptParameters, C3): the values typed, null on Cancel. */
 export type AskParameters = (params: SourceInfo['parameters']) => Promise<Record<string, CellInput> | null>;
 
@@ -67,7 +75,7 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
  *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
-export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
+export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { resources?: Pick<BasecraftApi['resources'], 'get'>; theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
   ready?: () => void, where?: string, events?: (doc: DesignDoc) => ReportEvents): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
   const ev = events?.(doc), release = ev?.register();
@@ -80,7 +88,8 @@ export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sou
     const data = await loadDocData(api, doc, params, signal, where);
     if (!data.rows.length && await ev?.noData()) throw reportCancelled();
     const theme = effectiveTheme(doc.props, await api.theme?.get().catch(() => DEFAULT_THEME) ?? DEFAULT_THEME);
-    return await layoutReport(readReport(doc, data.fields, { theme }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
+    const resources = api.resources ? await loadDocResources({ resources: api.resources } as Pick<BasecraftApi, 'resources'>, doc) : {};
+    return await layoutReport(readReport(doc, data.fields, { theme, resources }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
   } finally { release?.(); }
 }
 

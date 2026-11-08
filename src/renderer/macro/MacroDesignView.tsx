@@ -6,13 +6,19 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
+import { sameName } from '../../shared/field-types';
 import { emptyMacro, parseMacroDef, validateMacro, type MacroDef } from '../../shared/macro/model';
+import { convertedModuleName, convertMacro } from '../../shared/macro/to-python';
+import type { ModuleExport } from '../../shared/python/bridge';
 import { api } from '../bridge';
+import { functionClashes, listFunctions } from '../python/function-index';
+import { pythonHost } from '../python/python-host';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
 import { nameErrorKey } from '../shell/nav-menu-items';
 import { registerCommandStates, registerCommands, registerModeGuard } from '../shell/ribbon-model';
 import { ActionCatalog } from './ActionCatalog';
+import { askConvertOptions } from './ConvertMacrosDialog';
 import { ItemList, type BlockCtx } from './ActionBlock';
 import type { ObjectLists } from './ArgEditor';
 import { dropEmbedded, embeddedSession } from './embedded';
@@ -152,13 +158,45 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     try { await runMacroByName(name, { singleStep: live.current.singleStep }); } catch (e) { await showError(e); }
   };
 
-  const cmds = useRef({ save, leave, run });
-  cmds.current = { save, leave, run };
+  /** Convert Macros to Python (D4): the saved macro becomes the module "Converted_Macro_<name>"; the macro is not touched, nothing is opened. */
+  const convert = async () => {
+    if (busy.current) return;
+    await flush();
+    const { state: s, tab: doc } = live.current;
+    if (live.current.readOnly) { await message('dialog.op.readOnly'); return; }
+    let name: string | null = doc.name;
+    if (s.dirty || doc.isNew) {
+      const r = await modal.confirm({ titleKey: 'macro.saveFirstTitle', messageKey: 'macro.convert.saveFirst', buttons: ['yes', 'no'] });
+      name = r === 'yes' ? await save() : null;
+    }
+    if (name === null) return;
+    const options = await askConvertOptions(modal);
+    if (!options) return;
+    try {
+      const [mods, fns] = await Promise.all([api.objects.list('module'), listFunctions()]);
+      const out = convertMacro(name, live.current.state.def, options, { moduleOf: (f) => { const x = fns.find((y) => sameName(y.fn, f)); return x ? { module: x.module, fn: x.fn } : null } });
+      const module = convertedModuleName(name, mods.map((m) => m.name));
+      let exports: ModuleExport[] = [], engineDown = false;
+      try { exports = (await pythonHost().exports(out.source)).exports; } catch { engineDown = true; }   // as the module editor: saved anyway
+      const r = await api.objects.save('module', module, { formatVersion: '1.0', source: out.source, exports }, null);
+      if (!r.ok) { await message(`dialog.op.${r.reason}`); return; }
+      dispatch({ type: 'objectSaved', kind: 'module', name: module });
+      if (!engineDown && pythonHost().state() !== 'off') await pythonHost().reset();
+      const clashes = await functionClashes(module, exports).catch(() => []);
+      await modal.confirm({ titleKey: 'macro.convert.title', messageKey: 'macro.convert.done', params: { macro: name, module }, buttons: ['ok'] });
+      if (engineDown) await message('module.exportsUnavailable');
+      if (out.notes.length) await modal.confirm({ titleKey: 'macro.convert.title', messageKey: 'macro.convert.todo', params: { count: out.notes.length }, buttons: ['ok'] });
+      for (const x of clashes) await message(x.other === null ? 'module.functionBuiltin' : 'module.functionClash', { name: x.fn, fn: x.fn, other: x.other });
+    } catch (e) { await showError(e); }
+  };
+
+  const cmds = useRef({ save, leave, run, convert });
+  cmds.current = { save, leave, run, convert };
   useEffect(() => {
     const collapse = (on: boolean) => { const sel = live.current.state.selected; if (sel) send({ type: 'collapse', path: sel, on }); };
     const off = registerCommands(tab.id, {
       save: async () => { await cmds.current.save(); },
-      ...(tab.embedded ? {} : { macroRun: () => cmds.current.run(), singleStep: () => setSingleStep((v) => !v) }),
+      ...(tab.embedded ? {} : { macroRun: () => cmds.current.run(), singleStep: () => setSingleStep((v) => !v), convertMacros: () => cmds.current.convert() }),
       expandActions: () => collapse(false), collapseActions: () => collapse(true),
       expandAll: () => send({ type: 'collapseAll', on: false }), collapseAll: () => send({ type: 'collapseAll', on: true }),
       actionCatalog: () => send({ type: 'toggleCatalog' }), showAllActions: () => send({ type: 'toggleShowAll' }),

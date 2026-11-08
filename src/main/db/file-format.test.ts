@@ -61,7 +61,7 @@ describe('file-format', () => {
   it('creates and opens a BaseCraft file', () => {
     createBaseFile(p, '0.1.0');
     const b = openBaseFile(p, 'write', '0.1.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 3, appVersion: '0.1.0', options: {} });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4, appVersion: '0.1.0', options: {} });
     expect(b.meta.dbUuid).toMatch(/^[0-9a-f-]{36}$/);
     expect(b.db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID });
     expect(b.db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'delete' });
@@ -175,7 +175,7 @@ describe('file-format', () => {
   it('migrate: false refuses an older base and leaves it untouched', () => {
     createBaseFile(p, '0.1.0');
     const raw = new DatabaseSync(p);
-    raw.exec("DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'"); // a 1.1 base, as A2 wrote it
+    raw.exec("DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'"); // a 1.1 base, as A2 wrote it
     raw.close();
     const before = fs.readFileSync(p);
     const files = fs.readdirSync(dir);

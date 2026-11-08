@@ -6,6 +6,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { backupCopy, createBaseFile, openBaseFile } from './file-format';
 import { compactBase, vacuumInto, type CopyDeps } from './copy-file';
 import { createTable, reconcile } from './schema';
+import { addResource, getResources, listResources } from './resources';
+import { pictureDataUrl } from '../../shared/pictures';
 import { clients } from '../../shared/test-fixtures';
 import type { RiskProbe } from './location-risk';
 import { ReadOnlyError, Session, type SessionDeps } from '../session';
@@ -108,6 +110,23 @@ describe('vacuumInto', () => {
     expect(readFileSync(target, 'utf8')).toBe('old');
     expect(leftovers()).toEqual([]);
     expect(() => vacuumInto(s.db(), path.join(dir, 'missing', 'x.basecraft'))).toThrow(/bc:copyFailed/);
+  });
+});
+
+describe('gallery travels with the whole file', () => {
+  const url = pictureDataUrl('jpeg', Uint8Array.from([0xff, 0xd8, 0xff, 9, 8, 7]));
+  it('vacuumInto and compactBase keep the same names and bytes', async () => {
+    const s = seeded();
+    addResource(s.db(), 'logo', url);
+    const target = path.join(dir, 'copy.basecraft');
+    vacuumInto(s.db(), target);
+    const c = openBaseFile(target, 'readOnly', '0.0.0').db;
+    handles.push(c);
+    expect(listResources(c)).toEqual(listResources(s.db()));
+    expect(getResources(c, ['logo'])).toEqual({ logo: url });
+    const r = await compactBase(s);
+    if (!r.ok) throw new Error('expected ok');
+    expect(getResources(s.db(), ['logo'])).toEqual({ logo: url });
   });
 });
 

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
+  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
@@ -367,6 +367,10 @@ describe('import arguments', () => {
     expect(() => splitPath('relative.basecraft', new Set(['relative.basecraft']))).toThrow(INVALID);
     expect(() => splitPath(1, new Set([target]))).toThrow(INVALID);
   });
+  it('resourceNamesArg: at most 100 names', () => {
+    expect(resourceNamesArg(Array.from({ length: 100 }, (_, i) => `n${i}`))).toHaveLength(100);
+    expect(() => resourceNamesArg(Array.from({ length: 101 }, (_, i) => `n${i}`))).toThrow('bc:invalidArgument');
+  });
   it('nameList: 1 to 1000 names', () => {
     expect(nameList(['Clients', 'x'.repeat(1024)])).toEqual(['Clients', 'x'.repeat(1024)]);
     for (const v of [[], 'Clients', [1], ['x'.repeat(1025)], Array(1001).fill('a'), [, 'a']]) expect(() => nameList(v)).toThrow(INVALID);
@@ -556,6 +560,19 @@ describe('propertyTargetsArg (O4)', () => {
     const dp = (value: string) => [{ kind: 'form', name: 'F', control: 'M', prop: 'DecimalPlaces', value }];
     for (const v of ['auto', '0', '15']) expect(propertyTargetsArg(dp(v))).toEqual(dp(v));
     for (const v of ['16', '-1', '2.5', 'Auto ', '', 'x'.repeat(200)]) expect(() => propertyTargetsArg(dp(v))).toThrow('bc:invalidArgument');
+  });
+});
+
+describe('resourceNameArg / pictureDataUrlArg', () => {
+  it('a name: 1..255 characters, no control character', () => {
+    expect(resourceNameArg('logo')).toBe('logo');
+    for (const v of ['', ' x', '', 'a'.repeat(256), 5, null]) expect(() => resourceNameArg(v)).toThrow('bc:invalidName');
+  });
+  it('a picture: valid data URL kept, bad refused, over-long refused without decoding', () => {
+    const ok = 'data:image/png;base64,iVBORw==';
+    expect(pictureDataUrlArg(ok)).toBe(ok);
+    for (const v of ['data:image/svg+xml;base64,PHN2Zy8+', 'x', 5]) expect(() => pictureDataUrlArg(v)).toThrow('bc:invalidPicture');
+    expect(() => pictureDataUrlArg('data:image/png;base64,' + 'A'.repeat(1_500_000))).toThrow('bc:pictureTooLarge');
   });
 });
 

@@ -32,3 +32,25 @@ describe('new on an existing file', () => {
     expect(err.join('')).toBe(`${p} already exists\n`);
   });
 });
+
+describe('resources', () => {
+  it('lists what resource.add added, and commands lists resource.add', async () => {
+    const fs = await import('node:fs'), { tmp } = await import('./test-tmp');
+    const p = tmp(), img = p.replace('x.basecraft', 'logo.png'), spec = p.replace('x.basecraft', 's.json');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    fs.writeFileSync(img, png); fs.writeFileSync(spec, JSON.stringify([{ op: 'resource.add', file: img }]));
+    const io = { out: () => {}, err: () => {} };
+    expect(await run(['new', p], io)).toBe(0);
+    expect(await run(['script', spec, p], io)).toBe(0);
+    const out: string[] = [];
+    expect(await run(['resources', p], { out: (s) => out.push(s), err: () => {} })).toBe(0);
+    expect(JSON.parse(out.join(''))).toEqual([{ name: 'logo', type: 'png', bytes: png.length }]);
+    const cmds: string[] = [];
+    await run(['commands'], { out: (s) => cmds.push(s), err: () => {} });
+    expect(cmds.join('')).toContain('resource.add');
+  });
+  it('exits 2 on a missing file or extension', async () => {
+    expect(await run(['resources', 'nope.basecraft'], { out: () => {}, err: () => {} })).toBe(2);
+    expect(await run(['resources', 'nope.txt'], { out: () => {}, err: () => {} })).toBe(2);
+  });
+});

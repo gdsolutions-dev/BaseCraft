@@ -14,3 +14,18 @@ def msgbox(prompt, buttons='ok', title='BaseCraft', icon=None):
 
 def inputbox(prompt, title='BaseCraft', default=''):
     return call('ui.inputbox', [str(prompt), str(title), str(default)])
+
+
+def eval_expr(text):
+    """Evaluates a BaseCraft expression (the canonical text a macro stores) and returns its value."""
+    return call('expr.eval', [str(text)])
+
+
+def eval_cond(text):
+    """Evaluates an expression as a macro's If condition: True only when the macro engine would take the branch."""
+    return call('expr.eval', [str(text), 'bool'])
+
+
+def eval_text(text):
+    """Evaluates an expression and converts it to text as a macro argument is (Null gives "", numbers use the regional format)."""
+    return call('expr.eval', [str(text), 'text'])

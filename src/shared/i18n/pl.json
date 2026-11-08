@@ -359,6 +359,7 @@
       "closePreview": "Zamknij podgląd wydruku",
       "macroRun": "Uruchom",
       "singleStep": "Krok po kroku",
+      "convertMacros": "Konwertuj makra na Python",
       "expandActions": "Rozwiń akcje",
       "collapseActions": "Zwiń akcje",
       "expandAll": "Rozwiń wszystko",
@@ -560,6 +561,8 @@
       "invalidName": "Nazwa motywu ma od 1 do 60 znaków i nie zawiera znaków sterujących.",
       "themeReserved": "Ta nazwa należy do motywu dostarczanego z BaseCraft: wybierz inną.",
       "themeExists": "Motyw niestandardowy ma już tę nazwę.",
+      "invalidPicture": "Plik nie jest obrazem PNG, JPEG, GIF ani WebP.",
+      "pictureTooLarge": "Obraz jest za duży (najwyżej 1 MB).",
       "unknown": "Wystąpił nieoczekiwany błąd: {{detail}}",
       "fileTooLarge": "Plik jest większy niż 2 GB: nie można go zaimportować.",
       "importInterrupted": "Import został przerwany (baza danych została zamknięta lub stała się tylko do odczytu). Nic nie zostało zaimportowane.",
@@ -1600,7 +1603,11 @@
     "Top": "Góra",
     "Height": "Wysokość",
     "Picture": "Obraz",
+    "PictureType": "Typ obrazu",
     "SizeMode": "Tryb rozmiaru",
+    "PictureTiling": "Kafelkowanie obrazu",
+    "PictureAlignment": "Wyrównanie obrazu",
+    "PictureSizeMode": "Tryb rozmiaru obrazu",
     "LineSlant": "Nachylenie linii",
     "Pages": "Strony",
     "Name": "Nazwa",
@@ -1676,10 +1683,29 @@
       "tableQuery": "Tabela/kwerenda",
       "valueList": "Lista wartości"
     },
+    "PictureType": {
+      "embedded": "Osadzony",
+      "shared": "Udostępniony"
+    },
     "SizeMode": {
       "clip": "Przytnij",
       "stretch": "Rozciągnij",
       "zoom": "Powiększ"
+    },
+    "PictureAlignment": {
+      "topLeft": "Lewy górny",
+      "topRight": "Prawy górny",
+      "center": "Środek",
+      "bottomLeft": "Lewy dolny",
+      "bottomRight": "Prawy dolny",
+      "formCenter": "Środek formularza"
+    },
+    "PictureSizeMode": {
+      "clip": "Przytnij",
+      "stretch": "Rozciągnij",
+      "zoom": "Powiększ",
+      "stretchH": "Rozciągnij w poziomie",
+      "stretchV": "Rozciągnij w pionie"
     }
   },
   "color": {
@@ -1746,6 +1772,7 @@
       "glyphMissing": "Znaku „{{detail}}” brakuje w czcionce.",
       "fontNotPortable": "Czcionka „{{detail}}” nie jest osadzona: tekst jest mierzony i drukowany czcionką Liberation Sans.",
       "unsupportedControl": "Ten rodzaj formantu nie jest drukowany.",
+      "pictureMissing": "Obraz udostępniony „{{detail}}” nie istnieje już w galerii: obraz nie jest wyświetlany ani drukowany.",
       "aggregateNotAllowed": "Suma nie jest dozwolona w tej sekcji.",
       "sizeClamped": "Rozmiar przekracza 55,88 cm, czyli limit programu Access: zostaje zmniejszony do tego limitu.",
       "groupingMalformed": "Poziom grupowania jest pusty lub nieprawidłowy: nic nie grupuje.",
@@ -2000,6 +2027,8 @@
     "colors": "Kolory",
     "customColor": "Kolor niestandardowy…",
     "pickPicture": "Wybierz…",
+    "pickShared": "Wybierz z galerii…",
+    "pictureType": { "embedded": "(Osadzony)" },
     "fontNotPortable": "To nie jest czcionka przenośna: na innym komputerze tekst może wyglądać inaczej.",
     "error": {
       "nameInvalid": "Nieprawidłowa nazwa: od 1 do 64 znaków, bez kropki (.), wykrzyknika (!), akcentu odwrotnego (`) ani nawiasów kwadratowych ([ ]), nie może zaczynać się od spacji.",
@@ -2426,6 +2455,14 @@
     "saveFirst": "Czy zapisać zmiany w module „{{name}}”?"
   },
   "macro": {
+    "convert": {
+      "title": "Konwertuj makro",
+      "errorHandling": "Dodaj obsługę błędów do wygenerowanych funkcji",
+      "comments": "Dołącz komentarze makra",
+      "saveFirst": "Makro musi zostać zapisane przed konwersją. Zapisać je teraz?",
+      "done": "Zakończono konwersję makra „{{macro}}”: utworzono moduł „{{module}}”.",
+      "todo": "Elementy do ręcznego dokończenia: {{count}}. Wyszukaj w module TODO."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Usunąć makro osadzone?",
@@ -3078,6 +3115,15 @@
     "placeholder": "Wpisz instrukcję Pythona lub ?wyrażenie",
     "errorAt": "(Moduł {{module}}, wiersz {{line}})",
     "splitter": "Zmień rozmiar okna poleceń"
+  },
+  "imageGallery": {
+    "none": "Brak",
+    "title": "Galeria obrazów",
+    "empty": "W tej bazie danych nie ma jeszcze żadnego obrazu.",
+    "browse": "Przeglądaj...",
+    "replace": "Zamień obraz…",
+    "delete": "Usuń",
+    "deleteInUse": "Ten obraz jest używany przez {{count}} zapisanych formularzy lub raportów i nie można go usunąć."
   },
   "themeGallery": {
     "current": "W tej bazie danych",

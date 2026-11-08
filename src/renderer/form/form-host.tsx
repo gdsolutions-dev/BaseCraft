@@ -16,6 +16,7 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import { MAX_TWIPS } from '../designer/units';
 import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
+import { DesignButton, DesignImage } from './controls/ImageCtl';
 import { applies, color, controlLook, gridlineStyle, prop, type ThemeCtx } from './run-model';
 import { useDocTheme } from '../design/doc-theme';
 
@@ -118,15 +119,9 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'checkBox': return <div className={`fz fz-check${on}`} style={{ borderColor: color(c, 'BorderColor', tc) }} />;
     case 'optionButton': return <div className={`fz fz-check fz-radio${on}`} />;
     case 'optionGroup': return <fieldset className="fz fz-group" style={st}><legend>{String(prop(c, 'Caption') ?? '')}</legend></fieldset>;
-    case 'commandButton': return <div className="fz fz-text fz-button" style={st}>{String(prop(c, 'Caption') ?? '')}</div>;
+    case 'commandButton': return <DesignButton c={c} style={st} />;
     case 'subform': return <div className="fz fz-subform" style={st}><span className="fz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;
-    case 'image': {
-      const pic = prop(c, 'Picture');
-      const fit = ({ clip: 'none', stretch: 'fill', zoom: 'contain' } as Record<string, CSSProperties['objectFit']>)[String(prop(c, 'SizeMode'))] ?? 'contain';
-      return <div className="fz fz-image" style={st}>
-        {typeof pic === 'string' && pic.startsWith('data:image/') ? <img src={pic} alt="" draggable={false} style={{ objectFit: fit }} /> : <ImageIcon size={18} aria-hidden />}
-      </div>;
-    }
+    case 'image': return <DesignImage c={c} className="fz fz-image" style={st} />;
     case 'rectangle': return <div className="fz" style={st} />;
     case 'line': {
       const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)

@@ -30,16 +30,19 @@ import { eventSession, openEmbedded } from '../macro/embedded';
 import { macroNamesWithSubs } from '../macro/macro-shell';
 import { RowSourceBuilder } from '../query/QueryDesignView';
 import { ComboBox } from '../shell/ComboBox';
-import { useModal } from '../shell/Modal';
+import { useErrorDialog, useModal } from '../shell/Modal';
 import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontFromLabel, fontLabel, fontWarning, fromSourceRef, themeFontChoices,
-  MIXED, cellName, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
+  MIXED, cellName, pictureLabel, setPictureType, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
+import { PICTURE_ACCEPT } from '../../shared/pictures';
+import { readPictureFile } from './image-gallery-model';
+import { ImageGallery } from './ImageGallery';
+import { api } from '../bridge';
 
-const PICTURE_MAX = 1024 * 1024;
 const descOf = (name: string): PropertyDescriptor => PROPERTY_CATALOG.find((d) => d.name === name)!;
 type Parsed = { value: unknown } | { error: string };
 /** Une valeur refusée dont la ligne a disparu : le libellé de la propriété et la clé du message. */
@@ -83,6 +86,15 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 
   const commit = (d: PropertyDescriptor, v: unknown): string | null => {
     for (const x of targets) { const e = checkPropValue(doc, x, d, v); if (e) return e; }
+    if (d.name === 'PictureType') {
+      // changer le type ne convertit jamais l'image : il change seulement la lecture de `Picture`. Vers Partagé, `Picture` est effacée
+      // sauf si elle nomme déjà une image de la galerie ; vers Incorporé, un nom est effacé (une URL de données reste).
+      const edit = (names: Set<string> | null) => dispatch({ type: 'edit', apply: (cur) => setPictureType(cur, docKind, targets, v === 'shared' ? 'shared' : 'embedded', names) });
+      if (v !== 'shared') edit(null);
+      else void api.resources.list().then((l) => edit(new Set(l.map((r) => r.name))), () => edit(new Set()));
+      setLost(null);
+      return null;
+    }
     dispatch({ type: 'setProp', targets, name: d.name, value: v });
     setLost(null);
     return null;
@@ -144,6 +156,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
           <PropRow key={`${selKey}:${tab}:${row.d.name}`} row={row} id={`${uid}-${row.d.name}`} ctx={ctx} docKind={docKind} rowSourceTable={rowSourceTable}
             commit={(v) => commit(row.d, v)} onLost={(msg) => setLost({ label: t(row.d.labelKey), msg })} macros={macros}
             buildEvent={buildEvent && ((v) => buildEvent(row.d, v))}
+            shared={rows.find((r) => r.d.name === 'PictureType')?.value === 'shared'}
             transparent={row.d.name === 'BackColor' && targets.every((x) => x.kind === 'control') ? () => dispatch({ type: 'setProp', targets, name: 'BackStyle', value: 'transparent' }) : undefined} />
         ))}
       </div>
@@ -152,9 +165,9 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 }
 
 interface RowProps { row: SheetRow; id: string; ctx: PropertySheetContext; docKind: 'form' | 'report'; rowSourceTable: boolean;
-  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void; transparent?(): void }
+  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void; transparent?(): void; shared?: boolean }
 
-function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent, transparent }: RowProps) {
+function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent, transparent, shared }: RowProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const { d } = row;
@@ -259,7 +272,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
         );
         break;
       case 'color': editor = <ColorEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} fill={!!transparent} commit={commit} transparent={transparent} />; break;
-      case 'picture': editor = <PictureEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
+      case 'picture': editor = <PictureEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} shared={!!shared} />; break;
       case 'textList': editor = <TextListEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
       case 'expression': case 'criteria':
         editor = <ExprEditor id={id} testId={testId} value={v} mixed={mixed} criteria={d.editor === 'criteria'} disabled={row.readOnly} ctx={ctx}
@@ -388,31 +401,41 @@ function TextListEditor({ id, testId, value, mixed, disabled, commit }: { id: st
     onChange={(e) => setDraft(e.target.value)} onBlur={run} />;
 }
 
-function PictureEditor({ id, testId, value, mixed, disabled, commit }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean;
-  commit(v: unknown): string | null }) {
+function PictureEditor({ id, testId, value, mixed, disabled, commit, shared }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean;
+  commit(v: unknown): string | null; shared: boolean }) {
   const { t } = useTranslation();
+  const [gallery, setGallery] = useState<{ x: number; y: number } | null>(null);
   const file = useRef<HTMLInputElement>(null);
+  const showError = useErrorDialog();
   const [error, setError] = useState<string | null>(null);
   const read = (f: File | undefined) => {
     if (!f) return;
-    if (f.size > PICTURE_MAX) { setError('sheet.error.pictureTooLarge'); return; }
-    const r = new FileReader();
-    r.onload = () => { setError(commit(String(r.result))); };
-    r.readAsDataURL(f);
+    readPictureFile(f).then((url) => setError(commit(url)), (e: unknown) => {
+      if (e instanceof Error && e.message === 'bc:pictureTooLarge') setError('sheet.error.pictureTooLarge'); else void showError(e);
+    });
   };
   const set = typeof value === 'string' && value !== '';
   return (
     <div className="dz-pfield">
       {set && value.startsWith('data:image/') && <img className="dz-pthumb" src={value} alt="" />}
+      {set && !shared && <span className="dz-pmixed">{pictureLabel({ Picture: value }, t('sheet.pictureType.embedded'))}</span>}
       {mixed && <span className="dz-pmixed">{t('sheet.mixed')}</span>}
-      <button type="button" id={id} data-testid={testId} className="dz-pbutton" disabled={disabled} aria-describedby={error ? `${id}-msg` : undefined}
-        onClick={() => file.current?.click()}>{t('sheet.pickPicture')}</button>
+      {shared ? (
+        <button type="button" id={id} data-testid={`${testId}-shared`} className="dz-pbutton" disabled={disabled} aria-haspopup="dialog"
+          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setGallery({ x: Math.max(0, r.left - 240), y: r.bottom }); }}>
+          {set && !value.startsWith('data:') ? pictureLabel({ PictureType: 'shared', Picture: value }) : t('sheet.pickShared')}
+        </button>
+      ) : (
+        <button type="button" id={id} data-testid={testId} className="dz-pbutton" disabled={disabled} aria-describedby={error ? `${id}-msg` : undefined}
+          onClick={() => file.current?.click()}>{t('sheet.pickPicture')}</button>
+      )}
+      {gallery && <ImageGallery mode="insert" readOnly={disabled} at={gallery} onClose={() => setGallery(null)} onPick={(n) => { setGallery(null); setError(commit(n)); }} />}
       {(set || mixed) && (
         <button type="button" data-testid={`${testId}-clear`} className="dz-pbutton" disabled={disabled} onClick={() => { setError(null); commit(undefined); }}>
           {t('sheet.removePicture')}
         </button>
       )}
-      <input ref={file} type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp" data-testid={`${testId}-file`}
+      <input ref={file} type="file" hidden accept={PICTURE_ACCEPT} data-testid={`${testId}-file`}
         onChange={(e) => { read(e.target.files?.[0]); e.target.value = ''; }} />
       {error && <div id={`${id}-msg`} className="dz-perror" role="alert" data-testid={`${testId}-error`}>{t(error)}</div>}
     </div>

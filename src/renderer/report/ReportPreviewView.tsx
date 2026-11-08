@@ -17,6 +17,7 @@ import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import type { DocMode } from '../state/app-state';
 import { allowsLayout } from '../form/views';
+import { onResourcesChanged } from '../design/resources';
 import { useBaseTheme } from '../design/theme-context';
 import { errorMessage as dialogError, useModal, type ModalApi } from '../shell/Modal';
 import { RibbonPopup } from '../designer/RibbonPopup';
@@ -27,7 +28,7 @@ import { promptParameters } from '../query/prompt-parameters';
 import { callUserFunction } from '../python/expr-call';
 import { onUserFunctionsChanged } from '../python/user-function-names';
 import { memberValue } from '../form/form-instances';
-import { docParameters, layoutSavedReport, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
+import { docParameters, layoutSavedReport, loadDocResources, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
 import { unsavedRunDoc } from '../query/unsaved-run';
 import { reportEvents, reportShown, type ReportEvents } from './report-events';
 import { orientationStates, withPageSetup } from './page-setup';
@@ -237,12 +238,14 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       if (!live()) return;
       const theme = effectiveTheme(d.props, (await api.theme?.get().catch(() => undefined)) ?? DEFAULT_THEME);   // un état se dessine toujours en clair
       if (!live()) return;
-      const spec = readReport(d, data.current.fields, { theme }), { width, height } = pageGeometry(spec.page);
+      const resources = await loadDocResources(api, d);
+      if (!live()) return;
+      const spec = readReport(d, data.current.fields, { theme, resources }), { width, height } = pageGeometry(spec.page);
       let shownAt = 0;
       const onPage = (pages: LaidOutPage[]) => {   // page 1 at once, then at most twice a second
         if (pages.length > 1 && Date.now() - shownAt < 500) return;
         shownAt = Date.now();
-        setPhase({ k: 'ready', report: { width, height, pages: pages.slice(), issues: [] }, partial: true });
+        setPhase({ k: 'ready', report: { width, height, pages: pages.slice(), issues: [], ...(spec.background ? { background: spec.background } : {}) }, partial: true });
       };
       const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, onPage: (p) => live() && onPage(p),
         ...(events.current ? { hooks: events.current.hooks } : {}) });
@@ -319,6 +322,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
     seenTheme.current = baseTheme;
     if (doc.current && data.current) void cmds.current.run('layout');
   }, [baseTheme]);
+  useEffect(() => onResourcesChanged(() => { if (doc.current && data.current) void cmds.current.run('layout'); }), []);   // F3 : image partagée remplacée, la page se redessine
   useEffect(() => onUserFunctionsChanged(() => { if (doc.current && data.current) void cmds.current.run('layout'); }), []);   // D3 R5: Python functions added, removed or edited
   useEffect(() => () => { reportShown(name.current, false); void events.current?.close(); }, []);   // the preview closes
 

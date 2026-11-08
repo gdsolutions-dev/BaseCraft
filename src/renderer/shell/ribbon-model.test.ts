@@ -270,6 +270,18 @@ describe('Arrange layout commands (L1 dispositions)', () => {
   });
 });
 
+describe('Background Image command (F3)', () => {
+  const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
+  const bg = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((x) => x.id === 'backgroundImage')!;
+  it('is a real popup, enabled in Design and Layout views of forms and reports, also read-only', () => {
+    expect([bg.planned, bg.popup]).toEqual([undefined, true]);
+    for (const kind of ['form', 'report'] as const) for (const mode of ['design', 'layout'] as const) {
+      expect(bg.enabled(ctx({ kind, mode })), `${kind} ${mode}`).toBe(true);
+      expect(bg.enabled(ctx({ kind, mode, readOnly: true })), `${kind} ${mode} ro`).toBe(true);
+    }
+  });
+});
+
 describe('Themes command (F2)', () => {
   const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
   const themes = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).find((x) => x.id === 'themes')!;
@@ -405,7 +417,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThan(100); // 12 Arrange layout commands delivered (dispositions L1)
+    expect(planned.length).toBeGreaterThanOrEqual(95); // 12 Arrange layout commands delivered (dispositions L1)
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -553,7 +565,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   });
 
   it('creates no item marked "never"', () => {
-    const never = ['dataverse', 'dataverseExport', 'sharePointLists', 'moveToSharePoint', 'convertMacros', 'memoSettings', 'quickStyles',
+    const never = ['dataverse', 'dataverseExport', 'sharePointLists', 'moveToSharePoint', 'memoSettings', 'quickStyles',
       'changeShape', 'shapeEffects', 'applicationParts', 'classModule', 'createClassModule', 'addIns', 'exportEmail', 'wordMerge',
       'dataDefinitionQuery', 'dataDefinition', 'edgeBrowser'];
     const ids = new Set(commands.map((c) => c.id as string));
@@ -637,6 +649,16 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commandEnabled('expandActions', ctx({ kind: 'macro', mode: 'design' }))).toBe(true);
     // an embedded macro (R16): no Run, no Single Step, the rest as usual
     expect(ids.filter((id) => commandEnabled(id, ctx({ kind: 'macro', mode: 'design', embedded: true })))).toEqual(ids.filter((id) => id !== 'macroRun' && id !== 'singleStep'));
+  });
+
+  it('Macro Design › Convert Macros to Python (D4): a named macro in Design view of a writable base only', () => {
+    const c = RIBBON.find((t) => t.id === 'macroDesign')!.groups.find((g) => g.id === 'tools')!.commands.find((x) => x.id === 'convertMacros')!;
+    expect(c.planned).toBeUndefined();
+    expect(c.enabled(ctx({ kind: 'macro', mode: 'design' }))).toBe(true);
+    expect(c.enabled(ctx({ kind: 'macro', mode: 'design', embedded: true }))).toBe(false);
+    expect(c.enabled(ctx({ kind: 'macro', mode: 'design', readOnly: true }))).toBe(false);
+    expect(c.enabled(ctx({ kind: 'form', mode: 'design' }))).toBe(false);
+    expect(c.enabled(ctx({ kind: 'macro', mode: null }))).toBe(false);
   });
 
   it('View › Form View (A4): a saved form, in Design or Datasheet view; active in Form view', () => {
@@ -815,7 +837,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     const textBox = RIBBON.find((t) => t.id === 'formDesign')!.groups.flatMap((g) => g.commands).find((c) => c.id === 'textBox')!;
     expect(textBox.enabled(ctx({ mode: 'design', kind: 'form' }))).toBe(true); expect(textBox.enabled(ctx({ mode: 'design', kind: 'form', readOnly: true }))).toBe(false);
     expect(RIBBON.find((t) => t.id === 'format')!.groups.flatMap((g) => g.commands).filter((c) => c.popup).map((c) => c.id))
-      .toEqual(['objectList', 'font', 'fontSize', 'fontColor', 'backColor', 'format', 'shapeFill', 'shapeOutline']);
+      .toEqual(['objectList', 'font', 'fontSize', 'fontColor', 'backColor', 'format', 'backgroundImage', 'shapeFill', 'shapeOutline']);
     // a font field or colour choices are no menu items: those open a dialog (aria-haspopup="dialog")
     expect(RIBBON.find((t) => t.id === 'format')!.groups.flatMap((g) => g.commands).filter((c) => c.popup === 'dialog').map((c) => c.id))
       .toEqual(['font', 'fontColor', 'backColor', 'shapeFill', 'shapeOutline']);
@@ -1075,7 +1097,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "zoom: zoom",
         ],
         "macroDesign": [
-          "tools: macroRun singleStep",
+          "tools: macroRun singleStep convertMacros",
           "expandCollapse: expandActions collapseActions expandAll collapseAll",
           "showHide: actionCatalog showAllActions",
         ],
@@ -1127,5 +1149,23 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
         ],
       }
     `);
+  });
+});
+
+describe('Insert Image command (F3)', () => {
+  const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
+  const cmd = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands)).filter((x) => x.id === 'insertImage');
+  it('is a real popup in the controls gallery of the form and report Design tabs, enabled in Design and Layout views, also read-only', () => {
+    expect(cmd.length).toBe(2);
+    for (const c of cmd) {
+      expect([c.planned, c.popup]).toEqual([undefined, true]);
+      for (const kind of ['form', 'report'] as const) for (const mode of ['design', 'layout'] as const) {
+        expect(c.enabled(ctx({ kind, mode })), `${kind} ${mode}`).toBe(true);
+        expect(c.enabled(ctx({ kind, mode, readOnly: true })), `${kind} ${mode} ro`).toBe(true);
+      }
+      expect(c.enabled(ctx({ mode: 'run' }))).toBe(false);
+      expect(c.enabled(ctx({ kind: 'report', mode: 'run' }))).toBe(false);
+      expect(c.enabled(ctx({ kind: null, mode: null }))).toBe(false);
+    }
   });
 });

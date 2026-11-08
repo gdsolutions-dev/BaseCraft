@@ -307,5 +307,5 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
   }
   const issues = new Map(spec.issues.map((i) => [issueKey(i), i]));
   for (const [k, i] of r.issues) if (!issues.has(k)) issues.set(k, i);
-  return { width: g.width, height: flow ? r.end : g.height, pages: r.pages, issues: [...issues.values()] };
+  return { ...(spec.background ? { background: spec.background } : {}), width: g.width, height: flow ? r.end : g.height, pages: r.pages, issues: [...issues.values()] };
 }

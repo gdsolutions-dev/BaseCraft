@@ -151,7 +151,7 @@ describe('robustness', () => {
     const p = tmp(); newBase(p, '0.3.1'); setMeta(p, 'format_major', '9');
     const err: string[] = [];
     expect(await run(['script', spec(p), p], { out: () => {}, err: (s) => err.push(s) })).toBe(1);
-    expect(err.join('')).toMatch(/uses format 9\.3, newer than this basecraft-cli supports \(1\.3\)/);
+    expect(err.join('')).toMatch(/uses format 9\.4, newer than this basecraft-cli supports \(1\.4\)/);
   });
   it('leaves the file untouched for an empty script', async () => {
     const p = tmp(); newBase(p, '0.3.1');

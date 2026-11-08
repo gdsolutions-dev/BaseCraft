@@ -5,6 +5,7 @@ import type { SectionKind } from '../design/model';
 import type { Value } from '../expr/ast';
 import type { SourceField } from '../record-source';
 import type { ReportIssue } from './model';
+import type { PictureAlignment, PictureSpec } from '../design/picture-css';
 
 /** A font as typed in a property sheet; `name` may be any font, portable or not. */
 export interface FontSpec { name: string /* nom saisi */; size: number /* pt */; bold: boolean; italic: boolean; underline: boolean }
@@ -22,11 +23,11 @@ export type LaidOutItem =
   | { kind: 'check'; name: string; left: number; top: number; width: number; height: number; checked: boolean | null; color: string; grid?: Gridlines }
   | { kind: 'line'; name: string; x1: number; y1: number; x2: number; y2: number; border: Border }
   | { kind: 'rect'; name: string; left: number; top: number; width: number; height: number; border: Border | null; back: string | null; grid?: Gridlines }
-  | { kind: 'image'; name: string; left: number; top: number; width: number; height: number; src: string; sizeMode: 'clip' | 'stretch' | 'zoom'; grid?: Gridlines };
+  | { kind: 'image'; name: string; left: number; top: number; width: number; height: number; src: string; sizeMode: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; grid?: Gridlines };
 export interface LaidOutBand { section: SectionKind; groupLevel?: number; top: number; left: number; width: number; height: number;
   back: string | null; repeated?: true; continued?: true; items: LaidOutItem[] }
 export interface LaidOutPage { number: number; bands: LaidOutBand[] }
-export interface LaidOutReport { width: number; height: number; pages: LaidOutPage[]; issues: ReportIssue[] }
+export interface LaidOutReport { background?: PictureSpec; width: number; height: number; pages: LaidOutPage[]; issues: ReportIssue[] }
 export interface ReportData { fields: SourceField[]; rows: SqlValue[][] }
 /** `flow`: one unbounded page (Layout view): no page breaks, Keep Together or Force New Page; the Page Header once after the
  *  Report Header, the Page Footer once after the Report Footer; [Page] and [Pages] read 1; the height is the content's. */

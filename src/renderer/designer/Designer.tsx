@@ -2,7 +2,7 @@
 // Tout ce qui est propre au genre d'objet passe par l'hôte (DesignerHost) ; ce dossier n'importe jamais ../form.
 import { Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ColorValue } from '../../shared/design/colors';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
@@ -28,7 +28,8 @@ import { FONT_SIZES } from './units';
 import './designer.css';
 
 export interface ToolDef { kind: ControlKind; icon: LucideIcon; labelKey: string }
-export interface ToolState { kind: ControlKind | null; locked: boolean }   // null = Sélectionner
+/** null = Sélectionner. `props` : propriétés fusionnées dans le premier contrôle créé (l'image choisie dans la galerie, F3). */
+export interface ToolState { kind: ControlKind | null; locked: boolean; props?: Record<string, unknown> }
 export interface DesignerHost {
   target: 'form' | 'report';
   tools: ToolDef[];
@@ -55,12 +56,13 @@ export function Designer(p: { state: DesignerState; dispatch: (a: DesignerAction
   tool: ToolState; onTool(t: ToolState): void; sheetVisible: boolean; side?: ReactNode /* volet de l'hôte : liste des champs */;
   onSheetClose?(): void /* bouton Fermer de la feuille (l'hôte remet sheetVisible à faux) */;
   restrict?: DesignerRestrict /* Mode Page : gestes restreints ; absent, le concepteur est entier */;
+  background?: CSSProperties /* mode Page d'un formulaire : l'image d'arrière-plan, dessinée dans chaque section */;
   canvas?: ReactNode | ((c: CanvasProps) => ReactNode) /* Mode Page d'un état : remplace la surface de création ; absent, DesignCanvas */ }) {
   return (
     <div className="dz" data-testid="designer">
       {!p.restrict?.toolbox && <Toolbox tools={p.host.tools} tool={p.tool} onTool={p.onTool} readOnly={p.readOnly} />}
       {p.canvas === undefined
-        ? <DesignCanvas state={p.state} dispatch={p.dispatch} host={p.host} readOnly={p.readOnly} tool={p.tool} onTool={p.onTool} restrict={p.restrict} />
+        ? <DesignCanvas state={p.state} dispatch={p.dispatch} host={p.host} readOnly={p.readOnly} tool={p.tool} onTool={p.onTool} restrict={p.restrict} background={p.background} />
         : typeof p.canvas === 'function' ? p.canvas({ state: p.state, dispatch: p.dispatch, readOnly: p.readOnly, host: p.host, tool: p.tool, onTool: p.onTool }) : p.canvas}
       {p.sheetVisible && <PropertySheet state={p.state} dispatch={p.dispatch} docKind={p.host.target} ctx={p.host.sheet} readOnly={p.readOnly}
         onClose={p.onSheetClose} sectionLabel={p.host.sectionLabel} restrict={p.restrict} />}

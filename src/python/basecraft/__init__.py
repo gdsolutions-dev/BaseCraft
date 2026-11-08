@@ -42,6 +42,9 @@ def flush():
 def install():
     builtins.msgbox = ui.msgbox
     builtins.inputbox = ui.inputbox
+    builtins.eval_expr = ui.eval_expr
+    builtins.eval_cond = ui.eval_cond
+    builtins.eval_text = ui.eval_text
     for n in ('app', 'forms', 'reports', 'me', 'screen', 'docmd', 'tempvars'):
         setattr(builtins, n, getattr(objects, n))
     builtins.db = data.db

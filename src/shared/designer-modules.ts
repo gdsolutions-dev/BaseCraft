@@ -11,7 +11,7 @@ export const DESIGNER_MODULES: readonly string[] = [
   ...['QueryDesignView', 'QbeGrid', 'SqlView', 'ShowTableDialog', 'JoinDialog', 'TablePane', 'QueryProperties', 'ParametersDialog'].map((m) => `${R}query/${m}.tsx`),
   `${R}query/qbe-edit.ts`,
   ...['MacroDesignView', 'ActionCatalog', 'ActionBlock', 'ArgEditor'].map((m) => `${R}macro/${m}.tsx`),
-  `${R}macro/macro-edit.ts`,
+  `${R}macro/macro-edit.ts`, `${R}macro/ConvertMacrosDialog.tsx`, 'src/shared/macro/to-python.ts',
   ...['TableDesignView', 'FieldPropertiesPanel', 'IndexesDialog', 'TablePropertiesPanel'].map((m) => `${R}table-design/${m}.tsx`),
   ...['design-model', 'indexes-model', 'save-table'].map((m) => `${R}table-design/${m}.ts`),
   `${R}table-fields/table-fields-commands.ts`, `${R}table-fields/NameCaptionDialog.tsx`, `${R}table-fields/field-edit.ts`,

@@ -359,6 +359,7 @@
       "closePreview": "关闭打印预览",
       "macroRun": "运行",
       "singleStep": "单步",
+      "convertMacros": "将宏转换为 Python",
       "expandActions": "展开操作",
       "collapseActions": "折叠操作",
       "expandAll": "全部展开",
@@ -560,6 +561,8 @@
       "invalidName": "主题名称为 1 到 60 个字符,且不含控制字符。",
       "themeReserved": "此名称是 BaseCraft 自带主题的名称,请选择其他名称。",
       "themeExists": "已有同名的自定义主题。",
+      "invalidPicture": "该文件不是 PNG、JPEG、GIF 或 WebP 图像。",
+      "pictureTooLarge": "图像太大(最大 1 MB)。",
       "unknown": "发生意外错误：{{detail}}",
       "fileTooLarge": "文件大于 2 GB：无法导入。",
       "importInterrupted": "导入已中断（数据库已关闭或变为只读）。未导入任何内容。",
@@ -1567,7 +1570,11 @@
     "Top": "上",
     "Height": "高度",
     "Picture": "图片",
+    "PictureType": "图片类型",
     "SizeMode": "缩放模式",
+    "PictureTiling": "图片平铺",
+    "PictureAlignment": "图片对齐方式",
+    "PictureSizeMode": "图片大小模式",
     "LineSlant": "线条倾斜",
     "Pages": "页",
     "Name": "名称",
@@ -1643,10 +1650,29 @@
       "tableQuery": "表/查询",
       "valueList": "值列表"
     },
+    "PictureType": {
+      "embedded": "嵌入",
+      "shared": "共享"
+    },
     "SizeMode": {
       "clip": "剪裁",
       "stretch": "拉伸",
       "zoom": "缩放"
+    },
+    "PictureAlignment": {
+      "topLeft": "左上",
+      "topRight": "右上",
+      "center": "居中",
+      "bottomLeft": "左下",
+      "bottomRight": "右下",
+      "formCenter": "窗体中心"
+    },
+    "PictureSizeMode": {
+      "clip": "剪裁",
+      "stretch": "拉伸",
+      "zoom": "缩放",
+      "stretchH": "水平拉伸",
+      "stretchV": "垂直拉伸"
     }
   },
   "color": {
@@ -1713,6 +1739,7 @@
       "glyphMissing": "字体中缺少字符“{{detail}}”。",
       "fontNotPortable": "字体“{{detail}}”未嵌入：文本将以 Liberation Sans 测量和打印。",
       "unsupportedControl": "此类控件不会被打印。",
+      "pictureMissing": "共享图片“{{detail}}”已不在图库中：图片既不显示也不打印。",
       "aggregateNotAllowed": "此节中不允许使用汇总。",
       "sizeClamped": "某个尺寸超过了 Access 的上限 55.88 cm：已缩减到该上限。",
       "groupingMalformed": "某个分组级别为空或格式不正确：它不会分组任何内容。",
@@ -1964,6 +1991,8 @@
     "colors": "颜色",
     "customColor": "自定义颜色…",
     "pickPicture": "选择…",
+    "pickShared": "从图库中选择…",
+    "pictureType": { "embedded": "(嵌入)" },
     "fontNotPortable": "不是可移植字体：在另一台计算机上，文本的外观可能不同。",
     "error": {
       "nameInvalid": "名称无效：1 到 64 个字符，不能包含句点 (.)、感叹号 (!)、重音符 (`) 或方括号 ([ ])，且不能以空格开头。",
@@ -2357,6 +2386,14 @@
     "saveFirst": "是否保存对模块“{{name}}”的更改？"
   },
   "macro": {
+    "convert": {
+      "title": "转换宏",
+      "errorHandling": "为生成的函数添加错误处理",
+      "comments": "包含宏注释",
+      "saveFirst": "转换前必须先保存该宏。现在保存吗?",
+      "done": "宏“{{macro}}”转换完成:已创建模块“{{module}}”。",
+      "todo": "有 {{count}} 项需要您处理:请在模块中搜索 TODO。"
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "要删除嵌入的宏吗？",
@@ -3009,6 +3046,15 @@
     "placeholder": "输入 Python 语句，或 ?表达式",
     "errorAt": "(模块 {{module}}，第 {{line}} 行)",
     "splitter": "调整即时窗口大小"
+  },
+  "imageGallery": {
+    "none": "无",
+    "title": "图像库",
+    "empty": "此数据库中还没有图像。",
+    "browse": "浏览...",
+    "replace": "替换图片…",
+    "delete": "删除",
+    "deleteInUse": "此图片正被 {{count}} 个已保存的窗体或报表使用，无法删除。"
   },
   "themeGallery": {
     "current": "此数据库中",

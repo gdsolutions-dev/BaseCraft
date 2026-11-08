@@ -199,3 +199,30 @@ describe('printRequestFor (final review I3)', () => {
     expect(MAX_PRINT_HTML_CHARS).toBe(64 * 1024 ** 2);
   });
 });
+
+describe('layoutSavedReport : images partagées', () => {
+  const env: LayoutEnv = { locale: 'fr-FR', lang: 'fr', now: () => new Date(Date.UTC(2026, 9, 22)), errorText: { error: '#Erreur', name: '#Nom?' } };
+  const withImage = (name: string) => ({ ...FACTURES_REPORT, sections: FACTURES_REPORT.sections.map((s, i) => i === 0 ? { ...s,
+    controls: [...s.controls, { kind: 'image' as const, name: 'Logo', left: 0, top: 0, width: 500, height: 500, props: { PictureType: 'shared', Picture: name } }] } : s) });
+  const fake = (definition: unknown, gets: string[][]) => ({
+    objects: { get: async (_k: string, name: string) => ({ name, definition }) },
+    sources: {
+      describe: async (): Promise<SourceInfo> => ({ fields: FACTURES_FIELDS, updatable: false, parameters: [] }),
+      page: async (_: RecordSourceRef, r: SourcePageRequest): Promise<SourcePage> =>
+        ({ rows: FACTURES_ROWS.slice(r.offset, r.offset + r.limit), rowids: [], total: FACTURES_ROWS.length }),
+    },
+    resources: { get: async (names: string[]) => { gets.push(names); return {} as Record<string, string>; } },
+  });
+  const none = async () => null;
+  it('demande exactement les noms utilisés, une fois', async () => {
+    const gets: string[][] = [];
+    const r = await layoutSavedReport(fake(withImage('logo'), gets), 'x', env, none);
+    expect(gets).toEqual([['logo']]);
+    expect(r.issues).toContainEqual({ code: 'pictureMissing', control: 'Logo', detail: 'logo' });
+  });
+  it("n'appelle pas la galerie quand l'état n'en utilise aucune", async () => {
+    const gets: string[][] = [];
+    await layoutSavedReport(fake(FACTURES_REPORT, gets), 'x', env, none);
+    expect(gets).toEqual([]);
+  });
+});

@@ -359,6 +359,7 @@
       "closePreview": "印刷プレビューを閉じる",
       "macroRun": "実行",
       "singleStep": "ステップ実行",
+      "convertMacros": "マクロを Python に変換",
       "expandActions": "アクションを展開",
       "collapseActions": "アクションを折りたたむ",
       "expandAll": "すべて展開",
@@ -560,6 +561,8 @@
       "invalidName": "テーマ名は 1 〜 60 文字で、制御文字を含められません。",
       "themeReserved": "この名前は BaseCraft 標準のテーマの名前です。別の名前を指定してください。",
       "themeExists": "この名前のユーザー設定テーマは既にあります。",
+      "invalidPicture": "このファイルは PNG、JPEG、GIF、WebP のいずれの画像でもありません。",
+      "pictureTooLarge": "画像が大きすぎます (最大 1 MB)。",
       "unknown": "予期しないエラーが発生しました: {{detail}}",
       "fileTooLarge": "ファイルが 2 GB を超えているため、インポートできません。",
       "importInterrupted": "インポートが中断されました (データベースが閉じられたか、読み取り専用になりました)。何もインポートされていません。",
@@ -1567,7 +1570,11 @@
     "Top": "上",
     "Height": "高さ",
     "Picture": "画像",
+    "PictureType": "画像の種類",
     "SizeMode": "サイズ モード",
+    "PictureTiling": "画像のタイル表示",
+    "PictureAlignment": "画像の配置",
+    "PictureSizeMode": "画像のサイズ モード",
     "LineSlant": "線の傾き",
     "Pages": "ページ",
     "Name": "名前",
@@ -1643,10 +1650,29 @@
       "tableQuery": "テーブル/クエリ",
       "valueList": "値リスト"
     },
+    "PictureType": {
+      "embedded": "埋め込み",
+      "shared": "共有"
+    },
     "SizeMode": {
       "clip": "切り抜き",
       "stretch": "拡大/縮小",
       "zoom": "ズーム"
+    },
+    "PictureAlignment": {
+      "topLeft": "左上",
+      "topRight": "右上",
+      "center": "中央",
+      "bottomLeft": "左下",
+      "bottomRight": "右下",
+      "formCenter": "フォームの中央"
+    },
+    "PictureSizeMode": {
+      "clip": "切り取り",
+      "stretch": "拡大/縮小",
+      "zoom": "ズーム",
+      "stretchH": "水平方向に拡大/縮小",
+      "stretchV": "垂直方向に拡大/縮小"
     }
   },
   "color": {
@@ -1713,6 +1739,7 @@
       "glyphMissing": "文字「{{detail}}」がフォントにありません。",
       "fontNotPortable": "フォント「{{detail}}」は埋め込まれていません。テキストは Liberation Sans で計測および印刷されます。",
       "unsupportedControl": "この種類のコントロールは印刷されません。",
+      "pictureMissing": "共有画像「{{detail}}」はギャラリーにありません。画像は表示も印刷もされません。",
       "aggregateNotAllowed": "このセクションでは集計を使用できません。",
       "sizeClamped": "サイズが Access の上限である 55.88 cm を超えているため、上限に縮小されます。",
       "groupingMalformed": "グループ レベルが空か、正しくありません。何もグループ化されません。",
@@ -1964,6 +1991,8 @@
     "colors": "色",
     "customColor": "ユーザー設定の色…",
     "pickPicture": "選択…",
+    "pickShared": "ギャラリーから選択…",
+    "pictureType": { "embedded": "(埋め込み)" },
     "fontNotPortable": "移植性のないフォントです。別のコンピューターでは、テキストの見た目が異なる場合があります。",
     "error": {
       "nameInvalid": "名前が正しくありません。1 ～ 64 文字で、ピリオド (.)、感嘆符 (!)、グレーブ アクセント (`)、角かっこ ([ ]) を含まず、先頭にスペースを使用できません。",
@@ -2357,6 +2386,14 @@
     "saveFirst": "モジュール「{{name}}」の変更を保存しますか?"
   },
   "macro": {
+    "convert": {
+      "title": "マクロの変換",
+      "errorHandling": "生成された関数にエラー処理を追加する",
+      "comments": "マクロのコメントを含める",
+      "saveFirst": "変換する前にマクロを保存する必要があります。今すぐ保存しますか?",
+      "done": "マクロ '{{macro}}' の変換が完了しました。モジュール '{{module}}' を作成しました。",
+      "todo": "{{count}} 件の項目は手動での対応が必要です。モジュール内で TODO を検索してください。"
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "埋め込みマクロを削除しますか?",
@@ -3009,6 +3046,15 @@
     "placeholder": "Python のステートメントまたは ?式 を入力",
     "errorAt": "(モジュール {{module}}、{{line}} 行目)",
     "splitter": "イミディエイトウィンドウのサイズを変更"
+  },
+  "imageGallery": {
+    "none": "なし",
+    "title": "画像ギャラリー",
+    "empty": "このデータベースにはまだ画像がありません。",
+    "browse": "参照...",
+    "replace": "画像を置き換え…",
+    "delete": "削除",
+    "deleteInUse": "この画像は保存済みの {{count}} 件のフォームまたはレポートで使われているため、削除できません。"
   },
   "themeGallery": {
     "current": "このデータベース内",

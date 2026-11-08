@@ -12,6 +12,8 @@ import { resolveFont, resolveThemeFont } from '../fonts';
 import { DEFAULT_THEME, type Theme } from '../design/theme';
 import type { SourceField } from '../record-source';
 import { readColor, readProp } from './props';
+import { readAlignment, readPictureSpec, type PictureAlignment, type PictureSpec } from '../design/picture-css';
+import { readPictureType, resolvePicture, type ResourceMap } from '../pictures';
 import { extractAggregates, type AggSpec } from './totals';
 import type { Border, FontSpec, Gridlines } from './types';
 
@@ -20,7 +22,7 @@ export interface GroupLevel { expression: string /* nom de champ, ou '=' + expre
   header: boolean; footer: boolean; keepTogether: 'no' | 'wholeGroup' | 'withFirstDetail' }          // doc.props.grouping
 export interface PageSetup { orientation: 'portrait' | 'landscape'; margins: { top: number; right: number; bottom: number; left: number } }   // doc.props.pageSetup
 export type ReportIssue = { code: 'unknownField' | 'invalidExpression' | 'groupingInvalid' | 'widthExceedsPage' | 'glyphMissing'
-  | 'fontNotPortable' | 'unsupportedControl' | 'aggregateNotAllowed' | 'sizeClamped' | 'groupingMalformed' | 'sectionIgnored'; control?: string; detail?: string };
+  | 'fontNotPortable' | 'unsupportedControl' | 'aggregateNotAllowed' | 'sizeClamped' | 'groupingMalformed' | 'sectionIgnored' | 'pictureMissing'; control?: string; detail?: string };
 /** `error`: a source refused when read (invalid expression, aggregate where none is allowed); the engine shows #Erreur.
  *  `none`: unbound, shows nothing. */
 export type ControlSource = { kind: 'none' } | { kind: 'error' } | { kind: 'field'; name: string }
@@ -32,10 +34,10 @@ export interface ControlSpec { kind: ControlKind; name: string; left: number; to
   margin: { top: number; right: number; bottom: number; left: number };
   /** Gridlines over the cell rectangle; null when all four sides are transparent. */
   gridlines: Gridlines | null;
-  picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; slant?: boolean }
+  picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; slant?: boolean }
 export interface SectionSpec { kind: SectionKind; groupLevel?: number; height: number; visible: boolean; canGrow: boolean; canShrink: boolean;
   keepTogether: boolean; repeatSection: boolean; forceNewPage: 'none' | 'before' | 'after' | 'beforeAndAfter'; back: string | null; controls: ControlSpec[] }
-export interface ReportSpec { width: number; page: PageSetup; grouping: (GroupLevel & { key: ControlSource })[];
+export interface ReportSpec { background?: PictureSpec; width: number; page: PageSetup; grouping: (GroupLevel & { key: ControlSource })[];
   reportHeader?: SectionSpec; pageHeader?: SectionSpec; groupHeaders: (SectionSpec | undefined)[]; detail?: SectionSpec;
   groupFooters: (SectionSpec | undefined)[]; pageFooter?: SectionSpec; reportFooter?: SectionSpec; issues: ReportIssue[] }
 
@@ -87,7 +89,7 @@ const SINGLE = ['reportHeader', 'pageHeader', 'detail', 'pageFooter', 'reportFoo
 
 /** `allCells`: every empty layout cell becomes a rectangle (the report Layout view selects them); otherwise only those carrying
  *  stored formatting do, so a report saved before L5 reads and prints as before. */
-export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean; theme?: Theme } = {}): ReportSpec {
+export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean; theme?: Theme; resources?: ResourceMap } = {}): ReportSpec {
   const theme = opts.theme ?? DEFAULT_THEME;
   const issues: ReportIssue[] = [];
   const add = (code: ReportIssue['code'], control?: string, detail?: string): void => {
@@ -136,6 +138,8 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
       italic: r('FontItalic') as boolean, underline: r('FontUnderline') as boolean };
     if (!resolveFont(font.name).portable) add('fontNotPortable', undefined, font.name);
     const format = r('Format') as string, places = r('DecimalPlaces') as string, picture = r('Picture'), sizeMode = r('SizeMode', 'zoom');
+    const src = kind === 'image' ? resolvePicture({ PictureType: p.PictureType, Picture: picture }, opts.resources ?? {}) : undefined;
+    if (kind === 'image' && !src && readPictureType(p.PictureType) === 'shared' && typeof picture === 'string' && picture) add('pictureMissing', name, picture);
     const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
     const four = <T,>(f: (s: (typeof sides)[number]) => T) => ({ top: f('Top'), right: f('Right'), bottom: f('Bottom'), left: f('Left') });
     const margin = four((s) => (kind === 'pageBreak' ? 0 : r(`${s}Margin`) as number));
@@ -154,9 +158,11 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
         : { width: Math.round(Math.max(1, r('BorderWidth') as number) * 15), color: readColor(p, 'BorderColor', target, theme), style: r('BorderStyle') as Border['style'] },
       align: r('TextAlign') as ControlSpec['align'],
       margin, gridlines: Object.values(lines).some(Boolean) ? { ...lines, padding: four((s) => r(`${s}Padding`) as number) } : null,
-      // Picture, SizeMode and LineSlant come with A4: read raw until then; only an embedded image is ever drawn.
-      ...(kind === 'image' ? { ...(typeof picture === 'string' && picture.startsWith('data:image/') ? { picture } : {}),
-        sizeMode: isIn(sizeMode, ['clip', 'stretch', 'zoom']) ? sizeMode : 'zoom' } : {}),
+      // Picture (incorporée ou partagée, résolue ci-dessus), SizeMode et LineSlant.
+      ...(kind === 'image' ? { ...(src ? { picture: src } : {}),
+        sizeMode: isIn(sizeMode, ['clip', 'stretch', 'zoom']) ? sizeMode : 'zoom',
+        // absents par défaut : un état sans ces propriétés s'imprime à l'identique
+        ...(readAlignment(p.PictureAlignment) !== 'center' ? { pictureAlign: readAlignment(p.PictureAlignment) } : {}), ...(p.PictureTiling === true ? { tiling: true as const } : {}) } : {}),
       ...(kind === 'line' ? { slant: r('LineSlant', false) === true } : {}),
     };
   };
@@ -214,6 +220,9 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
     add('sectionIgnored', undefined, String(kind));   // a duplicate, or a group section no level asks for
   }
 
+  const background = readPictureSpec(props, opts.resources ?? {});
+  if (background) spec.background = background;
+  else if (readPictureType(props.PictureType) === 'shared' && typeof props.Picture === 'string' && props.Picture) add('pictureMissing', undefined, props.Picture);
   if (Number.isSafeInteger(props.Width)) twips(props.Width, undefined, 'Width');   // reported when clamped
   spec.width = reportWidth(doc);
   if (spec.width > pageGeometry(page).printableWidth) add('widthExceedsPage');

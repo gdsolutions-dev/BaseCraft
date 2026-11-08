@@ -10,6 +10,10 @@ import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { StartupOptions } from './startup';
 import type { Theme } from './design/theme';
+import type { PictureKind } from './pictures';
+
+/** An image of the base's shared gallery. */
+export interface ResourceInfo { name: string; type: PictureKind; bytes: number }
 
 export type { CellInput, TableDesign };
 export type { RecordSourceRef, SortSpec, SourceField, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
@@ -339,6 +343,12 @@ export const CH = {
   themesSave: 'bc:themes:save',
   themesRemove: 'bc:themes:remove',
   baseThemeChanged: 'bc:base:themeChanged', // main → renderer: the base's default theme was saved (open views refetch)
+  resourcesList: 'bc:resources:list',
+  resourcesGet: 'bc:resources:get',
+  resourcesAdd: 'bc:resources:add',
+  resourcesReplace: 'bc:resources:replace',
+  resourcesRemove: 'bc:resources:remove',
+  resourcesChanged: 'bc:resources:changed', // main → renderer: the gallery changed (open views refetch)
   linksPick: 'bc:links:pick',
   linksInspect: 'bc:links:inspect',
   linksCreate: 'bc:links:create',
@@ -447,6 +457,20 @@ export interface BasecraftApi {
      *  clear theirs by an edit), in one transaction. Rejects bc:invalidTheme, bc:invalidArgument and bc:readOnly. */
     applyToAll(t: Theme, kind: 'form' | 'report', openNames: string[]): Promise<{ cleared: number }>;
     /** The default changed (set by this window): open views refetch with get(). */
+    onChange(cb: () => void): () => void;
+  };
+  /** The base's shared image gallery (F3, bc_resources). list and get work read-only; add, replace and remove are design operations. */
+  resources: {
+    list(): Promise<ResourceInfo[]>;
+    /** Data URLs of the names that exist (unknown names omitted). */
+    get(names: string[]): Promise<Record<string, string>>;
+    /** Returns the final name (a taken name gets " (2)", ...). Rejects bc:invalidPicture, bc:pictureTooLarge, bc:invalidName, bc:readOnly. */
+    add(name: string, dataUrl: string): Promise<string>;
+    /** Rejects bc:resourceNotFound plus add's errors. */
+    replace(name: string, dataUrl: string): Promise<void>;
+    /** Rejects bc:resourceNotFound, bc:resourceInUse|<n> (n saved forms and reports use it) and bc:readOnly. */
+    remove(name: string): Promise<void>;
+    /** The gallery changed (add, replace, remove by this window): open views refetch. */
     onChange(cb: () => void): () => void;
   };
   /** The user's own themes (F2b), kept per user in <userData>/themes.json (never in the base; works read-only). */

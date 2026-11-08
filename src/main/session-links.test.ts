@@ -166,7 +166,7 @@ describe('linked tables in the session (C1 Task 3)', () => {
 
   it('an older minor data file (1.2) is used as it is (PF3)', async () => {
     const d = new DatabaseSync(data);
-    d.exec(`DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value = '2' WHERE key = 'format_minor'`);
+    d.exec(`DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value = '2' WHERE key = 'format_minor'`);
     d.close();
     expect(await s.update('Clients', 3, { Ville: 'Nice' })).toMatchObject({ ok: true });
     expect(readBack(data, `SELECT value FROM bc_meta WHERE key = 'format_minor'`)).toBe('2');

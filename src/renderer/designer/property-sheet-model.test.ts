@@ -7,8 +7,8 @@ import { CONTROL_KINDS, type ControlDef, type ControlKind, type DesignDoc } from
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { localeInfo } from '../../shared/locale-format';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontLabel, fontWarning, fromSourceRef,
-  MIXED, readProp, sheetRows, targetKind, targetsOf } from './property-sheet-model';
-import type { PropTarget } from './designer-model';
+  MIXED, pictureLabel, pictureRows, readProp, setPictureType, sheetRows, targetKind, targetsOf } from './property-sheet-model';
+import { designerReducer, initDesigner, type PropTarget } from './designer-model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
 import { EVENTS } from '../../shared/design/events';
 import { emptyCellsOf, readLayouts } from '../../shared/design/layout';
@@ -214,5 +214,49 @@ describe('fontLabel', () => {
     expect(fontLabel('(Body)', DEFAULT_THEME, t)).toBe('Inter (Détail)');
     expect(fontLabel('(Headings)', DEFAULT_THEME, t)).toBe('Inter (En-têtes)');
     expect(fontLabel('Carlito', DEFAULT_THEME, t)).toBe('Carlito');
+  });
+});
+
+describe('picture rows (F3a)', () => {
+  const rows = (kind: ControlKind) => {
+    const d: DesignDoc = { ...doc, sections: [{ kind: 'detail', height: 2268, props: {}, controls: [ctl(kind, 'X')] }] };
+    return sheetRows(d, 'form', [ctlT('X')], 'all', false).map((r) => r.d.name);
+  };
+  it('pictureRows: five rows for an image (capture 16 order) or a form/report, two for a command button', () => {
+    expect(pictureRows({}, 'image')).toEqual(['PictureType', 'Picture', 'PictureTiling', 'SizeMode', 'PictureAlignment']);
+    expect(pictureRows({}, 'commandButton')).toEqual(['PictureType', 'Picture']);
+    expect(pictureRows({}, 'form')).toEqual(['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode']);
+    expect(pictureRows({}, 'report')).toEqual(['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode']);
+  });
+  it('the sheet shows the picture rows for an image, a form and a report', () => {
+    const img = rows('image');
+    expect(img.filter((n) => n.startsWith('Picture') || n === 'SizeMode')).toEqual(['PictureType', 'Picture', 'PictureTiling', 'SizeMode', 'PictureAlignment']);
+    expect(rows('commandButton').filter((n) => n.startsWith('Picture'))).toEqual(['PictureType', 'Picture']);
+    expect(sheetRows(doc, 'form', [{ kind: 'doc' }], 'all', false).map((r) => r.d.name).filter((n) => n.startsWith('Picture'))).toEqual(['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode']);
+    expect(sheetRows(doc, 'report', [{ kind: 'doc' }], 'all', false).map((r) => r.d.name).filter((n) => n.startsWith('Picture'))).toEqual(['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode']);
+  });
+  it('pictureLabel', () => {
+    expect(pictureLabel({ PictureType: 'shared', Picture: 'logo' })).toBe('logo');
+    expect(pictureLabel({ Picture: 'data:image/png;base64,AAAA' }, '(Incorporé)')).toBe('(Incorporé)');
+    expect(pictureLabel({})).toBe('');
+    expect(pictureLabel({ PictureType: 'shared' })).toBe('');
+  });
+});
+
+describe('setPictureType: one edit sets the type and clears the picture', () => {
+  const img = (props: Record<string, unknown>): DesignDoc => ({ ...doc, sections: [{ kind: 'detail', height: 2268, props: {}, controls: [{ ...ctl('image', 'Img'), props }] }] });
+  const t = [ctlT('Img')];
+  const props = (d: DesignDoc) => d.sections[0]!.controls[0]!.props;
+  it('shared keeps a gallery name, clears anything else; embedded clears a name but keeps a data URL', () => {
+    expect(props(setPictureType(img({ Picture: 'Logo' }), 'form', t, 'shared', new Set(['Logo'])))).toEqual({ PictureType: 'shared', Picture: 'Logo' });
+    expect(props(setPictureType(img({ Picture: 'data:image/png;base64,AA' }), 'form', t, 'shared', new Set(['Logo'])))).toEqual({ PictureType: 'shared' });
+    expect(props(setPictureType(img({ PictureType: 'shared', Picture: 'Logo' }), 'form', t, 'embedded', null))).toEqual({});
+    expect(props(setPictureType(img({ PictureType: 'shared', Picture: 'data:image/png;base64,AA' }), 'form', t, 'embedded', null))).toEqual({ Picture: 'data:image/png;base64,AA' });
+  });
+  it('a single undo restores both properties', () => {
+    const d0 = img({ Picture: 'data:image/png;base64,AA' });
+    const s = designerReducer(initDesigner(d0), { type: 'edit', apply: (d) => setPictureType(d, 'form', t, 'shared', new Set()) });
+    expect(props(s.doc)).toEqual({ PictureType: 'shared' });
+    expect(props(designerReducer(s, { type: 'undo' }).doc)).toEqual(props(d0));
   });
 });

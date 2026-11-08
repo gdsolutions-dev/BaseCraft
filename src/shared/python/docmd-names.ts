@@ -9,7 +9,7 @@ export const REFUSED: Record<string, string> = {
   messagebox: 'msgbox()', stopallmacros: 'return or raise', stopmacro: 'return or raise', runcode: 'a direct call of the function',
 }
 export const norm = (s: string): string => s.replace(/_/g, '').toLowerCase()
-const snake = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2').toLowerCase()
+export const snake = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2').toLowerCase()
 
 /** Every allowed `docmd` name: the catalog's actions in snake_case minus the refused ones, plus `close`, `cancel_event`, `run_macro`. */
 export const DOCMD_NAMES: readonly string[] = [

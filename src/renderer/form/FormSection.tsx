@@ -3,7 +3,9 @@
 import { Fragment, type ReactNode } from 'react';
 import { colorCss, type ColorValue } from '../../shared/design/colors';
 import type { ControlDef, DesignDoc, SectionDef } from '../../shared/design/model';
+import { pictureCss } from '../../shared/design/picture-css';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
+import { useDocPicture } from '../design/resources';
 import { twipsToPx } from '../designer/units';
 import { errorMessage } from '../shell/Modal';
 import { CheckBoxCtl } from './controls/CheckBoxCtl';
@@ -70,6 +72,7 @@ function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDe
 
 export function FormSection({ doc, section, x, width }: { doc: DesignDoc; section: SectionDef; x: RunCtx; width: number }) {
   const tc = useDocTheme();
+  const picture = useDocPicture(doc.props);
   const back = colorCss(effectiveProp(section.props, 'BackColor', section.kind, 'form'), (defaultFor(BACK, section.kind, 'form') ?? 'theme:surface') as ColorValue, tc);
   // DOM order: the tab stops in tab order, then the rest; the paint order stays the document's (z-index)
   const seq = tabSequence(section, x.pages);
@@ -77,7 +80,7 @@ export function FormSection({ doc, section, x, width }: { doc: DesignDoc; sectio
   const order = section.controls.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
   return (
     // a click on the section itself, not on a control: the form's On Click / On Dbl Click
-    <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, background: back }}
+    <div className="frun-section" data-testid={`form-section-${section.kind}`} style={{ height: twipsToPx(section.height), width, backgroundColor: back, ...(picture && pictureCss(picture)) }}
       onClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnClick'); }}
       onDoubleClick={(e) => { if (e.target === e.currentTarget) void x.raise('OnDblClick'); }}>
       <EmptyCells doc={doc} section={section} />

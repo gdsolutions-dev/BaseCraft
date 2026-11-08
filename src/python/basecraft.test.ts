@@ -67,6 +67,21 @@ describe('basecraft', () => {
     expect(run("inputbox('p') is None")).toBe(true)
   })
 
+  it('eval_expr asks the host to evaluate an expression', () => {
+    handler = () => 5
+    expect(run("eval_expr('[a] + 1')")).toBe(5)
+    expect(calls[0]).toEqual(['expr.eval', ['[a] + 1']])
+  })
+
+  it('eval_cond and eval_text ask the host for the engine boolean and text', () => {
+    handler = () => true
+    expect(run("eval_cond('[a] > 1')")).toBe(true)
+    expect(calls[calls.length - 1]).toEqual(['expr.eval', ['[a] > 1', 'bool']])
+    handler = () => ''
+    expect(run("eval_text('[a]')")).toBe('')
+    expect(calls[calls.length - 1]).toEqual(['expr.eval', ['[a]', 'text']])
+  })
+
   it('modules, nested import and reset', () => {
     mods.A = 'import B\ndef f():\n    return B.g() + 1'
     mods.B = 'def g():\n    return 41'

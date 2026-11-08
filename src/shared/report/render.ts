@@ -3,6 +3,7 @@
 // data:image/, tout texte et tout attribut échappé.
 import { cssFamily, cssString, fontFaceCss, resolveFont } from '../fonts';
 import { lineHeight } from './text';
+import { objectPosition, pictureCss } from '../design/picture-css';
 import type { Border, FontSpec, Gridlines, LaidOutItem, LaidOutPage, LaidOutReport } from './types';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -82,16 +83,20 @@ function itemHtml(i: LaidOutItem, looks?: Looks): string {
       return `<div ${attrs('bc-rect', box(i.left, i.top, i.width, i.height), `${i.border ? `;border:${stroke(i.border)}` : ''}${back(i.back)}`, looks)}></div>`;
     case 'image':
       if (!i.src.startsWith('data:image/')) return '';
-      return `<img class="bc-img" alt="" src="${esc(i.src)}" style="${box(i.left, i.top, i.width, i.height)};object-fit:${Object.hasOwn(OBJECT_FIT, i.sizeMode) ? OBJECT_FIT[i.sizeMode] : 'contain'}">`;
+      if (i.tiling) return `<div class="bc-img" style="${box(i.left, i.top, i.width, i.height)};${esc(cssDecl(pictureCss({ src: i.src, sizeMode: 'clip', alignment: i.pictureAlign ?? 'center', tiling: true })))}"></div>`;
+      return `<img class="bc-img" alt="" src="${esc(i.src)}" style="${box(i.left, i.top, i.width, i.height)};object-fit:${Object.hasOwn(OBJECT_FIT, i.sizeMode) ? OBJECT_FIT[i.sizeMode] : 'contain'}${i.pictureAlign ? `;object-position:${objectPosition(i.pictureAlign)}` : ''}">`;
   }
 }
+
+/** L'image de fond : un `.bc-bg` premier enfant de la page (son style, une seule fois, dans reportCss). */
+const bg = (report: LaidOutReport): string => report.background ? '<div class="bc-bg"></div>' : '';
 
 /** One self-contained `.bc-page`; every page but the last breaks after itself. `looks`: the print document's classes. */
 export function renderPageHtml(page: LaidOutPage, report: LaidOutReport, looks?: Looks): string {
   const last = page.number === report.pages[report.pages.length - 1]?.number;
   const bands = page.bands.map((b) => `<div class="bc-band"${data(looks, { section: esc(b.section), top: n(b.top), height: n(b.height) })} `
     + `style="${box(b.left, b.top, b.width, b.height)}${back(b.back)}">${b.items.map((i) => item(i, looks)).join('')}</div>`);
-  return `<div class="bc-page"${data(looks, { page: n(page.number) })} style="width:${pt(report.width)};height:${pt(report.height)}${last ? '' : ';break-after:page'}">${bands.join('')}</div>`;
+  return `<div class="bc-page"${data(looks, { page: n(page.number) })} style="width:${pt(report.width)};height:${pt(report.height)}${last ? '' : ';break-after:page'}">${bg(report)}${bands.join('')}</div>`;
 }
 
 /** Space under the content of a flow page, standing in for the bottom margin (twips; the layout's height excludes it). */
@@ -102,8 +107,10 @@ const FLOW_BOTTOM = 567;
 export function renderFlowHtml(report: LaidOutReport): string {
   const bands = (report.pages[0]?.bands ?? []).map((b) => `<div class="bc-band" data-section="${esc(b.section)}" data-top="${n(b.top)}" data-height="${n(b.height)}" `
     + `style="${box(b.left, b.top, b.width, b.height)}${back(b.back)}">${b.items.map((i) => item(i).replace(/^<(div|svg|img) /, `<$1 data-name="${esc(i.name)}" `)).join('')}</div>`);
-  return `<div class="bc-page" data-page="1" style="width:${pt(report.width)};height:${pt(report.height + FLOW_BOTTOM)}">${bands.join('')}</div>`;
+  return `<div class="bc-page" data-page="1" style="width:${pt(report.width)};height:${pt(report.height + FLOW_BOTTOM)}">${bg(report)}${bands.join('')}</div>`;
 }
+
+const cssDecl = (o: Record<string, string>): string => Object.entries(o).map(([k, v]) => `${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}:${v}`).join(';');
 
 /** @font-face of the faces the report uses (a non-portable font draws in Liberation Sans, as measured) and the .bc-* rules. */
 export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
@@ -116,6 +123,7 @@ export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
     '.bc-text,.bc-check{overflow:hidden}.bc-rule{overflow:visible}.bc-check svg{display:block}',
     '.bc-text{font-kerning:none;font-variant-ligatures:none;font-feature-settings:"kern" 0,"liga" 0,"calt" 0;font-synthesis:none}',
     '.bc-grid{pointer-events:none}',
+    report.background ? `.bc-bg{position:absolute;inset:0;${cssDecl(pictureCss(report.background))}}` : '',
     '.bc-line{position:absolute;left:0;top:0;white-space:pre}',
   ].filter(Boolean).join('\n');
 }

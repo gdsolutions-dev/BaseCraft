@@ -30,6 +30,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'describeSource', 'pageSource', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
   'startup', 'saveStartup', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
+  'listResources', 'getResources', 'addResource', 'replaceResource', 'removeResource',
   'exportText',
   'exportRowCount',
   'exportExcel',
@@ -46,6 +47,6 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
 /** R16: the HOST_METHODS that only read (retried once on a transient SQLITE_CORRUPT). */
 export const READ_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listTables', 'tableDesign', 'count', 'page', 'lookup', 'cascadeChildren', 'listRelations', 'relationsLayout',
-  'describeSource', 'pageSource', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'startup', 'baseTheme', 'autoCorrectDependents',
+  'describeSource', 'pageSource', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
   'activeContent', 'dbUuid', 'dataStamp',
 ]);

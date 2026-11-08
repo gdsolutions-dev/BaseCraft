@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { LocaleInfo } from '../shared/locale-format';
 import type { RelationResult } from '../shared/api';
@@ -9,6 +11,8 @@ import { checkQueryDefinition } from '../main/query/source';
 import { isActionDefinition } from '../shared/query/definition';
 import { parseSql } from '../shared/query/sql-parser';
 import { formCreate, reportCreate } from './ops-design';
+import { addResource } from '../main/db/resources';
+import { resourceNameFromFile, sniffPicture, pictureDataUrl, PICTURE_MAX_BYTES } from '../shared/pictures';
 import { MACRO_HANDLERS } from './ops-macro';
 import { MODULE_HANDLERS } from './ops-module';
 import { rowsInsert } from './ops-data';
@@ -102,4 +106,26 @@ function queryCreate(db: DatabaseSync, args: Record<string, unknown>): OpOutcome
   return { ok: true };
 }
 
-export const OP_HANDLERS: Record<string, OpHandler> = { 'table.create': tableCreate, 'relation.create': relationCreate, 'query.create': queryCreate, 'form.create': formCreate, 'report.create': reportCreate, 'rows.insert': rowsInsert, ...MACRO_HANDLERS, ...MODULE_HANDLERS };
+/** Adds an image of the shared gallery from a path: same checks as the application (signature, 1 MB), unique naming "name (2)". */
+function resourceAdd(db: DatabaseSync, args: Record<string, unknown>): OpOutcome {
+  const { file, name } = args;
+  if (typeof file !== 'string') return refuse('"file" must be a string');
+  if (name !== undefined && typeof name !== 'string') return refuse('"name" must be a string');
+  let bytes: Uint8Array;
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile()) return refuse(`not a file: ${file}`);
+    if (st.size > PICTURE_MAX_BYTES) return refuse(`image too large (max ${PICTURE_MAX_BYTES} bytes): ${file}`);
+    bytes = fs.readFileSync(file);
+  } catch { return refuse(`cannot read ${file}`); }
+  if (bytes.length > PICTURE_MAX_BYTES) return refuse(`image too large (max ${PICTURE_MAX_BYTES} bytes): ${file}`);
+  const kind = sniffPicture(bytes);
+  if (!kind) return refuse(`not a PNG, JPEG, GIF or WebP image: ${file}`);
+  try { addResource(db, name ?? resourceNameFromFile(path.basename(file)), pictureDataUrl(kind, bytes)); } catch (e) {
+    if (e instanceof Error && e.message === 'bc:invalidName') return refuse(`invalid image name: ${name ?? file}`);
+    throw e;
+  }
+  return { ok: true };
+}
+
+export const OP_HANDLERS: Record<string, OpHandler> = { 'resource.add': resourceAdd, 'table.create': tableCreate, 'relation.create': relationCreate, 'query.create': queryCreate, 'form.create': formCreate, 'report.create': reportCreate, 'rows.insert': rowsInsert, ...MACRO_HANDLERS, ...MODULE_HANDLERS };

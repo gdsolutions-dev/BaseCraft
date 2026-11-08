@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { DesignDoc } from '../../shared/design/model';
 import type { Theme } from '../../shared/design/theme';
 import type { LaidOutReport } from '../../shared/report/types';
+import { usedResourceNames } from '../../shared/pictures';
+import { useResources } from '../design/resources';
 import { useModal } from '../shell/Modal';
 import { flowKey, keptOutOfLayout, latestRun, layoutFlow, loadFlowData, type FlowData, type FlowSource } from './layout-flow';
 import { onUserFunctionsChanged } from '../python/user-function-names';
@@ -18,6 +20,7 @@ export function useReportFlow(doc: DesignDoc, active: boolean, theme?: Theme): {
   const modal = useModal();
   const [runs] = useState(() => latestRun(RELAYOUT_DELAY));
   const key = flowKey(doc);
+  const { map: resources } = useResources(usedResourceNames(doc));   // la galerie change : mise en page refaite
   const [src, setSrc] = useState<{ key: string; source: FlowSource } | null>(null);
   const [fnTick, setFnTick] = useState(0);
   useEffect(() => onUserFunctionsChanged(() => setFnTick((n) => n + 1)), []);   // D3 R5: laid out again
@@ -43,9 +46,9 @@ export function useReportFlow(doc: DesignDoc, active: boolean, theme?: Theme): {
   const source = src?.key === key ? src.source : null;
   useEffect(() => {
     if (!active || !source) return;
-    runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal, theme)), (report) => setLaid({ doc, source, report }));
+    runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal, theme, resources)), (report) => setLaid({ doc, source, report }));
     return runs.cancel;
-  }, [active, doc, source, runs, fnTick, theme]);
+  }, [active, doc, source, runs, fnTick, theme, resources]);
 
   const failed = laid !== null && laid.source === source && !laid.report;
   return {

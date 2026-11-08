@@ -359,6 +359,7 @@
       "closePreview": "Seitenansicht schließen",
       "macroRun": "Ausführen",
       "singleStep": "Einzelschritt",
+      "convertMacros": "Makros in Python konvertieren",
       "expandActions": "Aktionen erweitern",
       "collapseActions": "Aktionen reduzieren",
       "expandAll": "Alle erweitern",
@@ -560,6 +561,8 @@
       "invalidName": "Ein Designname hat 1 bis 60 Zeichen und kein Steuerzeichen.",
       "themeReserved": "Dieser Name gehört zu einem mit BaseCraft gelieferten Design: Wählen Sie einen anderen.",
       "themeExists": "Ein benutzerdefiniertes Design trägt bereits diesen Namen.",
+      "invalidPicture": "Die Datei ist kein PNG-, JPEG-, GIF- oder WebP-Bild.",
+      "pictureTooLarge": "Bild zu groß (höchstens 1 MB).",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten: {{detail}}",
       "fileTooLarge": "Die Datei ist größer als 2 GB und kann nicht importiert werden.",
       "importInterrupted": "Der Import wurde unterbrochen (die Datenbank wurde geschlossen oder ist schreibgeschützt geworden). Es wurde nichts importiert.",
@@ -1578,7 +1581,11 @@
     "Top": "Oben",
     "Height": "Höhe",
     "Picture": "Bild",
+    "PictureType": "Bildtyp",
     "SizeMode": "Größenanpassung",
+    "PictureTiling": "Bildkachelung",
+    "PictureAlignment": "Bildausrichtung",
+    "PictureSizeMode": "Bildgrößenanpassung",
     "LineSlant": "Linienneigung",
     "Pages": "Seiten",
     "Name": "Name",
@@ -1654,10 +1661,29 @@
       "tableQuery": "Tabelle/Abfrage",
       "valueList": "Wertliste"
     },
+    "PictureType": {
+      "embedded": "Eingebettet",
+      "shared": "Freigegeben"
+    },
     "SizeMode": {
       "clip": "Abschneiden",
       "stretch": "Dehnen",
       "zoom": "Zoomen"
+    },
+    "PictureAlignment": {
+      "topLeft": "Oben links",
+      "topRight": "Oben rechts",
+      "center": "Zentriert",
+      "bottomLeft": "Unten links",
+      "bottomRight": "Unten rechts",
+      "formCenter": "Formularmitte"
+    },
+    "PictureSizeMode": {
+      "clip": "Zuschneiden",
+      "stretch": "Dehnen",
+      "zoom": "Zoom",
+      "stretchH": "Horizontal dehnen",
+      "stretchV": "Vertikal dehnen"
     }
   },
   "color": {
@@ -1724,6 +1750,7 @@
       "glyphMissing": "Das Zeichen „{{detail}}“ fehlt in der Schriftart.",
       "fontNotPortable": "Die Schriftart „{{detail}}“ ist nicht eingebettet: Text wird in Liberation Sans gemessen und gedruckt.",
       "unsupportedControl": "Diese Art von Steuerelement wird nicht gedruckt.",
+      "pictureMissing": "Das freigegebene Bild „{{detail}}“ ist nicht mehr in der Galerie: das Bild wird weder angezeigt noch gedruckt.",
       "aggregateNotAllowed": "In diesem Bereich ist keine Summe zulässig.",
       "sizeClamped": "Eine Größe überschreitet 55,88 cm, die Grenze von Access: Sie wird auf diese Grenze reduziert.",
       "groupingMalformed": "Eine Gruppierungsebene ist leer oder fehlerhaft: Sie gruppiert nichts.",
@@ -1976,6 +2003,8 @@
     "colors": "Farben",
     "customColor": "Benutzerdefinierte Farbe…",
     "pickPicture": "Auswählen…",
+    "pickShared": "Aus der Galerie wählen…",
+    "pictureType": { "embedded": "(Eingebettet)" },
     "fontNotPortable": "Keine portable Schriftart: Auf einem anderen Computer sieht der Text möglicherweise anders aus.",
     "error": {
       "nameInvalid": "Ungültiger Name: 1 bis 64 Zeichen, ohne Punkt (.), Ausrufezeichen (!), Gravis (`) oder eckige Klammern ([ ]), und nicht mit einem Leerzeichen beginnend.",
@@ -2380,6 +2409,14 @@
     "saveFirst": "Möchten Sie die Änderungen am Modul „{{name}}“ speichern?"
   },
   "macro": {
+    "convert": {
+      "title": "Makro konvertieren",
+      "errorHandling": "Fehlerbehandlung zu den erzeugten Funktionen hinzufügen",
+      "comments": "Makrokommentare einschließen",
+      "saveFirst": "Das Makro muss vor der Konvertierung gespeichert werden. Jetzt speichern?",
+      "done": "Konvertierung des Makros „{{macro}}“ abgeschlossen: Modul „{{module}}“ erstellt.",
+      "todo": "{{count}} Element(e) müssen Sie von Hand abschließen: Suchen Sie im Modul nach TODO."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Eingebettetes Makro löschen?",
@@ -3032,6 +3069,15 @@
     "placeholder": "Python-Anweisung oder ?Ausdruck eingeben",
     "errorAt": "(Modul {{module}}, Zeile {{line}})",
     "splitter": "Größe des Direktfensters ändern"
+  },
+  "imageGallery": {
+    "none": "Keine",
+    "title": "Bildergalerie",
+    "empty": "In dieser Datenbank gibt es noch kein Bild.",
+    "browse": "Durchsuchen...",
+    "replace": "Bild ersetzen…",
+    "delete": "Löschen",
+    "deleteInUse": "Dieses Bild wird von {{count}} gespeicherten Formularen oder Berichten verwendet und kann nicht gelöscht werden."
   },
   "themeGallery": {
     "current": "In dieser Datenbank",

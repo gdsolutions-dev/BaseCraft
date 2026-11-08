@@ -359,6 +359,7 @@
       "closePreview": "Fechar Visualização de Impressão",
       "macroRun": "Executar",
       "singleStep": "Passo a Passo",
+      "convertMacros": "Converter macros em Python",
       "expandActions": "Expandir Ações",
       "collapseActions": "Recolher Ações",
       "expandAll": "Expandir Tudo",
@@ -560,6 +561,8 @@
       "invalidName": "O nome de um tema tem de 1 a 60 carateres e nenhum caráter de controlo.",
       "themeReserved": "Este nome é o de um tema fornecido com o BaseCraft: escolha outro.",
       "themeExists": "Já existe um tema personalizado com este nome.",
+      "invalidPicture": "O ficheiro não é uma imagem PNG, JPEG, GIF ou WebP.",
+      "pictureTooLarge": "Imagem demasiado grande (1 MB no máximo).",
       "unknown": "Ocorreu um erro inesperado: {{detail}}",
       "fileTooLarge": "O arquivo tem mais de 2 GB: não é possível importá-lo.",
       "importInterrupted": "A importação foi interrompida (o banco de dados foi fechado ou passou a ser somente leitura). Nada foi importado.",
@@ -1589,7 +1592,11 @@
     "Top": "Superior",
     "Height": "Altura",
     "Picture": "Imagem",
+    "PictureType": "Tipo de imagem",
     "SizeMode": "Modo de Dimensionamento",
+    "PictureTiling": "Mosaico de imagem",
+    "PictureAlignment": "Alinhamento da imagem",
+    "PictureSizeMode": "Modo de tamanho da imagem",
     "LineSlant": "Inclinação da Linha",
     "Pages": "Páginas",
     "Name": "Nome",
@@ -1665,10 +1672,29 @@
       "tableQuery": "Tabela/Consulta",
       "valueList": "Lista de Valores"
     },
+    "PictureType": {
+      "embedded": "Incorporada",
+      "shared": "Compartilhada"
+    },
     "SizeMode": {
       "clip": "Recortar",
       "stretch": "Esticar",
       "zoom": "Zoom"
+    },
+    "PictureAlignment": {
+      "topLeft": "Superior esquerdo",
+      "topRight": "Superior direito",
+      "center": "Centro",
+      "bottomLeft": "Inferior esquerdo",
+      "bottomRight": "Inferior direito",
+      "formCenter": "Centro do formulário"
+    },
+    "PictureSizeMode": {
+      "clip": "Recortar",
+      "stretch": "Esticar",
+      "zoom": "Zoom",
+      "stretchH": "Esticar horizontalmente",
+      "stretchV": "Esticar verticalmente"
     }
   },
   "color": {
@@ -1735,6 +1761,7 @@
       "glyphMissing": "O caractere \"{{detail}}\" não existe na fonte.",
       "fontNotPortable": "A fonte \"{{detail}}\" não está incorporada: o texto é medido e impresso em Liberation Sans.",
       "unsupportedControl": "Este tipo de controle não é impresso.",
+      "pictureMissing": "A imagem partilhada «{{detail}}» já não existe na galeria: a imagem não é mostrada nem impressa.",
       "aggregateNotAllowed": "Um total não é permitido nesta seção.",
       "sizeClamped": "Um tamanho excede 55,88 cm, o limite do Access: ele é reduzido a esse limite.",
       "groupingMalformed": "Um nível de agrupamento está vazio ou malformado: ele não agrupa nada.",
@@ -1988,6 +2015,8 @@
     "colors": "Cores",
     "customColor": "Cor personalizada…",
     "pickPicture": "Escolher…",
+    "pickShared": "Escolher da galeria…",
+    "pictureType": { "embedded": "(Incorporada)" },
     "fontNotPortable": "Fonte não portátil: em outro computador, o texto pode ter uma aparência diferente.",
     "error": {
       "nameInvalid": "Nome inválido: de 1 a 64 caracteres, sem ponto (.), ponto de exclamação (!), acento grave (`) nem colchetes ([ ]), e sem começar com um espaço.",
@@ -2403,6 +2432,14 @@
     "saveFirst": "Pretende guardar as alterações ao módulo «{{name}}»?"
   },
   "macro": {
+    "convert": {
+      "title": "Converter macro",
+      "errorHandling": "Adicionar tratamento de erros às funções geradas",
+      "comments": "Incluir os comentários da macro",
+      "saveFirst": "A macro tem de ser guardada antes de ser convertida. Guardá-la agora?",
+      "done": "Conversão da macro '{{macro}}' concluída: módulo '{{module}}' criado.",
+      "todo": "{{count}} elemento(s) precisam da sua atenção: procure TODO no módulo."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Excluir a macro incorporada?",
@@ -3055,6 +3092,15 @@
     "placeholder": "Digite uma instrução Python ou ?expressão",
     "errorAt": "(Módulo {{module}}, linha {{line}})",
     "splitter": "Redimensionar a janela Imediata"
+  },
+  "imageGallery": {
+    "none": "Nenhuma",
+    "title": "Galeria de imagens",
+    "empty": "Ainda não há nenhuma imagem nesta base de dados.",
+    "browse": "Procurar...",
+    "replace": "Substituir imagem…",
+    "delete": "Eliminar",
+    "deleteInUse": "Esta imagem é usada por {{count}} formulários ou relatórios guardados: não pode ser eliminada."
   },
   "themeGallery": {
     "current": "Nesta base de dados",

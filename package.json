@@ -57,7 +57,7 @@
     "dist:runtime:linux": "electron-vite build --mode runtime && npm run licenses && electron-builder --config electron-builder.runtime.cjs --linux --x64 --publish never",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run --configLoader runner",
-    "e2e": "electron-vite build && electron-vite build --mode runtime && playwright test",
+    "e2e": "electron-vite build && electron-vite build --mode runtime && npm run build:cli && playwright test",
     "bench": "vitest bench --run --configLoader runner --reporter=verbose"
   },
   "dependencies": {

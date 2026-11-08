@@ -359,6 +359,7 @@
       "closePreview": "Chiudi anteprima di stampa",
       "macroRun": "Esegui",
       "singleStep": "Passo-passo",
+      "convertMacros": "Converti macro in Python",
       "expandActions": "Espandi azioni",
       "collapseActions": "Comprimi azioni",
       "expandAll": "Espandi tutto",
@@ -560,6 +561,8 @@
       "invalidName": "Il nome di un tema ha da 1 a 60 caratteri e nessun carattere di controllo.",
       "themeReserved": "Questo nome è quello di un tema fornito con BaseCraft: sceglierne un altro.",
       "themeExists": "Un tema personalizzato ha già questo nome.",
+      "invalidPicture": "Il file non è un'immagine PNG, JPEG, GIF o WebP.",
+      "pictureTooLarge": "Immagine troppo grande (1 MB al massimo).",
       "unknown": "Si è verificato un errore imprevisto: {{detail}}",
       "fileTooLarge": "Il file supera i 2 GB: non può essere importato.",
       "importInterrupted": "L'importazione è stata interrotta (il database è stato chiuso o è diventato di sola lettura). Non è stato importato nulla.",
@@ -1589,7 +1592,11 @@
     "Top": "Superiore",
     "Height": "Altezza",
     "Picture": "Immagine",
+    "PictureType": "Tipo immagine",
     "SizeMode": "Modalità dimensioni",
+    "PictureTiling": "Affiancamento immagine",
+    "PictureAlignment": "Allineamento immagine",
+    "PictureSizeMode": "Modalità dimensione immagine",
     "LineSlant": "Inclinazione linea",
     "Pages": "Pagine",
     "Name": "Nome",
@@ -1665,10 +1672,29 @@
       "tableQuery": "Tabella/Query",
       "valueList": "Elenco valori"
     },
+    "PictureType": {
+      "embedded": "Incorporata",
+      "shared": "Condivisa"
+    },
     "SizeMode": {
       "clip": "Ritaglia",
       "stretch": "Adatta",
       "zoom": "Zoom"
+    },
+    "PictureAlignment": {
+      "topLeft": "In alto a sinistra",
+      "topRight": "In alto a destra",
+      "center": "Centro",
+      "bottomLeft": "In basso a sinistra",
+      "bottomRight": "In basso a destra",
+      "formCenter": "Centro del modulo"
+    },
+    "PictureSizeMode": {
+      "clip": "Ritaglia",
+      "stretch": "Estendi",
+      "zoom": "Zoom",
+      "stretchH": "Estendi in orizzontale",
+      "stretchV": "Estendi in verticale"
     }
   },
   "color": {
@@ -1735,6 +1761,7 @@
       "glyphMissing": "Il carattere \"{{detail}}\" non è presente nel tipo di carattere.",
       "fontNotPortable": "Il tipo di carattere \"{{detail}}\" non è incorporato: il testo viene misurato e stampato in Liberation Sans.",
       "unsupportedControl": "Questo tipo di controllo non viene stampato.",
+      "pictureMissing": "L'immagine condivisa «{{detail}}» non è più nella galleria: l'immagine non viene né mostrata né stampata.",
       "aggregateNotAllowed": "Un totale non è consentito in questa sezione.",
       "sizeClamped": "Una dimensione supera 55,88 cm, il limite di Access: viene ridotta a tale limite.",
       "groupingMalformed": "Un livello di raggruppamento è vuoto o non valido: non raggruppa nulla.",
@@ -1988,6 +2015,8 @@
     "colors": "Colori",
     "customColor": "Colore personalizzato…",
     "pickPicture": "Scegli…",
+    "pickShared": "Scegli dalla galleria…",
+    "pictureType": { "embedded": "(Incorporata)" },
     "fontNotPortable": "Tipo di carattere non portabile: su un altro computer il testo potrebbe apparire diverso.",
     "error": {
       "nameInvalid": "Nome non valido: da 1 a 64 caratteri, senza punto (.), punto esclamativo (!), accento grave (`) o parentesi quadre ([ ]), e non iniziante con uno spazio.",
@@ -2403,6 +2432,14 @@
     "saveFirst": "Salvare le modifiche al modulo «{{name}}»?"
   },
   "macro": {
+    "convert": {
+      "title": "Converti macro",
+      "errorHandling": "Aggiungi la gestione degli errori alle funzioni generate",
+      "comments": "Includi i commenti della macro",
+      "saveFirst": "La macro deve essere salvata prima della conversione. Salvarla ora?",
+      "done": "Conversione della macro '{{macro}}' completata: modulo '{{module}}' creato.",
+      "todo": "{{count}} elemento/i richiedono la tua attenzione: cerca TODO nel modulo."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Eliminare la macro incorporata?",
@@ -3055,6 +3092,15 @@
     "placeholder": "Digitare un'istruzione Python o ?espressione",
     "errorAt": "(Modulo {{module}}, riga {{line}})",
     "splitter": "Ridimensiona la finestra Immediata"
+  },
+  "imageGallery": {
+    "none": "Nessuna",
+    "title": "Raccolta di immagini",
+    "empty": "Nessuna immagine in questo database per ora.",
+    "browse": "Sfoglia...",
+    "replace": "Sostituisci immagine…",
+    "delete": "Elimina",
+    "deleteInUse": "Questa immagine è usata da {{count}} maschere o report salvati: non può essere eliminata."
   },
   "themeGallery": {
     "current": "In questo database",

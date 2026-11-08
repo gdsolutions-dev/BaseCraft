@@ -370,3 +370,15 @@ describe('L5 catalog: empty cell', () => {
     for (const n of ['TopMargin', 'HorizontalAnchor', 'ControlSource', 'Caption']) expect(PROPERTY_CATALOG.find((x) => x.name === n)!.appliesTo).not.toContain('emptyCell');
   });
 });
+
+describe('F3 catalog: picture type', () => {
+  it('PictureType and Picture share form, report, image and commandButton', () => {
+    const t = ['form', 'report', 'image', 'commandButton'];
+    const type = PROPERTY_CATALOG.find((d) => d.name === 'PictureType')!;
+    expect(type.editor).toBe('enum');
+    expect(type.options).toEqual(['embedded', 'shared']);
+    expect(type.default).toBe('embedded');
+    expect([...type.appliesTo].sort()).toEqual([...t].sort());
+    expect([...PROPERTY_CATALOG.find((d) => d.name === 'Picture')!.appliesTo].sort()).toEqual([...t].sort());
+  });
+});

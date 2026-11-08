@@ -20,7 +20,7 @@ function edit(base: string, sql: string): void {
   db.exec(sql);
   db.close();
 }
-const OLDER = "DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'"; // a 1.1 base, as A2 wrote it
+const OLDER = "DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; DROP TABLE bc_objects; UPDATE bc_meta SET value='1' WHERE key='format_minor'"; // a 1.1 base, as A2 wrote it
 const state = (page: Page) => page.evaluate(() => (window as unknown as Win).basecraft.base.state());
 
 test('an older base: the Runtime refuses it and leaves it untouched; the full application migrates it', async () => {

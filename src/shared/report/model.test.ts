@@ -162,6 +162,13 @@ describe('readReport', () => {
     expect(readReport(doc({ props: { Width: 10773, pageSetup: { orientation: 'landscape', margins: DEFAULT_PAGE_SETUP.margins } } }), fields).issues).toEqual([]);
     expect(readReport(doc({ props: { Width: 'wide' }, sections: [sec('detail', undefined, [tb('A', '[Client]', { left: 500 })])] }), fields).width).toBe(1500);
   });
+  it('image alignment and tiling: only set when not default', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    const c = (p: Record<string, unknown>) => one(ctl('image', 'I', { Picture: png, ...p })).detail!.controls[0]!;
+    expect(c({ PictureAlignment: 'bottomRight', PictureTiling: true })).toMatchObject({ pictureAlign: 'bottomRight', tiling: true });
+    const plain = c({ PictureAlignment: 'weird' });
+    expect('pictureAlign' in plain).toBe(false); expect('tiling' in plain).toBe(false);
+  });
   it('image and line properties not in the catalog yet are read raw with safe fallbacks', () => {
     const png = 'data:image/png;base64,iVBORw0KGgo=';
     expect(one(ctl('image', 'I', { Picture: png, SizeMode: 'stretch' })).detail!.controls[0]).toMatchObject({ picture: png, sizeMode: 'stretch' });
@@ -169,6 +176,48 @@ describe('readReport', () => {
     expect(bad.picture).toBeUndefined(); expect(bad.sizeMode).toBe('zoom');
     expect(one(ctl('line', 'L', { LineSlant: true })).detail!.controls[0]!.slant).toBe(true);
     expect(one(ctl('line', 'L')).detail!.controls[0]!.slant).toBe(false);
+  });
+});
+
+describe('readReport (images partagées, F3)', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const shared = ctl('image', 'I', { PictureType: 'shared', Picture: 'logo' });
+  const read = (c: ControlDef, resources?: Record<string, string>) => readReport(doc({ sections: [sec('detail', undefined, [c])] }), fields, resources ? { resources } : {});
+  it('une image partagée prend la galerie', () => {
+    expect(read(shared, { logo: png }).detail!.controls[0]!.picture).toBe(png);
+    expect(read(shared, { logo: png }).issues).toEqual([]);
+  });
+  it("une image partagée absente : pas d'image et un avertissement pictureMissing", () => {
+    const r = read(shared, {});
+    expect(r.detail!.controls[0]!.picture).toBeUndefined();
+    expect(r.issues).toEqual([{ code: 'pictureMissing', control: 'I', detail: 'logo' }]);
+    expect(read(shared).issues).toEqual([{ code: 'pictureMissing', control: 'I', detail: 'logo' }]);
+  });
+  it('incorporée ou « linked » : lue comme avant, sans avertissement', () => {
+    expect(read(ctl('image', 'I', { Picture: png })).detail!.controls[0]!.picture).toBe(png);
+    const l = read(ctl('image', 'I', { PictureType: 'linked', Picture: png }));
+    expect(l.detail!.controls[0]!.picture).toBe(png);
+    expect(l.issues).toEqual([]);
+  });
+});
+
+describe("readReport : image d'arrière-plan (F3 Task 8)", () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const pic = { PictureType: 'shared', Picture: 'Motif', PictureTiling: true };
+  const read = (props: Record<string, unknown>, resources?: Record<string, string>) => readReport(doc({ props, sections: [sec('detail')] }), fields, resources ? { resources } : {});
+  it('une image partagée présente donne background', () => {
+    const r = read(pic, { Motif: png });
+    expect(r.background).toEqual({ src: png, sizeMode: 'clip', alignment: 'center', tiling: true });
+    expect(r.issues).toEqual([]);
+  });
+  it('absente : pas de background et pictureMissing sans contrôle', () => {
+    const r = read(pic, {});
+    expect('background' in r).toBe(false);
+    expect(r.issues).toEqual([{ code: 'pictureMissing', detail: 'Motif' }]);
+  });
+  it('incorporée : lue ; aucune image : pas de clé', () => {
+    expect(read({ Picture: png }).background?.src).toBe(png);
+    expect('background' in read({})).toBe(false);
   });
 });
 

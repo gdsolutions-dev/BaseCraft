@@ -279,6 +279,7 @@ export type CommandId =
   | 'closePreview'
   | 'macroRun'
   | 'singleStep'
+  | 'convertMacros'
   | 'expandActions'
   | 'collapseActions'
   | 'expandAll'
@@ -412,10 +413,10 @@ export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocM
  * is delivered at its own tab's call site, through the helper's `done` map, e.g. `controls('A4', false, { textBox: {...} })`,
  * never by editing the helper, which builds the other batch's tab too.
  *
- * Not created ("never" in the contextual-tabs spec): Dataverse, SharePoint lists, Convert Macros to Visual Basic, Memo
+ * Not created ("never" in the contextual-tabs spec): Dataverse, SharePoint lists, Memo
  * Settings, Quick Styles / Change Shape / Shape Effects, Application Parts, Class Module, Add-ins, export by e-mail, Word
  * merge, Data Definition query, a report's Tab Order. Access's two web browser controls (legacy and Edge) are one control
- * here, and the Python editor stands where Access has Visual Basic. Split buttons and galleries are one button each.
+ * here, and the Python editor stands where Access has Visual Basic, and Convert Macros to Python (D4) where Access has Convert Macros to Visual Basic. Split buttons and galleries are one button each.
  */
 export type PlannedIn =
   | 'A3'
@@ -621,7 +622,10 @@ const reportDesignWritable = (c: RibbonContext) => designOf('report')(c) && !c.r
 const reportHeaderWritable = (c: RibbonContext) => reportEditor(c) && !c.readOnly;
 /** A5 Task 12: the report's controls gallery — the tools of the band designer, in Design and Layout view (L3b); the controls the engine does not draw stay for later. */
 const reportControl = (id: CommandId, icon: LucideIcon): RibbonCommand => ({ id, icon, labelKey: `ribbon.cmd.${id}`, size: 'xs', enabled: reportHeaderWritable });
+/** F3 : Insérer une image ouvre la galerie d'images (aussi en lecture seule, pour regarder) ; choisir une image arme l'outil Image. */
+const insertImageCmd: RibbonCommand = { id: 'insertImage', icon: ImagePlus, labelKey: 'ribbon.cmd.insertImage', size: 'sm', popup: true, enabled: formOrReportDesign };
 const REPORT_CONTROLS: Delivered = {
+  insertImage: insertImageCmd,
   select: reportControl('select', MousePointer2), textBox: reportControl('textBox', TextCursorInput), label: reportControl('label', LetterText),
   insertPageBreak: reportControl('insertPageBreak', SeparatorHorizontal), comboBox: reportControl('comboBox', ChevronsUpDown), line: reportControl('line', Minus),
   rectangle: reportControl('rectangle', Square), checkBox: reportControl('checkBox', SquareCheck), optionButton: reportControl('optionButton', CircleDot),
@@ -828,7 +832,7 @@ export const RIBBON: RibbonTab[] = [
     id: 'formDesign', labelKey: 'ribbon.tab.formDesign', contextual: true, visible: formEditor, groups: [
       viewGroup(viewForm, viewDatasheet, viewLayout, viewDesign),
       themesGroup,
-      controls('A4', false, delivered(controls('A4', false).commands, FORM_CONTROLS, formEditorWritable)),
+      controls('A4', false, { ...delivered(controls('A4', false).commands, FORM_CONTROLS, formEditorWritable), insertImage: insertImageCmd }),
       group('headerFooter', ...headerFooter('A4', delivered(headerFooter('A4'), ['logo', 'title', 'dateTime'], formEditorWritable))),
       // in a read-only base they open read-only (the view's sheet, Field List and Tab Order dialog refuse the changes)
       // en mode Page : pas d'Ordre de tabulation (L2)
@@ -885,7 +889,7 @@ export const RIBBON: RibbonTab[] = [
         formatCmd('alignRight', AlignRight, 'xs')),
       group('number', formatCmd('format', Brush, 'sm', true), formatCmd('currencyFormat', Euro, 'xs'), formatCmd('percentFormat', Percent, 'xs'),
         formatCmd('commaFormat', Hash, 'xs'), formatCmd('increaseDecimals', DecimalsArrowRight, 'xs'), formatCmd('decreaseDecimals', DecimalsArrowLeft, 'xs')),
-      group('background', plan('later', 'backgroundImage', Wallpaper, 'lg'), resized(alternateRowColor, 'lg')),
+      group('background', { id: 'backgroundImage', icon: Wallpaper, labelKey: 'ribbon.cmd.backgroundImage', size: 'lg', popup: true, enabled: formOrReportDesign }, resized(alternateRowColor, 'lg')),
       group('controlFormatting', plan('later', 'conditionalFormatting', Blend), formatCmd('shapeFill', PaintBucket, 'sm', 'dialog'), formatCmd('shapeOutline', Square, 'sm', 'dialog')),
     ],
   },
@@ -913,7 +917,8 @@ export const RIBBON: RibbonTab[] = [
       // none changes the file: enabled on a read-only base too. Pressed (the view's command states): Single Step on, the
       // catalogue shown, unsafe actions listed; Expand / Collapse Actions need a selected block (command state).
       // Run and Single Step: not for an embedded macro, an event needs its object (R16)
-      group('tools', { ...macroCmd('macroRun', Play, 'lg'), enabled: namedMacro }, { ...macroCmd('singleStep', StepForward), enabled: namedMacro, active: off }),
+      group('tools', { ...macroCmd('macroRun', Play, 'lg'), enabled: namedMacro }, { ...macroCmd('singleStep', StepForward), enabled: namedMacro, active: off },
+        { ...macroCmd('convertMacros', FileCode2), enabled: (c) => namedMacro(c) && !c.readOnly }),
       group('expandCollapse', macroCmd('expandActions', UnfoldVertical), macroCmd('collapseActions', FoldVertical), macroCmd('expandAll', ChevronsDown),
         macroCmd('collapseAll', ChevronsUp)),
       group('showHide', { ...macroCmd('actionCatalog', BookOpen, 'lg'), active: off }, { ...macroCmd('showAllActions', ListChecks), active: off }),

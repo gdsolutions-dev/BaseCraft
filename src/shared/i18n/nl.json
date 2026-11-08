@@ -359,6 +359,7 @@
       "closePreview": "Afdrukvoorbeeld sluiten",
       "macroRun": "Uitvoeren",
       "singleStep": "Stap voor stap",
+      "convertMacros": "Macro’s converteren naar Python",
       "expandActions": "Acties uitvouwen",
       "collapseActions": "Acties samenvouwen",
       "expandAll": "Alles uitvouwen",
@@ -560,6 +561,8 @@
       "invalidName": "Een themanaam heeft 1 tot 60 tekens en geen stuurtekens.",
       "themeReserved": "Deze naam is die van een thema dat met BaseCraft wordt geleverd: kies een andere.",
       "themeExists": "Er is al een aangepast thema met deze naam.",
+      "invalidPicture": "Het bestand is geen PNG-, JPEG-, GIF- of WebP-afbeelding.",
+      "pictureTooLarge": "Afbeelding te groot (maximaal 1 MB).",
       "unknown": "Er is een onverwachte fout opgetreden: {{detail}}",
       "fileTooLarge": "Het bestand is groter dan 2 GB: het kan niet worden geïmporteerd.",
       "importInterrupted": "De import is onderbroken (de database is gesloten of alleen-lezen geworden). Er is niets geïmporteerd.",
@@ -1578,7 +1581,11 @@
     "Top": "Boven",
     "Height": "Hoogte",
     "Picture": "Afbeelding",
+    "PictureType": "Afbeeldingstype",
     "SizeMode": "Grootteaanpassing",
+    "PictureTiling": "Afbeelding tegelen",
+    "PictureAlignment": "Afbeeldingsuitlijning",
+    "PictureSizeMode": "Afbeeldingsgroottemodus",
     "LineSlant": "Lijnhelling",
     "Pages": "Pagina's",
     "Name": "Naam",
@@ -1654,10 +1661,29 @@
       "tableQuery": "Tabel/query",
       "valueList": "Waardelijst"
     },
+    "PictureType": {
+      "embedded": "Ingesloten",
+      "shared": "Gedeeld"
+    },
     "SizeMode": {
       "clip": "Bijsnijden",
       "stretch": "Uitrekken",
       "zoom": "Zoomen"
+    },
+    "PictureAlignment": {
+      "topLeft": "Linksboven",
+      "topRight": "Rechtsboven",
+      "center": "Midden",
+      "bottomLeft": "Linksonder",
+      "bottomRight": "Rechtsonder",
+      "formCenter": "Midden van formulier"
+    },
+    "PictureSizeMode": {
+      "clip": "Bijsnijden",
+      "stretch": "Uitrekken",
+      "zoom": "Zoom",
+      "stretchH": "Horizontaal uitrekken",
+      "stretchV": "Verticaal uitrekken"
     }
   },
   "color": {
@@ -1724,6 +1750,7 @@
       "glyphMissing": "Het teken \"{{detail}}\" ontbreekt in het lettertype.",
       "fontNotPortable": "Het lettertype \"{{detail}}\" is niet ingesloten: de tekst wordt gemeten en afgedrukt in Liberation Sans.",
       "unsupportedControl": "Dit soort besturingselement wordt niet afgedrukt.",
+      "pictureMissing": "De gedeelde afbeelding „{{detail}}” staat niet meer in de galerij: de afbeelding wordt niet getoond en niet afgedrukt.",
       "aggregateNotAllowed": "Een totaal is in deze sectie niet toegestaan.",
       "sizeClamped": "Een grootte overschrijdt 55,88 cm, de limiet van Access: ze wordt tot die limiet verkleind.",
       "groupingMalformed": "Een groeperingsniveau is leeg of onjuist opgebouwd: er wordt niets gegroepeerd.",
@@ -1976,6 +2003,8 @@
     "colors": "Kleuren",
     "customColor": "Aangepaste kleur…",
     "pickPicture": "Kiezen…",
+    "pickShared": "Kiezen uit de galerij…",
+    "pictureType": { "embedded": "(Ingesloten)" },
     "fontNotPortable": "Geen overdraagbaar lettertype: op een andere computer kan de tekst er anders uitzien.",
     "error": {
       "nameInvalid": "Ongeldige naam: 1 tot 64 tekens, zonder punt (.), uitroepteken (!), accent grave (`) of haakjes ([ ]), en niet beginnend met een spatie.",
@@ -2380,6 +2409,14 @@
     "saveFirst": "Wilt u de wijzigingen in de module '{{name}}' opslaan?"
   },
   "macro": {
+    "convert": {
+      "title": "Macro converteren",
+      "errorHandling": "Foutafhandeling toevoegen aan gegenereerde functies",
+      "comments": "Macro-opmerkingen opnemen",
+      "saveFirst": "De macro moet worden opgeslagen voordat deze wordt geconverteerd. Nu opslaan?",
+      "done": "Conversie van macro '{{macro}}' voltooid: module '{{module}}' gemaakt.",
+      "todo": "{{count}} item(s) vragen uw aandacht: zoek naar TODO in de module."
+    },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "De ingesloten macro verwijderen?",
@@ -3032,6 +3069,15 @@
     "placeholder": "Typ een Python-instructie of ?expressie",
     "errorAt": "(Module {{module}}, regel {{line}})",
     "splitter": "Grootte van het Direct-venster wijzigen"
+  },
+  "imageGallery": {
+    "none": "Geen",
+    "title": "Afbeeldingengalerij",
+    "empty": "Nog geen afbeelding in deze database.",
+    "browse": "Bladeren...",
+    "replace": "Afbeelding vervangen…",
+    "delete": "Verwijderen",
+    "deleteInUse": "Deze afbeelding wordt gebruikt door {{count}} opgeslagen formulier(en) of rapport(en) en kan niet worden verwijderd."
   },
   "themeGallery": {
     "current": "In deze database",

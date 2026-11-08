@@ -2,13 +2,13 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type AggregateOptions } from 'node:sqlite';
-import { BC_LINKS_DDL, BC_OBJECTS_DDL, BC_RELATIONS_DDL, BC_SOURCES_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
+import { BC_LINKS_DDL, BC_OBJECTS_DDL, BC_RELATIONS_DDL, BC_RESOURCES_DDL, BC_SOURCES_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
 import { fold, SQL_AGGREGATES, SQL_FUNCTIONS } from '../../shared/expr/sql';
 import { inTransaction } from './tx';
 
 export const FILE_EXTENSION = '.basecraft';
 export const APPLICATION_ID = 0x42435246; // 'BCRF'
-export const CURRENT_FORMAT = { major: 1, minor: 3 };
+export const CURRENT_FORMAT = { major: 1, minor: 4 };
 
 /** Every CREATE TABLE of a new base's bc_* tables, in order (createBaseFile runs them; openPlainSqlite runs them as TEMP). */
 export const SYSTEM_DDL: readonly string[] = [
@@ -20,6 +20,7 @@ export const SYSTEM_DDL: readonly string[] = [
   BC_OBJECTS_DDL,
   BC_SOURCES_DDL,
   BC_LINKS_DDL,
+  BC_RESOURCES_DDL,
 ];
 
 export interface BaseMeta {

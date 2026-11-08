@@ -74,3 +74,27 @@ describe('relation.create', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('resource.add', () => {
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const file = (name: string, bytes: Uint8Array | string): string => { const f = tmp().replace('x.basecraft', name); fs.writeFileSync(f, bytes); return f; };
+  const names = (p: string): string[] => { const db = new DatabaseSync(p); registerFunctions(db); try { return (db.prepare('SELECT name FROM bc_resources ORDER BY name').all() as { name: string }[]).map((r) => r.name); } finally { db.close(); } };
+  const go = async (ops: unknown[]) => { const p = tmp(); newBase(p, '0.3.1'); return { p, r: await applyScript(p, ops as never, CANON) }; };
+  it('stores the image under the base name of the file, then "name (2)" for the same name', async () => {
+    const f = file('logo.png', PNG);
+    const { p, r } = await go([{ op: 'resource.add', file: f }, { op: 'resource.add', file: f }, { op: 'resource.add', file: f, name: 'Autre' }]);
+    expect(r).toMatchObject({ ok: true, applied: 3 });
+    expect(names(p)).toEqual(['Autre', 'logo', 'logo (2)']);
+  });
+  it.each([
+    ['an SVG renamed .png', () => file('v.png', '<svg xmlns="http://www.w3.org/2000/svg"/>')],
+    ['a missing path', () => '/no/such/image.png'],
+    ['a file over 1 MB', () => file('big.png', Buffer.concat([PNG, Buffer.alloc(1024 * 1024)]))],
+  ])('refuses %s and applies nothing', async (_n, mk) => {
+    const ok = file('ok.png', PNG);
+    const { p, r } = await go([{ op: 'resource.add', file: ok }, { op: 'resource.add', file: mk() }]);
+    expect(r).toMatchObject({ ok: false, index: 1, op: 'resource.add' });
+    expect('message' in r && r.message).toMatch(/\S/);
+    expect(names(p)).toEqual([]);
+  });
+});

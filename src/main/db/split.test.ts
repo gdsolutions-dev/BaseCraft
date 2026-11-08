@@ -10,6 +10,8 @@ import { listRelations } from './relations';
 import { lookupRows } from './rows';
 import { createTable, listTables, removeTable, tableDesign } from './schema';
 import { splitDatabase } from './split';
+import { addResource, listResources } from './resources';
+import { pictureDataUrl } from '../../shared/pictures';
 import { saveStartupOptions, startupOptions } from './startup';
 import { addLinks, linkRows, sourceRows } from '../links/store';
 import { seedSales, seedSalesRelation } from '../query/test-db';
@@ -65,6 +67,14 @@ afterEach(() => {
 });
 
 describe('splitDatabase (C3 R12)', () => {
+  it('the gallery stays with the front-end: the data file has no resources', () => {
+    addResource(front!, 'logo', pictureDataUrl('png', Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1])));
+    splitDatabase(front!, fe, data, '0.0.0');
+    const d = openBaseFile(data, 'write', '0.0.0').db;
+    try { expect(listResources(d)).toEqual([]); } finally { d.close(); }
+    expect(listResources(front!).map((r) => r.name)).toEqual(['logo']);
+  });
+
   it('moves every local table with its rows, rules and relations', () => {
     const before = rows(front!, 'SELECT rowid, Montant FROM Commandes ORDER BY rowid');
     const rule = tableDesign(front!, 'Commandes').fields.find((x) => x.name === 'Montant')!.props.validationRule;

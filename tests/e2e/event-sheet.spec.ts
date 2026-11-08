@@ -95,6 +95,7 @@ test('Event tab: a named macro picked and run; an embedded macro built with Â« â
     await page.getByTestId('ribbon-tab-macroDesign').click();
     await expect(page.getByTestId('cmd-macroRun')).toBeDisabled();
     await expect(page.getByTestId('cmd-singleStep')).toBeDisabled();
+    await expect(page.getByTestId('cmd-convertMacros')).toBeDisabled();
     await page.getByTestId('macro-add-root').fill(fr.macro.action.MessageBox);
     await page.getByTestId('macro-arg-0-Message-input').fill('x');
     await page.keyboard.press('Control+s');   // into the form, no name asked

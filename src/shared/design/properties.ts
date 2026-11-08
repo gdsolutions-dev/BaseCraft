@@ -44,6 +44,8 @@ const LAID_OUT = CONTROL_KINDS.filter((k) => k !== 'pageBreak');
 const GRIDLINED = LAID_OUT.filter((k) => k !== 'line');   // print never drew gridlines on a line
 /** The kinds whose text inset a margin moves (the others ignore *Margin). */
 const MARGINED: PropertyTarget[] = ['label', 'textBox', 'comboBox', 'listBox'];
+/** Targets that take a picture (F3): embedded in the document or shared from the gallery. */
+const PICTURED: PropertyTarget[] = ['form', 'report', 'image', 'commandButton'];
 const SIDES = ['Top', 'Bottom', 'Left', 'Right'];
 const each = <T>(keys: DefaultKey[], v: T): Partial<Record<DefaultKey, T>> => Object.fromEntries(keys.map((k) => [k, v]));
 
@@ -129,8 +131,12 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('Left', 'format', 'twips', [...CONTROL_KINDS]),
   p('Top', 'format', 'twips', [...CONTROL_KINDS]),
   p('Height', 'format', 'twips', [...SECTION_KINDS, ...CONTROL_KINDS]),
-  p('Picture', 'format', 'picture', ['image']),
+  p('PictureType', 'format', 'enum', PICTURED, 'embedded', { options: ['embedded', 'shared'] }),
+  p('Picture', 'format', 'picture', PICTURED),
+  p('PictureTiling', 'format', 'bool', ['form', 'report', 'image'], false),
   p('SizeMode', 'format', 'enum', ['image'], 'zoom', { options: ['clip', 'stretch', 'zoom'] }),
+  p('PictureAlignment', 'format', 'enum', ['form', 'report', 'image'], 'center', { options: ['topLeft', 'topRight', 'center', 'bottomLeft', 'bottomRight', 'formCenter'] }),
+  p('PictureSizeMode', 'format', 'enum', ['form', 'report'], 'clip', { options: ['clip', 'stretch', 'zoom', 'stretchH', 'stretchV'] }),
   p('LineSlant', 'format', 'bool', ['line'], false),
   p('Pages', 'format', 'textList', ['tabControl']),
   p('Name', 'other', 'text', [...CONTROL_KINDS]),

@@ -3,7 +3,7 @@ import { validateDesignDoc, type ControlDef, type ControlKind, type DesignDoc } 
 import { MAX_TWIPS } from './units';
 import { INSERT_ROW_HEIGHT, ROW_GAP, emptyCellsOf, readLayouts, reflow, withLayouts } from '../../shared/design/layout';
 import { createLayout, insertCells, removeLayout, membersOf, selectionIn, selectionOf } from '../../shared/design/layout-edit';
-import { CONTAINER_KINDS, controlRect, coreReducer, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, syncLayouts,
+import { CONTAINER_KINDS, controlRect, coreReducer, designerReducer, docWidth, documentKind, findControl, initDesigner, sectionBottomLimit, setDocPicture, syncLayouts,
   uniqueName, type DesignerAction, type DesignerState } from './designer-model';
 
 const ctl = (kind: ControlKind, name: string, left = 0, top = 0, width = 2268, height = 340, children?: ControlDef[]): ControlDef =>
@@ -636,5 +636,23 @@ describe('L5 cellules vides dans le concepteur', () => {
     expect(rect(w, 'Ville').width).toBe(3000);
     const n = act(initDesigner(d), { type: 'setProp', targets: t, name: 'Name', value: 'X' });
     expect(n.doc).toBe(d);
+  });
+});
+
+describe('setDocPicture', () => {
+  const base = (): DesignDoc => ({ ...fixture(), props: { GridX: 4, PictureTiling: true } });
+  it('sets the type and the picture, keeps the other picture props', () => {
+    const d = setDocPicture(base(), { type: 'shared', value: 'Motif' });
+    expect(d.props).toEqual({ GridX: 4, PictureTiling: true, PictureType: 'shared', Picture: 'Motif' });
+  });
+  it('null removes both and keeps PictureTiling', () => {
+    const d = setDocPicture(setDocPicture(base(), { type: 'shared', value: 'Motif' }), null);
+    expect(d.props).toEqual({ GridX: 4, PictureTiling: true });
+  });
+  it('returns the same doc when nothing changes', () => {
+    const d = setDocPicture(base(), { type: 'shared', value: 'Motif' });
+    expect(setDocPicture(d, { type: 'shared', value: 'Motif' })).toBe(d);
+    const b = base();
+    expect(setDocPicture(b, null)).toBe(b);
   });
 });

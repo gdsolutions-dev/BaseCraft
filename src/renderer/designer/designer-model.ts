@@ -5,6 +5,7 @@ import { CELL_PROPS, cellAt, labelOf, readLayouts, reflow, sectionRef, spanOf, w
 import { deleteLines, emptyCellAt, fillCell, placeInLayout, pruneLayouts, setCellProp, setCellSize, slotOf } from '../../shared/design/layout-edit';
 import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
 import { effectiveProp, PROPERTY_CATALOG } from '../../shared/design/properties';
+import type { PictureType } from '../../shared/pictures';
 import { checkPropValue } from './property-sheet-model';
 import { reportWidth } from '../../shared/report/model';
 import { resizeRect, intersects, contains, type Handle, type Rect } from './geometry';
@@ -150,8 +151,15 @@ export function setDocProp(doc: DesignDoc, name: string, value: unknown): Design
   return props === doc.props ? doc : { ...doc, props };
 }
 
+/** L'image d'arrière-plan du document : le type et l'image d'un coup, ou les deux retirés (`null`) ; les autres propriétés d'image restent. */
+export function setDocPicture(doc: DesignDoc, pic: { type: PictureType; value: string } | null): DesignDoc {
+  return setDocProp(setDocProp(doc, 'PictureType', pic?.type), 'Picture', pic?.value);
+}
+
 const sameRef = (a: DesignDoc['recordSource'], b: DesignDoc['recordSource']): boolean => a === b
   || (!!a && !!b && a.kind === b.kind && ('name' in a ? a.name : undefined) === ('name' in b ? b.name : undefined) && ('sql' in a ? a.sql : undefined) === ('sql' in b ? b.sql : undefined));
+
+export const setProps = (doc: DesignDoc, targets: PropTarget[], name: string, value: unknown): DesignDoc => targets.reduce((d, t) => setProp(d, t, name, value), doc);
 
 function setProp(doc: DesignDoc, t: PropTarget, name: string, value: unknown): DesignDoc {
   if (t.kind === 'cell') {   // cellule vide : sa taille et sa mise en forme ; le reste (Name, Top, Left) ne lui appartient pas

@@ -223,7 +223,7 @@ describe('a data file opened directly (C3 R2–R6)', () => {
   it('an older data file is migrated only by a session alone', () => {
     const old = join(dir, 'old.basecraft');
     seed(old, true);
-    raw(old, "DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value='2' WHERE key='format_minor'"); // a 1.2 data file
+    raw(old, "DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value='2' WHERE key='format_minor'"); // a 1.2 data file
     const b = joinPresence(old, 'b', { now: () => now })!;
     expect(() => Session.open(old, deps('a'))).toThrow(/^bc:dataFileInUse\|/);
     expect(readdirSync(`${old}.users`)).toEqual(['b.lock']);
@@ -234,14 +234,14 @@ describe('a data file opened directly (C3 R2–R6)', () => {
     expect(s.state.shared).toBeUndefined();
     expect(s.state.migratedBackupPath).toBeTruthy();
     expect(existsSync(`${old}.lock`)).toBe(true);
-    expect(value(old, "SELECT value FROM bc_meta WHERE key = 'format_minor'")).toBe('3');
+    expect(value(old, "SELECT value FROM bc_meta WHERE key = 'format_minor'")).toBe('4');
     expect(open(old, { ...deps('c'), migrate: false }).state).toMatchObject({ readOnly: true, readOnlyReason: 'heldByOther' });
   });
 
   it('the Runtime never migrates an older data file', () => {
     const old = join(dir, 'old.basecraft');
     seed(old, true);
-    raw(old, "DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value='2' WHERE key='format_minor'");
+    raw(old, "DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources; UPDATE bc_meta SET value='2' WHERE key='format_minor'");
     expect(() => Session.open(old, { ...deps('a'), migrate: false })).toThrow(/needsDesigner/);
     expect(readdirSync(`${old}.users`)).toEqual([]);
   });

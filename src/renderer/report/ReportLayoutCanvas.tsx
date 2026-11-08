@@ -15,6 +15,7 @@ import { CLICK_PX, gridStep, twipsToPx } from '../designer/units';
 import { FLOW_ROWS, type FlowData } from './layout-flow';
 import { containerAt, deleteTargets, overlayFor, placement, resizeTo, selectionAt, stepDrag, type DragStep, type WidthDrag } from './layout-overlay';
 import { faces } from './ReportPreviewView';
+import { withToolProps } from '../designer/image-gallery-model';
 import './preview.css';
 
 const SCALE = twipsToPx(1);   // px par twip : la taille réelle de l'aperçu (zoom 100 %)
@@ -96,7 +97,7 @@ export function ReportLayoutCanvas({ flow, state, dispatch, readOnly, busy, noti
       state.snap && !e.altKey ? gridStep(state.doc) : null, SCALE);
     if (!at) return;
     const parent = containerAt(report, state.doc, d.x0 / SCALE, d.y0 / SCALE);   // commencé dans un groupe d'options ou un onglet : il y entre
-    dispatch({ type: 'insert', section: at.section, controls: host.newControls(tool.kind, at.rect, at.section, state.doc),
+    dispatch({ type: 'insert', section: at.section, controls: withToolProps(host.newControls(tool.kind, at.rect, at.section, state.doc), tool.props),
       at: { x: at.rect.left + at.rect.width / 2, y: at.rect.top + at.rect.height / 2 }, ...(parent ? { parent } : {}) });
     if (!tool.locked) onTool({ kind: null, locked: false });
   };

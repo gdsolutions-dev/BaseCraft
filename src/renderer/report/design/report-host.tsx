@@ -1,5 +1,6 @@
 // Hôte des états pour le concepteur générique (A4) : outils de la boîte à outils, aperçu des contrôles en mode Création, création
 // d'un contrôle posé, menu de la barre de section (En-tête/pied de page, En-tête/pied d'état), contexte de la Feuille de propriétés.
+import { DesignImage } from '../../form/controls/ImageCtl';
 import type { TFunction } from 'i18next';
 import {
   ChevronDown, ChevronsUpDown, CircleDot, Image as ImageIcon, LetterText, Minus, SeparatorHorizontal, Square, SquareCheck, TextCursorInput,
@@ -80,13 +81,7 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
       case 'comboBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
       case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
-      case 'image': {
-        const pic = prop(c, 'Picture');
-        const fit = ({ clip: 'none', stretch: 'fill', zoom: 'contain' } as Record<string, CSSProperties['objectFit']>)[String(prop(c, 'SizeMode'))] ?? 'contain';
-        return <div className="rz rz-image" style={st}>
-          {typeof pic === 'string' && pic.startsWith('data:image/') ? <img src={pic} alt="" draggable={false} style={{ objectFit: fit }} /> : <ImageIcon size={18} aria-hidden />}
-        </div>;
-      }
+      case 'image': return <DesignImage c={c} className="rz rz-image" style={st} />;
       case 'rectangle': return <div className="rz" style={st} />;
       case 'line': {
         const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)

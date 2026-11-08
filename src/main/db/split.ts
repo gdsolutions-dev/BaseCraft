@@ -23,7 +23,7 @@ export function splitDatabase(front: DatabaseSync, frontPath: string, target: st
     const d = openBaseFile(target, 'write', appVersion).db;
     try {
       inTransaction(d, () => {
-        d.exec(`DELETE FROM bc_objects WHERE kind <> 'query'; DELETE FROM bc_links; DELETE FROM bc_sources`);
+        d.exec(`DELETE FROM bc_objects WHERE kind <> 'query'; DELETE FROM bc_links; DELETE FROM bc_sources; DELETE FROM bc_resources`);
         const set = d.prepare('INSERT INTO bc_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
         set.run('db_uuid', randomUUID());
         set.run('options', JSON.stringify({ startup: { dataFile: true } }));

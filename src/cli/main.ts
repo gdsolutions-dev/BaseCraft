@@ -11,7 +11,7 @@ import { CANON } from '../shared/coerce';
 export interface CliIo { out(s: string): void; err(s: string): void }
 
 /** Exit codes: 0 success, 1 operation refused, 2 usage error. */
-export function run(argv: string[], io: CliIo): number {
+export async function run(argv: string[], io: CliIo): Promise<number> {
   try {
     if (argv[0] === '--version') { io.out(`basecraft-cli ${version}\n`); return 0; }
     if (argv[0] === 'new') {
@@ -31,8 +31,8 @@ export function run(argv: string[], io: CliIo): number {
         throw e;
       }
       checkTarget(argv[2]);
-      const r = applyScript(argv[2], ops, CANON);
-      if (r.ok) return 0;
+      const r = await applyScript(argv[2], ops, CANON);
+      if (r.ok) { if (r.activeContent) io.out('This file contains active content; BaseCraft will ask to enable it when opened.\n'); return 0; }
       io.err(`${r.index >= 0 ? `op #${r.index} ${r.op}: ` : ''}${r.message}
 `);
       return 1;
@@ -64,5 +64,5 @@ const isEntry = (): boolean => {
   try { return !!entry && import.meta.url === pathToFileURL(fs.realpathSync(entry)).href; } catch { return false; }
 };
 if (isEntry()) {
-  process.exitCode = run(process.argv.slice(2), { out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s) });
+  process.exitCode = await run(process.argv.slice(2), { out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s) });
 }

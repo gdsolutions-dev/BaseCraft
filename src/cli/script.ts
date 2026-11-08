@@ -3,12 +3,13 @@ import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import type { LocaleInfo } from '../shared/locale-format';
 import { BaseFileError, checkBaseFile, CURRENT_FORMAT, registerFunctions } from '../main/db/file-format';
+import { activeContent } from '../main/db/active-content';
 import { acquireLock } from '../main/db/lock';
 import { CliUsageError } from './errors';
 import { OP_HANDLERS } from './ops';
 
 export type ScriptOp = { op: string; [k: string]: unknown };
-export type ScriptResult = { ok: true; applied: number } | { ok: false; index: number; op: string; message: string };
+export type ScriptResult = { ok: true; applied: number; activeContent: boolean } | { ok: false; index: number; op: string; message: string };
 
 export function parseScript(text: string): ScriptOp[] {
   let json: unknown;
@@ -44,24 +45,32 @@ export function checkTarget(basePath: string): void {
 }
 
 /** All-or-nothing: ops run on a temp copy that replaces the base only if every op succeeded. */
-export function applyScript(basePath: string, ops: ScriptOp[], info: LocaleInfo): ScriptResult {
-  if (ops.length === 0) return { ok: true, applied: 0 };
+export async function applyScript(basePath: string, ops: ScriptOp[], info: LocaleInfo): Promise<ScriptResult> {
+  if (ops.length === 0) {
+    try {
+      const db = new DatabaseSync(basePath, { readOnly: true });
+      try { return { ok: true, applied: 0, activeContent: activeContent(db).present }; } finally { db.close(); }
+    } catch (e) {
+      return { ok: false, index: -1, op: 'file', message: e instanceof Error ? e.message : String(e) };
+    }
+  }
   const got = acquireLock(basePath, crypto.randomUUID());
   if (got.status === 'cannotLock') return { ok: false, index: -1, op: 'lock', message: `cannot lock ${basePath}: ${got.reason}` };
   if (got.status === 'heldByOther') return { ok: false, index: -1, op: 'lock', message: `${basePath} is in use by ${got.info.user}@${got.info.host}${got.stale ? `; the lock looks stale (its holder may have crashed): remove ${basePath}.lock if no one is using the base` : ''}` };
   const tmp = `${basePath}.cli-tmp`;
   try {
     fs.copyFileSync(basePath, tmp);
-    let result: ScriptResult = { ok: true, applied: ops.length };
+    let result: ScriptResult = { ok: true, applied: ops.length, activeContent: false };
     const db = new DatabaseSync(tmp);
     try {
       registerFunctions(db);
       for (const [index, { op, ...args }] of ops.entries()) {
         const handler = Object.hasOwn(OP_HANDLERS, op) ? OP_HANDLERS[op] : undefined;
         let out: { ok: true } | { ok: false; message: string };
-        try { out = handler ? handler(db, args, info) : { ok: false, message: `unknown op: ${op}` }; } catch (e) { out = { ok: false, message: e instanceof Error ? e.message : String(e) }; }
+        try { out = handler ? await handler(db, args, info) : { ok: false, message: `unknown op: ${op}` }; } catch (e) { out = { ok: false, message: e instanceof Error ? e.message : String(e) }; }
         if (!out.ok) { result = { ok: false, index, op, message: out.message }; break; }
       }
+      if (result.ok) result.activeContent = activeContent(db).present; // read only: the CLI never approves
     } finally { db.close(); }
     if (result.ok) fs.renameSync(tmp, basePath);
     return result;

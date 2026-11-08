@@ -15,6 +15,7 @@ export class PageCache {
   private reread = new Set<number>(); // written while loading: the reply may predate the write
   private settled = new Map<number, Promise<void>>(); // page → resolves when its load ended (loaded, failed or dropped)
   private requests = 0;
+  private writes = 0; // set() and invalidate() count: a reread that saw one is dropped
   private loaded: (() => void)[] = [];
   private failed: ((e: unknown) => void)[] = [];
 
@@ -42,6 +43,7 @@ export class PageCache {
     if (!page) this.stale.set(p, (page = []));
     page[rowIndex % this.pageSize] = row;
     if (this.loading.has(p)) this.reread.add(p);
+    this.writes++;
   }
 
   onLoaded(cb: () => void): void { this.loaded.push(cb); }
@@ -52,6 +54,27 @@ export class PageCache {
     this.pages.clear();
     this.loading.clear(); // replies to earlier requests are dropped
     this.reread.clear();
+    this.writes++;
+  }
+
+  /** A refresh (another workstation wrote): unlike invalidate, the loaded pages stay fresh, so editable (a key typed meanwhile is
+   *  not lost on a read-only row), while they are read again. Resolves the swap that puts the new rows in at once; null when a
+   *  row was written or the cache invalidated meanwhile (the reply may predate it: read again later); undefined past one
+   *  screen of pages (invalidate then). The swap itself does nothing and returns false after such a write. */
+  async rereadPages(): Promise<(() => boolean) | null | undefined> {
+    const ps = [...this.pages.keys()];
+    // ponytail: past 4 pages (Find or Select All read them) the old way, which locks the rows until reread; upgrade path: the visible pages only
+    if (ps.length > 4) return undefined;
+    const writes = this.writes;
+    const got = await Promise.all(ps.map((p) => this.fetch(p * this.pageSize, this.pageSize)));
+    if (this.writes !== writes) return null;
+    return () => {
+      if (this.writes !== writes) return false;
+      this.invalidate();
+      ps.forEach((p, i) => { this.pages.set(p, got[i]!.rows); this.stale.delete(p); });
+      this.loaded.forEach((cb) => cb());
+      return true;
+    };
   }
 
   /** Resolves once the pages of rows first..last are loaded (a failed or dropped load ends the wait, the rows stay absent).

@@ -286,6 +286,26 @@ describe('PythonHost interrupt (R6)', () => {
     await expect(p).rejects.toThrow('bc:pythonRestarted')
   })
 
+  it('an interrupt lost in Pyodide (its read-then-clear of the cell is not atomic) is sent again while the call runs', async () => {
+    vi.useFakeTimers()
+    const { h, w, p } = await running()
+    const init = w.received.find((m) => m.t === 'init') as Extract<HostToWorker, { t: 'init' }>
+    const cell = new Int32Array(init.interrupt)
+    h.interrupt()
+    expect(cell[0]).toBe(2)
+    cell[0] = 0 // Pyodide read 0, then wrote 0 over our 2
+    vi.advanceTimersByTime(499)
+    expect(cell[0]).toBe(0)
+    vi.advanceTimersByTime(1)
+    expect(cell[0]).toBe(2) // sent again
+    w.emit({ t: 'done', id: 1, ok: false, error: { type: 'KeyboardInterrupt', message: '', module: null, line: null, traceback: '' } })
+    await expect(p).rejects.toThrow()
+    cell[0] = 0
+    vi.advanceTimersByTime(5000)
+    expect(cell[0]).toBe(0) // never once the call ended: a stale 2 would hit the next run
+    expect(w.terminated).toBe(false)
+  })
+
   it('simulateStuck makes the next interrupt a no-op for the worker', async () => {
     const { h, w } = await running()
     const init = w.received.find((m) => m.t === 'init') as Extract<HostToWorker, { t: 'init' }>

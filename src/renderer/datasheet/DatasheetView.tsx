@@ -513,9 +513,22 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const dirty = buffer.pending !== null;
   const missedRefresh = useRef(false); // C3 R10: a refresh signal came while a row was being edited
   const refreshIfMissed = (editorOpen: boolean) => {
-    if (!missedRefresh.current || buffer.pending !== null || editorOpen || !live.current.shape) return;
+    const s = live.current.shape;
+    if (!missedRefresh.current || buffer.pending !== null || editorOpen || !s) return;
     missedRefresh.current = false;
-    reloadRows();
+    // The rows stay editable while read again (invalidate would lock them: a key typed meanwhile was lost), then are swapped in,
+    // unless an edit began meanwhile: the refresh then waits for its end, as above.
+    void Promise.all([countRows(activeFilter(live.current.filter), true), s.cache.rereadPages()]).then(([count, swap]) => {
+      if (!alive.current || live.current.shape !== s) return;
+      if (swap === undefined) { reloadRows(); return; }
+      const editing = buffer.pending !== null || (live.current.active && cellEditorOpen());
+      if (swap === null || editing || !swap()) {
+        missedRefresh.current = true;
+        if (!editing) cmds.current.refreshIfMissed(false); // a row written meanwhile: its reply may predate it, read again
+        return;
+      }
+      setRows({ count, more: false });
+    }, dataError);
   };
   useEffect(() => { dispatch({ type: 'setDirty', id: tab.id, dirty }); }, [dirty, tab.id, dispatch]);
   useEffect(() => () => { void dispatch({ type: 'setDirty', id: tab.id, dirty: false }); }, [tab.id, dispatch]);

@@ -10,6 +10,7 @@ import { getObject, saveObject, setObjectDescription } from '../main/db/objects'
 import { isTableName, tableDesign } from '../main/db/schema';
 import { describeQuerySource } from '../main/query/source';
 import type { OpOutcome } from './ops';
+import { checkEventBindings } from './ops-macro';
 
 type Kind = 'form' | 'report';
 const refuse = (message: string): OpOutcome => ({ ok: false, message });
@@ -91,6 +92,8 @@ function create(kind: Kind, db: DatabaseSync, args: Record<string, unknown>, inf
       const field = kind === 'report' ? bareName(src) : src; // a report also takes [Field]
       if (!fields.some((f) => sameName(f.name, field))) return refuse(`control ${c.name}: ControlSource "${src}" is not a field of the record source`);
     }
+    const events = checkEventBindings(db, kind, design);
+    if (events.length) return refuse(events.join('; '));
   }
   const r = saveObject(db, kind, name, design, null);
   if (!r.ok) return refuse(r.reason === 'nameExists' ? `${kind} name already used: ${name}` : r.reason === 'nameInvalid' ? `invalid ${kind} name: ${name}` : r.reason);

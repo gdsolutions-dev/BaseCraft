@@ -9,9 +9,12 @@ import { checkQueryDefinition } from '../main/query/source';
 import { isActionDefinition } from '../shared/query/definition';
 import { parseSql } from '../shared/query/sql-parser';
 import { formCreate, reportCreate } from './ops-design';
+import { MACRO_HANDLERS } from './ops-macro';
+import { MODULE_HANDLERS } from './ops-module';
+import { rowsInsert } from './ops-data';
 
 export type OpOutcome = { ok: true } | { ok: false; message: string };
-export type OpHandler = (db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo) => OpOutcome;
+export type OpHandler = (db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo) => OpOutcome | Promise<OpOutcome>;
 
 const FIELD_TYPE_SET: Record<FieldType, true> = { autoNumber: true, shortText: true, longText: true, number: true, currency: true, dateTime: true, yesNo: true, hyperlink: true }; // a new FieldType fails to compile here
 const FIELD_TYPES: readonly string[] = Object.keys(FIELD_TYPE_SET);
@@ -99,4 +102,4 @@ function queryCreate(db: DatabaseSync, args: Record<string, unknown>): OpOutcome
   return { ok: true };
 }
 
-export const OP_HANDLERS: Record<string, OpHandler> = { 'table.create': tableCreate, 'relation.create': relationCreate, 'query.create': queryCreate, 'form.create': formCreate, 'report.create': reportCreate };
+export const OP_HANDLERS: Record<string, OpHandler> = { 'table.create': tableCreate, 'relation.create': relationCreate, 'query.create': queryCreate, 'form.create': formCreate, 'report.create': reportCreate, 'rows.insert': rowsInsert, ...MACRO_HANDLERS, ...MODULE_HANDLERS };

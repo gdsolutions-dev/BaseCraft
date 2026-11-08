@@ -115,4 +115,43 @@ describe('PageCache', () => {
     c.invalidate(); c.get(0); await flush();
     expect(c.get(0)).toEqual({ rowid: 1, values: ['0'] });
   });
+
+  it('reread: the loaded pages stay fresh (editable) while read again, then are swapped in at once', async () => {
+    let tag = '';
+    const fetch = vi.fn((o: number, n: number) => Promise.resolve(rows(o, n, tag)));
+    const c = new PageCache(fetch, 10);
+    c.get(0); c.get(12); await flush();
+    tag = 'new';
+    const reading = c.rereadPages();
+    expect(c.fresh(3)).toBe(true);
+    expect(c.get(3)).toEqual({ rowid: 4, values: ['3'] });
+    const swap = await reading;
+    expect(c.get(3)?.values).toEqual(['3']); // nothing changes before the swap
+    expect(swap!()).toBe(true);
+    expect(c.fresh(3)).toBe(true);
+    expect(c.get(3)?.values).toEqual(['new3']);
+    expect(c.get(12)?.values).toEqual(['new12']);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('reread gives no swap when a row was written or the cache invalidated meanwhile', async () => {
+    const fetch = vi.fn((o: number, n: number) => Promise.resolve(rows(o, n)));
+    const c = new PageCache(fetch, 10);
+    c.get(0); await flush();
+    const written = c.rereadPages();
+    c.set(2, { rowid: 3, values: ['mine'] });
+    expect(await written).toBeNull();
+    const dropped = c.rereadPages();
+    c.invalidate();
+    expect(await dropped).toBeNull();
+  });
+
+  it('reread of more pages than one screen leaves it to invalidate', async () => {
+    const fetch = vi.fn((o: number, n: number) => Promise.resolve(rows(o, n)));
+    const c = new PageCache(fetch, 10);
+    for (let p = 0; p < 5; p++) c.get(p * 10);
+    await flush();
+    expect(await c.rereadPages()).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
 });

@@ -18,6 +18,7 @@ export class PythonError extends Error {
 
 const LOG_MAX = 1000
 const INTERRUPT_GRACE_MS = 2000 // R6
+const INTERRUPT_RESEND_MS = 500 // a lost interrupt sent again (3 times, inside the grace)
 const SLOW_MS = 2000 // R4
 
 /** One worker with its bridge and shared memory; dropped as a whole when the worker dies. */
@@ -164,10 +165,20 @@ export function createPythonHost() {
     interrupt(): void {
       const s = session
       if (!s || flight.length === 0) return
+      const cell = new Int32Array(s.interrupt)
+      const sent = !stuck
       if (stuck) stuck = false
-      else Atomics.store(new Int32Array(s.interrupt), 0, 2)
+      else Atomics.store(cell, 0, 2)
       // R9: the innermost call (a dialog's button while the caller waits on the bridge); else the one the worker runs (queued ones come later)
       const target = s.server.pendingCalls() > 0 ? flight[flight.length - 1]! : flight[0]!
+      // Pyodide reads the cell, then writes 0 over it (not atomic): a 2 stored in between is lost and the call never stops (seen
+      // on the Linux CI, about 1 in 40). Sent again while that call runs, before its grace ends.
+      const resend = (left: number): void => { setTimeout(() => {
+        if (session !== s || !flight.includes(target)) return
+        if (Atomics.load(cell, 0) === 0) Atomics.store(cell, 0, 2)
+        if (left > 1) resend(left - 1)
+      }, INTERRUPT_RESEND_MS) }
+      if (sent) resend(3)
       if (killTimer?.id === target) return
       clearKill() // re-target: a newer innermost call started since the timer was armed
       const arm = (id: number): void => {

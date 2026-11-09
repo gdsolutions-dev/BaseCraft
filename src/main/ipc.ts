@@ -22,7 +22,7 @@ import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
   basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg,
+  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
@@ -769,6 +769,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.objectsSetDescription, (k, n, d) => tableOp(() => need().setDescription(k === 'table' ? k : objectKind(k), lookupName(n), description(d))));
   handle(CH.sourcesDescribe, (r, p) => need().describeSource(sourceRef(r), p === undefined ? undefined : queryParams(p)));
   handle(CH.sourcesPage, (r, q) => need().pageSource(sourceRef(r), sourcePageRequest(q)));
+  handle(CH.chartsData, (q) => need().chartData(chartDataRequest(q)));
   handle(CH.sourcesSave, (r, q) => rowWrite(() => need().saveSource(...sourceSaveRequest(r, q))));
   handle(CH.sourcesAutoLookup, (r, v) => need().autoLookup(...autoLookupRequest(r, v)));
   handle(CH.queriesActionCount, (r, p) => contentRefused(() => need().actionCount(queryRef(r), queryParams(p))));

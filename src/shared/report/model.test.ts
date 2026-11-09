@@ -347,3 +347,15 @@ describe('readReport with a theme (F2)', () => {
     expect(r.issues.map((i) => i.code)).toContain('fontNotPortable');
   });
 });
+
+describe('readReport : graphique (F4)', () => {
+  const chartCtl = ctl('chart', 'Graph', { left: 100, top: 200, width: 3000, height: 2000, ChartAxis: ['Ville'], ChartValues: [{ field: 'Montant', agg: 'sum' }] });
+  const spec = (opts: Parameters<typeof readReport>[2]) => readReport(doc({ sections: [sec('detail', undefined, [chartCtl])] }), fields, opts).detail!.controls[0]!;
+  const data = { columns: [], rows: [], truncated: false };
+  it('un contrôle chart garde sa géométrie, ses données et le titre localisé par défaut', () => {
+    const c = spec({ charts: { Graph: data }, chartLabels: { title: 'Titre du graphique', empty: '(vide)' } });
+    expect(c).toMatchObject({ kind: 'chart', left: 100, top: 200, width: 3000, height: 2000 });
+    expect(c.chart).toMatchObject({ data, format: { title: 'Titre du graphique', emptyLabel: '(vide)' }, spec: { axis: ['Ville'] }, fontFamily: 'Inter' });
+  });
+  it('sans données : data null', () => expect(spec({}).chart!.data).toBeNull());
+});

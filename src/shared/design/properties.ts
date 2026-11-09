@@ -3,11 +3,13 @@
 // (une valeur sans clé, comme DecimalPlaces '0'…'15', s'affiche telle quelle).
 // Valeurs stockées (contrat 1.4) : longueurs en twips, couleurs ColorValue (colors.ts), expressions canoniques.
 // A4 et A5 ajoutent leurs entrées en fin de tableau, seulement si le nom n'existe pas : un nom n'a qu'un descripteur.
+import { CHART_TYPES } from '../chart/spec';
 import { CONTROL_KINDS, SECTION_KINDS, type ControlKind, type SectionKind } from './model';
 
 export type PropertyTarget = 'form' | 'report' | 'emptyCell' | SectionKind | ControlKind;
 export type PropertyEditorKind = 'text' | 'number' | 'twips' | 'bool' | 'enum' | 'color' | 'expression' | 'criteria'
-  | 'controlSource' | 'recordSource' | 'rowSource' | 'objectName' | 'fieldList' | 'picture' | 'textList' | 'event' | 'font';
+  | 'controlSource' | 'recordSource' | 'rowSource' | 'objectName' | 'fieldList' | 'picture' | 'textList' | 'event' | 'font'
+  | 'chart' /* ChartSource, ChartAxis, ChartValues, ChartSeries : édités dans les paramètres du graphique, la feuille les montre en lecture seule */;
 /** A per-target default key: a target, or a target inside a form or a report (C5; sections allowed too, e.g. `report:detail`). */
 export type DefaultKey = PropertyTarget | `${'form' | 'report'}:${SectionKind | ControlKind}`;
 export interface PropertyDescriptor { name: string; tab: 'format' | 'data' | 'event' | 'other'; editor: PropertyEditorKind;
@@ -27,11 +29,11 @@ export function defaultFor(d: PropertyDescriptor, target: PropertyTarget, object
 const BOUND: ControlKind[] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox'];
 const LISTS: ControlKind[] = ['comboBox', 'listBox'];
 const TEXT: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'commandButton'];
-const BOXED: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'optionGroup', 'commandButton', 'rectangle', 'image', 'subform'];
+const BOXED: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'optionGroup', 'commandButton', 'rectangle', 'image', 'subform'];   // le graphique a ses propres lignes (ChartBack*, ChartBorder*)
 const BORDERED: ControlKind[] = ['label', 'textBox', 'checkBox', 'comboBox', 'listBox', 'optionGroup', 'rectangle', 'line', 'image', 'subform'];
 /** Controls that take the keyboard focus in the tab order (Tab Stop, Tab Index, Status Bar Text). */
 const INPUTS: ControlKind[] = [...BOUND, 'commandButton'];
-const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'image', 'tabControl'];
+const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'image', 'tabControl', 'chart'];
 const FOCUSABLE: ControlKind[] = [...INPUTS, 'optionButton', 'subform']; // Enter/Exit: the option group has them, the tab control does not
 // Got/Lost Focus: the option group itself has none (its buttons do), nor the form (Access fires them only when no control can take the focus)
 const GOT_FOCUS: PropertyTarget[] = ['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton'];
@@ -123,8 +125,8 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('Locked', 'data', 'bool', [...BOUND, 'subform'], false),
   p('OptionValue', 'data', 'number', ['optionButton', 'checkBox'], undefined, { integer: true }), // inside an option group
   p('SourceObject', 'data', 'objectName', ['subform'], ''),
-  p('LinkMasterFields', 'data', 'fieldList', ['subform'], ''),
-  p('LinkChildFields', 'data', 'fieldList', ['subform'], ''),
+  p('LinkMasterFields', 'data', 'fieldList', ['subform', 'chart'], ''),   // graphique : formulaires seulement (feuille de propriétés)
+  p('LinkChildFields', 'data', 'fieldList', ['subform', 'chart'], ''),
   // A4 additions (only the names the foundation lacked). Left/Top/Height mirror ControlDef/SectionDef fields; Pages has no default (readers use ?? []);
   // PageIndex is deliberately not a descriptor (an internal key of a control placed on a tab page).
   p('RecordSelectors', 'format', 'bool', ['form'], true),
@@ -166,6 +168,53 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('OnNoData', 'event', 'event', ['report']),
   p('OnFormat', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
   p('OnPrint', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
+  // F4 : le graphique moderne (la spécification vit à plat dans les props du contrôle)
+  p('ChartType', 'format', 'enum', ['chart'], 'columnClustered', { options: [...CHART_TYPES] }),
+  p('HasTitle', 'format', 'bool', ['chart'], true),
+  p('ChartTitle', 'format', 'text', ['chart']), // sans défaut stocké : le défaut est localisé (chart.defaultTitle), lu par readChartFormat
+  p('HasLegend', 'format', 'bool', ['chart'], true),
+  p('LegendPosition', 'format', 'enum', ['chart'], 'top', { options: ['top', 'bottom', 'left', 'right'] }),
+  p('HasAxisTitles', 'format', 'bool', ['chart'], true),
+  p('AxisTitleX', 'format', 'text', ['chart'], ''),
+  p('AxisTitleY', 'format', 'text', ['chart'], ''),
+  p('AxisSecTitle', 'format', 'text', ['chart'], ''),
+  // Lignes des captures 12 et 13 : fond et cadre (défauts qui ne changent aucun dessin : fond transparent, bordure transparente), polices, axes.
+  p('ChartBackStyle', 'format', 'enum', ['chart'], 'transparent', { options: ['normal', 'transparent'] }),
+  p('ChartBackColor', 'format', 'color', ['chart'], 'theme:surface'),
+  p('ChartBorderStyle', 'format', 'enum', ['chart'], 'transparent', { options: ['transparent', 'solid', 'dashed', 'dotted'] }),
+  p('ChartBorderWidth', 'format', 'number', ['chart'], 0, { min: 0, max: 6, integer: true }), // px ; 0 = filet de 1 px
+  p('ChartBorderColor', 'format', 'color', ['chart'], 'theme:border'),
+  p('LegendFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('LegendFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
+  p('TitleFontName', 'format', 'font', ['chart'], '(Body)'),
+  p('TitleFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('TitleFontSize', 'format', 'number', ['chart'], 14, { min: 6, max: 72, integer: true }),
+  p('HasSubtitle', 'format', 'bool', ['chart'], false),
+  p('Subtitle', 'format', 'text', ['chart'], ''),
+  p('SubtitleFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('SubtitleFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
+  p('AxisXFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('AxisXFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
+  p('AxisRange', 'format', 'enum', ['chart'], 'auto', { options: ['auto', 'manual'] }),
+  p('AxisMin', 'format', 'number', ['chart']),
+  p('AxisMax', 'format', 'number', ['chart']),
+  p('AxisFormat', 'format', 'text', ['chart'], ''),
+  p('AxisUnits', 'format', 'enum', ['chart'], 'none', { options: ['none', 'hundreds', 'thousands', 'millions', 'billions'] }),
+  p('AxisFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('AxisFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
+  p('AxisSecRange', 'format', 'enum', ['chart'], 'auto', { options: ['auto', 'manual'] }),
+  p('AxisSecMin', 'format', 'number', ['chart']),
+  p('AxisSecMax', 'format', 'number', ['chart']),
+  p('AxisSecFormat', 'format', 'text', ['chart'], ''),
+  p('AxisSecUnits', 'format', 'enum', ['chart'], 'none', { options: ['none', 'hundreds', 'thousands', 'millions', 'billions'] }),
+  p('AxisSecFontColor', 'format', 'color', ['chart'], 'theme:text'),
+  p('AxisSecFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
+  p('ChartSource', 'data', 'chart', ['chart']),
+  p('ChartAxis', 'data', 'chart', ['chart']),
+  p('ChartDateGroup', 'data', 'enum', ['chart'], 'none', { options: ['none', 'year', 'quarter', 'month', 'day'] }),
+  p('ChartLegend', 'data', 'text', ['chart'], ''),
+  p('ChartValues', 'data', 'chart', ['chart']),
+  p('ChartSeries', 'data', 'chart', ['chart']), // F4b : type, axe secondaire, couleur, nom de chaque série (onglet Mise en forme des paramètres)
 ];
 
 // L5: what an empty cell shows (size, position, name, Tag, background, gridlines, padding; no margins, no anchors), defaults as a label's.

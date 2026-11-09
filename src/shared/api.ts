@@ -8,6 +8,7 @@ import type { MigrateRequest, MigrateResult, ServerImportResult } from './migrat
 import type { UiLanguage } from './i18n';
 import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
+import type { ChartData, ChartDataRequest } from './chart/query';
 import type { StartupOptions } from './startup';
 import type { Theme } from './design/theme';
 import type { PictureKind } from './pictures';
@@ -321,6 +322,7 @@ export const CH = {
   sourcesPage: 'bc:sources:page',
   sourcesSave: 'bc:sources:save',
   sourcesAutoLookup: 'bc:sources:autoLookup',
+  chartsData: 'bc:charts:data', // F4: aggregated rows of a chart (read only: a data channel, Runtime keeps it)
   objectsSetDescription: 'bc:objects:setDescription',
   queriesActionCount: 'bc:queries:actionCount',
   queriesRunAction: 'bc:queries:runAction',
@@ -459,6 +461,9 @@ export interface BasecraftApi {
     /** The default changed (set by this window): open views refetch with get(). */
     onChange(cb: () => void): () => void;
   };
+  /** F4 modern charts. data: the chart's grouped rows, at most CHART_MAX_POINTS (`truncated` when more). Reads only, works on a read-only base.
+   *  Rejects bc:invalidArgument (bad request, source not a select, unknown aggregate), bc:notFound (table, query or field), bc:missingParameter||<name>. */
+  charts: { data(req: ChartDataRequest): Promise<ChartData> };
   /** The base's shared image gallery (F3, bc_resources). list and get work read-only; add, replace and remove are design operations. */
   resources: {
     list(): Promise<ResourceInfo[]>;

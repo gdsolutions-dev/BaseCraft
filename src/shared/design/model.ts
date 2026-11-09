@@ -6,7 +6,7 @@ export type Unit = 'twip';   // stockage en twips (1 cm = 567), affichage en cm
 export type SectionKind = 'formHeader' | 'detail' | 'formFooter'
   | 'reportHeader' | 'pageHeader' | 'groupHeader' | 'groupFooter' | 'pageFooter' | 'reportFooter';
 export type ControlKind = 'label' | 'textBox' | 'checkBox' | 'optionGroup' | 'optionButton' | 'comboBox' | 'listBox'
-  | 'commandButton' | 'subform' | 'image' | 'line' | 'rectangle' | 'pageBreak' | 'tabControl';
+  | 'commandButton' | 'subform' | 'image' | 'line' | 'rectangle' | 'pageBreak' | 'tabControl' | 'chart';
 export interface ControlDef { kind: ControlKind; name: string; left: number; top: number; width: number; height: number;
   props: Record<string, unknown>;   // noms invariants (ControlSource, Format, Visible…), valeurs canoniques
   children?: ControlDef[] }         // groupe d'options, onglet
@@ -16,7 +16,7 @@ export interface DesignDoc { formatVersion: '1.0'; recordSource: RecordSourceRef
 export const SECTION_KINDS: readonly SectionKind[] = ['formHeader', 'detail', 'formFooter', 'reportHeader', 'pageHeader', 'groupHeader', 'groupFooter',
   'pageFooter', 'reportFooter'];
 export const CONTROL_KINDS: readonly ControlKind[] = ['label', 'textBox', 'checkBox', 'optionGroup', 'optionButton', 'comboBox', 'listBox',
-  'commandButton', 'subform', 'image', 'line', 'rectangle', 'pageBreak', 'tabControl'];
+  'commandButton', 'subform', 'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'chart'];
 
 export const TWIPS_PER_CM = 567;
 export const twipsToCm = (twips: number): number => twips / TWIPS_PER_CM;

@@ -13,7 +13,7 @@ import { intersects, type Rect } from './geometry';
 import { gridStep, MAX_TWIPS } from './units';
 
 export interface DesignClip { controls: ControlDef[]; section: Pick<SectionDef, 'kind' | 'groupLevel'> }   // section : celle d'où il vient
-/** kinds : les genres de sa boîte à outils (les autres ne se collent pas) ; prefix : Texte, Étiquette… */
+/** kinds : les genres de sa boîte à outils, plus le graphique (posé par Insérer un graphique moderne, pas par la boîte) ; les autres ne se collent pas ; prefix : Texte, Étiquette… */
 export interface ClipContext { target: 'form' | 'report'; kinds: ControlKind[]; prefix(k: ControlKind): string }
 export type ClipCommand = 'cut' | 'copy' | 'paste';
 
@@ -29,7 +29,7 @@ export const subscribeClip = (cb: () => void): (() => void) => {
 export const canPaste = (kinds: ControlKind[]): boolean => !!clip?.controls.some((c) => kinds.includes(c.kind));
 export const pasteEnabled = (kinds: ControlKind[]): boolean => canPaste(kinds) || getClip() !== null;
 
-export const clipContext = (host: DesignerHost, t: TFunction): ClipContext => ({ target: host.target, kinds: host.tools.map((x) => x.kind), prefix: (k) => t(`designer.ctlPrefix.${k}`) });
+export const clipContext = (host: DesignerHost, t: TFunction): ClipContext => ({ target: host.target, kinds: [...host.tools.map((x) => x.kind), 'chart'], prefix: (k) => t(`designer.ctlPrefix.${k}`) });
 
 /** Les contrôles sélectionnés dans l'ordre du document, chacun avec ses enfants (l'étiquette attachée) ou, membre d'une disposition,
  *  avec l'étiquette de sa ligne dans sa section (ownLabel ; pas l'étiquette d'en-tête d'un Tabulaire, qui se collerait sur lui) ; un

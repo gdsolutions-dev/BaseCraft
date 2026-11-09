@@ -153,6 +153,7 @@ const api: BasecraftApi = {
     save: (ref, req) => ipcRenderer.invoke(CH.sourcesSave, ref, req),
     autoLookup: (ref, values) => ipcRenderer.invoke(CH.sourcesAutoLookup, ref, values),
   },
+  charts: { data: (req) => ipcRenderer.invoke(CH.chartsData, req) },
   queries: {
     actionCount: (ref, params) => ipcRenderer.invoke(CH.queriesActionCount, ref, params),
     runAction: (ref, params, opts) => ipcRenderer.invoke(CH.queriesRunAction, ref, params, opts),

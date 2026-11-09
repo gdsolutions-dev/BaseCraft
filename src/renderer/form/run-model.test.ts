@@ -153,6 +153,9 @@ describe('layout labels: control names that are Object.prototype keys', () => {
 });
 
 describe('margins and gridlines', () => {
+  it("un graphique ne lit ni BackStyle ni BorderStyle génériques (il a ChartBack*, ChartBorder*)", () => {
+    expect(controlLook(ctl('chart', 'G', { BackStyle: 'normal', BorderStyle: 'solid', BorderWidth: 5 }))).toEqual({});
+  });
   it('a margin is the text inset, only on text-bearing kinds', () => {
     expect(controlLook(ctl('textBox', 'A', { LeftMargin: 90 })).paddingLeft).toBe(`calc(var(--bc-ix, 0px) + ${twipsToPx(90)}px)`);
     expect(controlLook(ctl('textBox', 'A')).paddingLeft).toBeUndefined();

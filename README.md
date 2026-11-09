@@ -71,6 +71,7 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - Python (Pyodide, offline, numpy and pandas included): modules, Immediate window (Ctrl+G), `msgbox` and `inputbox`, Ctrl+Break (see [Python](docs/python.md))
 - Themes: six built-in themes with light and dark palettes, Themes, Colors and Fonts galleries (all matching objects, this object only, default), your own saved themes (see [Themes](docs/themes.md))
 - Images: a shared image gallery stored in the database (PNG, JPEG, GIF, WebP, 1 MB), Insert Image with Browse, replace and delete, form and report background pictures (size mode, alignment, tiling), Image control alignment and tiling, command button pictures, `basecraft-cli resources` (see [Images](docs/images.md))
+- Charts: Insert Modern Chart (Column, Bar, Line, Area, Pie, Radar, Combo; clustered, stacked, 100 %), Chart Settings, Link Master/Child, drawn in forms and printed in report PDFs in the theme's colours (see [Charts](docs/charts.md))
 - Layouts and Layout view (Mode Page) for forms and reports: Stacked and Tabular layouts, merge and split, gridlines, margins, padding, anchoring, empty cells (see [Layout view](docs/layout-view.md))
 - Save As, Compact and Repair; `.basecraft` file association
 - Ribbon, navigation pane, tabs, light and dark themes

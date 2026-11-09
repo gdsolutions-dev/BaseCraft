@@ -109,3 +109,7 @@ textarea.frun-text { --bc-iy: 2px; padding: 2px 4px; resize: none; }
 .frun-row { position: absolute; left: 0; }
 /* the form's Datasheet view: the table datasheet's grid and error bar */
 .frun-sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Graphique moderne (F4) */
+.frun-chart { position: relative; }
+.frun-chart-empty { display: grid; place-items: center; height: 100%; font-size: 12px; text-align: center; padding: 4px; }
+.frun-chart-hint { position: absolute; right: 4px; bottom: 2px; font-size: 10px; color: var(--bc-text-muted); }

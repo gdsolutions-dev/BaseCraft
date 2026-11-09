@@ -46,6 +46,7 @@ export interface RunCtx {
   setTyped(name: string, text: string | undefined): void;
   sub?: SubformHost;                      // what the form's subform controls need from it (Task 11)
   other?: boolean;                        // another row of Continuous Forms or the datasheet: shown, not current
+  chart?: { source: RecordSourceRef | null; params?: Record<string, CellInput>; version: number };   // what the chart controls need: the form's own record source and its parameter values
 }
 
 /** The master form, for its subform controls. */

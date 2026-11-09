@@ -4,12 +4,13 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg,
+  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg, chartDataRequest,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
 import { DEFAULT_STARTUP } from '../shared/startup';
 import { localeInfo } from '../shared/locale-format';
+import type { ChartDataRequest } from '../shared/chart/query';
 import { clients } from '../shared/test-fixtures';
 
 const INVALID = 'bc:invalidArgument';
@@ -580,5 +581,40 @@ describe('themeArg', () => {
   it('accepts a theme, refuses anything else with bc:invalidTheme', () => {
     expect(themeArg(BUILTIN_THEMES[2])).toEqual(BUILTIN_THEMES[2]);
     for (const v of [{}, null, 'x', { ...BUILTIN_THEMES[0], fonts: 1 }]) expect(() => themeArg(v)).toThrow('bc:invalidTheme');
+  });
+});
+
+describe('chartDataRequest', () => {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const good = (): any => ({ spec: { type: 'line', source: null, axis: ['A'], dateGroup: 'none', legend: '', values: [{ field: 'V', agg: 'sum' }] }, source: { kind: 'table', name: 'T' } });
+  it('accepts a valid request and a link', () => {
+    expect(chartDataRequest(good()).spec.values).toEqual([{ field: 'V', agg: 'sum' }]);
+    const r = good(); r.link = { fields: ['A'], values: ['x'] };
+    expect(chartDataRequest(r).link).toEqual({ fields: ['A'], values: ['x'] });
+  });
+  it.each([
+    ['9 axis fields', (r: any) => { r.spec.axis = Array(9).fill('A'); }],
+    ['17 values', (r: any) => { r.spec.values = Array(17).fill({ field: 'V', agg: 'sum' }); }],
+    ['non-string field', (r: any) => { r.spec.axis = [1]; }],
+    ['256-character name', (r: any) => { r.spec.axis = ['a'.repeat(256)]; }],
+    ['unknown agg', (r: any) => { r.spec.values = [{ field: 'V', agg: 'median' }]; }],
+    ['unknown type', (r: any) => { r.spec.type = 'weird'; }],
+    ['link length mismatch', (r: any) => { r.link = { fields: ['A', 'B'], values: ['x'] }; }],
+    ['link object value', (r: any) => { r.link = { fields: ['A'], values: [{}] }; }],
+    ['no source', (r: any) => { delete r.source; }],
+    ['4097-character link value', (r: any) => { r.link = { fields: ['A'], values: ['x'.repeat(4097)] }; }],
+    ['params not an object', (r: any) => { r.params = 'x'; }],
+    ['101 params', (r: any) => { r.params = Object.fromEntries(Array.from({ length: 101 }, (_, i) => [`p${i}`, 1])); }],
+    ['nested param value', (r: any) => { r.params = { a: { b: 1 } }; }],
+  ])('rejects %s', (_n, f) => { const r = good(); f(r); expect(() => chartDataRequest(r)).toThrow('bc:invalidArgument'); });
+  it('accepts a 4096-character link value', () => {
+    const r = good(); r.link = { fields: ['A'], values: ['x'.repeat(4096)] };
+    expect(chartDataRequest(r).link?.values[0]).toHaveLength(4096);
+  });
+  it('a __proto__ params key (from JSON) is rejected or harmless', () => {
+    const r = good(); r.params = JSON.parse('{"__proto__": 1, "a": 2}');
+    let out: ChartDataRequest | null = null;
+    try { out = chartDataRequest(r); } catch (e) { expect(String(e)).toContain('bc:invalidArgument'); }
+    if (out) expect(({} as Record<string, unknown>).a).toBeUndefined();
   });
 });

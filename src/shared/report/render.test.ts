@@ -1,4 +1,6 @@
 // Rendu HTML/CSS positionné d'un état mis en page : unités, échappement, polices embarquées, images, thème clair.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { defaultProps } from '../field-types';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from './fixtures/factures';
@@ -248,5 +250,76 @@ describe("image d'arrière-plan de l'état (F3 Task 8)", () => {
   });
   it('renderFlowHtml aussi', () => {
     expect(renderFlowHtml(withBg)).toContain('<div class="bc-bg"');
+  });
+});
+
+describe('graphique dans un état (F4)', () => {
+  const env = { locale: 'fr-FR', lang: 'fr', now: () => new Date(0), errorText: { error: '#Erreur', name: '#Nom?' } } as const;
+  const values = [{ field: 'Montant', agg: 'sum' }];
+  const chartDoc = (props: Record<string, unknown> = {}) => ({ formatVersion: '1.0', recordSource: null, props: {}, sections: [
+    { kind: 'reportHeader', height: 4000, props: {}, controls: [{ kind: 'chart', name: 'Graph', left: 200, top: 100, width: 6000, height: 3600,
+      props: { ChartAxis: ['Ville'], ChartValues: values, ...props } }] }] }) as unknown as typeof FACTURES_REPORT;
+  const data = { columns: [{ role: 'category' as const, field: 'Ville', name: 'Ville' }, { role: 'value' as const, field: 'Montant', name: 'SumOfMontant' }],
+    rows: [['A', 4], ['B', 6]], truncated: false };
+  const html = async (d = chartDoc(), charts: Record<string, typeof data> = { Graph: data }) =>
+    renderDocumentHtml(await layoutReport(readReport(d, [], { charts, chartLabels: { title: 'Titre du graphique', empty: '(vide)' } }), { fields: [], rows: [] }, env));
+
+  it('un svg en ligne avec viewBox, ses catégories, aucun script', async () => {
+    const h = await html();
+    expect(h.match(/<svg/g)).toHaveLength(1);
+    expect(h).toMatch(/<div class="bc-chart" style="left:10pt;top:5pt;width:300pt;height:180pt"><svg[^>]* viewBox="/);
+    expect(h).toContain('>A</text>'); expect(h).toContain('Titre du graphique');
+    expect(h).not.toMatch(/<script|\son\w+=|https?:\/\/(?!www\.w3\.org\/)/i); expect(h).not.toMatch(/NaN|undefined/);
+  });
+  it("deux graphiques d'un même document n'ont aucun identifiant commun", async () => {
+    const d = chartDoc(); const c = (d.sections[0] as unknown as { controls: unknown[] }).controls;
+    c.push({ ...(c[0] as object), name: 'G2', top: 1800, props: { ChartAxis: ['Ville'], ChartValues: values, ChartType: 'line' } });
+    const ids = (h: string) => new Set(h.match(/zr[0-9a-f]+-c\d+/g));
+    const h = await html(d, { Graph: data, G2: data });
+    expect(h.match(/<svg/g)).toHaveLength(2);
+    const [a, b] = h.split('<svg').slice(1).map(ids);
+    expect([...a!].filter((x) => b!.has(x))).toEqual([]);
+  });
+  it("le même graphique deux fois dans un document : aucune valeur d'attribut id en double", async () => {
+    const d = chartDoc(); const c = (d.sections[0] as unknown as { controls: unknown[] }).controls;
+    c.push({ ...(c[0] as object), name: 'G2', top: 1800 });
+    const h = await html(d, { Graph: data, G2: data });
+    const ids = [...h.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(h.match(/zr\d+_\d+(?=-)/g))).toEqual(new Set(['zr1_0', 'zr1_1']));   // une page, deux graphiques : deux préfixes
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+  it('un titre hostile est échappé', async () => {
+    const h = await html(chartDoc({ ChartTitle: '</svg><script>x' }));
+    expect(h).not.toContain('<script'); expect(h).toContain('&lt;/svg&gt;');
+  });
+  it('police du titre déclarée (normal et gras), cadre seulement si la bordure est tracée, hostile échappé', async () => {
+    const h = await html(chartDoc({ TitleFontName: 'Carlito', ChartBorderStyle: 'dashed', ChartBorderWidth: 2, ChartBorderColor: '#ff0000', Subtitle: '<b>x', HasSubtitle: true }));
+    expect(h).toContain('font-family:"BC Carlito"');
+    expect(h).toContain('Carlito-Regular.ttf'); expect(h).toContain('Carlito-Bold.ttf');
+    expect(h).toMatch(/class="bc-chart" style="[^"]*;border:[^"]*dashed #ff0000"/);
+    expect(h).not.toContain('<b>x');
+    // le dessin ne dépasse pas l'intérieur du cadre (2 px de chaque côté = 3 pt au total) : le texte n'est pas réduit
+    expect(h).toMatch(/<svg[^>]* viewBox="0 0 297 177"/);
+    expect(await html(chartDoc({ TitleFontName: 'Police Inconnue' }))).toContain('LiberationSans-Bold.ttf');
+    expect(await html()).not.toMatch(/bc-chart" style="[^"]*border/);
+  });
+  it('la police du graphique est déclarée (régulier) pour le PDF', async () => {
+    const h = await html();
+    expect(h).toContain('@font-face{font-family:"BC Inter";src:url("fonts/Inter-Regular.ttf")');
+    expect(h).toContain('@font-face{font-family:"BC Inter";src:url("fonts/Inter-Bold.ttf") format("truetype");font-weight:700');   // le titre
+    expect(h).toContain('font-family:BC Inter');
+  });
+  it('identique à un second appel et après un autre graphique ; égal au golden', async () => {
+    const a = await html();
+    await html(chartDoc({ ChartType: 'pie' }));
+    expect(await html()).toBe(a);
+    const file = fileURLToPath(new URL('../chart/fixtures/report-chart.html', import.meta.url));
+    if (process.env.UPDATE_GOLDEN) writeFileSync(file, a);
+    expect(a).toBe(readFileSync(file, 'utf8'));
+  });
+  it('sans données : un cadre sans courbe ; sans graphique : aucun CSS de graphique', async () => {
+    expect(await html(chartDoc(), {})).not.toContain('<path');
+    const none = renderDocumentHtml(await layoutReport(readReport(FACTURES_REPORT, FACTURES_FIELDS), { fields: FACTURES_FIELDS, rows: FACTURES_ROWS }, env));
+    expect(none).not.toContain('bc-chart');
   });
 });

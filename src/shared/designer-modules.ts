@@ -24,5 +24,6 @@ export const DESIGNER_MODULES: readonly string[] = [
   `${R}links/MigrateWizard.tsx`, `${R}links/migrate-report.ts`,
   `${R}python/ImmediateWindow.tsx`, `${R}python/FunctionBuilder.tsx`, `${R}designer/ChooseBuilder.tsx`, `${R}python/ModuleEditorView.tsx`, `${R}python/module-menu.ts`,
   ...['ThemeGallery', 'ColorsGallery', 'CustomizeColorsDialog', 'FontsGallery', 'CustomizeFontsDialog', 'ColorPicker'].map((m) => `${R}designer/${m}.tsx`), ...['open-designs', 'theme-gallery-model', 'scheme-gallery-model', 'color-picker-model'].map((m) => `${R}designer/${m}.ts`),
+  ...['ChartSettings', 'ChartSeriesFormat', 'ColorEditor', 'ChartTypePopup', 'chart-pane'].map((m) => `${R}designer/${m}.tsx`), `${R}designer/chart-settings-model.ts`,
   `${R}design/entry.ts`, `${R}design/shell-design-commands.ts`,
 ];

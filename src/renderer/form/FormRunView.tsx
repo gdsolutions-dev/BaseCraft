@@ -292,6 +292,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const lastOwn = useRef<string | null>(null);       // the last of this form's own controls focused
   const [calc, setCalc] = useState<{ key: string; results: Record<string, CalcResult> }>({ key: '', results: {} });
   const [calcTick, setCalcTick] = useState(0);
+  const [chartTick, setChartTick] = useState(0);   // bumped by each requery: the charts read again (a save bumps snap.saves)
   useEffect(() => onUserFunctionsChanged(() => setCalcTick((n) => n + 1)), []);   // D3 R5: a Python function added, removed or edited
   const [filter, setFilterState] = useState<FilterState>(NO_FILTER);
   const filterRef = useRef(filter);
@@ -1065,6 +1066,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     if (values === null) return false;
     if (linkPending && !values) return true;
     if (!(await attempt(() => records.requery(values)))) return false;
+    setChartTick((n) => n + 1);
     if (records.snapshot.saves === saves) setListTick((n) => n + 1);
     for (const sf of [...subs.current.values()]) await sf.requery(ask);   // its subforms too, on the same master record or not
     return true;
@@ -1159,13 +1161,14 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       const c = named(n);
       if (c.kind === 'subform') { await subs.current.get(c.name)?.requery(false); return; }
       if (c.kind === 'comboBox' || c.kind === 'listBox') { listParams.current.delete(c.name); setListTick((k) => k + 1); return; }   // its [Forms]! parameters read again
+      if (c.kind === 'chart') setChartTick((k) => k + 1);
       setCalcTick((k) => k + 1);
     },
     saveRecord: async () => { notInBefore(); must(await attempt(() => records.save()), 'saveRefused'); },
     undoRecord: () => { records.undoRecord(); clearTyped(); typedIn.current.clear(); setCalcTick((k) => k + 1); },
     // not deleted (On Delete cancelled, a record that cannot be deleted, refused): Access's 2501
     deleteRecord: async (warnings) => { notInBefore(); must(await deleteRecord(warnings), 'actionCancelled'); },
-    refreshRecord: async () => { notInBefore(); await records.reload(); },
+    refreshRecord: async () => { notInBefore(); await records.reload(); setChartTick((k) => k + 1); },
   };
 
   const hasFilter = filter.items.length > 0 || !!filter.applied;
@@ -1358,7 +1361,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       </div>
     );
   }
-  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, labels, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, givenBack: (n) => givenBack.current === n, pages, setPage, lists, typed: typedTexts, setTyped, sub,
+  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, labels, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, givenBack: (n) => givenBack.current === n, pages, setPage, lists, typed: typedTexts, setTyped, sub, chart: { source: doc.recordSource, params: records.sourceParams, version: snap.saves + chartTick },
     raise: raiseCtl, input, update };
   /** Another record, made current; then the focus on `n` there (the control clicked: already focused), else on the last control. */
   const goRow = (i: number, n?: string) => void userAttempt(() => records.goTo(i)).then((ok) => {

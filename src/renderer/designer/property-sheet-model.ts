@@ -20,6 +20,7 @@ import type { RecordSourceRef } from '../../shared/record-source';
 import { findControl, setProps, type PropTarget, type Selection } from './designer-model';
 import type { SheetTab } from './sheet-types';
 import { readPictureType } from '../../shared/pictures';
+import { readChartSeries, readChartSpec } from '../../shared/chart/spec';
 import { MAX_TWIPS } from './units';
 
 export type { SheetTab, PropertySheetContext } from './sheet-types';
@@ -30,6 +31,28 @@ export interface SheetRow { d: PropertyDescriptor; value: unknown | typeof MIXED
 const TABS = ['format', 'data', 'event', 'other'] as const;
 const PICTURE_ROWS = ['PictureType', 'Picture', 'PictureTiling', 'PictureAlignment', 'PictureSizeMode'];
 const GEOMETRY = ['Left', 'Top', 'Width', 'Height'];
+
+/** Les lignes propres au graphique, en tête de leur onglet (suivies des lignes communes de mise en page). */
+export function chartRows(tab: 'format' | 'data' = 'format'): string[] {
+  // Ordre des captures 12 et 13 : type, fond, bordure, légende, titre, sous-titre, titres d'axes, axe des abscisses, axe des ordonnées.
+  return tab === 'format' ? ['ChartType', 'ChartBackStyle', 'ChartBackColor', 'ChartBorderStyle', 'ChartBorderWidth', 'ChartBorderColor',
+      'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
+      'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
+      'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize']
+    : ['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries'];
+}
+
+/** Le résumé en lecture seule d'une ligne `chart` (édité dans les paramètres du graphique) : « Commandes », « Client », « Montant (Somme) ». */
+export function chartSummary(name: string, value: unknown, aggLabel: (agg: string) => string): string {
+  // Séries : résumé « champ (type, 2) » ; ChartValues est aussi lue, sinon les séries seraient toutes ignorées.
+  if (name === 'ChartSeries') return readChartSeries({ ChartSeries: value, ChartValues: (Array.isArray(value) ? value : []).map((x) => ({ field: (x as { field?: unknown } | null)?.field })) })
+    .map((s) => `${s.name ?? s.field} (${s.type ?? 'column'}${s.secondary ? ', 2' : ''})`).join(', ');
+  const spec = readChartSpec({ [name]: value });
+  if (name === 'ChartSource') return spec.source ? (spec.source.kind === 'sql' ? spec.source.sql : spec.source.name) : '';
+  if (name === 'ChartAxis') return spec.axis.join(', ');
+  return spec.values.map((v) => (v.agg === 'none' ? v.field : `${v.field} (${aggLabel(v.agg)})`)).join(', ');
+}
 
 /** Rien de sélectionné : le document, comme Access montre le formulaire. */
 export function targetsOf(sel: Selection): PropTarget[] {
@@ -79,12 +102,17 @@ export function readProp(doc: DesignDoc, docKind: 'form' | 'report', t: PropTarg
 
 const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.stringify(a) === JSON.stringify(b);
 
+/** Lignes d'un graphique propres aux formulaires : un graphique d'état ignore le lien maître/détail. */
+const CHART_FORM_ONLY = ['LinkMasterFields', 'LinkChildFields'];
 /** Une ligne par descripteur qui s'applique au genre de **chaque** cible (et au genre du document : `objects`), dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
  *  Des valeurs différentes donnent MIXED. Nom en lecture seule dans une sélection multiple. */
 export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean, cellPrefix = ''): SheetRow[] {
   if (!targets.length || !targets.every((t) => targetExists(doc, t))) return [];
   const kinds = targets.map((t) => targetKind(doc, docKind, t));
-  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name)))))
+  const chartOnly = kinds.every((k) => k === 'chart');
+  const lead = (tb: string, n: string): number => { const i = chartOnly ? chartRows(tb as 'format' | 'data').indexOf(n) : -1; return i < 0 ? 99 : i; };
+  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k) && !(docKind === 'report' && k === 'chart' && CHART_FORM_ONLY.includes(d.name)) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name))))
+    .map((d, i) => ({ d, i })).sort((a, b) => lead(tb, a.d.name) - lead(tb, b.d.name) || a.i - b.i).map((x) => x.d))   // tri stable : le graphique d'abord
     .map((d) => {
       const values = targets.map((t) => readProp(doc, docKind, t, d, cellPrefix));
       return { d, value: values.every((v) => same(v, values[0])) ? values[0] : MIXED,

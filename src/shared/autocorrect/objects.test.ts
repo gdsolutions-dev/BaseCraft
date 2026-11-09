@@ -142,6 +142,41 @@ describe('rewriteDesign', () => {
     expect(props(out.doc)).toEqual([{ RowSource: 'SELECT Nom FROM [Clientèle]' }, { RowSource: 'Clients', RowSourceType: 'valueList' },
       { SourceObject: 'FSub2', LinkMasterFields: 'NomClient; Ville', LinkChildFields: 'Client', Autre: 1 }]);
   });
+  describe('charts', () => {
+    const ch = (props: Record<string, unknown>) => tb('G', { ChartType: 'columnClustered', ...props }, 'chart');
+    const byTable = (changes: NameChange[]): RewriteCtx => ({ ...c(changes), columns: (ref) => new Map(ref?.kind === 'table' && ref.name === 'Ventes' ? [['montant', 'Total'], ['client', 'Cli']] : ref?.kind === 'table' && ref.name === 'Clients' ? [['client', 'Cl2']] : []) });
+    it('follows a renamed table used as ChartSource', () => {
+      const doc = form({ controls: [ch({ ChartSource: { kind: 'table', name: 'Ventes' } })] });
+      const out = rewriteDesign(doc, 'form', 'F', byTable([obj('table', 'Ventes', 'Sales')]))!;
+      expect(props(out.doc)[0]!.ChartSource).toEqual({ kind: 'table', name: 'Sales' });
+      expect(out.entries).toContainEqual({ kind: 'form', name: 'F', control: 'G', property: 'ChartSource', old: 'Ventes', new: 'Sales' });
+    });
+    it('follows renamed fields in axis, legend and values of its own source', () => {
+      const doc = form({ recordSource: { kind: 'table', name: 'Clients' }, controls: [ch({ ChartSource: { kind: 'table', name: 'Ventes' }, ChartAxis: ['Client'], ChartLegend: 'Client', ChartValues: [{ field: 'Montant', agg: 'sum' }, { field: 'Autre', agg: 'count' }] })] });
+      const out = rewriteDesign(doc, 'form', 'F', byTable([]))!;
+      expect(props(out.doc)[0]).toMatchObject({ ChartAxis: ['Cli'], ChartLegend: 'Cli', ChartValues: [{ field: 'Total', agg: 'sum' }, { field: 'Autre', agg: 'count' }] });
+      expect(out.entries.map((e) => [e.control, e.property, e.new])).toEqual([['G', 'ChartAxis', 'Cli'], ['G', 'ChartLegend', 'Cli'], ['G', 'ChartValues', 'Total; Autre']]);
+    });
+    it('follows a renamed field in ChartSeries like in ChartValues', () => {
+      const doc = form({ controls: [ch({ ChartType: 'combo', ChartSource: { kind: 'table', name: 'Ventes' }, ChartValues: [{ field: 'Montant', agg: 'sum' }], ChartSeries: [{ field: 'Montant', type: 'line' }] })] });
+      const out = rewriteDesign(doc, 'form', 'F', byTable([]))!;
+      expect(props(out.doc)[0]).toMatchObject({ ChartValues: [{ field: 'Total', agg: 'sum' }], ChartSeries: [{ field: 'Total', type: 'line' }] });
+      expect(out.entries.map((e) => e.property)).toContain('ChartSeries');
+    });
+    it("uses the document's record source without ChartSource; a same-named field of another table is untouched", () => {
+      const doc = form({ recordSource: { kind: 'table', name: 'Clients' }, controls: [ch({ ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] })] });
+      expect(props(rewriteDesign(doc, 'form', 'F', byTable([]))!.doc)[0]).toMatchObject({ ChartAxis: ['Cl2'], ChartValues: [{ field: 'Montant', agg: 'sum' }] });
+      const other = form({ recordSource: { kind: 'table', name: 'Clients' }, controls: [ch({ ChartSource: { kind: 'table', name: 'Autre' }, ChartAxis: ['Client'] })] });
+      expect(rewriteDesign(other, 'form', 'F', byTable([]))).toBeNull();
+    });
+    it('renames LinkChildFields against the chart source, LinkMasterFields against the form', () => {
+      const link = { LinkMasterFields: 'Client', LinkChildFields: 'Client' };
+      const own = form({ recordSource: { kind: 'table', name: 'Clients' }, controls: [ch({ ChartSource: { kind: 'table', name: 'Ventes' }, ...link })] });
+      expect(props(rewriteDesign(own, 'form', 'F', byTable([]))!.doc)[0]).toMatchObject({ LinkMasterFields: 'Cl2', LinkChildFields: 'Cli' });
+      const doc = form({ recordSource: { kind: 'table', name: 'Clients' }, controls: [ch(link)] });
+      expect(props(rewriteDesign(doc, 'form', 'F', byTable([]))!.doc)[0]).toMatchObject({ LinkMasterFields: 'Cl2', LinkChildFields: 'Cl2' });
+    });
+  });
   it('follows a query record source output renames', () => {
     const doc = form({ recordSource: { kind: 'query', name: 'QVentes' }, controls: [tb('T', { ControlSource: 'Nom' })] });
     expect(props(rewriteDesign(doc, 'form', 'F', c([obj('query', 'QVentes', 'Q2')]))!.doc)).toEqual([{ ControlSource: 'NomClient' }]);

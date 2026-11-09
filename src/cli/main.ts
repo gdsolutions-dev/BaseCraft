@@ -9,6 +9,7 @@ import { applyScript, checkTarget, parseScript } from './script';
 import { DatabaseSync } from 'node:sqlite';
 import { listResources } from '../main/db/resources';
 import { registerFunctions } from '../main/db/file-format';
+import { listCharts } from './ops-design';
 import { CANON } from '../shared/coerce';
 
 export interface CliIo { out(s: string): void; err(s: string): void }
@@ -50,6 +51,16 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
 `); } finally { db.close(); }
       return 0;
     }
+    if (argv[0] === 'charts') {
+      if (argv.length !== 2) throw new CliUsageError('usage: basecraft-cli charts FILE.basecraft');
+      assertBaseExtension(argv[1]);
+      if (!fs.statSync(argv[1], { throwIfNoEntry: false })?.isFile()) throw new CliUsageError(`file not found: ${argv[1]}`);
+      checkTarget(argv[1]);
+      const db = new DatabaseSync(argv[1], { readOnly: true });
+      try { registerFunctions(db); io.out(`${JSON.stringify(listCharts(db), null, 2)}
+`); } finally { db.close(); }
+      return 0;
+    }
     if (argv[0] === 'commands' && argv.length === 1) { io.out(`${JSON.stringify(COMMANDS, null, 2)}
 `); return 0; }
     if (argv[0] === 'describe' && argv.length === 2) {
@@ -59,7 +70,7 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
 `);
       return 0;
     }
-    throw new CliUsageError('usage: basecraft-cli --version | new FILE | script SPEC.json FILE | resources FILE | commands | describe ID');
+    throw new CliUsageError('usage: basecraft-cli --version | new FILE | script SPEC.json FILE | resources FILE | charts FILE | commands | describe ID');
   } catch (e) {
     if (e instanceof CliUsageError) { io.err(`${e.message}\n`); return e.code; }
     if (e instanceof BaseFileError) { io.err(e.code === 'exists' ? `${argv[1]} already exists

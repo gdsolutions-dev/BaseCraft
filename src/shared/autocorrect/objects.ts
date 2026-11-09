@@ -224,6 +224,43 @@ export function rewriteDesign(doc: DesignDoc, kind: 'form' | 'report', name: str
       }
     }
   };
+  const chartOwn = (p: Record<string, unknown>): RecordSourceRef | null => {
+    const cs = p.ChartSource as Record<string, unknown> | undefined;
+    return cs && typeof cs === 'object' && (cs.kind === 'table' || cs.kind === 'query' || cs.kind === 'sql') ? (cs as unknown as RecordSourceRef) : null;
+  };
+  /** The columns a chart reads: its own ChartSource when valid, else the document's. */
+  const chartCols = (p: Record<string, unknown>): Map<string, string> => { const o = chartOwn(p); return o ? ctx.columns(o) : columns; };
+  /** A chart's ChartSource (table, query or SQL) and its Axis / Legend / Values fields, against its own source or the document's. */
+  const chart = (c: { name: string; props: Record<string, unknown> }): void => {
+    const p = c.props, own = chartOwn(p);
+    const emit = (property: string, old: string, now: string | null, reason?: FailReason): void => { entries.push({ kind, name, control: c.name, property, old, new: now, ...(reason && { reason }) }); };
+    if (own) {
+      const old = own.kind === 'sql' ? own.sql : own.name;
+      try {
+        const now = own.kind === 'sql' ? ctx.sql(own.sql) : renamedName(ctx.r, own.kind, own.name);
+        if (now != null && now !== old) { p.ChartSource = own.kind === 'sql' ? { kind: 'sql', sql: now } : { kind: own.kind, name: now }; emit('ChartSource', old, now); }
+      } catch (e) {
+        if (own.kind === 'sql' && (e instanceof Refused || mentionsRenamed(old, ctx))) emit('ChartSource', old, null, reasonOf(e));
+      }
+    }
+    const cols = chartCols(p);
+    const one = (f: string): string => cols.get(foldName(f.trim())) ?? f;
+    const list = (property: string, olds: string[], set: (news: string[]) => void): void => {
+      const news = olds.map(one);
+      if (news.some((n, i) => n !== olds[i])) { set(news); emit(property, olds.join('; '), news.join('; ')); }
+    };
+    if (Array.isArray(p.ChartAxis) && p.ChartAxis.every((x) => typeof x === 'string')) list('ChartAxis', p.ChartAxis as string[], (n) => { p.ChartAxis = n; });
+    if (typeof p.ChartLegend === 'string' && p.ChartLegend !== '') list('ChartLegend', [p.ChartLegend], ([n]) => { p.ChartLegend = n; });
+    if (Array.isArray(p.ChartValues)) {
+      const vs = p.ChartValues as { field?: unknown }[];
+      const fs = vs.filter((v) => v && typeof v.field === 'string');
+      list('ChartValues', fs.map((v) => v.field as string), (n) => fs.forEach((v, i) => { v.field = n[i]; }));
+    }
+    if (Array.isArray(p.ChartSeries)) {
+      const fs = (p.ChartSeries as { field?: unknown }[]).filter((v) => v && typeof v.field === 'string');
+      list('ChartSeries', fs.map((v) => v.field as string), (n) => fs.forEach((v, i) => { v.field = n[i]; }));
+    }
+  };
   props(copy, '');
   if (copy.recordSource) {
     const rs = copy.recordSource, old = rs.kind === 'sql' ? rs.sql : rs.name;
@@ -239,7 +276,10 @@ export function rewriteDesign(doc: DesignDoc, kind: 'form' | 'report', name: str
   });
   for (const s of copy.sections) {
     props(s, sectionName(s.kind, s.groupLevel));
-    for (const c of flattenControls(s.controls)) props(c, c.name, c.kind === 'subform' ? target(c) : undefined);
+    for (const c of flattenControls(s.controls)) {
+      props(c, c.name, c.kind === 'subform' ? target(c) : c.kind === 'chart' ? chartCols(c.props) : undefined);
+      if (c.kind === 'chart') chart(c);
+    }
   }
   return entries.length ? { doc: copy, entries } : null;
 }

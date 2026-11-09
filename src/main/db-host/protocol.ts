@@ -27,7 +27,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'saveColumnWidths', 'cascadeChildren',
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription', 'autoCorrectDependents', 'applyProperties',
-  'describeSource', 'pageSource', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
+  'describeSource', 'pageSource', 'chartData', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
   'startup', 'saveStartup', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
   'listResources', 'getResources', 'addResource', 'replaceResource', 'removeResource',
@@ -47,6 +47,6 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
 /** R16: the HOST_METHODS that only read (retried once on a transient SQLITE_CORRUPT). */
 export const READ_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listTables', 'tableDesign', 'count', 'page', 'lookup', 'cascadeChildren', 'listRelations', 'relationsLayout',
-  'describeSource', 'pageSource', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
+  'describeSource', 'pageSource', 'chartData', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
   'activeContent', 'dbUuid', 'dataStamp',
 ]);

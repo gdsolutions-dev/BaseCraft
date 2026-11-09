@@ -60,7 +60,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   const setGridPx = (px: number) => { const r = pxToRatio(px, avail); setRatio(r); saveRatio(SPLIT_KEY, r); };
   const lastExpression = useRef<Expression>('prop-validationRule'); // the Builder command's target (its field's test id)
   const loaded = useRef<{ name: string; token: number } | null>(null);
-  const busy = useRef(false); // synchronous twin of `saving` (a key repeat must not start a second save)
+  const busy = useRef<Promise<boolean> | null>(null); // the save under way, synchronous twin of `saving` (a key repeat must not start a second save)
   const [saving, setSaving] = useState(false); // the whole save flow: grid, properties and commands are locked
   const [sheet, setSheet] = useState(false); // the table's Property Sheet, on the right
   const [region, setRegion] = useState<string | null>(null); // expressions are shown with the region's separators
@@ -126,10 +126,9 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   });
 
   /** The whole save flow; true when the table is saved. */
-  const save = async (): Promise<boolean> => {
+  const saveNow = async (): Promise<boolean> => {
     const { readOnly: ro, ready: ok, tab: doc } = live.current;
-    if (ro || !ok || busy.current) return false;
-    busy.current = true;
+    if (ro || !ok) return false;
     const focused = root.current?.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.testid : undefined;
     if (focused) focusNext.current = focused; // given back once the grid is unlocked
     try {
@@ -175,10 +174,11 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
       await showError(e);
       return false;
     } finally {
-      busy.current = false;
       setSaving(false);
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<boolean> => busy.current ? Promise.resolve(false) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
   const deleteRows = async () => {
     const { model: m } = live.current;
@@ -204,7 +204,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   /** Before the view goes: true to let it go. As in Access, a change of mode requires the save (No stays in design);
    *  a close offers to drop the edits ("No"). */
   const leave = async (reason: 'mode' | 'close'): Promise<boolean> => {
-    if (busy.current) return false;
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
     await flush();
     const { model: m, tab: doc } = live.current;
     if (!m.dirty && m.originalName !== null) return true; // a new table always asks (Access)

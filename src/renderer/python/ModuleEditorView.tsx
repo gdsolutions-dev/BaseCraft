@@ -1,6 +1,6 @@
 // Module editor (D1): CodeMirror over the Python source. Save asks the engine for the module's exports (parsing only), stores
 // { source, exports }, then resets the user modules. A syntax error still saves (no exports); a bar and a red line show it.
-import type { CompletionContext } from '@codemirror/autocomplete';
+import { closeCompletion, completionStatus, type CompletionContext } from '@codemirror/autocomplete';
 import { python } from '@codemirror/lang-python';
 import { indentUnit } from '@codemirror/language';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
@@ -85,7 +85,7 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const dirty = useRef(false);
-  const busy = useRef(false);
+  const busy = useRef<Promise<unknown> | null>(null);   // the save under way
   const [error, setError] = useState<SyntaxError | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);   // R12: after a save, exports named like another module's or a built-in's
   const live = useRef({ tab, readOnly });
@@ -98,7 +98,10 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
     const ev = new EditorView({
       doc: initial, parent: host.current!,
       extensions: [basicSetup, py, py.language.data.of({ autocomplete: completionSource() }), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
-        EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); })],
+        EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); }),
+        // CodeMirror closes the list on blur only once it is shown: a list still being computed (the catalog is read from the base)
+        // opened afterwards, over a dialog (the save's name), and took its clicks. Out of focus, no list.
+        EditorView.updateListener.of((u) => { if (!u.view.hasFocus && completionStatus(u.state) !== null) setTimeout(() => closeCompletion(u.view)); })],
     });
     view.current = ev;
     return () => { ev.destroy(); void dispatch({ type: 'setDirty', id: live.current.tab.id, dirty: false }); };
@@ -119,10 +122,8 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
     validate: (v) => (isModuleName(v) ? null : t('module.badName')) });
 
   /** The name saved under, or null (nothing saved). */
-  const save = async (): Promise<string | null> => {
-    if (busy.current) return null;
+  const saveNow = async (): Promise<string | null> => {
     if (live.current.readOnly) { await message('dialog.op.readOnly'); return null; }
-    busy.current = true;
     try {
       const doc = live.current.tab;
       const source = view.current!.state.doc.toString();
@@ -153,14 +154,14 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
     } catch (e) {
       await showError(e);
       return null;
-    } finally {
-      busy.current = false;
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<string | null> => busy.current ? Promise.resolve(null) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
   /** Before the view goes: Yes saves, No drops the changes, Cancel keeps the module open. */
   const leave = async (): Promise<boolean> => {
-    if (busy.current) return false;
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
     if (!dirty.current) return true;
     const r = await modal.confirm({ titleKey: 'module.saveFirstTitle', messageKey: 'module.saveFirst', params: { name: live.current.tab.name }, buttons: ['yes', 'no', 'cancel'] });
     return r === 'no' || (r === 'yes' && (await save()) !== null);

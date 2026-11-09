@@ -11,6 +11,7 @@ import { errorMessage } from '../shell/Modal';
 import { CheckBoxCtl } from './controls/CheckBoxCtl';
 import { ComboBoxCtl } from './controls/ComboBoxCtl';
 import { CommandButtonCtl } from './controls/CommandButtonCtl';
+import { ChartCtl } from './controls/ChartCtl';
 import { ImageCtl } from './controls/ImageCtl';
 import { LabelCtl } from './controls/LabelCtl';
 import { ListBoxCtl } from './controls/ListBoxCtl';
@@ -45,6 +46,7 @@ function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDe
     case 'comboBox': el = <ComboBoxCtl {...p} />; break;
     case 'listBox': el = <ListBoxCtl {...p} />; break;
     case 'subform': el = <SubformCtl {...p} />; break;
+    case 'chart': el = <ChartCtl {...p} />; break;
     default: el = null;
   }
   const container = c.kind === 'optionGroup' || c.kind === 'tabControl';

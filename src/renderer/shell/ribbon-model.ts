@@ -624,8 +624,13 @@ const reportHeaderWritable = (c: RibbonContext) => reportEditor(c) && !c.readOnl
 const reportControl = (id: CommandId, icon: LucideIcon): RibbonCommand => ({ id, icon, labelKey: `ribbon.cmd.${id}`, size: 'xs', enabled: reportHeaderWritable });
 /** F3 : Insérer une image ouvre la galerie d'images (aussi en lecture seule, pour regarder) ; choisir une image arme l'outil Image. */
 const insertImageCmd: RibbonCommand = { id: 'insertImage', icon: ImagePlus, labelKey: 'ribbon.cmd.insertImage', size: 'sm', popup: true, enabled: formOrReportDesign };
+/** F4 : Insérer un graphique moderne ouvre la liste des types et arme l'outil Graphique ; réservé à la Création d'un objet modifiable. */
+const insertModernChartCmd: RibbonCommand = { id: 'insertModernChart', icon: ChartBar, labelKey: 'ribbon.cmd.insertModernChart', size: 'sm', popup: true,
+  enabled: (c) => inDesign(c) && designerWritable(c) };
+/** F4 : Paramètres du graphique ; la vue n'enregistre le gestionnaire que si un graphique est sélectionné (sinon grisé). */
+const chartSettingsCmd: RibbonCommand = { id: 'chartSettings', icon: ChartPie, labelKey: 'ribbon.cmd.chartSettings', size: 'sm', enabled: formOrReportDesign };
 const REPORT_CONTROLS: Delivered = {
-  insertImage: insertImageCmd,
+  insertImage: insertImageCmd, insertModernChart: insertModernChartCmd,
   select: reportControl('select', MousePointer2), textBox: reportControl('textBox', TextCursorInput), label: reportControl('label', LetterText),
   insertPageBreak: reportControl('insertPageBreak', SeparatorHorizontal), comboBox: reportControl('comboBox', ChevronsUpDown), line: reportControl('line', Minus),
   rectangle: reportControl('rectangle', Square), checkBox: reportControl('checkBox', SquareCheck), optionButton: reportControl('optionButton', CircleDot),
@@ -832,14 +837,14 @@ export const RIBBON: RibbonTab[] = [
     id: 'formDesign', labelKey: 'ribbon.tab.formDesign', contextual: true, visible: formEditor, groups: [
       viewGroup(viewForm, viewDatasheet, viewLayout, viewDesign),
       themesGroup,
-      controls('A4', false, { ...delivered(controls('A4', false).commands, FORM_CONTROLS, formEditorWritable), insertImage: insertImageCmd }),
+      controls('A4', false, { ...delivered(controls('A4', false).commands, FORM_CONTROLS, formEditorWritable), insertImage: insertImageCmd, insertModernChart: insertModernChartCmd }),
       group('headerFooter', ...headerFooter('A4', delivered(headerFooter('A4'), ['logo', 'title', 'dateTime'], formEditorWritable))),
       // in a read-only base they open read-only (the view's sheet, Field List and Tab Order dialog refuse the changes)
       // en mode Page : pas d'Ordre de tabulation (L2)
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: formEditor },
         { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: formEditor },
         { id: 'tabOrder', icon: ArrowDown, labelKey: 'ribbon.cmd.tabOrder', size: 'sm', enabled: designOf('form') },
-        plan('later', 'chartSettings', ChartPie), plan('later', 'subformInNewWindow', ExternalLink), { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: formEditor }),
+        chartSettingsCmd, plan('later', 'subformInNewWindow', ExternalLink), { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: formEditor }),
     ],
   },
   {
@@ -860,7 +865,7 @@ export const RIBBON: RibbonTab[] = [
       })),
       // in a read-only base they open read-only (the designer refuses the changes)
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: designOf('report') },
-        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: reportEditor }, plan('later', 'chartSettings', ChartPie),
+        { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: reportEditor }, chartSettingsCmd,
         plan('later', 'subreportInNewWindow', ExternalLink), { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: reportEditor }),
     ],
   },

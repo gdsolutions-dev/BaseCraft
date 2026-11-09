@@ -1,5 +1,6 @@
 // Ruban › Organiser › Taille et classement : menus Taille/Espace et Aligner, Premier plan, Arrière-plan -> actions du concepteur.
 import type { CommandHandlers } from '../shell/ribbon-model';
+import { updateControl } from '../../shared/design/control-tree';
 import type { ArrangeOp, DesignerAction, DesignerState } from './designer-model';
 
 export type ArrangeMenu = 'sizeSpace' | 'align';
@@ -30,4 +31,14 @@ export function designerCommands(dispatch: (a: DesignerAction) => void, openMenu
     bringToFront: () => dispatch({ type: 'arrange', op: 'bringToFront' }),
     sendToBack: () => dispatch({ type: 'arrange', op: 'sendToBack' }),
   };
+}
+
+/** Paramètres du graphique : un seul pas d'annulation pour tout le correctif sur les graphiques nommés ; une valeur `undefined` retire la clé. */
+export function setChartProps(names: string[], patch: Record<string, unknown>): DesignerAction {
+  return { type: 'edit', apply: (doc) => names.reduce((d, n) => updateControl(d, n, (c) => {
+    if (c.kind !== 'chart') return c;
+    const props = { ...c.props };
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete props[k]; else props[k] = v; }
+    return { ...c, props };
+  }), doc) };
 }

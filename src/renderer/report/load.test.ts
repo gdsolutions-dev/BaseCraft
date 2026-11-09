@@ -3,7 +3,8 @@ import { MAX_PRINT_HTML_CHARS, type RecordSourceRef, type SourceInfo, type Sourc
 import type { LayoutEnv } from '../../shared/report/types';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../shared/report/fixtures/factures';
 import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../../shared/design/theme';
-import { DATA_PAGE, docParameters, layoutSavedReport, loadDocData, loadReportData, printRequestFor, zoomFor } from './load';
+import type { DesignDoc } from '../../shared/design/model';
+import { DATA_PAGE, docParameters, loadDocCharts, layoutSavedReport, loadDocData, loadReportData, printRequestFor, zoomFor } from './load';
 
 const FIELDS = [{ name: 'N', type: 'number' as const, props: { type: 'number' as const } }] as unknown as SourceInfo['fields'];
 
@@ -224,5 +225,26 @@ describe('layoutSavedReport : images partagées', () => {
     const gets: string[][] = [];
     await layoutSavedReport(fake(FACTURES_REPORT, gets), 'x', env, none);
     expect(gets).toEqual([]);
+  });
+});
+
+describe('loadDocCharts (F4)', () => {
+  const chart = (name: string, values: unknown[] = [{ field: 'N', agg: 'sum' }]) => ({ kind: 'chart', name, left: 0, top: 0, width: 100, height: 100, props: { ChartValues: values } });
+  const doc = { formatVersion: '1.0', recordSource: { kind: 'table', name: 'T' }, props: {}, sections: [{ kind: 'detail', height: 100, props: {},
+    controls: [chart('G1'), { kind: 'rectangle', name: 'R', left: 0, top: 0, width: 1, height: 1, props: {}, children: [chart('G2')] }, chart('G3', [])] }] } as unknown as DesignDoc;
+  const data = { columns: [], rows: [[1]], truncated: false };
+  it('une demande par graphique dont la demande n\'est pas nulle', async () => {
+    const calls: string[] = [];
+    const out = await loadDocCharts({ charts: { data: async (r) => { calls.push(JSON.stringify(r.params)); return data; } } }, doc, { p: 1 });
+    expect(Object.keys(out).sort()).toEqual(['G1', 'G2']); expect(calls).toEqual(['{"p":1}', '{"p":1}']);
+  });
+  it("un graphique d'état ignore la liaison", async () => {
+    const linked = { ...doc, sections: [{ kind: 'detail', height: 100, props: {}, controls: [{ ...chart('G1'), props: { ChartValues: [{ field: 'N', agg: 'sum' }], LinkMasterFields: 'Id', LinkChildFields: 'Client' } }] }] } as unknown as DesignDoc;
+    const reqs: unknown[] = [];
+    await loadDocCharts({ charts: { data: async (r) => { reqs.push(r); return data; } } }, linked);
+    expect(reqs).toHaveLength(1); expect(reqs[0]).not.toHaveProperty('link');
+  });
+  it('un appel refusé donne {}', async () => {
+    expect(await loadDocCharts({ charts: { data: () => Promise.reject(new Error('bc:notFound')) } }, doc)).toEqual({});
   });
 });

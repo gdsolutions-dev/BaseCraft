@@ -47,7 +47,7 @@ function useCommit<K extends SettingKey>(k: K, stored: AppSettings[K], parse: (v
     const v = parse(raw);
     if (v === null) { setDraft(show(sent.current ?? stored)); return; }   // a write still in flight: its value, not the stale stored one
     setDraft(show(v));
-    if (v === stored || v === sent.current) return;
+    if (v === (sent.current ?? stored)) return;   // a write in flight is the value now: the stale stored one must not swallow a change back to it
     sent.current = v;
     api.app.setSetting(k, v).catch((e: unknown) => { sent.current = null; setDraft(show(stored)); void showError(e); });
   };

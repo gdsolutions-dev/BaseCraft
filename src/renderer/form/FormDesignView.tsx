@@ -21,6 +21,7 @@ import { ImageGallery } from '../designer/ImageGallery';
 import { useDocPicture } from '../design/resources';
 import { armedTool, readPictureFile, sectionBackground } from '../designer/image-gallery-model';
 import { FieldList } from '../designer/FieldList';
+import { useChartPane } from '../designer/chart-pane';
 import { formatCommands, type FormatPopupId } from '../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../designer/layout-commands';
 import { deleteKeyAllowed } from '../designer/delete-guard';
@@ -34,6 +35,7 @@ import { registerCommandStates, registerCommands, registerModeGuard, runCommand 
 import { editsDesign, sameView, type DocMode } from '../state/app-state';
 import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withPageTabOrder, withTabOrder } from './form-def';
 import { DocThemeProvider, useAppMode } from '../design/theme-context';
+import { ChartDocSource } from './controls/ChartCtl';
 import { useFormHost } from './form-host';
 import { viewHost } from './layout-host';
 import { LayoutRecordBar } from './LayoutRecordBar';
@@ -96,7 +98,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const root = useRef<HTMLDivElement>(null);
   const logoFile = useRef<HTMLInputElement>(null);
   const loaded = useRef<{ name: string; token: number } | null>(null);
-  const busy = useRef(false);
+  const busy = useRef<Promise<boolean> | null>(null);   // the save under way
+  const savedDoc = useRef<DesignDoc | null>(null);   // the design last saved: still shown, nothing to save (before the render says so)
   const [liveGen, setLiveGen] = useState(0);   // L2 : la définition relue d'ailleurs (pas un enregistrement d'ici) relit les données du mode Page
 
   useEffect(() => { if (fieldListFor === tab.name) fieldListFor = null; }, [tab.name]);
@@ -201,10 +204,9 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const askName = (initial: string) => modal.prompt({ titleKey: 'form.saveAsTitle', labelKey: 'form.nameLabel', initial,
     validate: (v) => { const k = nameErrorKey(v); return k && t(k); } });
 
-  const save = async (): Promise<boolean> => {
+  const saveNow = async (): Promise<boolean> => {
     const { readOnly: ro, tab: doc, phase: ph } = live.current;
-    if (ro || ph !== 'ready' || busy.current) return false;
-    busy.current = true;
+    if (ro || ph !== 'ready') return false;
     try {
       await flush();
       let name = doc.isNew ? await askName(doc.name) : doc.name;
@@ -214,6 +216,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
         const def: DesignDoc = { ...s.doc, sections: [...s.doc.sections, ...more] };
         const r = await api.objects.save('form', name, def, doc.isNew ? null : doc.name);
         if (r.ok) {
+          savedDoc.current = s.doc;
           send({ type: 'saved' });
           setNotice({ dropped: 0, badSource: false });   // réécrit sans les contrôles illisibles
           loaded.current = { name, token: doc.reloadToken + 1 };   // objectSaved l'augmente : ce n'est pas une modification venue d'ailleurs
@@ -227,13 +230,17 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     } catch (e) {
       await showError(e);   // par exemple bc:invalidArgument au-delà de 8 Mo : le concepteur reste modifié
       return false;
-    } finally {
-      busy.current = false;
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<boolean> => busy.current ? Promise.resolve(false) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
-  const leave = (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => leaveFormDesign(reason, target, {
-    mode: live.current.tab.mode, name: live.current.tab.name, busy: busy.current, flush, dirty: () => live.current.state.dirty || !!live.current.tab.isNew, confirm: modal.confirm, save,
+  const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
+    return leaveFormDesign(reason, target, leaving());
+  };
+  const leaving = (): Leaving => ({
+    mode: live.current.tab.mode, name: live.current.tab.name, busy: !!busy.current, flush, dirty: () => live.current.state.doc !== savedDoc.current && (live.current.state.dirty || !!live.current.tab.isNew), confirm: modal.confirm, save,
     unsaved: (keep) => { // what the form view shows: the design as it stands (its extra sections too), unsaved
       const id = live.current.tab.id;
       if (!keep) { unsavedRunDoc.delete(id); return; }
@@ -272,6 +279,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   cmds.current = { save, leave, tabOrder, addHeaderItem };
   const selected = selectedCount(state);
   const layoutKind = layoutKey(state);
+  const chartPane = useChartPane({ state, dispatch: send, readOnly, tables: lists.tables, queries: lists.queries, onTool: setTool });
   // the form view runs in front (DocumentView keeps this design behind it): this design registers no command, only its close guard
   // (closing the tab there asks to save the design, as a query does). A tab merely in the
   // background still registers, its close guard above all (else a modified form closed from another tab is lost unasked)
@@ -287,6 +295,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
       themes: () => setThemesOpen(true),
       insertImage: () => setImagesOpen(true),
+      ...chartPane.commands,
       backgroundImage: () => setBackgroundOpen(true),
       themeColors: () => setColorsOpen(true),
       themeFonts: () => setFontsOpen(true),
@@ -305,7 +314,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, behind, selected, layoutKind]);
+  }, [tab.id, behind, selected, layoutKind, chartPane.hasChart]);
   // Coller grisé tant qu'aucun presse-papiers (contrôles qu'un formulaire reçoit, objets du volet) n'a rien à coller
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));
   // L2 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte)
@@ -404,7 +413,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   if (typeof phase === 'object') return <div className="doc-empty muted" role="alert" data-testid="form-load-error">{phase.error}</div>;
   if (phase === 'loading' || region === null) return <div className="form-design" ref={root} />;
   return (
-    <DocThemeProvider docProps={state.doc.props} mode={appMode}>
+    <DocThemeProvider docProps={state.doc.props} mode={appMode}><ChartDocSource.Provider value={state.doc.recordSource ?? null}>
     <div className="form-design" ref={root} data-testid="form-design">
       {notice.dropped > 0 && <div className="fz-banner" role="status" data-testid="form-dropped">{t('form.dropped', { count: notice.dropped })}</div>}
       {notice.badSource && <div className="fz-banner" role="status" data-testid="form-bad-source">{t('form.badSource')}</div>}
@@ -412,12 +421,13 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       {linked && <div className="fz-banner" role="status" data-testid="form-subform-linked">{linked}</div>}
       {layout && liveData?.notice && !(liveData.notice === 'unreadable' && sourceError) && <div className="fz-banner" role="status" data-testid="layout-notice">{t(`layoutView.notice.${liveData.notice}`)}</div>}
       <Designer state={state} dispatch={dispatchDesign} host={view.host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} background={bgPicture} />
+        side={<>{fieldList && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />}{chartPane.side}</>} restrict={view.restrict} background={bgPicture} />
       {layout && <LayoutRecordBar row={row} count={liveData?.rows.length ?? 0} onGo={setRow} />}
       {menu && <ArrangePopup menu={menu} state={state} dispatch={send} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={send} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {formatMenu && <FormatPopup id={formatMenu} state={state} dispatch={send} docKind="form" sectionLabel={host.sectionLabel} onClose={closeFormatMenu} readOnly={readOnly} />}
       {imagesOpen && <ImageGallery mode="insert" readOnly={readOnly} onPick={pickImage} onClose={closeImages} />}
+      {chartPane.popup}
       {backgroundOpen && <ImageGallery mode="background" readOnly={readOnly} onPick={pickBackground} onNone={() => pickBackground(null)} onClose={closeBackground} />}
       {themesOpen && <ThemeGallery kind="form" dispatch={send} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       {colorsOpen && <ColorsGallery kind="form" appDispatch={dispatch} dispatch={send} onClose={closeColors} readOnly={readOnly} />}
@@ -425,6 +435,6 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       <input ref={logoFile} type="file" hidden accept={PICTURE_ACCEPT} data-testid="form-logo-file"
         onChange={(e) => { readLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
-    </DocThemeProvider>
+    </ChartDocSource.Provider></DocThemeProvider>
   );
 }

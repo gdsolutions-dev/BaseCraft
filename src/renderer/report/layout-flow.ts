@@ -1,7 +1,7 @@
 // Mode Page des états (L3) : les premiers enregistrements de la source, lus une fois par source, et la mise en page continue
 // de la définition courante sur ces lignes. Ni événement ni macro. Module pur, hors loadFlowData dont l'api est injectée (le
 // pont par défaut, chargé à la demande : les tests n'ont pas de window).
-import type { BasecraftApi } from '../../shared/api';
+import type { BasecraftApi, CellInput } from '../../shared/api';
 import type { DesignDoc } from '../../shared/design/model';
 import { layoutReport } from '../../shared/report/layout';
 import type { Theme } from '../../shared/design/theme';
@@ -9,6 +9,7 @@ import type { ResourceMap } from '../../shared/pictures';
 import { readReport } from '../../shared/report/model';
 import type { LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
 import type { LiveNotice } from '../form/live-records';
+import type { ChartDataMap } from '../../shared/chart/query';
 import { docParameters, loadDocData, type AskParameters } from './load';
 
 export const FLOW_ROWS = 100;
@@ -16,7 +17,7 @@ export const FLOW_ROWS = 100;
 export type FlowNotice = LiveNotice | 'truncated' | 'layoutFailed';
 export interface FlowData { report: LaidOutReport | null; notice: FlowNotice | null }
 /** Les lignes lues (opaque pour l'appelant) : gardées d'une modification à l'autre tant que la source ne change pas. */
-export interface FlowSource { data: ReportData; notice: FlowNotice | null }
+export interface FlowSource { data: ReportData; notice: FlowNotice | null; params?: Record<string, CellInput> }
 export type FlowApi = Pick<BasecraftApi, 'sources'>;
 
 const NO_DATA: ReportData = { fields: [], rows: [] };
@@ -38,8 +39,8 @@ export async function loadFlowData(doc: DesignDoc, ask: AskParameters, api?: Flo
     const a = api ?? (await import('../bridge')).api;
     const params = await docParameters(a, doc, ask);
     const data = await loadDocData(a, doc, params, undefined, undefined, FLOW_ROWS + 1);   // une de plus : la source en a-t-elle davantage ?
-    if (data.rows.length > FLOW_ROWS) return { data: { ...data, rows: data.rows.slice(0, FLOW_ROWS) }, notice: 'truncated' };
-    return { data, notice: data.rows.length ? null : 'empty' };
+    if (data.rows.length > FLOW_ROWS) return { data: { ...data, rows: data.rows.slice(0, FLOW_ROWS) }, notice: 'truncated', params };
+    return { data, notice: data.rows.length ? null : 'empty', params };
   } catch (e) {
     return { data: NO_DATA, notice: (e as Error | null)?.name === 'AbortError' ? 'parameters' : 'unreadable' };
   }
@@ -47,9 +48,9 @@ export async function loadFlowData(doc: DesignDoc, ask: AskParameters, api?: Flo
 
 /** La définition courante mise en page en un seul flux sur les lignes déjà lues. Les crochets d'événements (`hooks`) et
  *  `onPage` de `env` sont écartés : le mode Page n'exécute ni Sur formatage ni Sur impression. */
-export async function layoutFlow(doc: DesignDoc, source: FlowSource, env: LayoutEnv, signal: AbortSignal, theme?: Theme, resources?: ResourceMap): Promise<LaidOutReport> {
+export async function layoutFlow(doc: DesignDoc, source: FlowSource, env: LayoutEnv, signal: AbortSignal, theme?: Theme, resources?: ResourceMap, charts?: ChartDataMap): Promise<LaidOutReport> {
   const { hooks: _hooks, onPage: _onPage, ...rest } = env;
-  return layoutReport(readReport(doc, source.data.fields, { allCells: true, theme, resources }), source.data, { ...rest, signal }, { flow: true });
+  return layoutReport(readReport(doc, source.data.fields, { allCells: true, theme, resources, ...(charts ? { charts } : {}), ...(env.chartLabels ? { chartLabels: env.chartLabels } : {}) }), source.data, { ...rest, signal }, { flow: true });
 }
 
 /** Une seule mise en page à la fois : `schedule` lance `job` `delay` ms après le dernier appel, annule la précédente (son

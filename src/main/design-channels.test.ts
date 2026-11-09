@@ -14,7 +14,7 @@ const DATA_CHANNELS: string[] = [
   CH.relationsList, CH.relationsLayout, CH.relationsCascadeChildren,
   CH.importProgress, CH.importSpecs,
   CH.objectsList, CH.objectsGet,
-  CH.sourcesDescribe, CH.sourcesPage, CH.sourcesSave, CH.sourcesAutoLookup,
+  CH.sourcesDescribe, CH.sourcesPage, CH.sourcesSave, CH.sourcesAutoLookup, CH.chartsData,
   CH.queriesActionCount, CH.queriesRunAction, CH.queriesCancel,
   CH.reportsExportPdf, CH.reportsPrint, CH.exchangeExportText, CH.exchangeExportExcel,
   CH.linksRefresh, CH.linksUnlock, CH.linksLogin, CH.linksLoginInfo, // C4 R10: the Runtime logs in
@@ -34,6 +34,7 @@ describe('design channels', () => {
   for (const ch of [CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove]) expect(isDesignChannel(ch)).toBe(true);
   for (const ch of [CH.resourcesList, CH.resourcesGet, CH.resourcesChanged]) expect(isDesignChannel(ch)).toBe(false);
 });
+  it('charts.data only reads: a data channel (Runtime keeps it)', () => { expect(isDesignChannel(CH.chartsData)).toBe(false); });
   it('link design channels are design, refresh is not', () => { // R15
     for (const ch of [CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
       CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember]) expect(isDesignChannel(ch)).toBe(true);

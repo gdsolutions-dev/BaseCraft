@@ -2,11 +2,15 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { LocaleInfo } from '../shared/locale-format';
 import { sameName } from '../shared/field-types';
 import type { RecordSourceRef, SourceInfo } from '../shared/record-source';
-import { flattenControls, validateDesignDoc, type ControlKind, type DesignDoc, type SectionKind } from '../shared/design/model';
+import { flattenControls, validateDesignDoc, type ControlDef, type ControlKind, type DesignDoc, type SectionKind } from '../shared/design/model';
+import { isColorValue } from '../shared/design/colors';
 import { autoForm } from '../shared/design/auto-form';
 import { instantReport } from '../shared/report/instant';
 import { bareName } from '../shared/report/model';
-import { getObject, saveObject, setObjectDescription } from '../main/db/objects';
+import { AGGS, CHART_MAX_AXIS, CHART_MAX_SERIES, CHART_MAX_VALUES, CHART_TYPES, DASHES, DATE_GROUPS, GAPS, isLineWidth, LINE_WIDTH, readChartSpec, SERIES_TYPES } from '../shared/chart/spec';
+import { chartFormatIssue } from '../shared/chart/option';
+import { TRENDLINES } from '../shared/chart/trend';
+import { getObject, listObjects, saveObject, setObjectDescription } from '../main/db/objects';
 import { isTableName, tableDesign } from '../main/db/schema';
 import { describeQuerySource } from '../main/query/source';
 import { listResources } from '../main/db/resources';
@@ -20,7 +24,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 
 /** The words the renderer's formLabels(t) resolves to in the en locale (designer.ctlPrefix.*, form.tabPage). */
 const PREFIX: Record<ControlKind, string> = { label: 'Label', textBox: 'Text', checkBox: 'Check', optionGroup: 'Frame', optionButton: 'Option', comboBox: 'Combo',
-  listBox: 'List', commandButton: 'Command', subform: 'Child', image: 'Image', line: 'Line', rectangle: 'Box', pageBreak: 'PageBreak', tabControl: 'TabCtl' };
+  listBox: 'List', commandButton: 'Command', subform: 'Child', image: 'Image', line: 'Line', rectangle: 'Box', pageBreak: 'PageBreak', tabControl: 'TabCtl', chart: 'Chart' };
 export const LABELS = { prefix: (k: ControlKind) => PREFIX[k], tabPage: (n: number) => `Page${n}` };
 
 const SECTIONS: Record<Kind, readonly SectionKind[]> = { form: ['formHeader', 'detail', 'formFooter'],
@@ -53,6 +57,57 @@ function describe(db: DatabaseSync, ref: RecordSourceRef, info: LocaleInfo): { r
     if (isSourceError(e)) return e.message.replace(/^bc:/, '');
     throw e;
   }
+}
+
+/** Why a chart control is refused (raw props, stricter than readChartSpec's tolerant read), or null. `docFields`: the document's own record source. */
+function chartIssue(db: DatabaseSync, c: ControlDef, docFields: SourceInfo['fields'], info: LocaleInfo): string | null {
+  const p = c.props;
+  if (p.ChartType !== undefined && !(CHART_TYPES as readonly unknown[]).includes(p.ChartType)) return `ChartType "${String(p.ChartType)}" is not one of ${CHART_TYPES.join(', ')}`;
+  if (p.ChartValues !== undefined && !Array.isArray(p.ChartValues)) return 'ChartValues must be an array';
+  const raw = (p.ChartValues ?? []) as unknown[];
+  if (raw.length > CHART_MAX_VALUES) return `ChartValues has ${raw.length} entries, at most ${CHART_MAX_VALUES}`;
+  for (const [i, v] of raw.entries()) {
+    if (!isObject(v) || typeof v.field !== 'string' || v.field.trim() === '') return `ChartValues[${i}] needs a string field`;
+    if (v.agg !== undefined && !(AGGS as readonly unknown[]).includes(v.agg)) return `ChartValues[${i}] agg "${String(v.agg)}" is not one of ${AGGS.join(', ')}`;
+  }
+  if (p.ChartSeries !== undefined) {
+    if (!Array.isArray(p.ChartSeries)) return 'ChartSeries must be an array';
+    if (p.ChartSeries.length > CHART_MAX_SERIES) return `ChartSeries has ${p.ChartSeries.length} entries, at most ${CHART_MAX_SERIES}`;
+    for (const [i, s] of (p.ChartSeries as unknown[]).entries()) {
+      if (!isObject(s) || typeof s.field !== 'string' || !raw.some((v) => isObject(v) && typeof v.field === 'string' && sameName(v.field, s.field as string))) return `ChartSeries[${i}] needs the string field of an entry of ChartValues`;
+      if (s.type !== undefined && !(SERIES_TYPES as readonly unknown[]).includes(s.type)) return `ChartSeries[${i}] type "${String(s.type)}" is not one of ${SERIES_TYPES.join(', ')}`;
+      if (s.secondary !== undefined && typeof s.secondary !== 'boolean') return `ChartSeries[${i}] secondary must be a boolean`;
+      if (s.name !== undefined && typeof s.name !== 'string') return `ChartSeries[${i}] name must be a string`;
+      if (s.color !== undefined && !isColorValue(s.color)) return `ChartSeries[${i}] color must be a color value (theme:... or #rrggbb)`;
+      if (s.borderColor !== undefined && !isColorValue(s.borderColor)) return `ChartSeries[${i}] borderColor must be a color value (theme:... or #rrggbb)`;
+      for (const k of ['dataLabels', 'marker'] as const) if (s[k] !== undefined && typeof s[k] !== 'boolean') return `ChartSeries[${i}] ${k} must be a boolean`;
+      if (s.trendlineName !== undefined && typeof s.trendlineName !== 'string') return `ChartSeries[${i}] trendlineName must be a string`;
+      if (s.lineWidth !== undefined && !isLineWidth(s.lineWidth)) return `ChartSeries[${i}] lineWidth must be a number from ${LINE_WIDTH.min} to ${LINE_WIDTH.max}`;
+      for (const [k, list] of [['trendline', TRENDLINES], ['dash', DASHES], ['gap', GAPS]] as const) {
+        if (s[k] !== undefined && !(list as readonly unknown[]).includes(s[k])) return `ChartSeries[${i}] ${k} "${String(s[k])}" is not one of ${list.join(', ')}`;
+      }
+    }
+  }
+  const fmtIssue = chartFormatIssue(p);
+  if (fmtIssue) return fmtIssue;
+  if (p.ChartAxis !== undefined && (!Array.isArray(p.ChartAxis) || p.ChartAxis.some((a) => typeof a !== 'string'))) return 'ChartAxis must be an array of field names';
+  if (Array.isArray(p.ChartAxis)) {
+    if (p.ChartAxis.length > CHART_MAX_AXIS) return `ChartAxis has ${p.ChartAxis.length} fields, at most ${CHART_MAX_AXIS}`;
+    if (p.ChartAxis.some((a) => (a as string).trim() === '')) return 'ChartAxis must not contain an empty field name';
+  }
+  if (p.ChartDateGroup !== undefined && !(DATE_GROUPS as readonly unknown[]).includes(p.ChartDateGroup)) return `ChartDateGroup "${String(p.ChartDateGroup)}" is not one of ${DATE_GROUPS.join(', ')}`;
+  if (p.ChartLegend !== undefined && typeof p.ChartLegend !== 'string') return 'ChartLegend must be a string';
+  let fields = docFields;
+  if (p.ChartSource !== undefined) {
+    const ref = readRef(p.ChartSource);
+    if (typeof ref === 'string') return 'ChartSource must be { kind: "table"|"query", name } or { kind: "sql", sql }';
+    const d = describe(db, ref, info);
+    if (typeof d === 'string') return d;
+    fields = d.info.fields;
+  }
+  const s = readChartSpec(p);
+  const missing = [...s.axis, ...(s.legend ? [s.legend] : []), ...s.values.map((v) => v.field)].find((f) => !fields.some((x) => sameName(x.name, f)));
+  return missing === undefined ? null : `field "${missing}" is not a field of the chart source`;
 }
 
 function create(kind: Kind, db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo): OpOutcome {
@@ -90,6 +145,11 @@ function create(kind: Kind, db: DatabaseSync, args: Record<string, unknown>, inf
     const absent = usedResourceNames(design).find((n) => !gallery.includes(n));
     if (absent !== undefined) return refuse(`shared picture not in the gallery: ${absent}`);
     for (const c of design.sections.flatMap((s) => flattenControls(s.controls))) {
+      if (c.kind === 'chart') {
+        const issue = chartIssue(db, c, fields, info);
+        if (issue !== null) return refuse(`control ${c.name}: ${issue}`);
+        continue;
+      }
       const src = c.props.ControlSource;
       if (src === undefined || src === '') continue;
       if (typeof src !== 'string') return refuse(`control ${c.name}: ControlSource must be a string`);
@@ -108,3 +168,17 @@ function create(kind: Kind, db: DatabaseSync, args: Record<string, unknown>, inf
 
 export const formCreate = (db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo): OpOutcome => create('form', db, args, info);
 export const reportCreate = (db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo): OpOutcome => create('report', db, args, info);
+
+/** Every chart control of every form and report, nested ones included (for `basecraft-cli charts FILE`). */
+export function listCharts(db: DatabaseSync): { object: { kind: Kind; name: string }; control: string; type: string; source: RecordSourceRef | null }[] {
+  return (['form', 'report'] as const).flatMap((kind) => listObjects(db, kind).flatMap((o) => {
+    try {
+      const doc = getObject(db, kind, o.name)?.definition;
+      if (!isObject(doc) || !Array.isArray(doc.sections)) return [];
+      return (doc.sections as { controls?: ControlDef[] }[]).flatMap((s) => flattenControls(s.controls ?? [])).filter((c) => isObject(c) && c.kind === 'chart').map((c) => {
+        const spec = readChartSpec(c.props);
+        return { object: { kind, name: o.name }, control: c.name, type: spec.type, source: spec.source };
+      });
+    } catch { return []; } // objet abîmé à la main : ignoré, la liste continue
+  }));
+}

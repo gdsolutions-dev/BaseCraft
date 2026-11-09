@@ -73,9 +73,13 @@ test('Event tab: a named macro picked and run; an embedded macro built with « �
     await expect(page.getByTestId('prop-OnClick-error')).toHaveText(fr.sheet.error.badMacroName);
     await page.getByTestId('prop-OnClick').press('Escape');
     await expect(page.getByTestId('prop-OnClick')).toHaveValue('MLyon');
+    // a Windows CI run saved the form without OnClick: these tell whether the change was gone before the save or lost by it
+    await expect(page.getByTestId('doc-tab-form-FClients')).toContainText('•');
+    await expect(page.getByTestId('prop-OnClick')).toHaveValue('MLyon');
     await page.keyboard.press('Control+s');
     await expect(page.getByTestId('doc-tab-form-FClients')).not.toContainText('•');
-    expect((await getForm(page, 'FClients')).sections[1]!.controls[1]!.props.OnClick).toBe('MLyon');
+    const saved = (await getForm(page, 'FClients')).sections[1]!.controls;
+    expect(saved.find((c) => c.name === 'cmdCommandes')?.props.OnClick, JSON.stringify(saved)).toBe('MLyon');
     await page.getByTestId('ribbon-tab-home').click();
     await pickView(page, 'viewForm');
     await page.getByTestId('form-ctl-cmdCommandes').click();

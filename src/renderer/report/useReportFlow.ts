@@ -8,9 +8,12 @@ import type { LaidOutReport } from '../../shared/report/types';
 import { usedResourceNames } from '../../shared/pictures';
 import { useResources } from '../design/resources';
 import { useModal } from '../shell/Modal';
+import { api } from '../bridge';
 import { flowKey, keptOutOfLayout, latestRun, layoutFlow, loadFlowData, type FlowData, type FlowSource } from './layout-flow';
 import { onUserFunctionsChanged } from '../python/user-function-names';
+import { loadDocCharts } from './load';
 import { askParameters, layoutEnv } from './ReportPreviewView';
+import type { ChartData } from '../../shared/chart/query';
 
 const RELAYOUT_DELAY = 150;   // ms
 
@@ -43,10 +46,16 @@ export function useReportFlow(doc: DesignDoc, active: boolean, theme?: Theme): {
   }, [active, key]);   // eslint-disable-line react-hooks/exhaustive-deps -- `doc` n'est lu que pour sa source, qui suit key
   useEffect(() => { if (!active) setSrc(keptOutOfLayout); }, [active]);
 
+  const chartCache = useRef(new Map<string, Promise<ChartData | null>>());   // par demande : une modification ne rappelle pas charts.data
   const source = src?.key === key ? src.source : null;
   useEffect(() => {
     if (!active || !source) return;
-    runs.schedule((signal) => layoutEnv().then((env) => layoutFlow(doc, source, env, signal, theme, resources)), (report) => setLaid({ doc, source, report }));
+    runs.schedule(async (signal) => {
+      const env = await layoutEnv();
+      const charts = await loadDocCharts(api, doc, source.params, chartCache.current);
+      if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+      return layoutFlow(doc, source, env, signal, theme, resources, charts);
+    }, (report) => setLaid({ doc, source, report }));
     return runs.cancel;
   }, [active, doc, source, runs, fnTick, theme, resources]);
 

@@ -8,10 +8,9 @@ import { toSourceRef } from '../../shared/record-source';
 import { Ellipsis, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { colorCss } from '../../shared/design/colors';
 import { useDocTheme } from '../design/theme-context';
-import { ColorPicker } from './ColorPicker';
-import { colorLabel } from './color-picker-model';
+import { ColorEditor } from './ColorEditor';
+export { ColorEditor };
 import { readEvent } from '../../shared/design/events';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
 import type { CellRef } from '../../shared/design/layout';
@@ -35,7 +34,7 @@ import { shellDispatch } from '../shell/modal-tab';
 import type { DesignerAction, DesignerState } from './designer-model';
 import { restrictedTabs, type DesignerRestrict } from './designer-restrict';
 import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, eventToCanonical, eventToDisplay, fontFromLabel, fontLabel, fontWarning, fromSourceRef, themeFontChoices,
-  MIXED, cellName, pictureLabel, setPictureType, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
+  MIXED, cellName, chartSummary, pictureLabel, setPictureType, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
 import { PICTURE_ACCEPT } from '../../shared/pictures';
@@ -211,7 +210,11 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
   } else {
     switch (d.editor) {
       case 'text': case 'fieldList':
-        editor = field({ shown: v === undefined || v === null ? '' : String(v), parse: text });
+        // Titre du graphique : le défaut est localisé, la feuille le montre tant que rien n'est saisi
+        editor = field({ shown: v === undefined || v === null ? (d.name === 'ChartTitle' && !mixed ? t('chart.defaultTitle') : '') : String(v), parse: text });
+        break;
+      case 'chart':   // source, axe, valeurs : résumé en lecture seule, l'édition se fait dans les paramètres du graphique
+        editor = <input id={id} data-testid={testId} readOnly value={mixed ? t('sheet.mixed') : chartSummary(d.name, v, (a) => t(`chart.settings.agg.${a}`))} />;
         break;
       case 'number':
         editor = field({ shown: typeof v === 'number' ? String(v).replace('.', region.decimalSep) : '',
@@ -438,34 +441,6 @@ function PictureEditor({ id, testId, value, mixed, disabled, commit, shared }: {
       <input ref={file} type="file" hidden accept={PICTURE_ACCEPT} data-testid={`${testId}-file`}
         onChange={(e) => { read(e.target.files?.[0]); e.target.value = ''; }} />
       {error && <div id={`${id}-msg`} className="dz-perror" role="alert" data-testid={`${testId}-error`}>{t(error)}</div>}
-    </div>
-  );
-}
-
-/** Échap ou un clic dehors referme le choix des couleurs ; le focus revient au bouton. La cellule montre « Accent 2, Plus clair 80% » (aussi en infobulle). */
-function ColorEditor({ id, testId, value, mixed, disabled, fill, commit, transparent }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean; fill: boolean;
-  commit(v: unknown): string | null; transparent?(): void }) {
-  const { t } = useTranslation();
-  const ctx = useDocTheme();
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    window.addEventListener('pointerdown', outside, true);
-    return () => window.removeEventListener('pointerdown', outside, true);
-  }, [open]);
-  const label = mixed ? t('sheet.mixed') : colorLabel(value, t);
-  return (
-    <div ref={box} className="dz-pfield" onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); button.current?.focus(); } }}>
-      <button ref={button} type="button" id={id} data-testid={testId} className="dz-pcolor" disabled={disabled} aria-expanded={open} title={label} onClick={() => setOpen(!open)}>
-        {!mixed && <i className="dz-swatch" style={{ background: colorCss(value, 'transparent', ctx) }} aria-hidden />}<span>{label}</span>
-      </button>
-      {open && !disabled && (
-        <ColorPicker value={mixed ? undefined : value} fill={fill} theme={ctx.theme} mode={ctx.mode} testId={`${testId}-colors`}
-          onPick={(c) => { if (c === 'transparent') transparent?.(); else commit(c ?? undefined); setOpen(false); button.current?.focus(); }} />
-      )}
     </div>
   );
 }

@@ -333,7 +333,8 @@ export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: Do
   const [selected, setSelected] = useState(0);
   const [saving, setSaving] = useState(false);
   const [requests, setRequests] = useState(0);
-  const busy = useRef(false);
+  const busy = useRef<Promise<boolean> | null>(null);   // the save under way
+  const savedModel = useRef<unknown>(null);   // the grid last saved: still shown, nothing to save (before the render says so)
   const root = useRef<HTMLDivElement>(null);
   const lastExpr = useRef<string | null>(null);
   const lastRow = useRef(0); // the criteria row last focused (Insert / Delete Rows)
@@ -467,11 +468,9 @@ export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: Do
   };
 
   /** The whole save flow; true when the query is saved. */
-  const save = async (): Promise<boolean> => {
-    if (builder) return builderSave();
+  const saveNow = async (): Promise<boolean> => {
     const { readOnly: ro, state: s } = live.current;
-    if (ro || !s || busy.current) return false;
-    busy.current = true;
+    if (ro || !s) return false;
     try {
       await flush();
       setSaving(true);
@@ -502,7 +501,7 @@ export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: Do
           else descFailed = () => message(`dialog.op.${r.reason}`, { name, newName: '', table: '', view: '' });
         } catch (e) { descFailed = () => showError(e); }
       }
-      if (!descFailed) set({ type: 'clean' });
+      if (!descFailed) { set({ type: 'clean' }); savedModel.current = m; }
       if (live.current.view === 'sql') setSql(text);
       setState({ ...s, original: name });
       loaded.current = { name, token: doc.reloadToken + 1 }; // objectSaved bumps it: this save needs no reload
@@ -513,16 +512,20 @@ export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: Do
       await showError(e);
       return false;
     } finally {
-      busy.current = false;
       setSaving(false);
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<boolean> => builder ? builderSave()
+    : busy.current ? Promise.resolve(false) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
   /** Before the view goes (Access): a change of mode needs the save; a close offers to drop the edits. */
   const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
-    if (busy.current) return false;
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
     await flush();
-    const { model: m, tab: doc, readOnly: ro } = live.current;
+    const { model: lm, tab: ld, readOnly: ro } = live.current;
+    const saved = lm === savedModel.current;   // just saved, not rendered yet: neither modified nor new
+    const m = saved ? { ...lm, dirty: false } : lm, doc = saved ? { ...ld, isNew: false } : ld;
     if (!builder && reason === 'mode' && !live.current.passThrough) { // a new or modified query runs as it stands, unsaved (Access); its design stays behind (DocumentView)
       if (target === 'design') return true;
       unsavedRunSql.delete(doc.id);

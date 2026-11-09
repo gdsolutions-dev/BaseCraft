@@ -417,7 +417,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThanOrEqual(95); // 12 Arrange layout commands delivered (dispositions L1)
+    expect(planned.length).toBeGreaterThanOrEqual(94); // exact count today: 94 (95 before Insert Modern Chart and Chart Settings left the planned set); lower it only when a command is delivered
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -1167,5 +1167,27 @@ describe('Insert Image command (F3)', () => {
       expect(c.enabled(ctx({ kind: 'report', mode: 'run' }))).toBe(false);
       expect(c.enabled(ctx({ kind: null, mode: null }))).toBe(false);
     }
+  });
+});
+
+describe('Insert Modern Chart and Chart Settings commands (F4)', () => {
+  const ctx = (o: Partial<RibbonContext>): RibbonContext => ({ hasBase: true, readOnly: false, mode: 'design', isNew: false, kind: 'form', ...o });
+  const all = RIBBON.flatMap((t) => t.groups.flatMap((g) => g.commands));
+  it('Insert Modern Chart is a delivered popup, enabled in the Design view of a writable form or report only', () => {
+    const cmd = all.filter((x) => x.id === 'insertModernChart');
+    expect(cmd.length).toBe(2);
+    for (const c of cmd) {
+      expect([c.planned, c.popup]).toEqual([undefined, true]);
+      for (const kind of ['form', 'report'] as const) {
+        expect(c.enabled(ctx({ kind })), kind).toBe(true);
+        expect(c.enabled(ctx({ kind, readOnly: true })), `${kind} ro`).toBe(false);
+        expect(c.enabled(ctx({ kind, mode: 'run' })), `${kind} run`).toBe(false);
+      }
+    }
+  });
+  it('Chart Settings is delivered in both Design tabs (the views register its handler only with a chart selected)', () => {
+    const cmd = all.filter((x) => x.id === 'chartSettings');
+    expect(cmd.length).toBe(2);
+    for (const c of cmd) { expect(c.planned).toBeUndefined(); expect(c.enabled(ctx({ kind: 'report' }))).toBe(true); expect(c.enabled(ctx({ mode: 'run' }))).toBe(false); }
   });
 });

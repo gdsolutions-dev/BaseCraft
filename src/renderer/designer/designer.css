@@ -159,3 +159,27 @@
 .ig-thumb { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border: 1px solid var(--bc-border, #ccc); border-radius: 3px; }
 .ig-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .ig-grid .tg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px; }
+
+/* Volet Paramètres du graphique (F4) : comme la Liste des champs, plus large ; sections repliables */
+.dz-fields.cs { width: 280px; }
+.cs-close, .cs-fold { display: inline-flex; align-items: center; padding: 2px; border-radius: 3px; }
+.cs-close:hover, .cs-fold:hover:not(:disabled) { background: var(--hover); }
+.cs-close:focus-visible, .cs-fold:focus-visible, .cs-agg:focus-visible { outline: 2px solid var(--bc-accent); outline-offset: -2px; }
+.cs-tabs { display: flex; gap: var(--bc-space-1); padding: 0 var(--bc-space-3); border-bottom: 1px solid var(--bc-border); }
+.cs-tabs button { padding: 4px 8px; border-bottom: 2px solid transparent; }
+.cs-tabs button[aria-selected="true"] { border-bottom-color: var(--bc-accent); font-weight: 600; }
+.cs-tabs button:disabled { color: var(--bc-text-muted); }
+.cs-body { flex: 1; overflow: auto; padding: var(--bc-space-1) var(--bc-space-3); }
+.cs-head { display: flex; align-items: center; justify-content: space-between; }
+.cs-head h3 { margin: var(--bc-space-2) 0 var(--bc-space-1); font-size: 12px; font-weight: 600; }
+.cs-kinds { display: flex; flex-wrap: wrap; gap: var(--bc-space-2); margin-bottom: var(--bc-space-1); font-size: 12px; }
+.cs-body select { width: 100%; }
+.cs-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; }
+.cs-row.cs-dim { opacity: .5; }
+.cs-agg { text-align: left; font-size: 12px; text-decoration: underline dotted; cursor: pointer; }
+.cs-agg:disabled { cursor: default; text-decoration: none; }
+.cs-hint { margin: var(--bc-space-1) 0; font-size: 11px; }
+.cs-sub { margin: var(--bc-space-2) 0 var(--bc-space-1); font-size: 12px; font-weight: 600; }
+.cs-field { display: flex; flex-direction: column; gap: 2px; padding: 3px 0; font-size: 12px; }
+.cs-field input[type="text"], .cs-field input[type="number"] { width: 100%; }
+.cs-radios { display: flex; gap: var(--bc-space-3); }

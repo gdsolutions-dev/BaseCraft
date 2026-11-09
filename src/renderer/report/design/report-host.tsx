@@ -1,5 +1,6 @@
 // Hôte des états pour le concepteur générique (A4) : outils de la boîte à outils, aperçu des contrôles en mode Création, création
 // d'un contrôle posé, menu de la barre de section (En-tête/pied de page, En-tête/pied d'état), contexte de la Feuille de propriétés.
+import { DesignChart } from '../../form/controls/ChartCtl';
 import { DesignImage } from '../../form/controls/ImageCtl';
 import type { TFunction } from 'i18next';
 import {
@@ -82,6 +83,7 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
       case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'image': return <DesignImage c={c} className="rz rz-image" style={st} />;
+      case 'chart': return <DesignChart c={c} className="rz rz-chart" style={st} />;
       case 'rectangle': return <div className="rz" style={st} />;
       case 'line': {
         const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)

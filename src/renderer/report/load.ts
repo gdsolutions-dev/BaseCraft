@@ -5,6 +5,8 @@ import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import type { SourceInfo } from '../../shared/record-source';
 import { layoutReport } from '../../shared/report/layout';
 import { usedResourceNames, type ResourceMap } from '../../shared/pictures';
+import { chartRequest, type ChartData, type ChartDataMap } from '../../shared/chart/query';
+import { readChartSpec } from '../../shared/chart/spec';
 import { readReport } from '../../shared/report/model';
 import { renderDocumentHtml } from '../../shared/report/render';
 import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData } from '../../shared/report/types';
@@ -50,6 +52,32 @@ export async function loadDocResources(api: Pick<BasecraftApi, 'resources'>, doc
   try { return await api.resources.get(names); } catch { return {}; }
 }
 
+/** Les données de chaque graphique du document, par nom de contrôle : un appel `charts.data` par graphique dont la demande n'est pas
+ *  nulle ({} s'il n'y en a pas ; un appel refusé laisse ce graphique sans données, il se dessine vide). */
+export async function loadDocCharts(api: Pick<BasecraftApi, 'charts'>, doc: DesignDoc, params?: Record<string, CellInput>, cache?: Map<string, Promise<ChartData | null>>): Promise<ChartDataMap> {
+  const found: { name: string; props: Record<string, unknown> }[] = [];
+  const walk = (list: unknown): void => {
+    if (!Array.isArray(list)) return;
+    for (const c of list as { kind?: unknown; name?: unknown; props?: unknown; children?: unknown }[]) {
+      if (c?.kind === 'chart' && typeof c.name === 'string') found.push({ name: c.name, props: (c.props ?? {}) as Record<string, unknown> });
+      walk(c?.children);
+    }
+  };
+  for (const s of doc.sections ?? []) walk((s as { controls?: unknown }).controls);
+  const out: Record<string, ChartData> = {};
+  await Promise.all(found.map(async ({ name, props }) => {
+    const req = chartRequest(readChartSpec(props), doc.recordSource ?? null, params);
+    if (!req) return;
+    // `cache` (mode Page : une remise en page à chaque modification) : une demande identique ne rappelle pas charts.data
+    const key = JSON.stringify(req);
+    let p = cache?.get(key);
+    if (!p) { p = api.charts.data(req).catch(() => null); cache?.set(key, p); }
+    const got = await p;
+    if (got) out[name] = got;
+  }));
+  return out;
+}
+
 /** « Entrer une valeur de paramètre » (promptParameters, C3): the values typed, null on Cancel. */
 export type AskParameters = (params: SourceInfo['parameters']) => Promise<Record<string, CellInput> | null>;
 
@@ -75,7 +103,7 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
  *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
-export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { resources?: Pick<BasecraftApi['resources'], 'get'>; theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
+export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { charts?: Pick<BasecraftApi['charts'], 'data'>; resources?: Pick<BasecraftApi['resources'], 'get'>; theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
   ready?: () => void, where?: string, events?: (doc: DesignDoc) => ReportEvents): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
   const ev = events?.(doc), release = ev?.register();
@@ -89,7 +117,8 @@ export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sou
     if (!data.rows.length && await ev?.noData()) throw reportCancelled();
     const theme = effectiveTheme(doc.props, await api.theme?.get().catch(() => DEFAULT_THEME) ?? DEFAULT_THEME);
     const resources = api.resources ? await loadDocResources({ resources: api.resources } as Pick<BasecraftApi, 'resources'>, doc) : {};
-    return await layoutReport(readReport(doc, data.fields, { theme, resources }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
+    const charts = api.charts ? await loadDocCharts({ charts: api.charts }, doc, params) : {};
+    return await layoutReport(readReport(doc, data.fields, { theme, resources, charts, ...(env.chartLabels ? { chartLabels: env.chartLabels } : {}) }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
   } finally { release?.(); }
 }
 

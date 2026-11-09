@@ -38,4 +38,17 @@ describe('format', () => {
     expect((db.prepare("SELECT value FROM bc_meta WHERE key='format_minor'").get() as { value: string }).value).toBe('4');
     db.close();
   });
+
+  it('creates a form with a chart and lists it with the charts command', async () => {
+    const p = tmp(), spec = p.replace('x.basecraft', 'chart.json');
+    const chart = { kind: 'chart', name: 'Chart1', left: 0, top: 0, width: 4000, height: 3000, props: { ChartAxis: ['Nom'], ChartValues: [{ field: 'ID', agg: 'count' }] } };
+    const doc = { formatVersion: '1.0', recordSource: { kind: 'table', name: 'Clients' }, props: {}, sections: [{ kind: 'detail', height: 4000, props: {}, controls: [chart] }] };
+    fs.writeFileSync(spec, JSON.stringify([{ op: 'table.create', name: 'Clients', fields: [{ name: 'ID', type: 'autoNumber' }, { name: 'Nom', type: 'shortText' }] }, { op: 'form.create', name: 'F', layout: 'doc', doc }]));
+    const io = { out: () => {}, err: () => {} };
+    expect(await run(['new', p], io)).toBe(0);
+    expect(await run(['script', spec, p], io)).toBe(0);
+    const out: string[] = [];
+    expect(await run(['charts', p], { out: (s) => out.push(s), err: () => {} })).toBe(0);
+    expect(JSON.parse(out.join(''))).toEqual([{ object: { kind: 'form', name: 'F' }, control: 'Chart1', type: 'columnClustered', source: null }]);
+  });
 });

@@ -16,6 +16,7 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import { MAX_TWIPS } from '../designer/units';
 import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
+import { DesignChart } from './controls/ChartCtl';
 import { DesignButton, DesignImage } from './controls/ImageCtl';
 import { applies, color, controlLook, gridlineStyle, prop, type ThemeCtx } from './run-model';
 import { useDocTheme } from '../design/doc-theme';
@@ -56,6 +57,7 @@ export function newFormControls(kind: ControlKind, rect: Rect, section: number, 
   const r = { ...rect };
   if (click && (kind === 'checkBox' || kind === 'optionButton')) { r.width = BOX; r.height = BOX; }
   if (click && kind === 'line') r.height = 0;   // un clic pose un trait horizontal
+  if (click && kind === 'chart') { r.width = 4800; r.height = 2800; }   // un clic pose un graphique de taille utile (une étiquette de 2,5 cm ne montre rien)
   const props: Record<string, unknown> = {};
   if (TAB_KINDS.includes(kind)) props.TabIndex = nextTabIndex(s);
   if (kind === 'optionGroup' || kind === 'label' || kind === 'commandButton') props.Caption = name;
@@ -122,6 +124,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'commandButton': return <DesignButton c={c} style={st} />;
     case 'subform': return <div className="fz fz-subform" style={st}><span className="fz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;
     case 'image': return <DesignImage c={c} className="fz fz-image" style={st} />;
+    case 'chart': return <DesignChart c={c} className="fz fz-chart" style={st} />;
     case 'rectangle': return <div className="fz" style={st} />;
     case 'line': {
       const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)

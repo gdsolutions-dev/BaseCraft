@@ -143,6 +143,7 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
         break;
       case 'rectangle': case 'subform': box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) }; break;   // a subform: an empty frame
       case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...(c.pictureAlign ? { pictureAlign: c.pictureAlign } : {}), ...(c.tiling ? { tiling: true } : {}), ...grid(c) }; break;
+      case 'chart': if (c.chart) box.item = { kind: 'chart', ...at, ...c.chart }; break;
       case 'pageBreak': pageBreaks.push(c.top); continue;
       default: continue;   // readReport keeps no other kind
     }

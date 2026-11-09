@@ -10,6 +10,7 @@ import type { SourceField } from '../../../shared/record-source';
 import { uniqueReportName } from '../../../shared/report/instant';
 import { effectiveTheme } from '../../../shared/design/theme';
 import { DocThemeProvider, useBaseTheme } from '../../design/theme-context';
+import { ChartDocSource } from '../../form/controls/ChartCtl';
 import { readReport, type PageSetup } from '../../../shared/report/model';
 import { api } from '../../bridge';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type CanvasProps, type ToolState } from '../../designer/Designer';
@@ -27,6 +28,7 @@ import { ImageGallery } from '../../designer/ImageGallery';
 import { armedTool, readPictureFile, sectionBackground } from '../../designer/image-gallery-model';
 import { boundControlWithLabel } from '../../designer/field-controls';
 import { FieldList } from '../../designer/FieldList';
+import { useChartPane } from '../../designer/chart-pane';
 import { fromSourceRef } from '../../designer/property-sheet-model';
 import { RibbonPopup } from '../../designer/RibbonPopup';
 import type { PropertySheetContext } from '../../designer/sheet-types';
@@ -117,7 +119,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const logoInput = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const loaded = useRef<{ name: string; token: number } | null>(null);
-  const busy = useRef(false);
+  const busy = useRef<Promise<boolean> | null>(null);   // the save under way
+  const savedDoc = useRef<DesignDoc | null>(null);   // the design last saved: still shown, nothing to save (before the render says so)
 
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
@@ -249,17 +252,18 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const askName = (initial: string) => modal.prompt({ titleKey: 'report.saveAsTitle', labelKey: 'report.nameLabel', initial,
     validate: (v) => { const k = nameErrorKey(v); return k && t(k); } });
 
-  const save = async (): Promise<boolean> => {
+  const saveNow = async (): Promise<boolean> => {
     const { readOnly: ro, tab: doc, phase: ph } = live.current;
-    if (ro || ph !== 'ready' || busy.current) return false;
-    busy.current = true;
+    if (ro || ph !== 'ready') return false;
     try {
       await flush();
       let name = doc.isNew ? await askName(uniqueReportName((await api.objects.list('report')).map((o) => o.name), doc.name)) : doc.name;
       for (;;) {
         if (name === null) return false;
-        const r = await api.objects.save('report', name, live.current.state.doc, doc.isNew ? null : doc.name);
+        const def = live.current.state.doc;
+        const r = await api.objects.save('report', name, def, doc.isNew ? null : doc.name);
         if (r.ok) {
+          savedDoc.current = def;
           send({ type: 'saved' });
           loaded.current = { name, token: doc.reloadToken + 1 };   // objectSaved l'augmente : ce n'est pas une modification venue d'ailleurs
           dispatch(doc.isNew ? { type: 'objectSaved', kind: 'report', name, tabId: doc.id } : { type: 'objectSaved', kind: 'report', name });
@@ -272,16 +276,18 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     } catch (e) {
       await showError(e);   // bc:invalidArgument au-delà de la taille permise : le concepteur reste modifié
       return false;
-    } finally {
-      busy.current = false;
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<boolean> => busy.current ? Promise.resolve(false) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
   /** Vers l'aperçu, son « Fermer » ramènera ici. */
   const leave = async (reason: 'mode' | 'close', target?: DocMode): Promise<boolean> => {
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
     const doc = live.current.tab;
+    const clean = () => live.current.state.doc === savedDoc.current;
     const ok = await leaveReportDesign(reason, target, {
-      mode: doc.mode, name: doc.name, isNew: !!doc.isNew, busy: busy.current, flush, dirty: () => live.current.state.dirty, confirm: modal.confirm, save,
+      mode: doc.mode, name: doc.name, isNew: !!doc.isNew && !clean(), busy: !!busy.current, flush, dirty: () => !clean() && live.current.state.dirty, confirm: modal.confirm, save,
       unsaved: (keep) => { // what the preview shows: the design as it stands, unsaved
         if (keep) unsavedRunDoc.set(doc.id, live.current.state.doc); else unsavedRunDoc.delete(doc.id);
       },
@@ -339,6 +345,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   cmds.current = { save, leave, pageSetupDialog, hideDetails, pageNumbers, headerItem };
   const selected = selectedCount(state);
   const layoutKind = layoutKey(state);
+  const chartPane = useChartPane({ state, dispatch: guarded, readOnly, tables: lists.tables, queries: lists.queries, onTool: setTool });
   // the preview runs in front (DocumentView keeps this design behind it): this design registers no command, only its close guard
   // (closing the tab there asks to save the design, as a query does). A tab merely in the
   // background still registers, its close guard above all (else a modified report closed from another tab is lost unasked)
@@ -354,6 +361,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       ...designerCommands(guarded, setMenu, selected),
       themes: () => setThemesOpen(true),
       insertImage: () => setImagesOpen(true),
+      ...chartPane.commands,
       backgroundImage: () => setBackgroundOpen(true),
       themeColors: () => setColorsOpen(true),
       themeFonts: () => setFontsOpen(true),
@@ -380,7 +388,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, behind, selected, layoutKind, guarded, totalKey]);   // setup ne lit que guarded
+  }, [tab.id, behind, selected, layoutKind, guarded, totalKey, chartPane.hasChart]);   // setup ne lit que guarded
 
   // boutons enfoncés : orientation, volet Regrouper, trier et total affiché, Détail masqué
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));   // Coller grisé sinon
@@ -440,18 +448,19 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }
   if (phase === 'loading' || region === null) return <div className="rd" ref={root} />;
   return (
-    <DocThemeProvider docProps={state.doc.props} mode="light">
+    <DocThemeProvider docProps={state.doc.props} mode="light"><ChartDocSource.Provider value={state.doc.recordSource ?? null}>
     <div className="rd" ref={root} data-testid="report-design">
       {sourceError && <div className="rd-banner" role="status" data-testid="report-source-error">{sourceError}</div>}
       {/* en Page : pas de surface de section, donc ni menu contextuel de section ni dépôt de la Liste des champs (Global Constraints) */}
       <Designer state={state} dispatch={guarded} host={host} readOnly={readOnly} tool={tool} onTool={setTool} sheetVisible={sheetVisible} onSheetClose={closeSheet}
-        side={fieldList && !layout && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />} restrict={view.restrict} canvas={canvas} background={sectionBackground(picture, state.doc, layout)} />
+        side={<>{fieldList && !layout && <FieldList fields={fields} readOnly={readOnly} onAdd={onAdd} />}{chartPane.side}</>} restrict={view.restrict} canvas={canvas} background={sectionBackground(picture, state.doc, layout)} />
       {grouping && !layout && <GroupingPane doc={state.doc} fields={fields} display={display} readOnly={readOnly} dispatch={guarded} onClose={closeGrouping} />}
       <ReportIssues issues={issues} />
       {menu && <ArrangePopup menu={menu} state={state} dispatch={guarded} onClose={closeMenu} readOnly={readOnly} />}
       {layoutMenu && <LayoutPopupMenu key={layoutMenu} id={layoutMenu} state={state} dispatch={guarded} onClose={closeLayoutMenu} readOnly={readOnly} />}
       {backgroundOpen && <ImageGallery mode="background" readOnly={readOnly} onPick={pickBackground} onNone={() => pickBackground(null)} onClose={closeBackground} />}
       {imagesOpen && <ImageGallery mode="insert" readOnly={readOnly} onPick={pickImage} onClose={closeImages} />}
+      {chartPane.popup}
       {themesOpen && <ThemeGallery kind="report" dispatch={guarded} appDispatch={dispatch} onClose={closeThemes} readOnly={readOnly} />}
       {colorsOpen && <ColorsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeColors} readOnly={readOnly} />}
       {fontsOpen && <FontsGallery kind="report" appDispatch={dispatch} dispatch={guarded} onClose={closeFonts} readOnly={readOnly} />}
@@ -468,6 +477,6 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       <input ref={logoInput} type="file" hidden accept={PICTURE_ACCEPT} data-testid="report-logo-file"
         onChange={(e) => { pickLogo(e.target.files?.[0]); e.target.value = ''; }} />
     </div>
-    </DocThemeProvider>
+    </ChartDocSource.Provider></DocThemeProvider>
   );
 }

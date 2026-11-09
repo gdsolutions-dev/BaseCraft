@@ -31,6 +31,13 @@ describe('print protocol and requests', () => {
     expect(pdfFileName('Console')).toBe('Console.pdf'); expect(pdfFileName('COM10')).toBe('COM10.pdf');
   });
 
+  it('a chart: the inline SVG document passes the size cap', async () => {
+    const { chartSvg } = await import('../shared/chart/svg');
+    const html = `<div class="bc-chart">${chartSvg({ series: [] }, { width: 300, height: 180 })}</div>`;
+    expect(html).toContain('<svg');
+    expect(printRequest({ html, name: 'Etat', landscape: false }).html).toBe(html);
+  });
+
   it('validates print requests', () => {
     expect(printRequest({ html: '<p>x</p>', name: 'É', landscape: true })).toEqual({ html: '<p>x</p>', name: 'É', landscape: true });
     expect(() => printRequest({ html: 1, name: 'a', landscape: false })).toThrow(/invalidArgument/);

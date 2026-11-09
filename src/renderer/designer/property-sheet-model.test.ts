@@ -6,7 +6,7 @@ import { toSourceRef } from '../../shared/record-source';
 import { CONTROL_KINDS, type ControlDef, type ControlKind, type DesignDoc } from '../../shared/design/model';
 import { defaultFor, PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
 import { localeInfo } from '../../shared/locale-format';
-import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontLabel, fontWarning, fromSourceRef,
+import { chartRows, chartSummary, checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSourceToCanonical, controlSourceToDisplay, fontLabel, fontWarning, fromSourceRef,
   MIXED, pictureLabel, pictureRows, readProp, setPictureType, sheetRows, targetKind, targetsOf } from './property-sheet-model';
 import { designerReducer, initDesigner, type PropTarget } from './designer-model';
 import { FACTURES_REPORT } from '../../shared/report/fixtures/factures';
@@ -258,5 +258,54 @@ describe('setPictureType: one edit sets the type and clears the picture', () => 
     const s = designerReducer(initDesigner(d0), { type: 'edit', apply: (d) => setPictureType(d, 'form', t, 'shared', new Set()) });
     expect(props(s.doc)).toEqual({ PictureType: 'shared' });
     expect(props(designerReducer(s, { type: 'undo' }).doc)).toEqual(props(d0));
+  });
+});
+
+describe('chart rows (F4)', () => {
+  const chartDoc: DesignDoc = { ...doc, sections: doc.sections.map((s) => (s.kind === 'detail' ? { ...s, controls: [ctl('chart', 'Graphique1')] } : s)) };
+  const names = (tab: 'format' | 'data') => sheetRows(chartDoc, 'form', [ctlT('Graphique1')], tab, false).map((r) => r.d.name);
+  it('chartRows : format puis données', () => {
+    // ordre des captures 12 et 13 (Type, fond, bordure, légende, titre, sous-titre, titres d'axes, axe des abscisses, axe des ordonnées)
+    expect(chartRows()).toEqual(['ChartType', 'ChartBackStyle', 'ChartBackColor', 'ChartBorderStyle', 'ChartBorderWidth', 'ChartBorderColor',
+      'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
+      'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
+      'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize']);
+    expect(chartRows('data')).toEqual(['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries']);
+  });
+  it('la feuille montre les lignes du graphique en tête de leur onglet', () => {
+    expect(names('format').slice(0, chartRows().length)).toEqual(chartRows());
+    expect(names('format').length).toBeGreaterThan(chartRows().length);
+    expect(names('data').slice(0, 6)).toEqual(chartRows('data'));
+  });
+  it('valeurs par défaut', () => {
+    const dflt = (n: string) => defaultFor(desc(n), 'chart');
+    expect([dflt('HasTitle'), dflt('LegendPosition'), dflt('HasLegend'), dflt('HasAxisTitles')]).toEqual([true, 'top', true, true]);
+    expect([dflt('TitleFontSize'), dflt('LegendFontSize'), dflt('HasSubtitle'), dflt('AxisRange'), dflt('AxisUnits'), dflt('ChartBorderStyle')]).toEqual([14, 10, false, 'auto', 'none', 'transparent']);
+  });
+  it('les lignes génériques de fond et de bordure ne doublonnent pas celles du graphique', () => {
+    expect(names('format')).not.toContain('BackStyle');
+    expect(names('format')).not.toContain('BorderStyle');
+  });
+  it('résumés en lecture seule', () => {
+    const agg = (a: string) => ({ sum: 'Somme' })[a] ?? a;
+    expect(chartSummary('ChartSource', { kind: 'table', name: 'Commandes' }, agg)).toBe('Commandes');
+    expect(chartSummary('ChartAxis', ['Client'], agg)).toBe('Client');
+    expect(chartSummary('ChartValues', [{ field: 'Montant', agg: 'sum' }], agg)).toBe('Montant (Somme)');
+    expect(chartSummary('ChartValues', 'texte', agg)).toBe('');
+    expect(chartSummary('ChartSeries', [{ field: 'Remise', type: 'line', secondary: true }, { field: 'M' }], agg)).toBe('Remise (line, 2), M (column)');
+  });
+});
+
+describe('lien maître/détail : graphique de formulaire seulement, sous-formulaire partout', () => {
+  const ctl = (kind: 'chart' | 'subform', name: string) => ({ kind, name, left: 0, top: 0, width: 100, height: 100, props: {} });
+  const d = { formatVersion: '1.0', recordSource: null, props: {},
+    sections: [{ kind: 'detail', height: 1000, props: {}, controls: [ctl('chart', 'G'), ctl('subform', 'S')] }] } as unknown as Parameters<typeof sheetRows>[0];
+  const names = (k: 'form' | 'report', n: string) => sheetRows(d, k, [{ kind: 'control', name: n }], 'data', false).map((x) => x.d.name);
+  it('rows', () => {
+    expect(names('form', 'G')).toEqual(expect.arrayContaining(['LinkMasterFields', 'LinkChildFields']));
+    expect(names('report', 'G')).not.toContain('LinkMasterFields');
+    expect(names('report', 'G')).not.toContain('LinkChildFields');
+    expect(names('report', 'S')).toEqual(expect.arrayContaining(['LinkMasterFields', 'LinkChildFields']));
   });
 });

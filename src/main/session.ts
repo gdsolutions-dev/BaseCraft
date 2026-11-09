@@ -73,6 +73,8 @@ import { withMetadata } from './links/meta';
 import { refusedQueries, runMigration, switchLocal } from './migrate/run';
 import { fold } from '../shared/expr/sql';
 import { isModuleName, parseModuleDef } from '../shared/python/module-def';
+import { chartData } from './chart-data';
+import type { ChartData, ChartDataRequest } from '../shared/chart/query';
 
 export interface SessionDeps {
   appVersion: string;
@@ -1252,6 +1254,10 @@ export class Session {
       if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error(e.message.startsWith('bc:invalidFilter|') ? e.message.replace('invalidFilter', 'invalidArgument') : 'bc:invalidArgument');   // R6: the unknown function's name stays
       throw e;
     }
+  }
+  /** F4: the grouped rows of a chart (src/main/chart-data.ts). Reads only, so it works on a read-only base. */
+  chartData(req: ChartDataRequest): Promise<ChartData> {
+    return chartData(this, req);
   }
   /** C6: the saved pass-through `ref` names, if it is one. */
   private passThrough(ref: RecordSourceRef): { name: string; sql: string; pt: PassThroughProps } | null {

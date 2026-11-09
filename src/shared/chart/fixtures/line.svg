@@ -1,0 +1,62 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<path d="M46.6 192.5L388 192.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 165.5L388 165.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 139.5L388 139.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 112.5L388 112.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 85.5L388 85.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 59.5L388 59.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="-5" transform="matrix(0,-1,1,0,12.6,125.5)" fill="#1b1f27">SumOfMontant</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(217.3 218)" fill="#1b1f27">Ville</text>
+<path d="M46.6 192.5L388 192.5" fill="none" pointer-events="visible" stroke="#e1e4e9" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 192)" fill="#1b1f27">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 165.4)" fill="#1b1f27">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 138.8)" fill="#1b1f27">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 112.2)" fill="#1b1f27">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 85.6)" fill="#1b1f27">4</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 59)" fill="#1b1f27">5</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(103.5 200)" fill="#1b1f27">Jan</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(217.3 200)" fill="#1b1f27">Fév</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(331.1 200)" fill="#1b1f27">Mar</text>
+<g clip-path="url(#zr0-c0)">
+<path d="M103.5 112.2L217.3 59L331.1 85.6" fill="none" pointer-events="visible" stroke="#3e63dd" stroke-width="2" stroke-linejoin="bevel" class="zr0-cls-1"></path>
+</g>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,103.5,112.2)" fill="#fff" stroke="#3e63dd" stroke-width="0.6666666666666666" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,217.3,59)" fill="#fff" stroke="#3e63dd" stroke-width="0.6666666666666666" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,331.1,85.6)" fill="#fff" stroke="#3e63dd" stroke-width="0.6666666666666666" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M-5 -5l108.5 0l0 23.2l-108.5 0Z" transform="translate(150.75 33)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#b7b9be" stroke-width="0" class="zr0-cls-0"></path>
+<path d="M0 7L25 7" transform="translate(151.75 32.6)" fill="#000" stroke="#3e63dd" stroke-width="2" stroke-linecap="butt" stroke-miterlimit="10" class="zr0-cls-0"></path>
+<path d="M18.1 7A5.6 5.6 0 1 1 18.1 6.4A5.6 5.6 0 0 1 18.1 7" transform="translate(151.75 32.6)" fill="#fff" stroke="#3e63dd" stroke-width="2" stroke-linecap="butt" stroke-miterlimit="10" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(151.75 32.6)" fill="#1b1f27">SumOfMontant</text>
+<path d="M-1 0.4l98.5 0l0 13.2l-98.5 0Z" transform="translate(151.75 32.6)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" class="zr0-cls-3"></path>
+<path d="M-26.9 -5l53.8 0l0 24l-53.8 0Z" transform="translate(200 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:14px;font-family:BC Inter;font-weight:bold;" y="7" transform="translate(200 9)" fill="#1b1f27">Ventes</text>
+<defs >
+<clipPath id="zr0-c0">
+<path d="M45 58l345 0l0 135l-345 0Z" fill="#000" class="zr0-cls-4"></path>
+</clipPath>
+</defs>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-4:hover {
+cursor:pointer;
+fill:rgba(0,0,0,1);
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+fill:rgba(255,255,255,1);
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+fill:rgba(0,0,0,0);
+}
+
+]]>
+
+</style>
+</svg>

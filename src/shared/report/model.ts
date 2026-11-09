@@ -15,6 +15,10 @@ import { readColor, readProp } from './props';
 import { readAlignment, readPictureSpec, type PictureAlignment, type PictureSpec } from '../design/picture-css';
 import { readPictureType, resolvePicture, type ResourceMap } from '../pictures';
 import { extractAggregates, type AggSpec } from './totals';
+import { readChartFormat, type ChartFormat, type ChartLabels } from '../chart/option';
+import { chartPalette, type ChartPalette } from '../chart/palette';
+import type { ChartData, ChartDataMap } from '../chart/query';
+import { readChartSpec, type ChartSpec } from '../chart/spec';
 import type { Border, FontSpec, Gridlines } from './types';
 
 // props du DesignDoc propres aux états (contrat 1.3, clés A5)
@@ -34,7 +38,8 @@ export interface ControlSpec { kind: ControlKind; name: string; left: number; to
   margin: { top: number; right: number; bottom: number; left: number };
   /** Gridlines over the cell rectangle; null when all four sides are transparent. */
   gridlines: Gridlines | null;
-  picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; slant?: boolean }
+  picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; slant?: boolean;
+  chart?: { spec: ChartSpec; data: ChartData | null; format: ChartFormat; palette: ChartPalette; fontFamily: string; titleFamily: string } }
 export interface SectionSpec { kind: SectionKind; groupLevel?: number; height: number; visible: boolean; canGrow: boolean; canShrink: boolean;
   keepTogether: boolean; repeatSection: boolean; forceNewPage: 'none' | 'before' | 'after' | 'beforeAndAfter'; back: string | null; controls: ControlSpec[] }
 export interface ReportSpec { background?: PictureSpec; width: number; page: PageSetup; grouping: (GroupLevel & { key: ControlSource })[];
@@ -89,7 +94,7 @@ const SINGLE = ['reportHeader', 'pageHeader', 'detail', 'pageFooter', 'reportFoo
 
 /** `allCells`: every empty layout cell becomes a rectangle (the report Layout view selects them); otherwise only those carrying
  *  stored formatting do, so a report saved before L5 reads and prints as before. */
-export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean; theme?: Theme; resources?: ResourceMap } = {}): ReportSpec {
+export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCells?: boolean; theme?: Theme; resources?: ResourceMap; charts?: ChartDataMap; chartLabels?: ChartLabels } = {}): ReportSpec {
   const theme = opts.theme ?? DEFAULT_THEME;
   const issues: ReportIssue[] = [];
   const add = (code: ReportIssue['code'], control?: string, detail?: string): void => {
@@ -109,6 +114,9 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
   const known = (name: string) => fields.some((f) => sameName(f.name, name));
   /** Page or Pages when the source has no such field. */
   const pageRef = (name: string) => !known(name) && (sameName(name, 'Page') || sameName(name, 'Pages'));
+
+  /** La police de corps du thème, embarquée (une non portable : Liberation Sans), comme chartPalette. */
+  const embeddedBody = (theme: Theme, name = '(Body)'): string => { const f = resolveFont(name, theme); return f.portable ? f.family : 'Liberation Sans'; };
 
   /** A field name (`Client` or `[Client]`) or `=` + canonical expression; `noAgg`: the code when aggregates are not allowed. */
   const source = (text: string, control: string | undefined, bad: ReportIssue['code'], noAgg?: ReportIssue['code']): ControlSource => {
@@ -163,6 +171,10 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
         sizeMode: isIn(sizeMode, ['clip', 'stretch', 'zoom']) ? sizeMode : 'zoom',
         // absents par défaut : un état sans ces propriétés s'imprime à l'identique
         ...(readAlignment(p.PictureAlignment) !== 'center' ? { pictureAlign: readAlignment(p.PictureAlignment) } : {}), ...(p.PictureTiling === true ? { tiling: true as const } : {}) } : {}),
+      // un état se dessine toujours en clair ; la police du graphique est celle de la palette (embarquée)
+      ...(kind === 'chart' ? { chart: { spec: readChartSpec(p), data: opts.charts?.[name] ?? null,
+        format: readChartFormat(p, opts.chartLabels ?? { title: 'Chart Title', empty: '(empty)' }), palette: chartPalette(theme, 'light'),
+        fontFamily: embeddedBody(theme), titleFamily: embeddedBody(theme, readChartFormat(p, { title: '', empty: '' }).titleFont) } } : {}),
       ...(kind === 'line' ? { slant: r('LineSlant', false) === true } : {}),
     };
   };

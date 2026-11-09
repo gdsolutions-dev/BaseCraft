@@ -60,7 +60,8 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
   const [region, setRegion] = useState<string | null>(null);
   const [lists, setLists] = useState<ObjectLists>(NO_LISTS);
   const root = useRef<HTMLDivElement>(null);
-  const busy = useRef(false);
+  const busy = useRef<Promise<unknown> | null>(null);   // the save under way
+  const savedDef = useRef<unknown>(null);   // the macro last saved: still shown, nothing to save (before the render says so)
 
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
@@ -95,10 +96,8 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     validate: (v) => { const k = nameErrorKey(v); return k && t(k); } });
 
   /** The name saved under, or null (nothing saved). */
-  const save = async (): Promise<string | null> => {
-    if (busy.current) return null;
+  const saveNow = async (): Promise<string | null> => {
     if (live.current.readOnly) { await message('dialog.op.readOnly'); return null; }
-    busy.current = true;
     try {
       await flush();
       const issues = validateMacro(live.current.state.def);
@@ -110,14 +109,17 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
       if (doc.embedded) {   // into its design (R16): the design becomes dirty, nothing is written to the file
         const session = embeddedSession(doc.embedded);
         if (!session?.save(live.current.state.def)) { await message('macro.embedded.ownerGone'); return null; }
+        savedDef.current = live.current.state.def;
         send({ type: 'saved' });
         return doc.name;
       }
       let name = doc.isNew ? await askName(doc.name) : doc.name;
       for (;;) {
         if (name === null) return null;
-        const r = await api.objects.save('macro', name, live.current.state.def, doc.isNew ? null : doc.name);
+        const def = live.current.state.def;
+        const r = await api.objects.save('macro', name, def, doc.isNew ? null : doc.name);
         if (r.ok) {
+          savedDef.current = def;
           send({ type: 'saved' });
           dispatch(doc.isNew ? { type: 'objectSaved', kind: 'macro', name, tabId: doc.id } : { type: 'objectSaved', kind: 'macro', name });
           return name;
@@ -129,17 +131,17 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     } catch (e) {
       await showError(e);   // bc:invalidArgument past 8 M characters: the designer stays modified
       return null;
-    } finally {
-      busy.current = false;
     }
   };
+  /** One save at a time; leaving waits for the one under way (Access's save is over before the next action). */
+  const save = (): Promise<string | null> => busy.current ? Promise.resolve(null) : (busy.current = saveNow().finally(() => { busy.current = null; }));
 
   /** Before the view goes: Yes saves, No drops the changes, Cancel keeps the macro open. */
   const leave = async (): Promise<boolean> => {
-    if (busy.current) return false;
+    while (busy.current) await busy.current;   // closed or switched while Ctrl+S is saving: once saved (Access)
     await flush();
     const { state: s, tab: doc } = live.current;
-    if (!s.dirty) return true;
+    if (!s.dirty || s.def === savedDef.current) return true;
     const r = await modal.confirm({ titleKey: 'macro.saveFirstTitle', messageKey: 'macro.saveFirst', params: { name: doc.name }, buttons: ['yes', 'no', 'cancel'] });
     return r === 'no' || (r === 'yes' && (await save()) !== null);
   };

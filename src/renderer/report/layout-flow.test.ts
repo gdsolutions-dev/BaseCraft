@@ -58,6 +58,18 @@ describe('loadFlowData', () => {
   });
 });
 
+describe('layoutFlow charts (F4)', () => {
+  it('a chart control draws the data given; loadFlowData keeps the parameters asked', async () => {
+    const doc = { ...FACTURES_REPORT, sections: [{ kind: 'reportHeader', height: 3000, props: {}, controls: [{ kind: 'chart', name: 'Graph', left: 0, top: 0, width: 4000, height: 2000, props: {} }] }] } as unknown as typeof FACTURES_REPORT;
+    const s = await loadFlowData(doc, async () => ({ 'Client voulu': 'A' }), stub(FACTURES_ROWS, {}, P).api);
+    expect(s.params).toEqual({ 'Client voulu': 'A' });
+    const data = { columns: [{ role: 'category' as const, field: 'Client', name: 'Client' }, { role: 'value' as const, field: 'Montant', name: 'SumOfMontant' }], rows: [['A', 4]], truncated: false };
+    const r = await layoutFlow(doc, s, env, new AbortController().signal, undefined, undefined, { Graph: data });
+    const c = r.pages[0]!.bands.flatMap((b) => b.items).find((i) => i.kind === 'chart');
+    expect(c).toMatchObject({ kind: 'chart', data });
+  });
+});
+
 describe('layoutFlow', () => {
   it('one continuous page over the loaded rows; On Format / On Print hooks never invoked', async () => {
     const s = await loadFlowData(FACTURES_REPORT, noAsk, stub(FACTURES_ROWS).api);

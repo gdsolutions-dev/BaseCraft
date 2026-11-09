@@ -1,0 +1,32 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<path d="M60 160.5L360 160.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 141.5L360 141.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 122.5L360 122.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 103.5L360 103.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 84.5L360 84.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 65.5L360 65.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 160.5L360 160.5" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 160)" fill="#54555a">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 141)" fill="#54555a">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 122)" fill="#54555a">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 103)" fill="#54555a">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 84)" fill="#54555a">4</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 65)" fill="#54555a">5</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(135 168)" fill="#54555a">A</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(285 168)" fill="#54555a">B</text>
+<path d="M83.3 160l103.5 0l0 -57l-103.5 0Z" fill="#2f6f9f" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M233.3 160l103.5 0l0 -95l-103.5 0Z" fill="#2f6f9f" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(51,122,174,1);
+}
+
+]]>
+
+</style>
+</svg>

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { cssFamily, resolveFont } from '../../shared/fonts';
 import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
+import { trendLabels } from '../../shared/chart/trend';
 import { layoutReport } from '../../shared/report/layout';
 import { fourDigitYear } from '../settings-store';
 import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
@@ -28,7 +29,8 @@ import { promptParameters } from '../query/prompt-parameters';
 import { callUserFunction } from '../python/expr-call';
 import { onUserFunctionsChanged } from '../python/user-function-names';
 import { memberValue } from '../form/form-instances';
-import { docParameters, layoutSavedReport, loadDocResources, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
+import type { CellInput } from '../../shared/coerce';
+import { docParameters, layoutSavedReport, loadDocCharts, loadDocResources, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
 import { unsavedRunDoc } from '../query/unsaved-run';
 import { reportEvents, reportShown, type ReportEvents } from './report-events';
 import { orientationStates, withPageSetup } from './page-setup';
@@ -75,6 +77,8 @@ const GAP = 16; // px between two pages and around them
 
 /** The CSS font shorthand of every face the pages draw, for document.fonts.load (a non-portable font draws Liberation Sans). */
 export const faces = (r: LaidOutReport) => new Set(r.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => {
+  // chart text: plain, and the bold title; the title font (TitleFontName) in both weights
+  if (i.kind === 'chart') return [`400 12px "${i.fontFamily}"`, ...(i.format.hasTitle ? [`700 12px "${i.fontFamily}"`] : []), `400 12px "${i.titleFamily}"`, `700 12px "${i.titleFamily}"`];
   if (i.kind !== 'text') return [];
   const f = resolveFont(i.font.name);
   return [`${i.font.italic ? 'italic ' : ''}${i.font.bold ? 700 : 400} 12px "${cssFamily(f.portable ? f.family : 'Liberation Sans')}"`];
@@ -85,6 +89,7 @@ export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
     locale: s.region, lang: formulaLang(s.uiLanguage), fourDigitYear: fourDigitYear(), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
+    chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t) },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue, callUser: callUserFunction,   // D3: Python functions; [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }
@@ -183,6 +188,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const [layoutAllowed, setLayoutAllowed] = useState<boolean | null>(null); // L3: AllowLayoutView of the definition read; null: none read
   const doc = useRef<DesignDoc | null>(null);
   const data = useRef<ReportData | null>(null);
+  const params = useRef<Record<string, CellInput> | undefined>(undefined);   // les paramètres de ces lignes, pour les graphiques d'une nouvelle mise en page
   const ctl = useRef<AbortController | null>(null);
   const events = useRef<ReportEvents | null>(null);
   const name = useRef(tab.name);
@@ -225,9 +231,10 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       const d = doc.current;
       if (from !== 'layout' || !data.current) {
         data.current = null;
-        const params = kept ? asked : await docParameters(api, d, askParameters(modal));
+        const asked2 = kept ? asked : await docParameters(api, d, askParameters(modal));
         if (!live()) return;
-        const rows = await loadDocData(api, d, params, ac.signal, tab.openArgs?.where);   // OpenReport's Where Condition (R8)
+        params.current = asked2;
+        const rows = await loadDocData(api, d, asked2, ac.signal, tab.openArgs?.where);   // OpenReport's Where Condition (R8)
         if (!live()) return;
         if (!rows.rows.length && await events.current?.noData()) return refused();
         if (!live()) return;
@@ -240,7 +247,9 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
       if (!live()) return;
       const resources = await loadDocResources(api, d);
       if (!live()) return;
-      const spec = readReport(d, data.current.fields, { theme, resources }), { width, height } = pageGeometry(spec.page);
+      const charts = await loadDocCharts(api, d, params.current);
+      if (!live()) return;
+      const spec = readReport(d, data.current.fields, { theme, resources, charts, ...(env.chartLabels ? { chartLabels: env.chartLabels } : {}) }), { width, height } = pageGeometry(spec.page);
       let shownAt = 0;
       const onPage = (pages: LaidOutPage[]) => {   // page 1 at once, then at most twice a second
         if (pages.length > 1 && Date.now() - shownAt < 500) return;

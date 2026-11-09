@@ -6,6 +6,8 @@ import {
   MAX_CRITERIA_CHARS, MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type NameChange, type ObjectKind, type PropertyItem, type PageRequest, type PrintRequest, type RowRef, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
   type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions, SETTING_KEYS, type AppSettings, type SettingKey, type LinkFileInfo,
 } from '../shared/api';
+import { AGGS, CHART_MAX_AXIS, CHART_MAX_VALUES, CHART_TYPES, DATE_GROUPS, type ChartSpec } from '../shared/chart/spec';
+import type { ChartDataRequest } from '../shared/chart/query';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_TWIPS, MAX_INDEXES } from '../shared/field-types';
 import { PROPERTY_CATALOG } from '../shared/design/properties';
 import { checkedPicture } from './db/resources';
@@ -107,6 +109,32 @@ export function sourceRef(v: unknown): RecordSourceRef {
   if (v.kind === 'table' || v.kind === 'query') return { kind: v.kind, name: lookupName(v.name) };
   if (v.kind === 'sql' && typeof v.sql === 'string' && v.sql.length <= MAX_SQL_CHARS) return { kind: 'sql', sql: v.sql };
   bad();
+}
+
+/** F4 charts.data: a strict spec (the reader of documents is lenient, this boundary is not), at most 8 axis fields, 1 legend, 16 values
+ *  of at most 255 characters each, a known type, date grouping and aggregate; a link with as many values as fields. */
+export function chartDataRequest(v: unknown): ChartDataRequest {
+  if (!isObj(v) || !isObj(v.spec)) bad();
+  const s = v.spec;
+  const oneOf = <T extends string>(list: readonly T[], x: unknown): T => ((list as readonly unknown[]).includes(x) ? (x as T) : bad());
+  const list = (x: unknown, max: number): unknown[] => (Array.isArray(x) && x.length <= max ? x : bad());
+  const field = (x: unknown): string => { const n = boundedName(x, 255); return n === '' ? bad() : n; };
+  const spec: ChartSpec = {
+    type: oneOf(CHART_TYPES, s.type), source: s.source === null ? null : sourceRef(s.source),
+    axis: list(s.axis, CHART_MAX_AXIS).map(field), dateGroup: oneOf(DATE_GROUPS, s.dateGroup),
+    legend: s.legend === '' ? '' : field(s.legend),
+    values: list(s.values, CHART_MAX_VALUES).map((x) => (isObj(x) ? { field: field(x.field), agg: oneOf(AGGS, x.agg) } : bad())),
+  };
+  const r: ChartDataRequest = { spec, source: sourceRef(v.source) };
+  if (v.link !== undefined) {
+    if (!isObj(v.link)) bad();
+    const fields = list(v.link.fields, CHART_MAX_AXIS).map(field);
+    const values = list(v.link.values, CHART_MAX_AXIS);
+    if (values.length !== fields.length || !values.every((x) => isCell(x) && (typeof x !== 'string' || x.length <= 4096))) bad();
+    r.link = { fields, values: values as CellInput[] };
+  }
+  if (v.params !== undefined) r.params = queryParams(v.params);
+  return r;
 }
 
 export const MAX_PAGE_ROWS = 10_000;

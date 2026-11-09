@@ -28,6 +28,11 @@ const EVENTS: DesignDoc = {
     { k: 'action', action: 'SetProperty', args: { ControlName: 'Detail', Property: 'visible', Value: 'Non' } } as MacroItem] } } } }),
 };
 
+/** Un graphique (Client en abscisse, somme des montants) dans l'en-tête : le mode Page le dessine avec ses données. */
+const CHART: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'table', name: 'Factures' }, props: { Width: 8000 },
+  sections: [{ kind: 'reportHeader', height: 3600, props: {}, controls: [
+    { kind: 'chart', name: 'Graph', left: 200, top: 100, width: 7000, height: 3400, props: { HasLegend: false, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] } }] }] };
+
 const base = () => seedBase('etats-mode-page', (db) => {
   seedReportsE2E(db);   // Factures (75 lignes, 3 clients) et « Factures par client » (regroupé sur Client, totaux)
   const table = (name: string) => createTable(db, { name, fields: FACTURES_FIELDS.map((f) => ({ name: f.name, props: f.props })) });
@@ -41,7 +46,7 @@ const base = () => seedBase('etats-mode-page', (db) => {
   if (!q.ok) throw new Error(q.reason);
   for (const [name, doc] of [['Interdit', report({ AllowLayoutView: false })], ['Sans données', report({}, { kind: 'table', name: 'Vide' })],
     ['Longue', report({}, { kind: 'table', name: 'Longue' })], ['Paramétré', report({}, { kind: 'query', name: 'Factures du client' })],
-    ['Événements', EVENTS]] as const) {
+    ['Événements', EVENTS], ['Avec graphique', CHART]] as const) {
     const r = saveObject(db, 'report', name, doc, null);
     if (!r.ok) throw new Error(r.reason);
   }
@@ -408,5 +413,18 @@ test('Report Layout view: Delete removes the selected control everywhere (one un
   } finally {
     await second.app.close();
     await first.app.close();
+  }
+});
+
+test('Report Layout view: a chart control draws its bars with data', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await openLayout(page, 'Avec graphique');
+    await settled(page);
+    const g = items(page, 'Graph');
+    await expect(g).toContainText('Dupont');   // les catégories viennent des données
+    await expect(g.locator('path[ecmeta_series_index]')).toHaveCount(3);   // une barre par client
+  } finally {
+    await app.close();
   }
 });

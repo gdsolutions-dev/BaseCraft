@@ -22,7 +22,7 @@ describe('units', () => {
 
 describe('property catalog', () => {
   const EDITORS = ['text', 'number', 'twips', 'bool', 'enum', 'color', 'expression', 'criteria', 'controlSource', 'recordSource', 'rowSource',
-    'objectName', 'fieldList', 'picture', 'textList', 'event', 'font'];
+    'objectName', 'fieldList', 'picture', 'textList', 'event', 'font', 'chart'];
 
   it('one descriptor per invariant name, with a known tab, editor, target and label in both languages', () => {
     const names = PROPERTY_CATALOG.map((p) => p.name);
@@ -342,7 +342,28 @@ describe('validateDesignDoc', () => {
   it('knows every section and control kind of the contract', () => {
     expect(SECTION_KINDS).toEqual(['formHeader', 'detail', 'formFooter', 'reportHeader', 'pageHeader', 'groupHeader', 'groupFooter', 'pageFooter', 'reportFooter']);
     expect(CONTROL_KINDS).toEqual(['label', 'textBox', 'checkBox', 'optionGroup', 'optionButton', 'comboBox', 'listBox', 'commandButton', 'subform',
-      'image', 'line', 'rectangle', 'pageBreak', 'tabControl']);
+      'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'chart']);
+  });
+});
+
+describe('chart control (F4)', () => {
+  const doc = (kind: string): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props: {},
+    sections: [{ kind: 'detail', height: 567, props: {}, controls: [{ kind: kind as 'chart', name: 'Chart1', left: 0, top: 0, width: 4000, height: 3000, props: {} }] }] });
+  it('is a valid control kind; an unknown kind is still refused', () => {
+    expect(validateDesignDoc(doc('chart'))).toEqual([]);
+    expect(validateDesignDoc(doc('pie'))).toEqual(['sections[0].controls[0].kind']);
+  });
+  it('catalogs the chart rows for the chart target only', () => {
+    const rows = (n: string) => PROPERTY_CATALOG.find((p) => p.name === n)!;
+    expect(rows('ChartType')).toMatchObject({ tab: 'format', editor: 'enum', default: 'columnClustered', appliesTo: ['chart'],
+      options: ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100', 'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo'] });
+    for (const n of ['ChartSource', 'ChartAxis', 'ChartValues', 'ChartSeries']) expect(rows(n)).toMatchObject({ tab: 'data', editor: 'chart', appliesTo: ['chart'] });
+    for (const n of ['ChartDateGroup', 'ChartLegend']) expect(rows(n)).toMatchObject({ tab: 'data', appliesTo: ['chart'] });
+    expect(rows('ChartDateGroup').options).toEqual(['none', 'year', 'quarter', 'month', 'day']);
+    for (const n of ['Left', 'Width', 'Visible', 'HorizontalAnchor', 'OnClick']) expect(rows(n).appliesTo).toContain('chart');
+    for (const n of ['BackStyle', 'BorderStyle']) expect(rows(n).appliesTo).not.toContain('chart');   // le graphique a ChartBack* et ChartBorder*
+    expect(rows('ChartBorderStyle')).toMatchObject({ tab: 'format', default: 'transparent', appliesTo: ['chart'] });
+    for (const n of ['LinkMasterFields', 'LinkChildFields']) { expect(rows(n)).toMatchObject({ appliesTo: ['subform', 'chart'] }); expect(rows(n).objects).toBeUndefined(); }   // sous-état : lignes gardées ; graphique d'état : filtré par la feuille
   });
 });
 

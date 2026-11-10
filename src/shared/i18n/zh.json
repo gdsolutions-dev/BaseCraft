@@ -1650,6 +1650,10 @@
     "AxisSecFontSize": "次要数值轴字号",
     "DoughnutHoleSize": "圆环孔大小 (%)",
     "BubbleMaxSize": "最大气泡大小 (px)",
+    "WaterfallIncreaseColor": "瀑布图增加颜色",
+    "WaterfallDecreaseColor": "瀑布图减少颜色",
+    "WaterfallTotalColor": "瀑布图合计颜色",
+    "WaterfallShowTotal": "显示瀑布图合计",
     "ColumnHeads": "列标题",
     "ColumnWidth": "列宽"
   },
@@ -3158,7 +3162,7 @@
   "chart": {
     "noSource": "未定义数据源",
     "noData": "没有可显示的数据",
-    "waterfall": {"total": "合计"},
+    "waterfall": {"total": "合计", "increase": "增加", "decrease": "减少"},
     "pareto": {"cumulative": "累计 %"},
     "badLink": "主/子链接字段不匹配",
     "truncated": "仅绘制前 5000 个点",
@@ -3182,7 +3186,8 @@
       "legend": "图例 (系列)",
       "legendNone": "(无)",
       "legendHint": "使用图例时，只绘制第一个值。",
-      "typeHint": {"notOffered": "此图表类型暂不可用。", "doughnut": "扇区大小取决于第一个值；图例字段将被忽略。", "arc": "半环形图：扇区大小取决于第一个值；图例字段将被忽略。", "funnel": "阶段按第一个值排序；图例字段将被忽略。", "scatter": "第一个轴字段为 X，必须是数字；第一个值为 Y。图例字段会将点拆分为多个系列。", "bubble": "第一个轴字段为 X（数字），第一个值为 Y，第二个值为气泡大小。"},
+      "legendIgnored": "此图表类型忽略图例字段。",
+      "typeHint": {"doughnut": "扇区大小取决于第一个值；图例字段将被忽略。", "arc": "半环形图：扇区大小取决于第一个值；图例字段将被忽略。", "funnel": "阶段按第一个值排序；图例字段将被忽略。", "scatter": "第一个轴字段为 X，必须是数字；第一个值为 Y。图例字段会将点拆分为多个系列。", "bubble": "第一个轴字段为 X（数字），第一个值为 Y，第二个值为气泡大小。", "boxWhisker": "每个类别对应一个箱体；轴字段给出类别，第一个值为观测值（忽略图例字段）。", "pareto": "柱按第一个值从大到小排序；折线显示右轴上的累计百分比（忽略图例字段）。", "waterfall": "每个类别是第一个值(空 = 0)在累计值上的一步,最后一根柱显示合计(图例字段被忽略)。"},
       "rowsHint": "此图表类型按原值绘制，不使用聚合函数。",
       "axisXHint": "第一个字段为 X。",
       "values": "值 (Y 轴)",
@@ -3191,7 +3196,7 @@
       "collapse": "折叠部分",
       "expand": "展开部分",
       "close": "关闭",
-      "format": {"series": "数据系列", "heading": "设置数据系列格式: {{name}}", "fullName": "全名", "seriesType": "系列类型", "seriesTypes": {"column": "柱形", "line": "折线", "area": "面积"}, "plotOn": "将系列绘制在", "primary": "主坐标轴", "secondary": "次坐标轴", "fill": "系列填充颜色", "border": "系列边框颜色", "labels": "显示数据标签", "trend": "趋势线选项", "trendName": "趋势线名称", "noValues": "请先在“数据”选项卡中选择一个值。", "legendHint": "设置了图例字段时,格式对所有系列统一生效:已禁用。", "roundHint": "对此图表类型(饼图、雷达图)无效。", "axisHint": "条形图或堆积图没有次坐标轴。", "trendHint": "条形图或堆积图没有趋势线。", "lineOptions": "线条选项", "lineWidth": "线条粗细", "dash": "线条样式", "marker": "显示标记", "gap": "缺失值", "trendKinds": {"none": "无", "linear": "线性", "exponential": "指数", "logarithmic": "对数", "polynomial": "多项式", "power": "乘幂", "movingAverage": "移动平均"}, "dashes": {"solid": "实线", "dashed": "虚线", "dotted": "点线"}, "gaps": {"gap": "留空", "zero": "按零绘制", "connect": "连接数据点"}}
+      "format": {"series": "数据系列", "heading": "设置数据系列格式: {{name}}", "fullName": "全名", "seriesType": "系列类型", "seriesTypes": {"column": "柱形", "line": "折线", "area": "面积"}, "plotOn": "将系列绘制在", "primary": "主坐标轴", "secondary": "次坐标轴", "fill": "系列填充颜色", "border": "系列边框颜色", "labels": "显示数据标签", "trend": "趋势线选项", "trendName": "趋势线名称", "noValues": "请先在“数据”选项卡中选择一个值。", "legendHint": "设置了图例字段时,格式对所有系列统一生效:已禁用。", "roundHint": "对此图表类型(饼图、雷达图)无效。", "axisHint": "条形图或堆积图没有次坐标轴。", "trendHint": "条形图或堆积图没有趋势线。", "noEffect": "此图表类型不适用。", "noTrend": "此图表类型没有趋势线。", "noAxis": "此图表类型没有次坐标轴。", "waterfallColors": "瀑布图颜色", "lineOptions": "线条选项", "lineWidth": "线条粗细", "dash": "线条样式", "marker": "显示标记", "gap": "缺失值", "trendKinds": {"none": "无", "linear": "线性", "exponential": "指数", "logarithmic": "对数", "polynomial": "多项式", "power": "乘幂", "movingAverage": "移动平均"}, "dashes": {"solid": "实线", "dashed": "虚线", "dotted": "点线"}, "gaps": {"gap": "留空", "zero": "按零绘制", "connect": "连接数据点"}}
     }
   }
 }

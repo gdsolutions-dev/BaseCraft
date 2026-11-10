@@ -351,4 +351,64 @@ describe('graphiques F5a dans un état', () => {
     if (process.env.UPDATE_GOLDEN) writeFileSync(file, a);
     expect(a).toBe(readFileSync(file, 'utf8'));
   });
+
+  it("un nuage de points dont le X est du texte imprime l'aide du type (échappée, déterministe) ; un graphique tracé n'en imprime pas", async () => {
+    const hints = { 'chart.settings.typeHint.scatter': 'X <must> be a number & more', 'chart.noData': 'No data' };
+    const text: typeof grouped = { ...xy, rows: [['a', 10], ['b', 25]] };
+    const h = (c: typeof grouped) => async () => renderDocumentHtml(await layoutReport(readReport(doc, [], { charts: { ...charts, Nuage: c }, chartLabels: { title: 'Titre du graphique', empty: '(vide)', hints } }), { fields: [], rows: [] }, env));
+    const a = await h(text)();
+    expect(a).toContain('X &lt;must&gt; be a number &amp; more');
+    expect(a).not.toContain('<must>');
+    expect(await h(text)()).toBe(a);
+    expect((await h(xy)()).match(/bc-chart-hint/g) ?? []).toHaveLength(0);
+  });
+});
+
+describe('graphiques F5 : les huit nouveaux types dans un état', () => {
+  const env = { locale: 'fr-FR', lang: 'fr', now: () => new Date(0), errorText: { error: '#Erreur', name: '#Nom?' } } as const;
+  const cat = { role: 'category' as const, field: 'Ville', name: 'Ville' };
+  const val = { role: 'value' as const, field: 'Montant', name: 'SumOfMontant' };
+  const grouped = { columns: [cat, val], rows: [['A', 40], ['B', 60], ['C', -20], ['D', 35]], truncated: false };
+  const xy = { columns: [{ role: 'category' as const, field: 'Qte', name: 'Qte' }, val], rows: [[1, 10], [2, 25], [3, 18], [4, 30]], truncated: false };
+  const xys = { columns: [...xy.columns, { role: 'value' as const, field: 'Remise', name: 'Remise' }], rows: [[1, 10, 3], [2, 25, 8], [3, 18, 5], [4, 30, 12]], truncated: false };
+  const box = { columns: [cat, val], rows: [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 100].map((v) => ['A', v]), ...[2, 4, 4, 5, 7, 9].map((v) => ['B', v])], truncated: false };
+  const TYPES = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'] as const;
+  const data = { doughnut: grouped, arc: grouped, funnel: grouped, scatter: xy, bubble: xys, boxWhisker: box, pareto: grouped, waterfall: grouped };
+  const chart = (type: (typeof TYPES)[number], top: number) => ({ kind: 'chart', name: type, left: 200, top, width: 5200, height: 2400,
+    props: { ChartType: type, ChartTitle: `T ${type}`, ChartAxis: [type === 'scatter' || type === 'bubble' ? 'Qte' : 'Ville'],
+      ChartValues: type === 'bubble' ? [{ field: 'Montant', agg: 'sum' }, { field: 'Remise', agg: 'sum' }] : [{ field: 'Montant', agg: 'sum' }] } });
+  // deux pages : quatre graphiques dans l'en-tête d'état (page 1), quatre dans le pied (la page suivante)
+  const docOf = (order: readonly (typeof TYPES)[number][]) => ({ formatVersion: '1.0', recordSource: null, props: {}, sections: [
+    { kind: 'reportHeader', height: 12000, props: {}, controls: order.slice(0, 4).map((t, i) => chart(t, 100 + i * 2900)) },
+    { kind: 'reportFooter', height: 12000, props: {}, controls: order.slice(4).map((t, i) => chart(t, 100 + i * 2900)) }] }) as unknown as typeof FACTURES_REPORT;
+  const labels = { title: 'Titre du graphique', empty: '(vide)', total: 'Total', cumulative: 'Cumul %', increase: 'Hausse', decrease: 'Baisse' };
+  const html = async (order: readonly (typeof TYPES)[number][] = TYPES, d: Record<string, typeof grouped> = data) =>
+    renderDocumentHtml(await layoutReport(readReport(docOf(order), [], { charts: d, chartLabels: labels }), { fields: [], rows: [] }, env));
+  const svgs = (h: string) => h.split('<svg').slice(1).map((x) => '<svg' + x.slice(0, x.indexOf('</svg>') + 6));
+  const norm = (x: string) => x.replace(/zr\d+_\d+/g, 'zr0');
+
+  it('huit svg sur deux pages, aucun script ni NaN, identique à un second appel et après un autre graphique, égal au golden', async () => {
+    const a = await html();
+    expect(a.match(/<svg/g)).toHaveLength(8);
+    expect(a.match(/class="bc-page"/g)).toHaveLength(2);
+    expect(a).not.toMatch(/<script|\son\w+=|NaN|undefined|Infinity/);
+    expect(a).toContain('>Total</text>'); expect(a).toContain('Cumul %');
+    expect(a.length).toBeLessThan(64 * 1024 ** 2);
+    expect(await html()).toBe(a);
+    await html(TYPES, { ...data, scatter: { ...xy, rows: [[9, 9]] } });
+    expect(await html()).toBe(a);
+    const file = fileURLToPath(new URL('../chart/fixtures/report-chart-f5.html', import.meta.url));
+    if (process.env.UPDATE_GOLDEN) writeFileSync(file, a);
+    expect(a).toBe(readFileSync(file, 'utf8'));
+  });
+
+  it("chaque graphique ne dépend que de ses données : même dessin (identifiants normalisés) seul, en ordre inverse, ou après un autre", async () => {
+    const all = svgs(await html()).map(norm);
+    const reversed = svgs(await html([...TYPES].reverse())).map(norm);
+    expect(reversed).toEqual([...all].reverse());
+    for (const [i, t] of TYPES.entries()) {
+      const alone = svgs(await html([t, ...TYPES.filter((x) => x !== t).slice(0, 7)]))[0];
+      expect(norm(alone!), t).toBe(all[i]);
+    }
+  });
 });

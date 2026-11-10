@@ -1672,6 +1672,10 @@
     "AxisSecFontSize": "Tamaño de fuente del eje de valores secundario",
     "DoughnutHoleSize": "Tamaño del agujero del anillo (%)",
     "BubbleMaxSize": "Tamaño de la burbuja mayor (px)",
+    "WaterfallIncreaseColor": "Color de los aumentos de la cascada",
+    "WaterfallDecreaseColor": "Color de las disminuciones de la cascada",
+    "WaterfallTotalColor": "Color del total de la cascada",
+    "WaterfallShowTotal": "Mostrar el total de la cascada",
     "ColumnHeads": "Encabezados de columna",
     "ColumnWidth": "Ancho de columna"
   },
@@ -3204,7 +3208,7 @@
   "chart": {
     "noSource": "Origen de datos no definido",
     "noData": "No hay datos que mostrar",
-    "waterfall": {"total": "Total"},
+    "waterfall": {"total": "Total", "increase": "Aumento", "decrease": "Disminución"},
     "pareto": {"cumulative": "% acumulado"},
     "badLink": "Los campos principal/secundario no coinciden",
     "truncated": "Solo se dibujan los primeros 5.000 puntos",
@@ -3228,7 +3232,8 @@
       "legend": "Leyenda (series)",
       "legendNone": "(Ninguno)",
       "legendHint": "Con una leyenda, solo se traza el primer valor.",
-      "typeHint": {"notOffered": "Este tipo de gráfico todavía no está disponible.", "doughnut": "El tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "arc": "Semianillo: el tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "funnel": "Las etapas se ordenan por el primer valor; el campo de leyenda se ignora.", "scatter": "El primer campo de eje es X y debe ser un número; el primer valor es Y. Un campo de leyenda reparte los puntos en series.", "bubble": "El primer campo de eje es X (un número), el primer valor es Y y el segundo valor es el tamaño de la burbuja."},
+      "legendIgnored": "Este tipo de gráfico ignora el campo de leyenda.",
+      "typeHint": {"doughnut": "El tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "arc": "Semianillo: el tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "funnel": "Las etapas se ordenan por el primer valor; el campo de leyenda se ignora.", "scatter": "El primer campo de eje es X y debe ser un número; el primer valor es Y. Un campo de leyenda reparte los puntos en series.", "bubble": "El primer campo de eje es X (un número), el primer valor es Y y el segundo valor es el tamaño de la burbuja.", "boxWhisker": "Cada categoría es una caja; los campos del eje dan la categoría y el primer valor las observaciones (el campo de leyenda se ignora).", "pareto": "Las barras se ordenan por el primer valor, de mayor a menor; la línea muestra el porcentaje acumulado en el eje derecho (el campo de leyenda se ignora).", "waterfall": "Cada categoría es un paso del primer valor (vacío = 0) sobre un acumulado; una última barra muestra el total (el campo de leyenda se ignora)."},
       "rowsHint": "Los valores se trazan tal cual en este tipo de gráfico: sin función de agregado.",
       "axisXHint": "El primer campo es X.",
       "values": "Valores (eje Y)",
@@ -3237,7 +3242,7 @@
       "collapse": "Contraer sección",
       "expand": "Expandir sección",
       "close": "Cerrar",
-      "format": {"series": "Serie de datos", "heading": "Formato de la serie de datos: {{name}}", "fullName": "Nombre completo", "seriesType": "Tipo de serie", "seriesTypes": {"column": "Columna", "line": "Línea", "area": "Área"}, "plotOn": "Trazar la serie en", "primary": "Principal", "secondary": "Secundario", "fill": "Color de relleno de la serie", "border": "Color de borde de la serie", "labels": "Mostrar etiqueta de datos", "trend": "Opciones de línea de tendencia", "trendName": "Nombre de la línea de tendencia", "noValues": "Primero seleccione un valor en la pestaña Datos.", "legendHint": "Con un campo de leyenda, el formato se aplica a todas las series a la vez: desactivado.", "roundHint": "Sin efecto en este tipo de gráfico (circular, radar).", "axisHint": "No hay eje secundario en gráficos de barras ni apilados.", "trendHint": "No hay línea de tendencia en gráficos de barras ni apilados.", "lineOptions": "Opciones de línea", "lineWidth": "Grosor de línea", "dash": "Estilo de línea", "marker": "Mostrar marcadores", "gap": "Valores que faltan", "trendKinds": {"none": "Ninguna", "linear": "Lineal", "exponential": "Exponencial", "logarithmic": "Logarítmica", "polynomial": "Polinómica", "power": "Potencial", "movingAverage": "Media móvil"}, "dashes": {"solid": "Continua", "dashed": "Discontinua", "dotted": "Punteada"}, "gaps": {"gap": "Dejar un hueco", "zero": "Trazar como cero", "connect": "Conectar puntos"}}
+      "format": {"series": "Serie de datos", "heading": "Formato de la serie de datos: {{name}}", "fullName": "Nombre completo", "seriesType": "Tipo de serie", "seriesTypes": {"column": "Columna", "line": "Línea", "area": "Área"}, "plotOn": "Trazar la serie en", "primary": "Principal", "secondary": "Secundario", "fill": "Color de relleno de la serie", "border": "Color de borde de la serie", "labels": "Mostrar etiqueta de datos", "trend": "Opciones de línea de tendencia", "trendName": "Nombre de la línea de tendencia", "noValues": "Primero seleccione un valor en la pestaña Datos.", "legendHint": "Con un campo de leyenda, el formato se aplica a todas las series a la vez: desactivado.", "roundHint": "Sin efecto en este tipo de gráfico (circular, radar).", "axisHint": "No hay eje secundario en gráficos de barras ni apilados.", "trendHint": "No hay línea de tendencia en gráficos de barras ni apilados.", "noEffect": "Sin efecto en este tipo de gráfico.", "noTrend": "Sin línea de tendencia en este tipo de gráfico.", "noAxis": "Sin eje secundario en este tipo de gráfico.", "waterfallColors": "Colores de la cascada", "lineOptions": "Opciones de línea", "lineWidth": "Grosor de línea", "dash": "Estilo de línea", "marker": "Mostrar marcadores", "gap": "Valores que faltan", "trendKinds": {"none": "Ninguna", "linear": "Lineal", "exponential": "Exponencial", "logarithmic": "Logarítmica", "polynomial": "Polinómica", "power": "Potencial", "movingAverage": "Media móvil"}, "dashes": {"solid": "Continua", "dashed": "Discontinua", "dotted": "Punteada"}, "gaps": {"gap": "Dejar un hueco", "zero": "Trazar como cero", "connect": "Conectar puntos"}}
     }
   }
 }

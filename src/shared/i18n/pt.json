@@ -1672,6 +1672,10 @@
     "AxisSecFontSize": "Tamanho da fonte do eixo de valores secundário",
     "DoughnutHoleSize": "Tamanho do orifício do anel (%)",
     "BubbleMaxSize": "Tamanho da maior bolha (px)",
+    "WaterfallIncreaseColor": "Cor dos aumentos da cascata",
+    "WaterfallDecreaseColor": "Cor das reduções da cascata",
+    "WaterfallTotalColor": "Cor do total da cascata",
+    "WaterfallShowTotal": "Mostrar o total da cascata",
     "ColumnHeads": "Cabeçalhos de Coluna",
     "ColumnWidth": "Largura da Coluna"
   },
@@ -3204,7 +3208,7 @@
   "chart": {
     "noSource": "Origem de dados não definida",
     "noData": "Sem dados para mostrar",
-    "waterfall": {"total": "Total"},
+    "waterfall": {"total": "Total", "increase": "Aumento", "decrease": "Redução"},
     "pareto": {"cumulative": "% acumulado"},
     "badLink": "Os campos principal/secundário não correspondem",
     "truncated": "Só os primeiros 5.000 pontos são desenhados",
@@ -3228,7 +3232,8 @@
       "legend": "Legenda (séries)",
       "legendNone": "(Nenhuma)",
       "legendHint": "Com uma legenda, apenas o primeiro valor é traçado.",
-      "typeHint": {"notOffered": "Este tipo de gráfico ainda não está disponível.", "doughnut": "O tamanho das fatias vem do primeiro valor; o campo de legenda é ignorado.", "arc": "Meio anel: o tamanho das fatias vem do primeiro valor; o campo de legenda é ignorado.", "funnel": "As etapas são ordenadas pelo primeiro valor; o campo de legenda é ignorado.", "scatter": "O primeiro campo de eixo é X e deve ser um número; o primeiro valor é Y. Um campo de legenda divide os pontos em séries.", "bubble": "O primeiro campo de eixo é X (um número), o primeiro valor é Y e o segundo valor é o tamanho da bolha."},
+      "legendIgnored": "Este tipo de gráfico ignora o campo de legenda.",
+      "typeHint": {"doughnut": "O tamanho das fatias vem do primeiro valor; o campo de legenda é ignorado.", "arc": "Meio anel: o tamanho das fatias vem do primeiro valor; o campo de legenda é ignorado.", "funnel": "As etapas são ordenadas pelo primeiro valor; o campo de legenda é ignorado.", "scatter": "O primeiro campo de eixo é X e deve ser um número; o primeiro valor é Y. Um campo de legenda divide os pontos em séries.", "bubble": "O primeiro campo de eixo é X (um número), o primeiro valor é Y e o segundo valor é o tamanho da bolha.", "boxWhisker": "Cada categoria é uma caixa; os campos do eixo dão a categoria e o primeiro valor as observações (o campo de legenda é ignorado).", "pareto": "As barras são ordenadas pelo primeiro valor, da maior para a menor; a linha mostra a porcentagem acumulada no eixo direito (o campo de legenda é ignorado).", "waterfall": "Cada categoria é um passo do primeiro valor (vazio = 0) sobre um acumulado; uma última barra mostra o total (o campo de legenda é ignorado)."},
       "rowsHint": "Neste tipo de gráfico os valores são traçados tal como estão: sem função de agregação.",
       "axisXHint": "O primeiro campo é X.",
       "values": "Valores (eixo Y)",
@@ -3237,7 +3242,7 @@
       "collapse": "Recolher seção",
       "expand": "Expandir seção",
       "close": "Fechar",
-      "format": {"series": "Série de dados", "heading": "Formatar série de dados: {{name}}", "fullName": "Nome completo", "seriesType": "Tipo de série", "seriesTypes": {"column": "Coluna", "line": "Linha", "area": "Área"}, "plotOn": "Traçar série em", "primary": "Principal", "secondary": "Secundário", "fill": "Cor de preenchimento da série", "border": "Cor da borda da série", "labels": "Mostrar rótulo de dados", "trend": "Opções de linha de tendência", "trendName": "Nome da linha de tendência", "noValues": "Selecione primeiro um valor no separador Dados.", "legendHint": "Com um campo de legenda, a formatação aplica-se a todas as séries em conjunto: desativado.", "roundHint": "Sem efeito neste tipo de gráfico (circular, radar).", "axisHint": "Sem eixo secundário em gráficos de barras ou empilhados.", "trendHint": "Sem linha de tendência em gráficos de barras ou empilhados.", "lineOptions": "Opções de linha", "lineWidth": "Espessura da linha", "dash": "Estilo da linha", "marker": "Mostrar marcadores", "gap": "Valores em falta", "trendKinds": {"none": "Nenhuma", "linear": "Linear", "exponential": "Exponencial", "logarithmic": "Logarítmica", "polynomial": "Polinomial", "power": "Potência", "movingAverage": "Média móvel"}, "dashes": {"solid": "Contínua", "dashed": "Tracejada", "dotted": "Pontilhada"}, "gaps": {"gap": "Deixar uma lacuna", "zero": "Traçar como zero", "connect": "Ligar pontos"}}
+      "format": {"series": "Série de dados", "heading": "Formatar série de dados: {{name}}", "fullName": "Nome completo", "seriesType": "Tipo de série", "seriesTypes": {"column": "Coluna", "line": "Linha", "area": "Área"}, "plotOn": "Traçar série em", "primary": "Principal", "secondary": "Secundário", "fill": "Cor de preenchimento da série", "border": "Cor da borda da série", "labels": "Mostrar rótulo de dados", "trend": "Opções de linha de tendência", "trendName": "Nome da linha de tendência", "noValues": "Selecione primeiro um valor no separador Dados.", "legendHint": "Com um campo de legenda, a formatação aplica-se a todas as séries em conjunto: desativado.", "roundHint": "Sem efeito neste tipo de gráfico (circular, radar).", "axisHint": "Sem eixo secundário em gráficos de barras ou empilhados.", "trendHint": "Sem linha de tendência em gráficos de barras ou empilhados.", "noEffect": "Sem efeito neste tipo de gráfico.", "noTrend": "Sem linha de tendência neste tipo de gráfico.", "noAxis": "Sem eixo secundário neste tipo de gráfico.", "waterfallColors": "Cores da cascata", "lineOptions": "Opções de linha", "lineWidth": "Espessura da linha", "dash": "Estilo da linha", "marker": "Mostrar marcadores", "gap": "Valores em falta", "trendKinds": {"none": "Nenhuma", "linear": "Linear", "exponential": "Exponencial", "logarithmic": "Logarítmica", "polynomial": "Polinomial", "power": "Potência", "movingAverage": "Média móvel"}, "dashes": {"solid": "Contínua", "dashed": "Tracejada", "dotted": "Pontilhada"}, "gaps": {"gap": "Deixar uma lacuna", "zero": "Traçar como zero", "connect": "Ligar pontos"}}
     }
   }
 }

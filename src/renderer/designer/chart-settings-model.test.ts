@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readChartSpec, type ChartSpec } from '../../shared/chart/spec';
-import { armedChartTool, isDateField, listSources, setAgg, setLegend, setSeries, setSource, specPatch, specToProps, toggleAxis, toggleValue, typeHintKey } from './chart-settings-model';
+import { armedChartTool, isDateField, listSources, setAgg, setLegend, setSeries, setSource, specPatch, specToProps, toggleAxis, toggleValue, typeHintKey, seriesFormatApplies } from './chart-settings-model';
 
 const base: ChartSpec = { type: 'columnClustered', source: { kind: 'table', name: 'Commandes' }, axis: ['Client'], dateGroup: 'none', legend: '',
   values: [{ field: 'Montant', agg: 'sum' }] };
@@ -87,3 +87,30 @@ describe('typeHintKey (F5)', () => {
   });
 });
 
+
+describe('seriesFormatApplies (F5b)', () => {
+  const a = (type: ChartSpec['type'], legend = '') => seriesFormatApplies({ ...base, type, legend });
+  const none = { fill: false, border: false, labels: false, trend: false, secondary: false };
+  it('anneau, arc, entonnoir, secteurs, radar : rien', () => {
+    for (const t of ['doughnut', 'arc', 'funnel', 'pie', 'radar'] as const) expect(a(t), t).toMatchObject(none);
+  });
+  it('nuage et bulles : remplissage, bordure, étiquettes sauf avec un champ de légende ; ni tendance ni axe secondaire', () => {
+    expect(a('scatter')).toMatchObject({ fill: true, border: true, labels: true, trend: false, secondary: false });
+    expect(a('bubble', 'Pays')).toMatchObject({ fill: false, border: false, labels: false });
+  });
+  it('boîte : remplissage et bordure seulement (la légende est ignorée)', () => {
+    expect(a('boxWhisker', 'Pays')).toMatchObject({ fill: true, border: true, labels: false, trend: false, secondary: false });
+  });
+  it('Pareto : barres stylées, pas de tendance ni d axe secondaire', () => {
+    expect(a('pareto', 'Pays')).toMatchObject({ fill: true, border: true, labels: true, trend: false, secondary: false });
+  });
+  it('cascade : étiquettes seules, couleurs propres', () => {
+    expect(a('waterfall')).toMatchObject({ fill: false, border: false, labels: true, trend: false, secondary: false });
+  });
+  it('F4 inchangé', () => {
+    expect(a('columnClustered')).toMatchObject({ fill: true, border: true, labels: true, trend: true, secondary: true });
+    expect(a('barClustered')).toMatchObject({ trend: false, secondary: false });
+    expect(a('columnStacked')).toMatchObject({ trend: false, secondary: false, fill: true });
+    expect(a('line', 'Pays')).toMatchObject({ fill: false, trend: false, secondary: true });
+  });
+});

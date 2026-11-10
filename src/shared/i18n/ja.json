@@ -1650,6 +1650,10 @@
     "AxisSecFontSize": "第2値軸のフォントサイズ",
     "DoughnutHoleSize": "ドーナツの穴のサイズ (%)",
     "BubbleMaxSize": "最大バブルのサイズ (px)",
+    "WaterfallIncreaseColor": "ウォーターフォールの増加の色",
+    "WaterfallDecreaseColor": "ウォーターフォールの減少の色",
+    "WaterfallTotalColor": "ウォーターフォールの合計の色",
+    "WaterfallShowTotal": "ウォーターフォールの合計を表示",
     "ColumnHeads": "列見出し",
     "ColumnWidth": "列幅"
   },
@@ -3158,7 +3162,7 @@
   "chart": {
     "noSource": "データ ソースが定義されていません",
     "noData": "表示するデータがありません",
-    "waterfall": {"total": "合計"},
+    "waterfall": {"total": "合計", "increase": "増加", "decrease": "減少"},
     "pareto": {"cumulative": "累積 %"},
     "badLink": "リンク親フィールドとリンク子フィールドの数が一致しません",
     "truncated": "最初の 5,000 点のみ描画されます",
@@ -3182,7 +3186,8 @@
       "legend": "凡例 (系列)",
       "legendNone": "(なし)",
       "legendHint": "凡例を使用すると、最初の値のみが描画されます。",
-      "typeHint": {"notOffered": "このグラフの種類はまだ利用できません。", "doughnut": "扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "arc": "半円ドーナツ：扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "funnel": "段階は最初の値で並べ替えられます。凡例フィールドは無視されます。", "scatter": "最初の軸フィールドが X（数値である必要があります）、最初の値が Y です。凡例フィールドを指定すると、点が系列に分けられます。", "bubble": "最初の軸フィールドが X（数値）、最初の値が Y、2 番目の値がバブルの大きさです。"},
+      "legendIgnored": "このグラフの種類では凡例フィールドは無視されます。",
+      "typeHint": {"doughnut": "扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "arc": "半円ドーナツ：扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "funnel": "段階は最初の値で並べ替えられます。凡例フィールドは無視されます。", "scatter": "最初の軸フィールドが X（数値である必要があります）、最初の値が Y です。凡例フィールドを指定すると、点が系列に分けられます。", "bubble": "最初の軸フィールドが X（数値）、最初の値が Y、2 番目の値がバブルの大きさです。", "boxWhisker": "各カテゴリが 1 つの箱になります。軸フィールドがカテゴリ、最初の値が観測値です (凡例フィールドは無視されます)。", "pareto": "棒は最初の値の降順に並べ替えられ、折れ線は右軸の累積パーセントを示します (凡例フィールドは無視されます)。", "waterfall": "各カテゴリは累計に対する最初の値(空 = 0)の増減で、最後の棒が合計を示します(凡例フィールドは無視されます)。"},
       "rowsHint": "このグラフの種類では、値は集計せずそのまま描画されます。",
       "axisXHint": "最初のフィールドが X です。",
       "values": "値 (Y 軸)",
@@ -3191,7 +3196,7 @@
       "collapse": "セクションを折りたたむ",
       "expand": "セクションを展開",
       "close": "閉じる",
-      "format": {"series": "データ系列", "heading": "データ系列の書式: {{name}}", "fullName": "フルネーム", "seriesType": "系列の種類", "seriesTypes": {"column": "縦棒", "line": "折れ線", "area": "面"}, "plotOn": "系列のプロット先", "primary": "第 1 軸", "secondary": "第 2 軸", "fill": "系列の塗りつぶしの色", "border": "系列の枠線の色", "labels": "データ ラベルを表示", "trend": "近似曲線のオプション", "trendName": "近似曲線の名前", "noValues": "最初に [データ] タブで値を選択してください。", "legendHint": "凡例フィールドがある場合、書式はすべての系列に共通で適用されます。無効です。", "roundHint": "このグラフの種類(円、レーダー)では無効です。", "axisHint": "横棒グラフまたは積み上げグラフでは第2軸は使用できません。", "trendHint": "横棒グラフまたは積み上げグラフでは近似曲線は使用できません。", "lineOptions": "線のオプション", "lineWidth": "線の太さ", "dash": "線の種類", "marker": "マーカーを表示", "gap": "欠損値", "trendKinds": {"none": "なし", "linear": "線形", "exponential": "指数", "logarithmic": "対数", "polynomial": "多項式", "power": "累乗", "movingAverage": "移動平均"}, "dashes": {"solid": "実線", "dashed": "破線", "dotted": "点線"}, "gaps": {"gap": "途切れさせる", "zero": "ゼロとして表示", "connect": "データ ポイントを結ぶ"}}
+      "format": {"series": "データ系列", "heading": "データ系列の書式: {{name}}", "fullName": "フルネーム", "seriesType": "系列の種類", "seriesTypes": {"column": "縦棒", "line": "折れ線", "area": "面"}, "plotOn": "系列のプロット先", "primary": "第 1 軸", "secondary": "第 2 軸", "fill": "系列の塗りつぶしの色", "border": "系列の枠線の色", "labels": "データ ラベルを表示", "trend": "近似曲線のオプション", "trendName": "近似曲線の名前", "noValues": "最初に [データ] タブで値を選択してください。", "legendHint": "凡例フィールドがある場合、書式はすべての系列に共通で適用されます。無効です。", "roundHint": "このグラフの種類(円、レーダー)では無効です。", "axisHint": "横棒グラフまたは積み上げグラフでは第2軸は使用できません。", "trendHint": "横棒グラフまたは積み上げグラフでは近似曲線は使用できません。", "noEffect": "このグラフの種類では無効です。", "noTrend": "このグラフの種類では近似曲線は使えません。", "noAxis": "このグラフの種類では第 2 軸は使えません。", "waterfallColors": "ウォーターフォールの色", "lineOptions": "線のオプション", "lineWidth": "線の太さ", "dash": "線の種類", "marker": "マーカーを表示", "gap": "欠損値", "trendKinds": {"none": "なし", "linear": "線形", "exponential": "指数", "logarithmic": "対数", "polynomial": "多項式", "power": "累乗", "movingAverage": "移動平均"}, "dashes": {"solid": "実線", "dashed": "破線", "dotted": "点線"}, "gaps": {"gap": "途切れさせる", "zero": "ゼロとして表示", "connect": "データ ポイントを結ぶ"}}
     }
   }
 }

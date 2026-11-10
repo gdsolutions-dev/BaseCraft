@@ -1636,6 +1636,10 @@
     "AxisSecFontSize": "Secondary value axis font size",
     "DoughnutHoleSize": "Doughnut hole size (%)",
     "BubbleMaxSize": "Largest bubble size (px)",
+    "WaterfallIncreaseColor": "Waterfall increase color",
+    "WaterfallDecreaseColor": "Waterfall decrease color",
+    "WaterfallTotalColor": "Waterfall total color",
+    "WaterfallShowTotal": "Show waterfall total",
     "ColumnHeads": "Column Heads",
     "ColumnWidth": "Column Width"
   },
@@ -3059,7 +3063,7 @@
   "chart": {
     "noSource": "Data source not defined",
     "noData": "No data to display",
-    "waterfall": {"total": "Total"},
+    "waterfall": {"total": "Total", "increase": "Increase", "decrease": "Decrease"},
     "pareto": {"cumulative": "Cumulative %"},
     "badLink": "Link Master/Child fields do not match",
     "truncated": "Only the first 5,000 points are drawn",
@@ -3083,7 +3087,8 @@
       "legend": "Legend (Series)",
       "legendNone": "(None)",
       "legendHint": "With a legend, only the first value is plotted.",
-      "typeHint": {"notOffered": "This chart type is not available yet.", "doughnut": "Slices are sized by the first value; the legend field is ignored.", "arc": "Half doughnut: slices are sized by the first value; the legend field is ignored.", "funnel": "Stages are sorted by the first value; the legend field is ignored.", "scatter": "The first axis field is X and must be a number; the first value is Y. A legend field splits the points into series.", "bubble": "The first axis field is X (a number), the first value is Y and the second value is the bubble size."},
+      "legendIgnored": "This chart type ignores the legend field.",
+      "typeHint": {"doughnut": "Slices are sized by the first value; the legend field is ignored.", "arc": "Half doughnut: slices are sized by the first value; the legend field is ignored.", "funnel": "Stages are sorted by the first value; the legend field is ignored.", "scatter": "The first axis field is X and must be a number; the first value is Y. A legend field splits the points into series.", "bubble": "The first axis field is X (a number), the first value is Y and the second value is the bubble size.", "boxWhisker": "Each category is a box; the axis fields give the category and the first value the observations (the legend field is ignored).", "pareto": "Bars are sorted by the first value, largest first; the line shows the cumulative percentage on the right axis (the legend field is ignored).", "waterfall": "Each category is a step from the first value (empty = 0) on a running total; a last bar shows the total (the legend field is ignored)."},
       "rowsHint": "Values are plotted as they are for this chart type: no aggregate function.",
       "axisXHint": "The first field is X.",
       "values": "Values (Y axis)",
@@ -3092,7 +3097,7 @@
       "collapse": "Collapse section",
       "expand": "Expand section",
       "close": "Close",
-      "format": {"series": "Data series", "heading": "Format data series: {{name}}", "fullName": "Full name", "seriesType": "Series type", "seriesTypes": {"column": "Column", "line": "Line", "area": "Area"}, "plotOn": "Plot series on", "primary": "Primary", "secondary": "Secondary", "fill": "Series fill color", "border": "Series border color", "labels": "Show data label", "trend": "Trendline options", "trendName": "Trendline name", "noValues": "First select a value on the Data tab.", "legendHint": "With a Legend field the format applies to all series together: disabled.", "roundHint": "No effect on this chart type (pie, radar).", "axisHint": "No secondary axis for bar or stacked charts.", "trendHint": "No trendline for bar or stacked charts.", "lineOptions": "Line options", "lineWidth": "Line width", "dash": "Line style", "marker": "Show markers", "gap": "Missing values", "trendKinds": {"none": "None", "linear": "Linear", "exponential": "Exponential", "logarithmic": "Logarithmic", "polynomial": "Polynomial", "power": "Power", "movingAverage": "Moving average"}, "dashes": {"solid": "Solid", "dashed": "Dashed", "dotted": "Dotted"}, "gaps": {"gap": "Leave a gap", "zero": "Plot as zero", "connect": "Connect points"}}
+      "format": {"series": "Data series", "heading": "Format data series: {{name}}", "fullName": "Full name", "seriesType": "Series type", "seriesTypes": {"column": "Column", "line": "Line", "area": "Area"}, "plotOn": "Plot series on", "primary": "Primary", "secondary": "Secondary", "fill": "Series fill color", "border": "Series border color", "labels": "Show data label", "trend": "Trendline options", "trendName": "Trendline name", "noValues": "First select a value on the Data tab.", "legendHint": "With a Legend field the format applies to all series together: disabled.", "roundHint": "No effect on this chart type (pie, radar).", "axisHint": "No secondary axis for bar or stacked charts.", "trendHint": "No trendline for bar or stacked charts.", "noEffect": "No effect for this chart type.", "noTrend": "No trendline for this chart type.", "noAxis": "No secondary axis for this chart type.", "waterfallColors": "Waterfall colors", "lineOptions": "Line options", "lineWidth": "Line width", "dash": "Line style", "marker": "Show markers", "gap": "Missing values", "trendKinds": {"none": "None", "linear": "Linear", "exponential": "Exponential", "logarithmic": "Logarithmic", "polynomial": "Polynomial", "power": "Power", "movingAverage": "Moving average"}, "dashes": {"solid": "Solid", "dashed": "Dashed", "dotted": "Dotted"}, "gaps": {"gap": "Leave a gap", "zero": "Plot as zero", "connect": "Connect points"}}
     }
   }
 }

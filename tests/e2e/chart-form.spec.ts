@@ -141,3 +141,36 @@ test('F5a form view: a Doughnut (slice per client) and a Scatter (point per row)
     await expect(txt).toContainText('nombre');
   } finally { await app.close(); }
 });
+
+const mesures = t('Mesures', [f('Groupe', 'shortText'), f('Valeur', 'number', { numberSize: 'double' })]);
+const seed5b = (name: string) => seedBase(name, async (db) => {
+  createTable(db, mesures);
+  for (const [Groupe, Valeur] of [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 100].map((v) => ['A', v] as const), ...[2, 4, 4, 5, 7, 9].map((v) => ['B', v] as const)]) await insertRow(db, mesures, { Groupe, Valeur }, region);
+  seedForm(db, 'Fiche5b', { formatVersion: '1.0', recordSource: { kind: 'table', name: 'Mesures' }, props: { Width: 5500 }, sections: [{ kind: 'detail', height: 8000, props: {}, controls: [
+    chart('Boite', 100, { ChartType: 'boxWhisker', HasLegend: false, ChartAxis: ['Groupe'], ChartValues: [{ field: 'Valeur', agg: 'none' }] }),
+    chart('Cascade', 2600, { ChartType: 'waterfall', ChartAxis: ['Groupe'], ChartValues: [{ field: 'Valeur', agg: 'sum' }] }),
+    chart('CascadeSansTotal', 5100, { ChartType: 'waterfall', WaterfallShowTotal: false, ChartAxis: ['Groupe'], ChartValues: [{ field: 'Valeur', agg: 'sum' }] }),
+  ] }] });
+});
+
+test('F5b form view: a Box and Whisker draws two boxes and the outlier point; the Waterfall total bar and legend follow "Afficher le total"', async () => {
+  test.setTimeout(120000);
+  const { app, page } = await launchApp({ args: [await seed5b('chart-f5b-form')], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-Fiche5b').dblclick();
+    await expect(page.getByTestId('form-run')).toBeVisible();
+    const of = (n: string) => page.getByTestId(`form-ctl-${n}`).filter({ visible: true }).locator('svg').first();
+    const box = of('Boite');
+    await expect.poll(() => box.locator('path[fill-opacity="0.35"]').count()).toBe(2);   // une boîte par groupe
+    await expect(box.locator('path[transform^="matrix(5,"][fill^="#"]')).toHaveCount(1);   // le point aberrant (100 pour le groupe A)
+    expect(await box.textContent()).toContain('A');
+    expect(await box.textContent()).not.toMatch(/NaN|undefined/);
+    const full = of('Cascade'), off = of('CascadeSansTotal');
+    await expect(full).toContainText('Total');
+    await expect(full).toContainText('Hausse');
+    await expect(off).toContainText('Hausse');
+    await expect(off).toContainText('Baisse');
+    await expect(off).not.toContainText('Total');   // ni barre ni entrée de légende
+    expect((await off.locator('text').allTextContents()).filter((x) => x === 'Hausse' || x === 'Baisse' || x === 'Total')).toEqual(['Hausse', 'Baisse']);
+  } finally { await app.close(); }
+});

@@ -3,7 +3,7 @@
 import { Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AGGS, chartDataMode, chartFamily, DATE_GROUPS, type Agg, type ChartSeries, type ChartSpec } from '../../shared/chart/spec';
+import { AGGS, chartDataMode, chartFamily, DATE_GROUPS, ignoresLegend, type Agg, type ChartSeries, type ChartSpec } from '../../shared/chart/spec';
 import type { RecordSourceRef, SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
 import { isDateField, listSources, setAgg, setDateGroup, setLegend, setSource, sourceKindOf, specPatch, toggleAxis, toggleValue, typeHintKey, type SourceKind } from './chart-settings-model';
@@ -32,7 +32,7 @@ function Section(p: { id: string; title: string; children: React.ReactNode }) {
 }
 
 /** `spec` null : aucun graphique sélectionné. Le parent met `key` sur le nom du graphique (l'état local repart de zéro). */
-export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSourceRef | null; tables: string[]; queries: string[]; readOnly: boolean;
+export function ChartSettings(p: { spec: ChartSpec | null; props?: Record<string, unknown>; docSource: RecordSourceRef | null; tables: string[]; queries: string[]; readOnly: boolean;
   onChange(patch: Record<string, unknown>): void; onClose(): void }) {
   const { t } = useTranslation();
   const { spec, readOnly } = p;
@@ -80,7 +80,8 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
   const rows = chartDataMode(spec.type) === 'rows';   // nuage, bulles : les valeurs ne s'agrègent pas
   const hint = typeHintKey(spec);
   const xHint = chartFamily(spec.type) === 'scatter' || chartFamily(spec.type) === 'bubble';
-  const multiLegend = spec.legend !== '' && spec.values.length > 1;
+  const noLegend = ignoresLegend(spec.type);   // le champ Légende est ignoré (une seule série) : désactivé, la valeur reste
+  const multiLegend = spec.legend !== '' && spec.values.length > 1 && !noLegend;
 
   return (
     <section className="dz-fields cs" aria-label={t('chart.settings.title')} data-testid="chart-settings">
@@ -93,7 +94,7 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
       </div>
       {(
         <div className="cs-body" role="tabpanel" id={`${uid}-panel-format`} aria-labelledby={`${uid}-tab-format`} hidden={tab !== 'format'}>
-          <ChartSeriesFormat spec={spec} readOnly={readOnly} idPrefix={uid} onSeries={(series: ChartSeries[]) => commit({ ...spec, series })} />
+          <ChartSeriesFormat spec={spec} readOnly={readOnly} idPrefix={uid} onSeries={(series: ChartSeries[]) => commit({ ...spec, series })} props={p.props} onProps={(patch) => { if (!readOnly) p.onChange(patch); }} />
         </div>
       )}
       <div className="cs-body" role="tabpanel" id={`${uid}-panel-data`} aria-labelledby={`${uid}-tab-data`} hidden={tab !== 'data'}>
@@ -127,13 +128,14 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
         </Section>
         <Section id={`${uid}-legend`} title={t('chart.settings.legend')}>
           <div role="radiogroup" aria-label={t('chart.settings.legend')}>
-            <label className="cs-row"><input type="radio" name={`${uid}-legend`} data-testid="chart-legend-none" checked={spec.legend === ''} disabled={readOnly}
+            <label className="cs-row"><input type="radio" name={`${uid}-legend`} data-testid="chart-legend-none" checked={spec.legend === ''} disabled={readOnly || noLegend} aria-describedby={noLegend ? `${uid}-legend-ignored` : undefined}
               onChange={() => commit(setLegend(spec, ''))} />{t('chart.settings.legendNone')}</label>
             {fields.map((f) => (
-              <label key={f.name} className="cs-row"><input type="radio" name={`${uid}-legend`} data-testid={`chart-legend-${f.name}`} checked={sameName(spec.legend, f.name)} disabled={readOnly}
+              <label key={f.name} className="cs-row"><input type="radio" name={`${uid}-legend`} data-testid={`chart-legend-${f.name}`} checked={sameName(spec.legend, f.name)} disabled={readOnly || noLegend} aria-describedby={noLegend ? `${uid}-legend-ignored` : undefined}
                 onChange={() => commit(setLegend(spec, f.name))} />{f.name}</label>
             ))}
           </div>
+          {noLegend && <p id={`${uid}-legend-ignored`} className="cs-hint muted" data-testid="chart-legend-ignored">{t('chart.settings.legendIgnored')}</p>}
         </Section>
         <Section id={`${uid}-values`} title={t('chart.settings.values')}>
           {rows && <p id={`${uid}-rows`} className="cs-hint muted" data-testid="chart-rows-hint">{t('chart.settings.rowsHint')}</p>}

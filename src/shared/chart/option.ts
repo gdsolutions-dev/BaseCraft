@@ -4,6 +4,7 @@
 import type { EChartsCoreOption } from 'echarts/core';
 import type { SqlValue } from '../coerce';
 import { isColorValue, type ColorValue } from '../design/colors';
+import { boxStats } from './box';
 import type { ChartPalette } from './palette';
 import type { ChartColumn, ChartData } from './query';
 import { chartFamily, chartStack, singleSeries, usesAxes, type ChartSpec, type ChartType } from './spec';
@@ -36,10 +37,11 @@ export interface ChartFormat {
   holeSize: number; bubbleMax: number;
   waterfall: { increase: ColorValue; decrease: ColorValue; total: ColorValue; showTotal: boolean };
   /** Libellés localisés : barre du total (cascade) et courbe du cumul (Pareto). */
-  total: string; cumulative: string;
+  total: string; cumulative: string; increase: string; decrease: string;
 }
 
-export interface ChartLabels { title: string; empty: string; trends?: Record<string, string>; total?: string; cumulative?: string }
+/** `hints` : les textes d'aide par clé i18n (`typeHintKey`, ou `chart.noData`), imprimés quand rien ne se trace malgré des lignes. */
+export interface ChartLabels { title: string; empty: string; trends?: Record<string, string>; total?: string; cumulative?: string; increase?: string; decrease?: string; hints?: Record<string, string> }
 
 const POSITIONS: readonly LegendPosition[] = ['top', 'bottom', 'left', 'right'];
 export const BORDER_STYLES = ['transparent', 'solid', 'dashed', 'dotted'] as const;
@@ -127,6 +129,7 @@ export function readChartFormat(props: Record<string, unknown>, labels: ChartLab
     waterfall: { increase: col(props.WaterfallIncreaseColor, 'theme:accent1'), decrease: col(props.WaterfallDecreaseColor, 'theme:accent2'),
       total: col(props.WaterfallTotalColor, 'theme:accent3'), showTotal: bool(props.WaterfallShowTotal, true) },
     total: labels.total ?? 'Total', cumulative: labels.cumulative ?? 'Cumulative %',
+    increase: labels.increase ?? 'Increase', decrease: labels.decrease ?? 'Decrease',
   };
 }
 
@@ -147,10 +150,38 @@ const SAMPLES: Partial<Record<ChartType, ChartData>> = {
   scatter: { columns: [sc('category', 'X'), sc('legend', 'Series'), sc('value', 'Y')],
     rows: [[1, 'Series 1', 3], [2, 'Series 1', 5], [3, 'Series 1', 4], [4, 'Series 1', 7], [5, 'Series 1', 6], [6, 'Series 1', 9],
       [1.5, 'Series 2', 8], [2.5, 'Series 2', 6], [3.5, 'Series 2', 7], [4.5, 'Series 2', 3], [5.5, 'Series 2', 4], [6.5, 'Series 2', 2]], truncated: false },
+  // Pareto : donné en désordre pour montrer le tri
+  pareto: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [8, 40, 15, 25, 12][i]!]), truncated: false },
+  waterfall: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [60, -15, 25, -30, 10][i]!]), truncated: false },
   bubble: { columns: [sc('category', 'X'), sc('value', 'Y'), sc('value', 'Size')],
     rows: [[1, 3, 10], [2, 6, 25], [3, 4, 5], [4, 8, 40], [5, 5, 15], [6, 9, 30], [7, 3, 8], [8, 7, 20]], truncated: false },
+  // 3 catégories x 12 observations, une valeur aberrante (60) dans la deuxième
+  boxWhisker: { columns: [sc('category', 'Category'), sc('value', 'Value')], truncated: false,
+    rows: [[12, 14, 15, 15, 16, 17, 18, 18, 19, 20, 21, 23], [20, 22, 23, 24, 24, 25, 26, 27, 27, 28, 29, 60], [8, 10, 11, 12, 13, 13, 14, 15, 16, 16, 17, 19]]
+      .flatMap((vs, i) => vs.map((v) => [CATS[i]!, v])) },
 };
 SAMPLES.arc = SAMPLES.doughnut;
+
+/** Pareto : part cumulée (%) de chaque valeur, arrondie à 2 décimales ; une valeur négative compte 0, un total nul donne des 0 (jamais NaN). */
+export function cumulativeShares(values: number[]): number[] {
+  const pos = values.map((v) => Math.max(0, v));
+  const total = pos.reduce((t, v) => t + v, 0);
+  let run = 0;
+  return pos.map((v) => { run += v; return total === 0 ? 0 : Math.round((run / total) * 10000) / 100; });
+}
+
+const round6 = (n: number): number => Math.round(n * 1e6) / 1e6 + 0;   // + 0 : jamais -0
+
+/** Cascade : un pas par valeur (NULL = 0) avec le cumul avant (`start`) et après (`end`), puis, si demandé, la barre du total (0 jusqu'au cumul final). */
+export function waterfallSteps(values: (number | null)[], showTotal: boolean): { start: number; end: number; kind: 'increase' | 'decrease' | 'total' }[] {
+  let run = 0;
+  const steps = values.map((v) => {
+    const start = run;
+    run = round6(run + (v ?? 0));
+    return { start, end: run, kind: (v ?? 0) >= 0 ? ('increase' as const) : ('decrease' as const) };
+  });
+  return showTotal ? [...steps, { start: 0, end: run, kind: 'total' as const }] : steps;
+}
 
 /** Les données d'exemple de la vue Création pour un type : les types F4 gardent SAMPLE_ROWS. */
 export const sampleFor = (type: ChartType): ChartData => SAMPLES[type] ?? SAMPLE_ROWS;
@@ -158,7 +189,7 @@ export const sampleFor = (type: ChartType): ChartData => SAMPLES[type] ?? SAMPLE
 /** Info-bulle de la vue vivante (jamais à l'impression) ; en 100 % elle montre la valeur réelle, pas la part. */
 export function chartTooltip(spec: ChartSpec, option: EChartsCoreOption, locale?: string): Record<string, unknown> {
   const f = chartFamily(spec.type);
-  if (!usesAxes(f) || f === 'scatter' || f === 'bubble' || f === 'boxWhisker') return { trigger: 'item' };
+  if (!usesAxes(f) || f === 'scatter' || f === 'bubble' || f === 'boxWhisker' || f === 'waterfall') return { trigger: 'item' };
   if (chartStack(spec.type) !== 'percent') return { trigger: 'axis' };
   const series = (option as { series?: { realData?: (number | null)[] }[] }).series ?? [];
   const nf = new Intl.NumberFormat(locale);
@@ -240,8 +271,8 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   const hasSecondary = secondary.some(Boolean);
   const shown = (s: number): string => (legIdx < 0 ? cfgOf(s)?.name : undefined) ?? names[s]!;
   const catTitle = axisTitles && catIdx >= 0 ? data.columns[catIdx]!.field : '';
-  const valTitle = axisTitles ? (legIdx >= 0 || family === 'scatter' || family === 'bubble' ? valueCols[0]!.c.name : valueCols.flatMap(({ c }, s) => (secondary[s] ? [] : [shown(s) === names[s] ? c.name : shown(s)])).join(', ')) : '';
-  const secTitle = axisTitles && hasSecondary && fmt.axis2.title !== '' ? fmt.axis2.title : axisTitles && hasSecondary && legIdx < 0 ? names.flatMap((_, s) => (secondary[s] ? [shown(s)] : [])).join(', ') : '';
+  const valTitle = axisTitles ? (legIdx >= 0 || family === 'scatter' || family === 'bubble' || singleSeries(family) ? valueCols[0]!.c.name : valueCols.flatMap(({ c }, s) => (secondary[s] ? [] : [shown(s) === names[s] ? c.name : shown(s)])).join(', ')) : '';
+  const secTitle = family === 'pareto' ? (axisTitles ? (fmt.axis2.title !== '' ? fmt.axis2.title : fmt.cumulative) : '') : axisTitles && hasSecondary && fmt.axis2.title !== '' ? fmt.axis2.title : axisTitles && hasSecondary && legIdx < 0 ? names.flatMap((_, s) => (secondary[s] ? [shown(s)] : [])).join(', ') : '';
   const bottomTitle = axisTitles && fmt.axisTitleX !== '' ? fmt.axisTitleX : horizontal ? valTitle : catTitle;
   const leftTitle = axisTitles && fmt.axisTitleY !== '' ? fmt.axisTitleY : horizontal ? catTitle : valTitle;
   // Marges réservées au titre, à la légende et aux titres d'axes.
@@ -253,9 +284,10 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   };
 
   const vertical = pos === 'left' || pos === 'right';
-  const legend = pos
-    ? { legend: { show: true, [pos]: pos === 'top' && titleH > 0 ? 6 + titleH : 4, orient: vertical ? 'vertical' : 'horizontal', ...(vertical ? { top: 'middle' } : { left: 'center' }), textStyle: { fontSize: fmt.legendSize, color: pal.custom(fmt.legendColor) } } }
+  const legendOf = (data?: string[]) => pos
+    ? { legend: { show: true, [pos]: pos === 'top' && titleH > 0 ? 6 + titleH : 4, orient: vertical ? 'vertical' : 'horizontal', ...(vertical ? { top: 'middle' } : { left: 'center' }), textStyle: { fontSize: fmt.legendSize, color: pal.custom(fmt.legendColor) }, ...(data ? { data } : {}) } }
     : {};
+  const legend = legendOf();
   const title = titleOn || subOn ? { title: { text: titleOn ? fmt.title : '', ...(subOn ? { subtext: fmt.subtitle, subtextStyle: { fontSize: fmt.subtitleSize, color: pal.custom(fmt.subtitleColor), fontFamily: pal.fontFamily } } : {}),
     left: 'center', top: 4, textStyle: { fontSize: fmt.titleSize, color: pal.custom(fmt.titleColor), fontFamily: pal.font(fmt.titleFont) } } } : {};
 
@@ -325,7 +357,9 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
       const size = sizeIdx < 0 ? null : num(r[sizeIdx]);
       if (size !== null && size < 0) continue;
       const name = legIdx >= 0 ? label(r[legIdx]) : valueCols[0]!.c.name;
-      groups.set(name, [...(groups.get(name) ?? []), { x, y, size }]);
+      let g = groups.get(name);
+      if (!g) groups.set(name, g = []);
+      g.push({ x, y, size });
     }
     // Bulles : diamètre proportionnel à la racine de la taille (aire), échelle commune à toutes les séries ; taille absente ou nulle (ou
     // une seule Valeur) : diamètre moyen, toutes les bulles égales.
@@ -343,8 +377,76 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
         ...(dataLabels ? { label: { show: true, fontSize: TEXT, color: pal.text, formatter: '{@[1]}' } } : {}) })) };
   }
 
-  // Boîte à moustaches, Pareto, cascade : pas encore proposés (tâches suivantes), jamais le chemin des colonnes.
-  if (family === 'boxWhisker' || family === 'pareto' || family === 'waterfall') return { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };
+  if (family === 'boxWhisker') {
+    // Observations par catégorie (une seule boîte sans axe) ; la légende est ignorée. Catégories en points de code ; un texte numérique est lu, un autre ignoré.
+    const obs = new Map<string, number[]>();
+    for (const r of data.rows) {
+      const k = catIdx < 0 ? valueCols[0]!.c.name : label(r[catIdx]);
+      let g = obs.get(k);
+      if (!g) obs.set(k, g = []);
+      const v = num(r[valueCols[0]!.i]);
+      if (v !== null) g.push(v);
+    }
+    const keys = [...obs.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const stats = keys.map((k) => boxStats(obs.get(k)!));
+    if (stats.every((b) => b === null)) return { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };   // rien de numérique : l'aide du type s'affiche
+    const accent = cfgOf(0)?.color ? pal.custom(cfgOf(0)!.color!) : pal.series[0]!;
+    const edge = cfgOf(0)?.borderColor ? pal.custom(cfgOf(0)!.borderColor!) : accent;
+    // remplissage à 35 % d'opacité de l'accent 1 (#rrggbb), sinon la couleur telle quelle
+    const m = /^#([0-9a-f]{6})$/i.exec(accent);
+    const fill = m ? `rgba(${[0, 2, 4].map((i) => parseInt(m[1]!.slice(i, i + 2), 16)).join(', ')}, 0.35)` : accent;
+    const name = valueCols[0]!.c.name;
+    return { ...base, ...title, ...legendOf([name]), tooltip: { trigger: 'item' }, grid: { ...box, containLabel: true },
+      xAxis: { ...category(bottomTitle), data: keys }, yAxis: value(leftTitle),
+      series: [{ type: 'boxplot', name, itemStyle: { color: fill, borderColor: edge }, data: stats.map((b) => (b ? [b.whiskerLow, b.q1, b.median, b.q3, b.whiskerHigh] : null)) },
+        // silent : ni survol ni info-bulle (le nom 'outliers' n'est pas localisé)
+        { type: 'scatter', name: 'outliers', silent: true, itemStyle: { color: accent }, data: stats.flatMap((b, i) => (b ? b.outliers.map((o) => [i, o]) : [])) }] };
+  }
+
+  if (family === 'pareto') {
+    // Barres triées par valeur décroissante puis libellé croissant (points de code) ; NULL = barre de hauteur 0 ; la légende est ignorée.
+    const bars = cats.map((name, c) => ({ name, v: Math.round((cells.get(key(0, c)) ?? 0) * 1e6) / 1e6 }))
+      .sort((a, b) => b.v - a.v || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const accent = cfgOf(0)?.color ? pal.custom(cfgOf(0)!.color!) : pal.series[0]!;
+    const line = pal.series[1 % pal.series.length]!;
+    const edgeColor = cfgOf(0)?.borderColor ? pal.custom(cfgOf(0)!.borderColor!) : undefined;
+    return { ...base, ...title, ...legend, tooltip: { trigger: 'axis' }, grid: { ...box, containLabel: true },
+      xAxis: { ...category(bottomTitle), data: bars.map((b) => b.name) },
+      yAxis: [value(leftTitle), { type: 'value' as const, min: 0, max: 100, position: 'right' as const, splitLine: { show: false },
+        axisLabel: { fontSize: a2.size, color: pal.custom(a2.color), formatter: '{value}%' },
+        ...(secTitle !== '' ? { name: secTitle, nameLocation: 'middle' as const, nameGap: 34, nameTextStyle: { fontSize: a2.size, color: pal.custom(a2.color) } } : {}) }],
+      series: [{ type: 'bar', name: valueCols[0]!.c.name, itemStyle: { color: accent, ...(edgeColor ? { borderColor: edgeColor, borderWidth: 1 } : {}) },
+        ...(cfgOf(0)?.dataLabels ? { label: { show: true, fontSize: TEXT, color: pal.text } } : {}), data: bars.map((b) => b.v) },
+        { type: 'line', name: fmt.cumulative, yAxisIndex: 1, symbol: 'circle', smooth: false, itemStyle: { color: line }, lineStyle: { color: line }, data: cumulativeShares(bars.map((b) => b.v)) }] };
+  }
+
+  if (family === 'waterfall') {
+    // Pas = première Valeur par catégorie (la légende est ignorée) ; barres flottantes empilées sur une base transparente. Un pas qui
+    // traverse zéro est coupé en une partie positive et une partie négative de la même série (la pile positive et la négative sont séparées).
+    const steps = waterfallSteps(cats.map((_, c) => cells.get(key(0, c)) ?? 0), fmt.waterfall.showTotal);
+    const labelsOn = cfgFor(valueCols[0]!.c.field.toLowerCase())?.dataLabels === true;
+    const parts = steps.map((st) => {
+      const lo = Math.min(st.start, st.end), hi = Math.max(st.start, st.end);
+      return lo >= 0 ? { base: lo, pos: round6(hi - lo), neg: null } : hi <= 0 ? { base: hi, pos: null, neg: round6(lo - hi) } : { base: 0, pos: hi, neg: lo };
+    });
+    const text = (st: (typeof steps)[number]): string => (st.kind === 'total' ? String(st.end) : `${st.end >= st.start ? '+' : ''}${round6(st.end - st.start)}`);
+    const stepValue = (st: (typeof steps)[number]): string => String(st.kind === 'total' ? st.end : round6(st.end - st.start));
+    const kinds: [string, string, ColorValue][] = [['increase', fmt.increase, fmt.waterfall.increase], ['decrease', fmt.decrease, fmt.waterfall.decrease], ...(fmt.waterfall.showTotal ? [['total', fmt.total, fmt.waterfall.total] as [string, string, ColorValue]] : [])];
+    const bars = kinds.flatMap(([kind, name, color]) => {
+      const fill = pal.custom(color);
+      // étiquette en chaîne (jamais de fonction), sur la partie principale du pas ; texte noir ou blanc selon le fond
+      // info-bulle en chaîne sur chaque partie visible : la valeur signée du pas (pas la hauteur de la partie empilée)
+      const point = (i: number, v: number | null, main: boolean) => (v === null || steps[i]!.kind !== kind ? null
+        : { value: v, tooltip: { formatter: `{b}<br/>{a}: ${stepValue(steps[i]!)}` },
+          ...(labelsOn && main ? { label: { show: true, position: 'inside', fontSize: TEXT, color: onFill(fill, pal.text), formatter: text(steps[i]!) } } : {}) });
+      const posData = parts.map((pt, i) => point(i, pt.pos, true));
+      const negData = parts.map((pt, i) => point(i, pt.neg, pt.pos === null));
+      return [posData, ...(negData.some((v) => v !== null) ? [negData] : [])].map((data) => ({ type: 'bar' as const, name, stack: 'wf', itemStyle: { color: fill }, data }));
+    });
+    return { ...base, ...title, ...legendOf(kinds.map((k) => k[1])), tooltip: { trigger: 'item' }, grid: { ...box, containLabel: true },
+      xAxis: { ...category(bottomTitle), data: [...cats, ...(fmt.waterfall.showTotal ? [fmt.total] : [])] }, yAxis: value(leftTitle),
+      series: [{ type: 'bar', name: 'base', stack: 'wf', silent: true, tooltip: { show: false }, itemStyle: { color: 'transparent' }, data: parts.map((pt) => pt.base) }, ...bars] };
+  }
 
   // 100 % : chaque valeur devient sa part du total de la catégorie (total nul : parts à 0, jamais NaN) ; le réel reste dans realData.
   const total = cats.map((_, c) => names.reduce((t, _n, s) => t + Math.abs(cells.get(key(s, c)) ?? 0), 0));

@@ -26,7 +26,7 @@ function Canvas({ c, data, prefix }: { c: Ctl; data: ChartData; prefix: string }
   const chart = useRef<ReturnType<typeof echarts.init> | null>(null);
   const spec = useMemo(() => readChartSpec(c.props), [c.props]);
   const option = useMemo(() => {
-    const o = chartOption(spec, data, readChartFormat(c.props, { title: t('chart.defaultTitle'), empty: t('chart.emptyCategory'), trends: trendLabels(t), total: t('chart.waterfall.total'), cumulative: t('chart.pareto.cumulative') }), chartPalette(theme, mode), { width: 0, height: 0 });
+    const o = chartOption(spec, data, readChartFormat(c.props, { title: t('chart.defaultTitle'), empty: t('chart.emptyCategory'), trends: trendLabels(t), total: t('chart.waterfall.total'), increase: t('chart.waterfall.increase'), decrease: t('chart.waterfall.decrease'), cumulative: t('chart.pareto.cumulative') }), chartPalette(theme, mode), { width: 0, height: 0 });
     return { ...o, tooltip: chartTooltip(spec, o, i18n.language) };
   }, [spec, data, c.props, t, i18n.language, theme, mode]);
 

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { DesignDoc } from '../../shared/design/model';
 import { cssFamily, resolveFont } from '../../shared/fonts';
 import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
+import { TYPE_HINT_KEYS } from '../../shared/chart/spec';
 import { trendLabels } from '../../shared/chart/trend';
 import { layoutReport } from '../../shared/report/layout';
 import { fourDigitYear } from '../settings-store';
@@ -89,7 +90,8 @@ export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
     locale: s.region, lang: formulaLang(s.uiLanguage), fourDigitYear: fourDigitYear(), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
-    chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t), total: i18n.t('chart.waterfall.total'), cumulative: i18n.t('chart.pareto.cumulative') },
+    chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t), total: i18n.t('chart.waterfall.total'), increase: i18n.t('chart.waterfall.increase'), decrease: i18n.t('chart.waterfall.decrease'), cumulative: i18n.t('chart.pareto.cumulative'),
+      hints: Object.fromEntries(TYPE_HINT_KEYS.map((k) => [k, i18n.t(k)])) },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue, callUser: callUserFunction,   // D3: Python functions; [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }

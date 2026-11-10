@@ -270,11 +270,12 @@ describe('chart rows (F4)', () => {
       'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
       'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
       'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
-      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize']);
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize',
+      'WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor', 'WaterfallShowTotal']);
     expect(chartRows('data')).toEqual(['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries']);
   });
   it('la feuille montre les lignes du graphique en tête de leur onglet', () => {
-    const typed = chartRows().filter((n) => n !== 'DoughnutHoleSize' && n !== 'BubbleMaxSize');   // lignes propres à un type, absentes d'un histogramme
+    const typed = chartRows().filter((n) => !['DoughnutHoleSize', 'BubbleMaxSize'].includes(n) && !n.startsWith('Waterfall'));   // lignes propres à un type, absentes d'un histogramme
     expect(names('format').slice(0, typed.length)).toEqual(typed);
     expect(names('format').length).toBeGreaterThan(typed.length);
     expect(names('data').slice(0, 6)).toEqual(chartRows('data'));
@@ -288,6 +289,42 @@ describe('chart rows (F4)', () => {
     expect(rows('bubble')).toContain('BubbleMaxSize');
     expect(rows('bubble')).not.toContain('DoughnutHoleSize');
     expect(rows('columnClustered')).not.toContain('DoughnutHoleSize');
+  });
+  it('Waterfall* : seulement pour la cascade, après les lignes d axe', () => {
+    const typedDoc = (ChartType: string): DesignDoc => ({ ...doc, sections: doc.sections.map((s) => (s.kind === 'detail' ? { ...s, controls: [{ ...ctl('chart', 'Graphique1'), props: { ChartType } }] } : s)) });
+    const rows = (type: string) => sheetRows(typedDoc(type), 'form', [ctlT('Graphique1')], 'format', false).map((r) => r.d.name);
+    const wf = ['WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor', 'WaterfallShowTotal'];
+    expect(rows('waterfall').filter((n) => n.startsWith('Waterfall'))).toEqual(wf);
+    expect(rows('waterfall').indexOf('WaterfallIncreaseColor')).toBeGreaterThan(rows('waterfall').indexOf('AxisSecFontSize'));
+    for (const t of ['columnClustered', 'pareto', 'doughnut']) expect(rows(t).filter((n) => n.startsWith('Waterfall')), t).toEqual([]);
+  });
+  it('chartRows(tab, type) filtre par famille ; sans type, toutes les lignes', () => {
+    const all = chartRows();
+    const axisRows = ['HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisXFontColor', 'AxisXFontSize', 'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize'];
+    const noAxis = (r: string[]) => !r.some((n) => axisRows.includes(n) || n.startsWith('AxisSec'));
+    expect(chartRows('format', 'doughnut')).toEqual([...all.slice(0, 19), 'DoughnutHoleSize']);
+    expect(noAxis(chartRows('format', 'doughnut'))).toBe(true);
+    expect(chartRows('format', 'funnel')).not.toContain('AxisRange');
+    expect(noAxis(chartRows('format', 'pie'))).toBe(true);
+    expect(chartRows('format', 'radar')).not.toContain('AxisMax');
+    expect(chartRows('format', 'pareto')).toEqual(expect.arrayContaining(['AxisSecTitle', 'AxisSecFontColor', 'AxisSecFontSize', 'AxisRange']));
+    for (const n of ['AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits']) expect(chartRows('format', 'pareto')).not.toContain(n);
+    expect(chartRows('format', 'boxWhisker')).not.toContain('HasLegend');
+    expect(chartRows('format', 'combo')).toContain('AxisSecRange');
+    const wf = chartRows('format', 'waterfall');
+    expect(wf.slice(-4)).toEqual(['WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor', 'WaterfallShowTotal']);
+    expect(wf.indexOf('WaterfallIncreaseColor')).toBeGreaterThan(wf.indexOf('AxisFontSize'));
+    expect(chartRows('format', 'columnClustered')).toEqual(all.filter((n) => !['DoughnutHoleSize', 'BubbleMaxSize'].includes(n) && !n.startsWith('Waterfall')));
+    expect(chartRows('data', 'pie')).toEqual(chartRows('data'));
+  });
+  it('sélection de types différents : union des lignes ; valeurs conservées au changement de type', () => {
+    const mk = (props: Record<string, unknown>): DesignDoc => ({ ...doc, sections: doc.sections.map((s) => (s.kind === 'detail' ? { ...s, controls: [{ ...ctl('chart', 'A'), props }, { ...ctl('chart', 'B'), props: { ChartType: 'scatter' } }] } : s)) });
+    const rows = (d: DesignDoc, ...n: string[]) => sheetRows(d, 'form', n.map(ctlT), 'format', false).map((r) => r.d.name);
+    expect(rows(mk({ ChartType: 'pie' }), 'A')).not.toContain('AxisRange');
+    expect(rows(mk({ ChartType: 'pie' }), 'A', 'B')).toContain('AxisRange');
+    const d2 = mk({ ChartType: 'pie', AxisMax: 50 });
+    expect(rows(d2, 'A')).not.toContain('AxisMax');
+    expect(readProp(d2, 'form', ctlT('A'), desc('AxisMax'))).toBe(50);
   });
   it('valeurs par défaut', () => {
     const dflt = (n: string) => defaultFor(desc(n), 'chart');

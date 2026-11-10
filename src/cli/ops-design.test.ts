@@ -227,8 +227,14 @@ describe('chart controls and the charts command', () => {
     expect(await f({ ChartAxis: ['Nope'] })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartLegend: 'Nope' })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartType: 'weird' })).toMatch(/^control g1: .*weird/);
-    for (const ty of ['boxWhisker', 'pareto', 'waterfall']) expect(await f({ ChartType: ty }), ty).toMatch(new RegExp(`^control g1: ChartType "${ty}" is not one of .*doughnut`));   // F5b : pas encore proposés
+    expect(await f({ ChartType: 'wordCloud' }), 'wordCloud').toMatch(/^control g1: ChartType "wordCloud" is not one of .*doughnut/);   // Nuage de mots : prévu plus tard
+    expect(await f({ ChartType: 'waterfall', WaterfallShowTotal: false, WaterfallIncreaseColor: '#112233' })).toBe('');
+    expect(await f({ ChartType: 'waterfall', WaterfallDecreaseColor: 'red' })).toMatch(/^control g1: .*WaterfallDecreaseColor/);
+    expect(await f({ ChartType: 'waterfall', WaterfallShowTotal: 'yes' })).toMatch(/^control g1: .*WaterfallShowTotal/);
     expect(await f({ ChartType: 'scatter' })).toBe('');
+    expect(await f({ ChartType: 'boxWhisker' })).toBe('');
+    expect(await f({ ChartType: 'pareto' })).toBe('');
+    expect(await f({ ChartType: 'waterfall' })).toBe('');
     for (const [k, v] of [['ChartBorderStyle', 'wavy'], ['LegendPosition', 'middle'], ['AxisRange', 'wide'], ['AxisUnits', 'lots'], ['ChartBackStyle', 'x'],
       ['TitleFontSize', 'big'], ['AxisFontSize', 2], ['ChartBorderWidth', 9], ['HasSubtitle', 'yes'], ['Subtitle', 3], ['AxisMax', 'x'], ['AxisMin', null], ['TitleFontColor', 'red'], ['ChartBackColor', 'blue'], ['TitleFontName', 5], ['AxisFormat', 1],
       ['AxisSecRange', 'wide'], ['AxisSecUnits', 'lots'], ['AxisSecFontSize', 2], ['AxisSecFontColor', 'red'], ['AxisSecMin', null], ['AxisSecMax', 'x'], ['AxisSecTitle', 3], ['AxisSecFormat', 1]] as const) {

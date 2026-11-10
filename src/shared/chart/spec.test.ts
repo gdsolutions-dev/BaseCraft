@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHART_TYPES, OFFERED_CHART_TYPES, typeHintKey, chartDataMode, chartFamily, chartStack, isEmptySpec, readChartSeries, readChartSpec, seriesName, usesAxes } from './spec';
+import { formatApplies, ignoresLegend, CHART_TYPES, typeHintKey, chartDataMode, chartFamily, chartStack, isEmptySpec, readChartSeries, readChartSpec, seriesName, usesAxes } from './spec';
 
 describe('readChartSpec', () => {
   it('lit les valeurs par défaut', () => {
@@ -93,9 +93,10 @@ describe('readChartSeries', () => {
 
 describe('types F5', () => {
   const NEW = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'] as const;
-  it('OFFERED_CHART_TYPES : les types F4 et les F5 proposés, pas boxWhisker / pareto / waterfall ; aide du type non proposé', () => {
-    expect(OFFERED_CHART_TYPES).toEqual(CHART_TYPES.filter((t) => !['boxWhisker', 'pareto', 'waterfall'].includes(t)));
-    expect(typeHintKey(readChartSpec({ ChartType: 'waterfall' }))).toBe('chart.settings.typeHint.notOffered');
+  it('aide du type de chaque type', () => {
+    expect(typeHintKey(readChartSpec({ ChartType: 'boxWhisker' }))).toBe('chart.settings.typeHint.boxWhisker');
+    expect(typeHintKey(readChartSpec({ ChartType: 'pareto' }))).toBe('chart.settings.typeHint.pareto');
+    expect(typeHintKey(readChartSpec({ ChartType: 'waterfall' }))).toBe('chart.settings.typeHint.waterfall');
     expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');   // la valeur stockée est lue telle quelle
   });
   it('CHART_TYPES : 24 types, les nouveaux après combo', () => {
@@ -116,5 +117,23 @@ describe('types F5', () => {
   it('lit les nouveaux types ; Word Cloud reste inconnu', () => {
     expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');
     expect(readChartSpec({ ChartType: 'wordCloud' }).type).toBe('columnClustered');
+  });
+});
+
+describe('formatApplies (F5b)', () => {
+  const g = (t: Parameters<typeof formatApplies>[0]) => [...formatApplies(t)].sort().join(',');
+  const base = 'frame,legend,subtitle,title';
+  const axes = 'axisTitles,xAxis,yAxis';
+  const want = (...x: string[]) => x.join(',').split(',').sort().join(',');
+  it('matrice des familles pour les 24 types', () => {
+    const table: Record<string, string> = {
+      pie: want(base), radar: want(base), radarFilled: want(base), doughnut: want(base, 'hole'), arc: want(base, 'hole'), funnel: want(base),
+      scatter: want(base, axes), bubble: want(base, axes, 'bubble'), boxWhisker: want('frame,title,subtitle', axes),
+      pareto: want(base, axes, 'paretoSec'), waterfall: want(base, axes, 'waterfall'),
+    };
+    for (const t of CHART_TYPES) expect(g(t), t).toBe(table[t] ?? want(base, axes, 'secAxis'));
+  });
+  it('ignoresLegend : anneau, arc, entonnoir, boîte, Pareto, cascade', () => {
+    expect(CHART_TYPES.filter(ignoresLegend)).toEqual(['doughnut', 'arc', 'boxWhisker', 'funnel', 'pareto', 'waterfall']);
   });
 });

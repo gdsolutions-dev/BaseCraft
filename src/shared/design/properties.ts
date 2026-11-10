@@ -3,7 +3,7 @@
 // (une valeur sans clé, comme DecimalPlaces '0'…'15', s'affiche telle quelle).
 // Valeurs stockées (contrat 1.4) : longueurs en twips, couleurs ColorValue (colors.ts), expressions canoniques.
 // A4 et A5 ajoutent leurs entrées en fin de tableau, seulement si le nom n'existe pas : un nom n'a qu'un descripteur.
-import { OFFERED_CHART_TYPES } from '../chart/spec';
+import { CHART_TYPES } from '../chart/spec';
 import { CONTROL_KINDS, SECTION_KINDS, type ControlKind, type SectionKind } from './model';
 
 export type PropertyTarget = 'form' | 'report' | 'emptyCell' | SectionKind | ControlKind;
@@ -169,7 +169,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('OnFormat', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
   p('OnPrint', 'event', 'event', REPORT_SECTIONS, undefined, { objects: ['report'] }),
   // F4 : le graphique moderne (la spécification vit à plat dans les props du contrôle)
-  p('ChartType', 'format', 'enum', ['chart'], 'columnClustered', { options: [...OFFERED_CHART_TYPES] }),
+  p('ChartType', 'format', 'enum', ['chart'], 'columnClustered', { options: [...CHART_TYPES] }),
   p('HasTitle', 'format', 'bool', ['chart'], true),
   p('ChartTitle', 'format', 'text', ['chart']), // sans défaut stocké : le défaut est localisé (chart.defaultTitle), lu par readChartFormat
   p('HasLegend', 'format', 'bool', ['chart'], true),
@@ -211,6 +211,10 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('AxisSecFontSize', 'format', 'number', ['chart'], 10, { min: 6, max: 72, integer: true }),
   p('DoughnutHoleSize', 'format', 'number', ['chart'], 55, { min: 20, max: 90, integer: true }),
   p('BubbleMaxSize', 'format', 'number', ['chart'], 40, { min: 10, max: 100, integer: true }),
+  p('WaterfallIncreaseColor', 'format', 'color', ['chart'], 'theme:accent1'),
+  p('WaterfallDecreaseColor', 'format', 'color', ['chart'], 'theme:accent2'),
+  p('WaterfallTotalColor', 'format', 'color', ['chart'], 'theme:accent3'),
+  p('WaterfallShowTotal', 'format', 'bool', ['chart'], true),
   p('ChartSource', 'data', 'chart', ['chart']),
   p('ChartAxis', 'data', 'chart', ['chart']),
   p('ChartDateGroup', 'data', 'enum', ['chart'], 'none', { options: ['none', 'year', 'quarter', 'month', 'day'] }),

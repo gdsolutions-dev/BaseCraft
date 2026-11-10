@@ -1661,6 +1661,10 @@
     "AxisSecFontSize": "Schriftgröße der sekundären Werteachse",
     "DoughnutHoleSize": "Lochgröße des Rings (%)",
     "BubbleMaxSize": "Größte Blase (px)",
+    "WaterfallIncreaseColor": "Farbe der Zunahmen im Wasserfall",
+    "WaterfallDecreaseColor": "Farbe der Abnahmen im Wasserfall",
+    "WaterfallTotalColor": "Farbe der Summe im Wasserfall",
+    "WaterfallShowTotal": "Summe des Wasserfalls anzeigen",
     "ColumnHeads": "Spaltenüberschriften",
     "ColumnWidth": "Spaltenbreite"
   },
@@ -3181,7 +3185,7 @@
   "chart": {
     "noSource": "Datenquelle nicht definiert",
     "noData": "Keine Daten zum Anzeigen",
-    "waterfall": {"total": "Gesamt"},
+    "waterfall": {"total": "Gesamt", "increase": "Zunahme", "decrease": "Abnahme"},
     "pareto": {"cumulative": "Kumuliert %"},
     "badLink": "Die Master-/Child-Felder passen nicht zusammen",
     "truncated": "Nur die ersten 5.000 Punkte werden gezeichnet",
@@ -3205,7 +3209,8 @@
       "legend": "Legende (Datenreihen)",
       "legendNone": "(Keine)",
       "legendHint": "Mit einer Legende wird nur der erste Wert dargestellt.",
-      "typeHint": {"notOffered": "Dieser Diagrammtyp ist noch nicht verfügbar.", "doughnut": "Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "arc": "Halbring: Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "funnel": "Die Stufen werden nach dem ersten Wert sortiert; das Legendenfeld wird ignoriert.", "scatter": "Das erste Achsenfeld ist X und muss eine Zahl sein; der erste Wert ist Y. Ein Legendenfeld teilt die Punkte in Datenreihen auf.", "bubble": "Das erste Achsenfeld ist X (eine Zahl), der erste Wert ist Y und der zweite Wert ist die Blasengröße."},
+      "legendIgnored": "Dieser Diagrammtyp ignoriert das Legendenfeld.",
+      "typeHint": {"doughnut": "Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "arc": "Halbring: Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "funnel": "Die Stufen werden nach dem ersten Wert sortiert; das Legendenfeld wird ignoriert.", "scatter": "Das erste Achsenfeld ist X und muss eine Zahl sein; der erste Wert ist Y. Ein Legendenfeld teilt die Punkte in Datenreihen auf.", "bubble": "Das erste Achsenfeld ist X (eine Zahl), der erste Wert ist Y und der zweite Wert ist die Blasengröße.", "boxWhisker": "Jede Kategorie ist eine Box; die Achsenfelder liefern die Kategorie, der erste Wert die Beobachtungen (das Legendenfeld wird ignoriert).", "pareto": "Die Balken sind nach dem ersten Wert absteigend sortiert; die Linie zeigt den kumulierten Prozentsatz auf der rechten Achse (das Legendenfeld wird ignoriert).", "waterfall": "Jede Kategorie ist ein Schritt des ersten Werts (leer = 0) auf einer laufenden Summe; ein letzter Balken zeigt die Summe (das Legendenfeld wird ignoriert)."},
       "rowsHint": "Die Werte werden bei diesem Diagrammtyp unverändert dargestellt: keine Aggregatfunktion.",
       "axisXHint": "Das erste Feld ist X.",
       "values": "Werte (Y-Achse)",
@@ -3214,7 +3219,7 @@
       "collapse": "Abschnitt reduzieren",
       "expand": "Abschnitt erweitern",
       "close": "Schließen",
-      "format": {"series": "Datenreihe", "heading": "Datenreihe formatieren: {{name}}", "fullName": "Vollständiger Name", "seriesType": "Reihentyp", "seriesTypes": {"column": "Säulen", "line": "Linie", "area": "Fläche"}, "plotOn": "Reihe zeichnen auf", "primary": "Primär", "secondary": "Sekundär", "fill": "Füllfarbe der Reihe", "border": "Rahmenfarbe der Reihe", "labels": "Datenbeschriftung anzeigen", "trend": "Trendlinienoptionen", "trendName": "Name der Trendlinie", "noValues": "Wählen Sie zuerst auf der Registerkarte „Daten“ einen Wert aus.", "legendHint": "Mit einem Legendenfeld gilt die Formatierung für alle Reihen gemeinsam: deaktiviert.", "roundHint": "Ohne Wirkung bei diesem Diagrammtyp (Kreis, Netz).", "axisHint": "Keine Sekundärachse bei Balken- oder gestapelten Diagrammen.", "trendHint": "Keine Trendlinie bei Balken- oder gestapelten Diagrammen.", "lineOptions": "Linienoptionen", "lineWidth": "Linienstärke", "dash": "Linienart", "marker": "Marker anzeigen", "gap": "Fehlende Werte", "trendKinds": {"none": "Keine", "linear": "Linear", "exponential": "Exponentiell", "logarithmic": "Logarithmisch", "polynomial": "Polynomisch", "power": "Potenz", "movingAverage": "Gleitender Durchschnitt"}, "dashes": {"solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"}, "gaps": {"gap": "Lücke lassen", "zero": "Als Null zeichnen", "connect": "Punkte verbinden"}}
+      "format": {"series": "Datenreihe", "heading": "Datenreihe formatieren: {{name}}", "fullName": "Vollständiger Name", "seriesType": "Reihentyp", "seriesTypes": {"column": "Säulen", "line": "Linie", "area": "Fläche"}, "plotOn": "Reihe zeichnen auf", "primary": "Primär", "secondary": "Sekundär", "fill": "Füllfarbe der Reihe", "border": "Rahmenfarbe der Reihe", "labels": "Datenbeschriftung anzeigen", "trend": "Trendlinienoptionen", "trendName": "Name der Trendlinie", "noValues": "Wählen Sie zuerst auf der Registerkarte „Daten“ einen Wert aus.", "legendHint": "Mit einem Legendenfeld gilt die Formatierung für alle Reihen gemeinsam: deaktiviert.", "roundHint": "Ohne Wirkung bei diesem Diagrammtyp (Kreis, Netz).", "axisHint": "Keine Sekundärachse bei Balken- oder gestapelten Diagrammen.", "trendHint": "Keine Trendlinie bei Balken- oder gestapelten Diagrammen.", "noEffect": "Ohne Wirkung bei diesem Diagrammtyp.", "noTrend": "Keine Trendlinie bei diesem Diagrammtyp.", "noAxis": "Keine Sekundärachse bei diesem Diagrammtyp.", "waterfallColors": "Wasserfallfarben", "lineOptions": "Linienoptionen", "lineWidth": "Linienstärke", "dash": "Linienart", "marker": "Marker anzeigen", "gap": "Fehlende Werte", "trendKinds": {"none": "Keine", "linear": "Linear", "exponential": "Exponentiell", "logarithmic": "Logarithmisch", "polynomial": "Polynomisch", "power": "Potenz", "movingAverage": "Gleitender Durchschnitt"}, "dashes": {"solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"}, "gaps": {"gap": "Lücke lassen", "zero": "Als Null zeichnen", "connect": "Punkte verbinden"}}
     }
   }
 }

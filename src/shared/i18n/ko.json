@@ -1650,6 +1650,10 @@
     "AxisSecFontSize": "보조 값 축 글꼴 크기",
     "DoughnutHoleSize": "도넛 구멍 크기(%)",
     "BubbleMaxSize": "가장 큰 거품 크기(px)",
+    "WaterfallIncreaseColor": "폭포 증가 색",
+    "WaterfallDecreaseColor": "폭포 감소 색",
+    "WaterfallTotalColor": "폭포 합계 색",
+    "WaterfallShowTotal": "폭포 합계 표시",
     "ColumnHeads": "열 머리글",
     "ColumnWidth": "열 너비"
   },
@@ -3158,7 +3162,7 @@
   "chart": {
     "noSource": "데이터 원본이 정의되지 않았습니다",
     "noData": "표시할 데이터가 없습니다",
-    "waterfall": {"total": "합계"},
+    "waterfall": {"total": "합계", "increase": "증가", "decrease": "감소"},
     "pareto": {"cumulative": "누적 %"},
     "badLink": "기본/하위 연결 필드가 일치하지 않습니다",
     "truncated": "처음 5,000개 점만 그려집니다",
@@ -3182,7 +3186,8 @@
       "legend": "범례 (계열)",
       "legendNone": "(없음)",
       "legendHint": "범례를 사용하면 첫 번째 값만 그려집니다.",
-      "typeHint": {"notOffered": "이 차트 유형은 아직 사용할 수 없습니다.", "doughnut": "조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "arc": "반원 도넛: 조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "funnel": "단계는 첫 번째 값으로 정렬됩니다. 범례 필드는 무시됩니다.", "scatter": "첫 번째 축 필드가 X(숫자여야 함)이고 첫 번째 값이 Y입니다. 범례 필드를 지정하면 점이 계열로 나뉩니다.", "bubble": "첫 번째 축 필드가 X(숫자), 첫 번째 값이 Y, 두 번째 값이 거품 크기입니다."},
+      "legendIgnored": "이 차트 종류에서는 범례 필드가 무시됩니다.",
+      "typeHint": {"doughnut": "조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "arc": "반원 도넛: 조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "funnel": "단계는 첫 번째 값으로 정렬됩니다. 범례 필드는 무시됩니다.", "scatter": "첫 번째 축 필드가 X(숫자여야 함)이고 첫 번째 값이 Y입니다. 범례 필드를 지정하면 점이 계열로 나뉩니다.", "bubble": "첫 번째 축 필드가 X(숫자), 첫 번째 값이 Y, 두 번째 값이 거품 크기입니다.", "boxWhisker": "각 범주가 하나의 상자입니다. 축 필드가 범주, 첫 번째 값이 관측값입니다 (범례 필드는 무시됩니다).", "pareto": "막대는 첫 번째 값의 내림차순으로 정렬되고, 꺾은선은 오른쪽 축에 누적 백분율을 표시합니다 (범례 필드는 무시됩니다).", "waterfall": "각 범주는 누적값에 대한 첫 번째 값(비어 있으면 0)의 증감이며, 마지막 막대가 합계를 보여 줍니다(범례 필드는 무시됨)."},
       "rowsHint": "이 차트 형식에서는 집계 함수 없이 값이 그대로 그려집니다.",
       "axisXHint": "첫 번째 필드가 X입니다.",
       "values": "값 (Y축)",
@@ -3191,7 +3196,7 @@
       "collapse": "섹션 접기",
       "expand": "섹션 펼치기",
       "close": "닫기",
-      "format": {"series": "데이터 계열", "heading": "데이터 계열 서식: {{name}}", "fullName": "전체 이름", "seriesType": "계열 종류", "seriesTypes": {"column": "세로 막대", "line": "꺾은선", "area": "영역"}, "plotOn": "계열 표시 축", "primary": "주 축", "secondary": "보조 축", "fill": "계열 채우기 색", "border": "계열 테두리 색", "labels": "데이터 레이블 표시", "trend": "추세선 옵션", "trendName": "추세선 이름", "noValues": "먼저 데이터 탭에서 값을 선택하십시오.", "legendHint": "범례 필드가 있으면 서식이 모든 계열에 함께 적용됩니다. 사용할 수 없습니다.", "roundHint": "이 차트 종류(원형, 방사형)에는 적용되지 않습니다.", "axisHint": "가로 막대형 또는 누적형 차트에는 보조 축이 없습니다.", "trendHint": "가로 막대형 또는 누적형 차트에는 추세선이 없습니다.", "lineOptions": "선 옵션", "lineWidth": "선 두께", "dash": "선 스타일", "marker": "표식 표시", "gap": "빈 값", "trendKinds": {"none": "없음", "linear": "선형", "exponential": "지수", "logarithmic": "로그", "polynomial": "다항식", "power": "거듭제곱", "movingAverage": "이동 평균"}, "dashes": {"solid": "실선", "dashed": "파선", "dotted": "점선"}, "gaps": {"gap": "간격으로 두기", "zero": "0으로 표시", "connect": "데이터 요소 연결"}}
+      "format": {"series": "데이터 계열", "heading": "데이터 계열 서식: {{name}}", "fullName": "전체 이름", "seriesType": "계열 종류", "seriesTypes": {"column": "세로 막대", "line": "꺾은선", "area": "영역"}, "plotOn": "계열 표시 축", "primary": "주 축", "secondary": "보조 축", "fill": "계열 채우기 색", "border": "계열 테두리 색", "labels": "데이터 레이블 표시", "trend": "추세선 옵션", "trendName": "추세선 이름", "noValues": "먼저 데이터 탭에서 값을 선택하십시오.", "legendHint": "범례 필드가 있으면 서식이 모든 계열에 함께 적용됩니다. 사용할 수 없습니다.", "roundHint": "이 차트 종류(원형, 방사형)에는 적용되지 않습니다.", "axisHint": "가로 막대형 또는 누적형 차트에는 보조 축이 없습니다.", "trendHint": "가로 막대형 또는 누적형 차트에는 추세선이 없습니다.", "noEffect": "이 차트 종류에서는 적용되지 않습니다.", "noTrend": "이 차트 종류에서는 추세선을 사용할 수 없습니다.", "noAxis": "이 차트 종류에서는 보조 축을 사용할 수 없습니다.", "waterfallColors": "폭포 색", "lineOptions": "선 옵션", "lineWidth": "선 두께", "dash": "선 스타일", "marker": "표식 표시", "gap": "빈 값", "trendKinds": {"none": "없음", "linear": "선형", "exponential": "지수", "logarithmic": "로그", "polynomial": "다항식", "power": "거듭제곱", "movingAverage": "이동 평균"}, "dashes": {"solid": "실선", "dashed": "파선", "dotted": "점선"}, "gaps": {"gap": "간격으로 두기", "zero": "0으로 표시", "connect": "데이터 요소 연결"}}
     }
   }
 }

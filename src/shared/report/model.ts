@@ -18,7 +18,7 @@ import { extractAggregates, type AggSpec } from './totals';
 import { readChartFormat, type ChartFormat, type ChartLabels } from '../chart/option';
 import { chartPalette, type ChartPalette } from '../chart/palette';
 import type { ChartData, ChartDataMap } from '../chart/query';
-import { readChartSpec, type ChartSpec } from '../chart/spec';
+import { readChartSpec, typeHintKey, type ChartSpec } from '../chart/spec';
 import type { Border, FontSpec, Gridlines } from './types';
 
 // props du DesignDoc propres aux états (contrat 1.3, clés A5)
@@ -39,7 +39,7 @@ export interface ControlSpec { kind: ControlKind; name: string; left: number; to
   /** Gridlines over the cell rectangle; null when all four sides are transparent. */
   gridlines: Gridlines | null;
   picture?: string /* data: URI */; sizeMode?: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; slant?: boolean;
-  chart?: { spec: ChartSpec; data: ChartData | null; format: ChartFormat; palette: ChartPalette; fontFamily: string; titleFamily: string } }
+  chart?: { spec: ChartSpec; data: ChartData | null; format: ChartFormat; palette: ChartPalette; fontFamily: string; titleFamily: string; hint?: string } }
 export interface SectionSpec { kind: SectionKind; groupLevel?: number; height: number; visible: boolean; canGrow: boolean; canShrink: boolean;
   keepTogether: boolean; repeatSection: boolean; forceNewPage: 'none' | 'before' | 'after' | 'beforeAndAfter'; back: string | null; controls: ControlSpec[] }
 export interface ReportSpec { background?: PictureSpec; width: number; page: PageSetup; grouping: (GroupLevel & { key: ControlSource })[];
@@ -174,6 +174,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
       // un état se dessine toujours en clair ; la police du graphique est celle de la palette (embarquée)
       ...(kind === 'chart' ? { chart: { spec: readChartSpec(p), data: opts.charts?.[name] ?? null,
         format: readChartFormat(p, opts.chartLabels ?? { title: 'Chart Title', empty: '(empty)' }), palette: chartPalette(theme, 'light'),
+        ...(opts.chartLabels?.hints ? { hint: opts.chartLabels.hints[typeHintKey(readChartSpec(p)) ?? 'chart.noData'] } : {}),
         fontFamily: embeddedBody(theme), titleFamily: embeddedBody(theme, readChartFormat(p, { title: '', empty: '' }).titleFont) } } : {}),
       ...(kind === 'line' ? { slant: r('LineSlant', false) === true } : {}),
     };

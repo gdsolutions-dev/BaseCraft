@@ -38,6 +38,14 @@ describe('print protocol and requests', () => {
     expect(printRequest({ html, name: 'Etat', landscape: false }).html).toBe(html);
   });
 
+  it('eight F5 charts on two pages: the print document passes the size cap, and the print window CSP is unchanged', () => {
+    const html = readFileSync(new URL('../shared/chart/fixtures/report-chart-f5.html', import.meta.url), 'utf8');
+    expect(html.match(/<svg/g)).toHaveLength(8);
+    expect(html).not.toContain('<script');
+    expect(printRequest({ html, name: 'Etat', landscape: false }).html).toBe(html);
+    expect(readFileSync(new URL('./report-print.ts', import.meta.url), 'utf8')).toContain("const CSP = `default-src 'none'; style-src 'unsafe-inline'; font-src ${PRINT_SCHEME}:; img-src data:`;");
+  });
+
   it('validates print requests', () => {
     expect(printRequest({ html: '<p>x</p>', name: 'É', landscape: true })).toEqual({ html: '<p>x</p>', name: 'É', landscape: true });
     expect(() => printRequest({ html: 1, name: 'a', landscape: false })).toThrow(/invalidArgument/);

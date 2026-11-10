@@ -4,7 +4,7 @@ import en from '../i18n/en.json';
 import { CONTROL_KINDS, cmToTwips, SECTION_KINDS, twipsToCm, validateDesignDoc, type DesignDoc } from './model';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { OFFERED_CHART_TYPES } from '../chart/spec';
+import { CHART_TYPES } from '../chart/spec';
 import { DEFAULT_THEME, shade } from './theme';
 import { colorCss, DARK_THEME_HEX, isColorValue, LIGHT_THEME_HEX, resolveColor, THEME_COLORS } from './colors';
 import { defaultFor, effectiveProp, PROPERTY_CATALOG, propertiesFor, type PropertyDescriptor } from './properties';
@@ -358,11 +358,13 @@ describe('chart control (F4)', () => {
     const rows = (n: string) => PROPERTY_CATALOG.find((p) => p.name === n)!;
     expect(rows('ChartType')).toMatchObject({ tab: 'format', editor: 'enum', default: 'columnClustered', appliesTo: ['chart'],
       options: ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100', 'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo',
-        'doughnut', 'arc', 'scatter', 'bubble', 'funnel'] });
-    expect(rows('ChartType').options).toEqual(OFFERED_CHART_TYPES);   // F5a : les trois types F5b ne sont pas proposés
-    expect(rows('ChartType').options).toHaveLength(21);
+        'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'] });
+    expect(rows('ChartType').options).toEqual(CHART_TYPES);
+    expect(rows('ChartType').options).toHaveLength(24);
     expect(rows('DoughnutHoleSize')).toMatchObject({ tab: 'format', editor: 'number', default: 55, min: 20, max: 90, integer: true, appliesTo: ['chart'] });
     expect(rows('BubbleMaxSize')).toMatchObject({ tab: 'format', editor: 'number', default: 40, min: 10, max: 100, integer: true, appliesTo: ['chart'] });
+    for (const [n, d] of [['WaterfallIncreaseColor', 'theme:accent1'], ['WaterfallDecreaseColor', 'theme:accent2'], ['WaterfallTotalColor', 'theme:accent3']] as const) expect(rows(n)).toMatchObject({ tab: 'format', editor: 'color', default: d, appliesTo: ['chart'] });
+    expect(rows('WaterfallShowTotal')).toMatchObject({ tab: 'format', editor: 'bool', default: true, appliesTo: ['chart'] });
     for (const n of ['ChartSource', 'ChartAxis', 'ChartValues', 'ChartSeries']) expect(rows(n)).toMatchObject({ tab: 'data', editor: 'chart', appliesTo: ['chart'] });
     for (const n of ['ChartDateGroup', 'ChartLegend']) expect(rows(n)).toMatchObject({ tab: 'data', appliesTo: ['chart'] });
     expect(rows('ChartDateGroup').options).toEqual(['none', 'year', 'quarter', 'month', 'day']);

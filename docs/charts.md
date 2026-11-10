@@ -15,8 +15,9 @@ In the **Design** tab of a form or a report, **Insert Modern Chart** opens a men
 | Pie | pie |
 | Radar | radar, filled radar |
 | Combo | combo (each series is a column, a line or an area) |
+| Newer types | Doughnut, Arc, Funnel, Scatter, Bubble, Box and Whisker, Pareto, Waterfall (each listed directly, see [Newer chart types](#newer-chart-types)) |
 
-That is 16 types in all. The type can be changed later in the Property Sheet (*Chart type*) without losing the data settings.
+That is 24 types in all. Word Cloud is planned for later. The type can be changed later in the Property Sheet (*Chart type*) without losing the data settings.
 
 In a database opened read-only the pane opens and shows the settings, but nothing can be changed.
 
@@ -24,7 +25,7 @@ In a database opened read-only the pane opens and shows the settings, but nothin
 
 - **Data Source**: a table or a query (radios *Tables*, *Queries*, *Both*, then the list). Left empty, the chart uses the record source of its own form or report.
 - **Axis (categories)**: tick one or more fields. With several fields, each combination is one category, labelled `A / B`. When the first axis field is a date, a **Date grouping** list appears: *none*, *year* (`2026`), *quarter* (`2026-Q1`), *month* (`2026-03`) or *day* (`2026-03-15`). Grouping is done by the query and sorts chronologically.
-- **Legend (series)**: pick one field, or none. Each value of that field becomes a series. A pie ignores the legend and draws one slice per axis category.
+- **Legend (series)**: pick one field, or none. Each value of that field becomes a series. A pie ignores the legend and draws one slice per axis category (so do Doughnut, Arc, Funnel, Box and Whisker, Pareto and Waterfall: see below).
 - **Values (Y axis)**: tick the fields to plot. Click a value's label to pick its aggregate: *None*, *Sum*, *Average*, *Minimum*, *Maximum* or *Count*. The default is *Sum*.
 
 Series are named `SumOf<Field>`, `AvgOf<Field>`, `MinOf<Field>`, `MaxOf<Field>` and `CountOf<Field>` (these prefixes stay in English in every language, as in Access). With a Legend field, series carry the legend values instead.
@@ -44,6 +45,46 @@ The Format tab edits one **data series** at a time, chosen in the list at the to
 - **Line options** (line, area and combo): width, style (solid, dashed, dotted), markers, and how missing values are drawn (gap, as zero, connected).
 
 Every change is one step of Ctrl+Z. Controls that have no effect on the current chart (Full name, fill, border, data labels, trendline and Line options with a Legend field; the same on a pie or radar where they do not apply) are disabled with a short hint (see the limits below).
+
+## Newer chart types
+
+Eight more types are listed after Combo in **Insert Modern Chart**. In Design view, a chart with no source or no fields draws a fixed sample of its type.
+
+| Type | Data it needs |
+|---|---|
+| Doughnut | One Axis field (one slice per category) and one Value; a hole whose size is set by *Doughnut hole size* (default 55 %) |
+| Arc | Same data as Doughnut, drawn as a half-doughnut: the slices start at the left, run over the top in category order and end at the right. There is no total in the centre |
+| Funnel | One Axis field and one Value: one stage per category, sorted from the largest value to the smallest |
+| Scatter | A **numeric first Axis field** is the X value, the first Value is Y. One point per record (no grouping, no aggregate menu); a Legend field splits the points in series |
+| Bubble | Like Scatter, plus a second Value that sets the bubble size (area proportional to the value; *Bubble max size* sets the largest diameter) |
+| Box and Whisker | One Axis field (the group) and one Value, read from the **raw records**: one box per group. Quartiles use the exclusive median method (Excel's default); whiskers reach the farthest values within 1.5 x the interquartile range; values beyond are drawn as outlier points |
+| Pareto | One Axis field and one Value: bars sorted from largest to smallest and a **cumulative %** line on a right axis fixed at 0 to 100 |
+| Waterfall | One Axis field and one Value per category (a step: increase or decrease, with a running total). A final **Total** bar can be switched off (*Show total*); there are no per-category subtotals. The colours for *Increase*, *Decrease* and *Total* can be changed (defaults: accent 1, 2, 3 of the theme) |
+
+Notes:
+
+- Scatter and Bubble use **only the first Axis field**, and it must be a number. Text values are ignored (the chart shows a hint asking for a numeric field); a **Date** X is not supported in this version.
+- Box and Whisker, Scatter and Bubble work on records, not on aggregates: at most **5000 records** are read, in a fixed order, so the same data always gives the same chart.
+- The **Legend** setting is ignored by Doughnut, Arc, Funnel, Box and Whisker, Pareto and Waterfall (each draws one series).
+- A Waterfall step is the sum of the Value for the category; a running total that crosses zero is drawn correctly (the bar spans the zero line).
+- Scatter and Bubble have **no trendline** in this version.
+
+### Which format options apply
+
+The Property Sheet **Format** tab and the Chart Settings **Format** tab show only what the type uses. A hidden row keeps its value, and it comes back when you switch to a type that uses it.
+
+| Type | Rows shown besides the frame (type, background, border), title and subtitle |
+|---|---|
+| Pie, Radar | Legend. **No axis rows** (they had no effect; hidden since this version) |
+| Doughnut, Arc | Legend, *Doughnut hole size* |
+| Funnel | Legend |
+| Scatter | Axis titles, axis fonts, value axis range, format and units (these act on the vertical Y axis; the X axis is automatic); Legend only with a Legend field |
+| Bubble | Same as Scatter, plus *Bubble max size* |
+| Box and Whisker | Axis titles, axis fonts, value axis rows; no Legend |
+| Pareto | Legend, axis titles, axis fonts, value axis rows; of the secondary axis only its title and font (the 0-100 % range is fixed) |
+| Waterfall | Legend, axis titles, axis fonts, value axis rows, *Show total* and the three colours |
+
+In the Chart Settings Format tab (per series): Doughnut, Arc and Funnel have no fill, border, labels or trendline; Scatter and Bubble have fill, border and labels (not with a Legend field) but no trendline; Box and Whisker has fill and border; Pareto has fill, border and labels for its bars; Waterfall has labels and the colour rows instead of the fill, and no border. Disabled controls stay visible with a short hint.
 
 ## Property Sheet
 
@@ -79,18 +120,18 @@ Copy a chart from a form and paste it into a report (or the other way round): th
 - At most **8 Axis fields**, **1 Legend field** and **16 Values**.
 - *None* mixed with other aggregates acts as *Sum*.
 - With a **Legend** field only the **first Value** is plotted. Per-series Full name, fill, border, data labels, trendline and Line options (width, style, markers, missing values) do not apply (they are disabled); the series type and axis of the first Value do. A Legend with a secondary axis puts **all** series on the secondary axis.
-- A **pie** draws only the first Value (and ignores the Legend field). A **radar** draws a missing value as 0.
+- A **pie** draws only the first Value (and ignores the Legend field); so do the newer types except Scatter and Bubble (Bubble also uses the second Value as the size). A **radar** draws a missing value as 0.
 - The **secondary axis** is ignored for stacked charts and for horizontal bars (and has no meaning for pie and radar).
 - *Background style* defaults to **transparent** (Access: Standard).
 - *Axis format* accepts simple patterns only: `#,##0`, `0.00`, with a prefix or a suffix. Separators are always English (`1,000.50`) whatever the interface language; `0%` appends a "%" without multiplying by 100; any other pattern is ignored (the display units still apply). A manual range whose minimum is not below its maximum is ignored.
 - **100 % types**: each category's total is the sum of the absolute values and each share keeps its sign; the value axis is fixed at 0 to 100 % (down to -100 % if a value is negative) and the tooltip shows the real value. *Axis format* and the manual range are ignored on 100 % charts.
 - The moving average has period 2 and the polynomial trendline degree 2. Every trendline needs at least 2 points (polynomial: 3). Logarithmic, exponential and power trendlines need every value to be positive; otherwise no trendline is drawn.
-- **Trendlines are not drawn** on stacked charts, horizontal bars, pie, radar, nor with a Legend field.
+- **Trendlines are not drawn** on stacked charts, horizontal bars, pie, radar, nor with a Legend field, and the newer types have none (a trendline on Scatter and Bubble would be a later addition).
 - A **radar** with negative values widens its scale below zero.
 - A save in a **subform** does not redraw the chart of the main form: press **Requery** (Shift+F9).
 - Charts in **reports** have no Link Master/Child (they always draw the whole source).
 - The **tooltip** exists on screen only, never in print.
-- A database that contains charts needs **this version of BaseCraft or a newer one** (the file format number is unchanged; an older BaseCraft cannot read the chart control).
+- A database that contains charts needs **this version of BaseCraft or a newer one** (the file format number is unchanged; an older BaseCraft cannot read the chart control). A database that holds one of the newer types and is opened by an **F4 build** (before these types) shows that chart as a **column chart**; nothing is lost while the chart is not edited there, and it draws correctly again in this version.
 
 ## Command line
 
@@ -99,4 +140,4 @@ Copy a chart from a form and paste it into a report (or the other way round): th
 
 ## Bundle size
 
-Charts use Apache ECharts 6.1.0 (and its rendering library zrender), bundled with the application; nothing is loaded from the network. Only the chart modules BaseCraft needs are included. Measured with esbuild, they add about **620 KB minified** to the renderer (the project's own renderer build is not minified, so the file on disk is larger). The licences (Apache-2.0 and BSD-3-Clause) are listed in the licences file shipped with the application.
+Charts use Apache ECharts 6.1.0 (and its rendering library zrender), bundled with the application; nothing is loaded from the network. Only the chart modules BaseCraft needs are included. Measured with esbuild, the module set (`src/shared/chart/echarts.ts`, bundled and minified on its own) weighs about **600 KB**; the newer types (scatter, box and funnel modules) added about **49 KB** to the renderer build on disk, which is not minified, so the files on disk are larger. The licences (Apache-2.0 and BSD-3-Clause) are listed in the licences file shipped with the application.

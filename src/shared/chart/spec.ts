@@ -10,16 +10,12 @@ export type ChartType = 'columnClustered' | 'columnStacked' | 'columnStacked100'
 export const CHART_TYPES: readonly ChartType[] = ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100',
   'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo',
   'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
-/** Les types F5 proposés (menu, feuille de propriétés, CLI) ; les tâches suivantes y ajoutent les leurs. Les autres types F5 restent stockables mais non proposés. */
-/** Les types F5 (stockables), proposés ou non. */
-export const F5_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
-export const NEW_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'];
-export const OFFERED_CHART_TYPES: readonly ChartType[] = CHART_TYPES.filter((t) => !F5_CHART_TYPES.includes(t) || NEW_CHART_TYPES.includes(t));
+/** Les types F5, dans l'ordre du menu des nouveaux types. */
+export const F5_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'];
 export type ChartFamily = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'radar' | 'combo'
   | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall';
-const NEW_FAMILIES: readonly ChartType[] = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
 /** Famille d'un type : histogramme, barres, courbe, zone, secteurs, radar (simple ou rempli), combiné. */
-export const chartFamily = (t: ChartType): ChartFamily => (NEW_FAMILIES.includes(t) ? (t as ChartFamily) : t === 'pie' ? 'pie' : t === 'combo' ? 'combo' : t.startsWith('radar') ? 'radar' : t.startsWith('column') ? 'column' : t.startsWith('bar') ? 'bar' : t.startsWith('area') ? 'area' : 'line');
+export const chartFamily = (t: ChartType): ChartFamily => (F5_CHART_TYPES.includes(t) ? (t as ChartFamily) : t === 'pie' ? 'pie' : t === 'combo' ? 'combo' : t.startsWith('radar') ? 'radar' : t.startsWith('column') ? 'column' : t.startsWith('bar') ? 'bar' : t.startsWith('area') ? 'area' : 'line');
 /** Mode de données : `grouped` (GROUP BY, agrégats) ou `rows` (enregistrements bruts : nuage de points, bulles, boîte à moustaches). */
 export const chartDataMode = (t: ChartType): 'grouped' | 'rows' => (t === 'scatter' || t === 'bubble' || t === 'boxWhisker' ? 'rows' : 'grouped');
 /** Vrai quand la famille se dessine sur des axes (faux : secteurs, radar, anneau, arc, entonnoir). */
@@ -104,7 +100,24 @@ export const seriesName = (v: ChartValue): string => (v.agg === 'none' ? v.field
 
 export const isEmptySpec = (s: ChartSpec): boolean => s.axis.length === 0 && s.values.length === 0;
 
-const HINTED: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'];
-/** L'aide propre au type (clé i18n), ou null (types F4) ; un type stocké mais pas encore proposé a l'aide « pas encore disponible ». */
+/** Toutes les clés d'aide qu'un graphique peut afficher (la vue formulaire les traduit à la demande ; l'impression les reçoit d'avance). */
+export const TYPE_HINT_KEYS: readonly string[] = ['chart.noData', ...F5_CHART_TYPES.map((t) => `chart.settings.typeHint.${t}`)];
+/** L'aide propre au type (clé i18n), ou null (types F4). */
 export const typeHintKey = (spec: ChartSpec): string | null =>
-  !OFFERED_CHART_TYPES.includes(spec.type) ? 'chart.settings.typeHint.notOffered' : HINTED.includes(spec.type) ? `chart.settings.typeHint.${spec.type}` : null;
+  F5_CHART_TYPES.includes(spec.type) ? `chart.settings.typeHint.${spec.type}` : null;
+
+export type FormatGroup = 'frame' | 'legend' | 'title' | 'subtitle' | 'axisTitles' | 'xAxis' | 'yAxis' | 'secAxis' | 'paretoSec' | 'hole' | 'bubble' | 'waterfall';
+const FRAME_GROUPS: readonly FormatGroup[] = ['frame', 'legend', 'title', 'subtitle'];
+const AXIS_GROUPS: readonly FormatGroup[] = ['axisTitles', 'xAxis', 'yAxis'];
+/** Les groupes de lignes de mise en forme qui s'appliquent à un type (source unique de la feuille de propriétés) ; secteurs et radar n'ont pas d'axes. */
+export function formatApplies(type: ChartType): ReadonlySet<FormatGroup> {
+  const f = chartFamily(type);
+  const extra: Partial<Record<ChartFamily, FormatGroup[]>> = { doughnut: ['hole'], arc: ['hole'], bubble: [...AXIS_GROUPS, 'bubble'], scatter: [...AXIS_GROUPS],
+    pareto: [...AXIS_GROUPS, 'paretoSec'], waterfall: [...AXIS_GROUPS, 'waterfall'], boxWhisker: [...AXIS_GROUPS] };
+  const none = f === 'pie' || f === 'radar' || f === 'funnel';
+  const g = new Set<FormatGroup>([...FRAME_GROUPS, ...(extra[f] ?? (none ? [] : [...AXIS_GROUPS, 'secAxis']))]);
+  if (f === 'boxWhisker') g.delete('legend');   // une seule série
+  return g;
+}
+/** Types qui ignorent le champ Légende (une seule série dessinée) : Chart Settings le désactive, les mises en forme de série s'appliquent quand même. */
+export const ignoresLegend = (t: ChartType): boolean => ['doughnut', 'arc', 'boxWhisker', 'funnel', 'pareto', 'waterfall'].includes(t);

@@ -132,3 +132,43 @@ test('F5a report: a Doughnut and a Scatter show in the preview, two PDF exports 
     for (const w of ['anneau', 'nuage']) expect(words).toContain(w);
   } finally { await app.close(); }
 });
+
+const tableMes = t('Mesures', [f('Groupe', 'shortText'), f('Valeur', 'number', { numberSize: 'double' })]);
+const docMes: DesignDoc = {
+  formatVersion: '1.0', recordSource: { kind: 'table', name: 'Mesures' }, props: { Width: 8000 },
+  sections: [{ kind: 'reportHeader', height: 10900, props: {}, controls: (['waterfall', 'pareto', 'boxWhisker'] as const).map((ty, i) => (
+    { kind: 'chart' as const, name: ty, left: 200, top: 100 + i * 3600, width: 7000, height: 3400,
+      props: { ChartType: ty, ChartTitle: `Mon ${ty}`, ChartAxis: ['Groupe'], ChartValues: [{ field: 'Valeur', agg: ty === 'boxWhisker' ? 'none' : 'sum' }] } })) }],
+};
+const seedMes = () => seedBase('chart-report-f5b', async (db) => {
+  createTable(db, tableMes);
+  for (const [Groupe, Valeur] of [...[1, 2, 3, 4, 5, 6, 7, 8, 9, 100].map((v) => ['A', v] as const), ...[2, 4, 4, 5, 7, 9].map((v) => ['B', v] as const), ['C', 30]] as const) await insertRow(db, tableMes, { Groupe, Valeur }, region);
+  const ok = saveObject(db, 'report', 'EtatF5b', docMes, null);
+  if (!ok.ok) throw new Error(ok.reason);
+});
+
+test('F5b report: a Waterfall, a Pareto and a Box print; two PDF exports are byte-equal and the text layer holds the localised Total and cumulative labels', async () => {
+  test.setTimeout(120000);
+  const out = mkdtempSync(join(tmpdir(), 'basecraft-chart-f5b-'));
+  const first = join(out, 'a.pdf'), second = join(out, 'b.pdf');
+  const { app, page } = await launchApp({ args: [await seedMes()], env: { ...FR, BASECRAFT_E2E_PDF_PATH: first } });
+  try {
+    await page.getByTestId('nav-group-report').getByTestId('nav-item-report-EtatF5b').dblclick();
+    const view = page.locator('.doc:not([hidden])');
+    await expect(view.getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);
+    const svgs = view.locator('.bc-chart svg');
+    await expect(svgs).toHaveCount(3);
+    await expect(svgs.nth(0)).toContainText('Total');
+    await expect(svgs.nth(1)).toContainText('% cumulé');
+    await expect.poll(() => svgs.nth(2).locator('path[fill-opacity="0.35"]').count()).toBe(3);   // une boîte par groupe
+    for (const file of [first, second]) {
+      await setEnv(app, 'BASECRAFT_E2E_PDF_PATH', file);
+      await page.getByTestId('cmd-exportPdf').click();
+      await page.getByTestId('modal-btn-ok').click();
+    }
+    expect(streams(first).length).toBeGreaterThan(0);
+    expect(streams(second)).toEqual(streams(first));
+    const words = pdfWords(first);
+    for (const w of ['Total', 'Hausse', 'Baisse', 'cumulé', 'Mon waterfall', 'Mon pareto', 'Mon boxWhisker']) expect(words).toContain(w);
+  } finally { await app.close(); }
+});

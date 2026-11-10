@@ -102,7 +102,11 @@ function itemHtml(i: LaidOutItem, looks?: Looks, nextId: () => string = chartIds
       // la taille du dessin est en pt ; avec un cadre, le dessin prend la boîte moins les deux traits (1 px = 0,75 pt) : le SVG n'est pas réduit, le texte garde sa taille
       const edge = fr ? 2 * fr.width * 0.75 : 0;
       const size = { width: i.width / 20 - edge, height: i.height / 20 - edge };
-      return `<div class="bc-chart" style="${box(i.left, i.top, i.width, i.height)}${fr ? `;border:${stroke({ width: fr.width * 15, color: fr.color, style: fr.style })}` : ''}">${uniqueIds(chartSvg(chartOption(i.spec, i.data, i.format, i.palette, size), size), nextId())}</div>`;
+      const option = chartOption(i.spec, i.data, i.format, i.palette, size);
+      // des lignes mais rien à tracer : le même texte d'aide que la vue formulaire
+      const hint = i.hint && i.data && i.data.rows.length > 0 && ((option as { series?: unknown[] }).series ?? []).length === 0
+        ? `<div class="bc-chart-hint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:${i.format.axisSize}pt;color:${i.palette.text}">${esc(i.hint)}</div>` : '';
+      return `<div class="bc-chart" style="${box(i.left, i.top, i.width, i.height)}${fr ? `;border:${stroke({ width: fr.width * 15, color: fr.color, style: fr.style })}` : ''}">${uniqueIds(chartSvg(option, size), nextId())}${hint}</div>`;
     }
   }
 }

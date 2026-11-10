@@ -20,7 +20,7 @@ import type { RecordSourceRef } from '../../shared/record-source';
 import { findControl, setProps, type PropTarget, type Selection } from './designer-model';
 import type { SheetTab } from './sheet-types';
 import { readPictureType } from '../../shared/pictures';
-import { readChartSeries, readChartSpec } from '../../shared/chart/spec';
+import { formatApplies, readChartSeries, readChartSpec, type ChartType, type FormatGroup } from '../../shared/chart/spec';
 import { MAX_TWIPS } from './units';
 
 export type { SheetTab, PropertySheetContext } from './sheet-types';
@@ -33,13 +33,32 @@ const PICTURE_ROWS = ['PictureType', 'Picture', 'PictureTiling', 'PictureAlignme
 const GEOMETRY = ['Left', 'Top', 'Width', 'Height'];
 
 /** Les lignes propres au graphique, en tête de leur onglet (suivies des lignes communes de mise en page). */
-export function chartRows(tab: 'format' | 'data' = 'format'): string[] {
+export function chartRows(tab: 'format' | 'data' = 'format', type?: ChartType): string[] {
+  return chartRowsAll(tab).filter((n) => !type || rowApplies(n, [type]));
+}
+/** Le groupe de mise en forme de chaque ligne de l'onglet Format (voir formatApplies) ; une ligne peut dépendre de plusieurs groupes. */
+const ROW_GROUP: Record<string, FormatGroup[]> = Object.fromEntries([
+  ...['ChartType', 'ChartBackStyle', 'ChartBackColor', 'ChartBorderStyle', 'ChartBorderWidth', 'ChartBorderColor'].map((n) => [n, ['frame']]),
+  ...['HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize'].map((n) => [n, ['legend']]),
+  ...['HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize'].map((n) => [n, ['title']]),
+  ...['HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize'].map((n) => [n, ['subtitle']]),
+  ...['HasAxisTitles', 'AxisTitleX', 'AxisTitleY'].map((n) => [n, ['axisTitles']]),
+  ...['AxisXFontColor', 'AxisXFontSize'].map((n) => [n, ['xAxis']]),
+  ...['AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize'].map((n) => [n, ['yAxis']]),
+  ...['AxisSecTitle', 'AxisSecFontColor', 'AxisSecFontSize'].map((n) => [n, ['secAxis', 'paretoSec']]),
+  ...['AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits'].map((n) => [n, ['secAxis']]),
+  ['DoughnutHoleSize', ['hole']], ['BubbleMaxSize', ['bubble']],
+  ...['WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor', 'WaterfallShowTotal'].map((n) => [n, ['waterfall']]),
+]);
+/** Une ligne s'applique si l'un des types (union d'une sélection multiple) a l'un de ses groupes ; une ligne sans groupe s'applique toujours. */
+const rowApplies = (name: string, types: ChartType[]): boolean => !ROW_GROUP[name] || types.some((t) => ROW_GROUP[name]!.some((g) => formatApplies(t).has(g)));
+function chartRowsAll(tab: 'format' | 'data'): string[] {
   // Ordre des captures 12 et 13 : type, fond, bordure, légende, titre, sous-titre, titres d'axes, axe des abscisses, axe des ordonnées.
   return tab === 'format' ? ['ChartType', 'ChartBackStyle', 'ChartBackColor', 'ChartBorderStyle', 'ChartBorderWidth', 'ChartBorderColor',
       'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
       'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
       'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
-      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize']
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize', 'WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor', 'WaterfallShowTotal']
     : ['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries'];
 }
 
@@ -104,8 +123,6 @@ const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.string
 
 /** Lignes d'un graphique propres aux formulaires : un graphique d'état ignore le lien maître/détail. */
 const CHART_FORM_ONLY = ['LinkMasterFields', 'LinkChildFields'];
-/** Lignes propres à certains types de graphique (F5) : montrées seulement si le type de chaque graphique sélectionné y figure (la tâche 11 généralise). */
-const CHART_TYPE_ONLY: Record<string, string[]> = { DoughnutHoleSize: ['doughnut', 'arc'], BubbleMaxSize: ['bubble'] };
 /** Une ligne par descripteur qui s'applique au genre de **chaque** cible (et au genre du document : `objects`), dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
  *  Des valeurs différentes donnent MIXED. Nom en lecture seule dans une sélection multiple. */
 export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean, cellPrefix = ''): SheetRow[] {
@@ -114,7 +131,8 @@ export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: P
   const chartOnly = kinds.every((k) => k === 'chart');
   const typeDesc = PROPERTY_CATALOG.find((d) => d.name === 'ChartType')!;
   const chartTypes = chartOnly ? targets.map((t) => readProp(doc, docKind, t, typeDesc, cellPrefix)) : [];
-  const typeOk = (n: string): boolean => !chartOnly || !CHART_TYPE_ONLY[n] || chartTypes.every((v) => CHART_TYPE_ONLY[n]!.includes(String(v)));
+  const types = chartTypes.map((v) => readChartSpec({ ChartType: v }).type);
+  const typeOk = (n: string): boolean => !chartOnly || rowApplies(n, types);
   const lead = (tb: string, n: string): number => { const i = chartOnly ? chartRows(tb as 'format' | 'data').indexOf(n) : -1; return i < 0 ? 99 : i; };
   return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && typeOk(d.name) && kinds.every((k) => d.appliesTo.includes(k) && !(docKind === 'report' && k === 'chart' && CHART_FORM_ONLY.includes(d.name)) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name))))
     .map((d, i) => ({ d, i })).sort((a, b) => lead(tb, a.d.name) - lead(tb, b.d.name) || a.i - b.i).map((x) => x.d))   // tri stable : le graphique d'abord

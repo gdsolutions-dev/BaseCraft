@@ -1661,6 +1661,10 @@
     "AxisSecFontSize": "Lettergrootte van de secundaire waardeas",
     "DoughnutHoleSize": "Grootte van het gat van de donut (%)",
     "BubbleMaxSize": "Grootte van de grootste bel (px)",
+    "WaterfallIncreaseColor": "Kleur van de toenames in de watervalgrafiek",
+    "WaterfallDecreaseColor": "Kleur van de afnames in de watervalgrafiek",
+    "WaterfallTotalColor": "Kleur van het totaal in de watervalgrafiek",
+    "WaterfallShowTotal": "Totaal van de watervalgrafiek tonen",
     "ColumnHeads": "Kolomkoppen",
     "ColumnWidth": "Kolombreedte"
   },
@@ -3181,7 +3185,7 @@
   "chart": {
     "noSource": "Gegevensbron niet gedefinieerd",
     "noData": "Geen gegevens om weer te geven",
-    "waterfall": {"total": "Totaal"},
+    "waterfall": {"total": "Totaal", "increase": "Toename", "decrease": "Afname"},
     "pareto": {"cumulative": "Cumulatief %"},
     "badLink": "De hoofd-/subvelden komen niet overeen",
     "truncated": "Alleen de eerste 5.000 punten worden getekend",
@@ -3205,7 +3209,8 @@
       "legend": "Legenda (reeksen)",
       "legendNone": "(Geen)",
       "legendHint": "Met een legenda wordt alleen de eerste waarde getekend.",
-      "typeHint": {"notOffered": "Dit grafiektype is nog niet beschikbaar.", "doughnut": "De grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "arc": "Halve ring: de grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "funnel": "De fasen worden gesorteerd op de eerste waarde; het legendaveld wordt genegeerd.", "scatter": "Het eerste asveld is X en moet een getal zijn; de eerste waarde is Y. Een legendaveld verdeelt de punten over reeksen.", "bubble": "Het eerste asveld is X (een getal), de eerste waarde is Y en de tweede waarde is de grootte van de bel."},
+      "legendIgnored": "Dit diagramtype negeert het legendaveld.",
+      "typeHint": {"doughnut": "De grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "arc": "Halve ring: de grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "funnel": "De fasen worden gesorteerd op de eerste waarde; het legendaveld wordt genegeerd.", "scatter": "Het eerste asveld is X en moet een getal zijn; de eerste waarde is Y. Een legendaveld verdeelt de punten over reeksen.", "bubble": "Het eerste asveld is X (een getal), de eerste waarde is Y en de tweede waarde is de grootte van de bel.", "boxWhisker": "Elke categorie is een box; de aslvelden geven de categorie en de eerste waarde de waarnemingen (het legendaveld wordt genegeerd).", "pareto": "De balken zijn gesorteerd op de eerste waarde, de grootste eerst; de lijn toont het cumulatieve percentage op de rechteras (het legendaveld wordt genegeerd).", "waterfall": "Elke categorie is een stap van de eerste waarde (leeg = 0) op een lopend totaal; een laatste balk toont het totaal (het legendaveld wordt genegeerd)."},
       "rowsHint": "De waarden worden bij dit grafiektype ongewijzigd getekend: geen aggregatiefunctie.",
       "axisXHint": "Het eerste veld is X.",
       "values": "Waarden (Y-as)",
@@ -3214,7 +3219,7 @@
       "collapse": "Sectie samenvouwen",
       "expand": "Sectie uitvouwen",
       "close": "Sluiten",
-      "format": {"series": "Gegevensreeks", "heading": "Gegevensreeks opmaken: {{name}}", "fullName": "Volledige naam", "seriesType": "Reekstype", "seriesTypes": {"column": "Kolom", "line": "Lijn", "area": "Vlak"}, "plotOn": "Reeks uitzetten op", "primary": "Primair", "secondary": "Secundair", "fill": "Opvulkleur van de reeks", "border": "Randkleur van de reeks", "labels": "Gegevenslabel weergeven", "trend": "Opties voor trendlijn", "trendName": "Naam van de trendlijn", "noValues": "Selecteer eerst een waarde op het tabblad Gegevens.", "legendHint": "Met een legendaveld geldt de opmaak voor alle reeksen samen: uitgeschakeld.", "roundHint": "Geen effect bij dit grafiektype (cirkel, radar).", "axisHint": "Geen secundaire as bij staaf- of gestapelde grafieken.", "trendHint": "Geen trendlijn bij staaf- of gestapelde grafieken.", "lineOptions": "Lijnopties", "lineWidth": "Lijndikte", "dash": "Lijnstijl", "marker": "Markeringen weergeven", "gap": "Ontbrekende waarden", "trendKinds": {"none": "Geen", "linear": "Lineair", "exponential": "Exponentieel", "logarithmic": "Logaritmisch", "polynomial": "Polynomiaal", "power": "Macht", "movingAverage": "Voortschrijdend gemiddelde"}, "dashes": {"solid": "Ononderbroken", "dashed": "Gestreept", "dotted": "Gestippeld"}, "gaps": {"gap": "Een gat laten", "zero": "Als nul weergeven", "connect": "Punten verbinden"}}
+      "format": {"series": "Gegevensreeks", "heading": "Gegevensreeks opmaken: {{name}}", "fullName": "Volledige naam", "seriesType": "Reekstype", "seriesTypes": {"column": "Kolom", "line": "Lijn", "area": "Vlak"}, "plotOn": "Reeks uitzetten op", "primary": "Primair", "secondary": "Secundair", "fill": "Opvulkleur van de reeks", "border": "Randkleur van de reeks", "labels": "Gegevenslabel weergeven", "trend": "Opties voor trendlijn", "trendName": "Naam van de trendlijn", "noValues": "Selecteer eerst een waarde op het tabblad Gegevens.", "legendHint": "Met een legendaveld geldt de opmaak voor alle reeksen samen: uitgeschakeld.", "roundHint": "Geen effect bij dit grafiektype (cirkel, radar).", "axisHint": "Geen secundaire as bij staaf- of gestapelde grafieken.", "trendHint": "Geen trendlijn bij staaf- of gestapelde grafieken.", "noEffect": "Geen effect bij dit diagramtype.", "noTrend": "Geen trendlijn bij dit diagramtype.", "noAxis": "Geen secundaire as bij dit diagramtype.", "waterfallColors": "Waterval-kleuren", "lineOptions": "Lijnopties", "lineWidth": "Lijndikte", "dash": "Lijnstijl", "marker": "Markeringen weergeven", "gap": "Ontbrekende waarden", "trendKinds": {"none": "Geen", "linear": "Lineair", "exponential": "Exponentieel", "logarithmic": "Logaritmisch", "polynomial": "Polynomiaal", "power": "Macht", "movingAverage": "Voortschrijdend gemiddelde"}, "dashes": {"solid": "Ononderbroken", "dashed": "Gestreept", "dotted": "Gestippeld"}, "gaps": {"gap": "Een gat laten", "zero": "Als nul weergeven", "connect": "Punten verbinden"}}
     }
   }
 }

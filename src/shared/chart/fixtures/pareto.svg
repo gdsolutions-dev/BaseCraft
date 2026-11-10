@@ -1,0 +1,83 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<path d="M52.2 192.5L329.3 192.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M52.2 159.5L329.3 159.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M52.2 125.5L329.3 125.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M52.2 92.5L329.3 92.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M52.2 59.5L329.3 59.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="-5" transform="matrix(0,-1,1,0,18.2,125.5)" fill="#1b1f27">SumOfMontant</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" xml:space="preserve" y="5" transform="matrix(0,-1,1,0,363.3,125.5)" fill="#1b1f27">Cumulative %</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(190.75 218)" fill="#1b1f27">Ville</text>
+<path d="M52.2 192.5L329.3 192.5" fill="none" pointer-events="visible" stroke="#e1e4e9" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(44.2 192)" fill="#1b1f27">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(44.2 158.75)" fill="#1b1f27">10</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(44.2 125.5)" fill="#1b1f27">20</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(44.2 92.25)" fill="#1b1f27">30</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(44.2 59)" fill="#1b1f27">40</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 192)" fill="#1b1f27">0%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 165.4)" fill="#1b1f27">20%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 138.8)" fill="#1b1f27">40%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 112.2)" fill="#1b1f27">60%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 85.6)" fill="#1b1f27">80%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" transform="translate(337.3 59)" fill="#1b1f27">100%</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(79.91 200)" fill="#1b1f27">B</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(135.33 200)" fill="#1b1f27">D</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(190.75 200)" fill="#1b1f27">A</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(246.17 200)" fill="#1b1f27">E</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(301.59 200)" fill="#1b1f27">C</text>
+<path d="M60.8 192l38.2 0l0 -133l-38.2 0Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M116.2 192l38.2 0l0 -83.1l-38.2 0Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M171.6 192l38.2 0l0 -49.9l-38.2 0Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M227.1 192l38.2 0l0 -39.9l-38.2 0Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="3" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M282.5 192l38.2 0l0 -26.6l-38.2 0Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="4" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<g clip-path="url(#zr0-c0)">
+<path d="M79.9 138.8L135.3 105.6L190.8 85.6L246.2 69.6L301.6 59" fill="none" pointer-events="visible" stroke="#e5842c" stroke-width="2" stroke-linejoin="bevel" class="zr0-cls-2"></path>
+</g>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,79.91,138.8)" fill="#e5842c" ecmeta_series_index="1" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,135.33,105.55)" fill="#e5842c" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,190.75,85.6)" fill="#e5842c" ecmeta_series_index="1" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,246.17,69.64)" fill="#e5842c" ecmeta_series_index="1" ecmeta_data_index="3" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(3,0,0,3,301.59,59)" fill="#e5842c" ecmeta_series_index="1" ecmeta_data_index="4" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<path d="M-5 -5l208.3 0l0 24l-208.3 0Z" transform="translate(100.85 33)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#b7b9be" stroke-width="0" class="zr0-cls-0"></path>
+<path d="M3.5 0L21.5 0A3.5 3.5 0 0 1 25 3.5L25 10.5A3.5 3.5 0 0 1 21.5 14L3.5 14A3.5 3.5 0 0 1 0 10.5L0 3.5A3.5 3.5 0 0 1 3.5 0Z" transform="translate(100.85 33)" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(100.85 33)" fill="#1b1f27">SumOfMontant</text>
+<path d="M0 0l97.5 0l0 14l-97.5 0Z" transform="translate(100.85 33)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" class="zr0-cls-4"></path>
+<path d="M0 7L25 7" transform="translate(207.35 33)" fill="#000" stroke="#e5842c" stroke-width="2" stroke-linecap="butt" stroke-miterlimit="10" class="zr0-cls-0"></path>
+<path d="M18.1 7A5.6 5.6 0 1 1 18.1 6.4A5.6 5.6 0 0 1 18.1 7" transform="translate(207.35 33)" fill="#e5842c" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" xml:space="preserve" x="30" y="7" transform="translate(207.35 33)" fill="#1b1f27">Cumulative %</text>
+<path d="M-1 1.4l92.8 0l0 11.2l-92.8 0Z" transform="translate(207.35 33)" fill="none" pointer-events="visible" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="legend" class="zr0-cls-4"></path>
+<path d="M-26.9 -5l53.8 0l0 24l-53.8 0Z" transform="translate(200 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:14px;font-family:BC Inter;font-weight:bold;" y="7" transform="translate(200 9)" fill="#1b1f27">Ventes</text>
+<defs >
+<clipPath id="zr0-c0">
+<path d="M51 58l281 0l0 135l-281 0Z" fill="#000" class="zr0-cls-5"></path>
+</clipPath>
+</defs>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(68,108,243,1);
+}
+.zr0-cls-5:hover {
+cursor:pointer;
+fill:rgba(0,0,0,1);
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+fill:rgba(251,145,48,1);
+}
+.zr0-cls-4:hover {
+cursor:pointer;
+fill:rgba(0,0,0,0);
+}
+
+]]>
+
+</style>
+</svg>

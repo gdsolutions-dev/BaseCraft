@@ -2,10 +2,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME } from '../design/theme';
-import { chartFormatIssue, chartFrame, chartOption, chartTooltip, readChartFormat, sampleFor, SAMPLE_ROWS, type ChartFormat } from './option';
+import { chartFormatIssue, chartFrame, chartOption, cumulativeShares, chartTooltip, readChartFormat, sampleFor, SAMPLE_ROWS, waterfallSteps, type ChartFormat } from './option';
 import { chartPalette } from './palette';
 import type { ChartColumn, ChartData } from './query';
-import type { ChartSpec } from './spec';
+import { typeHintKey, type ChartSpec } from './spec';
 import { chartSvg } from './svg';
 
 const pal = chartPalette(DEFAULT_THEME, 'light');
@@ -571,7 +571,7 @@ describe('sampleFor (F5)', () => {
     expect(sampleFor('columnClustered')).toBe(SAMPLE_ROWS);
     expect(sampleFor('funnel')).toEqual(sampleFor('funnel'));
   });
-  it.each(['doughnut', 'arc', 'funnel', 'scatter', 'bubble'] as const)('%s : l exemple dessine au moins une série avec un point', (t) => {
+  it.each(['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'] as const)('%s : l exemple dessine au moins une série avec un point', (t) => {
     const o = opt(spec(t, { axis: ['x'], values: [{ field: 'v', agg: 'sum' }, { field: 'w', agg: 'sum' }] }), sampleFor(t));
     expect(o.series.length).toBeGreaterThan(0);
     expect(o.series[0].data.length).toBeGreaterThan(0);
@@ -584,3 +584,227 @@ describe('sampleFor (F5)', () => {
   });
 });
 
+
+describe('boîte à moustaches', () => {
+  const ccol: ChartColumn = { role: 'category', field: 'Groupe', name: 'Groupe' };
+  const v1: ChartColumn = { role: 'value', field: 'Montant', name: 'Montant' };
+  const box = (rows: ChartData['rows'], cols: ChartColumn[] = [ccol, v1]): ChartData => ({ columns: cols, rows, truncated: false });
+  const bs = spec('boxWhisker', { axis: ['Groupe'], values: [{ field: 'Montant', agg: 'none' }] });
+  const rows: ChartData['rows'] = [['A', 1], ['A', 2], ['A', 3], ['A', 4], ['A', 5], ['A', 6], ['A', 7], ['A', 8], ['A', 9], ['A', 100], ['B', 5]];
+  it('couleur et bordure de la Valeur : le remplissage (35 %) suit la couleur, la bordure suit la bordure, JSON stable', () => {
+    const o = opt({ ...bs, series: [{ field: 'Montant', color: '#ff0000', borderColor: '#00ff00' }] }, box(rows));
+    expect(o.series[0].itemStyle).toEqual({ color: 'rgba(255, 0, 0, 0.35)', borderColor: '#00ff00' });
+    expect(JSON.parse(JSON.stringify(o)).series[0].itemStyle.borderColor).toBe('#00ff00');
+    const c = opt({ ...bs, series: [{ field: 'Montant', color: '#ff0000' }] }, box(rows));
+    expect(c.series[0].itemStyle.borderColor).toBe('#ff0000');
+  });
+  it('deux catégories, une boîte nommée par la Valeur, la valeur aberrante en nuage [catégorie, valeur]', () => {
+    const o = opt(bs, box(rows));
+    expect(o.xAxis).toMatchObject({ type: 'category', data: ['A', 'B'] });
+    expect(o.yAxis.type).toBe('value');
+    expect(o.series).toHaveLength(2);
+    expect(o.series[0]).toMatchObject({ type: 'boxplot', name: 'Montant', data: [[1, 3, 5.5, 8, 9], [5, 5, 5, 5, 5]] });
+    expect(o.series[1]).toMatchObject({ type: 'scatter', name: 'outliers', silent: true, data: [[0, 100]] });   // silent : jamais dans l'info-bulle
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+    expect(o.series[0].itemStyle).toEqual({ color: expect.stringMatching(/^rgba\(\d+, \d+, \d+, 0\.35\)$/), borderColor: pal.series[0] });
+    expect(o.series[1].itemStyle.color).toBe(pal.series[0]);
+  });
+  it('une valeur aberrante est tracée à partir de [1..9, 100] et pas de [1,2,3,4,100]', () => {
+    expect(opt(bs, box([['A', 1], ['A', 2], ['A', 3], ['A', 4], ['A', 100]])).series[1].data).toEqual([]);
+  });
+  it('catégories en points de code (B avant a), NULL en emptyLabel', () => {
+    const o = opt(bs, box([['a', 1], ['B', 2], [null, 3]]), fmt({ emptyLabel: '(vide)' }));
+    expect(o.xAxis.data).toEqual(['(vide)', 'B', 'a']);
+  });
+  it('un texte numérique est lu, un autre texte est ignoré ; une catégorie sans observation garde une case null', () => {
+    const o = opt(bs, box([['A', '12'], ['A', 'x'], ['B', 'y'], ['B', null]]));
+    expect(o.series[0].data).toEqual([[12, 12, 12, 12, 12], null]);
+    expect(o.series[1].data).toEqual([]);
+  });
+  it('sans axe : une seule boîte ; la légende (colonne catégorie, légende, valeur) est ignorée', () => {
+    const none = opt(spec('boxWhisker', { axis: [], values: [{ field: 'Montant', agg: 'none' }] }), box([[1], [2], [3]], [v1]));
+    expect(none.series[0].data).toEqual([[1, 1, 2, 3, 3]]);
+    const lcol: ChartColumn = { role: 'legend', field: 'Produit', name: 'Produit' };
+    const o = opt(spec('boxWhisker', { axis: ['Groupe'], legend: 'Produit', values: [{ field: 'Montant', agg: 'none' }] }), box([['A', 'X', 1], ['A', 'Y', 3], ['B', 'X', 5]], [ccol, lcol, v1]), fmt({ hasLegend: true }));
+    expect(o.series.filter((x: { type: string }) => x.type === 'boxplot')).toHaveLength(1);
+    expect(o.series[0].data).toEqual([[1, 1, 2, 3, 3], [5, 5, 5, 5, 5]]);
+    expect(o.legend.data).toEqual(['Montant']);   // les valeurs aberrantes n'ont pas d'entrée
+  });
+  it('JSON sans fonction, info-bulle par élément, golden déterministe', () => {
+    const full = fmt({ hasTitle: true, title: 'Ventes', hasLegend: true });
+    const make = (): string => chartSvg(chartOption(bs, box(rows), full, pal, size), size);
+    const svg = make();
+    const o = opt(bs, box(rows), full);
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+    expect(chartTooltip(bs, o)).toEqual({ trigger: 'item' });
+    expect(svg).not.toMatch(/NaN|undefined/);
+    expect(make()).toBe(svg);
+    if (process.env.UPDATE_GOLDEN) writeFileSync(golden('box'), svg);
+    expect(svg).toBe(readFileSync(golden('box'), 'utf8'));
+  });
+});
+
+describe('Pareto', () => {
+  const ps = spec('pareto');
+  it('cumulativeShares : parts cumulées en pourcentage, arrondies à 2 décimales, jamais NaN', () => {
+    expect(cumulativeShares([50, 30, 20])).toEqual([50, 80, 100]);
+    expect(cumulativeShares([1, 1, 1])).toEqual([33.33, 66.67, 100]);
+    expect(cumulativeShares([0, 0])).toEqual([0, 0]);
+    expect(cumulativeShares([10, -5, 10])).toEqual([50, 50, 100]);
+    expect(cumulativeShares([0.1, 0.2, 0.3])).toEqual([16.67, 50, 100]);
+  });
+  it('barres triées (valeur décroissante, puis libellé), courbe cumulée sur l axe secondaire fixe 0..100', () => {
+    const o = opt(ps, plain([['A', 15], ['B', 40], ['C', 8]]));
+    expect(o.xAxis.data).toEqual(['B', 'A', 'C']);
+    expect(o.series).toHaveLength(2);
+    expect(o.series[0]).toMatchObject({ type: 'bar', name: 'SumOfMontant', data: [40, 15, 8] });
+    expect(o.series[1]).toMatchObject({ type: 'line', name: 'Cumulative %', yAxisIndex: 1, symbol: 'circle', smooth: false, data: [63.49, 87.3, 100] });
+    expect(o.series[1].itemStyle.color).toBe(pal.series[1]);
+    expect(o.yAxis).toHaveLength(2);
+    expect(o.yAxis[1]).toMatchObject({ type: 'value', min: 0, max: 100, position: 'right', splitLine: { show: false }, axisLabel: { formatter: '{value}%' } });
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+  });
+  it('égalités triées par libellé (points de code), le libellé de la courbe vient du format, la légende est ignorée', () => {
+    const o = opt(ps, plain([['b', 5], ['B', 5], ['a', 5]]), fmt({ cumulative: 'Cumul %' }));
+    expect(o.xAxis.data).toEqual(['B', 'a', 'b']);
+    expect(o.series[1].name).toBe('Cumul %');
+    const l = opt(spec('pareto', { legend: 'Produit' }), { columns: [cat, leg, val], rows: [['A', 'X', 1], ['A', 'Y', 2], ['B', 'X', 4]], truncated: false });
+    expect(o.series).toHaveLength(2);
+    expect(l.series[0].data).toEqual([4, 3]);
+  });
+  it('bordure et étiquettes de la Valeur sur les barres (chaîne, jamais de fonction)', () => {
+    const o = opt(spec('pareto', { series: [{ field: 'Montant', borderColor: '#00ff00', dataLabels: true }] }), plain([['A', 3], ['B', 2]]));
+    expect(o.series[0].itemStyle).toMatchObject({ borderColor: '#00ff00', borderWidth: 1 });
+    expect(o.series[0].label).toMatchObject({ show: true });
+    expect(JSON.parse(JSON.stringify(o)).series[0].label.show).toBe(true);
+    const d = opt(spec('pareto'), plain([['A', 3]]));
+    expect(d.series[0].label).toBeUndefined();
+    expect(d.series[0].itemStyle.borderColor).toBeUndefined();
+  });
+  it('NULL : barre de hauteur 0 ; couleur de la Valeur ; titre de l axe de droite', () => {
+    const o = opt(spec('pareto', { series: [{ field: 'Montant', color: '#ff0000' }] }), plain([['A', null], ['B', 2]]), fmt({ hasAxisTitles: true, axis2: { ...fmt().axis2, title: 'Cum.' } }));
+    expect(o.series[0].data).toEqual([2, 0]);
+    expect(o.series[0].itemStyle.color).toBe('#ff0000');
+    expect(o.yAxis[1].name).toBe('Cum.');
+    expect(opt(ps, plain([['A', 1]]), fmt({ hasAxisTitles: true })).yAxis[1].name).toBe('Cumulative %');
+    expect(opt(ps, plain([['A', 1]]), fmt({ hasAxisTitles: false })).yAxis[1].name).toBeUndefined();
+  });
+  it('zéro ligne : option vide (aucune série), jamais undefined ; l aide du type reste celle de Pareto', () => {
+    const o = opt(ps, plain([]));
+    expect(o.series).toEqual([]);
+    expect(JSON.stringify(o)).not.toMatch(/undefined|NaN/);
+    expect(typeHintKey(ps)).toBe('chart.settings.typeHint.pareto');
+    expect(opt(ps, { columns: [cat], rows: [['A']], truncated: false }).series).toEqual([]);   // aucune Valeur
+  });
+  it('golden déterministe', () => {
+    const full = fmt({ hasTitle: true, title: 'Ventes', hasLegend: true });
+    const make = (): string => chartSvg(chartOption(ps, plain([['A', 15], ['B', 40], ['C', 8], ['D', 25], ['E', 12]]), full, pal, size), size);
+    const svg = make();
+    expect(svg).not.toMatch(/NaN|undefined/);
+    expect(make()).toBe(svg);
+    if (process.env.UPDATE_GOLDEN) writeFileSync(golden('pareto'), svg);
+    expect(svg).toBe(readFileSync(golden('pareto'), 'utf8'));
+  });
+});
+
+describe('cascade', () => {
+  const ws = spec('waterfall');
+  const vals = (d: any[]): any[] => d.map((x) => (x !== null && typeof x === 'object' ? x.value : x));
+  const byName = (o: any, name: string): any[] => o.series.filter((x: any) => x.name === name);
+  it('waterfallSteps : cumul, hausse/baisse, total ; NULL = pas de 0', () => {
+    expect(waterfallSteps([100, -30, 45], true)).toEqual([{ start: 0, end: 100, kind: 'increase' }, { start: 100, end: 70, kind: 'decrease' }, { start: 70, end: 115, kind: 'increase' }, { start: 0, end: 115, kind: 'total' }]);
+    expect(waterfallSteps([100, -30, 45], false)).toHaveLength(3);
+    expect(waterfallSteps([null, 10], true).map((x) => [x.start, x.end])).toEqual([[0, 0], [0, 10], [0, 10]]);
+    expect(waterfallSteps([0.1, 0.2], false)[1]!.end).toBe(0.3);
+  });
+  it('série base transparente et muette, puis Hausse, Baisse, Total, toutes sur la pile wf ; légende de trois noms', () => {
+    const o = opt(ws, plain([['A', 100], ['B', -30], ['C', 45]]));
+    expect(o.xAxis.data).toEqual(['A', 'B', 'C', 'Total']);
+    expect(o.series.map((x: any) => x.name)).toEqual(['base', 'Increase', 'Decrease', 'Total']);
+    expect(o.series.every((x: any) => x.type === 'bar' && x.stack === 'wf')).toBe(true);
+    expect(o.series[0]).toMatchObject({ silent: true, itemStyle: { color: 'transparent' }, data: [0, 70, 70, 0] });
+    expect(vals(o.series[1].data)).toEqual([100, null, 45, null]);
+    expect(vals(o.series[2].data)).toEqual([null, 30, null, null]);
+    expect(vals(o.series[3].data)).toEqual([null, null, null, 115]);
+    expect(o.tooltip.trigger).toBe('item');
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+  });
+  it('légende : exactement Increase, Decrease, Total (base absente), localisés ; sans total, deux noms', () => {
+    const o = opt(ws, plain([['A', 1], ['B', -1]]), fmt({ hasLegend: true, total: 'Gesamt', increase: 'Plus', decrease: 'Moins' }));
+    expect(o.legend.data).toEqual(['Plus', 'Moins', 'Gesamt']);
+    expect(o.series.map((x: any) => x.name)).toEqual(['base', 'Plus', 'Moins', 'Gesamt']);
+    expect(opt(ws, plain([['A', 1]]), fmt({ hasLegend: true, waterfall: { ...fmt().waterfall, showTotal: false } })).legend.data).toEqual(['Increase', 'Decrease']);
+  });
+  it('passage par zéro : partie positive 50 et partie négative -30 de Baisse, base 0', () => {
+    const o = opt(ws, plain([['A', 50], ['B', -80]]), fmt({ waterfall: { ...fmt().waterfall, showTotal: false } }));
+    const dec = byName(o, 'Decrease');
+    expect(dec).toHaveLength(2);
+    expect(vals(dec[0].data)).toEqual([null, 50]);
+    expect(vals(dec[1].data)).toEqual([null, -30]);
+    expect(o.series[0].data).toEqual([0, 0]);
+  });
+  it('pas entièrement sous zéro : base négative puis barre négative', () => {
+    const o = opt(ws, plain([['A', -10], ['B', -5]]), fmt({ waterfall: { ...fmt().waterfall, showTotal: false } }));
+    expect(o.series[0].data).toEqual([0, -10]);
+    const dec = byName(o, 'Decrease');
+    expect(dec).toHaveLength(2);
+    expect(vals(dec[0].data)).toEqual([null, null]);
+    expect(vals(dec[1].data)).toEqual([-10, -5]);
+  });
+  it('total négatif : partie négative du Total ; NULL et tout à zéro : barres de hauteur 0, jamais NaN', () => {
+    const o = opt(ws, plain([['A', -4]]));
+    expect(byName(o, 'Total').map((x) => vals(x.data))).toEqual([[null, null], [null, -4]]);
+    const z = opt(ws, plain([['A', null], ['B', 0]]));
+    expect(vals(z.series[1].data)).toEqual([0, 0, null]);
+    expect(JSON.stringify(z)).not.toMatch(/NaN|undefined/);
+  });
+  it('couleurs : accents 1, 2, 3 par défaut ; surchargées par Waterfall*Color', () => {
+    const o = opt(ws, plain([['A', 1], ['B', -1]]));
+    expect(o.series.slice(1).map((x: any) => x.itemStyle.color)).toEqual([pal.custom('theme:accent1'), pal.custom('theme:accent2'), pal.custom('theme:accent3')]);
+    const c = opt(ws, plain([['A', 1]]), fmt({ waterfall: { increase: '#112233', decrease: '#223344', total: '#334455', showTotal: true } }));
+    expect(c.series.slice(1).map((x: any) => x.itemStyle.color)).toEqual(['#112233', '#223344', '#334455']);
+  });
+  it('étiquettes (Valeur 1) : chaînes avec signe, total sans ; pas d étiquette sinon', () => {
+    const d = plain([['A', 100], ['B', -30]]);
+    expect(JSON.stringify(opt(ws, d))).not.toContain('"label"');
+    const o = opt(spec('waterfall', { series: [{ field: 'Montant', dataLabels: true }] }), d);
+    expect(o.series[1].data.map((x: any) => x?.label?.formatter)).toEqual(['+100', undefined, undefined]);
+    expect(o.series[2].data.map((x: any) => x?.label?.formatter)).toEqual([undefined, '-30', undefined]);
+    expect(o.series[3].data.map((x: any) => x?.label?.formatter)).toEqual([undefined, undefined, '70']);
+    expect(o.series[0].label).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+  });
+  it('info-bulle : chaque partie visible montre la valeur signée du pas (total : le total)', () => {
+    const o = opt(ws, plain([['A', 10], ['B', -4], ['C', 6], ['D', -15]]));
+    const tips = (name: string): (string | undefined)[][] => byName(o, name).map((s: any) => s.data.map((x: any) => (x === null ? undefined : x.tooltip?.formatter)));
+    const dec = tips('Decrease'), inc = tips('Increase'), tot = tips('Total');
+    expect(dec).toHaveLength(2);
+    expect(dec[0]![3]).toContain('-15');
+    expect(dec[1]![3]).toContain('-15');
+    expect(dec[0]![1]).toContain('-4');
+    expect(inc[0]![0]).toContain('10');
+    expect(inc[0]![0]).not.toContain('-');
+    expect(tot[1]![4]).toContain('-3');
+    expect(o.series[0].tooltip).toEqual({ show: false });
+    const b = opt(ws, plain([['A', -8], ['B', 3]]));
+    expect(byName(b, 'Increase').map((x: any) => x.data[1]?.tooltip?.formatter).find(Boolean)).toMatch(/: 3$/);
+    expect(byName(b, 'Decrease').map((x: any) => x.data[0]?.tooltip?.formatter).find(Boolean)).toMatch(/: -8$/);
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+  });
+  it('la légende du champ est ignorée (lignes d une catégorie additionnées) ; seule la première Valeur compte', () => {
+    const o = opt(spec('waterfall', { legend: 'Produit' }), legended([['A', 'X', 1], ['A', 'Y', 2], ['B', 'X', -1]]), fmt({ waterfall: { ...fmt().waterfall, showTotal: false } }));
+    expect(vals(o.series[1].data)).toEqual([3, null]);
+    expect(vals(o.series[2].data)).toEqual([null, 1]);
+  });
+  it('goldens déterministes', () => {
+    const full = fmt({ hasTitle: true, title: 'Ventes', hasLegend: true });
+    for (const [name, rows] of [['waterfall', [['A', 100], ['B', -30], ['C', 45], ['D', -20]]], ['waterfall-cross-zero', [['A', 50], ['B', -80], ['C', 20]]]] as const) {
+      const make = (): string => chartSvg(chartOption(spec('waterfall', { series: [{ field: 'Montant', dataLabels: true }] }), plain(rows.map((r) => [...r])), full, pal, size), size);
+      const svg = make();
+      expect(svg).not.toMatch(/NaN|undefined/);
+      expect(make()).toBe(svg);
+      if (process.env.UPDATE_GOLDEN) writeFileSync(golden(name), svg);
+      expect(svg).toBe(readFileSync(golden(name), 'utf8'));
+    }
+  });
+});

@@ -301,14 +301,14 @@ test('A chart whose source table is missing: the pane shows the source error, no
   } finally { await app.close(); }
 });
 
-test('Insert Modern Chart lists the five F5a types after Combo (no Word Cloud); Doughnut arms the tool', async () => {
+test('Insert Modern Chart lists the new types after Combo (no Word Cloud); Doughnut arms the tool', async () => {
   test.setTimeout(120000);
   const { app, page } = await launchApp({ args: [await seed('chart-settings-f5-menu')], env: FR });
   try {
     await openDesign(page);
     await page.getByTestId('cmd-insertModernChart').click();
     const ids = await page.getByTestId('chart-type-popup').locator('[data-testid^="chart-type-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-    expect(ids.slice(ids.indexOf('chart-type-combo'))).toEqual(['chart-type-combo', 'chart-type-doughnut', 'chart-type-arc', 'chart-type-funnel', 'chart-type-scatter', 'chart-type-bubble']);
+    expect(ids.slice(ids.indexOf('chart-type-combo'))).toEqual(['chart-type-combo', 'chart-type-doughnut', 'chart-type-arc', 'chart-type-funnel', 'chart-type-scatter', 'chart-type-bubble', 'chart-type-boxWhisker', 'chart-type-pareto', 'chart-type-waterfall']);
     await expect(page.getByTestId('chart-type-wordCloud')).toHaveCount(0);
     await page.getByTestId('chart-type-doughnut').click();
     await draw(page, page.locator('[data-section-body="1"]'));
@@ -316,6 +316,10 @@ test('Insert Modern Chart lists the five F5a types after Combo (no Word Cloud); 
     await expect(page.getByTestId('prop-ChartType')).toHaveValue('doughnut');
     await expect(page.getByTestId('prop-DoughnutHoleSize')).toBeVisible();
     await expect(page.getByTestId('prop-BubbleMaxSize')).toHaveCount(0);
+    await expect(page.getByTestId('prop-AxisRange')).toHaveCount(0);   // anneau : pas de lignes d'axe
+    await page.getByTestId('prop-ChartType').selectOption('columnClustered');
+    await expect(page.getByTestId('prop-AxisRange')).toBeVisible();
+    await expect(page.getByTestId('prop-DoughnutHoleSize')).toHaveCount(0);
   } finally { await app.close(); }
 });
 
@@ -332,5 +336,38 @@ test('Chart Settings for a Scatter: no aggregate menu, per-type and axis hints',
     await expect(page.getByTestId('chart-rows-hint')).toBeVisible();
     await expect(page.getByTestId('chart-value-Montant')).toBeChecked();
     await expect(page.getByTestId('chart-value-label-Montant')).toHaveCount(0);
+    await page.getByTestId('chart-settings-tab-format').click();
+    await expect(page.getByTestId('chart-series-trend')).toBeDisabled();
+    await expect(page.getByTestId('chart-series-fill')).toBeEnabled();
+    await expect(page.getByTestId('chart-series-labels')).toBeEnabled();
+  } finally { await app.close(); }
+});
+
+test('Disabled chart controls point at their hint (aria-describedby); the waterfall hint follows fill/border, before the waterfall colours', async () => {
+  test.setTimeout(120000);
+  const chart = { kind: 'chart' as const, name: 'G1', left: 200, top: 200, width: 5000, height: 2800,
+    props: { ChartType: 'waterfall', ChartSource: { kind: 'table', name: 'Commandes' }, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] } };
+  const { app, page } = await launchApp({ args: [await seed('chart-settings-f5-describedby', [chart])], env: FR });
+  try {
+    await openDesign(page);
+    await page.getByTestId('ctl-G1').click();
+    const described = async (testId: string) => page.getByTestId(testId).evaluate((el) => {
+      const id = el.getAttribute('aria-describedby');
+      return id ? document.getElementById(id)?.textContent ?? '' : null;
+    });
+    expect(await described('chart-legend-none')).toBe(await page.getByTestId('chart-legend-ignored').textContent());
+    await page.getByTestId('chart-settings-tab-format').click();
+    for (const id of ['chart-series-trend', 'chart-series-fill', 'chart-series-labels']) {
+      if (await page.getByTestId(id).isDisabled()) expect((await described(id))?.length, id).toBeGreaterThan(0);
+    }
+    expect((await described('chart-series-trend'))?.length).toBeGreaterThan(0);
+    expect((await described('chart-series-fill'))?.length).toBeGreaterThan(0);
+    // la ligne « sans effet » suit les lignes remplissage/bordure ; les couleurs de la cascade viennent après
+    const order = await page.locator('[data-testid="chart-series-border"], .cs-hint, [data-testid="chart-WaterfallIncreaseColor"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid') ?? e.className));
+    expect(order.indexOf('chart-series-border')).toBeLessThan(order.indexOf('chart-WaterfallIncreaseColor'));
+    const hintAt = await page.locator(`[id="${await page.getByTestId('chart-series-fill').getAttribute('aria-describedby')}"]`).evaluate((h) => {
+      const prev = h.previousElementSibling; return prev?.querySelector('[data-testid="chart-series-border"]') != null;
+    });
+    expect(hintAt).toBe(true);
   } finally { await app.close(); }
 });

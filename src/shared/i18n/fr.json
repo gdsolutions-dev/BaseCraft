@@ -1636,6 +1636,10 @@
     "AxisSecFontSize": "Taille de police pour l'axe des ordonnées secondaire",
     "DoughnutHoleSize": "Taille du trou de l'anneau (%)",
     "BubbleMaxSize": "Taille de la plus grande bulle (px)",
+    "WaterfallIncreaseColor": "Couleur des hausses de la cascade",
+    "WaterfallDecreaseColor": "Couleur des baisses de la cascade",
+    "WaterfallTotalColor": "Couleur du total de la cascade",
+    "WaterfallShowTotal": "Afficher le total de la cascade",
     "ColumnHeads": "En-têtes colonnes",
     "ColumnWidth": "Largeur colonne"
   },
@@ -3059,7 +3063,7 @@
   "chart": {
     "noSource": "Source de données non définie",
     "noData": "Aucune donnée à afficher",
-    "waterfall": {"total": "Total"},
+    "waterfall": {"total": "Total", "increase": "Hausse", "decrease": "Baisse"},
     "pareto": {"cumulative": "% cumulé"},
     "badLink": "Les champs père/fils ne correspondent pas",
     "truncated": "Seuls les 5 000 premiers points sont tracés",
@@ -3083,7 +3087,8 @@
       "legend": "Légende (séries)",
       "legendNone": "(Aucun)",
       "legendHint": "Avec une légende, seule la première valeur est tracée.",
-      "typeHint": {"notOffered": "Ce type de graphique n'est pas encore disponible.", "doughnut": "La taille des secteurs vient de la première valeur ; le champ de légende est ignoré.", "arc": "Demi-anneau : la taille des secteurs vient de la première valeur ; le champ de légende est ignoré.", "funnel": "Les étapes sont triées par la première valeur ; le champ de légende est ignoré.", "scatter": "Le premier champ d'axe est X et doit être un nombre ; la première valeur est Y. Un champ de légende répartit les points en séries.", "bubble": "Le premier champ d'axe est X (un nombre), la première valeur est Y et la deuxième valeur est la taille des bulles."},
+      "legendIgnored": "Ce type de graphique ignore le champ de légende.",
+      "typeHint": {"doughnut": "La taille des secteurs vient de la première valeur ; le champ de légende est ignoré.", "arc": "Demi-anneau : la taille des secteurs vient de la première valeur ; le champ de légende est ignoré.", "funnel": "Les étapes sont triées par la première valeur ; le champ de légende est ignoré.", "scatter": "Le premier champ d'axe est X et doit être un nombre ; la première valeur est Y. Un champ de légende répartit les points en séries.", "bubble": "Le premier champ d'axe est X (un nombre), la première valeur est Y et la deuxième valeur est la taille des bulles.", "boxWhisker": "Chaque catégorie est une boîte ; les champs d'axe donnent la catégorie et la première valeur les observations (le champ de légende est ignoré).", "pareto": "Les barres sont triées par la première valeur, la plus grande d'abord ; la courbe montre le pourcentage cumulé sur l'axe de droite (le champ de légende est ignoré).", "waterfall": "Chaque catégorie est un pas de la première valeur (vide = 0) sur un cumul ; une dernière barre montre le total (le champ de légende est ignoré)."},
       "rowsHint": "Les valeurs sont tracées telles quelles pour ce type de graphique : pas de fonction d'agrégat.",
       "axisXHint": "Le premier champ est X.",
       "values": "Valeurs (axe des ordonnées)",
@@ -3092,7 +3097,7 @@
       "collapse": "Réduire la section",
       "expand": "Développer la section",
       "close": "Fermer",
-      "format": {"series": "Série de données", "heading": "Format de la série de données : {{name}}", "fullName": "Nom complet", "seriesType": "Type de série", "seriesTypes": {"column": "Histogramme", "line": "Courbe", "area": "Zone"}, "plotOn": "Tracer la série sur", "primary": "Principale", "secondary": "Secondaire", "fill": "Couleur de remplissage de la série", "border": "Couleur de bordure de la série", "labels": "Afficher l'étiquette de données", "trend": "Options de courbe de tendance", "trendName": "Nom de la courbe de tendance", "noValues": "Cochez d'abord une valeur dans l'onglet Données.", "legendHint": "Avec un champ de légende, la mise en forme se règle pour l'ensemble des séries : désactivé.", "roundHint": "Sans effet pour ce type de graphique (secteurs, radar).", "axisHint": "Pas d'axe secondaire en barres ni en empilé.", "trendHint": "Pas de courbe de tendance en barres ni en empilé.", "lineOptions": "Options de courbe", "lineWidth": "Épaisseur du trait", "dash": "Style de trait", "marker": "Afficher les marqueurs", "gap": "Valeurs manquantes", "trendKinds": {"none": "Aucune", "linear": "Linéaire", "exponential": "Exponentielle", "logarithmic": "Logarithmique", "polynomial": "Polynomiale", "power": "Puissance", "movingAverage": "Moyenne mobile"}, "dashes": {"solid": "Continu", "dashed": "Tirets", "dotted": "Points"}, "gaps": {"gap": "Laisser un trou", "zero": "Tracer à zéro", "connect": "Relier les points"}}
+      "format": {"series": "Série de données", "heading": "Format de la série de données : {{name}}", "fullName": "Nom complet", "seriesType": "Type de série", "seriesTypes": {"column": "Histogramme", "line": "Courbe", "area": "Zone"}, "plotOn": "Tracer la série sur", "primary": "Principale", "secondary": "Secondaire", "fill": "Couleur de remplissage de la série", "border": "Couleur de bordure de la série", "labels": "Afficher l'étiquette de données", "trend": "Options de courbe de tendance", "trendName": "Nom de la courbe de tendance", "noValues": "Cochez d'abord une valeur dans l'onglet Données.", "legendHint": "Avec un champ de légende, la mise en forme se règle pour l'ensemble des séries : désactivé.", "roundHint": "Sans effet pour ce type de graphique (secteurs, radar).", "axisHint": "Pas d'axe secondaire en barres ni en empilé.", "trendHint": "Pas de courbe de tendance en barres ni en empilé.", "noEffect": "Sans effet pour ce type de graphique.", "noTrend": "Pas de courbe de tendance pour ce type de graphique.", "noAxis": "Pas d'axe secondaire pour ce type de graphique.", "waterfallColors": "Couleurs de la cascade", "lineOptions": "Options de courbe", "lineWidth": "Épaisseur du trait", "dash": "Style de trait", "marker": "Afficher les marqueurs", "gap": "Valeurs manquantes", "trendKinds": {"none": "Aucune", "linear": "Linéaire", "exponential": "Exponentielle", "logarithmic": "Logarithmique", "polynomial": "Polynomiale", "power": "Puissance", "movingAverage": "Moyenne mobile"}, "dashes": {"solid": "Continu", "dashed": "Tirets", "dotted": "Points"}, "gaps": {"gap": "Laisser un trou", "zero": "Tracer à zéro", "connect": "Relier les points"}}
     }
   }
 }

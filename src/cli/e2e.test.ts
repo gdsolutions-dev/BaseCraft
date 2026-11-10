@@ -52,13 +52,13 @@ describe('format', () => {
     expect(JSON.parse(out.join(''))).toEqual([{ object: { kind: 'form', name: 'F' }, control: 'Chart1', type: 'columnClustered', source: null }]);
   });
 
-  it('F5a : le script crée un nuage de points, refuse un Waterfall (F5b) ; la commande charts affiche le type', async () => {
+  it('F5a : le script crée un nuage de points, refuse un Nuage de mots ; la commande charts affiche le type', async () => {
     const p = tmp(), spec = p.replace('x.basecraft', 'chart5.json'), bad = p.replace('x.basecraft', 'chart5bad.json');
     const doc = (ChartType: string) => ({ formatVersion: '1.0', recordSource: { kind: 'table', name: 'Clients' }, props: {}, sections: [{ kind: 'detail', height: 4000, props: {}, controls: [
       { kind: 'chart', name: 'Nuage', left: 0, top: 0, width: 4000, height: 3000, props: { ChartType, ChartAxis: ['ID'], ChartValues: [{ field: 'ID', agg: 'none' }] } }] }] });
     const tbl = { op: 'table.create', name: 'Clients', fields: [{ name: 'ID', type: 'autoNumber' }] };
     fs.writeFileSync(spec, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('scatter') }]));
-    fs.writeFileSync(bad, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('waterfall') }]));
+    fs.writeFileSync(bad, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('wordCloud') }]));
     const io = { out: () => {}, err: () => {} };
     expect(await run(['new', p], io)).toBe(0);
     expect(await run(['script', bad, p], io)).toBe(1);

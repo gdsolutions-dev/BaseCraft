@@ -7,7 +7,7 @@ import { isColorValue } from '../shared/design/colors';
 import { autoForm } from '../shared/design/auto-form';
 import { instantReport } from '../shared/report/instant';
 import { bareName } from '../shared/report/model';
-import { AGGS, CHART_MAX_AXIS, CHART_MAX_SERIES, CHART_MAX_VALUES, DASHES, DATE_GROUPS, GAPS, isLineWidth, LINE_WIDTH, OFFERED_CHART_TYPES, readChartSpec, SERIES_TYPES } from '../shared/chart/spec';
+import { AGGS, CHART_TYPES, CHART_MAX_AXIS, CHART_MAX_SERIES, CHART_MAX_VALUES, DASHES, DATE_GROUPS, GAPS, isLineWidth, LINE_WIDTH, readChartSpec, SERIES_TYPES } from '../shared/chart/spec';
 import { chartFormatIssue } from '../shared/chart/option';
 import { TRENDLINES } from '../shared/chart/trend';
 import { getObject, listObjects, saveObject, setObjectDescription } from '../main/db/objects';
@@ -62,7 +62,7 @@ function describe(db: DatabaseSync, ref: RecordSourceRef, info: LocaleInfo): { r
 /** Why a chart control is refused (raw props, stricter than readChartSpec's tolerant read), or null. `docFields`: the document's own record source. */
 function chartIssue(db: DatabaseSync, c: ControlDef, docFields: SourceInfo['fields'], info: LocaleInfo): string | null {
   const p = c.props;
-  if (p.ChartType !== undefined && !(OFFERED_CHART_TYPES as readonly unknown[]).includes(p.ChartType)) return `ChartType "${String(p.ChartType)}" is not one of ${OFFERED_CHART_TYPES.join(', ')}`;
+  if (p.ChartType !== undefined && !(CHART_TYPES as readonly unknown[]).includes(p.ChartType)) return `ChartType "${String(p.ChartType)}" is not one of ${CHART_TYPES.join(', ')}`;
   if (p.ChartValues !== undefined && !Array.isArray(p.ChartValues)) return 'ChartValues must be an array';
   const raw = (p.ChartValues ?? []) as unknown[];
   if (raw.length > CHART_MAX_VALUES) return `ChartValues has ${raw.length} entries, at most ${CHART_MAX_VALUES}`;

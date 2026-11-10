@@ -1683,6 +1683,10 @@
     "AxisSecFontSize": "Rozmiar czcionki osi wartości dodatkowej",
     "DoughnutHoleSize": "Rozmiar otworu pierścienia (%)",
     "BubbleMaxSize": "Rozmiar największej bańki (px)",
+    "WaterfallIncreaseColor": "Kolor wzrostów wykresu kaskadowego",
+    "WaterfallDecreaseColor": "Kolor spadków wykresu kaskadowego",
+    "WaterfallTotalColor": "Kolor sumy wykresu kaskadowego",
+    "WaterfallShowTotal": "Pokaż sumę wykresu kaskadowego",
     "ColumnHeads": "Nagłówki kolumn",
     "ColumnWidth": "Szerokość kolumny"
   },
@@ -3227,7 +3231,7 @@
   "chart": {
     "noSource": "Źródło danych nie zostało zdefiniowane",
     "noData": "Brak danych do wyświetlenia",
-    "waterfall": {"total": "Razem"},
+    "waterfall": {"total": "Razem", "increase": "Wzrost", "decrease": "Spadek"},
     "pareto": {"cumulative": "% skumulowany"},
     "badLink": "Pola nadrzędne/podrzędne nie pasują do siebie",
     "truncated": "Rysowanych jest tylko pierwszych 5000 punktów",
@@ -3251,7 +3255,8 @@
       "legend": "Legenda (serie)",
       "legendNone": "(Brak)",
       "legendHint": "Przy legendzie rysowana jest tylko pierwsza wartość.",
-      "typeHint": {"notOffered": "Ten typ wykresu nie jest jeszcze dostępny.", "doughnut": "Rozmiar wycinków wynika z pierwszej wartości; pole legendy jest ignorowane.", "arc": "Półpierścień: rozmiar wycinków wynika z pierwszej wartości; pole legendy jest ignorowane.", "funnel": "Etapy są sortowane według pierwszej wartości; pole legendy jest ignorowane.", "scatter": "Pierwsze pole osi to X i musi być liczbą; pierwsza wartość to Y. Pole legendy dzieli punkty na serie.", "bubble": "Pierwsze pole osi to X (liczba), pierwsza wartość to Y, a druga wartość to rozmiar bąbelka."},
+      "legendIgnored": "Ten typ wykresu ignoruje pole legendy.",
+      "typeHint": {"doughnut": "Rozmiar wycinków wynika z pierwszej wartości; pole legendy jest ignorowane.", "arc": "Półpierścień: rozmiar wycinków wynika z pierwszej wartości; pole legendy jest ignorowane.", "funnel": "Etapy są sortowane według pierwszej wartości; pole legendy jest ignorowane.", "scatter": "Pierwsze pole osi to X i musi być liczbą; pierwsza wartość to Y. Pole legendy dzieli punkty na serie.", "bubble": "Pierwsze pole osi to X (liczba), pierwsza wartość to Y, a druga wartość to rozmiar bąbelka.", "boxWhisker": "Każda kategoria to pudełko; pola osi wyznaczają kategorię, a pierwsza wartość obserwacje (pole legendy jest ignorowane).", "pareto": "Słupki są posortowane malejąco według pierwszej wartości; linia pokazuje procent skumulowany na osi prawej (pole legendy jest ignorowane).", "waterfall": "Każda kategoria to krok pierwszej wartości (puste = 0) na sumie narastającej; ostatni słupek pokazuje sumę (pole legendy jest ignorowane)."},
       "rowsHint": "W tym typie wykresu wartości są rysowane bez zmian: bez funkcji agregującej.",
       "axisXHint": "Pierwsze pole to X.",
       "values": "Wartości (oś Y)",
@@ -3260,7 +3265,7 @@
       "collapse": "Zwiń sekcję",
       "expand": "Rozwiń sekcję",
       "close": "Zamknij",
-      "format": {"series": "Seria danych", "heading": "Formatowanie serii danych: {{name}}", "fullName": "Pełna nazwa", "seriesType": "Typ serii", "seriesTypes": {"column": "Kolumnowy", "line": "Liniowy", "area": "Warstwowy"}, "plotOn": "Rysuj serię na osi", "primary": "Podstawowej", "secondary": "Pomocniczej", "fill": "Kolor wypełnienia serii", "border": "Kolor obramowania serii", "labels": "Pokaż etykietę danych", "trend": "Opcje linii trendu", "trendName": "Nazwa linii trendu", "noValues": "Najpierw zaznacz wartość na karcie Dane.", "legendHint": "Przy polu legendy formatowanie dotyczy wszystkich serii naraz: wyłączone.", "roundHint": "Bez efektu dla tego typu wykresu (kołowy, radarowy).", "axisHint": "Brak osi pomocniczej w wykresach słupkowych i skumulowanych.", "trendHint": "Brak linii trendu w wykresach słupkowych i skumulowanych.", "lineOptions": "Opcje linii", "lineWidth": "Grubość linii", "dash": "Styl linii", "marker": "Pokaż znaczniki", "gap": "Brakujące wartości", "trendKinds": {"none": "Brak", "linear": "Liniowa", "exponential": "Wykładnicza", "logarithmic": "Logarytmiczna", "polynomial": "Wielomianowa", "power": "Potęgowa", "movingAverage": "Średnia ruchoma"}, "dashes": {"solid": "Ciągła", "dashed": "Kreskowana", "dotted": "Kropkowana"}, "gaps": {"gap": "Zostaw lukę", "zero": "Rysuj jako zero", "connect": "Połącz punkty"}}
+      "format": {"series": "Seria danych", "heading": "Formatowanie serii danych: {{name}}", "fullName": "Pełna nazwa", "seriesType": "Typ serii", "seriesTypes": {"column": "Kolumnowy", "line": "Liniowy", "area": "Warstwowy"}, "plotOn": "Rysuj serię na osi", "primary": "Podstawowej", "secondary": "Pomocniczej", "fill": "Kolor wypełnienia serii", "border": "Kolor obramowania serii", "labels": "Pokaż etykietę danych", "trend": "Opcje linii trendu", "trendName": "Nazwa linii trendu", "noValues": "Najpierw zaznacz wartość na karcie Dane.", "legendHint": "Przy polu legendy formatowanie dotyczy wszystkich serii naraz: wyłączone.", "roundHint": "Bez efektu dla tego typu wykresu (kołowy, radarowy).", "axisHint": "Brak osi pomocniczej w wykresach słupkowych i skumulowanych.", "trendHint": "Brak linii trendu w wykresach słupkowych i skumulowanych.", "noEffect": "Bez efektu dla tego typu wykresu.", "noTrend": "Brak linii trendu dla tego typu wykresu.", "noAxis": "Brak osi dodatkowej dla tego typu wykresu.", "waterfallColors": "Kolory wykresu kaskadowego", "lineOptions": "Opcje linii", "lineWidth": "Grubość linii", "dash": "Styl linii", "marker": "Pokaż znaczniki", "gap": "Brakujące wartości", "trendKinds": {"none": "Brak", "linear": "Liniowa", "exponential": "Wykładnicza", "logarithmic": "Logarytmiczna", "polynomial": "Wielomianowa", "power": "Potęgowa", "movingAverage": "Średnia ruchoma"}, "dashes": {"solid": "Ciągła", "dashed": "Kreskowana", "dotted": "Kropkowana"}, "gaps": {"gap": "Zostaw lukę", "zero": "Rysuj jako zero", "connect": "Połącz punkty"}}
     }
   }
 }

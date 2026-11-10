@@ -30,7 +30,7 @@ export type LaidOutItem =
   | { kind: 'image'; name: string; left: number; top: number; width: number; height: number; src: string; sizeMode: 'clip' | 'stretch' | 'zoom'; pictureAlign?: PictureAlignment; tiling?: true; grid?: Gridlines }
   /** Graphique : dessiné en SVG par le rendu (chartSvg) ; `fontFamily` : la police embarquée de la palette (déclarée par reportCss). */
   | { kind: 'chart'; name: string; left: number; top: number; width: number; height: number; spec: ChartSpec; data: ChartData | null;
-      format: ChartFormat; palette: ChartPalette; fontFamily: string; /** La police embarquée du titre (TitleFontName), déclarée en normal et en gras. */ titleFamily: string };
+      format: ChartFormat; palette: ChartPalette; fontFamily: string; /** La police embarquée du titre (TitleFontName), déclarée en normal et en gras. */ titleFamily: string; /** L'aide imprimée quand rien ne se trace (ex. nuage de points sur un X texte). */ hint?: string };
 export interface LaidOutBand { section: SectionKind; groupLevel?: number; top: number; left: number; width: number; height: number;
   back: string | null; repeated?: true; continued?: true; items: LaidOutItem[] }
 export interface LaidOutPage { number: number; bands: LaidOutBand[] }

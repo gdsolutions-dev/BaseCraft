@@ -1,6 +1,6 @@
 // Paramètres du graphique (onglet Données) : opérations pures sur la spécification, jamais sur le document.
 // Chaque fonction renvoie une nouvelle ChartSpec ; le volet en tire un correctif de propriétés (specPatch).
-import { CHART_MAX_AXIS, CHART_MAX_VALUES, type Agg, type ChartSeries, type ChartSpec, type ChartType } from '../../shared/chart/spec';
+import { CHART_MAX_AXIS, CHART_MAX_VALUES, chartFamily, chartStack, ignoresLegend, type Agg, type ChartSeries, type ChartSpec, type ChartType } from '../../shared/chart/spec';
 import { findControl } from '../../shared/design/control-tree';
 import type { ControlDef } from '../../shared/design/model';
 import type { RecordSourceRef } from '../../shared/record-source';
@@ -84,3 +84,19 @@ export function selectedChart(s: DesignerState): ControlDef | null {
 }
 
 export { typeHintKey } from '../../shared/chart/spec';   // la vue Formulaire (bundle Runtime) la lit aussi : elle vit dans shared
+
+/** Ce que la mise en forme d'une série peut régler pour ce type (le reste est désactivé avec une astuce, jamais masqué). */
+export function seriesFormatApplies(spec: ChartSpec): { fill: boolean; border: boolean; labels: boolean; trend: boolean; secondary: boolean } {
+  const family = chartFamily(spec.type);
+  const stacked = chartStack(spec.type) !== 'none';
+  const legended = spec.legend !== '' && !ignoresLegend(spec.type);   // avec une légende, la mise en forme se règle pour l'ensemble des séries
+  const off = { fill: false, border: false, labels: false, trend: false, secondary: false };
+  switch (family) {
+    case 'pie': case 'radar': case 'doughnut': case 'arc': case 'funnel': return off;
+    case 'scatter': case 'bubble': return { ...off, fill: !legended, border: !legended, labels: !legended };
+    case 'boxWhisker': return { ...off, fill: true, border: true };
+    case 'pareto': return { ...off, fill: true, border: true, labels: true };
+    case 'waterfall': return { ...off, labels: true };
+    default: return { fill: !legended, border: !legended, labels: !legended, trend: !legended && !stacked && family !== 'bar', secondary: !stacked && family !== 'bar' };
+  }
+}

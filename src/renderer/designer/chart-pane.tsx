@@ -23,7 +23,7 @@ export function useChartPane(p: { state: DesignerState; dispatch: (a: DesignerAc
     // sans graphique sélectionné la commande n'est pas enregistrée : le ruban la grise
     commands: { insertModernChart: () => setTypes(true), ...(name ? { chartSettings: () => setOpen(true) } : {}) },
     side: open && (
-      <ChartSettings key={name ?? ''} spec={chart ? readChartSpec(chart.props) : null} docSource={p.state.doc.recordSource} tables={p.tables} queries={p.queries}
+      <ChartSettings key={name ?? ''} spec={chart ? readChartSpec(chart.props) : null} props={chart?.props} docSource={p.state.doc.recordSource} tables={p.tables} queries={p.queries}
         readOnly={p.readOnly} onChange={(patch) => { if (name) p.dispatch(setChartProps([name], patch)); }} onClose={() => setOpen(false)} />
     ),
     popup: types && <ChartTypePopup onPick={(t) => { setTypes(false); p.onTool(armedChartTool(t)); }} onClose={() => setTypes(false)} />,

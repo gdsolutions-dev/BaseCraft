@@ -323,3 +323,32 @@ describe('graphique dans un état (F4)', () => {
     expect(none).not.toContain('bc-chart');
   });
 });
+
+describe('graphiques F5a dans un état', () => {
+  const env = { locale: 'fr-FR', lang: 'fr', now: () => new Date(0), errorText: { error: '#Erreur', name: '#Nom?' } } as const;
+  const cat = { role: 'category' as const, field: 'Ville', name: 'Ville' };
+  const val = { role: 'value' as const, field: 'Montant', name: 'SumOfMontant' };
+  const grouped = { columns: [cat, val], rows: [['A', 4], ['B', 6], ['C', 2]], truncated: false };
+  const xy = { columns: [{ role: 'category' as const, field: 'Qte', name: 'Qte' }, val], rows: [[1, 10], [2, 25], [3, 18], [4, 30]], truncated: false };
+  const xys = { columns: [...xy.columns, { role: 'value' as const, field: 'Remise', name: 'Remise' }], rows: [[1, 10, 3], [2, 25, 8], [3, 18, 5], [4, 30, 12]], truncated: false };
+  const chart = (name: string, top: number, type: string, extra: Record<string, unknown> = {}) => ({ kind: 'chart', name, left: 200, top, width: 5200, height: 2400,
+    props: { ChartType: type, ChartTitle: `T ${name}`, ChartAxis: [type === 'scatter' || type === 'bubble' ? 'Qte' : 'Ville'], ChartValues: [{ field: 'Montant', agg: 'sum' }], ...extra } });
+  const doc = ({ formatVersion: '1.0', recordSource: null, props: {}, sections: [{ kind: 'reportHeader', height: 13000, props: {}, controls: [
+    chart('Anneau', 100, 'doughnut'), chart('Arc', 2600, 'arc'), chart('Entonnoir', 5100, 'funnel'), chart('Nuage', 7600, 'scatter'),
+    chart('Bulles', 10100, 'bubble', { ChartValues: [{ field: 'Montant', agg: 'sum' }, { field: 'Remise', agg: 'sum' }] })] }] }) as unknown as typeof FACTURES_REPORT;
+  const charts = { Anneau: grouped, Arc: grouped, Entonnoir: grouped, Nuage: xy, Bulles: xys };
+  const html = async (c: Record<string, typeof grouped> = charts) =>
+    renderDocumentHtml(await layoutReport(readReport(doc, [], { charts: c, chartLabels: { title: 'Titre du graphique', empty: '(vide)' } }), { fields: [], rows: [] }, env));
+
+  it('cinq svg, aucun script ni NaN, identique à un second appel et après un autre graphique, égal au golden', async () => {
+    const a = await html();
+    expect(a.match(/<svg/g)).toHaveLength(5);
+    expect(a).not.toMatch(/<script|\son\w+=|NaN|undefined/);
+    expect(await html()).toBe(a);
+    await html({ ...charts, Nuage: { ...xy, rows: [[9, 9]] } });
+    expect(await html()).toBe(a);
+    const file = fileURLToPath(new URL('../chart/fixtures/report-chart-f5a.html', import.meta.url));
+    if (process.env.UPDATE_GOLDEN) writeFileSync(file, a);
+    expect(a).toBe(readFileSync(file, 'utf8'));
+  });
+});

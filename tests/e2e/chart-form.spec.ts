@@ -88,3 +88,56 @@ test('a continuous form draws its chart for the current record only', async () =
     await expect(page.getByTestId('form-ctl-Graph')).not.toHaveCount(1);
   } finally { await app.close(); }
 });
+
+const F5A = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'] as const;
+const f5Table = t('Commandes5', [f('Client', 'shortText'), f('Quantite', 'number', { numberSize: 'double' }), f('Montant', 'number', { numberSize: 'double' }), f('Remise', 'number', { numberSize: 'double' })]);
+const f5Doc: DesignDoc = {
+  formatVersion: '1.0', recordSource: null, props: { Width: 5500 },
+  sections: [{ kind: 'detail', height: 12000, props: {}, controls: [
+    ...F5A.map((ty, i) => chart(`S_${ty}`, 100 + i * 2400, { ChartType: ty })),
+    chart('Anneau', 12100, { ChartType: 'doughnut', HasLegend: false, ChartSource: { kind: 'table', name: 'Commandes5' }, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] }),
+    chart('NuageTexte', 16900, { ChartType: 'scatter', HasLegend: false, ChartSource: { kind: 'table', name: 'Commandes5' }, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] }),
+    chart('Nuage', 14500, { ChartType: 'scatter', HasLegend: false, ChartSource: { kind: 'table', name: 'Commandes5' }, ChartAxis: ['Quantite'], ChartValues: [{ field: 'Montant', agg: 'sum' }] }),
+  ] }],
+};
+const seed5 = (name: string) => seedBase(name, async (db) => {
+  createTable(db, f5Table);
+  for (const [Client, Quantite, Montant] of [['Dupont', 1, 10], ['Durand', 2, 20], ['Dupont', 3, 5], ['Martin', 4, 7]] as const) await insertRow(db, f5Table, { Client, Quantite, Montant }, region);
+  seedForm(db, 'Fiche5', f5Doc);
+});
+
+test('F5a design view: each new type draws its sample without NaN', async () => {
+  test.setTimeout(120000);
+  const { app, page } = await launchApp({ args: [await seed5('chart-f5-design')], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-Fiche5').dblclick();
+    await expect(page.getByTestId('form-run')).toBeVisible();
+    await pickView(page, 'viewDesign');
+    for (const ty of F5A) {
+      const c = page.getByTestId('design-chart-sample').filter({ visible: true }).nth(F5A.indexOf(ty));
+      await c.scrollIntoViewIfNeeded();
+      const s = c.getByTestId('design-chart-svg');
+      await expect(s).toBeAttached();
+      expect(await s.locator('path, circle, rect').count()).toBeGreaterThan(0);
+      expect(await s.textContent()).not.toMatch(/NaN|undefined/);
+    }
+  } finally { await app.close(); }
+});
+
+test('F5a form view: a Doughnut (slice per client) and a Scatter (point per row) from real data', async () => {
+  test.setTimeout(120000);
+  const { app, page } = await launchApp({ args: [await seed5('chart-f5-form')], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-Fiche5').dblclick();
+    await expect(page.getByTestId('form-run')).toBeVisible();
+    const slices = page.getByTestId('form-ctl-Anneau').filter({ visible: true }).locator('svg path[fill^="#"]');
+    await expect.poll(() => slices.count()).toBe(3);
+    const pts = page.getByTestId('form-ctl-Nuage').filter({ visible: true }).locator('svg path[fill^="#"]');
+    await expect.poll(() => pts.count()).toBe(4);
+    // X texte : rien à tracer, le texte d'aide du nuage (pas « Aucune donnée ») recouvre le graphique
+    const txt = page.getByTestId('form-ctl-NuageTexte').filter({ visible: true }).getByTestId('chart-empty');
+    await expect(txt).toBeVisible();
+    await expect(txt).not.toContainText('Aucune donnée');
+    await expect(txt).toContainText('nombre');
+  } finally { await app.close(); }
+});

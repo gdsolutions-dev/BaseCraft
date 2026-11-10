@@ -22,6 +22,20 @@ const doc: DesignDoc = {
     { kind: 'chart', name: 'Graph', left: 200, top: 100, width: 7000, height: 3400, props: { HasLegend: false, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] } },
   ] }],
 };
+const doc5: DesignDoc = {
+  formatVersion: '1.0', recordSource: { kind: 'table', name: 'Commandes' }, props: { Width: 8000 },
+  sections: [{ kind: 'reportHeader', height: 7400, props: {}, controls: [
+    { kind: 'chart', name: 'Anneau', left: 200, top: 100, width: 7000, height: 3400, props: { ChartType: 'doughnut', ChartTitle: 'Mon anneau', HasLegend: false, ChartAxis: ['Client'], ChartValues: [{ field: 'Montant', agg: 'sum' }] } },
+    { kind: 'chart', name: 'Nuage', left: 200, top: 3700, width: 7000, height: 3400, props: { ChartType: 'scatter', ChartTitle: 'Mon nuage', HasLegend: false, ChartAxis: ['Quantite'], ChartValues: [{ field: 'Montant', agg: 'sum' }] } },
+  ] }],
+};
+const table5 = t('Commandes', [f('Client', 'shortText'), f('Quantite', 'number', { numberSize: 'double' }), f('Montant', 'number', { numberSize: 'double' })]);
+const seed5 = () => seedBase('chart-report-f5', async (db) => {
+  createTable(db, table5);
+  for (const [Client, Quantite, Montant] of [['Dupont', 1, 10], ['Durand', 2, 20], ['Dupont', 3, 5], ['Martin', 4, 7]] as const) await insertRow(db, table5, { Client, Quantite, Montant }, region);
+  const ok = saveObject(db, 'report', 'EtatF5', doc5, null);
+  if (!ok.ok) throw new Error(ok.reason);
+});
 const seed = () => seedBase('chart-report', async (db) => {
   createTable(db, table);
   for (const [Client, Montant] of [['Dupont', 10], ['Durand', 20], ['Dupont', 5], ['Martin', 7]] as const) await insertRow(db, table, { Client, Montant }, region);
@@ -90,5 +104,31 @@ test('a report chart shows in the preview, exports the same PDF twice, embeds it
     const words = pdfWords(first);
     expect(words).toContain('Titre');
     expect(words).toContain('graphique');
+  } finally { await app.close(); }
+});
+
+test('F5a report: a Doughnut and a Scatter show in the preview, two PDF exports are byte-equal and the text layer holds the titles', async () => {
+  test.setTimeout(120000);
+  const out = mkdtempSync(join(tmpdir(), 'basecraft-chart-f5-'));
+  const first = join(out, 'a.pdf'), second = join(out, 'b.pdf');
+  const { app, page } = await launchApp({ args: [await seed5()], env: { ...FR, BASECRAFT_E2E_PDF_PATH: first } });
+  try {
+    await page.getByTestId('nav-group-report').getByTestId('nav-item-report-EtatF5').dblclick();
+    const view = page.locator('.doc:not([hidden])');
+    await expect(view.getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);
+    await expect(view.locator('.bc-chart svg')).toHaveCount(2);
+    await expect(view.locator('.bc-chart svg').first()).toContainText('Mon anneau');
+    await expect(view.locator('.bc-chart svg').last()).toContainText('Mon nuage');
+    await expect.poll(() => view.locator('.bc-chart svg').first().locator('path[fill^="#"]').count()).toBe(3);
+    await expect.poll(() => view.locator('.bc-chart svg').last().locator('path[fill^="#"]').count()).toBe(4);
+    for (const file of [first, second]) {
+      await setEnv(app, 'BASECRAFT_E2E_PDF_PATH', file);
+      await page.getByTestId('cmd-exportPdf').click();
+      await page.getByTestId('modal-btn-ok').click();
+    }
+    expect(streams(first).length).toBeGreaterThan(0);
+    expect(streams(second)).toEqual(streams(first));
+    const words = pdfWords(first);
+    for (const w of ['anneau', 'nuage']) expect(words).toContain(w);
   } finally { await app.close(); }
 });

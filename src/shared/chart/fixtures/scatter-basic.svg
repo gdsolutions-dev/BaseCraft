@@ -1,0 +1,53 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<path d="M60 160.5L360 160.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 136.5L360 136.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 112.5L360 112.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 89.5L360 89.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60 65.5L360 65.5" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60.5 65L60.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M120.5 65L120.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M180.5 65L180.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M240.5 65L240.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M300.5 65L300.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M360.5 65L360.5 160" fill="none" pointer-events="visible" stroke="#dbdee4" class="zr0-cls-0"></path>
+<path d="M60.5 160L60.5 65" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<path d="M60 160.5L360 160.5" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<path d="M60 160.5L55 160.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M60 136.5L55 136.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M60 112.5L55 112.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M60 89.5L55 89.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M60 65.5L55 65.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M60.5 160L60.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M120.5 160L120.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M180.5 160L180.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M240.5 160L240.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M300.5 160L300.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M360.5 160L360.5 165" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 160)" fill="#54555a">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 136.25)" fill="#54555a">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 112.5)" fill="#54555a">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 88.75)" fill="#54555a">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" transform="translate(52 65)" fill="#54555a">4</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(60 168)" fill="#54555a">0</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(120 168)" fill="#54555a">1</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(180 168)" fill="#54555a">2</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(240 168)" fill="#54555a">3</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(300 168)" fill="#54555a">4</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:12px;font-family:BC Liberation Sans, sans-serif;" y="6" transform="translate(360 168)" fill="#54555a">5</text>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(5,0,0,5,120,112.5)" fill="#2f6f9f" fill-opacity="0.8" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(5,0,0,5,240,65)" fill="#2f6f9f" fill-opacity="0.8" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(5,0,0,5,360,88.75)" fill="#2f6f9f" fill-opacity="0.8" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(51,122,174,1);
+}
+
+]]>
+
+</style>
+</svg>

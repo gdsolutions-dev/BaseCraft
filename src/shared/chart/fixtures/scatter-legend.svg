@@ -1,0 +1,80 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<path d="M46.6 192.5L382.2 192.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 170.5L382.2 170.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 147.5L382.2 147.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 125.5L382.2 125.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 103.5L382.2 103.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 81.5L382.2 81.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.6 59.5L382.2 59.5" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M46.5 59L46.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M113.5 59L113.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M181.5 59L181.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M248.5 59L248.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M315.5 59L315.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<path d="M382.5 59L382.5 192" fill="none" pointer-events="visible" stroke="#e1e4e9" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="-5" transform="matrix(0,-1,1,0,12.6,125.5)" fill="#1b1f27">SumOfMontant</text>
+<path d="M46.5 192L46.5 59" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(214.4 226)" fill="#1b1f27">Qte</text>
+<path d="M46.6 192.5L382.2 192.5" fill="none" pointer-events="visible" stroke="#54555a" stroke-linecap="round" class="zr0-cls-0"></path>
+<path d="M46.6 192.5L41.6 192.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 170.5L41.6 170.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 147.5L41.6 147.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 125.5L41.6 125.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 103.5L41.6 103.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 81.5L41.6 81.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.6 59.5L41.6 59.5" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M46.5 192L46.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M113.5 192L113.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M181.5 192L181.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M248.5 192L248.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M315.5 192L315.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<path d="M382.5 192L382.5 197" fill="none" pointer-events="visible" stroke="#54555a" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 192)" fill="#1b1f27">0</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 169.8333)" fill="#1b1f27">1</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 147.6667)" fill="#1b1f27">2</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 125.5)" fill="#1b1f27">3</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 103.3333)" fill="#1b1f27">4</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 81.1667)" fill="#1b1f27">5</text>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" transform="translate(38.6 59)" fill="#1b1f27">6</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(46.6 200)" fill="#1b1f27">0</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(113.72 200)" fill="#1b1f27">1</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(180.84 200)" fill="#1b1f27">2</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(247.96 200)" fill="#1b1f27">3</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(315.08 200)" fill="#1b1f27">4</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:10px;font-family:BC Inter;" y="5" transform="translate(382.2 200)" fill="#1b1f27">5</text>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(4,0,0,4,113.72,125.5)" fill="#3e63dd" fill-opacity="0.75" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(4,0,0,4,247.96,103.3333)" fill="#3e63dd" fill-opacity="0.75" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(4,0,0,4,382.2,59)" fill="#3e63dd" fill-opacity="0.75" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(4,0,0,4,180.84,81.1667)" fill="#e5842c" fill-opacity="0.75" ecmeta_series_index="1" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M1 0A1 1 0 1 1 1 -0.1A1 1 0 0 1 1 0" transform="matrix(4,0,0,4,315.08,169.8333)" fill="#e5842c" fill-opacity="0.75" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M-5 -5l80.4 0l0 24l-80.4 0Z" transform="translate(164.8 33)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#b7b9be" stroke-width="0" class="zr0-cls-0"></path>
+<path d="M19.5 7A7 7 0 1 1 19.5 6.3A7 7 0 0 1 19.5 7" transform="translate(159.3 33)" fill="#3e63dd" fill-opacity="0.75" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(159.3 33)" fill="#1b1f27">X</text>
+<path d="M5.5 0l31.2 0l0 14l-31.2 0Z" transform="translate(159.3 33)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" class="zr0-cls-3"></path>
+<path d="M19.5 7A7 7 0 1 1 19.5 6.3A7 7 0 0 1 19.5 7" transform="translate(198.5 33)" fill="#e5842c" fill-opacity="0.75" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(198.5 33)" fill="#1b1f27">Y</text>
+<path d="M5.5 0l31.2 0l0 14l-31.2 0Z" transform="translate(198.5 33)" fill="none" pointer-events="visible" ecmeta_series_index="1" ecmeta_data_index="1" ecmeta_ssr_type="legend" class="zr0-cls-3"></path>
+<path d="M-26.9 -5l53.8 0l0 24l-53.8 0Z" transform="translate(200 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:14px;font-family:BC Inter;font-weight:bold;" y="7" transform="translate(200 9)" fill="#1b1f27">Ventes</text>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(68,108,243,1);
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+fill:rgba(251,145,48,1);
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+fill:rgba(0,0,0,0);
+}
+
+]]>
+
+</style>
+</svg>

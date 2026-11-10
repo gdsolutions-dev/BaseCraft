@@ -31,6 +31,12 @@ const fancy = {
     },
   ],
 };
+const scatter = {
+  xAxis: { type: 'value' },
+  yAxis: { type: 'value' },
+  series: [{ type: 'scatter', data: [[1, 2], [3, 4], [5, 3]], itemStyle: { color: '#2f6f9f' } }],
+};
+const scatterGolden = fileURLToPath(new URL('./fixtures/scatter-basic.svg', import.meta.url));
 const golden = fileURLToPath(new URL('./fixtures/column-basic.svg', import.meta.url));
 
 describe('chartSvg', () => {
@@ -70,5 +76,14 @@ describe('chartSvg', () => {
     const svg = chartSvg(column('<img src=x onerror=1>'), size);
     expect(svg).toContain('&lt;img');
     expect(svg).not.toContain('<img');
+  });
+  it('nuage de points : golden, déterministe, rien d’actif ni d’invalide', () => {
+    const svg = chartSvg(scatter, size);
+    if (process.env.UPDATE_GOLDEN) writeFileSync(scatterGolden, svg);
+    expect(svg).toBe(readFileSync(scatterGolden, 'utf8'));
+    expect(chartSvg(scatter, size)).toBe(svg);
+    chartSvg(three, size);
+    expect(chartSvg(scatter, size)).toBe(svg);
+    expect(svg).not.toMatch(/<script|NaN|undefined/);
   });
 });

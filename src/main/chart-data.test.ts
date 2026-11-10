@@ -103,4 +103,20 @@ describe('Session.chartData', () => {
     expect(b.state.readOnly).toBe(true);
     expect((await b.chartData(req({ axis: ['Ville'], values: [{ field: 'Nom', agg: 'count' }] }))).rows.length).toBeGreaterThan(0);
   });
+  it('a scatter returns numeric [X, Y] rows', async () => {
+    const r = await open().chartData(req({ type: 'scatter', axis: ['Client'], values: [{ field: 'Montant', agg: 'sum' }] }, { kind: 'table', name: 'Commandes' }));
+    expect(r.columns.map((c) => c.role)).toEqual(['category', 'value']);
+    expect(r.rows).toHaveLength(5);
+    expect(r.rows.every((x) => typeof x[0] === 'number' && typeof x[1] === 'number')).toBe(true);
+  });
+  it('a rows chart filters by link like a grouped one', async () => {
+    const r = await open().chartData(req({ type: 'scatter', axis: ['Client'], values: [{ field: 'Montant', agg: 'sum' }] }, { kind: 'table', name: 'Commandes' }, { link: { fields: ['Client'], values: [1] } }));
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(r.rows.every((x) => x[0] === 1)).toBe(true);
+  });
+  it('a rows chart works on a read-only base', async () => {
+    open('a');
+    const b = open('b');
+    expect((await b.chartData(req({ type: 'boxWhisker', axis: ['Client'], values: [{ field: 'Montant', agg: 'sum' }] }, { kind: 'table', name: 'Commandes' }))).rows).toHaveLength(5);
+  });
 });

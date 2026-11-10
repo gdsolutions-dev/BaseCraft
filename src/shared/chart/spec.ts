@@ -5,12 +5,27 @@ import { isColorValue, type ColorValue } from '../design/colors';
 import { TRENDLINES, type Trendline } from './trend';
 
 export type ChartType = 'columnClustered' | 'columnStacked' | 'columnStacked100' | 'barClustered' | 'barStacked' | 'barStacked100'
-  | 'line' | 'lineStacked' | 'lineStacked100' | 'area' | 'areaStacked' | 'areaStacked100' | 'pie' | 'radar' | 'radarFilled' | 'combo';
+  | 'line' | 'lineStacked' | 'lineStacked100' | 'area' | 'areaStacked' | 'areaStacked100' | 'pie' | 'radar' | 'radarFilled' | 'combo'
+  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall';
 export const CHART_TYPES: readonly ChartType[] = ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100',
-  'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo'];
-export type ChartFamily = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'radar' | 'combo';
+  'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo',
+  'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
+/** Les types F5 proposés (menu, feuille de propriétés, CLI) ; les tâches suivantes y ajoutent les leurs. Les autres types F5 restent stockables mais non proposés. */
+/** Les types F5 (stockables), proposés ou non. */
+export const F5_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
+export const NEW_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'];
+export const OFFERED_CHART_TYPES: readonly ChartType[] = CHART_TYPES.filter((t) => !F5_CHART_TYPES.includes(t) || NEW_CHART_TYPES.includes(t));
+export type ChartFamily = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'radar' | 'combo'
+  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall';
+const NEW_FAMILIES: readonly ChartType[] = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
 /** Famille d'un type : histogramme, barres, courbe, zone, secteurs, radar (simple ou rempli), combiné. */
-export const chartFamily = (t: ChartType): ChartFamily => (t === 'pie' ? 'pie' : t === 'combo' ? 'combo' : t.startsWith('radar') ? 'radar' : t.startsWith('column') ? 'column' : t.startsWith('bar') ? 'bar' : t.startsWith('area') ? 'area' : 'line');
+export const chartFamily = (t: ChartType): ChartFamily => (NEW_FAMILIES.includes(t) ? (t as ChartFamily) : t === 'pie' ? 'pie' : t === 'combo' ? 'combo' : t.startsWith('radar') ? 'radar' : t.startsWith('column') ? 'column' : t.startsWith('bar') ? 'bar' : t.startsWith('area') ? 'area' : 'line');
+/** Mode de données : `grouped` (GROUP BY, agrégats) ou `rows` (enregistrements bruts : nuage de points, bulles, boîte à moustaches). */
+export const chartDataMode = (t: ChartType): 'grouped' | 'rows' => (t === 'scatter' || t === 'bubble' || t === 'boxWhisker' ? 'rows' : 'grouped');
+/** Vrai quand la famille se dessine sur des axes (faux : secteurs, radar, anneau, arc, entonnoir). */
+export const usesAxes = (f: ChartFamily): boolean => !(f === 'pie' || f === 'radar' || f === 'doughnut' || f === 'arc' || f === 'funnel');
+/** Vrai quand la Légende est ignorée et qu'une seule série (première Valeur, lignes d'une catégorie additionnées) est tracée. */
+export const singleSeries = (f: ChartFamily): boolean => f === 'pie' || f === 'doughnut' || f === 'arc' || f === 'funnel' || f === 'pareto' || f === 'waterfall';
 /** Empilement : aucun (groupé), cumulé, ou cumulé en parts de la catégorie (100 %). */
 export const chartStack = (t: ChartType): 'none' | 'stack' | 'percent' => (t.endsWith('Stacked100') ? 'percent' : t.endsWith('Stacked') ? 'stack' : 'none');
 export type Agg = 'none' | 'sum' | 'avg' | 'min' | 'max' | 'count';
@@ -88,3 +103,8 @@ const PREFIX: Record<Exclude<Agg, 'none'>, string> = { sum: 'Sum', avg: 'Avg', m
 export const seriesName = (v: ChartValue): string => (v.agg === 'none' ? v.field : `${PREFIX[v.agg]}Of${v.field}`);
 
 export const isEmptySpec = (s: ChartSpec): boolean => s.axis.length === 0 && s.values.length === 0;
+
+const HINTED: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'];
+/** L'aide propre au type (clé i18n), ou null (types F4) ; un type stocké mais pas encore proposé a l'aide « pas encore disponible ». */
+export const typeHintKey = (spec: ChartSpec): string | null =>
+  !OFFERED_CHART_TYPES.includes(spec.type) ? 'chart.settings.typeHint.notOffered' : HINTED.includes(spec.type) ? `chart.settings.typeHint.${spec.type}` : null;

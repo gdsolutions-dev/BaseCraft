@@ -82,3 +82,5 @@ export function selectedChart(s: DesignerState): ControlDef | null {
   const c = findControl(s.doc, s.selection.names[0]!)?.control;
   return c?.kind === 'chart' ? c : null;
 }
+
+export { typeHintKey } from '../../shared/chart/spec';   // la vue Formulaire (bundle Runtime) la lit aussi : elle vit dans shared

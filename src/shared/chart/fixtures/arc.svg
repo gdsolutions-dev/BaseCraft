@@ -1,0 +1,51 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<polyline points="118.7 156 105.3 149.2 75.3 149.2" fill="none" pointer-events="visible" stroke="#3e63dd" class="zr0-cls-0"></polyline>
+<polyline points="211.9 108.5 214.3 93.7 244.3 93.7" fill="none" pointer-events="visible" stroke="#e5842c" class="zr0-cls-0"></polyline>
+<polyline points="282.6 168.9 296.9 164.3 326.9 164.3" fill="none" pointer-events="visible" stroke="#2f9e6e" class="zr0-cls-0"></polyline>
+<path d="M109 196.4A89 89 0 0 1 145.7 124.4L169.2 156.8A49 49 0 0 0 149.1 196.4Z" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="chart" class="zr0-cls-1"></path>
+<path d="M145.7 124.4A89 89 0 0 1 270 144.1L237.6 167.6A49 49 0 0 0 169.2 156.8Z" fill="#e5842c" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="chart" class="zr0-cls-2"></path>
+<path d="M270 144.1A89 89 0 0 1 287 196.4L247 196.4A49 49 0 0 0 237.6 167.6Z" fill="#2f9e6e" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="chart" class="zr0-cls-3"></path>
+<text dominant-baseline="central" text-anchor="end" style="font-size:10px;font-family:BC Inter;" xml:space="preserve" transform="translate(70.3353 149.185)" fill="#1b1f27">Lyon: 30%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" xml:space="preserve" transform="translate(249.2692 93.6804)" fill="#1b1f27">Paris: 50%</text>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" xml:space="preserve" transform="translate(331.9099 164.2622)" fill="#1b1f27">Nice: 20%</text>
+<path d="M-5 -5l180.6 0l0 24l-180.6 0Z" transform="translate(114.7 33)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#b7b9be" stroke-width="0" class="zr0-cls-4"></path>
+<path d="M3.5 0L21.5 0A3.5 3.5 0 0 1 25 3.5L25 10.5A3.5 3.5 0 0 1 21.5 14L3.5 14A3.5 3.5 0 0 1 0 10.5L0 3.5A3.5 3.5 0 0 1 3.5 0Z" transform="translate(114.7 33)" fill="#3e63dd" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-4"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(114.7 33)" fill="#1b1f27">Lyon</text>
+<path d="M0 0l51.8 0l0 14l-51.8 0Z" transform="translate(114.7 33)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="0" ecmeta_ssr_type="legend" class="zr0-cls-5"></path>
+<path d="M3.5 0L21.5 0A3.5 3.5 0 0 1 25 3.5L25 10.5A3.5 3.5 0 0 1 21.5 14L3.5 14A3.5 3.5 0 0 1 0 10.5L0 3.5A3.5 3.5 0 0 1 3.5 0Z" transform="translate(174.5 33)" fill="#e5842c" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-4"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(174.5 33)" fill="#1b1f27">Paris</text>
+<path d="M0 0l52.8 0l0 14l-52.8 0Z" transform="translate(174.5 33)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="1" ecmeta_ssr_type="legend" class="zr0-cls-5"></path>
+<path d="M3.5 0L21.5 0A3.5 3.5 0 0 1 25 3.5L25 10.5A3.5 3.5 0 0 1 21.5 14L3.5 14A3.5 3.5 0 0 1 0 10.5L0 3.5A3.5 3.5 0 0 1 3.5 0Z" transform="translate(235.3 33)" fill="#2f9e6e" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="legend" ecmeta_silent="true" class="zr0-cls-4"></path>
+<text dominant-baseline="central" text-anchor="start" style="font-size:10px;font-family:BC Inter;" x="30" y="7" transform="translate(235.3 33)" fill="#1b1f27">Nice</text>
+<path d="M0 0l50 0l0 14l-50 0Z" transform="translate(235.3 33)" fill="none" pointer-events="visible" ecmeta_series_index="0" ecmeta_data_index="2" ecmeta_ssr_type="legend" class="zr0-cls-5"></path>
+<path d="M-26.9 -5l53.8 0l0 24l-53.8 0Z" transform="translate(200 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-4"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:14px;font-family:BC Inter;font-weight:bold;" y="7" transform="translate(200 9)" fill="#1b1f27">Ventes</text>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+cursor:pointer;
+}
+.zr0-cls-1:hover {
+cursor:pointer;
+fill:rgba(68,108,243,1);
+}
+.zr0-cls-2:hover {
+cursor:pointer;
+fill:rgba(251,145,48,1);
+}
+.zr0-cls-3:hover {
+cursor:pointer;
+fill:rgba(51,173,121,1);
+}
+.zr0-cls-4:hover {
+pointer-events:none;
+}
+.zr0-cls-5:hover {
+cursor:pointer;
+fill:rgba(0,0,0,0);
+}
+
+]]>
+
+</style>
+</svg>

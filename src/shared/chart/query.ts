@@ -8,7 +8,7 @@ import type { RecordSourceRef, SourceField } from '../record-source';
 import type { FromItem, ParamDecl, Query, SelectItem, SelectQuery } from '../query/ast';
 import { printSql } from '../query/print';
 import { parseSql } from '../query/sql-parser';
-import { seriesName, type Agg, type ChartSpec } from './spec';
+import { chartDataMode, seriesName, type Agg, type ChartSpec } from './spec';
 
 export const CHART_MAX_POINTS = 5000;
 export interface ChartColumn { role: 'category' | 'legend' | 'value'; field: string; name: string }
@@ -68,10 +68,13 @@ export function buildChartQuery(spec: ChartSpec, source: RecordSourceRef, fields
     columns.push({ role, field: fieldName, name });
   };
 
-  const axis = spec.axis.map((a, i) => {
+  // Mode lignes (nuage, bulles, boîte) : aucune agrégation ; nuage et bulles lisent un seul champ d'axe brut (X reste un nombre)
+  const rowsMode = chartDataMode(spec.type) === 'rows';
+  const xyMode = spec.type === 'scatter' || spec.type === 'bubble';
+  const axis = (xyMode ? spec.axis.slice(0, 1) : spec.axis).map((a, i) => {
     const f = field(a);
     const e = id(f.name);
-    return { f, e: i === 0 && spec.dateGroup !== 'none' && f.type === 'dateTime' ? dateLabel(spec.dateGroup, e) : e };
+    return { f, e: i === 0 && !xyMode && spec.dateGroup !== 'none' && f.type === 'dateTime' ? dateLabel(spec.dateGroup, e) : e };
   });
   const groups = axis.map((a) => a.e);
   if (axis.length) {
@@ -81,9 +84,12 @@ export function buildChartQuery(spec: ChartSpec, source: RecordSourceRef, fields
   }
   const legend = spec.legend === '' ? null : field(spec.legend);
   if (legend) { add('legend', legend.name, id(legend.name), legend.name); groups.push(id(legend.name)); }
-  const raw = spec.values.every((v) => v.agg === 'none');
-  for (const v of legend ? spec.values.slice(0, 1) : spec.values) {
+  const raw = rowsMode || spec.values.every((v) => v.agg === 'none');
+  const nValues = rowsMode ? (spec.type === 'bubble' ? 2 : 1) : legend ? 1 : spec.values.length;
+  const valueIds: Expr[] = [];
+  for (const v of spec.values.slice(0, nValues)) {
     const f = field(v.field);
+    valueIds.push(id(f.name));
     if (raw) add('value', f.name, id(f.name), f.name);
     else {
       const agg = v.agg === 'none' ? 'sum' : v.agg;
@@ -102,7 +108,8 @@ export function buildChartQuery(spec: ChartSpec, source: RecordSourceRef, fields
   });
 
   const body: SelectQuery = { k: 'select', distinct: false, top: { n: CHART_MAX_POINTS + 1, percent: false }, items, from: [from],
-    ...(where ? { where } : {}), groupBy: raw ? [] : groups, orderBy: raw ? [] : groups.map((e) => ({ e, dir: 'asc' as const })) };
+    ...(where ? { where } : {}), groupBy: raw ? [] : groups,
+    orderBy: (raw ? (rowsMode ? [...groups, ...valueIds] : []) : groups).map((e) => ({ e, dir: 'asc' as const })) };
   return { sql: printSql({ params, body }), columns };
 }
 
@@ -113,6 +120,7 @@ export function chartRequest(spec: ChartSpec, docSource: RecordSourceRef | null,
   link?: { master: string[]; child: string[]; values: CellInput[] | null }): ChartDataRequest | null {
   const source = spec.source ?? docSource;
   if (!source || spec.values.length === 0) return null;
+  if ((spec.type === 'scatter' || spec.type === 'bubble') && spec.axis.length === 0) return null;
   const linked = !!link && (link.master.length > 0 || link.child.length > 0);
   if (linked && (link.master.length !== link.child.length || !link.values)) return null;
   return { spec, source, ...(linked && { link: { fields: link.child, values: link.values! } }), ...(params && { params }) };

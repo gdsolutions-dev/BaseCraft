@@ -270,13 +270,24 @@ describe('chart rows (F4)', () => {
       'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
       'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
       'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
-      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize']);
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize']);
     expect(chartRows('data')).toEqual(['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries']);
   });
   it('la feuille montre les lignes du graphique en tête de leur onglet', () => {
-    expect(names('format').slice(0, chartRows().length)).toEqual(chartRows());
-    expect(names('format').length).toBeGreaterThan(chartRows().length);
+    const typed = chartRows().filter((n) => n !== 'DoughnutHoleSize' && n !== 'BubbleMaxSize');   // lignes propres à un type, absentes d'un histogramme
+    expect(names('format').slice(0, typed.length)).toEqual(typed);
+    expect(names('format').length).toBeGreaterThan(typed.length);
     expect(names('data').slice(0, 6)).toEqual(chartRows('data'));
+  });
+  it('DoughnutHoleSize et BubbleMaxSize : seulement pour leur type', () => {
+    const typedDoc = (ChartType: string): DesignDoc => ({ ...doc, sections: doc.sections.map((s) => (s.kind === 'detail' ? { ...s, controls: [{ ...ctl('chart', 'Graphique1'), props: { ChartType } }] } : s)) });
+    const rows = (type: string) => sheetRows(typedDoc(type), 'form', [ctlT('Graphique1')], 'format', false).map((r) => r.d.name);
+    expect(rows('doughnut')).toContain('DoughnutHoleSize');
+    expect(rows('doughnut')).not.toContain('BubbleMaxSize');
+    expect(rows('arc')).toContain('DoughnutHoleSize');
+    expect(rows('bubble')).toContain('BubbleMaxSize');
+    expect(rows('bubble')).not.toContain('DoughnutHoleSize');
+    expect(rows('columnClustered')).not.toContain('DoughnutHoleSize');
   });
   it('valeurs par défaut', () => {
     const dflt = (n: string) => defaultFor(desc(n), 'chart');

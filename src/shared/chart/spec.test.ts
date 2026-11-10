@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartFamily, chartStack, isEmptySpec, readChartSeries, readChartSpec, seriesName } from './spec';
+import { CHART_TYPES, OFFERED_CHART_TYPES, typeHintKey, chartDataMode, chartFamily, chartStack, isEmptySpec, readChartSeries, readChartSpec, seriesName, usesAxes } from './spec';
 
 describe('readChartSpec', () => {
   it('lit les valeurs par défaut', () => {
@@ -88,5 +88,33 @@ describe('readChartSeries', () => {
   it('radar et combiné ont leur famille', () => {
     expect(chartFamily('radar')).toBe('radar'); expect(chartFamily('radarFilled')).toBe('radar'); expect(chartFamily('combo')).toBe('combo');
     expect(chartStack('combo')).toBe('none');
+  });
+});
+
+describe('types F5', () => {
+  const NEW = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'] as const;
+  it('OFFERED_CHART_TYPES : les types F4 et les F5 proposés, pas boxWhisker / pareto / waterfall ; aide du type non proposé', () => {
+    expect(OFFERED_CHART_TYPES).toEqual(CHART_TYPES.filter((t) => !['boxWhisker', 'pareto', 'waterfall'].includes(t)));
+    expect(typeHintKey(readChartSpec({ ChartType: 'waterfall' }))).toBe('chart.settings.typeHint.notOffered');
+    expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');   // la valeur stockée est lue telle quelle
+  });
+  it('CHART_TYPES : 24 types, les nouveaux après combo', () => {
+    expect(CHART_TYPES).toHaveLength(24);
+    expect(CHART_TYPES.slice(16)).toEqual([...NEW]);
+  });
+  it('chaque type a une famille explicite (jamais line par défaut)', () => {
+    for (const t of NEW) expect(chartFamily(t), t).toBe(t);
+    for (const t of CHART_TYPES.filter((x) => !(NEW as readonly string[]).includes(x))) expect(NEW as readonly string[], t).not.toContain(chartFamily(t));
+    expect(chartFamily('columnStacked')).toBe('column'); expect(chartFamily('lineStacked100')).toBe('line'); expect(chartFamily('radarFilled')).toBe('radar');
+    for (const t of NEW) expect(chartStack(t), t).toBe('none');
+  });
+  it('chartDataMode et usesAxes', () => {
+    for (const t of CHART_TYPES) expect(chartDataMode(t), t).toBe(['scatter', 'bubble', 'boxWhisker'].includes(t) ? 'rows' : 'grouped');
+    for (const f of ['pie', 'radar', 'doughnut', 'arc', 'funnel'] as const) expect(usesAxes(f), f).toBe(false);
+    for (const f of ['column', 'bar', 'line', 'area', 'combo', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'] as const) expect(usesAxes(f), f).toBe(true);
+  });
+  it('lit les nouveaux types ; Word Cloud reste inconnu', () => {
+    expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');
+    expect(readChartSpec({ ChartType: 'wordCloud' }).type).toBe('columnClustered');
   });
 });

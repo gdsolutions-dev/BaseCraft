@@ -5,8 +5,8 @@ import type { EChartsCoreOption } from 'echarts/core';
 import type { SqlValue } from '../coerce';
 import { isColorValue, type ColorValue } from '../design/colors';
 import type { ChartPalette } from './palette';
-import type { ChartData } from './query';
-import { chartFamily, chartStack, type ChartSpec } from './spec';
+import type { ChartColumn, ChartData } from './query';
+import { chartFamily, chartStack, singleSeries, usesAxes, type ChartSpec, type ChartType } from './spec';
 import { trendlineData } from './trend';
 
 const TEXT = 10;
@@ -32,9 +32,14 @@ export interface ChartFormat {
   axisRange: 'auto' | 'manual'; axisMin: number | null; axisMax: number | null; axisFormat: string; axisUnits: AxisUnits;
   /** Axe des valeurs secondaire (combiné) : titre, plage, format, unités, police ; ignoré sans axe secondaire. */
   axis2: { title: string; range: 'auto' | 'manual'; min: number | null; max: number | null; format: string; units: AxisUnits; color: ColorValue; size: number };
+  /** F5 : trou de l'anneau et de l'arc (% du rayon), diamètre de la plus grande bulle (px), couleurs de la cascade. */
+  holeSize: number; bubbleMax: number;
+  waterfall: { increase: ColorValue; decrease: ColorValue; total: ColorValue; showTotal: boolean };
+  /** Libellés localisés : barre du total (cascade) et courbe du cumul (Pareto). */
+  total: string; cumulative: string;
 }
 
-export interface ChartLabels { title: string; empty: string; trends?: Record<string, string> }
+export interface ChartLabels { title: string; empty: string; trends?: Record<string, string>; total?: string; cumulative?: string }
 
 const POSITIONS: readonly LegendPosition[] = ['top', 'bottom', 'left', 'right'];
 export const BORDER_STYLES = ['transparent', 'solid', 'dashed', 'dotted'] as const;
@@ -46,6 +51,8 @@ export const AXIS_UNITS = { none: 1, hundreds: 100, thousands: 1e3, millions: 1e
 export type AxisUnits = keyof typeof AXIS_UNITS;
 export const FONT_SIZE = { min: 6, max: 72 } as const;
 const isSize = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= FONT_SIZE.min && v <= FONT_SIZE.max;
+const isHole = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 20 && v <= 90;
+const isBubble = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 10 && v <= 100;
 const isWidth = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 6;
 
 /** Pourquoi les props de mise en forme brutes d'un graphique sont refusées (CLI : plus strict que la lecture tolérante), ou null. */
@@ -58,7 +65,9 @@ export function chartFormatIssue(p: Record<string, unknown>): string | null {
     ['ChartBorderWidth', isWidth, 'must be a whole number from 0 to 6'],
     ...each(['LegendFontSize', 'TitleFontSize', 'SubtitleFontSize', 'AxisXFontSize', 'AxisFontSize', 'AxisSecFontSize'], isSize, `must be a whole number from ${FONT_SIZE.min} to ${FONT_SIZE.max}`),
     ...each(['ChartBackColor', 'ChartBorderColor', 'LegendFontColor', 'TitleFontColor', 'SubtitleFontColor', 'AxisXFontColor', 'AxisFontColor', 'AxisSecFontColor'], isColorValue, 'must be a color value (theme:... or #rrggbb)'),
-    ...each(['HasTitle', 'HasLegend', 'HasAxisTitles', 'HasSubtitle'], (v) => typeof v === 'boolean', 'must be a boolean'),
+    ['DoughnutHoleSize', isHole, 'must be a whole number from 20 to 90'], ['BubbleMaxSize', isBubble, 'must be a whole number from 10 to 100'],
+    ...each(['WaterfallIncreaseColor', 'WaterfallDecreaseColor', 'WaterfallTotalColor'], isColorValue, 'must be a color value (theme:... or #rrggbb)'),
+    ...each(['HasTitle', 'HasLegend', 'HasAxisTitles', 'HasSubtitle', 'WaterfallShowTotal'], (v) => typeof v === 'boolean', 'must be a boolean'),
     ...each(['ChartTitle', 'Subtitle', 'AxisTitleX', 'AxisTitleY', 'TitleFontName', 'AxisFormat', 'AxisSecTitle', 'AxisSecFormat'], (v) => typeof v === 'string', 'must be a string'),
     ...each(['AxisMin', 'AxisMax', 'AxisSecMin', 'AxisSecMax'], (v) => typeof v === 'number' && Number.isFinite(v), 'must be a finite number'),
   ];
@@ -114,6 +123,10 @@ export function readChartFormat(props: Record<string, unknown>, labels: ChartLab
     axisUnits: units(props.AxisUnits),
     axis2: { title: typeof props.AxisSecTitle === 'string' ? props.AxisSecTitle : '', range: props.AxisSecRange === 'manual' ? 'manual' : 'auto', min: fin(props.AxisSecMin), max: fin(props.AxisSecMax),
       format: typeof props.AxisSecFormat === 'string' ? props.AxisSecFormat : '', units: units(props.AxisSecUnits), color: col(props.AxisSecFontColor, 'theme:text'), size: fsize(props.AxisSecFontSize, TEXT) },
+    holeSize: isHole(props.DoughnutHoleSize) ? props.DoughnutHoleSize : 55, bubbleMax: isBubble(props.BubbleMaxSize) ? props.BubbleMaxSize : 40,
+    waterfall: { increase: col(props.WaterfallIncreaseColor, 'theme:accent1'), decrease: col(props.WaterfallDecreaseColor, 'theme:accent2'),
+      total: col(props.WaterfallTotalColor, 'theme:accent3'), showTotal: bool(props.WaterfallShowTotal, true) },
+    total: labels.total ?? 'Total', cumulative: labels.cumulative ?? 'Cumulative %',
   };
 }
 
@@ -124,9 +137,28 @@ export const SAMPLE_ROWS: ChartData = {
   truncated: false,
 };
 
+const sc = (role: ChartColumn['role'], field: string): ChartColumn => ({ role, field, name: field });
+const CATS = ['A', 'B', 'C', 'D', 'E'];
+// Constantes écrites à la main (jamais aléatoires) : le même dessin à chaque appel, donc à l'impression comme à l'écran.
+const SAMPLES: Partial<Record<ChartType, ChartData>> = {
+  doughnut: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [40, 25, 15, 12, 8][i]!]), truncated: false },
+  // entonnoir : donné en désordre pour montrer le tri
+  funnel: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [15, 40, 8, 25, 12][i]!]), truncated: false },
+  scatter: { columns: [sc('category', 'X'), sc('legend', 'Series'), sc('value', 'Y')],
+    rows: [[1, 'Series 1', 3], [2, 'Series 1', 5], [3, 'Series 1', 4], [4, 'Series 1', 7], [5, 'Series 1', 6], [6, 'Series 1', 9],
+      [1.5, 'Series 2', 8], [2.5, 'Series 2', 6], [3.5, 'Series 2', 7], [4.5, 'Series 2', 3], [5.5, 'Series 2', 4], [6.5, 'Series 2', 2]], truncated: false },
+  bubble: { columns: [sc('category', 'X'), sc('value', 'Y'), sc('value', 'Size')],
+    rows: [[1, 3, 10], [2, 6, 25], [3, 4, 5], [4, 8, 40], [5, 5, 15], [6, 9, 30], [7, 3, 8], [8, 7, 20]], truncated: false },
+};
+SAMPLES.arc = SAMPLES.doughnut;
+
+/** Les données d'exemple de la vue Création pour un type : les types F4 gardent SAMPLE_ROWS. */
+export const sampleFor = (type: ChartType): ChartData => SAMPLES[type] ?? SAMPLE_ROWS;
+
 /** Info-bulle de la vue vivante (jamais à l'impression) ; en 100 % elle montre la valeur réelle, pas la part. */
 export function chartTooltip(spec: ChartSpec, option: EChartsCoreOption, locale?: string): Record<string, unknown> {
-  if (chartFamily(spec.type) === 'pie' || chartFamily(spec.type) === 'radar') return { trigger: 'item' };
+  const f = chartFamily(spec.type);
+  if (!usesAxes(f) || f === 'scatter' || f === 'bubble' || f === 'boxWhisker') return { trigger: 'item' };
   if (chartStack(spec.type) !== 'percent') return { trigger: 'axis' };
   const series = (option as { series?: { realData?: (number | null)[] }[] }).series ?? [];
   const nf = new Intl.NumberFormat(locale);
@@ -134,6 +166,15 @@ export function chartTooltip(spec: ChartSpec, option: EChartsCoreOption, locale?
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   return { trigger: 'axis', formatter: (ps: { seriesIndex: number; dataIndex: number; seriesName: string; value: number | null; axisValueLabel?: string }[]) =>
     [esc(String(ps[0]?.axisValueLabel ?? '')), ...ps.map((p) => `${esc(p.seriesName)}: ${real(p)} (${p.value == null ? '' : `${Math.round(p.value * 10) / 10} %`})`)].join('<br/>') };
+}
+
+/** Noir ou blanc, le plus lisible sur `fill` (#rrggbb, contraste WCAG) ; autre notation de couleur : `fallback`. */
+function onFill(fill: string, fallback: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(fill);
+  if (!m) return fallback;
+  const lin = [0, 2, 4].map((i) => { const c = parseInt(m[1]!.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  const L = 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
+  return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? '#000000' : '#ffffff';
 }
 
 /** Un nombre fini ou null (NaN, texte non numérique, NULL) : un trou, jamais 0. */
@@ -169,13 +210,13 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
     // Avec une légende, seule la première valeur est tracée.
     (legIdx >= 0 ? valueCols.slice(0, 1) : valueCols).forEach(({ c: col, i }) => {
       // Secteurs : la légende est ignorée, une seule série.
-      const sName = family === 'pie' ? col.name : legIdx >= 0 ? label(r[legIdx]) : col.name;
+      const sName = singleSeries(family) ? col.name : legIdx >= 0 ? label(r[legIdx]) : col.name;
       let s = nameIx.get(sName);
       if (s === undefined) { s = names.push(sName) - 1; nameIx.set(sName, s); }
       const v = num(r[i]);
       const old = cells.get(key(s, c));
       // Secteurs : plusieurs lignes d'une même catégorie (légende ignorée) s'additionnent.
-      cells.set(key(s, c), family === 'pie' && old != null ? old + (v ?? 0) : v);
+      cells.set(key(s, c), singleSeries(family) && old != null ? old + (v ?? 0) : v);
     });
   });
 
@@ -186,7 +227,7 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   const axisY = { fontSize: fmt.axisSize, color: pal.custom(fmt.axisColor) };
   const pos = fmt.hasLegend ? fmt.legendPosition : null;
   const horizontal = family === 'bar';
-  const axisTitles = fmt.hasAxisTitles && family !== 'pie' && family !== 'radar';
+  const axisTitles = fmt.hasAxisTitles && usesAxes(family);
   // La mise en forme de la série vient de la Valeur qu'elle trace (avec une légende, la première) ; le type de série ne compte que pour le combiné.
   const combo = family === 'combo';
   // Avec une légende, une seule Valeur se répartit sur toutes les séries : ni couleur, ni bordure, ni étiquettes, ni tendance par série (le volet les désactive).
@@ -199,7 +240,7 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   const hasSecondary = secondary.some(Boolean);
   const shown = (s: number): string => (legIdx < 0 ? cfgOf(s)?.name : undefined) ?? names[s]!;
   const catTitle = axisTitles && catIdx >= 0 ? data.columns[catIdx]!.field : '';
-  const valTitle = axisTitles ? (legIdx >= 0 ? valueCols[0]!.c.name : valueCols.flatMap(({ c }, s) => (secondary[s] ? [] : [shown(s) === names[s] ? c.name : shown(s)])).join(', ')) : '';
+  const valTitle = axisTitles ? (legIdx >= 0 || family === 'scatter' || family === 'bubble' ? valueCols[0]!.c.name : valueCols.flatMap(({ c }, s) => (secondary[s] ? [] : [shown(s) === names[s] ? c.name : shown(s)])).join(', ')) : '';
   const secTitle = axisTitles && hasSecondary && fmt.axis2.title !== '' ? fmt.axis2.title : axisTitles && hasSecondary && legIdx < 0 ? names.flatMap((_, s) => (secondary[s] ? [shown(s)] : [])).join(', ') : '';
   const bottomTitle = axisTitles && fmt.axisTitleX !== '' ? fmt.axisTitleX : horizontal ? valTitle : catTitle;
   const leftTitle = axisTitles && fmt.axisTitleY !== '' ? fmt.axisTitleY : horizontal ? catTitle : valTitle;
@@ -218,10 +259,27 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   const title = titleOn || subOn ? { title: { text: titleOn ? fmt.title : '', ...(subOn ? { subtext: fmt.subtitle, subtextStyle: { fontSize: fmt.subtitleSize, color: pal.custom(fmt.subtitleColor), fontFamily: pal.fontFamily } } : {}),
     left: 'center', top: 4, textStyle: { fontSize: fmt.titleSize, color: pal.custom(fmt.titleColor), fontFamily: pal.font(fmt.titleFont) } } } : {};
 
-  if (family === 'pie') {
+  if (family === 'pie' || family === 'doughnut' || family === 'arc') {
     const slices = cats.flatMap((name, c) => { const v = cells.get(key(0, c)); return v == null ? [] : [{ name, value: v }]; });
+    // Anneau : trou = holeSize % du rayon externe de 70 % (arrondi à 2 décimales). Arc : demi-anneau de 9 h à 3 h par le haut,
+    // centre bas (80 %) pour remplir la place sous le titre et la légende, rayon externe = le plein rayon disponible ; jamais de texte au centre.
+    const shape = family === 'pie' ? { radius: '70%' }
+      : family === 'doughnut' ? { radius: [`${Math.round(fmt.holeSize * 0.7 * 100) / 100}%`, '70%'] }
+        : { radius: [`${fmt.holeSize}%`, '100%'], startAngle: 180, endAngle: 0, clockwise: true, center: ['50%', '80%'] };
     return { ...base, ...title, ...legend, tooltip: { trigger: 'item' },
-      series: [{ type: 'pie', name: valueCols[0]!.c.name, radius: '70%', ...box, label: { formatter: '{b}: {d}%', fontSize: TEXT, color: pal.text }, data: slices }] };
+      series: [{ type: 'pie', name: valueCols[0]!.c.name, ...shape, ...box, label: { formatter: '{b}: {d}%', fontSize: TEXT, color: pal.text }, data: slices }] };
+  }
+
+  if (family === 'funnel') {
+    // Étapes triées par valeur décroissante puis libellé croissant (points de code, jamais la collation) ; NULL, NaN et négatives écartées.
+    const stages = cats.flatMap((name, c) => { const v = cells.get(key(0, c)); return v == null || v < 0 ? [] : [{ name, value: v }]; })
+      .sort((a, b) => b.value - a.value || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    if (stages.length === 0) return { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };
+    // ECharts 6 ne contraste pas l'étiquette intérieure avec la couleur de la part (texte du thème sur accent : illisible en sombre) :
+    // couleur de part explicite et étiquette noire ou blanche, selon le meilleur contraste.
+    return { ...base, ...title, ...legend, tooltip: { trigger: 'item' },
+      series: [{ type: 'funnel', name: valueCols[0]!.c.name, sort: 'none', gap: 2, minSize: '8%', ...box, label: { position: 'inside', formatter: '{b}: {c}', fontSize: TEXT },
+        data: stages.map((d, i) => { const fill = pal.series[i % pal.series.length]!; return { ...d, itemStyle: { color: fill }, label: { color: onFill(fill, pal.text) } }; }) }] };
   }
 
   if (family === 'radar') {
@@ -244,8 +302,9 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
   const anyNegative = stack === 'percent' && [...cells.values()].some((v) => v != null && v < 0);
   // Plage manuelle, format et unités, par axe des valeurs (en 100 % l'axe est fixe) ; un bord illisible est ignoré, un intervalle vide aussi.
   const a2 = fmt.axis2;
-  const value = (name: string, primary = true) => {
-    const ax = primary ? { range: fmt.axisRange, min: fmt.axisMin, max: fmt.axisMax, format: fmt.axisFormat, units: fmt.axisUnits, font: axisY }
+  const value = (name: string, primary = true, xAxis = false) => {
+    // Axe X d'un nuage de points : automatique (ni plage, ni format, ni unités), police des abscisses.
+    const ax = xAxis ? { range: 'auto' as const, min: null, max: null, format: '', units: 'none' as const, font: axisX } : primary ? { range: fmt.axisRange, min: fmt.axisMin, max: fmt.axisMax, format: fmt.axisFormat, units: fmt.axisUnits, font: axisY }
       : { range: a2.range, min: a2.min, max: a2.max, format: a2.format, units: a2.units, font: { fontSize: a2.size, color: pal.custom(a2.color) } };
     const manual = ax.range === 'manual' && stack !== 'percent' && !(ax.min !== null && ax.max !== null && ax.min >= ax.max);
     const formatter = stack === 'percent' ? undefined : axisFormatter(ax.format, AXIS_UNITS[ax.units]);
@@ -254,6 +313,39 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
       axisLabel: { ...ax.font, ...(formatter ? { formatter } : {}) }, splitLine: { lineStyle: { color: pal.grid } },
       ...(name !== '' ? { name, nameLocation: 'middle' as const, nameGap: 34, nameTextStyle: ax.font } : {}) };
   };
+  if (family === 'scatter' || family === 'bubble') {
+    const none = { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };
+    if (catIdx < 0) return none;
+    const sizeIdx = family === 'bubble' && valueCols[1] ? valueCols[1].i : -1;
+    const groups = new Map<string, { x: number; y: number; size: number | null }[]>();
+    for (const r of data.rows) {
+      const x = num(r[catIdx]);
+      const y = num(r[valueCols[0]!.i]);
+      if (x === null || y === null) continue;   // un X texte ou NULL, un Y illisible : le point est écarté
+      const size = sizeIdx < 0 ? null : num(r[sizeIdx]);
+      if (size !== null && size < 0) continue;
+      const name = legIdx >= 0 ? label(r[legIdx]) : valueCols[0]!.c.name;
+      groups.set(name, [...(groups.get(name) ?? []), { x, y, size }]);
+    }
+    // Bulles : diamètre proportionnel à la racine de la taille (aire), échelle commune à toutes les séries ; taille absente ou nulle (ou
+    // une seule Valeur) : diamètre moyen, toutes les bulles égales.
+    const maxSize = Math.max(0, ...[...groups.values()].flatMap((g) => g.map((p) => p.size ?? 0)));
+    const dia = (size: number | null): number => (size && maxSize > 0 ? Math.round((4 + (fmt.bubbleMax - 4) * Math.sqrt(size / maxSize)) * 100) / 100 : (4 + fmt.bubbleMax) / 2);
+    const dataLabels = cfgOf(0)?.dataLabels === true;
+    const list = [...groups].map(([name, pts]) => ({ name, pts: pts.sort((a, b) => a.x - b.x || a.y - b.y) }));
+    if (list.length === 0) return none;
+    return { ...base, ...title, ...legend, tooltip: { trigger: 'item' }, grid: { ...box, containLabel: true },
+      xAxis: value(bottomTitle, true, true), yAxis: value(leftTitle),
+      series: list.map(({ name, pts }) => ({ type: 'scatter', name, itemStyle: { opacity: 0.75 },
+        ...(family === 'scatter' ? { symbolSize: 8, data: pts.map((p) => [p.x, p.y]) }
+          : { data: pts.map((p) => ({ value: [p.x, p.y, p.size ?? 0], symbolSize: dia(p.size) })) }),
+        // Chaîne (jamais de fonction) : `{@[1]}` = la valeur Y, pas le couple [x, y]
+        ...(dataLabels ? { label: { show: true, fontSize: TEXT, color: pal.text, formatter: '{@[1]}' } } : {}) })) };
+  }
+
+  // Boîte à moustaches, Pareto, cascade : pas encore proposés (tâches suivantes), jamais le chemin des colonnes.
+  if (family === 'boxWhisker' || family === 'pareto' || family === 'waterfall') return { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };
+
   // 100 % : chaque valeur devient sa part du total de la catégorie (total nul : parts à 0, jamais NaN) ; le réel reste dans realData.
   const total = cats.map((_, c) => names.reduce((t, _n, s) => t + Math.abs(cells.get(key(s, c)) ?? 0), 0));
   const series = names.map((name, s) => {

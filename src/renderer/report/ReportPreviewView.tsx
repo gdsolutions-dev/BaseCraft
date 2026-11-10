@@ -89,7 +89,7 @@ export async function layoutEnv(): Promise<LayoutEnv> {
   const s = await api.app.getSettings();
   return {
     locale: s.region, lang: formulaLang(s.uiLanguage), fourDigitYear: fourDigitYear(), now: () => new Date(), errorText: { error: i18n.t('report.error'), name: i18n.t('report.name') },
-    chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t) },
+    chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t), total: i18n.t('chart.waterfall.total'), cumulative: i18n.t('chart.pareto.cumulative') },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue, callUser: callUserFunction,   // D3: Python functions; [Forms]!, [Reports]!, [TempVars]! (R11)
   };
 }

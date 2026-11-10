@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 O BaseCraft traz de volta o jeito Access de criar pequenos aplicativos de dados — tabelas, consultas, formulários, relatórios, macros e código — com uma interface moderna e sem depender do Windows. Tudo o que um banco de dados contém fica em **um único arquivo**, que é um banco de dados SQLite comum, ainda aberto por qualquer ferramenta SQLite.
 
-> **Status: desenvolvimento inicial.** A etapa A (tabelas, relacionamentos, consultas, formulários, relatórios, importação e exportação) está concluída na prévia 0.3.1. Espere mudanças incompatíveis antes da 1.0.
+> **Status: desenvolvimento inicial.** As etapas A a D estão concluídas na prévia 0.5.0, e a etapa F (últimos recursos de design de formulários e relatórios) está em andamento: ordem de tabulação, temas, imagens e gráficos estão prontos. Espere mudanças incompatíveis antes da 1.0.
 
 ## Por quê
 
@@ -71,10 +71,11 @@ O objetivo: um bom usuário de Excel, sem escrever código, monta em uma tarde u
 | Etapa | Conteúdo |
 |---|---|
 | **A — Substituir o Excel** ✅ | Tabelas, relações e expressões, consultas (QBE + SQL), formulários, relatórios com exportação em PDF, importação e exportação de CSV/Excel, instaladores |
-| **B — Automatizar e distribuir** | Eventos, macros, AutoExec, BaseCraft Runtime (executar um banco de dados sem acesso ao design) |
-| **C — Trabalhar em conjunto** | Tabelas vinculadas em PostgreSQL, SQL Server, SQLite e Access; bloqueio otimista; assistente de migração |
-| **D — Python** | Código Python (Pyodide) no lugar do VBA, com objetos do BaseCraft |
+| **B — Automatizar e distribuir** ✅ | Eventos, macros, AutoExec, BaseCraft Runtime (executar um banco de dados sem acesso ao design) |
+| **C — Trabalhar em conjunto** ✅ | Tabelas vinculadas em PostgreSQL, SQL Server, SQLite e Access; banco de dados dividido e arquivo de dados compartilhado com bloqueio otimista; consultas pass-through; assistente de migração para um servidor |
+| **D — Python** ✅ | Código Python (Pyodide) no lugar do VBA, com objetos do BaseCraft: módulos, janela Imediata, eventos, funções Python em expressões, converter macros em Python |
 | **E — Importação do Access** | Tabelas, dados, consultas, formulários, relatórios e macros de `.mdb` / `.accdb` |
+| **F — Últimos recursos de formulários e relatórios** 🚧 | Pronto: ordem de tabulação, temas, imagens, gráficos (ECharts); a seguir: os demais recursos de design |
 
 Fora do planejamento: compatibilidade com VBA, design simultâneo por várias pessoas, versão web ou móvel.
 

@@ -39,7 +39,7 @@ export function chartRows(tab: 'format' | 'data' = 'format'): string[] {
       'HasLegend', 'LegendPosition', 'LegendFontColor', 'LegendFontSize', 'HasTitle', 'ChartTitle', 'TitleFontName', 'TitleFontColor', 'TitleFontSize',
       'HasSubtitle', 'Subtitle', 'SubtitleFontColor', 'SubtitleFontSize', 'HasAxisTitles', 'AxisTitleX', 'AxisTitleY', 'AxisSecTitle', 'AxisXFontColor', 'AxisXFontSize',
       'AxisRange', 'AxisMin', 'AxisMax', 'AxisFormat', 'AxisUnits', 'AxisFontColor', 'AxisFontSize',
-      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize']
+      'AxisSecRange', 'AxisSecMin', 'AxisSecMax', 'AxisSecFormat', 'AxisSecUnits', 'AxisSecFontColor', 'AxisSecFontSize', 'DoughnutHoleSize', 'BubbleMaxSize']
     : ['ChartSource', 'ChartAxis', 'ChartDateGroup', 'ChartLegend', 'ChartValues', 'ChartSeries'];
 }
 
@@ -104,14 +104,19 @@ const same = (a: unknown, b: unknown): boolean => Object.is(a, b) || JSON.string
 
 /** Lignes d'un graphique propres aux formulaires : un graphique d'état ignore le lien maître/détail. */
 const CHART_FORM_ONLY = ['LinkMasterFields', 'LinkChildFields'];
+/** Lignes propres à certains types de graphique (F5) : montrées seulement si le type de chaque graphique sélectionné y figure (la tâche 11 généralise). */
+const CHART_TYPE_ONLY: Record<string, string[]> = { DoughnutHoleSize: ['doughnut', 'arc'], BubbleMaxSize: ['bubble'] };
 /** Une ligne par descripteur qui s'applique au genre de **chaque** cible (et au genre du document : `objects`), dans l'ordre du catalogue ; Tout = les quatre onglets à la suite.
  *  Des valeurs différentes donnent MIXED. Nom en lecture seule dans une sélection multiple. */
 export function sheetRows(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], tab: SheetTab, readOnly: boolean, cellPrefix = ''): SheetRow[] {
   if (!targets.length || !targets.every((t) => targetExists(doc, t))) return [];
   const kinds = targets.map((t) => targetKind(doc, docKind, t));
   const chartOnly = kinds.every((k) => k === 'chart');
+  const typeDesc = PROPERTY_CATALOG.find((d) => d.name === 'ChartType')!;
+  const chartTypes = chartOnly ? targets.map((t) => readProp(doc, docKind, t, typeDesc, cellPrefix)) : [];
+  const typeOk = (n: string): boolean => !chartOnly || !CHART_TYPE_ONLY[n] || chartTypes.every((v) => CHART_TYPE_ONLY[n]!.includes(String(v)));
   const lead = (tb: string, n: string): number => { const i = chartOnly ? chartRows(tb as 'format' | 'data').indexOf(n) : -1; return i < 0 ? 99 : i; };
-  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && kinds.every((k) => d.appliesTo.includes(k) && !(docKind === 'report' && k === 'chart' && CHART_FORM_ONLY.includes(d.name)) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name))))
+  return (tab === 'all' ? TABS : [tab]).flatMap((tb) => PROPERTY_CATALOG.filter((d) => d.tab === tb && (!d.objects || d.objects.includes(docKind)) && typeOk(d.name) && kinds.every((k) => d.appliesTo.includes(k) && !(docKind === 'report' && k === 'chart' && CHART_FORM_ONLY.includes(d.name)) && (!PICTURE_ROWS.includes(d.name) || pictureRows({}, k).includes(d.name))))
     .map((d, i) => ({ d, i })).sort((a, b) => lead(tb, a.d.name) - lead(tb, b.d.name) || a.i - b.i).map((x) => x.d))   // tri stable : le graphique d'abord
     .map((d) => {
       const values = targets.map((t) => readProp(doc, docKind, t, d, cellPrefix));

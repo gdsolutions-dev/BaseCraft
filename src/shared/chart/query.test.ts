@@ -7,7 +7,7 @@ import { localeInfo } from '../locale-format';
 import { parseSql } from '../query/sql-parser';
 import type { SourceField } from '../record-source';
 import { f, t } from '../test-fixtures';
-import { buildChartQuery, CHART_MAX_POINTS } from './query';
+import { buildChartQuery, CHART_MAX_POINTS, chartRequest } from './query';
 import { readChartSpec, type ChartSpec } from './spec';
 
 const fld = (name: string, type: SourceField['type'] = 'shortText'): SourceField => ({ name, type, props: { type } as SourceField['props'] });
@@ -110,5 +110,70 @@ describe('exécution', () => {
   it('un nom hostile ne change aucune ligne', () => {
     expect(() => buildChartQuery(spec({ axis: ['Client]; DELETE FROM Cmd; --'], values: [sum] }), T, FIELDS)).toThrow('bc:notFound');
     expect(db.prepare('SELECT COUNT(*) n FROM "Cmd"').get()).toEqual({ n: 4 });
+  });
+});
+
+describe('mode lignes (nuage, bulles, boîte)', () => {
+  const F = [fld('Client'), fld('Region'), fld('Quantite', 'number'), fld('Montant', 'number'), fld('Remise', 'number')];
+  const v = (field: string) => ({ field, agg: 'sum' as const });
+  const q = (s: Partial<ChartSpec>) => buildChartQuery(spec(s), T, F);
+  const roles = (s: Partial<ChartSpec>) => q(s).columns.map((c) => c.role);
+  it('nuage : ni GROUP BY ni Sum, tri sur X', () => {
+    const r = q({ type: 'scatter', axis: ['Quantite'], values: [v('Montant')] });
+    expect(r.sql).not.toMatch(/GROUP BY|Sum\(/);
+    expect(r.sql).toMatch(/^SELECT TOP 5001 \[Quantite\], \[Montant\]/);
+    expect(r.sql).toContain('ORDER BY [Quantite], [Montant]');
+    expect(roles({ type: 'scatter', axis: ['Quantite'], values: [v('Montant')] })).toEqual(['category', 'value']);
+  });
+  it('nuage avec légende : catégorie, légende, valeur', () => {
+    const s: Partial<ChartSpec> = { type: 'scatter', axis: ['Quantite'], legend: 'Client', values: [v('Montant'), v('Remise')] };
+    expect(roles(s)).toEqual(['category', 'legend', 'value']);
+    expect(q(s).sql).not.toContain('GROUP BY');
+    expect(q(s).sql).toContain('ORDER BY [Quantite], [Client], [Montant]');
+  });
+  it("nuage : seul le premier champ d'axe, groupement de date ignoré", () => {
+    const r = q({ type: 'scatter', axis: ['Quantite', 'Region'], dateGroup: 'month', values: [v('Montant')] });
+    expect(r.sql).not.toContain('Region');
+    expect(r.columns[0].name).toBe('Quantite');
+  });
+  it('bulles : deux valeurs, avec ou sans légende', () => {
+    expect(roles({ type: 'bubble', axis: ['Quantite'], values: [v('Montant'), v('Remise')] })).toEqual(['category', 'value', 'value']);
+    expect(roles({ type: 'bubble', axis: ['Quantite'], legend: 'Client', values: [v('Montant'), v('Remise')] })).toEqual(['category', 'legend', 'value', 'value']);
+  });
+  it('boîte : une valeur, catégorie jointe, tri', () => {
+    const r = q({ type: 'boxWhisker', axis: ['Client'], values: [v('Montant'), v('Remise')] });
+    expect(r.sql.replace(/\s+/g, ' ')).toBe('SELECT TOP 5001 [Client], [Montant] FROM [Cmd] ORDER BY [Client], [Montant];');
+    expect(q({ type: 'boxWhisker', axis: ['Client', 'Region'], values: [v('Montant')] }).columns[0].name).toBe('Client / Region');
+    expect(q({ type: 'boxWhisker', values: [v('Montant')] }).sql).toContain('ORDER BY [Montant]');   // sans axe ni légende : tri des valeurs, plafond déterministe
+  });
+  it('agg stocké ignoré, champ inconnu refusé, nom hostile entre crochets', () => {
+    expect(q({ type: 'scatter', axis: ['Quantite'], values: [{ field: 'Montant', agg: 'avg' }] }).sql).not.toContain('Avg(');
+    expect(() => q({ type: 'scatter', axis: ['Nope'], values: [v('Montant')] })).toThrow('bc:notFound');
+    const evil = "a]b'; DROP TABLE Cmd; --";
+    const { sql } = buildChartQuery(spec({ type: 'scatter', axis: [evil], values: [v('Montant')] }), T, [...F, fld(evil)]);
+    expect(parseSql(sql).body.k).toBe('select');
+    expect(sql.replace(/\[(?:[^\]]|\]\])*\]/g, '')).not.toMatch(/DROP/);
+  });
+  it('chartRequest : axe requis pour nuage et bulles, pas pour la boîte', () => {
+    for (const type of ['scatter', 'bubble'] as const) {
+      expect(chartRequest(spec({ type, values: [v('Montant')] }), T)).toBeNull();
+      expect(chartRequest(spec({ type, axis: ['Quantite'] }), T)).toBeNull();
+      expect(chartRequest(spec({ type, axis: ['Quantite'], values: [v('Montant')] }), T)).not.toBeNull();
+    }
+    expect(chartRequest(spec({ type: 'boxWhisker', values: [v('Montant')] }), T)).not.toBeNull();
+  });
+  it('6000 lignes : 5001 lues, triées sur X (plafond après tri)', () => {
+    const session = Session.create(`${process.env.TEMP ?? '.'}/chartq-rows-${process.pid}.basecraft`, { appVersion: '0.0.0', region: 'fr-FR', sessionId: 'b',
+      probe: { platform: 'win32', env: {}, homedir: 'C:\\x', windowsDriveType: () => 3 } });
+    const db = (session as unknown as { db: DatabaseSync }).db;
+    createTable(db, t('Cmd', [f('Quantite', 'number', { numberSize: 'double' }), f('Montant', 'number', { numberSize: 'double' })]));
+    const ins = db.prepare('INSERT INTO "Cmd" ("Quantite","Montant") VALUES (?,?)');
+    db.exec('BEGIN');
+    for (let i = 0; i < 6000; i++) ins.run((i * 7919) % 6000, i);
+    db.exec('COMMIT');
+    const qq = buildChartQuery(spec({ type: 'scatter', axis: ['Quantite'], values: [v('Montant')] }), T, [fld('Quantite', 'number'), fld('Montant', 'number')]);
+    const rows = pageQuerySource(db, { kind: 'sql', sql: qq.sql }, { offset: 0, limit: CHART_MAX_POINTS + 1 }, { info: localeInfo('fr-FR'), writeSeq: () => 0 }).rows;
+    expect(rows).toHaveLength(CHART_MAX_POINTS + 1);
+    expect(rows.map((r) => Number(r[0]))).toEqual(Array.from({ length: CHART_MAX_POINTS + 1 }, (_, i) => i));
   });
 });

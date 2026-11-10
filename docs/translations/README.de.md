@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft bringt die Access-Art, kleine Datenanwendungen zu bauen, zurück – Tabellen, Abfragen, Formulare, Berichte, Makros und Code – mit moderner Oberfläche und ohne Bindung an Windows. Alles, was eine Datenbank enthält, liegt in **einer einzigen Datei**, einer gewöhnlichen SQLite-Datenbank, die sich mit jedem SQLite-Werkzeug weiterhin öffnen lässt.
 
-> **Status: frühe Entwicklung.** Stufe A (Tabellen, Beziehungen, Abfragen, Formulare, Berichte, Import und Export) ist in der Vorschauversion 0.3.1 abgeschlossen. Bis 1.0 sind inkompatible Änderungen zu erwarten.
+> **Status: frühe Entwicklung.** Die Stufen A bis D sind in der Vorschauversion 0.5.0 abgeschlossen, und Stufe F (letzte Entwurfsfunktionen für Formulare und Berichte) läuft: Aktivierreihenfolge, Designs, Bilder und Diagramme sind fertig. Bis 1.0 sind inkompatible Änderungen zu erwarten.
 
 ## Warum
 
@@ -71,10 +71,11 @@ Das Ziel: Ein versierter Excel-Anwender baut ohne Programmierung an einem Nachmi
 | Stufe | Inhalt |
 |---|---|
 | **A — Excel ersetzen** ✅ | Tabellen, Beziehungen und Ausdrücke, Abfragen (QBE + SQL), Formulare, Berichte mit PDF-Export, CSV-/Excel-Import und -Export, Installationsprogramme |
-| **B — Automatisieren und verteilen** | Ereignisse, Makros, AutoExec, BaseCraft Runtime (eine Datenbank ohne Entwurfszugriff ausführen) |
-| **C — Zusammenarbeiten** | Verknüpfte Tabellen für PostgreSQL, SQL Server, SQLite und Access; optimistisches Sperren; Migrationsassistent |
-| **D — Python** | Python-Code (Pyodide) anstelle von VBA, mit BaseCraft-Objekten |
+| **B — Automatisieren und verteilen** ✅ | Ereignisse, Makros, AutoExec, BaseCraft Runtime (eine Datenbank ohne Entwurfszugriff ausführen) |
+| **C — Zusammenarbeiten** ✅ | Verknüpfte Tabellen für PostgreSQL, SQL Server, SQLite und Access; geteilte Datenbank und gemeinsame Datendatei mit optimistischem Sperren; Pass-Through-Abfragen; Migrationsassistent für einen Server |
+| **D — Python** ✅ | Python-Code (Pyodide) anstelle von VBA, mit BaseCraft-Objekten: Module, Direktbereich, Ereignisse, Python-Funktionen in Ausdrücken, Makros in Python konvertieren |
 | **E — Access-Import** | Tabellen, Daten, Abfragen, Formulare, Berichte und Makros aus `.mdb` / `.accdb` |
+| **F — Letzte Formular- und Berichtsfunktionen** 🚧 | Fertig: Aktivierreihenfolge, Designs, Bilder, Diagramme (ECharts); als Nächstes: die übrigen Entwurfsfunktionen |
 
 Nicht geplant: VBA-Kompatibilität, gleichzeitiger Entwurf durch mehrere Personen, eine Web- oder Mobilversion.
 

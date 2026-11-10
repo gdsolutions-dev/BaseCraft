@@ -10,7 +10,7 @@ import type { BasecraftApi } from '../../src/shared/api';
 import { saveObject } from '../../src/main/db/objects';
 import { createTable } from '../../src/main/db/schema';
 import { insertRow } from '../../src/main/db/write-layer';
-import { CHART_TYPES, chartFamily } from '../../src/shared/chart/spec';
+import { CHART_TYPES, chartFamily, F5_CHART_TYPES } from '../../src/shared/chart/spec';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import { localeInfo } from '../../src/shared/locale-format';
 import { f, t } from '../../src/shared/test-fixtures';
@@ -216,8 +216,9 @@ test('F4: every chart type of the Insert Modern Chart menu draws without error',
   page.on('pageerror', (e) => errors.push(e.message));
   try {
     await openDesign(page, 'form', 'Types');
-    expect(CHART_TYPES.length).toBe(16);
-    for (const type of CHART_TYPES) {
+    const f4Types = CHART_TYPES.filter((ty) => !F5_CHART_TYPES.includes(ty));   // les types F5 ont leur recette (recette-f5a)
+    expect(f4Types.length).toBe(16);
+    for (const type of f4Types) {
       await page.getByTestId('cmd-insertModernChart').click();
       const family = chartFamily(type);
       if (family !== 'pie' && family !== 'combo') await page.getByTestId(`chart-family-${family}`).click();

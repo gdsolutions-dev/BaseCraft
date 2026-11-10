@@ -28,7 +28,7 @@ Windows · macOS · Linux</p>
 
 BaseCraft retrouve la manière Access de construire de petites applications de données — tables, requêtes, formulaires, états, macros et code — avec une interface moderne, sans être lié à Windows. Tout ce qu'une base contient vit dans **un seul fichier**, une simple base SQLite que n'importe quel outil SQLite peut encore ouvrir.
 
-> **État : développement précoce.** L'étape A (tables, relations, requêtes, formulaires, états, import et export) est terminée dans la préversion 0.3.1. Attendez-vous à des changements incompatibles avant la 1.0.
+> **État : développement précoce.** Les étapes A à D sont terminées dans la préversion 0.5.0, et l'étape F (dernières fonctions de conception des formulaires et états) est en cours : ordre de tabulation, thèmes, images et graphiques sont faits. Attendez-vous à des changements incompatibles avant la 1.0.
 
 ## Pourquoi
 
@@ -71,10 +71,11 @@ L'objectif : un bon utilisateur d'Excel, sans écrire de code, construit en un a
 | Étape | Contenu |
 |---|---|
 | **A — Remplacer Excel** ✅ | Tables, relations et expressions, requêtes (QBE + SQL), formulaires, états avec export PDF, import et export CSV/Excel, programmes d'installation |
-| **B — Automatiser et distribuer** | Événements, macros, AutoExec, BaseCraft Runtime (exécuter une base sans accès à la conception) |
-| **C — Travailler ensemble** | Tables liées vers PostgreSQL, SQL Server, SQLite et Access ; verrouillage optimiste ; assistant de migration |
-| **D — Python** | Code Python (Pyodide) à la place de VBA, avec les objets BaseCraft |
+| **B — Automatiser et distribuer** ✅ | Événements, macros, AutoExec, BaseCraft Runtime (exécuter une base sans accès à la conception) |
+| **C — Travailler ensemble** ✅ | Tables liées vers PostgreSQL, SQL Server, SQLite et Access ; base de données scindée et fichier de données partagé avec verrouillage optimiste ; requêtes directes ; assistant de migration vers un serveur |
+| **D — Python** ✅ | Code Python (Pyodide) à la place de VBA, avec les objets BaseCraft : modules, fenêtre Exécution, événements, fonctions Python dans les expressions, conversion des macros en Python |
 | **E — Import Access** | Tables, données, requêtes, formulaires, états et macros depuis `.mdb` / `.accdb` |
+| **F — Dernières fonctions des formulaires et états** 🚧 | Fait : ordre de tabulation, thèmes, images, graphiques (ECharts) ; ensuite : les autres fonctions de conception |
 
 Non prévus : la compatibilité VBA, la conception simultanée par plusieurs personnes, une version web ou mobile.
 

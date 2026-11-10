@@ -244,6 +244,15 @@ describe('loadDocCharts (F4)', () => {
     await loadDocCharts({ charts: { data: async (r) => { reqs.push(r); return data; } } }, linked);
     expect(reqs).toHaveLength(1); expect(reqs[0]).not.toHaveProperty('link');
   });
+  it('F5 : un appel par graphique ; le nuage de points demande des lignes brutes', async () => {
+    const f5 = { ...doc, sections: [{ kind: 'detail', height: 100, props: {}, controls: ['doughnut', 'arc', 'funnel', 'scatter', 'bubble'].map((ty) => ({
+      kind: 'chart', name: `C_${ty}`, left: 0, top: 0, width: 100, height: 100, props: { ChartType: ty, ChartAxis: ['X'], ChartValues: [{ field: 'Y', agg: 'none' }, { field: 'Z', agg: 'none' }] } })) }] } as unknown as DesignDoc;
+    const reqs: { spec?: unknown; columns?: unknown }[] = [];
+    const out = await loadDocCharts({ charts: { data: async (r) => { reqs.push(r as never); return data; } } }, f5);
+    expect(Object.keys(out)).toHaveLength(5); expect(reqs).toHaveLength(5);
+    const spec = reqs[3].spec as { type: string; axis: unknown };
+    expect(spec.type).toBe('scatter'); expect(spec.axis).toEqual(['X']);
+  });
   it('un appel refusé donne {}', async () => {
     expect(await loadDocCharts({ charts: { data: () => Promise.reject(new Error('bc:notFound')) } }, doc)).toEqual({});
   });

@@ -211,12 +211,24 @@ describe('chart controls and the charts command', () => {
       { object: { kind: 'form', name: 'F' }, control: 'inTab', type: 'pie', source: { kind: 'table', name: 'Commandes' } },
       { object: { kind: 'report', name: 'R' }, control: 'g2', type: 'columnClustered', source: null }]);
   });
+  it('F5a : un nuage de points se crée et se liste ; WordCloud et les tailles hors bornes sont refusés en nommant le contrôle', async () => {
+    const f = async (props: Record<string, unknown>) => message((await run([commandes, { op: 'form.create', name: 'F', layout: 'doc', doc: docOf([chart(props)], null) }])).r);
+    const { r, p } = await run([commandes, { op: 'form.create', name: 'F', layout: 'doc', doc: docOf([chart({ ChartType: 'scatter', ChartAxis: ['client'], ChartValues: [{ field: 'Montant', agg: 'none' }] }, 'nuage')], null) }]);
+    expect(message(r)).toBe('');
+    expect((await list(p)).json).toEqual([{ object: { kind: 'form', name: 'F' }, control: 'nuage', type: 'scatter', source: { kind: 'table', name: 'Commandes' } }]);
+    expect(await f({ ChartType: 'wordCloud' })).toMatch(/^control g1: ChartType "wordCloud"/);
+    expect(await f({ DoughnutHoleSize: 5 })).toMatch(/^control g1: .*DoughnutHoleSize/);
+    expect(await f({ BubbleMaxSize: 500 })).toMatch(/^control g1: .*BubbleMaxSize/);
+    expect(await f({ ChartType: 'doughnut', DoughnutHoleSize: 60 })).toBe('');
+  });
   it('refuses an unknown field, type, agg or a value without a field, naming the control', async () => {
     const f = async (props: Record<string, unknown>) => message((await run([commandes, { op: 'form.create', name: 'F', layout: 'doc', doc: docOf([chart(props)], null) }])).r);
     expect(await f({ ChartValues: [{ field: 'Nope', agg: 'sum' }] })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartAxis: ['Nope'] })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartLegend: 'Nope' })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartType: 'weird' })).toMatch(/^control g1: .*weird/);
+    for (const ty of ['boxWhisker', 'pareto', 'waterfall']) expect(await f({ ChartType: ty }), ty).toMatch(new RegExp(`^control g1: ChartType "${ty}" is not one of .*doughnut`));   // F5b : pas encore proposés
+    expect(await f({ ChartType: 'scatter' })).toBe('');
     for (const [k, v] of [['ChartBorderStyle', 'wavy'], ['LegendPosition', 'middle'], ['AxisRange', 'wide'], ['AxisUnits', 'lots'], ['ChartBackStyle', 'x'],
       ['TitleFontSize', 'big'], ['AxisFontSize', 2], ['ChartBorderWidth', 9], ['HasSubtitle', 'yes'], ['Subtitle', 3], ['AxisMax', 'x'], ['AxisMin', null], ['TitleFontColor', 'red'], ['ChartBackColor', 'blue'], ['TitleFontName', 5], ['AxisFormat', 1],
       ['AxisSecRange', 'wide'], ['AxisSecUnits', 'lots'], ['AxisSecFontSize', 2], ['AxisSecFontColor', 'red'], ['AxisSecMin', null], ['AxisSecMax', 'x'], ['AxisSecTitle', 3], ['AxisSecFormat', 1]] as const) {

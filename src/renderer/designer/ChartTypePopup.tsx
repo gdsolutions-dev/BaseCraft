@@ -3,7 +3,7 @@
 // Échap ou Gauche le referme (le focus revient à la famille) ; Échap sur une autre famille referme aussi le sous-menu ; un second Échap ferme le menu.
 import { useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChartType } from '../../shared/chart/spec';
+import { NEW_CHART_TYPES, type ChartType } from '../../shared/chart/spec';
 import { RibbonPopup } from './RibbonPopup';
 
 type Family = 'column' | 'bar' | 'line' | 'area' | 'radar';
@@ -14,6 +14,9 @@ const variantsOf = (f: Family): readonly Variant[] => (f === 'radar' ? ['radar',
 const typeOf = (f: Family, v: Variant): ChartType => v === 'radar' || v === 'radarFilled' ? v :
   ((f === 'column' || f === 'bar') && v === 'clustered' ? `${f}Clustered` : f === 'line' && v === 'clustered' ? 'line' : f === 'area' && v === 'clustered' ? 'area'
     : `${f}${v === 'stacked' ? 'Stacked' : 'Stacked100'}`) as ChartType;
+
+/** Les types proposés après Combiné (anneau, arc, entonnoir, nuage de points, bulles) ; les tâches suivantes y ajoutent les leurs. */
+export const NEW_TYPES = NEW_CHART_TYPES;
 
 export function ChartTypePopup(p: { onPick(type: ChartType): void; onClose(): void }) {
   const { t } = useTranslation();
@@ -44,6 +47,7 @@ export function ChartTypePopup(p: { onPick(type: ChartType): void; onClose(): vo
         ))}
         <button type="button" role="menuitem" data-testid="chart-type-pie" onClick={() => p.onPick('pie')}>{t('propValue.ChartType.pie')}</button>
         <button type="button" role="menuitem" data-testid="chart-type-combo" onClick={() => p.onPick('combo')}>{t('propValue.ChartType.combo')}</button>
+        {NEW_TYPES.map((ty) => <button key={ty} type="button" role="menuitem" data-testid={`chart-type-${ty}`} onClick={() => p.onPick(ty)}>{t(`propValue.ChartType.${ty}`)}</button>)}
       </div>
     </RibbonPopup>
   );

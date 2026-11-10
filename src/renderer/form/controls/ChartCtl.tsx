@@ -3,10 +3,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { echarts } from '../../../shared/chart/echarts';
-import { chartFrame, chartOption, chartTooltip, readChartFormat, SAMPLE_ROWS } from '../../../shared/chart/option';
+import { chartFrame, chartOption, chartTooltip, readChartFormat, sampleFor } from '../../../shared/chart/option';
 import { chartPalette } from '../../../shared/chart/palette';
 import type { ChartData } from '../../../shared/chart/query';
-import { readChartSpec } from '../../../shared/chart/spec';
+import { readChartSpec, typeHintKey } from '../../../shared/chart/spec';
 import { trendLabels } from '../../../shared/chart/trend';
 import type { RecordSourceRef } from '../../../shared/record-source';
 import { useDocTheme } from '../../design/doc-theme';
@@ -26,7 +26,7 @@ function Canvas({ c, data, prefix }: { c: Ctl; data: ChartData; prefix: string }
   const chart = useRef<ReturnType<typeof echarts.init> | null>(null);
   const spec = useMemo(() => readChartSpec(c.props), [c.props]);
   const option = useMemo(() => {
-    const o = chartOption(spec, data, readChartFormat(c.props, { title: t('chart.defaultTitle'), empty: t('chart.emptyCategory'), trends: trendLabels(t) }), chartPalette(theme, mode), { width: 0, height: 0 });
+    const o = chartOption(spec, data, readChartFormat(c.props, { title: t('chart.defaultTitle'), empty: t('chart.emptyCategory'), trends: trendLabels(t), total: t('chart.waterfall.total'), cumulative: t('chart.pareto.cumulative') }), chartPalette(theme, mode), { width: 0, height: 0 });
     return { ...o, tooltip: chartTooltip(spec, o, i18n.language) };
   }, [spec, data, c.props, t, i18n.language, theme, mode]);
 
@@ -43,7 +43,15 @@ function Canvas({ c, data, prefix }: { c: Ctl; data: ChartData; prefix: string }
   }, [option, prefix]);
   // cadre du graphique (ChartBorder*) : aucun trait quand la bordure est transparente
   const fr = chartFrame(readChartFormat(c.props, { title: '', empty: '' }), chartPalette(theme, mode));
-  return <div ref={box} style={{ width: '100%', height: '100%', boxSizing: 'border-box', ...(fr ? { border: `${fr.width}px ${fr.style} ${fr.color}` } : {}) }} />;
+  // des lignes mais rien à tracer (nuage de points sur un X texte...) : le texte d'aide du type, sinon « aucune donnée »
+  const none = data.rows.length > 0 && ((option as { series?: unknown[] }).series ?? []).length === 0;
+  const hint = typeHintKey(spec);
+  return (
+    <>
+      <div ref={box} style={{ width: '100%', height: '100%', boxSizing: 'border-box', ...(fr ? { border: `${fr.width}px ${fr.style} ${fr.color}` } : {}) }} />
+      {none && <div className="frun-chart-empty muted" style={{ position: 'absolute', inset: 0 }} data-testid={`${prefix}chart-empty`}>{t(hint ?? 'chart.noData')}</div>}
+    </>
+  );
 }
 
 /** La source d'enregistrements du document en Création : celle d'un graphique sans source propre. */
@@ -90,7 +98,7 @@ export function DesignChart({ c, className, style }: { c: Ctl; className: string
   const sample = req === null;   // the fixed sample only without a source or fields; a valid empty source draws the real placeholder
   return (
     <div className={className} style={{ ...FRAME, ...style }} data-testid={sample ? 'design-chart-sample' : undefined}>
-      <Canvas c={c} data={sample ? SAMPLE_ROWS : data ?? NO_DATA} prefix="design-" />
+      <Canvas c={c} data={sample ? sampleFor(readChartSpec(c.props).type) : data ?? NO_DATA} prefix="design-" />
       {data?.truncated && <div className="frun-chart-hint" data-testid="design-chart-truncated">{t('chart.truncated')}</div>}
     </div>
   );

@@ -3,10 +3,10 @@
 import { Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AGGS, DATE_GROUPS, type Agg, type ChartSeries, type ChartSpec } from '../../shared/chart/spec';
+import { AGGS, chartDataMode, chartFamily, DATE_GROUPS, type Agg, type ChartSeries, type ChartSpec } from '../../shared/chart/spec';
 import type { RecordSourceRef, SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
-import { isDateField, listSources, setAgg, setDateGroup, setLegend, setSource, sourceKindOf, specPatch, toggleAxis, toggleValue, type SourceKind } from './chart-settings-model';
+import { isDateField, listSources, setAgg, setDateGroup, setLegend, setSource, sourceKindOf, specPatch, toggleAxis, toggleValue, typeHintKey, type SourceKind } from './chart-settings-model';
 import { errorMessage } from '../shell/Modal';
 import { PopupMenu } from './RibbonPopup';
 import { ChartSeriesFormat } from './ChartSeriesFormat';
@@ -77,6 +77,9 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
     e.preventDefault(); setTab(TABS[j]!);
     tabs.current?.querySelectorAll<HTMLElement>('[role="tab"]')[j]?.focus();
   };
+  const rows = chartDataMode(spec.type) === 'rows';   // nuage, bulles : les valeurs ne s'agrègent pas
+  const hint = typeHintKey(spec);
+  const xHint = chartFamily(spec.type) === 'scatter' || chartFamily(spec.type) === 'bubble';
   const multiLegend = spec.legend !== '' && spec.values.length > 1;
 
   return (
@@ -94,6 +97,7 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
         </div>
       )}
       <div className="cs-body" role="tabpanel" id={`${uid}-panel-data`} aria-labelledby={`${uid}-tab-data`} hidden={tab !== 'data'}>
+        {hint && <p className="cs-hint muted" data-testid="chart-type-hint">{t(hint)}</p>}
         <Section id={`${uid}-source`} title={t('chart.settings.source')}>
           <div role="radiogroup" aria-label={t('chart.settings.source')} className="cs-kinds">
             {KINDS.map((k) => (
@@ -112,6 +116,7 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
             <label key={f.name} className="cs-row"><input type="checkbox" data-testid={`chart-axis-${f.name}`} checked={spec.axis.some((a) => sameName(a, f.name))} disabled={readOnly}
               onChange={() => commit(toggleAxis(spec, f.name))} />{f.name}</label>
           ))}
+          {xHint && <p className="cs-hint muted" data-testid="chart-axis-x-hint">{t('chart.settings.axisXHint')}</p>}
           {isDateField(fields, spec.axis[0]) && (
             <label className="cs-row">{t('chart.settings.dateGroup')}
               <select data-testid="chart-date-group" value={spec.dateGroup} disabled={readOnly} onChange={(e) => commit(setDateGroup(spec, e.target.value as ChartSpec['dateGroup']))}>
@@ -131,6 +136,7 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
           </div>
         </Section>
         <Section id={`${uid}-values`} title={t('chart.settings.values')}>
+          {rows && <p id={`${uid}-rows`} className="cs-hint muted" data-testid="chart-rows-hint">{t('chart.settings.rowsHint')}</p>}
           {multiLegend && <p id={hintId} className="cs-hint muted" data-testid="chart-legend-hint">{t('chart.settings.legendHint')}</p>}
           {fields.map((f) => {
             const i = spec.values.findIndex((v) => sameName(v.field, f.name));
@@ -140,10 +146,10 @@ export function ChartSettings(p: { spec: ChartSpec | null; docSource: RecordSour
               <div key={f.name} className={`cs-row${dim ? ' cs-dim' : ''}`}>
                 <label><input type="checkbox" data-testid={`chart-value-${f.name}`} checked={!!v} disabled={readOnly} onChange={() => commit(toggleValue(spec, f.name))}
                   aria-label={f.name} aria-describedby={dim ? hintId : undefined} /></label>
-                {v ? (
+                {v && !rows ? (
                   <button type="button" className="cs-agg" data-testid={`chart-value-label-${f.name}`} aria-describedby={dim ? hintId : undefined} aria-haspopup="menu" aria-expanded={menu?.field === f.name} disabled={readOnly}
                     onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom, field: f.name }); }}>{f.name} ({aggLabel(v.agg)})</button>
-                ) : <span>{f.name}</span>}
+                ) : <span aria-describedby={rows ? `${uid}-rows` : undefined}>{f.name}</span>}
               </div>
             );
           })}

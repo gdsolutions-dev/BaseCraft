@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME } from '../design/theme';
-import { chartFrame, chartOption, chartTooltip, readChartFormat, SAMPLE_ROWS, type ChartFormat } from './option';
+import { chartFormatIssue, chartFrame, chartOption, chartTooltip, readChartFormat, sampleFor, SAMPLE_ROWS, type ChartFormat } from './option';
 import { chartPalette } from './palette';
 import type { ChartColumn, ChartData } from './query';
 import type { ChartSpec } from './spec';
@@ -294,6 +294,74 @@ describe('goldens', () => {
   });
 });
 
+describe('anneau, arc et entonnoir (F5)', () => {
+  const rows = plain([['A', 3], ['B', 5]]);
+  const kinds = ['doughnut', 'arc', 'funnel'] as const;
+  it('anneau : une série pie, trou non nul, plus grand avec DoughnutHoleSize 70, arrondi à 2 décimales', () => {
+    const o = opt(spec('doughnut'), rows);
+    expect(o.series).toHaveLength(1);
+    expect(o.series[0]).toMatchObject({ type: 'pie', data: [{ name: 'A', value: 3 }, { name: 'B', value: 5 }] });
+    expect(o.series[0].radius).toEqual(['38.5%', '70%']);
+    expect(opt(spec('doughnut'), rows, fmt({ holeSize: 70 })).series[0].radius[0]).toBe('49%');
+  });
+  it('arc : demi-anneau de 9 h à 3 h par le haut, centre bas, aucun texte au centre', () => {
+    const o = opt(spec('arc'), rows);
+    expect(o.series[0]).toMatchObject({ type: 'pie', startAngle: 180, endAngle: 0, clockwise: true, center: ['50%', '80%'], radius: ['55%', '100%'] });
+    expect(o.graphic).toBeUndefined();
+  });
+  it('arc : géométrie du SVG, première part à gauche et toutes au-dessus de la ligne du centre', () => {
+    const f = fmt();
+    const svg = chartSvg(chartOption(spec('arc'), plain([['A', 1], ['B', 1], ['C', 1], ['D', 1]]), f, pal, size), size);
+    // Extrémités de chaque part (M, L, A : deux derniers nombres) ; les parts sont les chemins remplis d'une couleur de série.
+    const slices = [...svg.matchAll(/<path d="(M[^"]+)"[^>]*ecmeta_data_index/g)].map((m) => [...m[1]!.matchAll(/([MLA])([^MLAZ]+)/g)].map((c) => {
+      const n = c[2]!.trim().split(/[\s,]+/).map(Number);
+      return [n[n.length - 2]!, n[n.length - 1]!] as [number, number];
+    }));
+    expect(slices).toHaveLength(4);
+    const baseline = slices[0]![0]![1];   // le diamètre : la part gauche y commence et la part droite y finit
+    const centerX = (slices[0]![0]![0] + slices[3]![slices[3]!.length - 2]![0]) / 2;
+    expect(slices[0]![0]![0]).toBeLessThan(centerX);
+    for (const pts of slices) for (const p of pts) expect(p[1]).toBeLessThanOrEqual(baseline + 0.5);
+    expect(slices[3]![slices[3]!.length - 2]![1]).toBeCloseTo(baseline, 0);
+    const xs = slices.map((pts) => pts[1]![0]);   // fin de l'arc externe : de gauche à droite dans l'ordre de la légende
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+  });
+  it('entonnoir : valeur décroissante puis libellé, négative et NULL écartées', () => {
+    const o = opt(spec('funnel'), plain([['A', 3], ['B', 5], ['C', 3], ['D', -1], ['E', null]]));
+    expect(o.series[0]).toMatchObject({ type: 'funnel', sort: 'none', data: [{ name: 'B', value: 5 }, { name: 'A', value: 3 }, { name: 'C', value: 3 }] });
+    expect(o.series[0].top).toBeDefined();
+  });
+  it('entonnoir sans étape dessinable : aucune série', () => {
+    expect(opt(spec('funnel'), plain([['A', null], ['B', -2]])).series).toEqual([]);
+  });
+  it.each(kinds)('%s : la légende est ignorée (parts sommées par catégorie)', (t) => {
+    const o = opt(spec(t, { legend: 'Produit' }), legended([['A', 'X', 1], ['A', 'Y', 2], ['B', 'X', 3]]));
+    expect(o.series[0].data.map((d: { value: number }) => d.value).sort()).toEqual([3, 3]);
+    expect(o.series).toHaveLength(1);
+  });
+  it.each(kinds)('%s : sans légende (hasLegend faux), JSON sans fonction ni undefined, info-bulle par élément', (t) => {
+    const o = opt(spec(t), rows);
+    expect(o.legend).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(o))).toEqual(o);
+    expect(opt(spec(t), rows, fmt({ hasLegend: true })).legend.show).toBe(true);
+    expect(chartTooltip(spec(t), o)).toEqual({ trigger: 'item' });
+  });
+  it('info-bulle par élément aussi pour nuage de points, bulles et boîte, par axe pour les colonnes', () => {
+    for (const t of ['scatter', 'bubble', 'boxWhisker'] as const) expect(chartTooltip(spec(t), {})).toEqual({ trigger: 'item' });
+    expect(chartTooltip(spec('columnClustered'), {})).toEqual({ trigger: 'axis' });
+  });
+  const full = fmt({ hasTitle: true, title: 'Ventes', hasLegend: true });
+  const data = plain([['Lyon', 3], ['Paris', 5], ['Nice', 2]]);
+  it.each(kinds)('%s : golden, déterministe, sans NaN', (t) => {
+    const make = () => chartSvg(chartOption(spec(t), data, full, pal, size), size);
+    const svg = make();
+    if (process.env.UPDATE_GOLDEN) writeFileSync(golden(t), svg);
+    expect(svg).toBe(readFileSync(golden(t), 'utf8'));
+    expect(make()).toBe(svg);
+    expect(svg).not.toMatch(/NaN|undefined/);
+  });
+});
+
 describe('mise en forme complète (T15)', () => {
   const rf = (props: Record<string, unknown>) => ({ ...readChartFormat(props, { title: 'T', empty: '(empty)' }), hasLegend: false, hasTitle: false });
   const o2 = (props: Record<string, unknown>, s = spec('columnClustered'), d = plain([['A', 1000], ['B', 2000]])) => opt(s, d, rf(props));
@@ -374,3 +442,145 @@ describe('mise en forme complète (T15)', () => {
     expect(chartFrame(readChartFormat({ ChartBorderStyle: 'bizarre' }, { title: '', empty: '' }), pal)).toBeNull();
   });
 });
+
+describe('mise en forme F5', () => {
+  const rf = (props: Record<string, unknown>, labels: object = {}) => readChartFormat(props, { title: 'T', empty: '', ...labels });
+  it('trou, bulle maximale, cascade : défauts et valeurs hors plage', () => {
+    expect(rf({}).holeSize).toBe(55); expect(rf({}).bubbleMax).toBe(40);
+    expect(rf({ DoughnutHoleSize: 5 }).holeSize).toBe(55); expect(rf({ DoughnutHoleSize: 70 }).holeSize).toBe(70); expect(rf({ DoughnutHoleSize: 5.5 }).holeSize).toBe(55);
+    expect(rf({ BubbleMaxSize: 'x' }).bubbleMax).toBe(40); expect(rf({ BubbleMaxSize: 100 }).bubbleMax).toBe(100);
+    expect(rf({}).waterfall).toEqual({ increase: 'theme:accent1', decrease: 'theme:accent2', total: 'theme:accent3', showTotal: true });
+    expect(rf({ WaterfallIncreaseColor: 'nope' }).waterfall.increase).toBe('theme:accent1');
+    expect(rf({ WaterfallDecreaseColor: '#112233', WaterfallShowTotal: false }).waterfall).toMatchObject({ decrease: '#112233', showTotal: false });
+  });
+  it('libellés du total et du cumul', () => {
+    expect([rf({}).total, rf({}).cumulative]).toEqual(['Total', 'Cumulative %']);
+    expect([rf({}, { total: 'Somme', cumulative: 'Cumul %' }).total, rf({}, { total: 'Somme', cumulative: 'Cumul %' }).cumulative]).toEqual(['Somme', 'Cumul %']);
+  });
+  it('chartFormatIssue refuse les valeurs F5 invalides', () => {
+    expect(chartFormatIssue({ BubbleMaxSize: 500 })).toMatch(/BubbleMaxSize/);
+    expect(chartFormatIssue({ DoughnutHoleSize: 5.5 })).toMatch(/DoughnutHoleSize/);
+    expect(chartFormatIssue({ WaterfallTotalColor: 'x' })).toMatch(/WaterfallTotalColor/);
+    expect(chartFormatIssue({ WaterfallShowTotal: 'yes' })).toMatch(/WaterfallShowTotal/);
+    expect(chartFormatIssue({ DoughnutHoleSize: 55, BubbleMaxSize: 40, WaterfallShowTotal: true, WaterfallIncreaseColor: 'theme:accent1' })).toBeNull();
+  });
+});
+
+describe('nuage de points et bulles (F5)', () => {
+  const xcol: ChartColumn = { role: 'category', field: 'Qte', name: 'Qte' };
+  const xy = (rows: ChartData['rows']): ChartData => ({ columns: [xcol, val], rows, truncated: false });
+  const xyl = (rows: ChartData['rows']): ChartData => ({ columns: [xcol, leg, val], rows, truncated: false });
+  const poids: ChartColumn = { role: 'value', field: 'Poids', name: 'Poids' };
+  const xys = (rows: ChartData['rows']): ChartData => ({ columns: [xcol, val, poids], rows, truncated: false });
+  const sc = spec('scatter', { axis: ['Qte'] });
+  const bu = spec('bubble', { axis: ['Qte'], values: [{ field: 'Montant', agg: 'none' }, { field: 'Poids', agg: 'none' }] });
+  const diam = (s: { data: { symbolSize: number }[] }): number[] => s.data.map((p) => p.symbolSize);
+  it('nuage : une série scatter, axes numériques, points triés par X puis Y', () => {
+    const o = opt(sc, xy([[3, 2], [1, 5], [1, 4]]));
+    expect(o.xAxis.type).toBe('value');
+    expect(o.yAxis.type).toBe('value');
+    expect(o.series).toHaveLength(1);
+    expect(o.series[0]).toMatchObject({ type: 'scatter', name: 'SumOfMontant', symbolSize: 8, itemStyle: { opacity: 0.75 }, data: [[1, 4], [1, 5], [3, 2]] });
+    expect(opt(sc, xy([[1, 10], [3, 20]])).series[0].data).toEqual([[1, 10], [3, 20]]);
+  });
+  it('légende : une série par valeur', () => {
+    const o = opt(spec('scatter', { axis: ['Qte'], legend: 'Produit' }), xyl([[1, 'X', 2], [2, 'Y', 3], [3, 'X', 4]]));
+    expect(o.series.map((s: { name: string; data: unknown[] }) => [s.name, s.data.length])).toEqual([['X', 2], ['Y', 1]]);
+  });
+  it('X NULL ou texte : point écarté (jamais NaN) ; texte numérique lu ; aucun point : option vide', () => {
+    expect(opt(sc, xy([[null, 1], ['abc', 2], ['12', 3], [4, null]])).series[0].data).toEqual([[12, 3]]);
+    const o = opt(sc, xy([['abc', 1], [null, 2]]));
+    expect(o.series).toEqual([]);
+    expect(o.xAxis).toEqual({ show: false });
+    expect(JSON.stringify(o)).not.toMatch(/NaN/);
+  });
+  it('sans colonne d\'axe : option vide', () => {
+    expect(opt(sc, { columns: [val], rows: [[2]], truncated: false }).series).toEqual([]);
+  });
+  it('bulles : diamètre proportionnel à l\'aire, la plus grande vaut BubbleMaxSize', () => {
+    const o = opt(bu, xys([[1, 10, 4], [2, 20, 16]]), fmt({ bubbleMax: 40 }));
+    expect(o.series[0].data).toEqual([{ value: [1, 10, 4], symbolSize: 22 }, { value: [2, 20, 16], symbolSize: 40 }]);
+    expect(o.series[0].symbolSize).toBeUndefined();
+  });
+  it('bulles : échelle commune aux séries, taille négative écartée, taille 0 ou absente : diamètre moyen', () => {
+    const l = spec('bubble', { axis: ['Qte'], legend: 'Produit', values: bu.values });
+    const d: ChartData = { columns: [xcol, leg, val, poids], rows: [[1, 'X', 1, 16], [2, 'Y', 2, 4], [3, 'Y', 3, -1], [4, 'Y', 4, 0], [5, 'Y', 5, null]], truncated: false };
+    const o = opt(l, d, fmt({ bubbleMax: 40 }));
+    expect(diam(o.series[0])).toEqual([40]);
+    expect(diam(o.series[1])).toEqual([22, 22, 22]);   // 4 sur 16 = 22 ; 0 et NULL = moyen (22) ; -1 écartée
+  });
+  it('bulles avec une seule Valeur : toutes les bulles ont le même diamètre moyen', () => {
+    const o = opt(spec('bubble', { axis: ['Qte'] }), xy([[1, 10], [2, 20]]), fmt({ bubbleMax: 40 }));
+    expect(diam(o.series[0])).toEqual([22, 22]);
+  });
+  it('titres d\'axes : champ X et première Valeur, ou saisis ; absents sans hasAxisTitles', () => {
+    const o = opt(bu, xys([[1, 10, 4]]), fmt({ hasAxisTitles: true }));
+    expect([o.xAxis.name, o.yAxis.name]).toEqual(['Qte', 'SumOfMontant']);
+    const t = opt(sc, xy([[1, 1]]), fmt({ axisTitleX: 'HX', axisTitleY: 'HY' }));
+    expect([t.xAxis.name, t.yAxis.name]).toEqual(['HX', 'HY']);
+    const n = opt(sc, xy([[1, 1]]), fmt({ hasAxisTitles: false }));
+    expect([n.xAxis.name, n.yAxis.name]).toEqual([undefined, undefined]);
+  });
+  it('plage manuelle, format et unités : axe Y seulement ; l\'axe X prend la police des abscisses', () => {
+    const o = opt(sc, xy([[1, 10]]), fmt({ axisRange: 'manual', axisMin: 0, axisMax: 50, axisFormat: '0.00', axisUnits: 'thousands', axisXSize: 13 }));
+    expect(o.yAxis).toMatchObject({ min: 0, max: 50 });
+    expect(o.xAxis.min).toBeUndefined();
+    expect(o.xAxis.max).toBeUndefined();
+    expect(o.xAxis.axisLabel.formatter).toBeUndefined();
+    expect(o.xAxis.axisLabel.fontSize).toBe(13);
+    expect(o.yAxis.axisLabel.formatter).toBeTypeOf('function');
+  });
+  it('étiquettes : chaîne `{@[1]}` (valeur Y), sinon aucune', () => {
+    const lab = spec('scatter', { axis: ['Qte'], series: [{ field: 'Montant', dataLabels: true }] });
+    expect(opt(lab, xy([[1, 10]])).series[0].label).toMatchObject({ show: true, formatter: '{@[1]}' });
+    expect(opt(sc, xy([[1, 10]])).series[0].label).toBeUndefined();
+  });
+  it.each([['scatter', sc, xy([[1, 10], [2, 5]])], ['bubble', bu, xys([[1, 10, 3], [2, 5, 4]])]] as const)('%s : séries sans fonction, info-bulle par élément', (_t, s, d) => {
+    const o = opt(s, d, fmt({ axisFormat: '0.00' }));
+    expect(JSON.parse(JSON.stringify(o.series))).toEqual(o.series);   // les axes portent un formatter (comme en F4)
+    expect(chartTooltip(s, o)).toEqual({ trigger: 'item' });
+  });
+  const full = fmt({ hasTitle: true, title: 'Ventes', hasLegend: true });
+  const gold: [string, () => string][] = [
+    ['scatter-legend', () => chartSvg(chartOption(spec('scatter', { axis: ['Qte'], legend: 'Produit' }), xyl([[1, 'X', 3], [2, 'Y', 5], [3, 'X', 4], [4, 'Y', 1], [5, 'X', 6]]), full, pal, size), size)],
+    ['bubble', () => chartSvg(chartOption(bu, xys([[1, 3, 4], [2, 5, 16], [3, 4, 9], [4, 1, 1]]), full, pal, size), size)],
+  ];
+  it.each(gold)('%s correspond au golden, déterministe, sans NaN', (name, make) => {
+    const svg = make();
+    if (process.env.UPDATE_GOLDEN) writeFileSync(golden(name), svg);
+    expect(svg).toBe(readFileSync(golden(name), 'utf8'));
+    expect(make()).toBe(svg);
+    expect(svg).not.toMatch(/NaN|undefined/);
+  });
+});
+
+describe('étiquettes intérieures de l\'entonnoir : contraste', () => {
+  const lin = (hex: string, i: number): number => { const c = parseInt(hex.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = (hex: string): number => 0.2126 * lin(hex, 1) + 0.7152 * lin(hex, 3) + 0.0722 * lin(hex, 5);
+  const ratio = (a: string, b: string): number => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  it.each(['light', 'dark'] as const)('palette %s : couleur de part explicite, étiquette lisible (contraste >= 4.5)', (mode) => {
+    const p = chartPalette(DEFAULT_THEME, mode);
+    const o = chartOption(spec('funnel'), plain([['A', 6], ['B', 5], ['C', 4], ['D', 3], ['E', 2], ['F', 1], ['G', 0]]), fmt(), p, size) as unknown as { series: { data: { itemStyle: { color: string }; label: { color: string } }[] }[] };
+    expect(o.series[0]!.data).toHaveLength(7);
+    for (const d of o.series[0]!.data) expect(ratio(d.itemStyle.color, d.label.color)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('sampleFor (F5)', () => {
+  it('F4 : les anciens types gardent SAMPLE_ROWS ; un exemple est une constante stable', () => {
+    expect(sampleFor('columnClustered')).toBe(SAMPLE_ROWS);
+    expect(sampleFor('funnel')).toEqual(sampleFor('funnel'));
+  });
+  it.each(['doughnut', 'arc', 'funnel', 'scatter', 'bubble'] as const)('%s : l exemple dessine au moins une série avec un point', (t) => {
+    const o = opt(spec(t, { axis: ['x'], values: [{ field: 'v', agg: 'sum' }, { field: 'w', agg: 'sum' }] }), sampleFor(t));
+    expect(o.series.length).toBeGreaterThan(0);
+    expect(o.series[0].data.length).toBeGreaterThan(0);
+    expect(JSON.stringify(o)).not.toMatch(/NaN|undefined/);
+  });
+  it('nuage : une légende désactive les étiquettes de données (comme en F4)', () => {
+    const s = spec('scatter', { axis: ['Qte'], legend: 'Produit', series: [{ field: 'Montant', dataLabels: true }] });
+    const d: ChartData = { columns: [{ role: 'category', field: 'Qte', name: 'Qte' }, leg, val], rows: [[1, 'X', 2], [2, 'Y', 3]], truncated: false };
+    for (const x of opt(s, d).series) expect(x.label).toBeUndefined();
+  });
+});
+

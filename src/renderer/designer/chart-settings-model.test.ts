@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readChartSpec, type ChartSpec } from '../../shared/chart/spec';
-import { armedChartTool, isDateField, listSources, setAgg, setLegend, setSeries, setSource, specPatch, specToProps, toggleAxis, toggleValue } from './chart-settings-model';
+import { armedChartTool, isDateField, listSources, setAgg, setLegend, setSeries, setSource, specPatch, specToProps, toggleAxis, toggleValue, typeHintKey } from './chart-settings-model';
 
 const base: ChartSpec = { type: 'columnClustered', source: { kind: 'table', name: 'Commandes' }, axis: ['Client'], dateGroup: 'none', legend: '',
   values: [{ field: 'Montant', agg: 'sum' }] };
@@ -78,3 +78,12 @@ describe('setSeries', () => {
     expect(specPatch(s, { ...s, series: [] })).toEqual({ ChartSeries: undefined });
   });
 });
+
+describe('typeHintKey (F5)', () => {
+  it('une aide par type, nulle pour les types F4', () => {
+    expect(typeHintKey({ ...base, type: 'scatter', axis: ['Client'] })).toBe('chart.settings.typeHint.scatter');
+    expect(typeHintKey({ ...base, type: 'doughnut' })).toBe('chart.settings.typeHint.doughnut');
+    expect(typeHintKey(base)).toBeNull();
+  });
+});
+

@@ -95,6 +95,18 @@ BaseCraft Runtime uruchamia bazę danych bez dostępu do projektowania: bez wido
 - **Linux:** oba produkty deklarują `application/x-basecraft`. Domyślną aplikację wybiera środowisko graficzne; aby ją sprawdzić lub zmienić, uruchom `xdg-mime query default application/x-basecraft` albo `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` dla Runtime).
 - **macOS:** na razie bez kompilacji Runtime. Kompilacje pełnej aplikacji dla macOS nie są podpisane ani poddane notaryzacji (patrz wyżej).
 
+#### Udostępnianie bazy z BaseCraft Runtime
+
+1. **Przygotuj bazę** w BaseCraft (pełnej aplikacji), w Plik › Opcje › Bieżąca baza danych: ustaw **Tytuł aplikacji**, wybierz w polu **Wyświetl formularz** formularz pokazywany przy otwarciu i wyłącz **Wyświetlaj okienko nawigacji**, jeśli użytkownicy mają pozostać w Twoich formularzach. Makro o nazwie `AutoExec` jest uruchamiane przy każdym otwarciu, po formularzu startowym.
+2. **Sprawdź efekt** bez Runtime: zaznacz **Otwieraj w trybie uruchomieniowym**, a następnie zamknij i otwórz bazę ponownie. Przytrzymaj Shift podczas otwierania, aby pominąć opcje uruchamiania; BaseCraft Runtime nie ma takiego obejścia.
+3. **Zainstaluj BaseCraft Runtime** na każdym stanowisku, ze [strony Releases](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Przekaż plik `.basecraft`** użytkownikom. Otwierają go dwukrotnym kliknięciem, gdy zainstalowany jest tylko Runtime, a w przeciwnym razie przez *Otwórz za pomocą*.
+5. **Makra i kwerendy funkcjonalne:** każdy użytkownik klika raz **Włącz zawartość** albo administrator oznacza folder jako zaufany (zobacz niżej).
+6. **Wielu użytkowników:** podziel bazę poleceniem **Podziel bazę danych**, a następnie umieść plik danych i fronton w udziale sieciowym. Runtime otwiera fronton z kopii lokalnej; podmień go w udziale, a każde stanowisko pobierze nową wersję przy następnym otwarciu.
+7. **Po aktualizacji BaseCraft:** otwórz bazę raz w pełnej aplikacji. BaseCraft Runtime nigdy nie aktualizuje formatu bazy i odmawia otwarcia bazy, która tego wymaga.
+
+BaseCraft Runtime uniemożliwia zmiany projektu; nie chroni danych. Plik `.basecraft` pozostaje zwykłą bazą danych SQLite, a okienko nawigacji, o ile baza go nie ukrywa, pokazuje wszystkie obiekty.
+
 ### Makra, kwerendy funkcjonalne i foldery zaufane
 
 Makra i kwerendy funkcjonalne w otwieranej bazie są wyłączone, dopóki nie klikniesz **Włącz zawartość** (« Activer le contenu ») na pasku zabezpieczeń lub dopóki plik nie znajdzie się w folderze, który administrator uznał za zaufany. Bazy utworzone przed wersją 0.3, które zawierają już zapisane kwerendy funkcjonalne, zapytają o to jednorazowo.

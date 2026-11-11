@@ -95,6 +95,18 @@ BaseCraft Runtime 可在没有设计权限的情况下运行数据库：没有�
 - **Linux：** 两个产品都声明了 `application/x-basecraft`。默认应用由桌面环境决定；要查看或更改它，请运行 `xdg-mime query default application/x-basecraft` 或 `xdg-mime default basecraft.desktop application/x-basecraft`（Runtime 则用 `basecraft-runtime.desktop`）。
 - **macOS：** 暂无 Runtime 构建。完整应用程序的 macOS 构建未经签名或公证（见上文）。
 
+#### 使用 BaseCraft Runtime 分发数据库
+
+1. **准备数据库。** 在 BaseCraft（完整应用程序）的 文件 › 选项 › 当前数据库 中：设置 **应用程序标题**，在 **显示窗体** 中选择打开时显示的窗体；如果希望用户只停留在您的窗体中，请取消勾选 **显示导航窗格**。名为 `AutoExec` 的宏会在每次打开时、启动窗体之后运行。
+2. **不用 Runtime 进行预览。** 勾选 **以运行模式打开**，然后关闭并重新打开数据库。打开时按住 Shift 键可绕过启动选项；BaseCraft Runtime 没有这种绕过方式。
+3. **在每台工作站上安装 BaseCraft Runtime。** 可从 [Releases 页面](https://github.com/gdsolutions-dev/BaseCraft/releases)下载。
+4. **把 `.basecraft` 文件交给用户。** 只安装了 Runtime 时双击即可打开，否则使用“打开方式”。
+5. **宏和操作查询：** 每位用户单击一次 **启用内容**，或者由管理员将该文件夹设为受信任（见下文）。
+6. **多位用户：** 使用 **拆分数据库** 拆分数据库，然后把数据文件和前端放到共享文件夹中。Runtime 从本地副本打开前端；替换共享文件夹中的前端后，每台工作站在下次打开时获取新版本。
+7. **更新 BaseCraft 之后：** 用完整应用程序打开数据库一次。BaseCraft Runtime 从不升级数据库的格式，并拒绝打开需要升级的数据库。
+
+BaseCraft Runtime 阻止设计更改，但不保护数据。`.basecraft` 文件仍然是普通的 SQLite 数据库；除非数据库将其隐藏，否则导航窗格会列出所有对象。
+
 ### 宏、操作查询与受信任文件夹
 
 在你打开的数据库中，宏和操作查询会被禁用，直到你在安全栏中单击**启用内容**（« Activer le contenu »），或者文件位于管理员已信任的文件夹中。0.3 之前创建、且已保存有操作查询的数据库会询问一次。

@@ -106,6 +106,18 @@ BaseCraft Runtime runs a database without design access: no Design view, no desi
 - **Linux:** both products declare `application/x-basecraft`. The desktop chooses the default; to see it, or to change it, run `xdg-mime query default application/x-basecraft` or `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` for the Runtime).
 - **macOS:** no Runtime build yet. The macOS builds of the full application are not signed or notarized (see above).
 
+#### Distributing a base with BaseCraft Runtime
+
+1. **Prepare the base** in BaseCraft (the full application), under File › Options › Current Database: set **Application Title**, choose the form shown at opening in **Display Form**, and clear **Display Navigation Pane** if users should stay in your forms. A macro named `AutoExec` runs at each opening, after the startup form.
+2. **Preview it** without the Runtime: tick **Open in run mode**, then close and reopen the base. Hold Shift while opening to bypass the startup options; BaseCraft Runtime has no such bypass.
+3. **Install BaseCraft Runtime** on each workstation, from the [Releases page](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Give the `.basecraft` file** to its users. They open it with a double-click when the Runtime is installed alone, with *Open with* otherwise.
+5. **Macros and action queries:** each user clicks **Enable Content** once, or an administrator trusts the folder (see below).
+6. **Several users:** split the base with **Split Database**, then put the data file and the front-end on a share. The Runtime opens the front-end from a local copy; replace the front-end on the share and each workstation takes the new version at its next opening.
+7. **After updating BaseCraft:** open the base once with the full application. BaseCraft Runtime never upgrades a base's format and refuses a base that needs it.
+
+BaseCraft Runtime prevents design changes; it does not protect the data. A `.basecraft` file remains an ordinary SQLite database and, unless the base hides it, the Navigation Pane lists every object.
+
 ### Macros, action queries and trusted folders
 
 Macros and action queries in a base you open are disabled until you click **Enable Content** (« Activer le contenu ») in the security bar, or until the file is in a folder an administrator has trusted. Bases created before 0.3 that already hold saved action queries ask once.

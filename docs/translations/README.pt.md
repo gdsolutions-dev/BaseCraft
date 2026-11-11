@@ -95,6 +95,18 @@ O BaseCraft Runtime executa um banco de dados sem acesso ao design: sem modo Des
 - **Linux:** os dois produtos declaram `application/x-basecraft`. O ambiente de desktop escolhe o padrão; para vê-lo ou alterá-lo, execute `xdg-mime query default application/x-basecraft` ou `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` para o Runtime).
 - **macOS:** ainda não há compilação do Runtime. As compilações do aplicativo completo para macOS não são assinadas nem notarizadas (veja acima).
 
+#### Distribuir uma base com o BaseCraft Runtime
+
+1. **Prepare a base** no BaseCraft (o aplicativo completo), em Arquivo › Opções › Banco de Dados Atual: defina o **Título do Aplicativo**, escolha em **Exibir Formulário** o formulário mostrado na abertura e desmarque **Exibir Painel de Navegação** se os usuários devem permanecer nos seus formulários. Uma macro chamada `AutoExec` é executada a cada abertura, depois do formulário de inicialização.
+2. **Visualize** sem o Runtime: marque **Abrir no modo de execução**, depois feche e reabra a base. Mantenha Shift pressionada ao abrir para ignorar as opções de inicialização; o BaseCraft Runtime não tem esse desvio.
+3. **Instale o BaseCraft Runtime** em cada estação, a partir da [página Releases](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Entregue o arquivo `.basecraft`** aos usuários. Eles o abrem com um clique duplo quando o Runtime está instalado sozinho, ou com *Abrir com* caso contrário.
+5. **Macros e consultas ação:** cada usuário clica uma vez em **Habilitar Conteúdo**, ou um administrador declara a pasta como confiável (veja abaixo).
+6. **Vários usuários:** divida a base com **Dividir Banco de Dados** e coloque o arquivo de dados e o front-end em um compartilhamento. O Runtime abre o front-end a partir de uma cópia local; substitua-o no compartilhamento e cada estação pega a nova versão na próxima abertura.
+7. **Depois de atualizar o BaseCraft:** abra a base uma vez com o aplicativo completo. O BaseCraft Runtime nunca atualiza o formato de uma base e recusa uma base que precise disso.
+
+O BaseCraft Runtime impede alterações de design; ele não protege os dados. Um arquivo `.basecraft` continua sendo um banco de dados SQLite comum e, a menos que a base o oculte, o Painel de Navegação lista todos os objetos.
+
 ### Macros, consultas de ação e pastas confiáveis
 
 As macros e consultas de ação de um banco que você abre ficam desativadas até que você clique em **Habilitar Conteúdo** (« Activer le contenu ») na barra de segurança, ou até que o arquivo esteja em uma pasta que um administrador tenha marcado como confiável. Bancos criados antes da 0.3 que já contêm consultas de ação salvas perguntam uma vez.

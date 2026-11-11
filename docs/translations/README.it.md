@@ -95,6 +95,18 @@ BaseCraft Runtime esegue un database senza accesso alla progettazione: nessuna v
 - **Linux:** entrambi i prodotti dichiarano `application/x-basecraft`. È il desktop a scegliere quello predefinito; per vederlo, o per cambiarlo, esegui `xdg-mime query default application/x-basecraft` oppure `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` per il Runtime).
 - **macOS:** nessuna build del Runtime per ora. Le build macOS dell'applicazione completa non sono firmate né notarizzate (vedi sopra).
 
+#### Distribuire un database con BaseCraft Runtime
+
+1. **Preparate il database** in BaseCraft (l'applicazione completa), in File › Opzioni › Database corrente: impostate **Titolo applicazione**, scegliete in **Visualizza maschera** la maschera mostrata all'apertura e deselezionate **Visualizza riquadro di spostamento** se gli utenti devono restare nelle vostre maschere. Una macro di nome `AutoExec` viene eseguita a ogni apertura, dopo la maschera di avvio.
+2. **Provate l'anteprima** senza il Runtime: selezionate **Apri in modalità esecuzione**, poi chiudete e riaprite il database. Tenete premuto Maiusc durante l'apertura per ignorare le opzioni di avvio; BaseCraft Runtime non prevede questa possibilità.
+3. **Installate BaseCraft Runtime** su ogni postazione, dalla [pagina Releases](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Consegnate il file `.basecraft`** agli utenti. Lo aprono con un doppio clic se è installato solo il Runtime, altrimenti con *Apri con*.
+5. **Macro e query di comando:** ogni utente fa clic una volta su **Abilita contenuto**, oppure un amministratore dichiara attendibile la cartella (vedi sotto).
+6. **Più utenti:** dividete il database con **Dividi database**, poi mettete il file di dati e il front-end su una condivisione. Il Runtime apre il front-end da una copia locale; sostituitelo sulla condivisione e ogni postazione prende la nuova versione all'apertura successiva.
+7. **Dopo un aggiornamento di BaseCraft:** aprite il database una volta con l'applicazione completa. BaseCraft Runtime non aggiorna mai il formato di un database e rifiuta un database che ne ha bisogno.
+
+BaseCraft Runtime impedisce le modifiche alla struttura; non protegge i dati. Un file `.basecraft` resta un normale database SQLite e, a meno che il database non lo nasconda, il riquadro di spostamento elenca tutti gli oggetti.
+
 ### Macro, query di comando e cartelle attendibili
 
 Le macro e le query di comando di una base di dati che apri sono disattivate finché non fai clic su **Abilita contenuto** (« Activer le contenu ») nella barra di sicurezza, oppure finché il file non si trova in una cartella che un amministratore ha reso attendibile. Le basi create prima della 0.3 che contengono già query di comando salvate lo chiedono una sola volta.

@@ -95,6 +95,18 @@ BaseCraft Runtime exécute une base sans accès à la conception : pas de mode C
 - **Linux :** les deux produits déclarent `application/x-basecraft`. C'est l'environnement de bureau qui choisit le défaut ; pour le voir ou le modifier, exécutez `xdg-mime query default application/x-basecraft` ou `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` pour le Runtime).
 - **macOS :** pas encore de version Runtime. Les versions macOS de l'application complète ne sont ni signées ni notarisées (voir plus haut).
 
+#### Distribuer une base avec BaseCraft Runtime
+
+1. **Préparez la base** dans BaseCraft (l'application complète), sous Fichier › Options › Base de données active : renseignez **Titre de l'application**, choisissez dans **Afficher le formulaire** le formulaire affiché à l'ouverture, et décochez **Afficher le volet de navigation** si les utilisateurs doivent rester dans vos formulaires. Une macro nommée `AutoExec` s'exécute à chaque ouverture, après le formulaire de démarrage.
+2. **Prévisualisez** sans le Runtime : cochez **Ouvrir en mode exécution**, puis fermez et rouvrez la base. Maintenez Maj pendant l'ouverture pour contourner les options de démarrage ; BaseCraft Runtime n'a pas ce contournement.
+3. **Installez BaseCraft Runtime** sur chaque poste, depuis la [page Releases](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Donnez le fichier `.basecraft`** à ses utilisateurs. Ils l'ouvrent par double-clic si le Runtime est installé seul, par *Ouvrir avec* sinon.
+5. **Macros et requêtes Action :** chaque utilisateur clique une fois sur **Activer le contenu**, ou un administrateur approuve le dossier (voir plus bas).
+6. **Plusieurs utilisateurs :** fractionnez la base avec **Fractionner la base de données**, puis placez le fichier de données et l'application frontale sur un partage. Le Runtime ouvre l'application frontale depuis une copie locale ; remplacez-la sur le partage et chaque poste prend la nouvelle version à sa prochaine ouverture.
+7. **Après une mise à jour de BaseCraft :** ouvrez la base une fois avec l'application complète. BaseCraft Runtime ne met jamais à niveau le format d'une base et refuse une base qui en a besoin.
+
+BaseCraft Runtime empêche les modifications de conception ; il ne protège pas les données. Un fichier `.basecraft` reste une base SQLite ordinaire et, sauf si la base le masque, le volet de navigation liste tous les objets.
+
 ### Macros, requêtes Action et dossiers approuvés
 
 Les macros et les requêtes Action d'une base que vous ouvrez sont désactivées tant que vous n'avez pas cliqué sur **Activer le contenu** (« Activer le contenu ») dans la barre de sécurité, ou que le fichier ne se trouve pas dans un dossier qu'un administrateur a approuvé. Les bases créées avant la 0.3 qui contiennent déjà des requêtes Action enregistrées demandent une fois.

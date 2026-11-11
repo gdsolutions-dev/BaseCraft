@@ -95,6 +95,18 @@ BaseCraft Runtime führt eine Datenbank ohne Entwurfszugriff aus: keine Entwurfs
 - **Linux:** Beide Produkte deklarieren `application/x-basecraft`. Die Desktop-Umgebung bestimmt den Standard; um ihn anzuzeigen oder zu ändern, führen Sie `xdg-mime query default application/x-basecraft` bzw. `xdg-mime default basecraft.desktop application/x-basecraft` aus (`basecraft-runtime.desktop` für die Runtime).
 - **macOS:** Noch kein Runtime-Build. Die macOS-Builds der Vollversion sind nicht signiert oder notarisiert (siehe oben).
 
+#### Eine Datenbank mit BaseCraft Runtime weitergeben
+
+1. **Bereiten Sie die Datenbank vor** in BaseCraft (der Vollversion), unter Datei › Optionen › Aktuelle Datenbank: Legen Sie den **Anwendungstitel** fest, wählen Sie unter **Formular anzeigen** das Formular, das beim Öffnen erscheint, und deaktivieren Sie **Navigationsbereich anzeigen**, wenn die Benutzer in Ihren Formularen bleiben sollen. Ein Makro namens `AutoExec` wird bei jedem Öffnen nach dem Startformular ausgeführt.
+2. **Testen Sie die Vorschau** ohne die Runtime: Aktivieren Sie **Im Ausführungsmodus öffnen**, schließen Sie die Datenbank und öffnen Sie sie erneut. Halten Sie beim Öffnen die Umschalttaste gedrückt, um die Startoptionen zu umgehen; BaseCraft Runtime kennt diese Umgehung nicht.
+3. **Installieren Sie BaseCraft Runtime** auf jedem Arbeitsplatz, von der [Releases-Seite](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Geben Sie die `.basecraft`-Datei** an die Benutzer weiter. Sie öffnen sie per Doppelklick, wenn nur die Runtime installiert ist, sonst über *Öffnen mit*.
+5. **Makros und Aktionsabfragen:** Jeder Benutzer klickt einmal auf **Inhalt aktivieren**, oder ein Administrator stuft den Ordner als vertrauenswürdig ein (siehe unten).
+6. **Mehrere Benutzer:** Teilen Sie die Datenbank mit **Datenbank teilen** und legen Sie die Datendatei und das Front-End auf einer Freigabe ab. Die Runtime öffnet das Front-End aus einer lokalen Kopie; ersetzen Sie es auf der Freigabe, und jeder Arbeitsplatz übernimmt die neue Version beim nächsten Öffnen.
+7. **Nach einem Update von BaseCraft:** Öffnen Sie die Datenbank einmal mit der Vollversion. BaseCraft Runtime aktualisiert das Format einer Datenbank nie und lehnt eine Datenbank ab, die es benötigt.
+
+BaseCraft Runtime verhindert Entwurfsänderungen; die Daten schützt es nicht. Eine `.basecraft`-Datei bleibt eine gewöhnliche SQLite-Datenbank, und sofern die Datenbank ihn nicht ausblendet, listet der Navigationsbereich alle Objekte auf.
+
 ### Makros, Aktionsabfragen und vertrauenswürdige Ordner
 
 Makros und Aktionsabfragen in einer geöffneten Datenbank sind deaktiviert, bis Sie in der Sicherheitsleiste auf **Inhalt aktivieren** (« Activer le contenu ») klicken oder bis sich die Datei in einem Ordner befindet, dem ein Administrator vertraut. Vor 0.3 erstellte Datenbanken, die bereits gespeicherte Aktionsabfragen enthalten, fragen einmalig nach.

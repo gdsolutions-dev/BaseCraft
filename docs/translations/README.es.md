@@ -95,6 +95,18 @@ BaseCraft Runtime ejecuta una base de datos sin acceso al diseño: sin vista Dis
 - **Linux:** ambos productos declaran `application/x-basecraft`. El escritorio elige el predeterminado; para verlo o cambiarlo, ejecuta `xdg-mime query default application/x-basecraft` o `xdg-mime default basecraft.desktop application/x-basecraft` (`basecraft-runtime.desktop` para el Runtime).
 - **macOS:** aún no hay compilación del Runtime. Las compilaciones de macOS de la aplicación completa no están firmadas ni notarizadas (ver arriba).
 
+#### Distribuir una base con BaseCraft Runtime
+
+1. **Prepare la base** en BaseCraft (la aplicación completa), en Archivo › Opciones › Base de datos actual: indique el **Título de la aplicación**, elija en **Mostrar formulario** el formulario que aparece al abrir y desmarque **Mostrar el panel de navegación** si los usuarios deben permanecer en sus formularios. Una macro llamada `AutoExec` se ejecuta en cada apertura, después del formulario de inicio.
+2. **Haga una vista previa** sin el Runtime: marque **Abrir en modo de ejecución**, luego cierre y vuelva a abrir la base. Mantenga pulsada la tecla Mayús al abrir para omitir las opciones de inicio; BaseCraft Runtime no tiene esta omisión.
+3. **Instale BaseCraft Runtime** en cada puesto, desde la [página Releases](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Entregue el archivo `.basecraft`** a sus usuarios. Lo abren con doble clic si el Runtime está instalado solo, o con *Abrir con* en caso contrario.
+5. **Macros y consultas de acción:** cada usuario hace clic una vez en **Habilitar contenido**, o un administrador declara la carpeta como de confianza (véase más abajo).
+6. **Varios usuarios:** divida la base con **Dividir base de datos** y coloque el archivo de datos y la aplicación cliente en un recurso compartido. El Runtime abre la aplicación cliente desde una copia local; sustitúyala en el recurso compartido y cada puesto toma la nueva versión en su siguiente apertura.
+7. **Después de actualizar BaseCraft:** abra la base una vez con la aplicación completa. BaseCraft Runtime nunca actualiza el formato de una base y rechaza una base que lo necesita.
+
+BaseCraft Runtime impide los cambios de diseño; no protege los datos. Un archivo `.basecraft` sigue siendo una base de datos SQLite corriente y, salvo que la base lo oculte, el panel de navegación muestra todos los objetos.
+
 ### Macros, consultas de acción y carpetas de confianza
 
 Las macros y consultas de acción de una base que abres están desactivadas hasta que hagas clic en **Habilitar contenido** (« Activer le contenu ») en la barra de seguridad, o hasta que el archivo esté en una carpeta que un administrador haya marcado como de confianza. Las bases creadas antes de la 0.3 que ya contienen consultas de acción guardadas preguntan una vez.

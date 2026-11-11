@@ -95,6 +95,18 @@ BaseCraft Runtime voert een database uit zonder ontwerptoegang: geen ontwerpweer
 - **Linux:** beide producten declareren `application/x-basecraft`. De desktop kiest de standaard; voer `xdg-mime query default application/x-basecraft` uit om die te zien, of `xdg-mime default basecraft.desktop application/x-basecraft` om die te wijzigen (`basecraft-runtime.desktop` voor de Runtime).
 - **macOS:** nog geen Runtime-build. De macOS-builds van de volledige toepassing zijn niet ondertekend of genotariseerd (zie hierboven).
 
+#### Een database verspreiden met BaseCraft Runtime
+
+1. **Bereid de database voor** in BaseCraft (de volledige toepassing), onder Bestand › Opties › Huidige database: stel de **Toepassingstitel** in, kies bij **Formulier weergeven** het formulier dat bij het openen verschijnt en schakel **Navigatiedeelvenster weergeven** uit als gebruikers in uw formulieren moeten blijven. Een macro met de naam `AutoExec` wordt bij elke opening uitgevoerd, na het opstartformulier.
+2. **Bekijk het resultaat** zonder de Runtime: vink **Openen in uitvoeringsmodus** aan, sluit de database en open haar opnieuw. Houd Shift ingedrukt tijdens het openen om de opstartopties over te slaan; BaseCraft Runtime kent die omweg niet.
+3. **Installeer BaseCraft Runtime** op elke werkplek, vanaf de [Releases-pagina](https://github.com/gdsolutions-dev/BaseCraft/releases).
+4. **Geef het `.basecraft`-bestand** aan de gebruikers. Ze openen het met een dubbelklik als alleen de Runtime is geïnstalleerd, anders via *Openen met*.
+5. **Macro's en actiequery's:** elke gebruiker klikt één keer op **Inhoud inschakelen**, of een beheerder markeert de map als vertrouwd (zie hieronder).
+6. **Meerdere gebruikers:** splits de database met **Database splitsen** en plaats het gegevensbestand en de front-end op een gedeelde map. De Runtime opent de front-end vanuit een lokale kopie; vervang de front-end op de gedeelde map en elke werkplek neemt de nieuwe versie bij de volgende opening.
+7. **Na een update van BaseCraft:** open de database één keer met de volledige toepassing. BaseCraft Runtime werkt de indeling van een database nooit bij en weigert een database die dat nodig heeft.
+
+BaseCraft Runtime verhindert ontwerpwijzigingen; het beschermt de gegevens niet. Een `.basecraft`-bestand blijft een gewone SQLite-database en, tenzij de database het verbergt, toont het navigatiedeelvenster alle objecten.
+
 ### Macro's, actiequery's en vertrouwde mappen
 
 Macro's en actiequery's in een geopende database zijn uitgeschakeld totdat u in de beveiligingsbalk op **Inhoud inschakelen** (« Activer le contenu ») klikt, of totdat het bestand in een map staat die een beheerder als vertrouwd heeft aangemerkt. Databases die vóór 0.3 zijn gemaakt en al opgeslagen actiequery's bevatten, vragen het eenmalig.

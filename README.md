@@ -47,6 +47,10 @@ The goal: a good Excel user, without writing code, builds a small data-entry app
 - **Nothing to install for solo use.** No server, no Python, no extra runtime.
 - **Multilingual.** Interface in 11 languages (English, French, Spanish, German, Italian, Portuguese, Dutch, Polish, Japanese, Chinese, Korean); expressions are shown in French or English.
 
+## Architecture
+
+<p align="center"><img src="docs/images/architecture.png" alt="BaseCraft architecture: the desktop application (Access-style interface, SQLite data engine, built-in Python, output to PDF, printing, Excel and text), the .basecraft file (a plain SQLite database, optionally split with a shared data file), and the linked sources (PostgreSQL, SQL Server, Access, other BaseCraft or SQLite files, Excel, CSV and text imports)" width="900"></p>
+
 ## What works today
 
 - Create and open `.basecraft` files, with versioned format and migrations

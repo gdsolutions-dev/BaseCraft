@@ -9,7 +9,7 @@ import { chartRequest, type ChartData, type ChartDataMap } from '../../shared/ch
 import { readChartSpec } from '../../shared/chart/spec';
 import { readReport } from '../../shared/report/model';
 import { renderDocumentHtml } from '../../shared/report/render';
-import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData } from '../../shared/report/types';
+import { ReportLoadError, type LaidOutReport, type LayoutEnv, type ReportData, type SubreportSource } from '../../shared/report/types';
 import type { ReportEvents } from './report-events';
 
 /** Rows per sources.page call: main's cap (MAX_PAGE_ROWS); 500 at a time made 200,000 rows 400 round trips (7 s). */
@@ -100,6 +100,26 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
   return loadReportData(api, doc.recordSource, params, signal, where, max);
 }
 
+/** LayoutEnv.subreport: a saved report and every row of its source, read once per loader (one per layout); null when it
+ *  cannot be read (not found, corrupt, a source that asks for parameters). */
+export function subreportLoader(api: Pick<BasecraftApi, 'objects' | 'sources'>): NonNullable<LayoutEnv['subreport']> {
+  const read = new Map<string, Promise<SubreportSource | null>>();
+  return (name, signal) => {
+    const key = name.toLowerCase();
+    let p = read.get(key);
+    if (!p) read.set(key, p = (async () => {
+      try {
+        const doc = await loadReportDoc(api, name), data = await loadDocData(api, doc, undefined, signal);
+        return { spec: readReport(doc, data.fields), data };
+      } catch (e) {
+        if ((e as Error | null)?.name === 'AbortError') throw e;
+        return null;
+      }
+    })());
+    return p;
+  };
+}
+
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
  *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
@@ -118,7 +138,7 @@ export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sou
     const theme = effectiveTheme(doc.props, await api.theme?.get().catch(() => DEFAULT_THEME) ?? DEFAULT_THEME);
     const resources = api.resources ? await loadDocResources({ resources: api.resources } as Pick<BasecraftApi, 'resources'>, doc) : {};
     const charts = api.charts ? await loadDocCharts({ charts: api.charts }, doc, params) : {};
-    return await layoutReport(readReport(doc, data.fields, { theme, resources, charts, ...(env.chartLabels ? { chartLabels: env.chartLabels } : {}) }), data, { ...env, signal, ...(ev ? { hooks: ev.hooks } : {}) });
+    return await layoutReport(readReport(doc, data.fields, { theme, resources, charts, ...(env.chartLabels ? { chartLabels: env.chartLabels } : {}) }), data, { ...env, signal, subPath: [name], ...(ev ? { hooks: ev.hooks } : {}) });
   } finally { release?.(); }
 }
 

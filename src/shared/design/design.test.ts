@@ -183,7 +183,7 @@ describe('A4 catalog additions', () => {
     expect(byName('OnEnter').appliesTo).toEqual(expect.arrayContaining(['optionGroup', 'optionButton', 'commandButton', 'subform']));
     expect(byName('OnEnter').appliesTo).not.toContain('tabControl');
     expect(byName('OnExit').appliesTo).toEqual(byName('OnEnter').appliesTo);
-    expect(byName('OnGotFocus').appliesTo).toEqual(['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton']);
+    expect(byName('OnGotFocus').appliesTo).toEqual(['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'toggleButton', 'optionButton']);
     expect(byName('OnLostFocus').appliesTo).toEqual(byName('OnGotFocus').appliesTo);
     expect(byName('OnClick').appliesTo).toEqual(expect.arrayContaining(['form', 'commandButton', 'optionGroup', 'checkBox', 'optionButton', 'image', 'tabControl']));
     expect(byName('BeforeUpdate').appliesTo).toContain('optionButton');
@@ -343,7 +343,7 @@ describe('validateDesignDoc', () => {
   it('knows every section and control kind of the contract', () => {
     expect(SECTION_KINDS).toEqual(['formHeader', 'detail', 'formFooter', 'reportHeader', 'pageHeader', 'groupHeader', 'groupFooter', 'pageFooter', 'reportFooter']);
     expect(CONTROL_KINDS).toEqual(['label', 'textBox', 'checkBox', 'optionGroup', 'optionButton', 'comboBox', 'listBox', 'commandButton', 'subform',
-      'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'chart']);
+      'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'toggleButton', 'navigationControl', 'chart']);
   });
 });
 

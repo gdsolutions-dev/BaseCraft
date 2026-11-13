@@ -25,12 +25,12 @@ export type TableLookup = Extract<LookupProps, { kind: 'table' }>
 export interface FieldProps {
   type: FieldType; size?: number; numberSize?: NumberSize; precision?: number; scale?: number
   decimalPlaces?: 'auto' | number; caption?: string; description?: string
-  required: boolean; allowZeroLength?: boolean; indexed: 'no' | 'yesDuplicates' | 'yesNoDuplicates'
+  required: boolean; allowZeroLength?: boolean; /** Long Text: Rich Text stores a limited HTML subset (rich-text.ts); absent: Plain Text */ textFormat?: 'plain' | 'rich'; indexed: 'no' | 'yesDuplicates' | 'yesNoDuplicates'
   primaryKey: boolean
   // expressions en forme canonique (voir contraintes A2) ; format et inputMask dépendent du type
   defaultValue?: string; validationRule?: string; validationText?: string
   format?: string; inputMask?: string; lookup?: LookupProps
-  columnWidth?: number // datasheet column width in twips, saved by the layout question (not a design property)
+  columnWidth?: number // datasheet column width in twips (0: hidden), saved by the layout question (not a design property)
   [unknownKey: string]: unknown // clés inconnues conservées (compatibilité mineure)
 }
 export interface FieldDef { name: string; props: FieldProps }
@@ -149,7 +149,7 @@ export function accessColumns(l: TableLookup, names: string[]): TableLookup | un
   return { ...rest, ...columnsOver(Math.max(bound, ...shown) + 1, bound, shown) }
 }
 
-const TYPE_SPECIFIC =['size', 'numberSize', 'precision', 'scale', 'decimalPlaces', 'allowZeroLength', 'format', 'inputMask'] as const
+const TYPE_SPECIFIC =['size', 'numberSize', 'precision', 'scale', 'decimalPlaces', 'allowZeroLength', 'textFormat', 'format', 'inputMask'] as const
 
 export function defaultProps(type: FieldType): FieldProps {
   const base: FieldProps = { type, required: false, indexed: 'no', primaryKey: false }

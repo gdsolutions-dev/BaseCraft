@@ -2,6 +2,8 @@
 // paginer ni couper. Longueurs en pt (twips / 20), polices embarquées seulement, thème clair, aucune URL hors fonts/ et
 // data:image/, tout texte et tout attribut échappé.
 import { cssFamily, cssString, fontFaceCss, resolveFont } from '../fonts';
+import { sanitizeRich } from '../rich-text';
+import { PAPERS } from './model';
 import { lineHeight } from './text';
 import { chartFrame, chartOption } from '../chart/option';
 import { chartSvg } from '../chart/svg';
@@ -73,8 +75,11 @@ function itemHtml(i: LaidOutItem, looks?: Looks, nextId: () => string = chartIds
       // print: a line at 0 leaves its left or top to .bc-line's
       const lines = i.lines.map((l) => looks ? `<span ${attrs('bc-line', [l.x ? `left:${pt(l.x)}` : '', l.y ? `top:${pt(l.y)}` : ''].filter(Boolean).join(';'), lh, looks)}>${esc(l.text)}</span>`
         : `<span class="bc-line"${data(looks, { x: n(l.x), y: n(l.y), w: n(l.width) })} style="left:${pt(l.x)};top:${pt(l.y)}${lh}">${esc(l.text)}</span>`);
-      return `<div ${attrs('bc-text', box(i.left, i.top, i.width, i.height), `${i.border ? `;border:${stroke(i.border)}` : ''}${back(i.back)}`
-        + `;color:${hex(i.color) ?? '#000000'};${fontCss(i.font)}`, looks)}>${lines.join('')}</div>`;
+      // Rich Text: the stored HTML through the allow-list, the margins as padding; every other text is escaped above
+      const inner = i.rich ? sanitizeRich(i.rich.html) : lines.join('');
+      const rich = i.rich ? `${lh};padding:${i.rich.inset.map(pt).join(' ')};text-align:${i.align}` : '';
+      return `<div ${attrs(i.rich ? 'bc-text bc-rich' : 'bc-text', box(i.left, i.top, i.width, i.height), `${i.border ? `;border:${stroke(i.border)}` : ''}${back(i.back)}`
+        + `;color:${hex(i.color) ?? '#000000'};${fontCss(i.font)}${rich}`, looks)}>${inner}</div>`;
     }
     case 'check': {
       const side = Math.min(i.width, i.height), color = hex(i.color) ?? '#000000';
@@ -139,12 +144,14 @@ const cssDecl = (o: Record<string, string>): string => Object.entries(o).map(([k
 
 /** @font-face of the faces the report uses (a non-portable font draws in Liberation Sans, as measured) and the .bc-* rules. */
 export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
-  const faces = report.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => i.kind === 'text' ? [{ family: i.font.name, bold: i.font.bold, italic: i.font.italic }]
+  const faces = report.pages.flatMap((p) => p.bands.flatMap((b) => b.items.flatMap((i) => i.kind === 'text' ? (i.rich ? [false, true].flatMap((bold) => [false, true].map((italic) => ({ family: i.font.name, bold, italic }))) // a Rich Text value may use any of the four faces
+    : [{ family: i.font.name, bold: i.font.bold, italic: i.font.italic }])
         // le titre du graphique est en gras (ECharts) : sans la face grasse embarquée, Chromium la synthétiserait
     : i.kind === 'chart' ? [{ family: i.fontFamily, bold: false, italic: false }, ...(i.format.hasTitle ? [{ family: i.fontFamily, bold: true, italic: false }] : []),
         // la police du titre (TitleFontName), en normal et en gras (le titre est en gras) ; la même que le corps : fontFaceCss dédouble
         { family: i.titleFamily, bold: false, italic: false }, { family: i.titleFamily, bold: true, italic: false }] : [])));
   const charts = report.pages.some((p) => p.bands.some((b) => b.items.some((i) => i.kind === 'chart')));
+  const rich = report.pages.some((p) => p.bands.some((b) => b.items.some((i) => i.kind === 'text' && i.rich)));
   return [fontFaceCss(faces, fontBaseUrl),
     '.bc-page{position:relative;overflow:hidden;background:#ffffff;color:#000000;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
     // a cut band part can hold items above its top or past its bottom: the band clips them
@@ -157,12 +164,24 @@ export function reportCss(report: LaidOutReport, fontBaseUrl: string): string {
     charts ? '.bc-chart{position:absolute;box-sizing:border-box;margin:0;overflow:hidden}.bc-chart svg{display:block;width:100%;height:100%}' : '',
     report.background ? `.bc-bg{position:absolute;inset:0;${cssDecl(pictureCss(report.background))}}` : '',
     '.bc-line{position:absolute;left:0;top:0;white-space:pre}',
+    // Rich Text boxes (the line height is set inline, with the font)
+    rich ? '.bc-rich ul,.bc-rich ol{margin:0;padding-left:15pt}.bc-rich blockquote{margin:0 0 0 22pt}.bc-rich p,.bc-rich div{margin:0}' : '',
   ].filter(Boolean).join('\n');
+}
+
+/** Print Data Only (Access, for pre-printed forms): the report without its decoration and its labels. Lines, boxes, pictures,
+ *  colours, borders and gridlines go; the bound and calculated text and the check boxes stay. `labels`: the names of the
+ *  report's label controls (the layout does not tell them apart; its output stays as it is). */
+export function dataOnlyReport(report: LaidOutReport, labels: ReadonlySet<string>): LaidOutReport {
+  return { ...report, background: undefined, pages: report.pages.map((p) => ({ ...p, bands: p.bands.map((b) => ({ ...b, back: null, items: b.items.flatMap((i): LaidOutItem[] =>
+    i.kind === 'text' ? (labels.has(i.name) ? [] : [{ ...i, border: null, back: null, grid: undefined }]) : i.kind === 'check' ? [{ ...i, grid: undefined }] : []) })) })) };
 }
 
 /** The whole document for the print window: A4 pages, fonts under fonts/, light background. */
 export function renderDocumentHtml(report: LaidOutReport): string {
-  const size = report.width > report.height ? '297mm 210mm' : '210mm 297mm';
+  const long = Math.max(report.width, report.height), short = Math.min(report.width, report.height);
+  const paper = Object.values(PAPERS).find((x) => x.width === short && x.height === long);
+  const size = paper ? (report.width > report.height ? paper.css.split(' ').reverse().join(' ') : paper.css) : '210mm 297mm';
   const looks: Looks = new Map(), body = report.pages.map((p) => renderPageHtml(p, report, looks)).join('\n');
   // a look holds only numbers, #rrggbb and escaped font names; `<` escaped all the same: nothing closes the <style>
   const classes = [...looks].map(([look, c]) => `.${c}{${look.slice(1).replace(/</g, '\\3c ')}}`).join('\n');

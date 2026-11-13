@@ -3,6 +3,7 @@
 import type { FieldFilter, RowRef, RowWriteResult, WriteConflict } from './api';
 import type { CellInput, SqlValue } from './coerce';
 import { sameName, type FieldProps, type FieldType } from './field-types';
+import type { TotalFn } from './sheet-layout';
 
 /** Sort key; several keys sort by the first, then the next… */
 export interface SortSpec { field: string; dir: 'asc' | 'desc' }
@@ -20,8 +21,9 @@ export interface SourceInfo { fields: SourceField[]; updatable: boolean; keyTabl
 export interface SourcePageRequest { offset: number; limit: number; sort?: SortSpec[]; filter?: FieldFilter[]; params?: Record<string, CellInput>;
   where?: string /* an opening's Where Condition: canonical expression over the source's output columns, no member; ANDed with filter */
   fresh?: boolean /* C6 R7: an open or a Requery: a pass-through runs again */
+  aggregates?: { field: string; fn: TotalFn }[] /* totals over every row the filter keeps, in SourcePage.aggregates (not for a server source) */
   count?: false /* the rows only, not counted (a query's datasheet counts once idle, as Access): total is then -1 */ }
-export interface SourcePage { rows: SqlValue[][]; rowids: (RowRef | null)[]; total: number /* -1: not counted (count: false, no count kept) */; columns?: string[] /* a crosstab: this page's column names (R14) */ }
+export interface SourcePage { rows: SqlValue[][]; rowids: (RowRef | null)[]; total: number /* -1: not counted (count: false, no count kept) */; columns?: string[] /* a crosstab: this page's column names (R14) */; aggregates?: (number | string | null)[] /* the request's, in order; null: no value */ }
 /** A record saved through an updatable query or SQL source (B4 R2, R3). */
 export interface SourceSaveRequest { rowid: RowRef | null /* key table rowid; null = new record */; values: Record<string, CellInput> /* by output column */
   expected?: Record<string, SqlValue> /* by output column: the record as read when editing began (C3 R8) */ }

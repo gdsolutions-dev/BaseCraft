@@ -154,6 +154,8 @@ test('scenario 1: online retail base, 1,000 order lines, entry form, sales repor
 
     // 5. sales report: AutoReport on the query (saved under the query's name), PDF
     await autoReport(page, 'query:QSalesByProduct');
+    await page.getByTestId('qat-save').click();   // opened unsaved: Save names it after the query
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('nav-item-report-QSalesByProduct')).toBeVisible();
     await page.screenshot({ path: join(OUT, 'sales-preview.png') });
     await exportPdf(page, 'SalesByProduct.pdf');
@@ -171,6 +173,7 @@ test('scenario 1: online retail base, 1,000 order lines, entry form, sales repor
     await page.getByTestId('totals-popup-Sum').click();
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-save').click();
+    await page.getByTestId('modal-btn-ok').click();   // a new report: its name (the source's) proposed
     await expect(page.getByTestId('doc-tab-report-QInvoice')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await pickView(page, 'viewPrintPreview');

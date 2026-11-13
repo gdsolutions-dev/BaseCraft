@@ -23,8 +23,8 @@ export type MacroIssue = { path: string /* 'items[2].branches[0].cond' */; code:
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const KINDS = new Set(['action', 'comment', 'group', 'if', 'submacro']);
 
-function parses(text: string, python = true): boolean {
-  try { parseCanonical(text, python ? { functions: withUserFunctions() } : undefined); return true; } catch { return false; }
+function parses(text: string, python = true, data = false): boolean {
+  try { parseCanonical(text, data ? { qualified: true } : python ? { functions: withUserFunctions() } : undefined); return true; } catch { return false; }
 }
 
 /**
@@ -33,7 +33,7 @@ function parses(text: string, python = true): boolean {
  * Paths look like `items[2].branches[0].cond`; a block deeper than MAX_MACRO_DEPTH and every item past MAX_MACRO_ITEMS
  * are reported and not walked further.
  */
-export function validateMacro(def: unknown): MacroIssue[] {
+export function validateMacro(def: unknown, opts: { data?: boolean } = {}): MacroIssue[] {   // data (T2): [Old].[Field] allowed, no Python call
   const issues: MacroIssue[] = [];
   const add = (path: string, code: MacroIssue['code']): void => { issues.push({ path, code }); };
   if (!isObject(def) || def.formatVersion !== '1.0') return [{ path: isObject(def) ? 'formatVersion' : '', code: 'shape' }];
@@ -52,7 +52,7 @@ export function validateMacro(def: unknown): MacroIssue[] {
       const formula = type === 'expression' || type === 'where' || type === 'reference' ? value.trim() === '' ? undefined : value   // blank: not set
         : (type === 'text' || type === 'number') && value.startsWith('=') ? value.slice(1) : undefined;     // '=' + expression
       if (type === 'functionCall' && value.trim() !== '' && !parsePythonCall(value)) add(`${p}.args.${name}`, 'badExpression');
-      if (formula !== undefined && !parses(formula, type !== 'where')) add(`${p}.args.${name}`, 'badExpression');
+      if (formula !== undefined && !parses(formula, type !== 'where' && !opts.data, opts.data)) add(`${p}.args.${name}`, 'badExpression');
     }
   };
 
@@ -91,7 +91,7 @@ export function validateMacro(def: unknown): MacroIssue[] {
             if (!isObject(b)) return add(bp, 'shape');
             if (typeof b.cond !== 'string') add(`${bp}.cond`, 'shape');
             else if (b.cond.trim() === '') add(`${bp}.cond`, 'emptyCondition');
-            else if (!parses(b.cond)) add(`${bp}.cond`, 'badExpression');
+            else if (!parses(b.cond, !opts.data, opts.data)) add(`${bp}.cond`, 'badExpression');
             sub(b.items, `${bp}.items`);
           });
           if (node.else !== undefined) sub(node.else, `${p}.else`);

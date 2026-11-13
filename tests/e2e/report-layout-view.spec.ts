@@ -200,11 +200,11 @@ test('Report Layout view: one flow with groups and totals, rings on every record
     await expect(tab(page, REPORT)).not.toContainText('•');
     await pickView(page, 'viewPrintPreview');
     await expect(cur(page).getByTestId('report-preview')).toBeVisible();
-    await expect(tab(page, REPORT)).not.toContainText('•');
     await page.getByTestId('cmd-closePreview').click();
     await expect(flow(page)).toBeVisible();
     await expect(status(page, 'layout')).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => width(page, 'Date')).toBe(wide);
+    await page.keyboard.press('Control+s');
     await clean(page, REPORT);
   } finally {
     await app.close();

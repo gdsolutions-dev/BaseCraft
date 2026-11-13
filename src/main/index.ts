@@ -46,7 +46,7 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
       ...(e2eHidden ? { backgroundThrottling: false } : {}),
-      ...(process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? { additionalArguments: ['--bc-e2e'] } : {}),
+      ...(process.env.BASECRAFT_E2E === '1' && !app.isPackaged ? { additionalArguments: ['--bc-e2e', ...(process.env.BASECRAFT_E2E_MISSPELLED ? [`--bc-e2e-misspelled=${process.env.BASECRAFT_E2E_MISSPELLED}`] : [])] } : {}),
     },
   });
   mainWindow = win;

@@ -71,7 +71,7 @@ test('a datasheet: Ctrl+F opens the dialog with the « Recherche rapide » defau
     await expect(vis(page, 'find-search')).toHaveValue('all');      // Tout
     await expect(vis(page, 'find-case')).not.toBeChecked();
     await expect(vis(page, 'find-formatted')).toBeChecked();
-    await expect(vis(page, 'find-tab-replace')).toBeDisabled();
+    await expect(vis(page, 'find-tab-replace')).toBeEnabled();   // Replace is live in a datasheet
     await expect(vis(page, 'find-next')).toBeDisabled();             // nothing to find yet
 
     // Lyon, case ignored, accents kept (B2 R13): LYON, then Lyon from the top, never Lyôn
@@ -237,7 +237,7 @@ test('forms: Home › Find in a single form and in a continuous form moves the r
       await page.getByTestId('ribbon-tab-home').click();
       await page.getByTestId('cmd-find').click();
       await expect(vis(page, 'find-look-in')).toHaveValue('field');
-      await expect(vis(page, 'find-tab-replace')).toBeDisabled();
+      await expect(vis(page, 'find-tab-replace')).toBeEnabled();
       await next(page, what);
       await expect(vis(page, 'nav-record-input').first()).toHaveValue(record);
       await expect(dialog(page)).toBeVisible();
@@ -275,6 +275,101 @@ test('forms: Home › Find in a single form and in a continuous form moves the r
     await expect(vis(page, 'find-next')).toBeFocused();
     await vis(page, 'find-cancel').click();
     await expect(vis(page, 'form-ctl-Nom').first()).toBeFocused();
+  } finally {
+    await app.close();
+  }
+});
+
+test('a datasheet: Replace All replaces every whole-field match of the current field and tells how many; the rows are saved', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await openSheet(page, 'Clients');
+    await clickCell(page, 2, 0);   // Ville: Lyon, LYON, Paris, Lyôn
+    await page.keyboard.press('Control+f');
+    await vis(page, 'find-tab-replace').click();
+    await vis(page, 'find-what').fill('lyon');
+    await vis(page, 'replace-with').fill('Nice');
+    await vis(page, 'replace-all').click();
+    await expect(page.getByTestId('modal')).toContainText('Continuer');   // Access: it cannot be undone
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText('2 remplacements effectués.');   // Lyon and LYON, not Lyôn
+    await page.getByTestId('modal-btn-ok').click();
+    await vis(page, 'find-cancel').click();
+    await expect(cell(page, 2, 0)).toHaveText('Nice');
+    await expect(cell(page, 2, 1)).toHaveText('Nice');
+    await expect(cell(page, 2, 2)).toHaveText('Paris');
+    await expect(cell(page, 2, 3)).toHaveText('Lyôn');
+  } finally {
+    await app.close();
+  }
+});
+
+test('forms: the Replace tab replaces in the bound text boxes through the form (Replace One, Replace All, a refused save stops it)', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-FClient').dblclick();
+    await expect(vis(page, 'nav-record-input').first()).toHaveValue('1');
+    await vis(page, 'form-ctl-Nom').first().click();
+    await page.getByTestId('ribbon-tab-home').click();
+    await page.getByTestId('cmd-replace').click();
+    await expect(vis(page, 'find-tab-replace')).toHaveAttribute('aria-selected', 'true');
+    await vis(page, 'find-look-in').selectOption('document');
+    await vis(page, 'find-search').selectOption('down');   // « All » would wrap round to the record itself, whose stored value is still Martin
+    // Replace One: the first click finds Martin (record 2), the second replaces it, then looks for the next one
+    await vis(page, 'find-what').fill('Martin');
+    await vis(page, 'replace-with').fill('Marc');
+    await vis(page, 'replace-one').click();
+    await expect(vis(page, 'nav-record-input').first()).toHaveValue('2');
+    await vis(page, 'replace-one').click();
+    await notFound(page);
+    await expect(vis(page, 'form-ctl-Nom').first()).toHaveValue('Marc');
+    await expect(vis(page, 'form-dirty')).toBeVisible();   // pending: saved with the record
+    // Replace All: Lyon and LYON (Ville of records 1 and 2, whole field), each record saved
+    await vis(page, 'find-what').fill('lyon');
+    await vis(page, 'replace-with').fill('Nice');
+    await vis(page, 'replace-all').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText('2 remplacements effectués.');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(vis(page, 'form-dirty')).toHaveCount(0);
+    await vis(page, 'nav-record-input').first().fill('1');
+    await vis(page, 'nav-record-input').first().press('Enter');
+    await expect(vis(page, 'form-ctl-Ville').first()).toHaveValue('Nice');
+    // a refused save (Nom is required) stops Replace All with its message
+    await vis(page, 'find-what').fill('Dupont');
+    await vis(page, 'replace-with').fill('');
+    await vis(page, 'replace-all').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText('Nom');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect(dialog(page)).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test('a datasheet: Replace All also works in a number field, through its edit text; a result that is not a number is refused and stops it', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await openSheet(page, 'Commandes');
+    await clickCell(page, 2, 3);   // Montant, 99,99
+    await page.keyboard.press('Control+f');
+    await vis(page, 'find-tab-replace').click();
+    await vis(page, 'find-what').fill('99,99');
+    await vis(page, 'replace-with').fill('50,5');
+    await vis(page, 'replace-all').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText('1 remplacements effectués.');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(cell(page, 2, 3)).toContainText('50,5');
+    await vis(page, 'find-what').fill('50,5');
+    await vis(page, 'replace-with').fill('abc');
+    await vis(page, 'replace-all').click();
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal')).toContainText('Montant');   // the field's own message, nothing replaced
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
   } finally {
     await app.close();
   }

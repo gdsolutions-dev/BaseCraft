@@ -31,6 +31,8 @@ export async function confirmDelete(modal: ModalApi, table: string, count: numbe
 
 /** A delete refused because related records exist (no cascade). */
 export async function showRelatedRefusal(modal: ModalApi, r: Extract<DeleteResult, { ok: false }>): Promise<void> {
+  // a Before Delete data macro (T2): its RaiseError message alone, as a table rule's
+  if (r.reason === 'dataMacro') { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.fieldError_record', params: { message: r.message }, buttons: ['ok'] }); return; }
   await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.related', params: { table: r.table, context: r.table === undefined ? 'unnamed' : undefined }, buttons: ['ok'] });
 }
 

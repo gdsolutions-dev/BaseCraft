@@ -26,6 +26,9 @@ test('Instant report totals follow their column: width handle in Layout view, To
     await page.getByTestId('ribbon-tab-create').click();
     await page.getByTestId('cmd-createReport').click();
     await expect(cur(page).getByTestId('preview-page-of')).toBeVisible();
+    await page.keyboard.press('Control+s');   // the new report, saved under the proposed name: Layout view needs a saved one
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-report-Achats')).toBeVisible();
     await page.getByTestId('status-view-layout').click();
     await settled(page);
 
@@ -83,6 +86,9 @@ test('Totals in Layout view: a Detail value selected in the flow, Totals > Sum p
     await page.getByTestId('ribbon-tab-create').click();
     await page.getByTestId('cmd-createReport').click();
     await expect(cur(page).getByTestId('preview-page-of')).toBeVisible();
+    await page.keyboard.press('Control+s');   // the new report, saved under the proposed name: Layout view needs a saved one
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-report-Achats')).toBeVisible();
     await page.getByTestId('status-view-layout').click();
     await settled(page);
 

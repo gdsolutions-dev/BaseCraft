@@ -8,7 +8,7 @@ import { CH } from '../shared/api';
 export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme,
   CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove, // F3: the shared image gallery
-  CH.tablesSave, CH.tablesRename, CH.tablesDrop, CH.tablesCopy, CH.tablesAppend, CH.tablesSaveColumnWidths,
+  CH.tablesSave, CH.tablesRename, CH.tablesDrop, CH.tablesCopy, CH.tablesAppend, CH.tablesSaveColumnWidths, CH.tablesSaveSheetLayout, CH.tablesDataMacros, CH.tablesSaveDataMacros,
   CH.relationsSave, CH.relationsDelete, CH.relationsSaveLayout,
   CH.importPick, CH.importPreview, CH.importRun, CH.importExcelPick, CH.importExcelPreview, CH.importExcelRun, CH.importSaveSpec, CH.importDeleteSpec,
   CH.objectsSave, CH.objectsRename, CH.objectsDelete, CH.objectsCopy, CH.objectsSetDescription,
@@ -17,6 +17,7 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
   CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember, // C4: the server link dialog
   CH.migrateRun, CH.migrateImport, // C7 R1, R17
+  CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport, // E1: External Data › Import › Access
 ]);
 
 export const isDesignChannel = (ch: string): boolean => DESIGN_CHANNELS.has(ch);

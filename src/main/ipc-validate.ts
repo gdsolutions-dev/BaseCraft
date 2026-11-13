@@ -10,14 +10,17 @@ import { AGGS, CHART_MAX_AXIS, CHART_MAX_VALUES, CHART_TYPES, DATE_GROUPS, type 
 import type { ChartDataRequest } from '../shared/chart/query';
 import { isValidObjectName, MAX_INDEX_FIELDS, MAX_TWIPS, MAX_INDEXES } from '../shared/field-types';
 import { PROPERTY_CATALOG } from '../shared/design/properties';
+import { safeUrl } from '../shared/hyperlink';
+import { parseSheetLayout, TOTAL_FNS, type SheetLayout, type TotalFn } from '../shared/sheet-layout';
 import { checkedPicture } from './db/resources';
 import { isResourceName } from '../shared/pictures';
 import { isTheme, type Theme } from '../shared/design/theme';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
 import type { CellInput, SqlValue } from '../shared/coerce';
-import { validExportSpec, type ExportSource, type ExportTextSpec } from '../shared/exchange';
+import { validExportSpec, validSavedExport, type ExportSource, type ExportTextSpec, type SavedExport } from '../shared/exchange';
 import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-text';
+import { parseDataMacros, type DataMacros } from '../shared/macro/data-macro';
 import { BaseFileError, FILE_EXTENSION } from './db/file-format';
 import { definitionJson, MAX_DEFINITION_CHARS } from './db/objects';
 import { SETTING_CHECKS } from './settings';
@@ -90,6 +93,9 @@ export function expectedValues(v: unknown): Record<string, SqlValue> | undefined
 /** C3 R9: the text Write Conflict › Copy to Clipboard puts there, at most 10 MB (UTF-16 code units). */
 export const clipboardText = (v: unknown): string => (typeof v === 'string' && v.length <= 10 * 1024 * 1024 ? v : bad());
 
+/** A hyperlink to open (D3): an http:, https: or mailto: URL; anything else is refused. Returns the normalised URL. */
+export const hyperlinkUrl = (v: unknown): string => safeUrl(v) ?? bad();
+
 export const strOrNull = (v: unknown): string | null => (v === null ? null : str(v));
 /** An object's description (Properties dialog): null or at most 255 characters, as in Access. */
 export const description = (v: unknown): string | null => (v === null ? null : boundedName(v, 255));
@@ -102,6 +108,11 @@ export const objectKindOrAll = (v: unknown): ObjectKind | undefined => (v === un
 export function definition(v: unknown, maxChars = MAX_DEFINITION_CHARS): unknown {
   const json = definitionJson(v, maxChars);
   return json === null ? bad() : (JSON.parse(json) as unknown);
+}
+
+/** A table's data macros (T2): a plain JSON object within the save limits; the macros' own checks (actions, expressions) are the session's. */
+export function dataMacrosArg(v: unknown): DataMacros {
+  return parseDataMacros(definition(v));
 }
 
 export function sourceRef(v: unknown): RecordSourceRef {
@@ -158,6 +169,10 @@ export function sourcePageRequest(v: unknown): SourcePageRequest {
   if (v.where !== undefined) r.where = typeof v.where === 'string' && v.where.length <= MAX_WHERE_CHARS ? v.where : bad();
   if (v.fresh !== undefined) r.fresh = typeof v.fresh === 'boolean' ? v.fresh : bad();
   if (v.count !== undefined) r.count = v.count === false ? false : bad();
+  if (v.aggregates !== undefined) {
+    if (!Array.isArray(v.aggregates) || v.aggregates.length > MAX_FIELDS) bad();
+    r.aggregates = Array.from(v.aggregates, (a) => (isObj(a) && (TOTAL_FNS as readonly unknown[]).includes(a.fn) ? { field: lookupName(a.field), fn: a.fn as TotalFn } : bad()));
+  }
   return r;
 }
 
@@ -202,10 +217,16 @@ export function columnWidths(v: unknown): Record<string, number> {
   if (!isObj(v)) bad();
   const out: Record<string, number> = Object.create(null);
   for (const [k, w] of Object.entries(v)) {
-    if (typeof w !== 'number' || !Number.isInteger(w) || w < 1 || w > MAX_TWIPS) bad();
+    if (typeof w !== 'number' || !Number.isInteger(w) || w < 0 || w > MAX_TWIPS) bad(); // 0: the column is hidden (Access's convention)
     out[lookupName(k)] = w;
   }
   return out;
+}
+
+/** A datasheet layout: what `parseSheetLayout` accepts (the rest is left out). */
+export function sheetLayoutArg(v: unknown): SheetLayout {
+  if (!isObj(v)) bad();
+  return parseSheetLayout(v);
 }
 
 /** Keyed by table name: a table may be named "__proto__" (IPC delivers it as an own key), so no prototype to set. */
@@ -401,6 +422,10 @@ export function importPath(v: unknown, chosen: ReadonlySet<string>, maxBytes = M
 /** A file to link (C1): as importPath (a path the link dialog returned, still an existing file), any size. The front-end itself
  *  is refused by the session (realpath), which answers `self`. */
 export const linkPath = (v: unknown, chosen: ReadonlySet<string>): string => importPath(v, chosen, Infinity);
+/** An import report's text (E1): a string of at most 5,000,000 characters. */
+export const reportBody = (v: unknown): string => (typeof v === 'string' && v.length <= 5_000_000 ? v : bad());
+/** A default file name for a save dialog: a bare name (no folder), 1 to 255 characters. */
+export const bareFileName = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 255 && !/[\\/]/.test(v) ? v : bad());
 /** The split's data file (C3 R13): as linkPath, a path its save dialog returned, absolute; it need not exist yet. */
 export const splitPath = (v: unknown, chosen: ReadonlySet<string>): string => (typeof v === 'string' && chosen.has(v) && isAbsolute(v) ? v : bad());
 /** The link dialog's first filter (C2 R10): none, or a source kind. */
@@ -473,6 +498,8 @@ export function exportSource(v: unknown): ExportSource {
   return { ref: sourceRef(v.ref), ...(params ? { params } : {}), ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(where !== undefined ? { where } : {}) };
 }
 export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? bad();
+export const markupFormat = (v: unknown): 'xml' | 'html' => (v === 'xml' || v === 'html' ? v : bad());
+export const savedExport = (v: unknown): SavedExport => validSavedExport(v) ?? bad();
 
 /** A3 action queries: a query or SQL ref (never a table), at most MAX_PARAMS parameter values, the run's two options. */
 export const queryRef = (v: unknown): QueryRef => { const r = sourceRef(v); return r.kind === 'table' ? bad() : r; };

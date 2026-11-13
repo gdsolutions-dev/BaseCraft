@@ -165,6 +165,7 @@ test('C5 acceptance: link SQL Server tables, a parameter query on the server, a 
       await expect(a.page.getByTestId('form-dirty').filter({ visible: true })).toHaveCount(0);
       await expect.poll(durand).toBe('Lille');
       await a.page.getByTestId('doc-tab-close-form-Clients').click();
+      await a.page.getByTestId('modal-btn-no').click();   // the AutoForm, not kept
 
       // 4. Write conflict on Clients (rowversion): B (the Runtime, its own userData: its own login) and A on Durand's Ville
       b = await launchApp({ runtime: true, enterMovesDown: true, args: [front], userDataDir: workstation(1), env: { ...ENV, BASECRAFT_E2E_NETWORK_DIR: dirname(front) } });

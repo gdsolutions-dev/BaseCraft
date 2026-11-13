@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ControlDef, ControlKind, DesignDoc } from '../../shared/design/model';
 import { createLayout, insertCells, membersOf } from '../../shared/design/layout-edit';
 import { designerReducer, findControl, initDesigner, type Selection } from './designer-model';
-import { currentValue, decimalStep, fillAction, formatAction, formatCommands, outlineAction, selectionSet } from './format-commands';
+import { currentValue, decimalStep, fillAction, formatAction, formatCommands, outlineAction, paintAction, selectionSet } from './format-commands';
 
 const ctl = (kind: ControlKind, name: string, props: Record<string, unknown> = {}): ControlDef => ({ kind, name, left: 0, top: 0, width: 1418, height: 340, props });
 const doc: DesignDoc = { formatVersion: '1.0', recordSource: null, props: {}, sections: [
@@ -11,6 +11,18 @@ const sel = (...names: string[]): Selection => ({ kind: 'controls', names });
 const ctlT = (name: string) => ({ kind: 'control' as const, name });
 const withProps = (d: DesignDoc, byName: Record<string, Record<string, unknown>>): DesignDoc => ({ ...d, sections: d.sections.map((s) => ({
   ...s, controls: s.controls.map((c) => (byName[c.name] ? { ...c, props: { ...c.props, ...byName[c.name] } } : c)) })) });
+
+describe('Format Painter', () => {
+  it('copies the font, colours, border and alignment that apply to the target, in one undoable edit', () => {
+    const src = withProps(doc, { Nom: { FontName: 'Arial', FontWeight: 'bold', ForeColor: '#ff0000', TextAlign: 'right', BorderColor: '#00ff00' } });
+    const a = paintAction(src, 'form', 'Nom', 'Titre')!;
+    expect(a.type).toBe('edit');
+    const painted = findControl(designerReducer(initDesigner(src, 'form'), a).doc, 'Titre')!.control.props;
+    expect(painted).toMatchObject({ FontName: 'Arial', FontWeight: 'bold', ForeColor: '#ff0000', TextAlign: 'right', BorderColor: '#00ff00' });
+    expect(paintAction(src, 'form', 'Ligne', 'Nom')).not.toBeNull();   // a line has a border but no font: only the border is painted
+    expect(paintAction(src, 'form', 'Nom', 'Introuvable')).toBeNull();
+  });
+});
 
 describe('Format tab commands', () => {
   it('bold toggles on the selection, off when every target is already bold', () => {

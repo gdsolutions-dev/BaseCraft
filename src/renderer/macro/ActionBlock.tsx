@@ -38,8 +38,8 @@ function AddItem({ lp, count, ctx }: { lp: ItemPath; count: number; ctx: BlockCt
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const id = `macro-add-${pathKey(lp)}`;
-  const options = [...BLOCKS.map((b) => ({ id: `block-${b}`, label: t(`macro.block.${b}`) })),
-    ...addableActions(ctx.state.showAll).map((a) => ({ id: a.name, label: t(`macro.action.${a.name}`) }))];
+  const options = [...BLOCKS.filter((b) => !ctx.state.data || b !== 'submacro').map((b) => ({ id: `block-${b}`, label: t(`macro.block.${b}`) })),
+    ...addableActions(ctx.state.showAll, ctx.state.data).map((a) => ({ id: a.name, label: t(`macro.action.${a.name}`) }))];
   return (
     <div className="macro-add">
       <label htmlFor={id} className="sr-only">{t('macro.addAction')}</label>

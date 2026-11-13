@@ -40,7 +40,13 @@ button:disabled { opacity: .45; }
 
 /* Ruban */
 .ribbon { flex: none; padding: 0 var(--bc-space-2); }
-.rtabs { display: flex; align-items: flex-end; gap: 2px; height: 40px; padding: 0 var(--bc-space-1); }
+.rtop { display: flex; align-items: center; }
+/* the Quick Access Toolbar: Save, Undo, Redo (Ribbon.tsx) */
+.rqat { display: flex; padding: 0 4px 0 var(--bc-space-1); border-right: 1px solid var(--bc-border); }
+.rqat-btn { width: 24px; height: 24px; display: grid; place-items: center; border-radius: var(--bc-radius); color: var(--bc-text-muted); }
+.rqat-btn:hover:not(:disabled) { background: var(--hover); color: var(--bc-text); }
+.rqat-btn:disabled { opacity: .45; }
+.rtabs { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 2px; height: 40px; padding: 0 var(--bc-space-1); }
 .rtab { position: relative; height: 32px; padding: 0 10px; color: var(--bc-text-muted); font-weight: 500; white-space: nowrap; }
 .rtab:hover { color: var(--bc-text); }
 .rtab.is-active { color: var(--bc-text); }
@@ -189,6 +195,8 @@ button:disabled { opacity: .45; }
 .modal-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .doc { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .doc[hidden] { display: none; }
+.doc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }   /* la vue dans un onglet : pas un .doc, sinon les sélecteurs de l'onglet visible la comptent deux fois */
+.doc-body[hidden] { display: none; }
 .doc-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--bc-space-2); padding: var(--bc-space-4); text-align: center; }
 
 /* Barre d'état */
@@ -303,12 +311,16 @@ fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
 
 /* Fenêtres étroites (900 px) : petites commandes du ruban sans libellé, onglets resserrés */
 @media (max-width: 1100px) {
-  .rbtn-sm span { display: none; }
+  .rbtn-sm span, .rbtn-sm .rcaret { display: none; }
   .rbtn-sm { width: 26px; justify-content: center; padding: 0; }
   .rtab { padding: 0 6px; }
   .rtab.is-active::after { left: 6px; right: 6px; }
-  .rtab-file { margin-right: 2px; }
+  .rtab-file { margin-right: 2px; padding: 0 8px; }
   .rtab-sep { margin: 0 2px; }
+  /* 900 px (the window's minimum, main/index.ts): the report designer's nine tabs still fit beside the Quick Access Toolbar */
+  .rtabs { gap: 0; font-size: 12px; }
+  .rqat { padding: 0 2px; }
+  .rqat-btn { width: 22px; }
 }
 
 /* Splitter (horizontal bar between two stacked panes) */
@@ -338,3 +350,8 @@ fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
 /* PythonVeil: a Python call runs; the window stands back (inert), modals (z-index 50) stay usable above it */
 .python-veil { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; cursor: progress; }
 .python-veil-box { display: flex; align-items: center; gap: var(--bc-space-3); padding: var(--bc-space-2) var(--bc-space-3); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); background: var(--bc-surface); box-shadow: var(--shadow-pop); }
+.rbtn-lg .rcaret, .rbtn-sm .rcaret { width: 10px; height: 10px; flex: none; color: var(--bc-text-muted); }
+/* a large button has no height left under a two-line label: its arrow sits in the bottom right corner */
+.rbtn-lg:has(.rcaret) { position: relative; }
+.rbtn-lg .rcaret { position: absolute; right: 3px; bottom: 3px; }
+.rbtn-xs .rcaret { display: none; } /* an icon-only button has no room for it; its menu still opens */

@@ -117,7 +117,9 @@ test('page setup: landscape is saved and laid out again (shorter pages: 4 instea
     await openReport(page, REPORT);
     await expect(pageOf(page)).toHaveText('Page 1 sur 3');
     await page.getByTestId('cmd-pageSetupDialog').click();
+    await page.getByTestId('page-setup-tab-page').click();   // orientation: the Page tab; margins: Print Options
     await expect(page.getByTestId('page-setup-portrait')).toBeChecked();
+    await page.getByTestId('page-setup-tab-options').click();
     await expect(page.getByTestId('page-setup-margin-top')).toHaveValue('1');
     await page.getByTestId('page-setup-margin-left').fill('12');
     await page.getByTestId('modal-btn-ok').click();
@@ -129,6 +131,7 @@ test('page setup: landscape is saved and laid out again (shorter pages: 4 instea
     await expect(page.getByTestId('page-setup-margin-top')).toHaveAttribute('aria-invalid', 'false');
     await expect(page.getByTestId('page-setup-margin-top')).not.toHaveAttribute('aria-describedby');
     await page.getByTestId('page-setup-margin-left').fill('1');
+    await page.getByTestId('page-setup-tab-page').click();
     await page.getByTestId('page-setup-landscape').check();
     await page.getByTestId('modal-btn-ok').click();
     await expect(pageOf(page)).toHaveText('Page 1 sur 4');
@@ -139,6 +142,50 @@ test('page setup: landscape is saved and laid out again (shorter pages: 4 instea
     await expect(pageOf(page)).toHaveText('Page 1 sur 4');
     const box = await visiblePages(page).first().evaluate((el) => ({ w: (el as HTMLElement).offsetWidth, h: (el as HTMLElement).offsetHeight }));
     expect(box.w).toBeGreaterThan(box.h);
+  } finally {
+    await app.close();
+  }
+});
+
+test('page setup: two columns of an explicit size and row spacing, and Data Only, are saved with the report', async () => {
+  test.setTimeout(120000);
+  const base = seed();
+  let { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  const detailWidths = () => visiblePages(page).first().locator('.bc-band[data-section="detail"]').evaluateAll((els) => els.map((e) => ({ w: Math.round(parseFloat((e as HTMLElement).style.width) * 20), h: Math.round(parseFloat((e as HTMLElement).style.height) * 20), l: Math.round(parseFloat((e as HTMLElement).style.left) * 20) })));
+  try {
+    await openReport(page, REPORT);
+    await page.getByTestId('cmd-columns').click();
+    await expect(page.getByTestId('columns-same-as-detail')).toBeDisabled();   // one column: nothing to size
+    await page.getByTestId('columns-count').fill('2');
+    await page.getByTestId('columns-spacing').fill('0,5');
+    await expect(page.getByTestId('columns-same-as-detail')).toBeChecked();
+    await page.getByTestId('columns-same-as-detail').uncheck();
+    await page.getByTestId('columns-width').fill('6');
+    await page.getByTestId('columns-height').fill('0,8');
+    await page.getByTestId('columns-row-spacing').fill('0,3');
+    await page.getByTestId('columns-across').check();
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect.poll(async () => (await detailWidths())[0]).toMatchObject({ w: 3402, h: 454 });
+    const d = await detailWidths();
+    expect(Math.abs(d[1]!.l - d[0]!.l - (3402 + 284))).toBeLessThanOrEqual(1);   // 0,5 cm in pt, rounded
+    await page.getByTestId('cmd-pageSetupDialog').click();
+    await page.getByTestId('page-setup-data-only').check();
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('cmd-printDataOnly')).toHaveAttribute('aria-pressed', 'true');
+    await app.close();
+
+    ({ app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } }));
+    await openReport(page, REPORT);
+    await expect.poll(async () => (await detailWidths())[0]).toMatchObject({ w: 3402, h: 454 });
+    await expect(page.getByTestId('cmd-printDataOnly')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('cmd-columns').click();
+    await expect(page.getByTestId('columns-same-as-detail')).not.toBeChecked();
+    await expect(page.getByTestId('columns-width')).toHaveValue('6');
+    await expect(page.getByTestId('columns-row-spacing')).toHaveValue('0,3');
+    await page.getByTestId('modal-btn-cancel').click();
+    await page.getByTestId('cmd-printDataOnly').click();   // toggled off: saved too
+    await expect(page.getByTestId('cmd-printDataOnly')).not.toHaveAttribute('aria-pressed', 'true');
   } finally {
     await app.close();
   }

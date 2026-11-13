@@ -23,7 +23,7 @@ const withGroup = (expression: string): DesignDoc => {
 describe('report sections (band designer)', () => {
   it('a new report stores the default margins (O3 R9); without them, no page setup', () => {
     const M = { top: 360, right: 360, bottom: 360, left: 1134 };
-    expect(readReport(blankReport(M), []).page).toEqual({ orientation: 'portrait', margins: M });
+    expect(readReport(blankReport(M), []).page).toEqual({ orientation: 'portrait', paper: 'a4', margins: M });
     expect(blankReport().props.pageSetup).toBeUndefined();
   });
   it('a blank report: page header, detail, page footer, no source, no grouping', () => {

@@ -16,7 +16,7 @@ import { CONTAINER_KINDS, designerReducer, docWidth, documentKind, findControl, 
 import type { Handle } from './geometry';
 import { emptyCells, layoutOutlines } from './layout-outline';
 import type { EmptyCell } from '../../shared/design/layout';
-import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Gesture } from './pointer';
+import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Body, type Gesture } from './pointer';
 import { currentSettings } from '../settings-store';
 import { withToolProps } from './image-gallery-model';
 import { fieldDrop } from './FieldList';
@@ -145,9 +145,9 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     return { x: e.clientX - r.left - el.clientLeft, y: e.clientY - r.top - el.clientTop };
   };
   // Positions des sections relevées au début du geste : l'aperçu peut agrandir une section et décaler les suivantes.
-  const layout = useRef<{ blocks: number[]; bodies: Point[] }>({ blocks: [], bodies: [] });
+  const layout = useRef<{ blocks: number[]; bodies: Body[] }>({ blocks: [], bodies: [] });
   const measure = () => {
-    layout.current = { blocks: blocks.current.map((b) => b?.offsetTop ?? 0), bodies: bodies.current.map((b) => ({ x: b?.offsetLeft ?? 0, y: b?.offsetTop ?? 0 })) };
+    layout.current = { blocks: blocks.current.map((b) => b?.offsetTop ?? 0), bodies: bodies.current.map((b) => ({ x: b?.offsetLeft ?? 0, y: b?.offsetTop ?? 0, height: b?.offsetHeight ?? 0 })) };
   };
   const bodyAt = (i: number): Point => layout.current.bodies[i] ?? { x: 0, y: 0 };
   const sectionAt = (y: number): number => {
@@ -158,14 +158,16 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const local = (i: number) => (q: Point): At => { const o = bodyAt(i); return { x: q.x - o.x, y: q.y - o.y, section: i }; };
 
   const start = (e: PointerEvent, d: Omit<Drag, 'at' | 'alt' | 'shift'>, from: Point) => {
-    sheet.current!.setPointerCapture(e.pointerId);
+    root.current!.setPointerCapture(e.pointerId);
     setDrag({ ...d, at: d.toAt(from), alt: e.altKey, shift: e.shiftKey });
   };
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0 || drag) return;
     const el = e.target as HTMLElement;
-    if (el.closest('[data-layout-handle], [data-layout-cell]')) return;   // la poignée d'une disposition et une cellule vide sélectionnent au clic : ni glisser ni rectangle
+    if (el.closest('[data-layout-handle], [data-layout-cell], [role="menu"]')) return;   // la poignée d'une disposition et une cellule vide sélectionnent au clic : ni glisser ni rectangle
+    const c = root.current!, cr = c.getBoundingClientRect();
+    if (e.clientX - cr.left - c.clientLeft >= c.clientWidth || e.clientY - cr.top - c.clientTop >= c.clientHeight) return;   // les barres de défilement
     const at = pt(e);
     measure();
     const handle = el.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined;
@@ -198,11 +200,9 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
         return { x, y: s === section ? y : y + bodyAt(section).y - bodyAt(s).y, section: s };
       };
       start(e, { g: { kind: 'move', section, origin }, toAt, focus: ctl }, at);
-    } else if (body !== undefined) {
-      const section = Number(body);
-      const toAt = local(section);
+    } else if (body !== undefined || !sheet.current!.contains(el)) {   // le rectangle de sélection part d'une section ou du fond autour de la feuille
       root.current?.focus({ preventScroll: true });
-      start(e, { g: { kind: 'band', section, origin: toAt(at) }, toAt }, at);
+      start(e, { g: { kind: 'band', origin: at, bodies: layout.current.bodies }, toAt: (q) => ({ ...q, section: 0 }) }, at);
     }
   };
   // un aperçu par image au plus : les mouvements du pointeur entre deux images se fondent dans le dernier
@@ -342,11 +342,15 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
     dispatch(m.action);
   };
 
-  const rubber = drag && (drag.g.kind === 'band' || drag.g.kind === 'place') ? { section: drag.g.section, o: drag.g.origin, at: drag.at } : null;
+  const rubber = drag && drag.g.kind === 'place' ? { section: drag.g.section, o: drag.g.origin, at: drag.at } : null;
+  const band = drag && drag.g.kind === 'band' ? { o: drag.g.origin, at: drag.at } : null;
 
   return (
     <div className="dz-surface" style={{ ['--cm' as string]: `${CM_PX}px` }}>
-    <div className="dz-ruler-corner" aria-hidden />
+    {/* le sélecteur du formulaire / de l'état, comme Access : un clic sélectionne le document, un carré plein le montre sélectionné */}
+    <button type="button" className={`dz-ruler-corner${state.selection.kind === 'doc' ? ' is-sel' : ''}`} data-testid="doc-selector"
+      aria-pressed={state.selection.kind === 'doc'} aria-label={t(`tabs.kind.${kind}`)} title={t(`tabs.kind.${kind}`)}
+      onClick={() => dispatch({ type: 'select', selection: { kind: 'doc' } })} />
     <div className="dz-ruler dz-hruler" aria-hidden data-testid="ruler-h">
       <div ref={hRuler} className="dz-ruler-track"><div ref={hScale} className="dz-ruler-scale" style={{ width: px(width) }}><RulerMarks twips={width} locale={locale} /></div></div>
     </div>
@@ -360,10 +364,11 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
       </div>
     </div>
     <div ref={root} className="dz-canvas" role="region" aria-label={t('designer.canvas')} data-testid="design-canvas" tabIndex={-1} onKeyDown={onKeyDown}
-      onScroll={followScroll} onFocus={(e) => { lastFocus.current = e.target as HTMLElement; }}>
+      onScroll={followScroll} onFocus={(e) => { lastFocus.current = e.target as HTMLElement; }}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancel} onLostPointerCapture={() => drag && cancel()}>
       <div ref={sheet} className={`dz-sheet${placing ? ' is-placing' : ''}`} style={{ width: px(width) }}
-        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancel} onLostPointerCapture={() => drag && cancel()}
         onContextMenu={openPageMenu} onDragStart={(e) => e.preventDefault()} onDragOver={onDragOver} onDrop={onDrop}>   {/* une image d'un aperçu ne part pas en glisser-déposer natif */}
+        {host.pageGuide && <div className="dz-page-guide" aria-hidden data-testid="page-guide" style={{ width: px(host.pageGuide.width), height: px(host.pageGuide.height) }} />}
         {doc.sections.map((s: SectionDef, i) => (
           <div key={i} ref={(el) => { blocks.current[i] = el; }} className="dz-block">
             <button type="button" className={`dz-band${state.selection.kind === 'section' && state.selection.index === i ? ' is-sel' : ''}`}
@@ -424,6 +429,8 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
               }} />}
           </div>
         ))}
+        {band && <div className="dz-rubber" aria-hidden style={{ left: Math.min(band.o.x, band.at.x), top: Math.min(band.o.y, band.at.y),
+          width: Math.abs(band.at.x - band.o.x), height: Math.abs(band.at.y - band.o.y) }} />}
       </div>
       {pageMenu && (
         <PopupMenu x={pageMenu.x} y={pageMenu.y} testId="page-menu" labelKey="form.tabOrder.pageMenu" onClose={() => setPageMenu(null)}>

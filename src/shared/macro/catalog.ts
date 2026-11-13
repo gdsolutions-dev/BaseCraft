@@ -6,6 +6,7 @@
 export type ActionName = 'Beep' | 'ClearMacroError' | 'CloseDatabase' | 'CloseWindow' | 'MessageBox' | 'OnError' | 'OpenForm' | 'OpenQuery'
   | 'OpenReport' | 'OpenTable' | 'Quit' | 'RemoveAllTempVars' | 'RemoveTempVar' | 'RunCode' | 'RunMacro' | 'RunSQL' | 'SetLocalVar' | 'SetTempVar'
   | 'SetWarnings' | 'StopAllMacros' | 'StopMacro'
+  | 'CreateRecord' | 'RaiseError' | 'RunDataMacro' | 'SetField'   // data macros only (T2): never in a UI macro
   | 'ApplyFilter'
   | 'CancelEvent'
   | 'DeleteRecord'
@@ -21,7 +22,8 @@ export type ActionName = 'Beep' | 'ClearMacroError' | 'CloseDatabase' | 'CloseWi
   | 'UndoRecord';
 /** Access's categories that B1 and B2 fill. */
 export type ActionCategory = 'ui' | 'macro' | 'system' | 'filter' | 'window' | 'objects'
-  | 'dataEntry';
+  | 'dataEntry'
+  | 'dataMacro';   // T2: the actions of a table's data macros; a UI macro refuses them
 /** `text`: a literal, or `=` + a canonical expression evaluated at run time, as Access; `number`: the same with a number;
  *  `reference`: a canonical expression naming a control or field (SetValue's Item), edited as an expression, never evaluated by the engine. */
 export type ArgType = 'text' | 'expression' | 'where' | 'number' | 'enum' | 'sql' | 'formName' | 'reportName' | 'queryName' | 'tableName'
@@ -47,6 +49,7 @@ export const ACTIONS: readonly ActionDef[] = [
   act('CloseWindow', 'window', [
     arg('ObjectType', 'objectType', { options: ['', 'table', 'query', 'form', 'report', 'macro'], default: '' }),
     arg('ObjectName', 'objectName')]),
+  act('CreateRecord', 'dataMacro', [arg('TableName', 'tableName', required), arg('Values', 'sql')]),   // T2: `Field = expression` per line (canonical)
   act('DeleteRecord', 'dataEntry'),
   act('FindRecord', 'filter', [   // R4: no SearchAsFormatted
     arg('FindWhat', 'text', required),
@@ -77,14 +80,17 @@ export const ACTIONS: readonly ActionDef[] = [
   act('OpenReport', 'objects', [arg('ReportName', 'reportName', required), view(['preview', 'print', 'design']), arg('WhereCondition', 'where')]),   // R7
   act('OpenTable', 'objects', [arg('TableName', 'tableName', required), view(['datasheet', 'design'])]),
   act('Quit', 'system'),   // R6
+  act('RaiseError', 'dataMacro', [arg('ErrorNumber', 'number'), arg('ErrorDescription', 'text')]),
   act('RefreshRecord', 'filter'),
   act('RemoveAllTempVars', 'macro'),
   act('RemoveTempVar', 'macro', [arg('Name', 'text', required)]),
   act('Requery', 'filter', [arg('ControlName', 'text')]),
   act('RunCode', 'macro', [arg('FunctionName', 'functionCall', required)], true),
+  act('RunDataMacro', 'dataMacro', [arg('MacroName', 'text', required)]),
   act('RunMacro', 'macro', [arg('MacroName', 'macroName', required), arg('RepeatCount', 'number'), arg('RepeatExpression', 'expression')]),
   act('RunSQL', 'filter', [arg('SQLStatement', 'sql', required)], true),
   act('SaveRecord', 'dataEntry'),
+  act('SetField', 'dataMacro', [arg('Name', 'text', required), arg('Value', 'expression', required)]),
   act('SetLocalVar', 'macro', [arg('Name', 'text', required), arg('Expression', 'expression', required)]),
   act('SetProperty', 'objects', [   // R9
     arg('ControlName', 'text'),

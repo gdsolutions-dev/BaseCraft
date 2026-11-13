@@ -73,6 +73,8 @@ async function instantForm(page: Page, source: string, name: string) {
   await page.getByTestId('cmd-createForm').click();
   await expect(page.getByTestId(`doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
   await page.getByTestId(`doc-tab-close-form-${source}`).click();
+  await page.getByTestId('modal-btn-yes').click();   // saved when its tab closes, under the proposed name (its source's)
+  await page.getByTestId('modal-btn-ok').click();
   await page.getByTestId(`nav-item-form-${source}`).click({ button: 'right' });
   await page.getByTestId('nav-menu-rename').click();
   await page.getByTestId('modal-input').fill(name);
@@ -252,6 +254,9 @@ test('recette B4: a form on a crosstab whose headings need parameters, without C
     await expect(vis(page, 'form-ctl-Nom')).toHaveValue('Dupont');
     await expect(vis(page, 'nav-record-count')).toHaveText('3');
     for (const h of ['9', '10']) await expect(page.getByTestId(`form-ctl-${h}`)).toHaveCount(0);
+    await page.keyboard.press('Control+s');   // the new form, saved under the proposed name
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-form-QVentesDepuis')).toBeVisible();
     const form = await page.evaluate(() => (window as unknown as Win).basecraft.objects.get('form', 'QVentesDepuis')) as { definition: DesignDoc };
     expect(form.definition.sections.flatMap((s) => s.controls).map((c) => c.props.ControlSource).filter((s) => s !== undefined)).toEqual(['Nom']);
   } finally {

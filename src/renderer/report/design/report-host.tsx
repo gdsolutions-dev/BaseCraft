@@ -4,7 +4,8 @@ import { DesignChart } from '../../form/controls/ChartCtl';
 import { DesignImage } from '../../form/controls/ImageCtl';
 import type { TFunction } from 'i18next';
 import {
-  ChevronDown, ChevronsUpDown, CircleDot, Image as ImageIcon, LetterText, Minus, SeparatorHorizontal, Square, SquareCheck, TextCursorInput,
+  AppWindow, ChevronDown, ChevronsUpDown, CircleDot, Group, Image as ImageIcon, LetterText, List, Minus, PanelTop, RectangleHorizontal, SeparatorHorizontal,
+  Square, SquareCheck, TextCursorInput, ToggleLeft,
 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { colorCss, type ColorValue } from '../../../shared/design/colors';
@@ -15,7 +16,7 @@ import { EMBEDDED_FONTS, resolveFont } from '../../../shared/fonts';
 import type { DesignerHost, ToolDef } from '../../designer/Designer';
 import { controlSourceToDisplay } from '../../designer/property-sheet-model';
 import type { PropertySheetContext } from '../../designer/sheet-types';
-import { gridlineStyle, marginInset, themedFamily, type ThemeCtx } from '../../form/run-model';
+import { gridlineStyle, linkAddress, LINK_LOOK, marginInset, themedFamily, type ThemeCtx } from '../../form/run-model';
 import { useDocTheme } from '../../design/doc-theme';
 import { i18n } from '../../i18n';
 import { newReportControls, sectionLabel, togglePageHeaderFooter, toggleReportHeaderFooter } from './report-sections';
@@ -26,8 +27,14 @@ export const REPORT_TOOLBOX: ToolDef[] = [
   { kind: 'label', icon: LetterText, labelKey: 'ribbon.cmd.label' },
   { kind: 'textBox', icon: TextCursorInput, labelKey: 'ribbon.cmd.textBox' },
   { kind: 'comboBox', icon: ChevronsUpDown, labelKey: 'ribbon.cmd.comboBox' },
+  { kind: 'listBox', icon: List, labelKey: 'ribbon.cmd.listBox' },
+  { kind: 'commandButton', icon: RectangleHorizontal, labelKey: 'ribbon.cmd.button' },
+  { kind: 'toggleButton', icon: ToggleLeft, labelKey: 'ribbon.cmd.toggleButton' },
+  { kind: 'optionGroup', icon: Group, labelKey: 'ribbon.cmd.optionGroup' },
+  { kind: 'tabControl', icon: PanelTop, labelKey: 'ribbon.cmd.tabControl' },
   { kind: 'checkBox', icon: SquareCheck, labelKey: 'ribbon.cmd.checkBox' },
   { kind: 'optionButton', icon: CircleDot, labelKey: 'ribbon.cmd.optionButton' },
+  { kind: 'subform', icon: AppWindow, labelKey: 'ribbon.cmd.subform' },
   { kind: 'image', icon: ImageIcon, labelKey: 'ribbon.cmd.image' },
   { kind: 'rectangle', icon: Square, labelKey: 'ribbon.cmd.rectangle' },
   { kind: 'line', icon: Minus, labelKey: 'ribbon.cmd.line' },
@@ -77,14 +84,22 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
     const st = boxStyle(c, tc);
     const source = () => controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound;
     switch (c.kind) {
-      case 'label': return <div className="rz rz-text" style={st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
+      case 'label': return <div className="rz rz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
       case 'textBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span></div>;
       case 'comboBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
+      case 'listBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span></div>;
+      case 'commandButton': case 'toggleButton': return <div className="rz rz-text rz-button" style={st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
+      case 'optionGroup': return <div className="rz rz-group" style={st}><span className="rz-legend">{String(prop(c, 'Caption') ?? '')}</span></div>;
+      case 'tabControl': {
+        const v = prop(c, 'Pages');
+        return <div className="rz rz-tabs"><div className="rz-tabstrip">{(Array.isArray(v) ? v : []).map((x, i) => <span key={i} className={i === 0 ? 'is-on' : ''}>{String(x)}</span>)}</div></div>;
+      }
       case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'image': return <DesignImage c={c} className="rz rz-image" style={st} />;
       case 'chart': return <DesignChart c={c} className="rz rz-chart" style={st} />;
       case 'rectangle': return <div className="rz" style={st} />;
+      case 'subform': return <div className="rz rz-text" style={st}><span className="rz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;
       case 'line': {
         const slant = prop(c, 'LineSlant') === true;   // faux : du coin haut gauche au coin bas droit (Access)
         const stroke = prop(c, 'BorderStyle') === 'transparent' ? 'var(--bc-border)' : color(c, 'BorderColor', tc);
@@ -109,7 +124,7 @@ export function reportHost(p: { doc: DesignDoc; sheet: PropertySheetContext; t: 
     tools: REPORT_TOOLBOX,
     sectionLabel: (s) => sectionLabel(s, doc, t, sheet.display),
     renderControl: p.renderControl,
-    newControls: (kind, rect, section, d) => newReportControls(kind, rect, section, d, (k) => t(`designer.ctlPrefix.${k}`)),
+    newControls: (kind, rect, section, d) => newReportControls(kind, rect, section, d, (k) => t(`designer.ctlPrefix.${k}`), (n) => t('form.tabPage', { n })),
     // le menu contextuel de toute barre de section d'Access
     sectionMenu: () => [
       { id: 'pageHeaderFooter', labelKey: 'report.pageHeaderFooter', action: { type: 'edit', apply: togglePageHeaderFooter } },

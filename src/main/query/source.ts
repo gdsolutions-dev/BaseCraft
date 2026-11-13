@@ -13,6 +13,7 @@ import { invalidQueryError, isSqlSource, parseQueryDefinition, passThroughOf } f
 import { parseSql } from '../../shared/query/sql-parser';
 import type { RecordSourceRef, SourceField, SourceInfo, SourcePage, SourcePageRequest } from '../../shared/record-source';
 import type { FieldFilter } from '../../shared/api';
+import { aggregateRun } from '../db/aggregate';
 import { compileFilter } from '../db/filter';
 import { getObject } from '../db/objects';
 import { hasRealRowid, isTableName, listTables, tableDesign } from '../db/schema';
@@ -264,7 +265,22 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
     if (cache.size >= MAX_TOTALS) cache.clear(); // ponytail: drop all past 256 keys; an LRU if forms page many parameter sets
     if (!volatile) cache.set(key, { seq, total });
   }
-  if (req.limit === 0) return { rows: [], rowids: [], total, ...columns };
+  let aggregates: SourcePage['aggregates'];
+  if (req.aggregates) {
+    const specs = req.aggregates.map((a) => {
+      const k = b.columns.findIndex((col) => sameName(col.name, a.field));
+      if (k < 0) throw new Error('bc:notFound');
+      return { col: `"c${k}"`, fn: a.fn, numeric: b.columns[k].props.type !== 'dateTime' };
+    });
+    // the authorizer allows no sum, avg, min or max: it checks the query's own SELECT, which the totals' fixed wrapper then runs
+    authorizedPrepare(db, c.sql, compiled.temp);
+    try {
+      aggregates = aggregateRun(db, specs, `(${c.sql})`, c.params);
+    } catch (e) {
+      throw queryError(e);
+    }
+  }
+  if (req.limit === 0) return { rows: [], rowids: [], total, ...columns, ...(aggregates ? { aggregates } : {}) };
 
   const out = [...(c.hasRowid ? ['"bcx_rowid"'] : []), ...b.columns.map((_, k) => `"c${k}"`)].join(', ');
   // the query's own ORDER BY stays inside; row_number() over its rows, in that order, breaks the page sort's ties
@@ -273,8 +289,8 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
     : `SELECT ${out} FROM (${c.sql}) AS "bcx_q" LIMIT ? OFFSET ?`;
   const rows = run(db, sql, [...c.params, req.limit, req.offset], compiled.temp);
   return c.hasRowid
-    ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => (r[0] === null ? null : Number(r[0]))) /* an outer join's row without its key record (R5) */, total }
-    : { rows, rowids: rows.map(() => null), total, ...columns };
+    ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => (r[0] === null ? null : Number(r[0]))) /* an outer join's row without its key record (R5) */, total, ...(aggregates ? { aggregates } : {}) }
+    : { rows, rowids: rows.map(() => null), total, ...columns, ...(aggregates ? { aggregates } : {}) };
 }
 
 /**

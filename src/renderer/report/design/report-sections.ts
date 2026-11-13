@@ -81,13 +81,13 @@ const LABEL_WIDTH = 1418, GAP = 57, BOX = 284;   // étiquette attachée 2,5 cm 
 const DEFAULT_CLICK = { width: 1418, height: 340 };   // la taille d'un simple clic (pointer.ts)
 
 /** Le premier « préfixe + n » libre (n ≥ 1), comme Access (Texte1, Étiquette2…). */
-function nextName(doc: DesignDoc, prefix: string, taken: string[]): string {
+export function nextName(doc: DesignDoc, prefix: string, taken: string[]): string {
   for (let n = 1; ; n++) { const name = `${prefix}${n}`; if (!findControl(doc, name) && !taken.some((x) => sameName(x, name))) return name; }
 }
 
 /** Les contrôles d'un outil posé dans `rect` (twips, relatifs à la section) : zone de texte et liste déroulante avec leur étiquette
  *  attachée à gauche, case à cocher et case d'option avec la leur à droite ; une étiquette porte son nom pour légende. */
-export function newReportControls(kind: ControlKind, rect: Rect, section: number, doc: DesignDoc, prefix: (k: ControlKind) => string): ControlDef[] {
+export function newReportControls(kind: ControlKind, rect: Rect, section: number, doc: DesignDoc, prefix: (k: ControlKind) => string, tabPage: (n: number) => string = (n) => String(n)): ControlDef[] {
   if (!doc.sections[section]) return [];
   const name = nextName(doc, prefix(kind), []);
   const click = rect.width === DEFAULT_CLICK.width && rect.height === DEFAULT_CLICK.height;
@@ -104,7 +104,9 @@ export function newReportControls(kind: ControlKind, rect: Rect, section: number
     const left = Math.min(r.left + r.width + GAP, MAX_TWIPS - LABEL_WIDTH);
     return [{ kind, name, ...r, props: {}, children: [label({ left, top: r.top, width: LABEL_WIDTH, height: Math.max(r.height, BOX) }, name)] }];
   }
-  return [{ kind, name, ...r, props: kind === 'label' ? { Caption: name } : {} }];
+  const props: Record<string, unknown> = kind === 'label' || kind === 'commandButton' || kind === 'toggleButton' || kind === 'optionGroup' ? { Caption: name }
+    : kind === 'tabControl' ? { Pages: [tabPage(1), tabPage(2)] } : {};
+  return [{ kind, name, ...r, props }];
 }
 
 /** The Detail is hidden (Hide Details: its Visible property false). */

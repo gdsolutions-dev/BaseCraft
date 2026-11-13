@@ -77,6 +77,7 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     // saved, then Print Preview: exact totals per client and for the report
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-save').click();
+    await page.getByTestId('modal-btn-ok').click();   // a new report: its name (the source's) proposed
     await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await pickView(page, 'viewPrintPreview');
@@ -124,6 +125,10 @@ test('recette A5: AutoReport, grouped by client with exact totals, PDF, reopened
     await cur(page).getByTestId('preview-nav-last').click();
     const last = cur(page).locator(`.bc-page[data-page="${n}"] .bc-band[data-section="pageFooter"] .bc-line`);
     await expect(last.filter({ hasText: `Page ${n} sur ${n}` })).toHaveCount(2);
+    // enregistrement explicite depuis la Création (plus de question à l'aperçu)
+    await pickView(page, 'viewDesign');
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
   } finally {
     await app.close();
   }

@@ -162,7 +162,7 @@ async function runAction(run: Run, frame: Frame, item: Extract<MacroItem, { k: '
       if (answer === 'continue') run.stepping = false;
     }
     const def = actionDef(item.action);
-    if (!def) throw new Fail('unknownAction');
+    if (!def || def.category === 'dataMacro') throw new Fail('unknownAction');   // the data macros' actions run only in a table's events (T2)
     if (def.unsafe && !host.contentEnabled()) throw new Fail('blocked');
     const args = await resolveArgs(run, frame, def, item.args);
     return await execute(run, frame, def.name, args, item.args);

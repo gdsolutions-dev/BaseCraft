@@ -14,13 +14,22 @@ export function goToRow(where: GoTo, current: number | null, count: number): num
   return where === 'first' ? 0 : where === 'last' ? count - 1 : where === 'next' ? Math.min(count - 1, at + 1) : Math.max(0, at - 1);
 }
 
-export function findCommands(env: { openFind(): void; openMenu(menu: 'goTo' | 'select'): void }): CommandHandlers {
-  return { find: () => env.openFind(), goTo: () => env.openMenu('goTo'), selectMenu: () => env.openMenu('select') };
+export function findCommands(env: { openFind(tab: 'find' | 'replace'): void; openMenu(menu: 'goTo' | 'select'): void }): CommandHandlers {
+  return { find: () => env.openFind('find'), replace: () => env.openFind('replace'), goTo: () => env.openMenu('goTo'), selectMenu: () => env.openMenu('select') };
 }
 
 /** « Rechercher/Remplacer par défaut » (R10): where the dialog's Look In and Match start. */
 export function findDefaults(d: AppSettings['findReplaceDefault']): { onlyCurrentField: boolean; match: FindOptions['match'] } {
   return d === 'general' ? { onlyCurrentField: false, match: 'anywhere' } : { onlyCurrentField: true, match: d === 'startOfField' ? 'start' : 'whole' };
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Replace (Access's): the matched text of `text` becomes `replaceWith`. Whole Field: the whole text; Start of Field: the text's
+ *  start; Any Part of Field: the first occurrence, or every one when `all`. The caller has checked that `text` matches. */
+export function replaceText(text: string, o: { what: string; match: FindOptions['match']; matchCase: boolean }, replaceWith: string, all: boolean): string {
+  if (o.match === 'whole') return replaceWith;
+  const re = new RegExp(o.match === 'start' ? '^' + escapeRe(o.what) : escapeRe(o.what), (o.matchCase ? '' : 'i') + (all && o.match === 'anywhere' ? 'g' : ''));
+  return text.replace(re, () => replaceWith);
 }
 
 /** Find's comparison (the dialog and FindRecord, B2 R13): without Match Case, case ignored, accents kept (Access); the region's

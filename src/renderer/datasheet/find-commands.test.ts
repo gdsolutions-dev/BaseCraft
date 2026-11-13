@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDefaults, goToRow, matchText } from './find-commands';
+import { findCommands, findDefaults, goToRow, matchText, replaceText } from './find-commands';
 
 describe('goToRow', () => {
   it('moves within the saved records', () => {
@@ -42,5 +42,23 @@ describe('Find dialog (O2 R10)', () => {
   it('matchText: the no-break spaces of the region (grouping, currency) match a typed space', () => {
     expect(matchText('1\u202f200,00\u00a0€', '1 200,00 €', 'whole', false, 'fr-FR')).toBe(true);
     expect(matchText('1\u202f200,00\u00a0€', '1 200,00 €', 'whole', true, 'fr-FR')).toBe(true);
+  });
+});
+
+describe('Replace (Find dialog, Replace tab)', () => {
+  it('replaceText: whole field, start, any part (first or every occurrence)', () => {
+    expect(replaceText('Dupont', { what: 'dup', match: 'whole', matchCase: false }, 'Martin', false)).toBe('Martin');
+    expect(replaceText('Dupont Dupont', { what: 'dup', match: 'start', matchCase: false }, 'X', true)).toBe('Xont Dupont');
+    expect(replaceText('Dupont Dupont', { what: 'dup', match: 'anywhere', matchCase: false }, 'X', false)).toBe('Xont Dupont');
+    expect(replaceText('Dupont Dupont', { what: 'dup', match: 'anywhere', matchCase: false }, 'X', true)).toBe('Xont Xont');
+    expect(replaceText('a.b a.b', { what: 'a.b', match: 'anywhere', matchCase: true }, 'c', true)).toBe('c c');
+    expect(replaceText('aXb', { what: 'a.b', match: 'anywhere', matchCase: true }, 'c', true)).toBe('aXb');
+    expect(replaceText('$1 x', { what: '$1', match: 'anywhere', matchCase: true }, '$&', false)).toBe('$& x');
+  });
+  it('findCommands opens the dialog on the Find or the Replace tab', () => {
+    const tabs: string[] = [];
+    const h = findCommands({ openFind: (tab) => tabs.push(tab), openMenu: () => {} });
+    h.find!(undefined as never); h.replace!(undefined as never);
+    expect(tabs).toEqual(['find', 'replace']);
   });
 });

@@ -27,7 +27,7 @@ export function actionFor(pyName: string): ActionDef {
   const k = norm(pyName)
   if (REFUSED[k]) throw new Error(`bc:refusedDocmd|${pyName}|${REFUSED[k]}`)
   const def = ACTIONS.find((a) => a.name.toLowerCase() === (k === 'close' ? 'closewindow' : k))
-  if (!def) throw new Error(`bc:noSuchDocmd|${pyName}`)
+  if (!def || def.category === 'dataMacro') throw new Error(`bc:noSuchDocmd|${pyName}`)
   return def
 }
 

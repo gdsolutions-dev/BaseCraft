@@ -12,24 +12,27 @@ import type { FieldFilter, LookupData, QueryRef, RowPage, RowRef, RowWriteResult
 import type { CellInput, FieldErrorCode, SqlValue } from '../../shared/coerce';
 import { FORMATS_BY_TYPE } from '../../shared/expr/format';
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
-import { lookupOf, MASK_TYPES, sameName, serverComputed, type FieldDef, type TableDesign } from '../../shared/field-types';
-import { localeInfo } from '../../shared/locale-format';
+import { LOOKUP_TYPES, lookupOf, MASK_TYPES, sameName, serverComputed, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { localeInfo, parseDecimal } from '../../shared/locale-format';
 import { lookupFor, writableColumn, type RecordSourceRef, type SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { bcErrorCode, useErrorDialog, useModal } from '../shell/Modal';
-import { exportSource } from '../exchange/export';
+import { chooseMoreExport, exportSource } from '../exchange/export';
+import type { ExportFormat } from '../../shared/exchange';
 import { registerCommands, registerCommandStates, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { RibbonPopup } from '../designer/RibbonPopup';
 import { design } from '../design/entry';
+import { DATA_EVENTS } from '../../shared/macro/data-macro';
 import { currentBaseOptions, currentUi } from '../shell/startup';
 import type { TableFieldsEnv, ValidationItem } from '../table-fields/table-fields-commands';
 import { defaultValues, editText, fromEdit, inputCell, lookupList, measureIn, pasteAllowed, texts, toCell, truncateNumber, type LookupList } from './datasheet-cells';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from './filter-model';
 import { installEditorCommitFix } from './glide-keyboard';
 import { datasheetLook } from './datasheet-look';
-import { layoutSavable, storedPx, toTwips, withQueryWidths } from './sheet-layout';
+import { columnWidthPx, layoutSavable, rowHeightPx, storedPx, toTwips, withQuerySheet, withQueryWidths } from './sheet-layout';
+import { parseSheetLayout, type SheetLayout } from '../../shared/sheet-layout';
 import { leaveSheetLayout } from '../form/FormRunView';
 import { passThroughOf } from '../../shared/query/definition';
 import { currentSettings, fourDigitYear } from '../settings-store';
@@ -37,8 +40,17 @@ import {
   cellEditorOpen, cellSelection, flushCellEditor, HEADER_HEIGHT, HEADER_ICONS, headerDecor, LOADING, NO_SELECTION, rowOf, RowPencil, scrollGridToRow,
   useColumnWidths, useEditKeys, usePalette, useRowPencil, type EditKeysEnv,
 } from './grid-shared';
-import { findCommands, goToRow, matchText, type GoTo } from './find-commands';
-import { FindDialog } from './FindDialog';
+import { findCommands, goToRow, matchText, replaceText, type GoTo } from './find-commands';
+import { FindDialog, type FindTab } from './FindDialog';
+import { SpellingDialog, type SpellAnswer } from './SpellingDialog';
+import { applyChange, wordsOf } from '../../shared/spelling';
+import { ZoomBox } from './ZoomBox';
+import { SizeBox, UnhideBox } from './SizeBox';
+import { FormatBox, Swatches, type SheetFormat } from './SheetColors';
+import { EMBEDDED_FONTS } from '../../shared/fonts';
+import { columnOrder, mapSelection, orderedNames } from './column-order';
+import { FONT_SIZES } from '../designer/units';
+import { TOTAL_LABEL, totalFnsFor, totalOf, totalsLayout, type TotalFn } from './totals';
 import type { FindOptions } from '../form/form-instances';
 import { FilterMenu, type BuiltList, type FilterMenuState } from './FilterMenu';
 import { fieldMenu } from './filter-menu-data';
@@ -107,13 +119,25 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const modal = useModal();
   const showError = useErrorDialog();
   const palette = usePalette();
-  const look = useMemo(() => datasheetLook(currentSettings()), []); // read when the view opens (O2 R1)
+  const settings0 = useMemo(() => currentSettings(), []); // read when the view opens (O2 R1)
+  // Home › Text Formatting: this view's font (bold, italic, underline, size) over the Options' one, and the alignment picked per field.
+  // Kept with the table or query (sheetLayout, with the other state below) when the « save layout? » question is answered Yes.
+  const [fontOver, setFontOver] = useState<Partial<Pick<typeof settings0, 'datasheetFontSize' | 'datasheetFontWeight' | 'datasheetFontItalic' | 'datasheetFontUnderline'>>>({});
+  // Font, font colour, background and gridline colours of this view (undefined: the theme's own)
+  const [skin, setSkin] = useState<{ font?: string; text?: string; back?: string; grid?: string }>({});
+  const [aligns, setAligns] = useState<Record<string, 'left' | 'center' | 'right'>>({});
+  const look = useMemo(() => datasheetLook({ ...settings0, ...fontOver }), [settings0, fontOver]);
+  const [gridlines, setGridlines] = useState({ horizontal: look.horizontal, vertical: look.vertical }); // Quadrillage (ribbon): this view's lines
   const checkTruncated = useMemo(() => currentBaseOptions().checkTruncatedNumbers, []); // read when the view opens (R13)
-  const measure = useMemo(() => measureIn(`${look.fontStyle} ${palette.theme.fontFamily}`), [look, palette]);
+  const fontFamily = skin.font ? `"${skin.font}", ${EMBEDDED_FONTS.find((f) => f.family === skin.font)?.generic ?? 'sans-serif'}` : palette.theme.fontFamily;
+  const measure = useMemo(() => measureIn(`${look.fontStyle} ${fontFamily}`), [look, fontFamily]);
   const theme = useMemo(() => ({
-    ...palette.theme, baseFontStyle: look.fontStyle, editorFontSize: `${look.fontPx}px`,
-    ...(look.horizontal ? {} : { horizontalBorderColor: palette.theme.bgCell }),
-  }), [palette, look]);
+    ...palette.theme, baseFontStyle: look.fontStyle, editorFontSize: `${look.fontPx}px`, fontFamily,
+    ...(skin.text ? { textDark: skin.text } : {}),
+    ...(skin.back ? { bgCell: skin.back, bgCellMedium: skin.back } : {}),
+    ...(skin.grid ? { borderColor: skin.grid, horizontalBorderColor: skin.grid } : {}),
+    ...(gridlines.horizontal ? {} : { horizontalBorderColor: skin.back ?? palette.theme.bgCell }),
+  }), [palette, look, gridlines.horizontal, skin, fontFamily]);
   // Underline (O2 R12): Glide draws the cell, then a 1 px line under the text of a Text cell. ponytail: one line, no wrapping of long text
   const drawUnderline = useCallback<DrawCellCallback>(({ ctx, cell, theme: th, rect }, draw) => {
     draw();
@@ -130,10 +154,11 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [shape, setShape] = useState<Shape | null>(null);
   const [lookups, setLookups] = useState<Lookups>(new Map());
   // The ribbon menu open under its button: Table Fields (More Fields, Data Type, Format, Validation) and Home › Find (Go To, Select).
-  const [popup, setPopup] = useState<'moreFields' | 'dataType' | 'format' | 'validation' | 'goTo' | 'select' | null>(null);
+  const [popup, setPopup] = useState<'moreFields' | 'dataType' | 'format' | 'validation' | 'goTo' | 'select' | 'more' | 'fontSize' | 'font' | 'fontColor' | 'backColor' | null>(null);
   // Home › Find: the Find dialog is open while > 0 (its key: each opening starts it again); closed, the key negated: every
   // opening and closing changes it, so a search under way sees it (findInSheet)
   const [finding, setFinding] = useState(0);
+  const [findTab, setFindTab] = useState<FindTab>('find');
   const findOpen = useRef(0);
   findOpen.current = finding;
   // Table Fields commands waiting for the structure to be read again, and the column to select then.
@@ -151,9 +176,62 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [refused, setRefused] = useState(false); // a write was refused as read-only (lock lost meanwhile)
   const [busy, setBusy] = useState(false); // a row is being saved: the grid is locked
   const [widths, resize] = useColumnWidths();
+  const [rowHeight, setRowHeight] = useState(look.rowHeight); // Hauteur de ligne (Plus)
+  // Masquer / Figer (Plus) : les champs masqués (enregistrés comme une largeur 0, la convention d'Access) et figés à gauche (enregistrés avec `sheetLayout`).
+  // La vue travaille en indices de champ ; `view.order` donne le champ de chaque colonne de la grille (column-order.ts).
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [frozen, setFrozen] = useState<string[]>([]);
+  const [order, setOrder] = useState<string[]>([]); // display order of the fields: Freeze fixes it, Unfreeze leaves the formerly frozen ones first
+  const view = useMemo(() => columnOrder(shape?.design.fields.map((f) => f.name) ?? [], hidden, frozen, order), [shape, hidden, frozen, order]);
+  const orderRef = useRef(view.order);
+  orderRef.current = view.order;
+  const fieldOf = (c: number) => orderRef.current[c] ?? c, gridOf = (c: number) => orderRef.current.indexOf(c);
+  // Totaux (Accueil › Enregistrements) : la ligne des totaux sous la grille, la fonction choisie par champ, et le défilement de la grille qu'elle suit.
+  // ponytail: calculés par SQL sur toutes les lignes (une source serveur : sur les lignes lues, MAX_LOADED_ROWS au plus), sans l'enregistrement en cours de saisie
+  const [totalsOn, setTotalsOn] = useState(false);
+  const [totalFns, setTotalFns] = useState<Record<string, TotalFn>>({});
+  const [totals, setTotals] = useState<Record<string, string>>({});
+  const scrollAt = useRef({ x: 0, tx: 0 }); // the grid's first scrolling column shown and its offset
+  const [region, setRegion] = useState(scrollAt.current);
   // Largeurs enregistrées (px par colonne : propriété des champs d'une table, `columnWidths` d'une requête) et tirées depuis (pas encore enregistrées)
   const [stored, setStored] = useState<Record<string, number>>({});
   const dragged = useRef<Record<string, number>>({});
+  /** The rest of the layout as stored (JSON), once the view has read it: the question « save layout? » is asked when it differs. */
+  const layoutKept = useRef<string | null>(null);
+  /** Only what differs from the defaults is kept, so an old table opens unchanged and the Options still apply to the rest. */
+  const sheetLayout = (): SheetLayout => {
+    const d = datasheetLook(settings0);
+    return {
+      ...(rowHeight !== look.rowHeight ? { rowHeight } : {}),
+      ...(frozen.length ? { frozen } : {}), ...(order.length ? { order } : {}),
+      ...(totalsOn ? { totals: true } : {}), ...(Object.keys(totalFns).length ? { totalFns } : {}),
+      ...(fontOver.datasheetFontSize !== undefined ? { fontSize: fontOver.datasheetFontSize } : {}),
+      ...(fontOver.datasheetFontWeight !== undefined ? { bold: fontOver.datasheetFontWeight >= 600 } : {}),
+      ...(fontOver.datasheetFontItalic !== undefined ? { italic: fontOver.datasheetFontItalic } : {}),
+      ...(fontOver.datasheetFontUnderline !== undefined ? { underline: fontOver.datasheetFontUnderline } : {}),
+      ...(skin.font ? { font: skin.font } : {}), ...(skin.text ? { textColor: skin.text } : {}), ...(skin.back ? { backColor: skin.back } : {}), ...(skin.grid ? { gridColor: skin.grid } : {}),
+      ...(gridlines.horizontal !== d.horizontal || gridlines.vertical !== d.vertical ? { gridlines } : {}),
+      ...(Object.keys(aligns).length ? { aligns } : {}),
+    };
+  };
+  const layoutChanged = () => layoutKept.current !== null && JSON.stringify(sheetLayout()) !== layoutKept.current;
+  const applyLayout = (l: SheetLayout) => {
+    const font = {
+      ...(l.fontSize !== undefined ? { datasheetFontSize: l.fontSize } : {}), ...(l.bold !== undefined ? { datasheetFontWeight: l.bold ? 700 : 400 } : {}),
+      ...(l.italic !== undefined ? { datasheetFontItalic: l.italic } : {}), ...(l.underline !== undefined ? { datasheetFontUnderline: l.underline } : {}),
+    };
+    setFontOver(font);
+    setRowHeight(l.rowHeight ?? datasheetLook({ ...settings0, ...font }).rowHeight);
+    setSkin({ ...(l.font && EMBEDDED_FONTS.some((f) => f.family === l.font) ? { font: l.font } : {}), ...(l.textColor ? { text: l.textColor } : {}), ...(l.backColor ? { back: l.backColor } : {}), ...(l.gridColor ? { grid: l.gridColor } : {}) });
+    if (l.gridlines) setGridlines(l.gridlines);
+    setFrozen(l.frozen ?? []);
+    setOrder(l.order ?? []);
+    setTotalsOn(!!l.totals);
+    setTotalFns(l.totalFns ?? {});
+    setAligns(l.aligns ?? {});
+  };
+  // the layout read, applied and rendered: it is the one the question compares with
+  useEffect(() => { if (shape && layoutKept.current === null) layoutKept.current = JSON.stringify(sheetLayout()); }, [shape]);
   const passThrough = useRef(false);
   // A drag of a column's edge ends on the column's new right edge, where its menu button now is: Glide then opens the filter menu
   // on the mouse-up. A press that resized a column opens no menu (Access's header has none to open).
@@ -403,13 +481,16 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         const design: TableDesign = src ? { name, fields: src.info.fields.map(columnOf) } : table!;
         // Les largeurs enregistrées : celles des champs de la table, `columnWidths` de la requête enregistrée (illisible : aucune)
         let widthsKept: Record<string, number> = {};
-        if (!src) for (const fd of design.fields) { const px = storedPx(fd.props.columnWidth); if (px) widthsKept[fd.name] = px; }
+        const hiddenKept = new Set<string>(); // largeur 0 : champ masqué
+        let sheetStored: unknown = src ? undefined : design.extra?.sheetLayout; // the rest of the layout (SheetLayout), validated by parseSheetLayout
+        if (!src) for (const fd of design.fields) { const px = storedPx(fd.props.columnWidth); if (px) widthsKept[fd.name] = px; else if (fd.props.columnWidth === 0) hiddenKept.add(fd.name); }
         else if (source?.kind === 'query') {
           try {
             const def = (await api.objects.get('query', source.name)).definition as Record<string, unknown>;
             passThrough.current = passThroughOf(def) !== null;
             const cw = def.columnWidths;
-            if (typeof cw === 'object' && cw !== null && !Array.isArray(cw)) for (const [k, v] of Object.entries(cw)) { const px = storedPx(v); if (px) widthsKept[k] = px; }
+            sheetStored = def.sheetLayout;
+            if (typeof cw === 'object' && cw !== null && !Array.isArray(cw)) for (const [k, v] of Object.entries(cw)) { const px = storedPx(v); if (px) widthsKept[k] = px; else if (v === 0) hiddenKept.add(k); }
           } catch { widthsKept = {}; }
         }
         // A sort and the criteria of fields still there are kept (a reload after a structure change); the others go.
@@ -448,6 +529,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         rows.current = { count: Math.max(count, 0), adding: false, more: count < 0 };
         pendingHeadings.current = null;
         setStored(widthsKept);
+        if (layoutKept.current === null) applyLayout(parseSheetLayout(sheetStored)); // once: a later reload keeps the view's own state
+        // masqués ou réaffichés depuis le dernier enregistrement de la disposition : gardés à travers une relecture de la structure
+        for (const [k, px] of Object.entries(dragged.current)) { if (px === 0) hiddenKept.add(k); else hiddenKept.delete(k); }
+        setHidden(design.fields.every((f) => hiddenKept.has(f.name)) ? new Set() : hiddenKept);
         setShape({ design, locale: settings.region, year4: fourDigitYear(), cache, defaults, ...(src ? { src } : {}), ...(tableInfo && !tableInfo.updatable ? { fixed: true as const } : {}) });
         setLookups(lists);
         idle();
@@ -556,7 +641,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     setSelection(sel);
   };
 
-  const scrollToRow = (row: number) => scrollGridToRow(wrap.current, row, look.rowHeight);
+  const scrollToRow = (row: number) => scrollGridToRow(wrap.current, row, rowHeight);
   const goRow = (row: number) => {
     const col = live.current.selection.current?.cell[0] ?? firstEditable();
     select(cellSelection(col, row));
@@ -598,11 +683,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
     if (!s || n === 0) return false;
     const cur = live.current.selection.current?.cell;
-    const width = o.onlyCurrentField ? 1 : s.design.fields.length;
+    const shown = orderRef.current; // the columns shown, left to right: a hidden field is not searched
+    const width = o.onlyCurrentField ? 1 : shown.length;
     const col0 = cur?.[0] ?? firstEditable();
     const total = n * width;
     // the position searched from (row × width + column); none, or the new record's row: before the first (after the last going up)
-    const at = cur && cur[1] < n ? cur[1] * width + (o.onlyCurrentField ? 0 : cur[0]) : o.search === 'up' ? total : -1;
+    const at = cur && cur[1] < n ? cur[1] * width + (o.onlyCurrentField ? 0 : Math.max(0, gridOf(cur[0]))) : o.search === 'up' ? total : -1;
     for (let k = 1; k <= total; k++) {
       if (k % (800 * width) === 0) {
         await new Promise((r) => setTimeout(r));
@@ -610,7 +696,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       }
       const pos = o.search === 'all' ? (((at + k) % total) + total) % total : o.search === 'down' ? at + k : at - k;
       if (pos < 0 || pos >= total) break;
-      const row = Math.floor(pos / width), col = o.onlyCurrentField ? col0 : pos % width;
+      const row = Math.floor(pos / width), col = o.onlyCurrentField ? col0 : shown[pos % width]!;
       if (!s.cache.fresh(row)) {
         await (o.search === 'up' ? s.cache.ensure(Math.max(0, row - 799), row, gone) : s.cache.ensure(row, Math.min(n - 1, row + 799), gone));
         if (gone() || live.current.shape !== s) return false;   // the structure was read again meanwhile
@@ -624,7 +710,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       const p = buffer.pending;
       if (p && p.rowIndex !== row && !(await commitRow())) throw new Error('bc:saveRefused');
       select(cellSelection(col, row));
-      requestAnimationFrame(() => { scrollToRow(row); editor.current?.scrollTo(col, row, 'horizontal'); });
+      requestAnimationFrame(() => { scrollToRow(row); editor.current?.scrollTo(Math.max(0, gridOf(col)), row, 'horizontal'); });
       return true;
     }
     if (rows.current.count > n && !cappedTold.current) {
@@ -634,9 +720,118 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return false;
   };
 
+  /** Replace (Find's Replace tab, O2): the text, number, currency, date and hyperlink fields the user may edit (a number or a date is replaced in
+   *  its edit text, which the save converts: an invalid result is refused with the field's message, as a typed one). */
+  const replaceable = (col: number): boolean => {
+    const s = live.current.shape, field = s?.design.fields[col];
+    return !!s && !!field && ['shortText', 'longText', 'number', 'currency', 'dateTime', 'hyperlink'].includes(field.props.type) && !field.props.lookup
+      && !serverComputed(field.props) && (!s.src || s.src.editable[col]);
+  };
+  /** The matched text of a cell replaced as an edit of it (saved with its row, like a typed one); false when nothing changes. */
+  const replaceIn = (col: number, row: number, o: FindOptions, replaceWith: string, all: boolean): boolean => {
+    const cell = cellAt.current([col, row]);
+    if (cell.kind !== GridCellKind.Text) return false;
+    const next = replaceText(cell.data, o, replaceWith, all);
+    if (next === cell.data) return false;
+    select(cellSelection(col, row));
+    onCellEdited([col, row], { ...cell, data: next, displayData: next } as EditableGridCell);
+    return true;
+  };
+  /** Replace One: the selected cell replaced when it holds a match, then the next match is found (findInSheet). */
+  const replaceOne = async (o: FindOptions, replaceWith: string): Promise<boolean> => {
+    flushCellEditor();
+    const s = live.current.shape, cur = live.current.selection.current?.cell;
+    if (s && cur && !live.current.ro && cur[1] < rows.current.count && replaceable(cur[0])) {
+      const cell = cellAt.current(cur);
+      if (cell.kind === GridCellKind.Text && matchText(cell.data, o.what, o.match, o.matchCase, s.locale)) replaceIn(cur[0], cur[1], o, replaceWith, false);
+    }
+    return findInSheet(o);
+  };
+  /** Replace All: every match of the loaded rows, row by row; a row is saved before the next one (a refused save stops it). */
+  const replaceAll = async (o: FindOptions, replaceWith: string): Promise<number> => {
+    flushCellEditor();
+    const opened = findOpen.current;
+    const gone = () => findOpen.current !== opened;
+    const s = live.current.shape;
+    if (!s || live.current.ro) return 0;
+    const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
+    const cur = live.current.selection.current?.cell;
+    const cols = orderRef.current.filter((c) => replaceable(c) && (!o.onlyCurrentField || c === (cur?.[0] ?? firstEditable())));
+    let count = 0;
+    for (let row = 0; row < n; row++) {
+      if (!s.cache.fresh(row)) {
+        await s.cache.ensure(row, Math.min(n - 1, row + 799), gone);
+        if (gone() || live.current.shape !== s) return count;
+      }
+      for (const col of cols) {
+        const cell = cellAt.current([col, row]);
+        if (cell.kind !== GridCellKind.Text || !matchText(cell.data, o.what, o.match, o.matchCase, s.locale)) continue;
+        const p = buffer.pending;
+        if (p && p.rowIndex !== row && !(await commitRow())) throw new Error('bc:saveRefused');
+        if (replaceIn(col, row, o, replaceWith, true)) count++;
+      }
+    }
+    if (!(await commitRow())) throw new Error('bc:saveRefused');
+    return count;
+  };
+
+  /** Home › Spelling (C2): from the selected cell, row by row, the replaceable cells' text (Find's walk, in its column order); each
+   *  misspelled word stops the walk in the Spelling dialog. A change is an edit of the cell, as Replace's; Ignore All and Change All
+   *  last for this check. The record being edited is saved when the walk moves to another one. */
+  const spelling = async () => {
+    flushCellEditor();
+    const s = live.current.shape;
+    if (!s || live.current.ro) return;
+    if (!(await api.app.spellPrepare())) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: 'datasheet.spellUnavailable', buttons: ['ok'] }); return; }
+    const gone = () => live.current.shape !== s;
+    const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
+    const cur = live.current.selection.current?.cell;
+    const from = cur && cur[1] < n ? { row: cur[1], grid: Math.max(0, gridOf(cur[0])) } : { row: 0, grid: 0 };
+    const ignored = new Set<string>(), always = new Map<string, string>();
+    let stopped = false;
+    for (let row = from.row; row < n && !stopped; row++) {
+      if (!s.cache.fresh(row)) {
+        await s.cache.ensure(row, Math.min(n - 1, row + 799), gone);
+        if (gone()) return;
+      }
+      for (const col of orderRef.current.filter((c) => replaceable(c) && gridOf(c) >= (row === from.row ? from.grid : 0))) {
+        const cell = cellAt.current([col, row]);
+        if (cell.kind !== GridCellKind.Text) continue;
+        let text = cell.data, at = 0;
+        for (;;) {
+          const w = wordsOf(text).find((x) => x.start >= at && !ignored.has(x.word.toLowerCase()) && api.app.isMisspelled(x.word));
+          if (!w) break;
+          const key = w.word.toLowerCase();
+          let to = always.get(key);
+          if (to === undefined) {
+            select(cellSelection(col, row));
+            const a = await modal.custom<SpellAnswer>((close) => <SpellingDialog text={text} word={w} suggestions={api.app.spellSuggestions(w.word)} close={close} />, { titleKey: 'ribbon.cmd.spelling' });
+            if (!a) { stopped = true; break; }
+            if (a.action === 'ignore') { at = w.end; continue; }
+            if (a.action === 'ignoreAll') { ignored.add(key); continue; }
+            to = a.text;
+            if (a.action === 'changeAll') always.set(key, to);
+          }
+          text = applyChange(text, w, to);
+          at = w.start + to.length;
+        }
+        if (text !== cell.data) {
+          const p = buffer.pending;
+          if (p && p.rowIndex !== row && !(await commitRow())) throw new Error('bc:saveRefused');
+          select(cellSelection(col, row));
+          onCellEdited([col, row], { ...cell, data: text, displayData: text } as EditableGridCell);
+        }
+        if (stopped) break;
+      }
+    }
+    if (!(await commitRow())) throw new Error('bc:saveRefused');
+    if (!stopped) await modal.confirm({ titleKey: 'ribbon.cmd.spelling', messageKey: 'datasheet.spellDone', buttons: ['ok'] });
+  };
+
   const firstEditable = () => {
     const s = live.current.shape;
-    return Math.max(0, s?.design.fields.findIndex((x, k) => x.props.type !== 'autoNumber' && !serverComputed(x.props) && (!s.src || s.src.editable[k])) ?? 0);
+    const shown = orderRef.current; // a hidden field is never the one to go to
+    return shown.find((k) => { const x = s?.design.fields[k]; return !!x && x.props.type !== 'autoNumber' && !serverComputed(x.props) && (!s?.src || s.src.editable[k]); }) ?? shown[0] ?? 0;
   };
 
   const onCellEdited = ([col, row]: Item, cell: EditableGridCell) => {
@@ -688,7 +883,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // select the new record. Appended again once rendered with the new count, it does.
     if (rows.current.count + 1 <= shown) {
       const col = live.current.selection.current?.cell[0] ?? firstEditable();
-      requestAnimationFrame(() => requestAnimationFrame(() => void editor.current?.appendRow(col)));
+      requestAnimationFrame(() => requestAnimationFrame(() => void editor.current?.appendRow(Math.max(0, gridOf(col)))));
       return undefined;
     }
     if (!rows.current.adding) setRows({ adding: true });
@@ -816,6 +1011,99 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
 
   /** Filter By Selection: the menu for the selected cell's stored value (a Lookup field: its bound value, not its text). */
+  /** Zoom (Access's Zoom box): the selected text cell's text in a larger box. OK writes it back as an edit of that cell, as typing
+   *  would (the new record's cell too). A field without text (a number, a Lookup) has none: nothing opens. */
+  const zoomBox = async () => {
+    flushCellEditor();
+    const at = selectedField();
+    const s = live.current.shape;
+    if (!at || !s || at.field.props.lookup || (at.field.props.type !== 'shortText' && at.field.props.type !== 'longText')) return;
+    const row = rowOf(live.current.selection) ?? rows.current.count;
+    const cell = cellAt.current([at.col, row]);
+    if (cell.kind !== GridCellKind.Text) return;
+    const readOnly = live.current.ro;
+    const next = await modal.custom<string>((close) => <ZoomBox text={cell.data} readOnly={readOnly} close={close} />, { titleKey: 'ribbon.cmd.zoom' });
+    if (next === null || next === cell.data || readOnly) return;
+    onCellEdited([at.col, row], { ...cell, data: next, displayData: next } as EditableGridCell);
+  };
+  /** Home › Records › More: Row Height (points, every row of this view) and Field Width (cm, the selected column: kept as a dragged width is). */
+  const moreSize = async (what: 'rowHeight' | 'columnWidth') => {
+    flushCellEditor();
+    const info = localeInfo(live.current.shape?.locale ?? 'en-US');
+    const points = (px: number) => new Intl.NumberFormat(info.locale, { maximumFractionDigits: 2, useGrouping: false }).format(px * 0.75);
+    if (what === 'rowHeight') {
+      const px = await modal.custom<number>((close) => <SizeBox label={t('datasheet.more.rowHeightLabel')} standardLabel={t('datasheet.more.standardHeight')}
+        text={points(rowHeight)} standard={points(look.rowHeight)} parse={(s) => { const d = parseDecimal(s, info); return rowHeightPx(d === null ? null : Number(d)); }} close={close} />, { titleKey: 'datasheet.more.rowHeight' });
+      if (px !== null) setRowHeight(px);
+      return;
+    }
+    const at = selectedField(), names = pickedFields();
+    if (!at || !names.length) return;
+    // Access's unit: characters of the datasheet's font (the width of its digits)
+    const digit = measure('0') || 7;
+    const chars = (px: number) => points(px / 0.75 / digit);
+    const px = await modal.custom<number>((close) => <SizeBox label={t('datasheet.more.columnWidthLabel')} standardLabel={t('datasheet.more.standardWidth')}
+      text={chars(widths[at.field.name] ?? stored[at.field.name] ?? look.columnPx)} standard={chars(look.columnPx)}
+      parse={(s) => { const d = parseDecimal(s, info); return d === null ? null : columnWidthPx(Number(d) * digit * 15); }}
+      fit={{ label: t('datasheet.more.bestFit'), px: () => bestFit(at.col) }} close={close} />, { titleKey: 'datasheet.more.columnWidth' });
+    if (px !== null) for (const name of names) onColumnResize({ id: name } as GridColumn, px);
+  };
+  /** Best Fit: the widest of the heading and of the column's cells in the rows read so far. ponytail: rows not loaded yet are not measured */
+  const bestFit = (col: number): number => {
+    const s = live.current.shape, fd = s?.design.fields[col];
+    if (!s || !fd) return look.columnPx;
+    let w = measure(fd.props.caption || fd.name) + 44; // the heading's type icon and menu arrow
+    const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
+    for (let row = 0; row < n; row++) {
+      if (!s.cache.fresh(row)) continue;
+      const cell = cellAt.current([col, row]);
+      if (cell.kind === GridCellKind.Text) w = Math.max(w, measure(cell.displayData));
+    }
+    return Math.min(2112, Math.max(20, Math.ceil(w) + 18)); // the cell's padding on both sides
+  };
+  /** The fields a More command acts on: the selected columns, else the current cell's. */
+  const pickedFields = (): string[] => {
+    const { shape: s, selection: sel } = live.current;
+    const cols = sel.columns.length ? sel.columns.toArray() : sel.current ? [sel.current.cell[0]] : [];
+    return s ? cols.flatMap((c) => (s.design.fields[c] ? [s.design.fields[c].name] : [])) : [];
+  };
+  /** Hidden fields changed (Hide, Unhide): kept with the layout like a dragged width (0: hidden); the current cell leaves a
+   *  hidden column for the next shown one. One field at least stays shown. */
+  const setHiddenFields = (next: ReadonlySet<string>) => {
+    const s = live.current.shape;
+    if (!s || s.design.fields.every((f) => next.has(f.name))) return;
+    flushCellEditor();
+    for (const fd of s.design.fields) {
+      if (next.has(fd.name) !== hidden.has(fd.name)) dragged.current[fd.name] = next.has(fd.name) ? 0 : widths[fd.name] ?? stored[fd.name] ?? look.columnPx;
+    }
+    const sel = live.current.selection, cur = sel.current?.cell;
+    const shown = s.design.fields.map((_, i) => i).filter((i) => !next.has(s.design.fields[i]!.name));
+    if (sel.columns.length || (cur && !shown.includes(cur[0]))) {
+      setSelection(cur ? cellSelection(shown.includes(cur[0]) ? cur[0] : shown.find((i) => i > cur[0]) ?? shown[shown.length - 1]!, cur[1]) : NO_SELECTION);
+    }
+    setHidden(next);
+    backToGrid();
+  };
+  const hideFields = () => setHiddenFields(new Set([...hidden, ...pickedFields()]));
+  /** Unhide Fields: Access's box of every field, ticked when shown. */
+  const unhideFields = async () => {
+    const s = live.current.shape;
+    if (!s) return;
+    const next = await modal.custom<string[]>((close) => <UnhideBox fields={s.design.fields.map((f) => ({ name: f.name, title: f.props.caption || f.name }))} hidden={hidden} close={close} />, { titleKey: 'datasheet.more.unhideTitle' });
+    if (next) setHiddenFields(new Set(next));
+  };
+  /** Freeze Fields: the picked fields move to the left and stay there while the others scroll. */
+  const freezeFields = (on = true) => {
+    flushCellEditor();
+    if (on) {
+      const names = pickedFields(), next = [...frozen.filter((n) => !names.includes(n)), ...names];
+      setFrozen(next);
+      setOrder([...next, ...orderedNames(live.current.shape?.design.fields.map((f) => f.name) ?? [], order).filter((n) => !next.includes(n))]); // Unfreeze leaves them first
+    } else setFrozen([]);
+    backToGrid();
+  };
+  /** After a More command: the keys go to the grid again, not to the ribbon button (once the new columns are rendered). */
+  const backToGrid = () => requestAnimationFrame(() => { if (!document.querySelector('[aria-modal="true"]') && !cellEditorOpen()) editor.current?.focus(); });
   const filterSelection = async () => {
     flushCellEditor();
     if (!(await commitRow())) return;
@@ -913,7 +1201,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       await new Promise((r) => requestAnimationFrame(r));
     }
     editor.current?.focus();
-    await editor.current?.appendRow(live.current.selection.current?.cell[0] ?? firstEditable());
+    await editor.current?.appendRow(Math.max(0, gridOf(live.current.selection.current?.cell[0] ?? firstEditable())));
   };
 
   /** The record bar's Go: beyond the rows read (a query not counted yet), counted first. */
@@ -932,25 +1220,29 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       discardRow();
     }
     // Les largeurs tirées, une fois l'enregistrement quitté : la question d'Access (Oui enregistre, Non les oublie, Annuler reste)
-    const ok = await leaveSheetLayout({ widths: dragged.current, readOnly: !layoutOk(), name: live.current.tab.name,
+    const ok = await leaveSheetLayout({ widths: dragged.current, pending: layoutChanged(), readOnly: !layoutOk(), name: live.current.tab.name,
       messageKey: live.current.source ? 'datasheet.saveQueryLayout' : 'datasheet.saveTableLayout', confirm: modal.confirm, save: saveLayout });
-    if (ok) dragged.current = {};
+    if (ok) { dragged.current = {}; layoutKept.current = JSON.stringify(sheetLayout()); }
     return ok;
   };
 
   // ponytail: un lien (fichier ou serveur) garde ses largeurs pour la session, sans question (Access les garde dans le front-end) ; à ajouter avec `bc_links.props.meta`.
   const layoutOk = () => layoutSavable({ kind: live.current.source ? 'query' : 'table', ...(live.current.source ? { source: live.current.source } : {}), link: !!link, passThrough: passThrough.current, readOnly: live.current.readOnly, runtime: !design });
-  /** Enregistre les largeurs tirées : les champs de la table (twips), ou la définition de la requête ; un échec est montré, l'onglet reste. */
+  /** Enregistre les largeurs tirées et le reste de la mise en forme : les champs et les métadonnées de la table (twips), ou la définition de la requête ; un échec est montré, l'onglet reste. */
   const saveLayout = async (w: Record<string, number>): Promise<boolean> => {
     const { tab: tb, source: src } = live.current;
+    const sheet = sheetLayout(), changed = layoutChanged();
     try {
-      if (!src) await api.tables.saveColumnWidths(tb.name, toTwips(w));
-      else {
+      if (!src) {
+        if (Object.keys(w).length) await api.tables.saveColumnWidths(tb.name, toTwips(w));
+        if (changed) await api.tables.saveSheetLayout(tb.name, sheet);
+      } else {
         const def = (await api.objects.get('query', tb.name)).definition as Record<string, unknown>;
-        const r = await api.objects.save('query', tb.name, withQueryWidths(def, w), tb.name);
+        const r = await api.objects.save('query', tb.name, withQuerySheet(withQueryWidths(def, w), sheet), tb.name);
         if (!r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return false; }
       }
-      setStored((k) => ({ ...k, ...w }));
+      layoutKept.current = JSON.stringify(sheet);
+      setStored((k) => ({ ...k, ...Object.fromEntries(Object.entries(w).filter(([, px]) => px > 0)) })); // 0 : masqué, pas une largeur
       return true;
     } catch (e) { await showError(e); return false; }
   };
@@ -959,7 +1251,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   // pour qu'une fermeture pendant celle-ci ne repose pas la question (échec : rendues, la question reviendra)
   const save = async () => {
     flushCellEditor();
-    if (!(await commitRow(true)) || !layoutOk() || !Object.keys(dragged.current).length) return;
+    if (!(await commitRow(true)) || !layoutOk() || (!Object.keys(dragged.current).length && !layoutChanged())) return;
     const w = dragged.current;
     dragged.current = {};
     if (!(await saveLayout(w))) dragged.current = { ...w, ...dragged.current };
@@ -967,7 +1259,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
 
   /** External Data › Export › Text File or Excel: this datasheet's rows, in its current order and filter (a query's with its
    *  parameters). The record being edited is saved first, as Access does; refused, nothing is exported. */
-  const exportData = async (format: 'text' | 'excel') => {
+  const exportData = async (format: ExportFormat) => {
     flushCellEditor();
     if (!(await commitRow())) return;
     const { tab: tb, source: src, params: ps } = live.current;
@@ -999,8 +1291,22 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const fieldHandlers = useMemo(() => (currentUi().datasheetDesign ? design?.tableFieldsCommands(fieldsEnv) : undefined), [fieldsEnv]);   // O1 R9: read at mount
   commitRowRef.current = commitRow;
   selectedFieldRef.current = selectedField;
-  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet });
-  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet };
+  /** Align Left, Center, Right: the picked fields' cells, else every shown field's (the same button again: back to the type's own alignment). */
+  const alignFields = (to: 'left' | 'center' | 'right') => {
+    const picked = pickedFields(), fields = live.current.shape?.design.fields ?? [];
+    const names = picked.length ? picked : orderRef.current.map((i) => fields[i]!.name);
+    setAligns((cur) => { const next = { ...cur }, off = names.every((n) => cur[n] === to); for (const n of names) { if (off) delete next[n]; else next[n] = to; } return next; });
+  };
+  /** Mise en forme de la feuille de données: the view's gridlines, background and gridline colours, underline. */
+  const formatBox = async () => {
+    const f = await modal.custom<SheetFormat>((close) => <FormatBox initial={{ ...gridlines, underline: look.underline, back: skin.back, grid: skin.grid }} close={close} />, { titleKey: 'ribbon.cmd.datasheetFormatting' });
+    if (!f) return;
+    setGridlines({ horizontal: f.horizontal, vertical: f.vertical });
+    setSkin((k) => ({ ...k, back: f.back, grid: f.grid }));
+    setFontOver((o) => ({ ...o, datasheetFontUnderline: f.underline }));
+  };
+  const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet, replaceOne, replaceAll, spelling, discardRow, zoomBox, alignFields, formatBox });
+  cmds.current = { newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet, replaceOne, replaceAll, spelling, discardRow, zoomBox, alignFields, formatBox };
   const hasFilter = filter.items.length > 0;
   useEffect(() => {
     // Read-only (also a refused write before the session says so): the ribbon offers no record command.
@@ -1014,15 +1320,40 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       filterAdvanced: () => setMenu({ kind: 'advanced', ...cmds.current.menuAt('filterAdvanced') }),
       ...(hasFilter ? { filterToggle: () => cmds.current.toggleFilter() } : {}),
       save: () => cmds.current.save(),
+      ...(ro ? {} : { undo: () => cmds.current.discardRow() }),   // Quick Access Toolbar Undo: the pending record dropped (Escape)
       ...(tab.kind === 'table' && !source && fieldHandlers ? {
         ...fieldHandlers, moreFields: () => setPopup('moreFields'), dataType: () => setPopup('dataType'), format: () => setPopup('format'), validation: () => setPopup('validation'),
       } : {}),
-      ...(tab.kind === 'table' || tab.kind === 'query' ? findCommands({ openFind: () => setFinding((k) => Math.abs(k) + 1), openMenu: (m) => setPopup(m) }) : {}),
+      ...(!ro && (tab.kind === 'table' || tab.kind === 'query') ? { spelling: () => cmds.current.spelling() } : {}),
+      ...(tab.kind === 'table' || tab.kind === 'query' ? findCommands({ openFind: (tab) => { setFindTab(tab); setFinding((k) => Math.abs(k) + 1); }, openMenu: (m) => setPopup(m) }) : {}),
       refresh: () => cmds.current.reloadRows(true), // Shift+F9 (Requery): a pass-through runs again (C6 R7)
-      ...(tab.kind === 'table' || tab.kind === 'query' ? { exportText: () => cmds.current.exportData('text'), exportExcel: () => cmds.current.exportData('excel') } : {}), // a form's datasheet exports the pane's selection
+      zoom: () => cmds.current.zoomBox(),
+      moreRecords: () => setPopup('more'),
+      textBold: () => setFontOver((f) => ({ ...f, datasheetFontWeight: (f.datasheetFontWeight ?? settings0.datasheetFontWeight) >= 600 ? 400 : 700 })),
+      textItalic: () => setFontOver((f) => ({ ...f, datasheetFontItalic: !(f.datasheetFontItalic ?? settings0.datasheetFontItalic) })),
+      textUnderline: () => setFontOver((f) => ({ ...f, datasheetFontUnderline: !(f.datasheetFontUnderline ?? settings0.datasheetFontUnderline) })),
+      textFontSize: () => setPopup('fontSize'), textFont: () => setPopup('font'), textFontColor: () => setPopup('fontColor'), textBackColor: () => setPopup('backColor'),
+      datasheetFormatting: () => void cmds.current.formatBox(),
+      textAlignLeft: () => cmds.current.alignFields('left'), textAlignCenter: () => cmds.current.alignFields('center'), textAlignRight: () => cmds.current.alignFields('right'),
+      recordsTotals: () => { setRegion(scrollAt.current); setTotalsOn((v) => !v); },
+      datasheetGridlines: () => setGridlines((g) => { const on = !(g.horizontal || g.vertical); return { horizontal: on, vertical: on }; }), // both lines or none
+      ...(tab.kind === 'table' || tab.kind === 'query' ? { exportText: () => cmds.current.exportData('text'), exportExcel: () => cmds.current.exportData('excel'), exportXml: () => cmds.current.exportData('xml'), exportMore: async () => { const f = await chooseMoreExport(modal); if (f) await cmds.current.exportData(f); } } : {}), // a form's datasheet exports the pane's selection
     });
     return offCommands;
   }, [tab.id, ro, hasFilter, fieldHandlers]);
+  useEffect(() => registerCommandStates(tab.id, { datasheetGridlines: { enabled: true, active: gridlines.horizontal || gridlines.vertical } }), [tab.id, gridlines]);
+  useEffect(() => registerCommandStates(tab.id, { recordsTotals: { enabled: true, active: totalsOn } }), [tab.id, totalsOn]);
+  // a linked table (file or server) keeps its data macros in its own file: the Table tab's buttons are off (T2)
+  useEffect(() => (link ? registerCommandStates(tab.id, Object.fromEntries([...DATA_EVENTS, 'namedMacro'].map((id) => [id, { enabled: false }]))) : undefined), [tab.id, link]);
+  const alignAt = aligns[shape?.design.fields[selection.current?.cell[0] ?? selection.columns.first() ?? -1]?.name ?? ''];
+  const fontSize = fontOver.datasheetFontSize ?? settings0.datasheetFontSize;
+  useEffect(() => registerCommandStates(tab.id, {
+    textBold: { enabled: true, active: (fontOver.datasheetFontWeight ?? settings0.datasheetFontWeight) >= 600 },
+    textItalic: { enabled: true, active: fontOver.datasheetFontItalic ?? settings0.datasheetFontItalic },
+    textUnderline: { enabled: true, active: look.underline },
+    textAlignLeft: { enabled: true, active: alignAt === 'left' }, textAlignCenter: { enabled: true, active: alignAt === 'center' }, textAlignRight: { enabled: true, active: alignAt === 'right' },
+  }), [tab.id, fontOver, settings0, look, alignAt]);
+  useEffect(() => registerCommandStates(tab.id, { undo: { enabled: dirty } }), [tab.id, dirty]);   // Undo: a record being edited
   // Commands on the selected field are enabled by it: Field Size needs a Short Text one (a pending record is saved first by every command).
   const picked = shape?.design.fields[selection.current?.cell[0] ?? selection.columns.first() ?? -1]?.props;
   useEffect(() => {
@@ -1031,7 +1362,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const numeric = picked?.type === 'number' || picked?.type === 'currency';
     const keyed = has && picked.type !== 'autoNumber';
     return registerCommandStates(tab.id, {
-      deleteField: { enabled: has }, nameCaption: { enabled: has }, defaultValue: { enabled: keyed }, fieldSize: { enabled: picked?.type === 'shortText' },
+      deleteField: { enabled: has }, nameCaption: { enabled: has }, defaultValue: { enabled: keyed }, fieldSize: { enabled: picked?.type === 'shortText' }, modifyLookups: { enabled: !!picked && LOOKUP_TYPES.includes(picked.type) },
       dataType: { enabled: has }, format: { enabled: has && FORMATS_BY_TYPE[picked.type].length > 0 },
       currencyFormat: { enabled: numeric }, percentFormat: { enabled: numeric }, commaFormat: { enabled: numeric },
       increaseDecimals: { enabled: numeric }, decreaseDecimals: { enabled: numeric },
@@ -1050,6 +1381,47 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     cmds.current.refreshIfMissed(l.active && cellEditorOpen());
   }), []);
   useEffect(() => { if (!dirty) cmds.current.refreshIfMissed(live.current.active && cellEditorOpen()); }, [dirty]);
+
+  // The totals: SQLite computes each field's function over every row the filter keeps (an aggregate request on the source). A
+  // source that cannot (a server's) answers none: then every row is read first (as Find does, MAX_LOADED_ROWS at most) and the
+  // function runs over the stored values. Delayed, so that the pages landing while one scrolls make one request.
+  useEffect(() => {
+    if (!totalsOn || !shape || !Object.keys(totalFns).length) return;
+    let stale = false;
+    const timer = setTimeout(() => void (async () => {
+      const wanted = shape.design.fields.flatMap((fd, col) => {
+        const fn = totalFns[fd.name];
+        return fn && totalFnsFor(fd.props.type, !!fd.props.lookup).includes(fn) ? [{ fd, col, fn }] : [];
+      });
+      let all: (number | string | null)[] | undefined;
+      try {
+        const { tab: tb, source: src } = live.current;
+        all = (await api.sources.page(src ?? { kind: 'table', name: tb.name }, { offset: 0, limit: 0, count: false, ...(activeFilter(filter) ? { filter: activeFilter(filter)! } : {}), ...withParams(), aggregates: wanted.map((w) => ({ field: w.fd.name, fn: w.fn })) })).aggregates;
+      } catch { all = undefined; }
+      if (stale) return;
+      const n = Math.min(rows.current.count, MAX_LOADED_ROWS);
+      if (!all && n) await shape.cache.ensure(0, n - 1, () => stale);
+      if (stale) return;
+      const out: Record<string, string> = {};
+      wanted.forEach(({ fd, col, fn }, i) => {
+        let v: number | string | null;
+        if (all) v = all[i] ?? null;
+        else {
+          const values: unknown[] = [];
+          for (let row = 0; row < n; row++) values.push(shape.cache.get(row)?.values[col]);
+          v = totalOf(fn, values);
+        }
+        if (v === null) out[fd.name] = '';
+        else if (fn === 'count' || fn === 'stdev' || fn === 'var') out[fd.name] = new Intl.NumberFormat(shape.locale, { maximumFractionDigits: 4 }).format(v as number);
+        else {
+          const cell = toCell(fd, v, { locale: shape.locale, lang: i18n.language.startsWith('fr') ? 'fr' : 'en', ...(shape.year4 ? { fourDigitYear: true } : {}), readOnly: true });
+          out[fd.name] = cell.kind === GridCellKind.Text ? cell.displayData : String(v);
+        }
+      });
+      setTotals(out);
+    })().catch(() => { /* a page that cannot be read is told by the grid */ }), 150);
+    return () => { stale = true; clearTimeout(timer); };
+  }, [totalsOn, totalFns, shape, version, filter, i18n.language]);
 
   const getCellContent = useCallback(([col, row]: Item): GridCell => {
     if (!shape) return LOADING;
@@ -1076,8 +1448,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     }
     if (checkTruncated && !(p?.rowIndex === row && Object.hasOwn(p.changes, field.name))) cell = truncateNumber(field, cell, widths[field.name] ?? look.columnPx, measure);
     if (error && p?.rowIndex === row && error.field === field.name) cell = { ...cell, themeOverride: { bgCell: palette.error } };
+    const align = aligns[field.name];
+    if (align && cell.kind === GridCellKind.Text) cell = { ...cell, contentAlign: align };
     return cell;
-  }, [shape, lookups, ro, busy, error, palette, version, t, i18n.language, checkTruncated, measure, widths, look]); // busy, version: Glide redraws when the function changes
+  }, [aligns, shape, lookups, ro, busy, error, palette, version, t, i18n.language, checkTruncated, measure, widths, look]); // busy, version: Glide redraws when the function changes
 
   const cellAt = useRef(getCellContent);
   cellAt.current = getCellContent;
@@ -1093,14 +1467,15 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     }
     const cell = (x: number, y: number): GridCell =>
       y < MAX_LOADED_ROWS || s?.cache.fresh(y) ? cellAt.current([x, y]) : { kind: GridCellKind.Text, data: '', displayData: '', allowOverlay: false };
-    return Array.from({ length: r.height }, (_, dy) => Array.from({ length: r.width }, (_, dx) => cell(r.x + dx, r.y + dy)));
+    return Array.from({ length: r.height }, (_, dy) => Array.from({ length: r.width }, (_, dx) => cell(fieldOf(r.x + dx), r.y + dy)));
   };
   // Access's keys (O2): a move goes through select, as a click (leaving the pending row saves it; refused, the selection comes back)
   const keysEnv = useRef<EditKeysEnv>(null!);
   keysEnv.current = {
-    cellAt: (item) => cellAt.current(item), selected: () => live.current.selection.current,
-    cols: () => live.current.shape?.design.fields.length ?? 0, rows: () => rows.current.count + (rows.current.adding ? 1 : 0) + (live.current.ro ? 0 : 1), // past a new record: another one
-    moveTo: ([col, row]) => select(cellSelection(col, row)),
+    // the keys move through the grid's columns (hidden fields skipped, frozen ones first)
+    cellAt: ([c, r]) => cellAt.current([fieldOf(c), r]), selected: () => mapSelection(live.current.selection, gridOf).current,
+    cols: () => orderRef.current.length, rows: () => rows.current.count + (rows.current.adding ? 1 : 0) + (live.current.ro ? 0 : 1), // past a new record: another one
+    moveTo: ([col, row]) => select(cellSelection(fieldOf(col), row)),
   };
   useEditKeys(wrap, keysEnv);
 
@@ -1130,6 +1505,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       ...headerDecor(fd.props.type, dir, filtered, palette.theme.accentColor!),
     };
   }), [shape, sort, filter, widths, stored, palette]);
+  // What the grid gets: the shown fields' columns, cells and selection, in its own column indexes
+  const gridColumns = useMemo(() => view.order.flatMap((i) => (columns[i] ? [columns[i]] : [])), [columns, view]);
+  const gridCell = useCallback(([c, r]: Item): GridCell => { const col = view.order[c]; return col === undefined ? LOADING : getCellContent([col, r]); }, [getCellContent, view]);
+  const gridSelection = useMemo(() => mapSelection(selection, (c) => view.order.indexOf(c)), [selection, view]);
 
   // The pending row's selector shows a pencil (drawn over the canvas, where Glide draws the row number).
   const pencil = useRowPencil(editor, wrap, buffer.pending?.rowIndex ?? null);
@@ -1148,14 +1527,14 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     <div className="datasheet">
       <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
         onPointerDownCapture={() => { appendClick.current = false; resizing.current = false; }}>
-        <DataEditor ref={editor} theme={theme} verticalBorder={look.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={columns} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
-          getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
-          gridSelection={selection} onGridSelectionChange={select} onCellEdited={onCellEdited} onFinishedEditing={() => refreshIfMissed(false)}
+        <DataEditor ref={editor} theme={theme} verticalBorder={gridlines.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={gridColumns} freezeColumns={view.frozen} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
+          getCellContent={gridCell} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
+          gridSelection={gridSelection} onGridSelectionChange={(s) => select(mapSelection(s, fieldOf))} onCellEdited={([c, r], v) => onCellEdited([fieldOf(c), r], v)} onFinishedEditing={() => refreshIfMissed(false)}
           onRowAppended={ro || more ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro || more ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
-          onDelete={onDelete} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
-          rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={look.rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
-          onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => { if (!resizing.current) void cmds.current.filterMenu(col, { x: b.x, y: b.y + b.height }); }}
-          onVisibleRegionChanged={() => { idle(); if (buffer.pending) scrolled(); }}
+          onDelete={(s) => onDelete(mapSelection(s, fieldOf))} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
+          rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
+          onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => { if (!resizing.current) void cmds.current.filterMenu(fieldOf(col), { x: b.x, y: b.y + b.height }); }}
+          onVisibleRegionChanged={(r, tx) => { idle(); if (buffer.pending) scrolled(); scrollAt.current = { x: r.x, tx }; if (totalsOn) setRegion((cur) => (cur.x === r.x && cur.tx === tx ? cur : scrollAt.current)); }}
           width="100%" height="100%" />
         {(popup === 'goTo' || popup === 'select') && (
           <RibbonPopup anchor={popup === 'goTo' ? 'goTo' : 'selectMenu'} testId={`${popup}-menu`} labelKey={`ribbon.cmd.${popup === 'goTo' ? 'goTo' : 'selectMenu'}`} onClose={() => setPopup(null)}>
@@ -1166,6 +1545,38 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
               : (['record', 'all'] as const).map((w) => (
                 <button key={w} type="button" role="menuitem" data-testid={`select-${w}`} onClick={() => { setPopup(null); void selectRecords(w); }}>{t(`datasheet.select.${w}`)}</button>
               ))}
+          </RibbonPopup>
+        )}
+        {popup === 'fontSize' && (
+          <RibbonPopup anchor="textFontSize" testId="font-size-menu" labelKey="ribbon.cmd.textFontSize" onClose={() => setPopup(null)}>
+            {FONT_SIZES.map((pt) => (
+              <button key={pt} type="button" role="menuitemradio" aria-checked={pt === fontSize} data-testid={`font-size-${pt}`}
+                onClick={() => { setPopup(null); setFontOver((f) => ({ ...f, datasheetFontSize: pt })); setRowHeight(datasheetLook({ ...settings0, datasheetFontSize: pt }).rowHeight); }}>{pt}</button>
+            ))}
+          </RibbonPopup>
+        )}
+        {popup === 'font' && (
+          <RibbonPopup anchor="textFont" testId="font-menu" labelKey="ribbon.cmd.textFont" onClose={() => setPopup(null)}>
+            {EMBEDDED_FONTS.map((f) => (
+              <button key={f.family} type="button" role="menuitemradio" aria-checked={f.family === skin.font} data-testid={`font-${f.family.replace(/ /g, '-')}`} style={{ fontFamily: `"${f.family}"` }}
+                onClick={() => { setPopup(null); setSkin((k) => ({ ...k, font: f.family })); }}>{f.family}</button>
+            ))}
+          </RibbonPopup>
+        )}
+        {(popup === 'fontColor' || popup === 'backColor') && (
+          <RibbonPopup anchor={popup === 'fontColor' ? 'textFontColor' : 'textBackColor'} testId={`${popup}-menu`} role="dialog" labelKey={`ribbon.cmd.${popup === 'fontColor' ? 'textFontColor' : 'textBackColor'}`} onClose={() => setPopup(null)}>
+            <Swatches testId={`${popup}-choices`} value={popup === 'fontColor' ? skin.text : skin.back}
+              onPick={(c) => { setPopup(null); setSkin((k) => (popup === 'fontColor' ? { ...k, text: c } : { ...k, back: c })); }} />
+          </RibbonPopup>
+        )}
+        {popup === 'more' && (
+          <RibbonPopup anchor="moreRecords" testId="more-records-menu" labelKey="ribbon.cmd.moreRecords" onClose={() => setPopup(null)}>
+            <button type="button" role="menuitem" data-testid="more-row-height" onClick={() => { setPopup(null); void moreSize('rowHeight'); }}>{t('datasheet.more.rowHeight')}</button>
+            <button type="button" role="menuitem" data-testid="more-hide" disabled={!picked} onClick={() => { setPopup(null); hideFields(); }}>{t('datasheet.more.hide')}</button>
+            <button type="button" role="menuitem" data-testid="more-unhide" onClick={() => { setPopup(null); void unhideFields(); }}>{t('datasheet.more.unhide')}</button>
+            <button type="button" role="menuitem" data-testid="more-freeze" disabled={!picked} onClick={() => { setPopup(null); freezeFields(); }}>{t('datasheet.more.freeze')}</button>
+            <button type="button" role="menuitem" data-testid="more-unfreeze" disabled={!frozen.length} onClick={() => { setPopup(null); freezeFields(false); }}>{t('datasheet.more.unfreeze')}</button>
+            <button type="button" role="menuitem" data-testid="more-column-width" disabled={!picked} onClick={() => { setPopup(null); void moreSize('columnWidth'); }}>{t('datasheet.more.columnWidth')}</button>
           </RibbonPopup>
         )}
         {popup === 'moreFields' && design && (
@@ -1215,6 +1626,26 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
             }} />
         )}
       </div>
+      {totalsOn && (
+        <div className="ds-totals" style={{ height: rowHeight }} role="group" aria-label={t('datasheet.totals.label')} data-testid="datasheet-totals">
+          {totalsLayout(gridColumns.map((c) => ('width' in c ? c.width : look.columnPx)), view.frozen, region.x, region.tx, 44).map((b, c) => {
+            const fd = shape.design.fields[view.order[c] ?? -1];
+            if (!b || !fd) return null;
+            const fn = totalFns[fd.name];
+            return (
+              <label key={fd.name} className={`ds-total${c < view.frozen ? ' ds-total-frozen' : ''}`} style={{ left: b.left, width: b.width }}>
+                <span data-testid={`total-value-${fd.name}`}>{fn ? totals[fd.name] ?? '' : ''}</span>
+                <select data-testid={`total-${fd.name}`} aria-label={`${t('datasheet.totals.label')} — ${fd.props.caption || fd.name}`} value={fn ?? ''}
+                  onChange={(e) => { const v = e.target.value as TotalFn | ''; setTotalFns((cur) => { const next = { ...cur }; delete next[fd.name]; if (v) next[fd.name] = v; return next; }); }}>
+                  <option value="">{t('datasheet.totals.none')}</option>
+                  {totalFnsFor(fd.props.type, !!fd.props.lookup).map((f) => <option key={f} value={f}>{t(`report.totals.${TOTAL_LABEL[f]}`)}</option>)}
+                </select>
+              </label>
+            );
+          })}
+          <span className="ds-total ds-total-head" style={{ left: 0, width: 44 }} title={t('datasheet.totals.label')}>Σ</span>
+        </div>
+      )}
       {error && (
         <div className="ds-error" role="alert" data-testid="datasheet-error">
           <CircleAlert className="ic ic-sm" aria-hidden />
@@ -1225,7 +1656,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         onGo={(row) => void navGo(row)}
         filter={!filter.items.length ? 'none' : filter.active ? 'on' : 'off'} onToggleFilter={toggleFilter}
         onNew={() => void newRecord()} />
-      {finding > 0 && <FindDialog key={finding} find={(o) => cmds.current.findInSheet(o)}
+      {finding > 0 && <FindDialog key={finding} find={(o) => cmds.current.findInSheet(o)} initialTab={findTab}
+        replace={{ one: (o, w) => cmds.current.replaceOne(o, w), all: (o, w) => cmds.current.replaceAll(o, w) }}
         close={() => { setFinding((k) => -k); requestAnimationFrame(() => { if (!cellEditorOpen()) editor.current?.focus(); }); }} />}
       {menu && (
         <FilterMenu menu={menu} hasFilter={menu.kind === 'field' ? filter.items.some((x) => x.field === menu.field.name) : filter.items.length > 0}

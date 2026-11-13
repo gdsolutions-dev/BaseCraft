@@ -3,6 +3,7 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import { join } from 'node:path';
 import { FILE_EXTENSION } from './db/file-format';
+import type { ExportFormat } from '../shared/exchange';
 
 const filters = [{ name: 'BaseCraft', extensions: [FILE_EXTENSION.slice(1)] }];
 const e2e = () => process.env.BASECRAFT_E2E === '1' && !app.isPackaged;
@@ -65,18 +66,18 @@ export async function pickLinkPath(names: { basecraft: string; sqlite: string; a
 }
 
 /** Classeur Excel à importer (A6). */
-export async function pickExcelPath(filterName: string): Promise<string | null> {
-  if (e2e()) return process.env.BASECRAFT_E2E_EXCEL_PATH ?? null;
-  const opts = { filters: [{ name: filterName, extensions: ['xlsx', 'xlsm'] }], properties: ['openFile' as const] };
+export async function pickExcelPath(filterName: string, kind: 'excel' | 'xml' = 'excel'): Promise<string | null> {
+  if (e2e()) return (kind === 'xml' ? process.env.BASECRAFT_E2E_XML_PATH : process.env.BASECRAFT_E2E_EXCEL_PATH) ?? null;
+  const opts = { filters: [{ name: filterName, extensions: kind === 'xml' ? ['xml'] : ['xlsx', 'xlsm'] }], properties: ['openFile' as const] };
   const win = BrowserWindow.getFocusedWindow();
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return r.canceled ? null : (r.filePaths[0] ?? null);
 }
 
 /** Where to write an export (A6); `defaultName` is a bare name (no folder), the extension follows `format`. */
-export async function pickExportPath(defaultName: string, format: 'text' | 'excel', filterName: string): Promise<string | null> {
+export async function pickExportPath(defaultName: string, format: ExportFormat, filterName: string): Promise<string | null> {
   if (e2e()) return process.env.BASECRAFT_E2E_EXPORT_PATH ?? null;
-  const extensions = format === 'text' ? ['csv', 'txt'] : ['xlsx'];
+  const extensions = { text: ['csv', 'txt'], excel: ['xlsx'], xml: ['xml'], html: ['html', 'htm'] }[format];
   const base = defaultName.replace(/[\\/:*?"<>|]/g, '_');
   const opts = { defaultPath: join(app.getPath('documents'), `${base}.${extensions[0]}`), filters: [{ name: filterName, extensions }] };
   const win = BrowserWindow.getFocusedWindow();
@@ -93,6 +94,16 @@ export async function pickPdfPath(defaultName: string, filterName: string): Prom
   const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
   if (r.canceled || !r.filePath) return null;
   return r.filePath.toLowerCase().endsWith('.pdf') ? r.filePath : r.filePath + '.pdf';
+}
+
+/** Where to write a text file (E1: the import report); `filterName` in the interface language. Always ends with .txt. */
+export async function pickTextPath(defaultName: string, filterName: string): Promise<string | null> {
+  if (e2e()) return process.env.BASECRAFT_E2E_REPORT_PATH ?? null;
+  const opts = { defaultPath: join(app.getPath('documents'), defaultName), filters: [{ name: filterName, extensions: ['txt'] }] };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  if (r.canceled || !r.filePath) return null;
+  return r.filePath.toLowerCase().endsWith('.txt') ? r.filePath : r.filePath + '.txt';
 }
 
 /** A notice with no choice, shown until the function returned is called (« Compacter lors de la fermeture » taking long, the window

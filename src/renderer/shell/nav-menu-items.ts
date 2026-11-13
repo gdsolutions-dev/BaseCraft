@@ -98,9 +98,7 @@ const common = (propertiesLabel: string, exportPlanned: NavMenuItem['planned'] |
   { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: designNotLink, enabled: (c) => writable(c) && !c.openTab, run: rename }, // an open object keeps its name (Access)
   { id: 'hide', group: 'object', order: 20, labelKey: 'nav.menu.hide', icon: EyeOff, planned: 'later' },
   { id: 'delete', group: 'object', order: 30, labelKey: 'nav.menu.delete', icon: Trash2, visible: design, enabled: writable, run: remove },
-  { id: 'cut', group: 'clipboard', order: 10, labelKey: 'nav.menu.cut', icon: Scissors, visible: design, planned: 'A6' },
   { id: 'copy', group: 'clipboard', order: 20, labelKey: 'nav.menu.copy', icon: Copy, enabled: writable, run: copy },
-  { id: 'paste', group: 'clipboard', order: 30, labelKey: 'nav.menu.paste', icon: ClipboardPaste, visible: design, planned: 'A6' },
   { id: 'properties', group: 'properties', order: 10, labelKey: propertiesLabel, icon: Settings, run: properties },
 ];
 
@@ -108,11 +106,10 @@ const MENUS: [DocKind, NavMenuItem[]][] = [
   ['table', [
     { id: 'import', group: 'transfer', order: 10, labelKey: 'nav.menu.import', icon: FolderInput, visible: design, enabled: writable, submenu: [
       { id: 'text', group: 'transfer', order: 10, labelKey: 'nav.menu.importText', icon: FileText, run: (c) => importText(c.name) },
-      { id: 'excel', group: 'transfer', order: 20, labelKey: 'nav.menu.importExcel', icon: FileSpreadsheet, planned: 'A6' },
     ] },
-    ...common('nav.menu.tableProperties', 'A6'),
+    ...common('nav.menu.tableProperties', null),   // Export and Import › Excel, Cut, Paste: exchange-menu.ts (A6)
   ]],
-  ['query', common('nav.menu.objectProperties', 'A6')],
+  ['query', common('nav.menu.objectProperties', null)],
   ['form', common('nav.menu.properties', 'later')],   // Layout View: form-nav-menu.ts (L2)
   ['report', common('nav.menu.properties', null)], // Export › PDF and Layout View (L3): report-menu.ts
   ['macro', common('nav.menu.objectProperties', 'later')], // B1's macro-menu.ts replaces Open and Design View

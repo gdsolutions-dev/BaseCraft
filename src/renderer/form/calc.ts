@@ -1,6 +1,7 @@
 // Contrôles calculés (Control Source `=…`), valeurs par défaut et règles de validation des contrôles, évalués par
 // l'évaluateur partagé (A2). Module pur : la vue construit les valeurs (contrôles, champs) et rafraîchit sous un jeton Latest.
 import { coerce, type CellInput, type SqlValue } from '../../shared/coerce';
+import { compileConditions, firstMatch } from '../../shared/design/format-conditions';
 import { flattenControls, type ControlDef } from '../../shared/design/model';
 import { ExprRuntimeError, ExprSyntaxError, type Expr, type Value } from '../../shared/expr/ast';
 import { sameName } from '../../shared/field-types';
@@ -134,6 +135,14 @@ export async function buildCalcEnv(controls: ControlDef[], info: SourceInfo, sto
     state.set(c, 'done');
   };
   for (const c of calcs) await run(c);
+  // Conditional formatting: the format of the first rule that holds, as JSON in results['cf:<control>'] (run-model's conditionStyle reads it)
+  for (const c of all) {
+    if ((c.kind !== 'textBox' && c.kind !== 'comboBox') || typeof c.props.FormatConditions !== 'string') continue;
+    const v = ctlValues[c.name], rules = compileConditions(c.props.FormatConditions, parseExpr);
+    if (!rules.length || v === FAILED) continue;
+    const fmt = await firstMatch(rules, v ?? null, { field: (n) => envValue(env, n), now: env.now, locale: env.locale, lang: env.lang, member: env.member, callUser: env.callUser });
+    if (fmt) results[`cf:${c.name}`] = { ok: true, value: null, text: JSON.stringify(fmt) };
+  }
   return { ...env, results };
 }
 

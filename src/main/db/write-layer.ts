@@ -8,7 +8,9 @@ import { foreignKeys, listTables, parentOf, pickName, quoteIdent, refColumns, sq
 import { applyDefaults, checkRecordRule, checkRules, DefaultValueError } from './rules';
 import { degraded, lookupSource, queryRowSource } from './rows';
 import { sourceHasValue } from '../query/source';
-import { inTransaction } from './tx';
+import { inTransaction, inTransactionAsync } from './tx';
+import { dataMacrosOf, runEvent, type Row } from './data-macro-run';
+import type { DataMacros } from '../../shared/macro/data-macro';
 
 import type { DeleteResult, RowWriteResult, WriteConflict } from '../../shared/api';
 export type { DeleteResult, RowWriteResult };
@@ -169,7 +171,7 @@ function blockingKey(db: DatabaseSync, table: string, rowids: number[], changed:
  *  integer value for the AutoNumber is accepted, as Access appends it. `nullOnConversion` (A3 action queries run anyway): a
  *  value its field cannot store is written as Null and reported in `nulled`, as Access does; the field's rule then runs on
  *  the Null, and a Required or primary-key field refuses it. */
-export interface WriteOptions { enforceMask?: boolean; allowAutoNumber?: boolean; nullOnConversion?: boolean
+export interface WriteOptions { macroDepth?: number /* data macros: the nesting of this write (T2) */; enforceMask?: boolean; allowAutoNumber?: boolean; nullOnConversion?: boolean
   /** By field name: the record as read when editing began (R8). An update then compares it inside its transaction; a change
    *  since is a conflict and nothing is written. Unknown names are ignored. Inserts never check it. */
   expected?: Record<string, SqlValue> }
@@ -192,6 +194,23 @@ function applyMasks(design: TableDesign, values: Record<string, CellInput>): { v
 }
 
 const storedOf = (cols: { fd: FieldDef; value: SqlValue }[]): Record<string, SqlValue> => Object.fromEntries(cols.map((c) => [c.fd.name, c.value]));
+
+/** The refusal a data macro's RaiseError (or failure) is: shown as the datasheet shows a table rule's (no field, its message). */
+const macroRefusal = (design: TableDesign, message: string): { ok: false; errors: FieldError[] } =>
+  ({ ok: false, errors: [{ field: '', code: 'validation', message, table: design.name }] });
+
+/** Before Change (T2): the macro runs on the row as it will be stored, `next` (`old`: the row before, absent for an insert); its
+ *  SetField values are converted like any input and replace the columns. Returns the columns to write, or the refusal. */
+async function beforeChange(db: DatabaseSync, dm: DataMacros, design: TableDesign, cols: { fd: FieldDef; value: SqlValue }[], next: Row, old: Row | undefined, info: LocaleInfo, now: () => Date, depth: number):
+  Promise<{ cols: { fd: FieldDef; value: SqlValue }[] } | { ok: false; errors: FieldError[] }> {
+  if (!dm.events?.beforeChange) return { cols };
+  const r = await runEvent(db, dm, 'beforeChange', design, { old, next }, info, now, depth);
+  if (!r.ok) return macroRefusal(design, r.message);
+  if (Object.keys(r.sets).length === 0) return { cols };
+  const c = convert(design, r.sets, info, false);
+  if (c.errors.length > 0) return { ok: false, errors: c.errors };
+  return { cols: [...cols.filter((x) => !c.cols.some((y) => y.fd.name === x.fd.name)), ...c.cols] };
+}
 
 /** Limit To List of a value list (its bound items converted as the field stores them) or a Field List (`names`: the names of
  *  its table's fields, undefined when it is gone: checks nothing); undefined for a table, SQL or query Row Source, which the
@@ -260,10 +279,15 @@ export async function prepareWrite(kind: 'insert' | 'update', design: TableDesig
 export async function insertRow(db: DatabaseSync, design: TableDesign, values: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<Exclude<LocalWriteResult, { conflict: unknown }>> {
   const p = await prepareWrite('insert', design, values, info, now, opts);
   if (!p.ok) return p;
-  const { cols, nulled, values: stored } = p;
+  const { nulled } = p;
+  let { cols, values: stored } = p;
   const unlisted = opts.enforceMask ? notInList(db, cols.filter((c) => Object.hasOwn(values, c.fd.name)), info) : [];
   if (unlisted.length > 0) return { ok: false, errors: unlisted };
   for (const fd of design.fields) if (fd.props.type === 'yesNo' && !Object.hasOwn(stored, fd.name)) stored[fd.name] = 0; // DEFAULT 0
+  const dm = dataMacrosOf(db, design);
+  const macro = await beforeChange(db, dm, design, cols, { ...Object.fromEntries(design.fields.map((fd) => [fd.name, null])), ...stored }, undefined, info, now, opts.macroDepth ?? 1);
+  if ('errors' in macro) return macro;
+  cols = macro.cols; stored = { ...stored, ...storedOf(cols) };
   const broken = await checkRules(design, stored, design.fields.map((fd) => fd.name), now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
   const record = await checkRecordRule(design, stored, now, info);
@@ -272,11 +296,17 @@ export async function insertRow(db: DatabaseSync, design: TableDesign, values: R
   const sql = cols.length === 0 ? `INSERT OR ABORT INTO ${table} DEFAULT VALUES`
     : `INSERT OR ABORT INTO ${table} (${cols.map((c) => quoteIdent(c.fd.name)).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
   try {
-    return inTransaction(db, () => {
+    const write = () => {
       const r = db.prepare(sql).run(...cols.map((c) => c.value));
       if (Number(r.changes) !== 1) throw new Error('insert changed an unexpected number of rows');
       const rowid = Number(r.lastInsertRowid);
       return { ok: true as const, rowid, values: readBack(db, design, rowid), ...(nulled.length && { nulled }) };
+    };
+    if (!dm.events?.afterInsert) return inTransaction(db, write);
+    return await inTransactionAsync(db, async () => {   // After Insert (T2): same transaction; a failure of the macro is not the write's
+      const w = write();
+      await runEvent(db, dm, 'afterInsert', design, { next: Object.fromEntries(design.fields.map((fd, i) => [fd.name, w.values[i] ?? null])) }, info, now, opts.macroDepth ?? 1);
+      return w;
     });
   } catch (e) {
     if (isForeignKeyError(e)) {
@@ -308,10 +338,23 @@ function referencedField(db: DatabaseSync, table: string, changed: string[]): st
 export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: number, changes: Record<string, CellInput>, info: LocaleInfo, now: () => Date = () => new Date(), opts: WriteOptions = {}): Promise<LocalWriteResult> {
   const p = await prepareWrite('update', design, changes, info, now, opts);
   if (!p.ok) return p;
-  const { cols, nulled } = p;
+  const { nulled } = p;
+  let { cols } = p;
   const unlisted = opts.enforceMask ? notInList(db, cols, info) : [];
   if (unlisted.length > 0) return { ok: false, errors: unlisted };
-  const broken = await checkRules(design, storedOf(cols), Object.keys(changes), now, info);
+  const dm = dataMacrosOf(db, design);
+  let old: Row | undefined;   // the row before (T2: [Old] of Before Change, After Update); undefined when no macro needs it or the row is gone
+  if (dm.events?.beforeChange || dm.events?.afterUpdate) {
+    const cur = readRow(db, design, rowid);
+    if (cur) old = Object.fromEntries(design.fields.map((fd, i) => [fd.name, cur[i] ?? null]));
+  }
+  if (old && dm.events?.beforeChange) {
+    if (opts.expected) { const c = expectedConflict(db, design, rowid, opts.expected); if (c) return c; }   // a conflict first: [Old] would be another workstation's
+    const macro = await beforeChange(db, dm, design, cols, { ...old, ...storedOf(cols) }, old, info, now, opts.macroDepth ?? 1);
+    if ('errors' in macro) return macro;
+    cols = macro.cols;
+  }
+  const broken = await checkRules(design, storedOf(cols), [...Object.keys(changes), ...cols.map((c) => c.fd.name)], now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
   if (design.validationRule && opts.expected) { // a conflict first: the rule would read another workstation's values
     const c = expectedConflict(db, design, rowid, opts.expected);
@@ -324,7 +367,7 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
     if (record) return { ok: false, errors: [record] };
   }
   try {
-    return inTransaction(db, (): LocalWriteResult => {
+    const write = (): LocalWriteResult => {
       const c = opts.expected && expectedConflict(db, design, rowid, opts.expected);
       if (c) return c;
       if (cols.length > 0) {
@@ -334,6 +377,12 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
         if (Number(n) !== 1) throw new Error('update changed an unexpected number of rows');
       }
       return { ok: true as const, rowid, values: readBack(db, design, rowid), ...(nulled.length && { nulled }) };
+    };
+    if (!dm.events?.afterUpdate || !old) return inTransaction(db, write);
+    return await inTransactionAsync(db, async () => {   // After Update (T2): same transaction; a failure of the macro is not the write's
+      const w = write();
+      if (w.ok) await runEvent(db, dm, 'afterUpdate', design, { old, next: Object.fromEntries(design.fields.map((fd, i) => [fd.name, w.values[i] ?? null])) }, info, now, opts.macroDepth ?? 1);
+      return w;
     });
   } catch (e) {
     const changed = cols.map((c) => c.fd.name);
@@ -386,6 +435,29 @@ export function deleteRows(db: DatabaseSync, table: string, rowids: number[]): D
     if (!child) throw e;
     return { ok: false, reason: 'related', table: child };
   }
+}
+
+/**
+ * deleteRows with the table's data macros (T2): Before Delete runs on each row first (RaiseError refuses the whole delete,
+ * nothing is deleted), After Delete on each after the delete, all in one transaction. Without such macros it is deleteRows.
+ * ponytail: rows removed by a CASCADE on a child table do not run that table's macros.
+ */
+export async function deleteRowsWithMacros(db: DatabaseSync, design: TableDesign, rowids: number[], info: LocaleInfo, now: () => Date = () => new Date(), depth = 1): Promise<DeleteResult> {
+  const dm = dataMacrosOf(db, design);
+  if (!dm.events?.beforeDelete && !dm.events?.afterDelete) return deleteRows(db, design.name, rowids);
+  return inTransactionAsync(db, async (): Promise<DeleteResult> => {
+    const olds: Row[] = rowids.flatMap((id) => {
+      const r = readRow(db, design, id);
+      return r ? [Object.fromEntries(design.fields.map((fd, i) => [fd.name, r[i] ?? null]))] : [];
+    });
+    for (const old of olds) {
+      const r = await runEvent(db, dm, 'beforeDelete', design, { old }, info, now, depth);
+      if (!r.ok) return { ok: false, reason: 'dataMacro', message: r.message };
+    }
+    const res = deleteRows(db, design.name, rowids);
+    if (res.ok) for (const old of olds) await runEvent(db, dm, 'afterDelete', design, { old }, info, now, depth);
+    return res;
+  });
 }
 
 /** A table copy: every row of `from` into `to`, a new empty table with the same design (createTable). The rows already meet

@@ -26,17 +26,17 @@ export function defaultFor(d: PropertyDescriptor, target: PropertyTarget, object
   return d.default;
 }
 
-const BOUND: ControlKind[] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox'];
+const BOUND: ControlKind[] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox', 'toggleButton'];
 const LISTS: ControlKind[] = ['comboBox', 'listBox'];
-const TEXT: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'commandButton'];
-const BOXED: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'optionGroup', 'commandButton', 'rectangle', 'image', 'subform'];   // le graphique a ses propres lignes (ChartBack*, ChartBorder*)
+const TEXT: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'commandButton', 'toggleButton'];
+const BOXED: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'optionGroup', 'commandButton', 'toggleButton', 'rectangle', 'image', 'subform', 'navigationControl'];   // le graphique a ses propres lignes (ChartBack*, ChartBorder*)
 const BORDERED: ControlKind[] = ['label', 'textBox', 'checkBox', 'comboBox', 'listBox', 'optionGroup', 'rectangle', 'line', 'image', 'subform'];
 /** Controls that take the keyboard focus in the tab order (Tab Stop, Tab Index, Status Bar Text). */
 const INPUTS: ControlKind[] = [...BOUND, 'commandButton'];
-const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'image', 'tabControl', 'chart'];
+const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'toggleButton', 'image', 'tabControl', 'chart'];
 const FOCUSABLE: ControlKind[] = [...INPUTS, 'optionButton', 'subform']; // Enter/Exit: the option group has them, the tab control does not
 // Got/Lost Focus: the option group itself has none (its buttons do), nor the form (Access fires them only when no control can take the focus)
-const GOT_FOCUS: PropertyTarget[] = ['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'optionButton'];
+const GOT_FOCUS: PropertyTarget[] = ['textBox', 'checkBox', 'comboBox', 'listBox', 'commandButton', 'toggleButton', 'optionButton'];
 /** Page header and footer can neither grow, shrink, keep together nor force a page (as in Access). */
 const FLOWING: SectionKind[] = SECTION_KINDS.filter((s) => s !== 'pageHeader' && s !== 'pageFooter');
 /** The report sections that fire On Format and On Print. */
@@ -62,7 +62,7 @@ const FORM_ONLY: Extra = { objects: ['form'] };
 
 export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   // Format
-  p('Caption', 'format', 'text', ['form', 'report', 'label', 'commandButton', 'optionGroup', 'tabControl'], ''),
+  p('Caption', 'format', 'text', ['form', 'report', 'label', 'commandButton', 'toggleButton', 'optionGroup', 'tabControl'], ''),
   p('DefaultView', 'format', 'enum', ['form'], 'single', { options: ['single', 'continuous', 'datasheet'] }),
   p('AllowLayoutView', 'format', 'bool', ['form', 'report'], true), // Layout view (Mode Page) can be entered
   p('NavigationButtons', 'format', 'bool', ['form'], true),
@@ -75,13 +75,15 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('ColumnCount', 'format', 'number', LISTS, 1, { min: 1, max: 20, integer: true }),
   p('ColumnWidths', 'format', 'text', LISTS, ''), // integer twips separated by ';' (as Access stores them), shown in cm
   p('ColumnHeads', 'format', 'bool', LISTS, false), // a value list's first row, a table's captions (A2's Lookup tab)
-  p('ColumnWidth', 'format', 'twips', BOUND, undefined, FORM_ONLY), // a form control's Datasheet-view column width, integer twips > 0 (absent: automatic)
+  p('ColumnWidth', 'format', 'twips', BOUND.filter((k) => k !== 'toggleButton'), undefined, FORM_ONLY), // a form control's Datasheet-view column width, integer twips > 0 (absent: automatic)
   p('BackStyle', 'format', 'enum', BOXED, 'normal', {
     options: ['normal', 'transparent'], defaults: { ...each(['label', 'optionGroup', 'rectangle'], 'transparent'), 'report:textBox': 'transparent', 'report:comboBox': 'transparent' },
   }),
   // A report prints on white whatever the theme (C5). Its controls keep theme tokens for ForeColor and BorderColor (and
   // BackColor, drawn only when BackStyle is normal): a report always resolves them with resolveColor(v, 'light').
-  p('BackColor', 'format', 'color', [...SECTION_KINDS, ...BOXED], 'theme:surface', { defaults: each(SECTION_KINDS.map((s) => `report:${s}` as const), '#ffffff') }),
+  p('BackColor', 'format', 'color', [...SECTION_KINDS, ...BOXED], 'theme:surface', {
+    defaults: { ...each(SECTION_KINDS.map((s) => `report:${s}` as const), '#ffffff'), 'report:commandButton': '#e1e1e1', 'report:toggleButton': '#e1e1e1' },   // a printed button has a grey face
+  }),
   p('BorderStyle', 'format', 'enum', BORDERED, 'solid', {
     options: ['transparent', 'solid', 'dashed', 'dotted'], defaults: { label: 'transparent', 'report:textBox': 'transparent', 'report:comboBox': 'transparent', 'report:label': 'transparent' },
   }),
@@ -103,7 +105,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('FontItalic', 'format', 'bool', TEXT, false),
   p('FontUnderline', 'format', 'bool', TEXT, false),
   p('TextAlign', 'format', 'enum', ['label', 'textBox', 'comboBox'], 'general', { options: ['general', 'left', 'center', 'right'] }),
-  p('CanGrow', 'format', 'bool', [...FLOWING, 'textBox', 'subform'], false),
+  p('CanGrow', 'format', 'bool', [...FLOWING, 'textBox', 'subform'], false, { defaults: { 'report:subform': true } }), // a subreport grows (Access)
   p('CanShrink', 'format', 'bool', [...FLOWING, 'textBox', 'subform'], false),
   p('KeepTogether', 'format', 'bool', FLOWING, false, { defaults: { groupHeader: true, 'report:detail': true } }), // as in Access
   p('RepeatSection', 'format', 'bool', ['groupHeader'], false),
@@ -123,7 +125,9 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('ValidationText', 'data', 'text', BOUND, ''),
   p('Enabled', 'data', 'bool', [...BOUND, 'optionButton', 'commandButton', 'subform'], true),
   p('Locked', 'data', 'bool', [...BOUND, 'subform'], false),
-  p('OptionValue', 'data', 'number', ['optionButton', 'checkBox'], undefined, { integer: true }), // inside an option group
+  p('OptionValue', 'data', 'number', ['optionButton', 'checkBox', 'toggleButton'], undefined, { integer: true }), // inside an option group
+  p('HyperlinkAddress', 'data', 'text', ['label'], ''), // D3: an http:, https: or mailto: address; the label is a link (Form view opens it after asking, a report prints it underlined)
+  p('NavigationTargets', 'data', 'textList', ['navigationControl']), // D4: one tab per line, Caption|form:Name (or Caption|report:Name, not shown yet)
   p('SourceObject', 'data', 'objectName', ['subform'], ''),
   p('LinkMasterFields', 'data', 'fieldList', ['subform', 'chart'], ''),   // graphique : formulaires seulement (feuille de propriétés)
   p('LinkChildFields', 'data', 'fieldList', ['subform', 'chart'], ''),

@@ -17,7 +17,7 @@ import type { ItemPath, MacroEditAction } from './macro-edit';
 import { pathKey } from './macro-edit';
 
 export type ObjectLists = Record<'table' | 'query' | 'form' | 'report' | 'macro', string[]>;   // macro: with its M.Sub names
-export interface MacroViewCtx { display: DisplayContext; readOnly: boolean; send: Dispatch<MacroEditAction>; lists: ObjectLists }
+export interface MacroViewCtx { display: DisplayContext; readOnly: boolean; send: Dispatch<MacroEditAction>; lists: ObjectLists; data?: boolean /* a data macro (T2): [Old].[Field], no Python */ }
 
 /** An expression (canonical stored, display form shown), its error shown under it until a readable text is committed. */
 export function ExprInput({ id, testId, value, fields = [], ctx, label, onCommit, userFunctions = true }: {
@@ -26,7 +26,7 @@ export function ExprInput({ id, testId, value, fields = [], ctx, label, onCommit
 }) {
   const [error, setError] = useState<ExprErrorCode | undefined>();
   return <ExpressionField id={id} testId={testId} value={value} ctx={ctx.display} fields={fields} disabled={ctx.readOnly} error={error} label={label}
-    onCommit={onCommit} onInvalid={(c) => setError(c ?? undefined)} userFunctions={userFunctions} />;
+    onCommit={onCommit} onInvalid={(c) => setError(c ?? undefined)} userFunctions={userFunctions && !ctx.data} query={ctx.data ? { qualified: true } : undefined} />;
 }
 
 /** The fields of a form's or report's record source, for the Where Condition's builder (none while the object does not exist). */
@@ -49,14 +49,14 @@ function useTargetFields(kind: 'form' | 'report', name: string, exists: boolean)
 }
 
 /** `=` + an expression shown in display form; any other text as stored. */
-function shownText(v: string, ctx: DisplayContext): string {
+function shownText(v: string, ctx: DisplayContext, data?: boolean): string {
   if (!v.startsWith('=')) return v;
-  try { return `=${toDisplay(v.slice(1), ctx, { functions: withUserFunctions() })}`; } catch { return v; }
+  try { return `=${toDisplay(v.slice(1), ctx, data ? { qualified: true } : { functions: withUserFunctions() })}`; } catch { return v; }
 }
 /** The typed text as stored: `=` + the canonical expression when it reads (else as typed: Save reports it), any other text as is. */
-function storedText(v: string, ctx: DisplayContext): string {
+function storedText(v: string, ctx: DisplayContext, data?: boolean): string {
   if (!v.startsWith('=')) return v;
-  try { return `=${toCanonical(v.slice(1), ctx, { functions: withUserFunctions() })}`; } catch { return v; }
+  try { return `=${toCanonical(v.slice(1), ctx, data ? { qualified: true } : { functions: withUserFunctions() })}`; } catch { return v; }
 }
 
 function WhereField({ id, testId, value, action, args, ctx, onCommit }: {
@@ -98,8 +98,8 @@ export function ArgEditor({ path, action, def, args, ctx }: { path: ItemPath; ac
       return <input id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} value={draft ?? value ?? ''}
         onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== null) { set(draft); setDraft(null); } }} onKeyDown={(e) => { if (e.key === 'Enter' && draft !== null) { set(draft); setDraft(null); } }} />;
     case 'text': case 'number': {
-      const commit = () => { if (draft !== null) { set(storedText(draft, ctx.display)); setDraft(null); } };
-      return <input id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} value={draft ?? shownText(value ?? '', ctx.display)}
+      const commit = () => { if (draft !== null) { set(storedText(draft, ctx.display, ctx.data)); setDraft(null); } };
+      return <input id={id} data-testid={id} disabled={ctx.readOnly} spellCheck={false} value={draft ?? shownText(value ?? '', ctx.display, ctx.data)}
         onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />;
     }
   }

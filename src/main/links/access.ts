@@ -15,6 +15,8 @@ export interface AccessTableInfo { name: string; skipped: string[]; unsupported?
 /** Readers of a Jet 3 file (Access 97): its text sizes are in characters, not bytes (m2). */
 const JET3 = new WeakSet<MDBReader>();
 
+export const isJet3 = (r: MDBReader): boolean => JET3.has(r);
+
 const unavailable = (state: 'needsPassword' | 'cannotOpen', path: string) => new Error(`bc:linkUnavailable|${state}|${path}`);
 
 /** Reads the file once. bc:linkUnavailable|needsPassword|<path> (no or wrong password), |cannotOpen|<path> (anything else). */
@@ -88,7 +90,7 @@ const pad = (n: number, w = 2) => String(n).padStart(w, '0');
 const dateText = (d: Date) => `${pad(d.getUTCFullYear(), 4)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 
 /** A value as the column stores it. Text is kept exactly (coerce would trim it); the rest goes through coerce. A value that does not fit is null. */
-function stored(fd: FieldDef, v: unknown): string | number | null {
+export function stored(fd: FieldDef, v: unknown): string | number | null {
   if (v === null || v === undefined) return null;
   const t = fd.props.type;
   if (t === 'autoNumber') return Number(v);

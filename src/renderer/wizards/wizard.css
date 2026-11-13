@@ -1,0 +1,16 @@
+/* Query, Form and Report wizards: one dialog (.modal, shell.css) with a body per step. */
+.modal:has(.wiz) { width: min(640px, 100%); }
+.wiz-body { min-height: 300px; display: flex; flex-direction: column; gap: var(--bc-space-3); }
+.wiz-body > p { margin: 0; }
+.wiz-pick { display: flex; gap: var(--bc-space-3); align-items: stretch; }
+.wiz-pick > div { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wiz-pick select { flex: 1; min-height: 180px; }
+.wiz-pick .wiz-moves { flex: none; justify-content: center; }
+.wiz-radios { display: flex; flex-direction: column; gap: 6px; }
+.wiz-radios label { display: flex; align-items: center; gap: 6px; }
+.wiz-radios label.is-disabled { color: var(--bc-text-muted); }
+.wiz-row { display: flex; align-items: center; gap: var(--bc-space-2); }
+.wiz-row > span { min-width: 7em; }
+.wiz-error { color: var(--bc-danger); margin: 0; }
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+.choice small { color: var(--bc-text-muted); }

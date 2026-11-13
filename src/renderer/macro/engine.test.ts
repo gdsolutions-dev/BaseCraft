@@ -293,3 +293,12 @@ describe('Python failures in macros (D3 R3)', () => {
     } finally { setUserFunctions([]); }
   });
 });
+
+describe('data macro actions (T2)', () => {
+  it('a UI macro refuses them: they run only in a table event', async () => {
+    const h = host({});
+    for (const a of ['SetField', 'RaiseError', 'RunDataMacro', 'CreateRecord'])
+      expect(await runMacroDef(m([act(a, { Name: 'x', Value: '1', MacroName: 'M', TableName: 'T' })]), 'M', h)).toMatchObject({ ok: false, failure: { code: 'unknownAction', action: a } });
+    expect(h.calls).toEqual([]);
+  });
+});

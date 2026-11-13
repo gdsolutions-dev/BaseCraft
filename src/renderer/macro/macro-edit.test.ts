@@ -123,3 +123,14 @@ describe('addPoint (the Action Catalog adds there)', () => {
     expect(names(macroEdit(initialEdit(def), { type: 'add', at: at(null), item: act('Quit') }).def.items)).toEqual(['Beep', 'if', 'Quit', 'submacro']);
   });
 });
+
+describe('addableActions (T2)', () => {
+  const of = (...a: Parameters<typeof addableActions>) => addableActions(...a).map((x) => x.name).sort();
+  it('a UI macro is offered no data action; a data macro only its event\'s', () => {
+    expect(of(true)).not.toContain('RaiseError');
+    expect(of(false, 'beforeChange')).toEqual(['RaiseError', 'RunDataMacro', 'SetField', 'SetLocalVar', 'StopMacro']);
+    expect(of(false, 'beforeDelete')).toEqual(['RaiseError', 'RunDataMacro', 'SetLocalVar', 'StopMacro']);
+    expect(of(false, 'afterInsert')).toEqual(['CreateRecord', 'RaiseError', 'RunDataMacro', 'SetLocalVar', 'StopMacro']);
+    expect(of(false, 'named')).toEqual(['CreateRecord', 'RaiseError', 'RunDataMacro', 'SetField', 'SetLocalVar', 'StopMacro']);
+  });
+});

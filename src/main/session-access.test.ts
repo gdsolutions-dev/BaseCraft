@@ -157,3 +157,50 @@ describe('Access sources in the session (C2 Task 3)', () => {
     await expect(s.describeSource({ kind: 'sql', sql: 'SELECT * FROM Notes, Clients' })).rejects.toThrow(/\|mixedSources\|Clients/);
   });
 });
+
+describe('Access import in the session (E1 Task 3)', () => {
+  const count = (name: string) => { const db = openBaseFile(fe, 'readOnly', '0.0.0').db; try { return (db.prepare(`SELECT count(*) AS n FROM "${name}"`).get() as { n: number }).n; } finally { db.close(); } };
+  const tableNames = () => s.listTables().map((x) => x.name);
+  const withLocalClients = () => { s.close(); const db = openBaseFile(fe, 'write', '0.0.0').db; createTable(db, t('clients', [f('Nom', 'shortText')])); db.close(); s = open(fe); };
+
+  it('inspectAccessImport: offered names, skipped columns, a name in use is numbered', () => {
+    withLocalClients();
+    const info = s.inspectAccessImport(access);
+    expect(info.tables).toEqual([
+      { name: 'Clients1', remote: 'Clients', taken: false, skipped: ['Photo'] },
+      { name: 'Commandes', remote: 'Commandes', taken: false }, { name: 'Divers', remote: 'Divers', taken: false }]);
+    expect(info.linked).toEqual([]); expect(info.warnSize).toBe(false);
+  });
+  it('inspectAccessImport: a file that is not Access is refused', () => {
+    expect(() => s.inspectAccessImport(fe)).toThrow(/^bc:linkUnavailable\|cannotOpen\|/);
+  });
+  it('importAccessTables: imports under the numbered name and keeps the local table', async () => {
+    withLocalClients();
+    const r = await s.importAccessTables(access, ['Clients']);
+    expect(r.ok && r.tables).toEqual([{ name: 'Clients1', remote: 'Clients', rows: 4 }]);
+    expect(count('clients')).toBe(0); expect(count('Clients1')).toBe(4);
+  });
+  it('importAccessTables: a table the file does not hold creates nothing', async () => {
+    expect(await s.importAccessTables(access, ['Clients', 'Absente'])).toEqual({ ok: false, reason: 'missingTables', names: ['Absente'] });
+    expect(tableNames()).not.toContain('Clients');
+  });
+  it('importAccessTables: the file deleted after the list is cannotOpen', async () => {
+    s.inspectAccessImport(access); fs.rmSync(access);
+    await expect(s.importAccessTables(access, ['Clients'])).rejects.toThrow(/^bc:linkUnavailable\|cannotOpen\|/);
+  });
+  it('a protected file: needsPassword, then imported once unlocked; no password in the result', async () => {
+    expect(() => s.inspectAccessImport(protectedCopy)).toThrow(/^bc:linkUnavailable\|needsPassword\|/);
+    expect(s.unlockAccess(protectedCopy, ACCESS_PASSWORD, true)).toBe(true);
+    const r = await s.importAccessTables(protectedCopy, ['Divers']);
+    expect(r.ok).toBe(true); expect(JSON.stringify(r)).not.toContain(ACCESS_PASSWORD);
+  });
+  it('interrupt during an Access import cancels it and answers true', async () => {
+    const p = s.importAccessTables(access, ['Clients', 'Commandes'], async () => { expect(await s.interrupt()).toBe(true); });
+    expect(await p).toEqual({ ok: false, reason: 'cancelled' }); expect(tableNames()).not.toContain('Clients');
+  });
+  it('a read-only front-end refuses the import', async () => {
+    const ro = Session.open(fe, { ...deps, sessionId: 'b' }); opened.push(ro); // s holds the lock: this one is read-only
+    expect(ro.state.readOnly).toBe(true);
+    await expect(ro.importAccessTables(access, ['Clients'])).rejects.toThrow();
+  });
+});

@@ -104,6 +104,14 @@ export function fillAction(doc: DesignDoc, docKind: 'form' | 'report', sel: Sele
   return writes([{ targets: ts.map((x) => x.t), name: 'BackColor', value: color }, { targets: hidden.map((x) => x.t), name: 'BackStyle', value: 'normal' }], docKind);
 }
 
+/** Format Painter: the font, colours, border and alignment of `from`, written on `to` (only what applies to each kind) in one edit. */
+const PAINTED = ['FontName', 'FontSize', 'FontWeight', 'FontItalic', 'FontUnderline', 'ForeColor', 'BackStyle', 'BackColor', 'BorderStyle', 'BorderWidth', 'BorderColor', 'TextAlign'];
+export function paintAction(doc: DesignDoc, docKind: 'form' | 'report', from: string, to: string): DesignerAction | null {
+  const values: Record<string, unknown> = {};
+  for (const name of PAINTED) { const x = targetsFor(doc, { kind: 'controls', names: [from] }, name)[0]; if (x) values[name] = read(x, name, docKind); }
+  return selectionSet(doc, docKind, { kind: 'controls', names: [to] }, values);
+}
+
 /** À fusionner dans l'unique `registerCommands` de la vue hôte : les commandes directes agissent sur l'état courant (`current`),
  *  les autres ouvrent leur menu (`openPopup`, voir FormatPopup). Sans contrôle sélectionné (`selected`, comme designerCommands),
  *  seuls Objet et Sélectionner tout sont enregistrés : le ruban désactive les autres. */

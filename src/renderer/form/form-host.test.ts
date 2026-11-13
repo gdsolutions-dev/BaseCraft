@@ -13,10 +13,22 @@ const withDetail = (...controls: ControlDef[]) => { const d = emptyFormDoc(null)
 
 describe('form host', () => {
   it('tools in the mockup order, labelled by their ribbon gallery entry', () => {
-    expect(FORM_TOOLS.map((x) => x.kind)).toEqual(['label', 'textBox', 'commandButton', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton',
-      'tabControl', 'subform', 'image', 'rectangle', 'line', 'pageBreak']);
+    expect(FORM_TOOLS.map((x) => x.kind)).toEqual(['label', 'textBox', 'commandButton', 'comboBox', 'listBox', 'toggleButton', 'checkBox', 'optionGroup', 'optionButton',
+      'tabControl', 'subform', 'navigationControl', 'image', 'rectangle', 'line', 'pageBreak']);
     expect(FORM_TOOLS.find((x) => x.kind === 'commandButton')!.labelKey).toBe('ribbon.cmd.button');
     expect(FORM_TOOLS.find((x) => x.kind === 'pageBreak')!.labelKey).toBe('ribbon.cmd.insertPageBreak');
+  });
+  it('a toggle button: its name is its caption, with the next tab index, and no attached label', () => {
+    const [c, ...rest] = newFormControls('toggleButton', click, 1, withDetail(), labels);
+    expect(c).toMatchObject({ kind: 'toggleButton', name: 'toggleButton1', props: { Caption: 'toggleButton1', TabIndex: 0 } }); expect(rest).toEqual([]);
+    expect(renderToStaticMarkup(createElement(Fragment, null, preview(c!, { lang: 'en' as const, region: localeInfo('en-US') }, '')))).toContain('toggleButton1');
+  });
+  it('a navigation control: a 12 x 6 cm frame on a click, its preview shows the tab captions', () => {
+    const [c, ...rest] = newFormControls('navigationControl', click, 1, withDetail(), labels);
+    expect(c).toMatchObject({ kind: 'navigationControl', name: 'navigationControl1', width: 6804, height: 3402, props: {} }); expect(rest).toEqual([]);
+    const shown = { ...c!, props: { NavigationTargets: ['Clients|form:Fiche', 'Ventes|report:Etat'] } };
+    const html = renderToStaticMarkup(createElement(Fragment, null, preview(shown, { lang: 'en' as const, region: localeInfo('en-US') }, '')));
+    expect(html).toContain('Clients'); expect(html).toContain('Ventes'); expect(html).not.toContain('Fiche');
   });
   it('a text box: prefix + first free number, an attached label on its left, the next tab index', () => {
     const doc = withDetail({ kind: 'textBox', name: 'Texte1', left: 0, top: 0, width: 100, height: 100, props: { TabIndex: 0 } });

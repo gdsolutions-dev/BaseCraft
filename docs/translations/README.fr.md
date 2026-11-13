@@ -22,7 +22,7 @@ Windows · macOS · Linux</p>
 
 <p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>Site web</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">Télécharger</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">Maquettes de l'interface</a></p>
 
-<img src="../images/screenshot.png" alt="Mode Création d'un état BaseCraft avec regroupements et totaux" width="900">
+<img src="../images/screenshot.png" alt="Formulaire de menu de démarrage d'une base exemple BaseCraft, avec boutons et graphique des ventes" width="900">
 
 </div>
 

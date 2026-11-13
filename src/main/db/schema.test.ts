@@ -8,7 +8,7 @@ import { changeType } from '../../shared/field-types';
 import { clients, f, t } from '../../shared/test-fixtures';
 import type { FieldProps, TableDesign } from '../../shared/field-types';
 import {
-  createTable, createTableStatements, dropTable, writeTableMetadata, listTables, NameExistsError, quoteIdent, reconcile, renameTable, setColumnWidths, tableDesign,
+  createTable, createTableStatements, dropTable, writeTableMetadata, listTables, NameExistsError, quoteIdent, reconcile, renameTable, setColumnWidths, setSheetLayout, tableDesign,
 } from './schema';
 
 let dir: string;
@@ -61,6 +61,18 @@ describe('schema', () => {
     expect(tableDesign(db, 'T').fields.find((x) => x.name === 'Age')!.props.columnWidth).toBeUndefined();
     writeTableMetadata(db, t('T', [f('Nom', 'shortText', { caption: 'Cap' }), f('Age', 'number')]));
     expect(nom().columnWidth).toBe(2000);
+  });
+
+  it('setSheetLayout keeps the datasheet layout in the table row: read as extra, never overwritten by a table save, removed when empty', () => {
+    createTable(db, t('T', [f('Nom', 'shortText')]));
+    expect(setSheetLayout(db, 'nope', { rowHeight: 40 })).toBe(false);
+    expect(setSheetLayout(db, 't', { rowHeight: 40, frozen: ['Nom'], totals: true })).toBe(true);
+    const layout = { rowHeight: 40, frozen: ['Nom'], totals: true };
+    expect(tableDesign(db, 'T').extra?.sheetLayout).toEqual(layout);
+    writeTableMetadata(db, { ...tableDesign(db, 'T'), extra: { other: 1 } }); // a design opened before the layout was saved
+    expect(tableDesign(db, 'T').extra).toEqual({ sheetLayout: layout, other: 1 });
+    setSheetLayout(db, 'T', {});
+    expect(tableDesign(db, 'T').extra).toEqual({ other: 1 });
   });
 
   it('new props round-trip and clearing removes them', () => {

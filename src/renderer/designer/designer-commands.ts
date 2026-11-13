@@ -1,7 +1,7 @@
 // Ruban › Organiser › Taille et classement : menus Taille/Espace et Aligner, Premier plan, Arrière-plan -> actions du concepteur.
 import type { CommandHandlers } from '../shell/ribbon-model';
 import { updateControl } from '../../shared/design/control-tree';
-import type { ArrangeOp, DesignerAction, DesignerState } from './designer-model';
+import { findControl, type ArrangeOp, type DesignerAction, type DesignerState } from './designer-model';
 
 export type ArrangeMenu = 'sizeSpace' | 'align';
 
@@ -19,6 +19,13 @@ export function arrangeItemEnabled(op: ArrangeOp | 'toggleSnap', selected: numbe
 }
 
 export const selectedCount = (s: DesignerState): number => (s.selection.kind === 'controls' ? s.selection.names.length : 0);
+
+/** Subform / Subreport in New Window: the Source Object of the one selected subform (or subreport) control, else null. */
+export function subObjectOf(s: DesignerState): string | null {
+  if (s.selection.kind !== 'controls' || s.selection.names.length !== 1) return null;
+  const c = findControl(s.doc, s.selection.names[0]!)?.control;
+  return c?.kind === 'subform' && typeof c.props.SourceObject === 'string' && c.props.SourceObject.trim() ? c.props.SourceObject.trim() : null;
+}
 
 /** À fusionner dans l'unique `registerCommands` de la vue hôte. Sans sélection, seul Taille/Espace reste (pour Aimanter à la grille ;
  *  ses autres éléments sont désactivés par arrangeItemEnabled) : les autres ne sont pas enregistrés, le ruban les désactive. */
@@ -42,3 +49,10 @@ export function setChartProps(names: string[], patch: Record<string, unknown>): 
     return { ...c, props };
   }), doc) };
 }
+/** Annuler / Rétablir de la barre d'outils Accès rapide : l'historique du concepteur (Ctrl+Z / Ctrl+Y le font aussi). */
+export function historyCommands(dispatch: (a: DesignerAction) => void): CommandHandlers {
+  return { undo: () => dispatch({ type: 'undo' }), redo: () => dispatch({ type: 'redo' }) };
+}
+/** Leurs états : grisés sans passé, sans futur. */
+export const historyStates = (s: Pick<DesignerState, 'past' | 'future'>): { undo: { enabled: boolean }; redo: { enabled: boolean } } =>
+  ({ undo: { enabled: s.past.length > 0 }, redo: { enabled: s.future.length > 0 } });

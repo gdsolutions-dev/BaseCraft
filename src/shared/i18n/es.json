@@ -27,6 +27,7 @@
   },
   "ribbon": {
     "label": "Cinta de opciones",
+    "quickAccess": "Barra de herramientas de acceso rápido",
     "file": "Archivo",
     "tab": {
       "home": "Inicio",
@@ -110,6 +111,8 @@
       "viewDesign": "Vista Diseño",
       "newRecord": "Nuevo",
       "save": "Guardar",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
       "deleteRecord": "Eliminar",
       "sortAsc": "Ascendente",
       "sortDesc": "Descendente",
@@ -803,6 +806,8 @@
       "rectangle": "Cuadro",
       "pageBreak": "SaltoPagina",
       "tabControl": "CtlPestanas",
+      "toggleButton": "Alternar",
+      "navigationControl": "Navegacion",
       "chart": "Gráfico"
     },
     "format": {
@@ -811,6 +816,25 @@
       "fontSize": "Tamaño de fuente",
       "colors": "Colores",
       "format": "Formato"
+    },
+    "cond": {
+      "empty": "Sin reglas. Agregue una para dar formato a este control según su valor.",
+      "rule": "Regla {{n}}",
+      "and": "y",
+      "remove": "Eliminar",
+      "add": "Nueva regla",
+      "invalid": "Regla {{n}}: no se puede leer la expresión.",
+      "noColor": "Sin color",
+      "op": {
+        "between": "El valor del campo está entre",
+        "equal": "El valor del campo es igual a",
+        "notEqual": "El valor del campo no es igual a",
+        "greater": "El valor del campo es mayor que",
+        "less": "El valor del campo es menor que",
+        "greaterEqual": "El valor del campo es mayor o igual que",
+        "lessEqual": "El valor del campo es menor o igual que",
+        "expression": "La expresión es"
+      }
     }
   },
   "fieldType": {
@@ -833,6 +857,8 @@
     "caption": "Título",
     "required": "Requerido",
     "allowZeroLength": "Permitir longitud cero",
+    "textFormat": "Formato de texto",
+    "textFormats": { "plain": "Texto sin formato", "rich": "Texto enriquecido" },
     "indexed": "Indexado",
     "auto": "Auto",
     "numberSizes": {
@@ -947,6 +973,9 @@
     "tableRule_short": "La regla de validación establecida para “{{table}}” prohíbe uno o más valores."
   },
   "datasheet": {
+    "more": { "rowHeight": "Alto de fila…", "columnWidth": "Ancho de campo…", "rowHeightLabel": "Alto de fila (puntos):", "columnWidthLabel": "Ancho de columna:", "standardHeight": "Alto estándar", "standardWidth": "Ancho estándar", "bestFit": "Ajuste perfecto", "hide": "Ocultar campos", "unhide": "Mostrar campos…", "freeze": "Inmovilizar campos", "unfreeze": "Liberar todos los campos", "unhideTitle": "Mostrar columnas" },
+    "totals": { "label": "Total", "none": "Ninguno" },
+    "format": { "gridlines": "Líneas de cuadrícula visibles", "gridColor": "Color de la cuadrícula", "auto": "Automático" },
     "goTo": {
       "first": "Primero",
       "previous": "Anterior",
@@ -965,6 +994,15 @@
     "fieldError_record": "{{message}}",
     "unsupported": "BaseCraft no admite esta tabla: no se pueden mostrar sus datos.",
     "findCapped": "Buscar y copiar abarcan los primeros 100 000 registros.",
+    "spellNotFound": "No está en el diccionario",
+    "spellChangeTo": "Cambiar a",
+    "spellSuggestions": "Sugerencias",
+    "spellIgnore": "Omitir",
+    "spellIgnoreAll": "Omitir todo",
+    "spellChange": "Cambiar",
+    "spellChangeAll": "Cambiar todo",
+    "spellDone": "La revisión ortográfica ha finalizado.",
+    "spellUnavailable": "No hay ningún diccionario ortográfico disponible para el idioma de la interfaz. Se descarga la primera vez, lo que requiere una conexión a Internet.",
     "pasteOneRow": "Solo se puede pegar una fila cada vez.",
     "discardTitle": "No se puede guardar el registro",
     "saveTableLayout": "¿Desea guardar los cambios en el diseño de la tabla '{{name}}'?",
@@ -1339,6 +1377,7 @@
   },
   "importText": {
     "titleExcel": "Importar libro de Excel",
+    "titleXml": "Importar archivo XML",
     "title": "Importar archivo de texto",
     "stepOf": "Paso {{n}} de {{total}}",
     "step": {
@@ -1353,6 +1392,7 @@
     },
     "source": {
       "introExcel": "Indique el libro de Excel (.xlsx, .xlsm) que desea importar y, después, cómo y dónde almacenar sus datos en la base de datos actual.",
+      "introXml": "Indique el archivo XML que desea importar (registros formados por campos, como los escriben BaseCraft y Access) y, después, cómo y dónde almacenar sus datos en la base de datos actual.",
       "intro": "Indique el archivo de texto que desea importar y, después, cómo y dónde almacenar sus datos en la base de datos actual.",
       "file": "Nombre de archivo",
       "browse": "Examinar…",
@@ -1488,6 +1528,7 @@
     },
     "error": {
       "excelUnsupported": "Este archivo no es un libro de Excel legible (.xlsx o .xlsm).",
+      "xmlUnsupported": "Este archivo no es un archivo de datos XML que BaseCraft pueda leer (un elemento raíz con elementos de registro repetidos, cada uno con elementos de campo simples; 100 MB como máximo; sin DTD).",
       "fileTooLarge": "Este libro supera los 100 MB.",
       "noFile": "Indique el archivo que desea importar.",
       "fileNotFound": "No se encuentra el archivo o no se puede leer.",
@@ -1599,6 +1640,8 @@
     "PictureAlignment": "Alineación de la imagen",
     "PictureSizeMode": "Modo de tamaño de la imagen",
     "LineSlant": "Inclinación de línea",
+    "HyperlinkAddress": "Dirección del hipervínculo",
+    "NavigationTargets": "Destinos de navegación",
     "Pages": "Páginas",
     "Name": "Nombre",
     "Tag": "Etiqueta",
@@ -1823,6 +1866,9 @@
       "fontNotPortable": "La fuente «{{detail}}» no está incrustada: el texto se mide y se imprime en Liberation Sans.",
       "unsupportedControl": "Este tipo de control no se imprime.",
       "pictureMissing": "La imagen compartida «{{detail}}» ya no está en la galería: la imagen no se muestra ni se imprime.",
+      "subreportMissing": "No se encuentra o no se puede leer el subinforme “{{detail}}”.",
+      "subreportRecursive": "El subinforme “{{detail}}” contiene este informe (o supera los siete niveles): no se imprime.",
+      "subreportBadLink": "Los campos principales y secundarios de este subinforme no coinciden con los campos de los informes.",
       "aggregateNotAllowed": "No se permite un total en esta sección.",
       "sizeClamped": "Un tamaño supera los 55.88 cm, el límite de Access: se reduce a ese límite.",
       "groupingMalformed": "Un nivel de agrupación está vacío o mal formado: no agrupa nada.",
@@ -1833,7 +1879,47 @@
     "invalidDefinition": "La definición de este informe no es válida:",
     "pdfSaved": "Se guardó el archivo PDF.",
     "pdfFilter": "Archivos PDF",
+    "paper": {
+      "chou3": "Sobre japonés Chou n.º 3",
+      "chou4": "Sobre japonés Chou n.º 4",
+      "p4x6": "4x6 pulg./10x15 cm",
+      "p5x7": "5x7 pulg./13x18 cm",
+      "p35x5": "3,5x5 pulg./L 89x127 mm",
+      "l2": "2L 127 x 178 mm",
+      "p8x10": "8x10 pulg.",
+      "ofuku": "Ofuku Hagaki 200 x 148 mm",
+      "envA2": "Sobre A2 111 x 146 mm",
+      "bristol4x6": "Ficha Bristol 4x6 pulg.",
+      "bristol5x8": "Ficha Bristol 5x8 pulg.",
+      "cardUs": "Tarjeta Carta EE. UU. (8,5 x 11 pulg.)",
+      "cardA4": "Tarjeta A4 (8,27 x 11,69 pulg.)",
+      "p8_5x13": "8,5x13 pulg.",
+      "p3x5": "3 x 5 pulg.",
+      "bristol3x5": "Ficha Bristol 3 x 5 pulg.",
+      "b5iso": "B5 (ISO) 176 x 250 mm",
+      "letter": "Carta",
+      "legal": "Legal",
+      "statement": "Declaración",
+      "executive": "Ejecutivo",
+      "a4": "A4",
+      "a5": "A5",
+      "b5": "B5 (JIS)",
+      "env10": "Sobre n.º 10",
+      "envDl": "Sobre DL",
+      "envC5": "Sobre C5",
+      "envC6": "Sobre C6",
+      "envMonarch": "Sobre Monarch",
+      "env675": "Sobre n.º 6 3/4",
+      "postcardJp": "Tarjeta postal japonesa",
+      "a6": "A6"
+    },
     "pageSetup": {
+      "tabOptions": "Opciones de impresión",
+      "tabPage": "Página",
+      "tabColumns": "Columnas",
+      "paper": "Papel",
+      "size": "Tamaño",
+      "dataOnly": "Solo datos",
       "title": "Configurar página",
       "orientation": "Orientación",
       "portrait": "Vertical",
@@ -1844,6 +1930,21 @@
       "left": "Izquierdo",
       "right": "Derecho",
       "invalid": "Cada margen debe estar entre 0 y 10 cm."
+    },
+    "columns": {
+      "grid": "Parámetros de la cuadrícula",
+      "columnSize": "Tamaño de las columnas",
+      "width": "Ancho (cm)",
+      "height": "Alto (cm)",
+      "rowSpacing": "Espaciado entre filas (cm)",
+      "sameAsDetail": "Igual que la sección Detalle",
+      "title": "Columnas",
+      "count": "Número de columnas",
+      "spacing": "Espacio entre columnas (cm)",
+      "layout": "Disposición de columnas",
+      "down": "Hacia abajo, luego a la derecha",
+      "across": "A la derecha, luego hacia abajo",
+      "invalid": "Columnas: de 1 a 10; espacio: de 0 a 10 cm."
     },
     "sectionGroup": {
       "header": "Encabezado de grupo: {{expr}}",
@@ -2059,7 +2160,8 @@
       "line": "Línea",
       "rectangle": "Rectángulo",
       "pageBreak": "Salto de página",
-      "tabControl": "Control de pestañas"
+      "tabControl": "Control de pestañas",
+      "toggleButton": "Botón de alternar"
     },
     "tab": {
       "format": "Formato",
@@ -2107,6 +2209,7 @@
     "badSource": "No se puede leer el origen del registro de este formulario: se quitó.",
     "headerFooter": "Encabezado o pie del formulario",
     "tabPage": "Página{{n}}",
+    "nav": { "reportLater": "Todavía no se puede mostrar un informe en un control de navegación; solo formularios." },
     "unbound": "Independiente",
     "saveFirstTitle": "Guardar formulario",
     "saveFirst": "¿Desea guardar los cambios en el formulario “{{name}}”?",
@@ -2321,6 +2424,18 @@
     "no": "Falso",
     "excelFilter": "Libros de Excel",
     "textFilter": "Archivos de texto",
+    "xmlFilter": "Archivos XML",
+    "htmlFilter": "Documentos HTML",
+    "saveSteps": "Guardar los pasos de exportación",
+    "saveName": "Guardar como",
+    "savedDefault": "Exportación - {{name}}",
+    "savedEmpty": "No hay ninguna exportación guardada.",
+    "savedRun": "Ejecutar",
+    "savedDelete": "Eliminar",
+    "fmtText": "Archivo de texto",
+    "fmtExcel": "Libro de Excel",
+    "fmtXml": "Archivo XML",
+    "fmtHtml": "Documento HTML",
     "actionQuery": "“{{name}}” es una consulta de acción: no tiene datos que exportar.",
     "noSource": "Este informe no tiene origen del registro: no hay nada que exportar.",
     "selectObject": "Seleccione primero una tabla o una consulta en el panel de navegación.",
@@ -2393,6 +2508,7 @@
     "fieldSizeTitle": "Tamaño del campo",
     "fieldSizeLabel": "Tamaño del campo (1 a 255)",
     "fieldSizeInvalid": "Escriba un número entero de 1 a 255.",
+    "lookupValues": "Valores (uno por línea)",
     "formatNone": "(ninguno)",
     "validationTextTitle": "Mensaje de validación",
     "fieldValidationTextLabel": "Mensaje que se muestra cuando se rechaza un valor de «{{field}}»",
@@ -2422,6 +2538,8 @@
     "noTables": "Esta base no contiene ninguna tabla local que mover.",
     "self": "El archivo de datos no puede ser la base abierta. Elija otro nombre u otra carpeta."
   },
+  "clipboard": { "empty": "El portapapeles del sistema no contiene texto.", "content": "{{text}}" },
+  "hyperlink": { "address": "Dirección (https://, http:// o mailto:)", "text": "Texto para mostrar", "invalid": "La dirección debe empezar por https://, http:// o mailto:.", "open": "¿Abrir {{url}}?" },
   "migrate": {
     "title": "Asistente para mover a un servidor",
     "intro": "Este asistente mueve todas las tablas locales de la base de datos actual a una base de datos PostgreSQL o SQL Server, con sus datos, claves, índices y relaciones, y luego las sustituye por tablas vinculadas con los mismos nombres. Primero se hace una copia de seguridad de la base de datos. Las reglas de validación y los valores predeterminados calculados permanecen en la aplicación, que se convierte en una aplicación front-end.",
@@ -2492,6 +2610,23 @@
     "saveFirstTitle": "Guardar módulo",
     "saveFirst": "¿Desea guardar los cambios del módulo «{{name}}»?"
   },
+  "dataMacro": {
+    "title": "Macros de datos de «{{table}}»",
+    "namedTitle": "Macros con nombre de «{{table}}»",
+    "events": "Eventos de la tabla",
+    "named": "Macros con nombre",
+    "noNamed": "Ninguna macro con nombre.",
+    "empty": "(vacío)",
+    "edit": "Editar",
+    "rename": "Cambiar nombre…",
+    "delete": "Eliminar",
+    "new": "Nueva macro con nombre…",
+    "close": "Cerrar",
+    "nameLabel": "Nombre de la macro",
+    "nameExists": "Ya existe una macro con ese nombre.",
+    "deleteAsk": "¿Eliminar la macro de datos «{{name}}» de «{{table}}»?",
+    "saveFailed": "No se pudieron guardar las macros de datos:\n{{detail}}"
+  },
   "macro": {
     "convert": {
       "title": "Convertir macro",
@@ -2508,6 +2643,10 @@
     },
     "newName": "Macro{{n}}",
     "action": {
+      "CreateRecord": "CrearRegistro",
+      "RaiseError": "GenerarError",
+      "RunDataMacro": "EjecutarMacroDatos",
+      "SetField": "EstablecerCampo",
       "Beep": "Bip",
       "ClearMacroError": "BorrarErrorMacro",
       "CloseDatabase": "CerrarBaseDatos",
@@ -2544,6 +2683,10 @@
       "UndoRecord": "DeshacerRegistro"
     },
     "arg": {
+      "Values": "Valores (Campo = expresión, uno por línea)",
+      "ErrorNumber": "Número de error",
+      "ErrorDescription": "Descripción del error",
+      "Value": "Valor",
       "FormName": "Nombre del formulario",
       "View": "Vista",
       "WhereCondition": "Condición WHERE",
@@ -2671,6 +2814,7 @@
       }
     },
     "category": {
+      "dataMacro": "Acciones de macro de datos",
       "ui": "Comandos de interfaz de usuario",
       "macro": "Comandos de macro",
       "system": "Comandos del sistema",
@@ -2937,6 +3081,41 @@
       "ok": "Importar",
       "done": "Tablas importadas: {{names}}.",
       "skipped": "Columnas no importadas ({{table}}): {{names}}."
+    },
+    "access": {
+      "title": "Importar desde Access",
+      "fileOnly": "Se importan las tablas y sus datos. No se leen las claves distintas de un Autonumeración, los índices ni las reglas de campo; no se importan las consultas, formularios, informes, macros ni módulos.",
+      "linked": "No se ofrecen las tablas vinculadas de este archivo: {{names}}.",
+      "warnSize": "Este archivo es grande: la importación puede tardar.",
+      "missingTables": "El archivo ya no contiene: {{names}}. No se cambió nada."
+    },
+    "report": {
+      "title": "Informe de importación: {{source}}",
+      "save": "Guardar el informe",
+      "fileName": "Informe de importación {{source}}.txt",
+      "level": {
+        "carried": "Importado tal cual",
+        "approximated": "Importado con una diferencia",
+        "ignored": "No importado"
+      },
+      "reason": {
+        "tableNotImported": "No se importó una tabla de esta relación.",
+        "violations": "Algunos registros no tienen registro correspondiente en la tabla principal."
+      },
+      "line": {
+        "tableImported": "Tabla «{{object}}»: filas importadas: {{n}}.",
+        "relationCreated": "Relación «{{object}}» creada.",
+        "keyAssumed": "Tabla «{{object}}»: el campo Autonumeración «{{part}}» se toma como clave principal.",
+        "keyNotRead": "Tabla «{{object}}»: sin campo Autonumeración, importada sin clave principal.",
+        "relationNotEnforced": "Relación «{{object}}» creada sin integridad referencial. {{reason}}",
+        "structureNotRead": "No se leen los índices, las reglas de campo, los valores predeterminados, los títulos ni las listas de búsqueda.",
+        "fieldSkipped": "Tabla «{{object}}»: columna «{{part}}» no importada (un tipo que BaseCraft no lee).",
+        "valuesLost": "Tabla «{{object}}», campo «{{part}}»: {{n}} valores no cabían y quedaron vacíos.",
+        "tableUnsupported": "Tabla «{{object}}» no importada. {{reason}}",
+        "tableLinked": "La tabla «{{object}}» es una tabla vinculada del archivo Access: no se importa.",
+        "relationIgnored": "Relación «{{object}}» del archivo Access no importada. {{reason}}",
+        "tablesOnly": "No se importan las consultas, formularios, informes, macros ni módulos."
+      }
     }
   },
   "link": {
@@ -3075,6 +3254,11 @@
     "title": "Buscar y reemplazar",
     "tabFind": "Buscar",
     "tabReplace": "Reemplazar",
+    "replaceWith": "Reemplazar por:",
+    "replace": "Reemplazar",
+    "replaceAll": "Reemplazar todo",
+    "replaceAllWarning": "No podrá deshacer esta operación de Reemplazar todo. ¿Continuar?",
+    "replacedCount": "Se han realizado {{count}} reemplazos.",
     "what": "Buscar:",
     "lookIn": "Buscar en:",
     "lookInField": "Campo actual",
@@ -3153,6 +3337,121 @@
     "placeholder": "Escriba una instrucción de Python o ?expresión",
     "errorAt": "(Módulo {{module}}, línea {{line}})",
     "splitter": "Cambiar el tamaño de la ventana Inmediato"
+  },
+  "wizard": {
+    "source": "Tablas/Consultas",
+    "available": "Campos disponibles:",
+    "selected": "Campos seleccionados:",
+    "fieldsQuestion": "¿Qué campos desea incluir?",
+    "queryWhich": "¿Qué asistente desea usar?",
+    "queryKind": {
+      "simple": "Asistente para consultas sencillas",
+      "crosstab": "Asistente para consultas de tabla de referencias cruzadas",
+      "duplicates": "Asistente para búsqueda de duplicados",
+      "unmatched": "Asistente para búsqueda de no coincidentes"
+    },
+    "queryName": {
+      "simple": "Consulta de {{source}}",
+      "crosstab": "Referencias cruzadas de {{source}}",
+      "duplicates": "Duplicados de {{source}}",
+      "unmatched": "{{a}} sin coincidencias en {{b}}"
+    },
+    "dupFields": "¿Qué campos pueden contener información duplicada?",
+    "dupExtra": "¿Qué campos adicionales desea ver?",
+    "crossRows": "¿Qué campos desea como encabezados de fila?",
+    "crossColumn": "¿Qué campo desea como encabezado de columna?",
+    "crossValue": "¿Qué número desea calcular en cada intersección de columna y fila?",
+    "unmatchedA": "¿Qué tabla o consulta contiene los registros que desea en los resultados?",
+    "unmatchedB": "¿Qué tabla o consulta contiene los registros relacionados?",
+    "unmatchedKey": "¿Qué campo está en ambas?",
+    "detailOrSummary": "¿Desea una consulta de detalle o de resumen?",
+    "detail": "Detalle (muestra cada campo de cada registro)",
+    "summary": "Resumen",
+    "countRecords": "Contar los registros de {{source}}",
+    "queryTitle": "¿Qué título desea para la consulta?",
+    "openQuery": "Abrir la consulta para ver la información",
+    "openQueryDesign": "Modificar el diseño de la consulta",
+    "formLayout": "¿Qué distribución desea para el formulario?",
+    "formLayouts": {
+      "columnar": "En columnas",
+      "tabular": "Tabular",
+      "datasheet": "Hoja de datos",
+      "justified": "Justificado (se muestra en columnas)"
+    },
+    "formTitle": "¿Qué título desea para el formulario?",
+    "openForm": "Abrir el formulario para ver o introducir información",
+    "openFormDesign": "Modificar el diseño del formulario",
+    "reportGroups": "¿Desea agregar niveles de agrupación (hasta {{max}})?",
+    "reportSort": "¿En qué orden desea ordenar los registros de detalle (hasta {{max}} campos)?",
+    "sortField": "Campo de ordenación {{n}}",
+    "reportSummary": "¿Qué valores de resumen desea calcular?",
+    "detailAndSummary": "Detalle y resumen",
+    "summaryOnly": "Solo resumen",
+    "reportLayout": "¿Qué distribución desea para el informe?",
+    "stepped": "Distribución: Escalonada",
+    "reportTitle": "¿Qué título desea para el informe?",
+    "openReport": "Vista previa del informe",
+    "openReportDesign": "Modificar el diseño del informe",
+    "labelSheet": "¿Qué tamaño de etiqueta desea?",
+    "labelCustom": "Personalizado…",
+    "labelWidth": "Ancho de la etiqueta (mm)",
+    "labelHeight": "Alto de la etiqueta (mm)",
+    "labelColumns": "Etiquetas por fila",
+    "labelMarginLeft": "Margen izquierdo y derecho de la hoja (mm)",
+    "labelMarginTop": "Margen superior de la hoja (mm)",
+    "labelNoFit": "Estas etiquetas no caben en la hoja.",
+    "labelFont": "Tamaño de fuente",
+    "labelLines": "¿Qué desea en la etiqueta? Escriba texto y agregue campos con la lista.",
+    "labelLine": "Línea {{n}}",
+    "labelInsertField": "Insertar campo…",
+    "labelRemoveLine": "Quitar línea",
+    "labelAddLine": "Agregar línea",
+    "labelSort": "¿Por qué campos desea ordenar?",
+    "labelName": "¿Qué nombre desea para el informe?",
+    "openLabels": "Ver las etiquetas como se imprimirán",
+    "labelsOf": "Etiquetas {{source}}",
+    "moreForms": {
+      "multiple": "Varios elementos",
+      "datasheet": "Hoja de datos",
+      "split": "Formulario dividido",
+      "splitNote": "No disponible: BaseCraft aún no tiene formulario dividido.",
+      "modal": "Cuadro de diálogo modal",
+      "modalNote": "Aceptar y Cancelar cierran el formulario. Se abre como un formulario normal: aún no existen las propiedades Emergente y Cuadro de diálogo modal."
+    },
+    "navigation": {
+      "horizontal": "Fichas horizontales",
+      "verticalLeft": "Fichas verticales, izquierda",
+      "verticalRight": "Fichas verticales, derecha",
+      "horizontalVertical": "Fichas horizontales y fichas verticales, izquierda",
+      "verticalNote": "No disponible: el control de navegación solo dibuja fichas horizontales.",
+      "name": "Formulario de navegación"
+    }
+  },
+  "dbtools": {
+    "close": "Cerrar",
+    "relReportEmpty": "No se muestra ninguna tabla en la ventana Relaciones.",
+    "depsNoSelection": "Seleccione primero una tabla, consulta, formulario, informe o macro en el panel de navegación.",
+    "depsNone": "Ninguno.",
+    "depsOnMe": "Objetos que dependen de mí",
+    "depsIDependOn": "Objetos de los que dependo",
+    "depsHint": "Haga clic en un objeto para abrirlo en la vista Diseño. Se busca en orígenes de registros, orígenes de filas, subformularios, consultas y acciones de macro.",
+    "docFields": "Campos",
+    "docIndexes": "Índices",
+    "docRelationships": "Relaciones",
+    "docControls": "Controles",
+    "docRecordSource": "Origen del registro",
+    "docName": "Nombre",
+    "docType": "Tipo",
+    "docDescription": "Descripción",
+    "docSource": "Origen del control",
+    "docParent": "Tabla principal",
+    "docChild": "Tabla secundaria",
+    "docEnforced": "Integridad referencial",
+    "perfNoKey": "{{table}}: sin clave principal. Defina una en la vista Diseño para encontrar y relacionar registros rápidamente.",
+    "perfRelation": "{{table}}.{{field}}: lo usa la relación {{relation}} pero no está indexado. Un índice acelera las combinaciones y la búsqueda de registros relacionados.",
+    "perfQuery": "{{table}}.{{field}}: la consulta {{query}} lo usa para filtrar o combinar, pero no está indexado.",
+    "perfOptimize": "Optimizar",
+    "perfNone": "Sin sugerencias: todas las tablas tienen clave principal y los campos usados por las relaciones y las consultas guardadas están indexados."
   },
   "imageGallery": {
     "none": "Ninguna",

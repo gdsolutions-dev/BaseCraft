@@ -8,11 +8,13 @@ import { localeInfo } from '../../shared/locale-format';
 import type { SourceField } from '../../shared/record-source';
 import { api } from '../bridge';
 import { promptParameters } from '../query/prompt-parameters';
-import { unsavedRunDoc } from '../query/unsaved-run';
+import { unsavedDesignSave, unsavedRunDoc } from '../query/unsaved-run';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type ToolState } from '../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../designer/designer-clipboard';
-import { designerCommands, selectedCount, type ArrangeMenu } from '../designer/designer-commands';
+import { useFormatPainter } from '../designer/format-painter';
+import { designerCommands, historyCommands, historyStates, selectedCount, subObjectOf, type ArrangeMenu } from '../designer/designer-commands';
 import { designerReducer, findControl, initDesigner, setDocPicture, setDocProp, type DesignerAction } from '../designer/designer-model';
+import { conditionTarget, editConditions } from '../designer/ConditionsDialog';
 import { registerOpenDesign } from '../designer/open-designs';
 import { ColorsGallery } from '../designer/ColorsGallery';
 import { FontsGallery } from '../designer/FontsGallery';
@@ -41,7 +43,8 @@ import { viewHost } from './layout-host';
 import { LayoutRecordBar } from './LayoutRecordBar';
 import { loadLive, type LiveData } from './live-records';
 import { proposeLinks } from './links';
-import { GALLERY_TOOLS, headerItem } from './form-ribbon';
+import { askHyperlink } from '../designer/hyperlink-item';
+import { GALLERY_TOOLS, headerItem, insertHyperlink } from './form-ribbon';
 import './form-nav-menu';
 import { pageGroup, sectionGroups, TabOrderDialog } from './TabOrderDialog';
 import { allowsLayout, firstRun } from './views';
@@ -55,6 +58,10 @@ const NO_LISTS: Lists = { tables: [], queries: [], forms: [], reports: [] };
 /** Formulaire vierge (Créer › Formulaire vierge) : le nouvel onglet de ce nom provisoire s'ouvre avec la Liste des champs (lu une fois). */
 let fieldListFor: string | null = null;
 export function requestFieldList(name: string): void { fieldListFor = name; }
+/** Créer › Formulaire (AutoForm) : la définition du nouvel onglet de ce nom provisoire, ouvert non enregistré en mode Formulaire
+ *  (Access : enregistré à la fermeture, sur Oui, ou sur Enregistrer) ; lue à l'ouverture de sa conception, restée derrière la vue. */
+let newFormFor: { name: string; doc: DesignDoc } | null = null;
+export function requestNewForm(name: string, doc: DesignDoc): void { newFormFor = { name, doc }; }
 
 interface Leaving { mode: DocMode; name: string; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean>; unsaved(keep: boolean): void }
 /** Avant que la vue parte : vers le mode Formulaire ou Feuille, la définition telle quelle s'affiche, enregistrée ou non (Access, comme une
@@ -74,7 +81,13 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
-  const [state, send] = useReducer(designerReducer, undefined, () => initDesigner(emptyFormDoc(null), 'form'));
+  const [state, send] = useReducer(designerReducer, undefined, () => {
+    // Create › Form: the AutoForm's definition, which the Form view in front reads from the stash (as a modified form's)
+    const seed = tab.isNew && newFormFor?.name === tab.name ? newFormFor.doc : null;
+    if (seed) unsavedRunDoc.set(tab.id, seed);
+    return initDesigner(seed ?? emptyFormDoc(null), 'form');
+  });
+  const painter = useFormatPainter(state, send, readOnly);
   useState(() => firstRun(tab.id));   // opened in Design view: Form view is then never the opening view (Default View Datasheet)
   const [phase, setPhase] = useState<'loading' | 'ready' | { error: string }>(tab.isNew ? 'ready' : 'loading');
   const [extra, setExtra] = useState<SectionDef[]>([]);   // sections d'un autre genre : gardées telles quelles, non montrées
@@ -102,7 +115,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   const savedDoc = useRef<DesignDoc | null>(null);   // the design last saved: still shown, nothing to save (before the render says so)
   const [liveGen, setLiveGen] = useState(0);   // L2 : la définition relue d'ailleurs (pas un enregistrement d'ici) relit les données du mode Page
 
-  useEffect(() => { if (fieldListFor === tab.name) fieldListFor = null; }, [tab.name]);
+  useEffect(() => { if (fieldListFor === tab.name) fieldListFor = null; if (newFormFor?.name === tab.name) newFormFor = null; }, [tab.name]);
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const appMode = useAppMode();
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
@@ -275,8 +288,12 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
     readPictureFile(f).then((url) => addHeaderItem('logo', url), (e: unknown) => { void showError(e); });
   };
 
-  const cmds = useRef({ save, leave, tabOrder, addHeaderItem });
-  cmds.current = { save, leave, tabOrder, addHeaderItem };
+  const conditions = async () => {
+    const a = live.current.readOnly ? null : await editConditions(modal, live.current.state, display);
+    if (a && !live.current.readOnly) send(a);
+  };
+  const cmds = useRef({ save, leave, tabOrder, addHeaderItem, conditions });
+  cmds.current = { save, leave, tabOrder, addHeaderItem, conditions };
   const selected = selectedCount(state);
   const layoutKind = layoutKey(state);
   const chartPane = useChartPane({ state, dispatch: send, readOnly, tables: lists.tables, queries: lists.queries, onTool: setTool });
@@ -288,10 +305,18 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   useEffect(() => registerOpenDesign({ kind: 'form', name: tab.name, clearTheme: () => {
     if (live.current.state.doc.props.Theme !== undefined) send({ type: 'edit', apply: (d) => setDocProp(d, 'Theme', undefined) });
   } }), [tab.name]);
+  // the Form view in front shows a new or modified design: Save there (Ctrl+S, the Quick Access Toolbar) saves it once the record has
+  // nothing to save; a saved, unchanged design is not rewritten (its view would read its records again)
+  const unsavedDesign = behind && (!!tab.isNew || state.dirty);
   useEffect(() => {
-    if (behind) return registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
+    if (behind) {
+      const offGuard = registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
+      if (unsavedDesign) unsavedDesignSave.set(tab.id, () => cmds.current.save());
+      return () => { offGuard(); unsavedDesignSave.delete(tab.id); };
+    }
     const off = registerCommands(tab.id, {
       ...designerCommands(send, setMenu, selected),
+      ...historyCommands(send),
       ...formatCommands(() => live.current.state, send, setFormatMenu, selected),
       themes: () => setThemesOpen(true),
       insertImage: () => setImagesOpen(true),
@@ -304,22 +329,30 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       // la galerie Contrôles : le même outil que la boîte à outils (le prochain clic dans une section pose le contrôle)
       ...Object.fromEntries(Object.entries(GALLERY_TOOLS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })])),
       logo: () => logoFile.current?.click(),
+      hyperlink: () => { void askHyperlink(modal, t).then((l) => { if (l && !live.current.readOnly) send({ type: 'edit', apply: (d) => insertHyperlink(d, l, live.current.labels) }); }); },
       title: () => cmds.current.addHeaderItem('title'),
       dateTime: () => cmds.current.addHeaderItem('dateTime'),
       save: async () => { await cmds.current.save(); },
       addExistingFields: () => setFieldList((v) => !v),
       propertySheet: () => setSheetVisible((v) => !v),
       tabOrder: () => cmds.current.tabOrder(),
+      conditionalFormatting: () => cmds.current.conditions(),
+      formatPainter: () => painter.toggle(),
+      subformInNewWindow: () => { const n = subObjectOf(live.current.state); if (n) void dispatch({ type: 'open', kind: 'form', name: n, mode: 'design' }); },
       viewCode: () => { const { state: s } = live.current; viewCode(firstPythonCall(s.doc, s.selection), (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }, () => { runCommand('createModule'); }).catch(showError); },
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, behind, selected, layoutKind, chartPane.hasChart]);
+  }, [tab.id, behind, unsavedDesign, selected, layoutKind, chartPane.hasChart]);
   // Coller grisé tant qu'aucun presse-papiers (contrôles qu'un formulaire reçoit, objets du volet) n'a rien à coller
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));
   // L2 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte)
   const layoutOk = allowsLayout(state.doc);
-  useEffect(() => (behind ? undefined : registerCommandStates(tab.id, { paste: { enabled: pasteable }, viewLayout: { enabled: layoutOk } })), [tab.id, behind, pasteable, layoutOk]);
+  const hasSub = subObjectOf(state) !== null;
+  const hasCondTarget = conditionTarget(state) !== null;
+  const canUndo = state.past.length > 0, canRedo = state.future.length > 0;   // Quick Access Toolbar Undo / Redo
+  useEffect(() => (behind ? undefined : registerCommandStates(tab.id, { paste: { enabled: pasteable }, viewLayout: { enabled: layoutOk }, subformInNewWindow: { enabled: hasSub }, conditionalFormatting: { enabled: hasCondTarget }, formatPainter: painter.cmdState, ...historyStates(live.current.state) })),
+    [tab.id, behind, pasteable, layoutOk, hasSub, hasCondTarget, painter.cmdState.enabled, painter.cmdState.active, canUndo, canRedo]);
 
   // F5 (Access, C7) : du mode Création au mode Formulaire, tant que cet onglet est actif
   useEffect(() => {
@@ -389,7 +422,7 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
   proposing.current = proposeFor;
   /** The designer's dispatch, with the links proposed after a subform's Source Object is set. */
   const dispatchDesign = useCallback((a: DesignerAction) => {
-    send(a);
+    painter.painting(a);
     if (a.type.startsWith('select') || a.type === 'toggleSelect') setLinked(null);   // announced while its subform is selected
     if (a.type !== 'setProp' || a.name !== 'SourceObject' || typeof a.value !== 'string' || !a.value) return;
     const names = a.targets.flatMap((x) => (x.kind === 'control' ? [x.name] : []));

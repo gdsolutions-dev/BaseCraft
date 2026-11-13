@@ -11,11 +11,11 @@ import { uniqueReportName } from '../../../shared/report/instant';
 import { effectiveTheme } from '../../../shared/design/theme';
 import { DocThemeProvider, useBaseTheme } from '../../design/theme-context';
 import { ChartDocSource } from '../../form/controls/ChartCtl';
-import { readReport, type PageSetup } from '../../../shared/report/model';
+import { pageGeometry, readReport, type ColumnSetup, type PageSetup } from '../../../shared/report/model';
 import { api } from '../../bridge';
 import { ArrangePopup, Designer, FormatPopup, LayoutPopupMenu, type CanvasProps, type ToolState } from '../../designer/Designer';
 import { clipboardCommands, clipContext, pasteEnabled, subscribeClip } from '../../designer/designer-clipboard';
-import { designerCommands, selectedCount, type ArrangeMenu } from '../../designer/designer-commands';
+import { designerCommands, historyCommands, historyStates, selectedCount, subObjectOf, type ArrangeMenu } from '../../designer/designer-commands';
 import { formatCommands, type FormatPopupId } from '../../designer/format-commands';
 import { layoutCommands, layoutKey, type LayoutPopup } from '../../designer/layout-commands';
 import { deleteKeyAllowed } from '../../designer/delete-guard';
@@ -27,6 +27,7 @@ import { ThemeGallery } from '../../designer/ThemeGallery';
 import { ImageGallery } from '../../designer/ImageGallery';
 import { armedTool, readPictureFile, sectionBackground } from '../../designer/image-gallery-model';
 import { boundControlWithLabel } from '../../designer/field-controls';
+import { conditionTarget, editConditions } from '../../designer/ConditionsDialog';
 import { FieldList } from '../../designer/FieldList';
 import { useChartPane } from '../../designer/chart-pane';
 import { fromSourceRef } from '../../designer/property-sheet-model';
@@ -35,13 +36,14 @@ import type { PropertySheetContext } from '../../designer/sheet-types';
 import type { DocViewProps } from '../../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../../shell/Modal';
 import { nameErrorKey } from '../../shell/nav-menu-items';
+import { useFormatPainter } from '../../designer/format-painter';
 import { firstPythonCall, viewCode } from '../../designer/view-code';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand, type CommandHandlers, type CommandId } from '../../shell/ribbon-model';
 import { editsDesign, sameView, type DocMode } from '../../state/app-state';
 import { allowsLayout } from '../../form/views';
-import { unsavedRunDoc } from '../../query/unsaved-run';
+import { unsavedDesignSave, unsavedRunDoc } from '../../query/unsaved-run';
 import { loadReportDoc, ReportLoadError } from '../load';
-import { withPageSetup } from '../page-setup';
+import { setupInput, withPageSetup, withSetup, type PageSetupChoice, type PageSetupInput } from '../page-setup';
 import { PageSetupDialog, PageSetupMenu } from '../PageSetupDialog';
 import { ReportLayoutCanvas } from '../ReportLayoutCanvas';
 import { previewFromDesign, ReportIssues } from '../ReportPreviewView';
@@ -49,6 +51,8 @@ import { useReportFlow } from '../useReportFlow';
 import { addTotal, TOTAL_FNS, type TotalFn } from './grouping-model';
 import { GroupingPane } from './GroupingPane';
 import { headerItemControls, insertPageNumbers, reportHeaderItem } from './header-items';
+import { askHyperlink } from '../../designer/hyperlink-item';
+import { insertHyperlink } from './picture-item';
 import { PageNumbersDialog, type PageNumberChoice } from './PageNumbersDialog';
 import { reportHost, reportRenderControl } from './report-host';
 import { printMargins } from '../../settings-store';
@@ -64,12 +68,16 @@ const NO_LISTS: Lists = { tables: [], queries: [], forms: [], reports: [] };
 /** La galerie Contrôles du ruban choisit l'outil de la boîte à outils. */
 const TOOL_COMMANDS: Partial<Record<CommandId, ControlKind | null>> = {
   select: null, textBox: 'textBox', label: 'label', insertPageBreak: 'pageBreak', comboBox: 'comboBox', line: 'line', rectangle: 'rectangle',
-  checkBox: 'checkBox', optionButton: 'optionButton', image: 'image',
+  checkBox: 'checkBox', optionButton: 'optionButton', image: 'image', subform: 'subform', button: 'commandButton', tabControl: 'tabControl', optionGroup: 'optionGroup', listBox: 'listBox', toggleButton: 'toggleButton',
 };
 
 // État vierge (Créer › État vide) : la Liste des champs s'ouvre avec l'onglet de ce nom, une seule fois.
 const fieldListRequests = new Set<string>();
 export function requestFieldList(name: string): void { fieldListRequests.add(name); }
+/** Créer › État (AutoReport) : la définition du nouvel onglet de ce nom provisoire, ouvert non enregistré en Aperçu avant impression
+ *  (Access : enregistré à la fermeture, sur Oui, ou sur Enregistrer) ; lue à l'ouverture de sa conception, restée derrière l'aperçu. */
+let newReportFor: { name: string; doc: DesignDoc } | null = null;
+export function requestNewReport(name: string, doc: DesignDoc): void { newReportFor = { name, doc }; }
 const takeFieldListRequest = (name: string): boolean => fieldListRequests.delete(name);
 
 interface Leaving { mode: DocMode; name: string; isNew: boolean; busy: boolean; flush(): Promise<void>; dirty(): boolean; confirm: ModalApi['confirm']; save(): Promise<boolean>; unsaved(keep: boolean): void }
@@ -96,7 +104,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
-  const [state, send] = useReducer(designerReducer, undefined, () => initDesigner(blankReport(printMargins()), 'report'));
+  const [state, send] = useReducer(designerReducer, undefined, () => {
+    // Create › Report: the AutoReport's definition, which the preview in front reads from the stash (as a modified report's)
+    const seed = tab.isNew && newReportFor?.name === tab.name ? newReportFor.doc : null;
+    if (seed) unsavedRunDoc.set(tab.id, seed);
+    return initDesigner(seed ?? blankReport(printMargins()), 'report');
+  });
+  const painter = useFormatPainter(state, send, readOnly);
   const [phase, setPhase] = useState<'loading' | 'ready' | { error: string; list?: string[] }>(tab.isNew ? 'ready' : 'loading');
   const [described, setDescribed] = useState<{ key: string; fields: SourceField[] }>({ key: 'null', fields: [] });
   const [sourceError, setSourceError] = useState<string | null>(null);
@@ -105,6 +119,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const [tool, setTool] = useState<ToolState>({ kind: null, locked: false });
   const [sheetVisible, setSheetVisible] = useState(true);
   const [fieldList, setFieldList] = useState(() => takeFieldListRequest(tab.name));
+  useEffect(() => { if (newReportFor?.name === tab.name) newReportFor = null; }, [tab.name]);
   const [menu, setMenu] = useState<ArrangeMenu | null>(null);
   const [formatMenu, setFormatMenu] = useState<FormatPopupId | null>(null);
   const [themesOpen, setThemesOpen] = useState(false);
@@ -114,9 +129,12 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   const [fontsOpen, setFontsOpen] = useState(false);
   const [layoutMenu, setLayoutMenu] = useState<LayoutPopup | null>(null);
   const [pageMenu, setPageMenu] = useState<'margins' | 'pageSize' | null>(null);
+  const [showMargins, setShowMargins] = useState(false);   // Afficher les marges (ribbon): the printable area of the first page, dashed
   const [grouping, setGrouping] = useState(false);
   const [totalsMenu, setTotalsMenu] = useState(false);
   const logoInput = useRef<HTMLInputElement>(null);
+  // Données seulement: stored in the report's page setup (one undoable edit)
+  const dataOnly = useMemo(() => readReport(state.doc, []).page.dataOnly === true, [state.doc]);
   const root = useRef<HTMLDivElement>(null);
   const loaded = useRef<{ name: string; token: number } | null>(null);
   const busy = useRef<Promise<boolean> | null>(null);   // the save under way
@@ -134,7 +152,10 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     [display, fieldNames, lists, tab.id, tab.name]);
   const theme = effectiveTheme(state.doc.props, useBaseTheme());   // les états se dessinent toujours en mode clair
   const renderControl = useMemo(() => reportRenderControl(display), [display]);
-  const host = useMemo(() => reportHost({ doc: state.doc, sheet, t, renderControl }), [state.doc, sheet, t, renderControl]);
+  const host = useMemo(() => {
+    const g = pageGeometry(readReport(state.doc, []).page);
+    return { ...reportHost({ doc: state.doc, sheet, t, renderControl }), pageGuide: showMargins ? { width: g.printableWidth, height: g.printableHeight } : undefined };
+  }, [state.doc, sheet, t, renderControl, showMargins]);
   // les avertissements du moteur, une fois les champs de la source connus
   // (une source illisible : ses champs inconnus ne sont pas répétés champ par champ, le bandeau le dit)
   const { map: resources, ready: resourcesReady } = useResources(usedResourceNames(state.doc));
@@ -239,8 +260,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
         return;
       }
     }
-    send(a);
-  }, [modal]);
+    painter.painting(a);
+  }, [modal, painter.painting]);
 
   /** Un brouillon de la feuille se valide à la sortie du champ : il atteint le document avant l'enregistrement. */
   const flush = async () => {
@@ -297,11 +318,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   };
 
   const setup = (patch: Partial<PageSetup>) => guarded({ type: 'edit', apply: (d) => withPageSetup(d, patch) });
-  const pageSetupDialog = async () => {
-    const next = await modal.custom<PageSetup>((close) => <PageSetupDialog initial={readReport(live.current.state.doc, []).page} onClose={close} />,
+  /** Mise en page (Page Setup): its tabs; Page Setup > Columns opens the Colonnes tab. One edit, undoable. */
+  const pageSetupDialog = async (tab: PageSetupInput['tab'] = 'options') => {
+    const next = await modal.custom<PageSetupChoice>((close) => <PageSetupDialog input={setupInput(live.current.state.doc, tab)} onClose={close} />,
       { titleKey: 'report.pageSetup.title' });
-    if (next && !live.current.readOnly) setup(next);
+    if (next && !live.current.readOnly) guarded({ type: 'edit', apply: (x) => withSetup(x, next) });
   };
+  const columnsDialog = () => pageSetupDialog('columns');
 
   /** Masquer les détails : la propriété Visible du Détail (faux, ou retirée pour revenir au défaut), annulable. */
   const hideDetails = () => {
@@ -341,8 +364,13 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
     if (added) send({ type: 'select', selection: { kind: 'controls', names: [added.name] } });
   };
 
-  const cmds = useRef({ save, leave, pageSetupDialog, hideDetails, pageNumbers, headerItem });
-  cmds.current = { save, leave, pageSetupDialog, hideDetails, pageNumbers, headerItem };
+  const conditions = async () => {
+    const a = live.current.readOnly ? null : await editConditions(modal, live.current.state, display);
+    if (a && !live.current.readOnly) guarded(a);
+  };
+  const cmds = useRef({ save, leave, pageSetupDialog, columnsDialog, hideDetails, pageNumbers, headerItem, conditions });
+  cmds.current = { save, leave, pageSetupDialog, columnsDialog, hideDetails, pageNumbers, headerItem, conditions };
+  useEffect(() => registerCommandStates(tab.id, { printDataOnly: { enabled: true, active: dataOnly } }), [tab.id, dataOnly]);
   const selected = selectedCount(state);
   const layoutKind = layoutKey(state);
   const chartPane = useChartPane({ state, dispatch: guarded, readOnly, tables: lists.tables, queries: lists.queries, onTool: setTool });
@@ -354,8 +382,14 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   useEffect(() => registerOpenDesign({ kind: 'report', name: tab.name, clearTheme: () => {
     if (live.current.state.doc.props.Theme !== undefined) send({ type: 'edit', apply: (d) => setDocProp(d, 'Theme', undefined) });
   } }), [tab.name]);
+  // the preview in front shows a new or modified design: Save there (Ctrl+S, the Quick Access Toolbar) saves it
+  const unsavedDesign = behind && (!!tab.isNew || state.dirty);
   useEffect(() => {
-    if (behind) return registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
+    if (behind) {
+      const offGuard = registerModeGuard(tab.id, (reason, target) => (reason === 'close' ? cmds.current.leave(reason, target) : true));
+      if (unsavedDesign) unsavedDesignSave.set(tab.id, () => cmds.current.save());
+      return () => { offGuard(); unsavedDesignSave.delete(tab.id); };
+    }
     const tools: CommandHandlers = Object.fromEntries(Object.entries(TOOL_COMMANDS).map(([id, kind]) => [id, () => setTool({ kind: kind ?? null, locked: false })]));
     const off = registerCommands(tab.id, {
       ...designerCommands(guarded, setMenu, selected),
@@ -365,6 +399,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       backgroundImage: () => setBackgroundOpen(true),
       themeColors: () => setColorsOpen(true),
       themeFonts: () => setFontsOpen(true),
+      ...historyCommands(guarded),
       ...formatCommands(() => live.current.state, guarded, setFormatMenu, selected),   // the report's own defaults (documentKind)
       ...layoutCommands(() => live.current.state, guarded, undefined, setLayoutMenu),
       ...clipboardCommands(() => live.current.state, guarded, () => clipContext(liveHost.current, t)),
@@ -372,29 +407,36 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       save: async () => { await cmds.current.save(); },
       addExistingFields: () => setFieldList((v) => !v),
       propertySheet: () => setSheetVisible((v) => !v),
+      formatPainter: () => painter.toggle(),
+      subreportInNewWindow: () => { const n = subObjectOf(live.current.state); if (n) void dispatch({ type: 'open', kind: 'report', name: n, mode: 'design' }); },
       viewCode: () => { const { state: s } = live.current; viewCode(firstPythonCall(s.doc, s.selection), (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }, () => { runCommand('createModule'); }).catch(showError); },
       pageSetupDialog: () => cmds.current.pageSetupDialog(),
+      columns: () => cmds.current.columnsDialog(),
       portrait: () => setup({ orientation: 'portrait' }),
       landscape: () => setup({ orientation: 'landscape' }),
       margins: () => setPageMenu((m) => (m === 'margins' ? null : 'margins')),
+      showMargins: () => setShowMargins((v) => !v),
       pageSize: () => setPageMenu((m) => (m === 'pageSize' ? null : 'pageSize')),
       groupSort: () => setGrouping((v) => !v),
       ...(totalKey ? { reportTotals: () => setTotalsMenu((v) => !v) } : {}),   // sinon le ruban le montre désactivé
       hideDetails: () => cmds.current.hideDetails(),
       pageNumbers: () => cmds.current.pageNumbers(),
+      conditionalFormatting: () => cmds.current.conditions(),
       logo: () => logoInput.current?.click(),
+      printDataOnly: () => setup({ dataOnly: readReport(live.current.state.doc, []).page.dataOnly ? undefined : true }),
+      hyperlink: () => { void askHyperlink(modal, t).then((l) => { if (l && !live.current.readOnly) guarded({ type: 'edit', apply: (d) => insertHyperlink(d, l, t('designer.ctlPrefix.label')) }); }); },
       title: () => cmds.current.headerItem('title'),
       dateTime: () => cmds.current.headerItem('dateTime'),
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };
-  }, [tab.id, behind, selected, layoutKind, guarded, totalKey, chartPane.hasChart]);   // setup ne lit que guarded
+  }, [tab.id, behind, unsavedDesign, selected, layoutKind, guarded, totalKey, chartPane.hasChart]);   // setup ne lit que guarded
 
   // boutons enfoncés : orientation, volet Regrouper, trier et total affiché, Détail masqué
   const pasteable = useSyncExternalStore(subscribeClip, () => pasteEnabled(host.tools.map((x) => x.kind)));   // Coller grisé sinon
   // L3 : mode Page éteint quand AllowLayoutView vaut false (la valeur en cours de modification compte) ; le volet Regrouper est
   // masqué en mode Page, son bouton n'y est donc pas enfoncé
-  const states = JSON.stringify({ ...reportDesignStates(state.doc, grouping && tab.mode !== 'layout'), paste: { enabled: pasteable }, viewLayout: { enabled: allowsLayout(state.doc, 'report') } });
+  const states = JSON.stringify({ ...reportDesignStates(state.doc, grouping && tab.mode !== 'layout'), ...historyStates(state), subreportInNewWindow: { enabled: subObjectOf(state) !== null }, conditionalFormatting: { enabled: conditionTarget(state) !== null }, formatPainter: painter.cmdState, paste: { enabled: pasteable }, viewLayout: { enabled: allowsLayout(state.doc, 'report') }, showMargins: { enabled: true, active: showMargins } });
   useEffect(() => (behind ? undefined : registerCommandStates(tab.id, JSON.parse(states))), [tab.id, behind, states]);
 
   // un champ de la Liste des champs : au point de dépôt, ou sous le contrôle le plus bas du Détail

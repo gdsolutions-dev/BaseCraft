@@ -10,11 +10,12 @@
 .dz-tool-lock { position: absolute; right: 3px; bottom: 3px; }
 
 .dz-surface { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template: 18px 1fr / 18px 1fr; background: var(--bc-surface-2); }
-.dz-canvas { position: relative; min-width: 0; min-height: 0; overflow: auto; padding: 20px; outline: none; user-select: none; }
+.dz-canvas { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; user-select: none; }
 
 /* Règles (cm) : graduations au cm, au demi-cm et au quart de cm, dessinées en CSS ; les nombres sont des <span> */
 .dz-ruler-corner, .dz-ruler { background: var(--bc-surface); border-color: var(--bc-border); border-style: solid; border-width: 0; }
-.dz-ruler-corner { border-width: 0 1px 1px 0; }
+.dz-ruler-corner { border-width: 0 1px 1px 0; padding: 0; cursor: default; }
+.dz-ruler-corner.is-sel { background: var(--bc-text) content-box; padding: 3px; }
 .dz-ruler { position: relative; overflow: hidden; color: var(--bc-text-muted); font-size: 9px; line-height: 1; pointer-events: none; }
 .dz-hruler { border-bottom-width: 1px; }
 .dz-vruler { border-right-width: 1px; }
@@ -31,6 +32,7 @@
 .dz-ruler-n { position: absolute; }
 .dz-hruler .dz-ruler-n { top: 1px; transform: translateX(-50%); }
 .dz-vruler .dz-ruler-n { left: 1px; transform: translateY(-50%); }
+.dz-page-guide { position: absolute; left: 0; top: 0; box-sizing: border-box; border: 1px dashed var(--bc-text-muted); pointer-events: none; }
 .dz-sheet { position: relative; min-width: 120px; background: var(--bc-surface); border: 1px solid var(--bc-border); box-shadow: var(--shadow); touch-action: none; }
 .dz-sheet.is-placing .dz-body, .dz-sheet.is-placing .dz-ctl { cursor: crosshair; }
 

@@ -10,7 +10,8 @@ import { acquireLock, peekLock, releaseIfOurs, takeOverStaleLock, type HeldLock,
 import { detectLocationRisk, type LocationRisk, type RiskProbe } from '../db/location-risk';
 import { joinPresence, presenceEntry, sharedRefusal } from '../db/presence';
 import { peekStartup } from '../db/startup';
-import { inspectAccess, loadAccessCache, openAccess } from './access';
+import type MDBReader from 'mdb-reader';
+import { inspectAccess, isJet3, loadAccessCache, openAccess } from './access';
 import { linkRows, resolveSourcePath, sourceRows, type SourceKind } from './store';
 
 /** shared: a data file written in shared mode, through this session's presence entry (C3 R3). */
@@ -257,6 +258,12 @@ export class LinkedSources {
     }
     this.passwords.set(realKey(p), password);
     return true;
+  }
+
+  /** The reader of the Access file `p`, opened with this session's password for it (bc:linkUnavailable|needsPassword|<p> without). */
+  accessReader(p: string): { r: MDBReader; jet3: boolean } {
+    const r = openAccess(p, this.passwords.get(realKey(p)));
+    return { r, jet3: isJet3(r) };
   }
 
   /** inspectSource with this session's password for `p` (C2 R7). */

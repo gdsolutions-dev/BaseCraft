@@ -309,6 +309,9 @@ test('form: AutoForm on the join query is updatable; AutoLookup shows the client
     await page.getByTestId('cmd-createForm').click();
     await expect(page.getByTestId('doc-tab-form-QSaisie')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('doc-tab-close-form-QSaisie').click();
+    await page.getByTestId('modal-btn-yes').click();   // Create › Form: the new form is saved when its tab closes, under the proposed name
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-form-QSaisie')).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as Win).basecraft.objects.rename('form', 'QSaisie', 'FSaisie'))).toMatchObject({ ok: true });   // O4: the result also lists the corrected dependents
     await page.reload();
     await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });

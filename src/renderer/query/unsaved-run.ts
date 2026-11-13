@@ -5,3 +5,6 @@ export const unsavedRunSql = new Map<string, string>();
 // Définition d'un formulaire ou d'un état jamais enregistré (ou modifié), affiché tel quel comme une requête : posée par la conception
 // à la sortie (Mode Formulaire, Aperçu avant impression), lue par la vue qui s'ouvre.
 export const unsavedRunDoc = new Map<string, DesignDoc>();
+// Enregistrement de la conception d'un formulaire montré non enregistré en mode Formulaire (nouveau, ou modifié) : posé par la conception
+// restée derrière, appelé par Enregistrer (Ctrl+S, barre d'outils Accès rapide) de la vue quand l'enregistrement courant n'a rien à enregistrer.
+export const unsavedDesignSave = new Map<string, () => Promise<boolean>>();

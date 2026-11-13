@@ -2,11 +2,14 @@
 // index à travers items / branches[b].items / else : dans un Si, le segment qui suit son index est la branche b (-1 : Sinon).
 // Le concepteur ne peut pas créer de problème submacroPlace / submacroOrder ; les clés inconnues d'un élément sont gardées.
 import { ACTIONS, type ActionDef } from '../../shared/macro/catalog';
+import { isDataAction, type DataEvent } from '../../shared/macro/data-macro';
 import type { MacroDef, MacroItem } from '../../shared/macro/model';
 import { i18n } from '../i18n';
 
 export type ItemPath = number[];
-export interface MacroEditState { def: MacroDef; selected: ItemPath | null; collapsed: Set<string>; dirty: boolean; showAll: boolean; catalog: boolean }
+/** data (T2): a table's data macro, for this event ('named': a named one) - only the data actions are offered, [Old].[Field] is read; null: a UI macro. */
+export type DataScope = DataEvent | 'named' | null;
+export interface MacroEditState { def: MacroDef; selected: ItemPath | null; collapsed: Set<string>; dirty: boolean; showAll: boolean; catalog: boolean; data: DataScope }
 export type MacroEditAction =
   | { type: 'add'; at: ItemPath; item: MacroItem }
   | { type: 'remove'; path: ItemPath } | { type: 'move'; path: ItemPath; dir: -1 | 1 }
@@ -18,13 +21,14 @@ export type MacroEditAction =
   | { type: 'toggleCatalog' } | { type: 'toggleShowAll' } | { type: 'saved' };
 
 export const pathKey = (p: ItemPath): string => (p.length ? p.join('.') : 'root');
-export const initialEdit = (def: MacroDef): MacroEditState => ({ def, selected: null, collapsed: new Set(), dirty: false, showAll: false, catalog: false });
+export const initialEdit = (def: MacroDef, data: DataScope = null): MacroEditState => ({ def, selected: null, collapsed: new Set(), dirty: false, showAll: false, catalog: false, data });
 
 /** The actions « Ajouter une nouvelle action » and the Action Catalog offer, by label: the unsafe ones only with Show All Actions
  *  (Access). Whether the base's content is enabled does not change the list: a disabled base refuses unsafe actions when they run. */
-export function addableActions(showAll: boolean): ActionDef[] {
+export function addableActions(showAll: boolean, data: DataScope = null): ActionDef[] {
   const label = (a: ActionDef) => i18n.t(`macro.action.${a.name}`);
-  return ACTIONS.filter((a) => showAll || !a.unsafe).sort((a, b) => label(a).localeCompare(label(b), i18n.language));
+  // a data macro: its own actions for this event (no unsafe one); a UI macro: none of the data actions
+  return ACTIONS.filter((a) => (data ? isDataAction(a.name, data === 'named' ? undefined : data) : a.category !== 'dataMacro') && (showAll || !a.unsafe)).sort((a, b) => label(a).localeCompare(label(b), i18n.language));
 }
 
 /** The list a block holds at `lp` (the path of the list: an item's path without its last index), or undefined. */

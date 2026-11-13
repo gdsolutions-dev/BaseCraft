@@ -24,7 +24,7 @@ export function uniqueReportName(taken: string[], base: string): string {
   }
 }
 
-export function instantReport(source: RecordSourceRef & { name: string }, info: SourceInfo, opts: { lang: 'fr' | 'en'; margins?: PageSetup['margins'] }): DesignDoc {
+export function instantReport(source: RecordSourceRef & { name: string }, info: SourceInfo, opts: { lang: 'fr' | 'en'; margins?: PageSetup['margins']; title?: string; orientation?: PageSetup['orientation'] }): DesignDoc {
   const names: string[] = [];
   const ctl = (kind: ControlDef['kind'], base: string, left: number, top: number, width: number, height: number, props: Record<string, unknown>): ControlDef => {
     const name = uniqueReportName(names, base);
@@ -34,9 +34,9 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
 
   let widths = info.fields.map(widthOf);
   const gaps = GAP * Math.max(0, widths.length - 1), sum = () => widths.reduce((a, b) => a + b, 0) + gaps;
-  const base: PageSetup = opts.margins ? { orientation: 'portrait', margins: opts.margins } : DEFAULT_PAGE_SETUP;   // O3 R9: the options' margins
-  let pageSetup: PageSetup = base;
-  if (sum() > pageGeometry(pageSetup).printableWidth) pageSetup = { ...base, orientation: 'landscape' };
+  const base: PageSetup = opts.margins ? { orientation: 'portrait', paper: 'a4', margins: opts.margins } : DEFAULT_PAGE_SETUP;   // O3 R9: the options' margins
+  let pageSetup: PageSetup = opts.orientation ? { ...base, orientation: opts.orientation } : base;   // the Report Wizard asks for one
+  if (!opts.orientation && sum() > pageGeometry(pageSetup).printableWidth) pageSetup = { ...base, orientation: 'landscape' };
   const printable = pageGeometry(pageSetup).printableWidth;
   if (sum() > printable) {   // same ratio for every column, never below 1 cm: what still overflows is clipped (widthExceedsPage)
     const ratio = (printable - gaps) / (sum() - gaps);
@@ -45,7 +45,7 @@ export function instantReport(source: RecordSourceRef & { name: string }, info: 
   const lefts = widths.map((_, i) => widths.slice(0, i).reduce((a, w) => a + w + GAP, 0));
   const width = Math.max(sum(), MIN_TOTAL);
 
-  const title = ctl('label', 'Titre', 0, 283, width - STAMP - GAP, 567, { Caption: source.name, FontSize: 18, FontWeight: 'bold' });
+  const title = ctl('label', 'Titre', 0, 283, width - STAMP - GAP, 567, { Caption: opts.title ?? source.name, FontSize: 18, FontWeight: 'bold' });
   const date = ctl('textBox', 'Auto_Date', width - STAMP, 57, STAMP, 340, { ControlSource: '=Date()', Format: 'longDate', TextAlign: 'right' });
   const time = ctl('textBox', 'Auto_Heure', width - STAMP, 454, STAMP, 340, { ControlSource: '=Time()', Format: 'longTime', TextAlign: 'right' });
   const labels = info.fields.map((f, i) => ctl('label', `Étiquette_${f.name}`, lefts[i]!, 57, widths[i]!, 340, { Caption: f.props.caption || f.name, FontWeight: 'bold', ...(RIGHT.includes(f.type) ? { TextAlign: 'right' } : {}) }));

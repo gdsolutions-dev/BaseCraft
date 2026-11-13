@@ -1,15 +1,18 @@
 // Pagination d'un état (pur, déterministe, sans DOM) : tri et regroupement des lignes, suite des bandes, placement sur les
 // pages (Garder ensemble, Répéter la section, Saut de page, coupe d'une bande plus haute que la place), en-tête et pied de
 // page formatés à la fermeture de la page, deux passes quand un contrôle lit [Pages].
+import type { SqlValue } from '../coerce';
 import { ExprRuntimeError, type Value } from '../expr/ast';
 import { compare, evaluate } from '../expr/evaluate';
 import { infoOf } from '../expr/library';
+import { sameName } from '../field-types';
 import type { LocaleInfo } from '../locale-format';
 import { formatBand, type FormattedBand } from './band';
-import { pageGeometry, type ReportIssue, type ReportSpec, type SectionSpec } from './model';
+import { columnWidth, pageGeometry, type ControlSpec, type ReportIssue, type ReportSpec, type SectionSpec } from './model';
 import { lineHeight } from './text';
 import { rowField } from './totals';
-import { ReportLoadError, type LaidOutBand, type LaidOutItem, type LaidOutPage, type LaidOutReport, type LayoutEnv, type LayoutOpts, type ReportData } from './types';
+import { ReportLoadError, type LaidOutBand, type LaidOutItem, type LaidOutPage, type LaidOutReport, type LayoutEnv, type LayoutOpts, type ReportData,
+  type SubLayout, type SubreportSource } from './types';
 
 /** Past this many pages the layout stops (tooManyPages): a definition gone wrong never fills the renderer's memory. */
 export const MAX_PAGES = 10000;
@@ -19,7 +22,8 @@ interface Job { s: SectionSpec; row: number | null; scope: number[]; starts?: Sp
 /** A group of one level: its bands are jobs[first..last]; `scope` is the one array every band of the group passes to formatBand. */
 interface Span { level: number; first: number; last: number; firstDetail: number; scope: number[]; header?: Job }
 interface Page { number: number; bands: LaidOutBand[]; y: number; phTop: number | null /* null: not yet reserved (page 1) */; body: boolean;
-  first: number | null; last: number | null /* rows of its first and last Detail */ }
+  first: number | null; last: number | null /* rows of its first and last Detail */;
+  col: number /* the column of the body block in use */; base: number /* the block's top (under the Page Header) */; bottom: number /* the lowest bottom of the block so far */ }
 
 /** Awaits `env.tick` after 50 ms of work (a timer costs up to 15 ms on Windows: every 200 calls made 200,000 rows wait
  *  minutes); throws an AbortError once `env.signal` is aborted. */
@@ -141,10 +145,74 @@ function lineSafe(items: LaidOutItem[], from: number, cut: number): number {
 
 /** A section whose band has the same height, cut points and page breaks whatever the row: no Can Grow or Can Shrink, and
  *  room for one line of text at most in each text control (two lines would make a cut point between them). */
-const fixedShape = (s: SectionSpec) => !s.canGrow && !s.canShrink && s.controls.every((c) => !c.canGrow && !c.canShrink
+const fixedShape = (s: SectionSpec) => !s.canGrow && !s.canShrink && s.controls.every((c) => !c.canGrow && !c.canShrink && !c.sub?.source
   && (!['label', 'textBox', 'comboBox'].includes(c.kind) || c.height - 2 * (c.border?.width ?? 0) < 2 * lineHeight(c.font)));
 
 const issueKey = (i: ReportIssue) => JSON.stringify([i.code, i.control, i.detail]);
+
+/** Nested reports at most (the report itself counted), as Access's subforms. */
+export const MAX_SUBREPORT_DEPTH = 7;
+/** Link values as one key: text compares without case (Access); null when one is Null (a Null link shows no record). */
+const linkKey = (vs: SqlValue[]): string | null =>
+  vs.some((v) => v === null) ? null : vs.map((v) => (typeof v === 'string' ? `s${v.toLowerCase()}` : `n${v}`)).join('\u0000');
+
+/**
+ * `ctx.sub` of formatBand: the subreport of control `c` for one row of `data`. Its Source Object is read once (env.subreport),
+ * its rows indexed by their Link Child Fields; each master row lays out its own rows in one flow, without Page Header or
+ * Footer (Access prints neither in a subreport), without events. A layout is kept per control and link value: a band
+ * formatted again (two passes, Keep Together) costs nothing. A subreport that cannot be shown is an issue and an empty frame.
+ * ponytail: [Page] and [Pages] read 1 inside a subreport, and its source's parameters are not asked (subreportMissing).
+ */
+function subreports(data: ReportData, env: LayoutEnv): (c: ControlSpec, row: number | null) => Promise<SubLayout | null> {
+  type Ready = { src: SubreportSource; masters: number[]; index: Map<string, number[]> | null };
+  const ready = new Map<ControlSpec, Promise<Ready | ReportIssue['code']>>(), laid = new Map<ControlSpec, Map<string | null, Promise<SubLayout>>>();
+  const path = env.subPath ?? [];
+  const { hooks: _hooks, onPage: _onPage, ...rest } = env;
+  const prepare = async (sub: NonNullable<ControlSpec['sub']>): Promise<Ready | ReportIssue['code']> => {
+    if (path.length >= MAX_SUBREPORT_DEPTH || path.some((n) => sameName(n, sub.source))) return 'subreportRecursive';
+    const src = await env.subreport!(sub.source, env.signal);
+    if (!src) return 'subreportMissing';
+    const col = (fields: ReportData['fields'], n: string) => fields.findIndex((f) => sameName(f.name, n));
+    const masters = sub.master.map((n) => col(data.fields, n)), children = sub.child.map((n) => col(src.data.fields, n));
+    if (masters.length !== children.length || masters.includes(-1) || children.includes(-1)) return 'subreportBadLink';
+    if (!masters.length) return { src, masters, index: null };
+    const index = new Map<string, number[]>();
+    for (const [i, r] of src.data.rows.entries()) {
+      const k = linkKey(children.map((x) => r[x] ?? null));
+      if (k !== null) { const list = index.get(k); if (list) list.push(i); else index.set(k, [i]); }
+    }
+    return { src, masters, index };
+  };
+  const layout = async (c: ControlSpec, r: Ready, key: string | null): Promise<SubLayout> => {
+    const { spec, data: all } = r.src;
+    const rows = r.index ? (key === null ? [] : (r.index.get(key) ?? []).map((i) => all.rows[i]!)) : all.rows;
+    const { pageHeader: _ph, pageFooter: _pf, ...body } = spec;
+    const report = await layoutReport(body, { fields: all.fields, rows }, { ...rest, subPath: [...path, c.sub!.source] }, { flow: true });
+    const g = pageGeometry(spec.page), items: LaidOutItem[] = [];
+    let height = 0;
+    for (const b of report.pages[0]?.bands ?? []) {
+      const dx = b.left - g.bodyLeft, dy = b.top - g.bodyTop;
+      height = Math.max(height, dy + b.height);
+      // nameless: Layout view picks the subreport's control (its frame), never something inside it
+      if (b.back && b.height > 0) items.push({ kind: 'rect', name: '', left: dx, top: dy, width: Math.min(b.width, Math.max(0, c.width - 2 * (c.border?.width ?? 0) - dx)), height: b.height, border: null, back: b.back });
+      for (const i of b.items) items.push(i.kind === 'line' ? { ...i, name: '', x1: i.x1 + dx, x2: i.x2 + dx, y1: i.y1 + dy, y2: i.y2 + dy } : { ...i, name: '', left: i.left + dx, top: i.top + dy });
+    }
+    return { height, items, issues: report.issues.filter((i) => i.code !== 'widthExceedsPage') };
+  };
+  return async (c, row) => {
+    if (!c.sub?.source || !env.subreport) return null;
+    let p = ready.get(c);
+    if (!p) ready.set(c, p = prepare(c.sub));
+    const r = await p;
+    if (typeof r === 'string') return { height: 0, items: [], issues: [{ code: r, control: c.name, detail: c.sub.source }] };
+    const key = r.index ? (row === null ? null : linkKey(r.masters.map((x) => data.rows[row]![x] ?? null))) : '';
+    let byKey = laid.get(c);
+    if (!byKey) laid.set(c, byKey = new Map());
+    let l = byKey.get(key);
+    if (!l) byKey.set(key, l = layout(c, r, key));
+    return l;
+  };
+}
 const uses = (s: SectionSpec | undefined, k: 'usesPage' | 'usesPages') => !!s?.controls.some((c) => c.source.kind === 'expr' && c.source[k]);
 
 /**
@@ -156,6 +224,8 @@ const uses = (s: SectionSpec | undefined, k: 'usesPage' | 'usesPages') => !!s?.c
  */
 export async function layoutReport(spec: ReportSpec, data: ReportData, env: LayoutEnv, opts?: LayoutOpts): Promise<LaidOutReport> {
   const flow = !!opts?.flow;
+  // Column Size > Height: each Detail cell of a multi-column layout is that tall (it neither grows nor shrinks)
+  if (!flow && spec.columns.count > 1 && spec.columns.height && spec.detail) spec = { ...spec, detail: { ...spec.detail, height: spec.columns.height, canGrow: false, canShrink: false } };
   const { order, keys } = await sortAndGroup(spec, data, env);
   const jobs = bandSequence(spec, order, keys, infoOf(env.locale));
   const g = pageGeometry(spec.page), width = Math.min(spec.width, g.printableWidth);
@@ -163,14 +233,22 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
   const reserved = (s?: SectionSpec) => (s?.visible ? s.height : 0);
   const phH = reserved(spec.pageHeader), pfH = reserved(spec.pageFooter);
   const usable = g.printableHeight - phH - pfH, limit = flow ? Infinity : g.bodyTop + g.printableHeight - pfH;   // flow: nothing ever moves to a next page
+  // columns (Page Setup > Columns): flow is one page, one column; a column band is `colW` wide, `colX(c)` from the left
+  const cols = flow ? 1 : spec.columns.count, across = cols > 1 && spec.columns.across, gap = spec.columns.spacing;
+  const rowGap = cols > 1 ? spec.columns.rowSpacing ?? 0 : 0;   // Row Spacing: under each Detail (Down) or each row (Across)
+  const colW = cols > 1 && spec.columns.width ? Math.min(spec.columns.width, width) : columnWidth(width, cols, gap), colX = (c: number) => g.bodyLeft + c * (colW + gap);
+  /** The bands across the whole width: the report's and the page's header and footer, and the groups in Across, then Down. */
+  const fullWidth = (s: SectionSpec) => s.kind === 'reportHeader' || s.kind === 'reportFooter' || s.kind === 'pageHeader' || s.kind === 'pageFooter'
+    || (across && (s.kind === 'groupHeader' || s.kind === 'groupFooter'));
 
   const all = [spec.reportHeader, spec.pageHeader, ...spec.groupHeaders, spec.detail, ...spec.groupFooters, spec.pageFooter, spec.reportFooter];
   const readsPages = all.some((s) => uses(s, 'usesPages'));
+  const sub = subreports(data, env);
   /** `shown`: a pass whose page count is known (the only one, or one after the count): its pages go to `env.onPage`. */
   const pass = async (total: number | null, shown: boolean): Promise<{ pages: LaidOutPage[]; issues: Map<string, ReportIssue>; end: number /* the y under the last band */ }> => {
     const beat = heartbeat(env), issues = new Map<string, ReportIssue>(), times = new Map<Job, number>();
     const pages: LaidOutPage[] = [], active: (Span | undefined)[] = [];   // per level: the group whose header is placed and footer not yet
-    const fresh = (number: number): Page => ({ number, bands: [], y: g.bodyTop, phTop: null, body: false, first: null, last: null });
+    const fresh = (number: number): Page => ({ number, bands: [], y: g.bodyTop, phTop: null, body: false, first: null, last: null, col: 0, base: g.bodyTop, bottom: g.bodyTop });
     let pg = fresh(1), after = false;
     // the pass that only counts the pages (its pages are never shown): a band of a fixed shape is formatted once per section
     // (pass 2 lays out again if the count were wrong); never with event hooks, which may change anything
@@ -179,20 +257,30 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
     const format = async (job: Job): Promise<FormattedBand | null> => {
       await beat();
       if (counting && fixedShape(job.s)) {
-        if (!once.has(job.s)) once.set(job.s, await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: null, formatCount: 1 }, env));
+        if (!once.has(job.s)) once.set(job.s, await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: null, formatCount: 1, sub }, env));
         return once.get(job.s)!;
       }
       const formatCount = (times.get(job) ?? 0) + 1;
       times.set(job, formatCount);
-      const f = await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: total, formatCount }, env);
+      const f = await formatBand(job.s, data, { row: job.row, scope: job.scope, page: pg.number, pages: total, formatCount, sub }, env);
       for (const i of f?.issues ?? []) issues.set(issueKey(i), i);
       return f;
     };
     const remaining = () => limit - pg.y - (pg.phTop === null ? phH : 0);
-    const reservePH = () => { if (pg.phTop === null) { pg.phTop = pg.y; pg.y += phH; } };
+    const reservePH = () => { if (pg.phTop === null) { pg.phTop = pg.y; pg.y += phH; pg.base = pg.bottom = pg.y; } };
+    /** Columns: a full-width band starts below everything placed so far; the block is one column again. */
+    const syncBlock = () => { pg.base = pg.bottom = pg.y = Math.max(pg.y, pg.bottom); pg.col = 0; };
+    /** Down, then Across: the column is full; the next one starts at the block's top. */
+    const nextColumn = () => { pg.bottom = Math.max(pg.bottom, pg.y); pg.col++; pg.y = pg.base; };
+    /** Across, then Down: a record is placed; the next one goes to the next column, or under the row when the row is full. */
+    const acrossNext = () => {
+      pg.bottom = Math.max(pg.bottom, pg.y);
+      if (pg.col < cols - 1) { pg.col++; pg.y = pg.base; } else { pg.base = pg.y = pg.bottom + rowGap; pg.col = 0; }
+    };
     /** Part [from, to) of `f` at `top`: `onPrint` sees it on this page, and a cancel leaves its space empty. */
     const band = async (f: FormattedBand, job: Job, top: number, from: number, to: number, flag?: 'repeated' | 'continued'): Promise<LaidOutBand> => {
-      const b: LaidOutBand = { section: job.s.kind, ...(job.s.groupLevel === undefined ? {} : { groupLevel: job.s.groupLevel }), top, left: g.bodyLeft, width,
+      const whole = fullWidth(job.s);
+      const b: LaidOutBand = { section: job.s.kind, ...(job.s.groupLevel === undefined ? {} : { groupLevel: job.s.groupLevel }), top, left: whole ? g.bodyLeft : colX(pg.col), width: whole ? width : colW,
         height: to - from, back: job.s.back, ...(flag === 'repeated' ? { repeated: true as const } : flag === 'continued' ? { continued: true as const } : {}),
         items: from === 0 && to >= f.height ? f.items : slice(f.items, from, to) };
       f.event.page = pg.number; f.event.cancel = false;
@@ -219,20 +307,28 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
       if (shown) env.onPage?.(pages);
     };
     /** Closes the page and opens the next: Page Header, then the open groups' Repeat Section headers, outermost first. */
-    const newPage = async () => {
-      await beat();
-      if (pages.length + 1 >= MAX_PAGES) throw new ReportLoadError('tooManyPages');
-      await close();
-      pg = fresh(pages.length + 1);
-      reservePH();
+    const repeatHeaders = async () => {
       for (const sp of active) {
         if (!sp?.header?.s.repeatSection) continue;
         const f = await format(sp.header);
         if (f && f.height <= remaining()) await put(f, sp.header, 0, f.height, 'repeated');
       }
     };
+    const newPage = async () => {
+      await beat();
+      if (pages.length + 1 >= MAX_PAGES) throw new ReportLoadError('tooManyPages');
+      await close();
+      pg = fresh(pages.length + 1);
+      reservePH();
+      await repeatHeaders();
+    };
+    /** No room for the band at the cursor: the next column of the block (a column band, Down, then Across), else a new page. */
+    const breakFlow = async (whole: boolean) => {
+      if (!whole && !across && pg.col < cols - 1) { nextColumn(); await repeatHeaders(); return; }
+      await newPage();
+    };
     /** Moves a band not yet placed to a new page, formatted again there when it reads [Page] (null: it no longer prints). */
-    const moveOn = async (job: Job, f: FormattedBand) => { await newPage(); return uses(job.s, 'usesPage') ? format(job) : f; };
+    const moveOn = async (job: Job, f: FormattedBand, page: boolean) => { await (page ? newPage() : breakFlow(fullWidth(job.s))); return uses(job.s, 'usesPage') ? format(job) : f; };
     /** Places `f` at the cursor: whole, else on a new page (Keep Together, page break at its top), else cut page after page. */
     const place = async (job: Job, f: FormattedBand) => {
       let from = 0, keep = job.s.keepTogether, top = f.breaks.some((p) => p <= 0), flag: 'continued' | undefined;
@@ -241,8 +337,9 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
         const end = Math.min(f.height, ...f.breaks.filter((p) => p > from)), room = remaining();
         const fits = end - from <= room || end === from;
         if (from === 0 && pg.body && (top || (!fits && keep && end <= usable))) {
+          const byPage = top;
           top = keep = false;
-          const again = await moveOn(job, f);
+          const again = await moveOn(job, f, byPage);
           if (!again) return;
           f = again; continue;
         }
@@ -254,13 +351,13 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
         }
         let cut = f.cuts.filter((c) => c > from && c <= from + room).at(-1);
         if (cut === undefined) {
-          if (pg.body) { const again = await moveOn(job, f); if (!again) return; f = again; continue; }   // from is 0: a cut part opens a page
+          if (pg.body) { const again = await moveOn(job, f, false); if (!again) return; f = again; continue; }   // from is 0: a cut part opens a page
           // an empty page: cut at its bottom, never through a line of text, always at least one twip further
           cut = room > 0 ? lineSafe(f.items, from, from + room) : end;
         }
         await put(f, job, from, cut, flag);
         from = cut; flag = 'continued';
-        await newPage();
+        await breakFlow(fullWidth(job.s));
       }
     };
     /** Group Keep Together, before the group's first band: if the group (or its header and first Detail, when the group is
@@ -276,7 +373,7 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
       };
       let h = mode === 'wholeGroup' ? await height(sp.last) : Infinity;
       if (h > usable) h = await height(sp.firstDetail >= 0 ? sp.firstDetail : sp.last);
-      if (h > room && h <= usable) await newPage();
+      if (h > room && h <= usable) await breakFlow(across);
     };
 
     for (const job of jobs) {
@@ -286,10 +383,15 @@ export async function layoutReport(spec: ReportSpec, data: ReportData, env: Layo
       const force = flow ? undefined : job.s.forceNewPage;
       let f = await format(job);
       if (f && flow) f = { ...f, breaks: [] };   // a page break control breaks nothing
-      if (f && (after || force === 'before' || force === 'beforeAndAfter') && pg.body) f = await moveOn(job, f);
+      if (f && (after || force === 'before' || force === 'beforeAndAfter') && pg.body) f = await moveOn(job, f, true);
       if (f) {
         const { height } = f;
+        const whole = cols > 1 && fullWidth(job.s);
+        if (whole) syncBlock();
         await place(job, f);
+        if (whole) syncBlock();   // the block starts under the band just placed
+        if (across && job.s.kind === 'detail') acrossNext();
+        else if (job.s.kind === 'detail') pg.y += rowGap;
         after = force === 'after' || force === 'beforeAndAfter' || f.breaks.some((p) => p >= height);
       }
       for (const sp of job.starts ?? []) if (sp.header === job) active[sp.level] = sp;

@@ -25,6 +25,7 @@ const menuLayout = (page: Page) => page.getByTestId('nav-menu').evaluate((m) =>
 /** Mise en page… shows `orientation` checked, then is cancelled. */
 async function expectOrientation(page: Page, orientation: 'portrait' | 'landscape') {
   await page.getByTestId('cmd-pageSetupDialog').click();
+  await page.getByTestId('page-setup-tab-page').click();   // orientation sits on the Page tab
   await expect(page.getByTestId(`page-setup-${orientation}`)).toBeChecked();
   await page.getByTestId('modal-btn-cancel').click();
   await expect(page.getByTestId('modal')).toHaveCount(0);
@@ -79,7 +80,7 @@ test('Report Design view: create, Field List, section pairs, page setup, save, P
 
     // Page Setup tab: Landscape is an undoable edit of the design
     await page.getByTestId('ribbon-tab-pageSetup').click();
-    await expect(page.getByTestId('cmd-showMargins')).toBeDisabled(); // later
+    await expect(page.getByTestId('cmd-showMargins')).toBeEnabled(); // delivered (fe5d1f2d)
     await page.getByTestId('cmd-landscape').click();
     await expectOrientation(page, 'landscape');
     await page.getByTestId('section-detail').click();

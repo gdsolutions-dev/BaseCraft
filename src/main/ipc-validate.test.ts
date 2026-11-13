@@ -4,7 +4,7 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, nameChanges, propertyTargetsArg, chartDataRequest,
+  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
@@ -30,8 +30,12 @@ describe('ipc argument checks', () => {
     for (const v of ['table', 'Form', '', null, undefined]) expect(() => objectKind(v)).toThrow(INVALID);
     expect(objectKindOrAll(undefined)).toBeUndefined();
     expect(objectKindOrAll('report')).toBe('report');
-    expect(columnWidths({ A: 1, B: 31680 })).toEqual({ A: 1, B: 31680 });
-    for (const bad of [null, [], { A: 0 }, { A: 31681 }, { A: 1.5 }, { A: '5' }, { A: NaN }, { ['x'.repeat(1025)]: 5 }]) expect(() => columnWidths(bad)).toThrow(INVALID);
+    expect(columnWidths({ A: 1, B: 31680, C: 0 })).toEqual({ A: 1, B: 31680, C: 0 });   // 0: a hidden column
+    for (const bad of [null, [], { A: -1 }, { A: 31681 }, { A: 1.5 }, { A: '5' }, { A: NaN }, { ['x'.repeat(1025)]: 5 }]) expect(() => columnWidths(bad)).toThrow(INVALID);
+    expect(sheetLayoutArg({ rowHeight: 40, bold: 'x', frozen: ['A'] })).toEqual({ rowHeight: 40, frozen: ['A'] });   // what is invalid is left out
+    for (const bad of [null, [], 'x', 3]) expect(() => sheetLayoutArg(bad)).toThrow(INVALID);
+    expect(sourcePageRequest({ offset: 0, limit: 0, aggregates: [{ field: 'A', fn: 'stdev' }] }).aggregates).toEqual([{ field: 'A', fn: 'stdev' }]);
+    for (const bad of [{}, [{ field: 'A', fn: 'median' }], [{ field: 5, fn: 'sum' }], ['sum']]) expect(() => sourcePageRequest({ offset: 0, limit: 0, aggregates: bad })).toThrow(INVALID);
     expect(strOrNull(null)).toBeNull();
     expect(() => strOrNull(undefined)).toThrow(INVALID);
     const d = { formatVersion: '1.0', a: [1, { b: null }] };
@@ -486,6 +490,13 @@ describe('record sources through a join (B4)', () => {
     expect(MAX_EXPECTED_BYTES).toBe(10 * 1024 * 1024);
     expect(expectedValues({ a: new Uint8Array(MAX_EXPECTED_BYTES / 2), b: new Uint8Array(MAX_EXPECTED_BYTES / 2) })).toHaveProperty('b');
   });
+  it('hyperlinkUrl (D3): http, https and mailto only', () => {
+    expect(hyperlinkUrl('https://example.com/a')).toBe('https://example.com/a');
+    expect(hyperlinkUrl('mailto:ana@example.com')).toBe('mailto:ana@example.com');
+    for (const v of ['file:///C:/Windows/notepad.exe', 'javascript:alert(1)', 'ms-msdt:/id x', 'smb://host/share', 'C:\\Windows\\notepad.exe', 'example.com', '', null, undefined, 3, ['https://a.com']]) {
+      expect(() => hyperlinkUrl(v), String(v)).toThrow(INVALID);
+    }
+  });
   it('clipboardText (C3 R9): a string of at most 10 MB', () => {
     expect(clipboardText('Ville\r\nLille')).toBe('Ville\r\nLille');
     expect(clipboardText('x'.repeat(10 * 1024 * 1024))).toHaveLength(10 * 1024 * 1024);
@@ -616,5 +627,17 @@ describe('chartDataRequest', () => {
     let out: ChartDataRequest | null = null;
     try { out = chartDataRequest(r); } catch (e) { expect(String(e)).toContain('bc:invalidArgument'); }
     if (out) expect(({} as Record<string, unknown>).a).toBeUndefined();
+  });
+});
+
+describe('Access import report (E1)', () => {
+  it('reportBody: a string of at most 5,000,000 characters', () => {
+    expect(reportBody('x'.repeat(5_000_000))).toHaveLength(5_000_000);
+    expect(() => reportBody('x'.repeat(5_000_001))).toThrow('bc:invalidArgument');
+    expect(() => reportBody(1)).toThrow('bc:invalidArgument');
+  });
+  it('bareFileName: no folder', () => {
+    expect(bareFileName('Ventes - rapport.txt')).toBe('Ventes - rapport.txt');
+    for (const v of ['a/b.txt', 'a\\b.txt', '', 3]) expect(() => bareFileName(v)).toThrow('bc:invalidArgument');
   });
 });

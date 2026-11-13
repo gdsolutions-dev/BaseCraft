@@ -8,6 +8,7 @@ import type { Value } from '../../shared/expr/ast';
 import { formatValue } from '../../shared/expr/format';
 import { checkMasked, parseMask } from '../../shared/expr/input-mask';
 import { date, num, str, toSerial } from '../../shared/expr/library';
+import { richToPlain } from '../../shared/rich-text';
 import { formatCurrency, formatDateTime, formatNumber, localeInfo, type LocaleInfo } from '../../shared/locale-format';
 
 const infos = new Map<string, LocaleInfo>();
@@ -72,6 +73,8 @@ function plainTexts(field: FieldDef, v: SqlValue, locale: string): [string, stri
       const date = formatDateTime(`${m[1]} 00:00:00`, locale);
       return [formatDateTime(v as string, locale), m[2] === '00:00:00' ? date : `${date} ${m[2]}`];
     }
+    case 'longText': // Rich Text: the text of the HTML is shown, the HTML is what is edited (and sanitized when written, coerce)
+      return p.textFormat === 'rich' ? [richToPlain(String(v)).replace(/\n+/g, ' '), String(v)] : [String(v), String(v)];
     default:
       return [String(v), String(v)];
   }

@@ -9,6 +9,7 @@ import type { LocaleInfo } from '../../shared/locale-format';
 import { detectHeader, inferFields, SAMPLE } from '../import/infer';
 import type { ImportSource } from '../import/text-import';
 import { tag, type Rec } from '../import/text-parse';
+import { readFlatXml } from './xml-read';
 
 const PREVIEW_ROWS = 50;
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -44,7 +45,11 @@ async function load(path: string): Promise<ExcelJS.Workbook> {
 }
 
 /** Enregistrements d'une feuille (la première si `sheet` est null), de la colonne 1 à la dernière utilisée ; `line` = numéro de ligne Excel. */
-export async function readSheet(path: string, sheet: string | null): Promise<{ sheets: string[]; sheet: string; records: Rec[] }> {
+export async function readSheet(path: string, sheet: string | null): Promise<{ sheets: string[]; sheet: string; records: Rec[]; header?: true }> {
+  if (extname(path).toLowerCase() === '.xml') { // F1: a flat XML file is one « sheet » named after its record element, its first record the element names
+    const x = readFlatXml(path);
+    return { sheets: [x.row], sheet: x.row, records: [tag(x.columns, 1), ...x.rows.map((r, i) => tag(r, i + 2))], header: true };
+  }
   const wb = await load(path);
   const sheets = wb.worksheets.map((w) => w.name);
   const ws = sheet === null ? wb.worksheets[0] : wb.worksheets.find((w) => w.name === sheet);
@@ -76,11 +81,11 @@ const ERROR_CELL = /^#(DIV\/0!|N\/A|VALUE!|REF!|NAME\?|NUM!|NULL!|GETTING_DATA)$
 const blankErrors = (r: string[]) => r.map((x) => (ERROR_CELL.test(x) ? '' : x));
 
 export async function previewExcel(path: string, sheet: string | null, hasHeader: boolean | null, region: LocaleInfo, prefix: string): Promise<ExcelPreview> {
-  const { sheets, sheet: name, records } = await readSheet(path, sheet);
+  const { sheets, sheet: name, records, header: named } = await readSheet(path, sheet);
   const info = specLocale(EXCEL_SPEC, region);
   const sample = records.slice(0, SAMPLE + 1).map(blankErrors);
   // a header-only sheet is a header: detectHeader wants a row below it
-  const header = hasHeader ?? detectHeader(sample.length === 1 ? [...sample, []] : sample, EXCEL_SPEC, info);
+  const header = hasHeader ?? named ?? detectHeader(sample.length === 1 ? [...sample, []] : sample, EXCEL_SPEC, info);
   const rows = header ? sample.slice(1) : sample;
   const columns = Math.max(1, records[0]?.length ?? 0);
   const fields = inferFields(header ? sample[0] ?? [] : null, rows, columns, EXCEL_SPEC, info, prefix);

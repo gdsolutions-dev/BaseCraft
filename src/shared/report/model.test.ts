@@ -6,7 +6,7 @@ import { setUserFunctions } from '../expr/user-functions';
 import { BUILTIN_THEMES, DEFAULT_THEME, shade } from '../design/theme';
 import { FACTURES_REPORT } from './fixtures/factures';
 import { LIGHT_THEME_HEX, resolveColor, type ColorValue } from '../design/colors';
-import type { ControlDef, DesignDoc, SectionDef, SectionKind } from '../design/model';
+import { validateDesignDoc, type ControlDef, type DesignDoc, type SectionDef, type SectionKind } from '../design/model';
 import { cellItemName } from '../design/layout';
 import { defaultFor, PROPERTY_CATALOG, type PropertyTarget } from '../design/properties';
 import { defaultProps, MAX_TWIPS, type FieldType } from '../field-types';
@@ -46,7 +46,7 @@ describe('readReport (brief)', () => {
   it('issues, never throws', () => {
     const s = readReport(doc({ sections: [sec('detail', undefined, [tb('A', '[Inconnu]'), tb('B', '=1 +'), { ...tb('C', '[Client]'), kind: 'subform' }, tb('D', '[Client]', { FontName: 'Comic Sans MS' }), tb('E', '[Client]', { FontName: 'Arial' })]),
       sec('pageHeader', undefined, [tb('F', '=Sum([Montant])')]), sec('reportFooter', undefined, [tb('G', '[Client]', { FontName: 'Comic Sans MS' })])], grouping: [g('=Left(')] }), fields);
-    expect(s.issues.map((i) => i.code).sort()).toEqual(['aggregateNotAllowed', 'fontNotPortable', 'groupingInvalid', 'invalidExpression', 'unknownField', 'unsupportedControl']);   // Arial : alias, portable ; Comic Sans MS (D, G) : une seule fois
+    expect(s.issues.map((i) => i.code).sort()).toEqual(['aggregateNotAllowed', 'fontNotPortable', 'groupingInvalid', 'invalidExpression', 'unknownField']);   // Arial : alias, portable ; Comic Sans MS (D, G) : une seule fois
     expect(() => readReport({ formatVersion: '1.0', recordSource: null, props: { grouping: 'x', pageSetup: 3 }, sections: [{ kind: 'detail' } as never] }, fields)).not.toThrow();
   });
   it('page geometry', () => {
@@ -140,19 +140,34 @@ describe('readReport', () => {
     const s = readReport(doc({ sections: [sec('detail', undefined, [tb('P', '=[page] & [Pages]')])] }), [...fields, sf('Page', 'shortText')]);
     expect(s.detail!.controls[0]!.source).toMatchObject({ usesPage: false, usesPages: true }); expect(s.issues).toEqual([]);
   });
-  it('flattens children after their parent; controls that are not drawn are dropped with their children', () => {
+  it('flattens children after their parent; an unknown kind is dropped with its children; a tab control keeps its first page', () => {
     const withLabel = { ...tb('A', '[Client]'), children: [{ ...ctl('label', 'A_Label', { left: 50 }), children: [ctl('label', 'Deep')] }] };
     const group = { ...ctl('optionGroup', 'G'), children: [ctl('optionButton', 'O')] };
-    const tabs = { ...ctl('tabControl', 'T'), children: [ctl('textBox', 'T_Box')] };
-    const s = readReport(doc({ sections: [sec('detail', undefined, [withLabel, group, ctl('commandButton', 'B'), ctl('listBox', 'LB'), tabs, ctl('comboBox', 'K'), ctl('subform', 'S'), tb('Z', '[Client]')])] }), fields);
-    expect(s.detail!.controls.map((c) => c.name)).toEqual(['A', 'A_Label', 'Deep', 'K', 'S', 'Z']);
+    const tabs = { ...ctl('tabControl', 'T', { Pages: ['One', 'Two'] }), children: [ctl('textBox', 'T_Box'), { ...ctl('textBox', 'T_Two'), props: { PageIndex: 1 } }] };
+    const odd = { ...ctl('textBox', 'Odd'), kind: 'gizmo' as never, children: [ctl('textBox', 'Lost')] };
+    const s = readReport(doc({ sections: [sec('detail', undefined, [withLabel, group, ctl('commandButton', 'B'), ctl('listBox', 'LB'), tabs, odd, ctl('comboBox', 'K'), ctl('subform', 'S'), tb('Z', '[Client]')])] }), fields);
+    expect(s.detail!.controls.map((c) => c.name)).toEqual(['A', 'A_Label', 'Deep', 'G', 'O', 'B', 'LB', 'T', 'T_Box', 'K', 'S', 'Z']);
     expect(s.detail!.controls[1]!.left).toBe(50);
-    expect(s.issues).toEqual([['G', 'optionGroup'], ['B', 'commandButton'], ['LB', 'listBox'], ['T', 'tabControl'], ['S', 'subform']]
-      .map(([control, detail]) => ({ code: 'unsupportedControl', control, detail })));
+    expect(s.detail!.controls.find((c) => c.name === 'T')!.pages).toEqual(['One', 'Two']);
+    expect(s.issues).toEqual([{ code: 'unsupportedControl', control: 'Odd', detail: 'gizmo' }]);
+  });
+  it('a design with a button, a toggle button, an option group, a list box and a tab control is valid in a report', () => {
+    const kinds = ['commandButton', 'toggleButton', 'optionGroup', 'listBox', 'tabControl'] as const;
+    const d = doc({ sections: [sec('detail', undefined, kinds.map((k) => ctl(k, `C_${k}`)))] });
+    expect(validateDesignDoc(d)).toEqual([]);
+    expect(readReport(d, fields).detail!.controls.map((c) => c.kind)).toEqual([...kinds]);
+  });
+  it('a label with a HyperlinkAddress is read as a link (underlined, blue); another label is not (D3)', () => {
+    const d = doc({ sections: [sec('detail', undefined, [ctl('label', 'Lien', { Caption: 'Site', HyperlinkAddress: 'https://example.com/' }), ctl('label', 'Plain', { Caption: 'x' })])] });
+    const [link, plain] = readReport(d, fields).detail!.controls;
+    expect(link).toMatchObject({ color: '#0563c1', font: { underline: true } });
+    expect(plain!.font.underline).toBe(false); expect(plain!.color).not.toBe('#0563c1');
   });
   it('page setup is read, or the default when invalid', () => {
     const page = { orientation: 'landscape', margins: { top: 0, right: 1134, bottom: 5670, left: 284 } };
-    expect(readReport(doc({ props: { pageSetup: page } }), fields).page).toEqual(page);
+    expect(readReport(doc({ props: { pageSetup: page } }), fields).page).toEqual({ ...page, paper: 'a4' });
+    expect(readReport(doc({ props: { pageSetup: { ...page, paper: 'letter' } } }), fields).page.paper).toBe('letter');
+    expect(readReport(doc({ props: { pageSetup: { ...page, paper: 'nope' } } }), fields).page.paper).toBe('a4');
     for (const bad of [{ ...page, orientation: 'tall' }, { ...page, margins: { ...page.margins, left: 5671 } }, { ...page, margins: { ...page.margins, top: 1.5 } }, { orientation: 'portrait' }])
       expect(readReport(doc({ props: { pageSetup: bad } }), fields).page).toEqual(DEFAULT_PAGE_SETUP);
   });

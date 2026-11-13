@@ -4,7 +4,7 @@ import type { SqlValue } from '../coerce';
 import type { SectionKind } from '../design/model';
 import type { Value } from '../expr/ast';
 import type { SourceField } from '../record-source';
-import type { ReportIssue } from './model';
+import type { ReportIssue, ReportSpec } from './model';
 import type { PictureAlignment, PictureSpec } from '../design/picture-css';
 import type { ChartFormat } from '../chart/option';
 import type { ChartPalette } from '../chart/palette';
@@ -23,7 +23,9 @@ export interface Gridlines { top: Border | null; right: Border | null; bottom: B
 /** A drawn control, in twips relative to its band. A text line's `x`/`y` are relative to the box inside the border. */
 export type LaidOutItem =
   | { kind: 'text'; name: string; left: number; top: number; width: number; height: number; font: FontSpec; color: string; back: string | null;
-      border: Border | null; align: 'left' | 'center' | 'right'; lines: { text: string; x: number; y: number; width: number }[]; grid?: Gridlines }
+      border: Border | null; align: 'left' | 'center' | 'right'; lines: { text: string; x: number; y: number; width: number }[]; grid?: Gridlines;
+      /** A Rich Text value: its HTML (sanitized when drawn), drawn instead of `lines`, which only measured it; inset = the control margins [top, right, bottom, left] */
+      rich?: { html: string; inset: [number, number, number, number] } }
   | { kind: 'check'; name: string; left: number; top: number; width: number; height: number; checked: boolean | null; color: string; grid?: Gridlines }
   | { kind: 'line'; name: string; x1: number; y1: number; x2: number; y2: number; border: Border }
   | { kind: 'rect'; name: string; left: number; top: number; width: number; height: number; border: Border | null; back: string | null; grid?: Gridlines }
@@ -48,7 +50,15 @@ export interface LayoutEnv { locale: string; lang: 'fr' | 'en'; fourDigitYear?: 
   /** D3: Python functions in the report's expressions (absent: badArgument, #Erreur). */
   callUser?(name: string, args: Value[]): Promise<Value>;
   /** The pages laid out so far (one array, growing), after each page of a pass whose count is known; a third pass starts a new array. */
-  onPage?(pages: LaidOutPage[]): void }
+  onPage?(pages: LaidOutPage[]): void;
+  /** A subreport's Source Object: its definition and every row of its source; null when it cannot be read (absent: a
+   *  subreport is an empty frame). */
+  subreport?(name: string, signal?: AbortSignal): Promise<SubreportSource | null>;
+  /** The reports being laid out, outermost first: a subreport never holds one of them. */
+  subPath?: string[] }
+export interface SubreportSource { spec: ReportSpec; data: ReportData }
+/** A subreport laid out for one row of its master: items relative to the inside of its control, and the content's height. */
+export interface SubLayout { height: number; items: LaidOutItem[]; issues: ReportIssue[] }
 export interface SectionEvent { section: SectionKind; groupLevel?: number; formatCount: number; page: number;
   values: Record<string, Value>;          // valeur de chaque contrôle lié, modifiable
   visible: Record<string, boolean>;       // modifiable

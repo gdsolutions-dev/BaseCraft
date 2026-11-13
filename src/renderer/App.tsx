@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import type { ObjectSummary, SessionState, TableSummary } from '../shared/api';
+import type { AppInfo, ObjectSummary, SessionState, TableSummary } from '../shared/api';
 import { sameName } from '../shared/field-types';
 import { formulaLang } from '../shared/i18n';
 import { DEFAULT_STARTUP, hasStartup, type StartupOptions } from '../shared/startup';
@@ -46,7 +46,8 @@ import { PRODUCT_TITLE_KEY, RUNTIME } from '../shared/product';
 import './report/report-menu'; // A5's Navigation Pane items for reports (C6)
 import './macro/macro-menu'; // B1's Navigation Pane items for macros (C6)
 import './exchange/exchange-menu'; // A6's Navigation Pane items: Export (C6)
-import { exportNamed } from './exchange/export';
+import { chooseMoreExport, exportNamed, exportTitleKey, runSavedExport } from './exchange/export';
+import type { ExportFormat } from '../shared/exchange';
 import { setClip } from './exchange/object-clipboard';
 import { runNavClipboard } from './shell/nav-menu';
 import { showObjectProperties } from './shell/ObjectProperties';
@@ -89,7 +90,7 @@ function Shell() {
   const [objects, setObjects] = useState<ObjectSummary[]>([]);
   const [backstage, setBackstage] = useState<BackstageView | null>(null);
   const modalTab = useModalTab();
-  const [importing, setImporting] = useState<false | { appendTo?: string; source?: 'text' | 'excel' }>(false);
+  const [importing, setImporting] = useState<false | { appendTo?: string; source?: 'text' | 'excel' | 'xml' }>(false);
   const [navSelection, setNavSelection] = useState<{ kind: string; name: string } | null>(null);
   const [state, rawDispatch] = useReducer(appReducer, initialAppState);
   // The UI the base's startup options ask for (B3 R10), set by the startup sequence; the full UI otherwise (BaseCraft Runtime: always run mode).
@@ -360,12 +361,13 @@ function Shell() {
   };
 
   // External Data › Export without a datasheet to export: the Navigation Pane's table or query
-  const exportSelected = async (format: 'text' | 'excel') => {
+  const exportSelected = async (format: ExportFormat) => {
     const sel = live.current.navSelection;
     if (sel?.kind === 'table' || sel?.kind === 'query') return exportNamed(modal, sel.kind, sel.name, format);
-    await modal.confirm({ titleKey: format === 'excel' ? 'ribbon.cmd.exportExcel' : 'ribbon.cmd.exportText', messageKey: 'exchange.selectObject', buttons: ['ok'] });
+    await modal.confirm({ titleKey: exportTitleKey(format), messageKey: 'exchange.selectObject', buttons: ['ok'] });
   };
 
+  const openLink = async (k: keyof AppInfo['links']) => api.app.openExternal((await api.app.info()).links[k]);
   const clipboardCommand = (cmd: 'cut' | 'copy' | 'paste') => {
     if (document.activeElement?.closest('.nitem')) runNavClipboard(cmd);
     else return api.app.edit(cmd);
@@ -386,8 +388,19 @@ function Shell() {
     cut: () => clipboardCommand('cut'),
     copy: () => clipboardCommand('copy'),
     paste: () => clipboardCommand('paste'),
+    // Help tab: the main process only opens the links About shows
+    help: () => openLink('site'), showTraining: () => openLink('site'), whatsNew: () => openLink('releases'),
+    contactSupport: () => openLink('issues'), feedback: () => openLink('issues'),
+    // Home › Clipboard launcher: a read-only view of the text on the system clipboard (not Access's Office Clipboard pane)
+    showClipboard: async () => {
+      const text = await api.app.readClipboard();
+      await modal.confirm({ titleKey: 'ribbon.cmd.showClipboard', messageKey: text ? 'clipboard.content' : 'clipboard.empty', params: { text: text.slice(0, 2000) }, buttons: ['ok'] });
+    },
     exportText: () => exportSelected('text'),
     exportExcel: () => exportSelected('excel'),
+    exportXml: () => exportSelected('xml'),
+    exportMore: async () => { const f = await chooseMoreExport(modal); if (f) await exportSelected(f); },
+    savedExports: () => runSavedExport(modal),
     compactRepair: () => compact(),
     saveAs: () => switchBase(api.base.saveAs),
     tableProperties: () => {

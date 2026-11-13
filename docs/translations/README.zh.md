@@ -22,7 +22,7 @@ Windows · macOS · Linux</p>
 
 <p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>网站</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">下载</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">界面原型</a></p>
 
-<img src="../images/screenshot.png" alt="BaseCraft 报表设计视图，含分组与汇总" width="900">
+<img src="../images/screenshot.png" alt="BaseCraft 示例数据库的启动菜单窗体，含按钮和销售图表" width="900">
 
 </div>
 

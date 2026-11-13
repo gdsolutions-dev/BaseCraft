@@ -71,6 +71,12 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
       .toEqual(['cmd-addExistingFields', 'cmd-propertySheet', 'cmd-tabOrder', 'cmd-chartSettings', 'cmd-subformInNewWindow', 'cmd-viewCode']);
     await expect(page.getByTestId('ruler-h')).toContainText('15');   // 16 cm de large, en cm
     await expect(page.getByTestId('ruler-v-detail')).toContainText('3');   // 4 cm de haut
+    // le sélecteur au coin des règles : une section sélectionnée l'éteint, un clic sélectionne le formulaire
+    await page.getByTestId('section-detail').click();
+    await expect(page.getByTestId('doc-selector')).toHaveAttribute('aria-pressed', 'false');
+    await page.getByTestId('doc-selector').click();
+    await expect(page.getByTestId('doc-selector')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('section-detail')).toHaveAttribute('aria-pressed', 'false');
 
     // Feuille de propriétés : le bouton du ruban la masque, F4 la rend
     await expect(page.getByTestId('property-sheet')).toBeVisible();
@@ -295,6 +301,11 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await pickView(page, 'viewForm');
     await expect(page.getByTestId('form-run')).toBeVisible();
     await expect(page.getByTestId('ribbon-tab-formDesign')).toHaveCount(0);
+    // retour en Création, puis enregistrement explicite : la définition en base reçoit la modification
+    await page.getByTestId('status-view-design').click();
+    await expect(page.getByTestId('design-canvas')).toBeVisible();
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('doc-tab-form-Fiche client')).not.toContainText('•');
     const after = await getForm(page, 'Fiche client');
     expect(after.sections[1].controls.find((c) => c.name === 'Nom')!.left).toBe(1846);   // une flèche : au point de grille suivant (142 twips)
     expect(after.sections[0]).toMatchObject({ height: 0, props: { Visible: false }, controls: [] });

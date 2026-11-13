@@ -1,15 +1,17 @@
 // Geste de souris ou touche du clavier -> actions du modèle du concepteur. Module pur.
 // Coordonnées en px (100 %) relatives à la section : pour 'move', le coin haut gauche de la sélection (son ancre) au départ
-// et à l'arrivée, l'arrivée dans le repère de la section survolée ; pour 'band' et 'place', l'arrivée dans le repère de départ.
+// et à l'arrivée, l'arrivée dans le repère de la section survolée ; pour 'place', l'arrivée dans le repère de départ ; pour 'band', le repère de la feuille.
 import type { ControlDef, ControlKind } from '../../shared/design/model';
 import type { DesignerAction } from './designer-model';
 import type { Handle, Rect } from './geometry';
 import { CLICK_PX, DEFAULT_SIZE, pxToTwips, TWIPS_PER_PX } from './units';
 
 type Point = { x: number; y: number };
+/** Le corps d'une section dans le repère de la feuille (px), relevé au début du geste. */
+export type Body = Point & { height: number };
 export type Gesture =
   | { kind: 'move'; section: number; origin: Point } | { kind: 'resize'; handle: Handle; origin: Point }
-  | { kind: 'band'; section: number; origin: Point } | { kind: 'sectionHeight'; index: number; origin: { y: number }; start: number }
+  | { kind: 'band'; origin: Point; bodies: Body[] } | { kind: 'sectionHeight'; index: number; origin: { y: number }; start: number }
   | { kind: 'place'; tool: ControlKind; section: number; origin: Point };
 
 const isClick = (o: Point, at: Point): boolean => Math.abs(at.x - o.x) < CLICK_PX && Math.abs(at.y - o.y) < CLICK_PX;
@@ -30,9 +32,13 @@ export function gestureEnd(g: Gesture, at: Point & { section: number }, mods: { 
     }
     case 'resize':
       return isClick(g.origin, at) ? [] : [{ type: 'resize', handle: g.handle, dx: pxToTwips(at.x - g.origin.x), dy: pxToTwips(at.y - g.origin.y), ...free(mods.alt) }];
-    case 'band':
-      if (isClick(g.origin, at)) return mods.shift ? [] : [{ type: 'select', selection: { kind: 'doc' } }];
-      return [{ type: 'selectRect', section: g.section, rect: spanned(g.origin, at), add: mods.shift, ...(mods.enclosed ? { enclosed: true } : {}) }];
+    case 'band': {   // comme Access : commencé hors de la feuille au besoin, il sélectionne dans chaque section qu'il traverse
+      const top = Math.min(g.origin.y, at.y), bottom = Math.max(g.origin.y, at.y);
+      const crossed = isClick(g.origin, at) ? [] : g.bodies.flatMap((b, section) => (top < b.y + b.height && b.y < bottom ? [{ b, section }] : []));
+      if (!crossed.length) return mods.shift ? [] : [{ type: 'select', selection: { kind: 'doc' } }];
+      return crossed.map(({ b, section }, i) => ({ type: 'selectRect', section, rect: spanned({ x: g.origin.x - b.x, y: g.origin.y - b.y }, { x: at.x - b.x, y: at.y - b.y }),
+        add: mods.shift || i > 0, ...(mods.enclosed ? { enclosed: true } : {}) }));
+    }
     case 'sectionHeight':
       return Math.abs(at.y - g.origin.y) < CLICK_PX ? [] : [{ type: 'setSectionHeight', index: g.index, height: Math.max(0, g.start + pxToTwips(at.y - g.origin.y)) }];
     case 'place': return [];   // le canevas appelle placeRect, puis host.newControls

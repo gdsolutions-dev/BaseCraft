@@ -40,12 +40,19 @@ async function setProp(page: Page, name: string, value: string) {
   await vis(page, `prop-${name}`).fill(value);
   await vis(page, `prop-${name}`).press('Enter');
 }
-/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list). */
+/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list); the form opens unsaved: saved at once
+ *  (Ctrl+S, the proposed name: its source's). */
 async function autoForm(page: Page, source: string) {
   await vis(page, `nav-item-${source}`).click();
   await vis(page, 'ribbon-tab-create').click();
   await vis(page, 'cmd-createForm').click();
   await expect(vis(page, `doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
+  await expect(vis(page, `nav-item-form-${source}`)).toHaveCount(0);
+  await expect(vis(page, 'nav-record-count')).toBeVisible();   // its records shown: the view takes Save
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('modal-input')).toHaveValue(source);
+  await page.getByTestId('modal-btn-ok').click();
+  await expect(vis(page, `nav-item-form-${source}`)).toBeVisible();
 }
 /** Create › Query Design, the tables added through Show Table, which opens by itself. */
 async function newQuery(page: Page, tbls: string[]) {
@@ -263,6 +270,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     await expect(body('groupFooter').getByTestId('ctl-Somme_Montant1')).toBeVisible();
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-save').click();
+    await page.getByTestId('modal-btn-ok').click();   // a new report: its name (the source's) proposed
     await expect(page.getByTestId('doc-tab-report-Factures')).not.toContainText('•');
     await page.getByTestId('ribbon-tab-reportDesign').click();
     await pickView(page, 'viewPrintPreview');

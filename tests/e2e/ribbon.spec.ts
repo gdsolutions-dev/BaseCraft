@@ -26,17 +26,17 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
   const base = seedBase('ruban', (db) => createTable(db, clients));
   const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
   try {
-    await page.getByTestId('ribbon-tab-create').click();
-    const query = page.getByTestId('cmd-labels'); // a placeholder (later)
-    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.labels);
-    await expect(page.getByTestId('cmd-labels')).toHaveAccessibleName(fr.ribbon.cmd.labels); // the French labels are laid out (the hover lands on the right button)
+    await page.getByTestId('ribbon-tab-externalData').click();
+    const query = page.getByTestId('cmd-savedImports'); // a placeholder (later)
+    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.savedImports);
+    await expect(page.getByTestId('cmd-savedImports')).toHaveAccessibleName(fr.ribbon.cmd.savedImports); // the French labels are laid out (the hover lands on the right button)
     await expect(query).toHaveAttribute('aria-disabled', 'true');
     await expect(query).toHaveAttribute('data-planned', 'later');
     await expect(query).not.toHaveAttribute('disabled');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
     await query.hover();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.labels + fr.ribbon.planned.later);   // a small button's tooltip also names it
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.savedImports + fr.ribbon.planned.later);   // a small button's tooltip also names it
     await expect(query).toHaveAccessibleDescription(fr.ribbon.planned.later); // aria-describedby
     await query.click({ force: true }); // Playwright would wait for an aria-disabled button to become enabled
     await expect(docTabs(page)).toHaveCount(0);
@@ -44,13 +44,13 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
     await page.mouse.move(600, 600);
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
-    // keyboard: Tab reaches it from the previous command (Macro), and the tooltip shows on focus
-    await page.getByTestId('cmd-queryWizard').focus();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.planned.later);
-    await page.getByTestId('cmd-reportWizard').focus();
+    // keyboard: Tab reaches it from the previous command (ODBC Database), and the tooltip shows on focus
+    await page.getByTestId('cmd-importOdbc').focus();
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.importOdbc + fr.ribbon.planned.later);
+    await page.getByTestId('cmd-importOdbc').focus();
     await page.keyboard.press('Tab');
     await expect(query).toBeFocused();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.labels + fr.ribbon.planned.later);   // a small button's tooltip also names it
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.savedImports + fr.ribbon.planned.later);   // a small button's tooltip also names it
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
     await expect(docTabs(page)).toHaveCount(0);
@@ -61,16 +61,14 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
 
     // stages, and an icon-only button whose tooltip also names it; implemented commands keep their behaviour
     await page.getByTestId('ribbon-tab-externalData').click();
-    await page.getByTestId('cmd-importAccess').hover();
-    await expect(page.getByRole('tooltip')).toHaveText("Prévu à l'étape E — Import Access");
+    await page.getByTestId('cmd-exportAccess').hover(); // importAccess is delivered (E1); exportAccess is still planned
+    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.exportAccess}${fr.ribbon.planned.later}`);
+    await expect(page.getByTestId('cmd-exportAccess')).toHaveAccessibleName(fr.ribbon.cmd.exportAccess);
+    await expect(page.getByTestId('cmd-exportAccess')).toHaveAccessibleDescription(fr.ribbon.planned.later); // the name is not read twice
     await page.getByTestId('ribbon-tab-home').click();
-    await page.getByTestId('cmd-textBold').hover();
-    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.textBold}${fr.ribbon.planned.later}`); // no label shown: the tooltip names it
-    await page.getByTestId('cmd-replace').hover();
-    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.replace}${fr.ribbon.planned.later}`);
-    await expect(page.getByTestId('cmd-replace')).toHaveAccessibleName(fr.ribbon.cmd.replace);
-    await expect(page.getByTestId('cmd-replace')).toHaveAccessibleDescription(fr.ribbon.planned.later); // the name is not read twice
-    await expect(page.getByTestId('cmd-textBold')).toHaveAccessibleName(fr.ribbon.cmd.textBold);
+    await page.getByTestId('cmd-alternateRowColor').hover();
+    await expect(page.getByRole('tooltip')).toHaveText(`${fr.ribbon.cmd.alternateRowColor}${fr.ribbon.planned.later}`); // no label shown: the tooltip names it
+    await expect(page.getByTestId('cmd-alternateRowColor')).toHaveAccessibleName(fr.ribbon.cmd.alternateRowColor);
     await expect(page.getByTestId('cmd-sortAsc')).toBeDisabled(); // no document: an implemented command, disabled as before
     await expect(page.getByTestId('cmd-sortAsc')).not.toHaveAttribute('data-planned');
     await page.getByTestId('ribbon-tab-create').click();
@@ -320,6 +318,40 @@ test('keyboard focus: a focused command is never under a scroll arrow or cut by 
       }
     }
     expect(problems).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});
+
+test('Quick Access Toolbar: Save, Undo and Redo before the tabs; Undo and Redo follow the designer\'s history, Save saves the design', async () => {
+  const base = seedBase('acces-rapide', (db) => createTable(db, clients));
+  const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
+  try {
+    const save = page.getByTestId('qat-save'), undo = page.getByTestId('qat-undo'), redo = page.getByTestId('qat-redo');
+    await expect(save).toHaveAccessibleName(fr.ribbon.cmd.save);
+    await expect(undo).toHaveAccessibleName(fr.ribbon.cmd.undo);
+    await expect(redo).toHaveAccessibleName(fr.ribbon.cmd.redo);
+    for (const b of [save, undo, redo]) await expect(b).toBeDisabled();   // no document
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createFormDesign').click();
+    await expect(save).toBeEnabled();
+    await expect(undo).toBeDisabled();
+    await page.getByTestId('sheet-object').selectOption('s:1');
+    await page.getByTestId('prop-Height').fill('10');
+    await page.getByTestId('prop-Height').press('Enter');
+    await expect(undo).toBeEnabled();
+    await expect(redo).toBeDisabled();
+    await undo.click();
+    await expect(undo).toBeDisabled();
+    await expect(redo).toBeEnabled();
+    await redo.click();
+    await expect(undo).toBeEnabled();
+    await expect(redo).toBeDisabled();
+    await save.click();   // a new form: its name asked
+    await page.getByTestId('modal-input').fill('Saisie');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-form-Saisie')).toBeVisible();
+    await expect(page.getByTestId('doc-tab-form-Saisie')).not.toContainText('•');
   } finally {
     await app.close();
   }

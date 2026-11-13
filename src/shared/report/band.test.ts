@@ -139,6 +139,38 @@ describe('formatBand: values', () => {
   });
 });
 
+describe('formatBand: static controls (button, option group, list box, tab control)', () => {
+  it('a command button prints its caption centred; a list box its bound value', async () => {
+    const b = await fmt(sec([ctl('commandButton', 'B', { Caption: 'Go', width: 1000 }), ctl('listBox', 'LB', { ControlSource: '[Client]', width: 1000 })]), row({ Client: 'Ana' }));
+    expect(item(b, 'B')).toMatchObject({ kind: 'text', align: 'center', back: '#e1e1e1', width: 1000 }); expect(text(b, 'B')).toBe('Go');
+    expect(item(b, 'LB')).toMatchObject({ kind: 'text', align: 'left' }); expect(text(b, 'LB')).toBe('Ana');
+  });
+  it('an option group is a frame with its caption over the top edge', async () => {
+    const b = await fmt(sec([ctl('optionGroup', 'G', { Caption: 'Mode', height: 600, BorderStyle: 'solid' })]), row());
+    const [frame, legend] = b!.items as any[];
+    expect(frame).toMatchObject({ kind: 'rect', top: 0, height: 600 }); expect(frame.border).not.toBeNull();
+    expect(legend).toMatchObject({ kind: 'text', top: 0, back: '#ffffff', border: null }); expect(legend.lines.map((l: { text: string }) => l.text)).toEqual(['Mode']);
+  });
+  it('a tab control is a frame under a strip of tabs, one per page', async () => {
+    const b = await fmt(sec([ctl('tabControl', 'T', { Pages: ['One', 'Two'], height: 900, BorderStyle: 'solid', FontName: 'Liberation Mono' })]), row());
+    const [frame, one, two] = b!.items as any[];
+    expect(frame.top).toBe(one.height); expect(frame.height).toBe(900 - one.height);
+    expect([one.back, two.back]).toEqual(['#ffffff', '#e1e1e1']); expect(two.left).toBe(one.width);
+    expect([one, two].map((t) => t.lines[0].text)).toEqual(['One', 'Two']);
+  });
+});
+
+describe('formatBand: toggle button', () => {
+  it('a toggle button prints its caption on a face, darker (sunken) when its value is true', async () => {
+    const t = (name: string, src: string) => ctl('toggleButton', name, { ControlSource: src, Caption: 'Actif' });
+    const b = await fmt(sec([t('Y', '[Payé]'), t('N', '[Payé]'), t('E', '[Client]')]), rows([{ Payé: 1, Client: 'x' }]));
+    expect(text(b, 'Y')).toBe('Actif'); expect(item(b, 'Y')).toMatchObject({ align: 'center', back: '#b4b4b4' });
+    const off = await fmt(sec([t('N', '[Payé]')]), row({ Payé: 0 }));
+    expect(item(off, 'N').back).toBe('#e1e1e1');
+    expect(item(b, 'E').back).toBe('#e1e1e1');   // not a truth value: not pressed
+  });
+});
+
 describe('formatBand: text', () => {
   it('a line break in a label gives lines, never a missing glyph', async () => {
     const b = await fmt(sec([lbl('L', 'ab\r\ncd\ne', { height: 3 * lh })]), row());

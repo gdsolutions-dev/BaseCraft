@@ -22,7 +22,7 @@ Windows · macOS · Linux</p>
 
 <p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>Sito web</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">Download</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">Mockup dell'interfaccia</a></p>
 
-<img src="../images/screenshot.png" alt="Visualizzazione Struttura di un report BaseCraft con raggruppamenti e totali" width="900">
+<img src="../images/screenshot.png" alt="Maschera del menu di avvio di un database di esempio BaseCraft, con pulsanti e un grafico delle vendite" width="900">
 
 </div>
 

@@ -22,9 +22,9 @@ export interface HostOpen { path: string; create: boolean; appVersion: string; r
  * handler over a new session method appends its name here (host.test.ts checks ipc.ts against this list).
  */
 export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
-  'listTables', 'tableDesign', 'saveTable', 'renameTable', 'dropTable', 'testRules', 'copyTable', 'appendTable',
+  'listTables', 'tableDesign', 'saveTable', 'renameTable', 'dropTable', 'testRules', 'dataMacros', 'saveDataMacros', 'copyTable', 'appendTable',
   'count', 'page', 'insert', 'update', 'delete', 'lookup',
-  'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'saveColumnWidths', 'cascadeChildren',
+  'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'saveColumnWidths', 'saveSheetLayout', 'cascadeChildren',
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription', 'autoCorrectDependents', 'applyProperties',
   'describeSource', 'pageSource', 'chartData', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
@@ -34,19 +34,20 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'exportText',
   'exportRowCount',
   'exportExcel',
+  'exportMarkup', 'savedExports', 'saveSavedExport', 'deleteSavedExport',
   'saveCopy',
   'compact',
   'splitDatabase',
-  'inspectLinkFile', 'createLinks', 'listLinks', 'refreshLinks', 'relink', 'convertLink', 'unlockAccess', 'serverKeys', 'setCredential', 'login', 'loginDefaults',
+  'inspectLinkFile', 'inspectAccessImport', 'createLinks', 'listLinks', 'refreshLinks', 'relink', 'convertLink', 'unlockAccess', 'serverKeys', 'setCredential', 'login', 'loginDefaults',
   'inspectServer', 'createServerLinks', 'relinkServer',
-  'migrateToServer', 'importServerTables',
+  'migrateToServer', 'importServerTables', 'importAccessTables',
   'takeOverLock', 'tick', 'dataStamp', 'close',
   'interrupt', // R12: answered out of the queue (host.ts), while another call runs
 ]);
 
 /** R16: the HOST_METHODS that only read (retried once on a transient SQLITE_CORRUPT). */
 export const READ_METHODS: ReadonlySet<string> = new Set<keyof Session>([
-  'listTables', 'tableDesign', 'count', 'page', 'lookup', 'cascadeChildren', 'listRelations', 'relationsLayout',
-  'describeSource', 'pageSource', 'chartData', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
+  'listTables', 'tableDesign', 'dataMacros', 'count', 'page', 'lookup', 'cascadeChildren', 'listRelations', 'relationsLayout',
+  'describeSource', 'pageSource', 'chartData', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'savedExports', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
   'activeContent', 'dbUuid', 'dataStamp',
 ]);

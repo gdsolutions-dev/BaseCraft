@@ -8,6 +8,7 @@ import {
   accessColumns, DEFAULT_COLUMN_WIDTH, lookupOf, sameName, shownColumns, valueListRows, type FieldDef, type FieldProps, type LookupProps, type TableDesign, type TableLookup,
 } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
+import { aggregateRun, type AggregateSpec } from './aggregate';
 import { compileFilter } from './filter';
 import { listTables, pickName, quoteIdent, tableDesign } from './schema';
 import { rowSourceRef, sourceLookupRows } from '../query/source';
@@ -26,6 +27,17 @@ function where(design: TableDesign, filter: FieldFilter[] | undefined, locale: s
 export function countRows(db: DatabaseSync, table: string, filter: FieldFilter[] = [], locale = 'en-US', cond?: string): number {
   const w = filter.length || cond !== undefined ? where(tableDesign(db, table), filter, locale, cond) : { sql: '', params: [] };
   return Number((db.prepare(`SELECT count(*) AS n FROM ${quoteIdent(table)}${w.sql}`).get(...w.params) as { n: number | bigint }).n);
+}
+
+/** The totals of the fields `aggs` name (SQL: see aggregate.ts) over the rows `filter` and `cond` keep; an unknown field: bc:notFound. */
+export function aggregateRows(db: DatabaseSync, design: TableDesign, aggs: readonly { field: string; fn: AggregateSpec['fn'] }[], filter: FieldFilter[] = [], locale = 'en-US', cond?: string): (number | string | null)[] {
+  const specs = aggs.map((a) => {
+    const fd = design.fields.find((x) => sameName(x.name, a.field));
+    if (!fd) throw new Error('bc:notFound');
+    return { col: quoteIdent(fd.name), fn: a.fn, numeric: fd.props.type !== 'dateTime' };
+  });
+  const w = where(design, filter, locale, cond);
+  return specs.length ? aggregateRun(db, specs, `${quoteIdent(design.name)}${w.sql}`, w.params) : [];
 }
 
 /** Sort keys in order; `tie` breaks ties, in the direction of the last key: rowid, or another unique column for a table

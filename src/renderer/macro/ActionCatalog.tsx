@@ -11,9 +11,9 @@ export function ActionCatalog({ state, send, readOnly }: { state: MacroEditState
   const { t, i18n } = useTranslation();
   const [search, setSearch] = useState('');
   const match = (label: string) => foldKey(label).includes(foldKey(search.trim()));
-  const flow = BLOCKS.map((b) => ({ id: `block-${b}`, label: t(`macro.block.${b}`) })).filter((x) => match(x.label));
+  const flow = BLOCKS.filter((b) => !state.data || b !== 'submacro').map((b) => ({ id: `block-${b}`, label: t(`macro.block.${b}`) })).filter((x) => match(x.label));
   const byCategory = new Map<string, { id: string; label: string }[]>();
-  for (const a of addableActions(state.showAll)) {
+  for (const a of addableActions(state.showAll, state.data)) {
     const label = t(`macro.action.${a.name}`);
     if (match(label)) byCategory.set(a.category, [...(byCategory.get(a.category) ?? []), { id: a.name, label }]);
   }

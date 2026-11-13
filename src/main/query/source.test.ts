@@ -334,3 +334,23 @@ it('saving a pass-through checks its connector and params, binds nothing', () =>
   expect(() => checkQueryDefinition(db, 'P', PT, { postgresql: { ...postgresql, capabilities: { ...postgresql.capabilities, passThrough: false } } }))
     .toThrow('bc:serverNotSupported|passThrough|postgresql');
 });
+
+it('aggregates: totals over every row the filter keeps, for a table, a saved query and a sql source (STDEV and VAR from sums)', async () => {
+  const aggregates = [{ field: 'Montant', fn: 'sum' }, { field: 'Montant', fn: 'count' }, { field: 'Montant', fn: 'max' }, { field: 'Montant', fn: 'min' }, { field: 'Montant', fn: 'var' }, { field: 'Montant', fn: 'stdev' }, { field: 'Le', fn: 'max' }] as const;
+  const want = (xs: number[], date: string) => {
+    const sum = xs.reduce((a, b) => a + b, 0), mean = sum / xs.length, v = xs.length > 1 ? xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (xs.length - 1) : null;
+    return [sum, xs.length, Math.max(...xs), Math.min(...xs), v, v === null ? null : Math.sqrt(v), date];
+  };
+  const check = (got: unknown[] | undefined, exp: (number | string | null)[]) => {
+    expect(got).toHaveLength(exp.length);
+    exp.forEach((e, i) => (typeof e === 'number' ? expect(got![i]).toBeCloseTo(e, 9) : expect(got![i]).toBe(e)));
+  };
+  saveQ('QMontants', 'SELECT Client, Montant, Le FROM Commandes');
+  for (const ref of [{ kind: 'table', name: 'Commandes' }, { kind: 'query', name: 'QMontants' }, { kind: 'sql', sql: 'SELECT Client, Montant, Le FROM Commandes' }] as const) {
+    check((await session.pageSource(ref, { offset: 0, limit: 0, aggregates: [...aggregates] })).aggregates, want([10.1, 0.1, 0.2, 99.99, 0.1], '2026-10-21 00:00:00'));
+    check((await session.pageSource(ref, { offset: 0, limit: 0, filter: [{ field: 'Client', criteria: '=2' }], aggregates: [...aggregates] })).aggregates, want([0.2, 0.1], '2026-10-21 00:00:00'));
+    check((await session.pageSource(ref, { offset: 0, limit: 5, filter: [{ field: 'Client', criteria: '=3' }], aggregates: [...aggregates] })).aggregates, want([99.99], '2026-09-30 00:00:00'));
+    await expect(session.pageSource(ref, { offset: 0, limit: 0, aggregates: [{ field: 'Zzz', fn: 'sum' }] })).rejects.toThrow(/^bc:notFound$/);
+  }
+  expect((await session.pageSource({ kind: 'table', name: 'Commandes' }, { offset: 0, limit: 0 })).aggregates).toBeUndefined();
+});

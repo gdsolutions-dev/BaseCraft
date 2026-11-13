@@ -2,6 +2,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { inTransaction } from './tx';
 import { readOptions, updateOptions } from './file-format';
 import { isLinkName } from '../links/store';
+import { parseDataMacros, type DataMacros } from '../../shared/macro/data-macro';
+import type { SheetLayout } from '../../shared/sheet-layout';
 import type { CascadeChild, OpResult, ReconcileReport, Relation, TableSummary } from '../../shared/api';
 export type { ReconcileReport, TableSummary };
 import {
@@ -279,7 +281,8 @@ const TABLE_KEYS = ['description', 'validationRule', 'validationText', 'indexes'
 export function writeTableMetadata(db: DatabaseSync, design: TableDesign): void {
   inTransaction(db, () => {
     const old = db.prepare('SELECT props FROM bc_tables WHERE name = ?').get(design.name) as { props: string } | undefined;
-    const incoming: Record<string, unknown> = { ...design.extra };
+    const { sheetLayout: _layout, ...extra } = design.extra ?? {}; // the datasheet's layout is saved by setSheetLayout alone: a stale copy in the design never overwrites it
+    const incoming: Record<string, unknown> = { ...extra };
     for (const k of TABLE_KEYS) if (design[k] !== undefined) incoming[k] = design[k];
     const { description: _gone, validationRule: _rule, validationText: _text, indexes: oldIndexes, ...kept } = old ? parseObject(old.props) : {};
     // Stored entries this version cannot read (a newer one's) are kept as they are, after the design's.
@@ -306,6 +309,44 @@ export function setTableDescription(db: DatabaseSync, name: string, description:
   const row = tm.find((r) => r.name === metaName(tm.map((x) => x.name), live, cur));
   const { description: _old, ...kept } = row ? parseObject(row.props) : {};
   const props = JSON.stringify(description ? { ...kept, description } : kept);
+  if (row) db.prepare('UPDATE bc_tables SET props = ? WHERE name = ?').run(props, row.name);
+  else db.prepare('INSERT INTO bc_tables (name, props) VALUES (?, ?)').run(cur, props);
+  return true;
+}
+
+/** The table's data macros (T2), as stored in its bc_tables row; none for an unknown table or a row without. */
+export function getDataMacros(db: DatabaseSync, name: string): DataMacros {
+  const row = db.prepare('SELECT props FROM bc_tables WHERE name = ?').get(name) as { props: string } | undefined;
+  return row ? parseDataMacros(parseObject(row.props).dataMacros) : {};
+}
+
+/** Saves the table's data macros next to its other metadata (other keys kept; an empty set removes the key). False for an
+ *  unknown table. The caller has checked them (dataMacrosIssue). Never rebuilds the table. */
+export function setDataMacros(db: DatabaseSync, name: string, dm: DataMacros): boolean {
+  const live = liveTableNames(db);
+  const cur = pickName(live, name);
+  if (!cur) return false;
+  const tm = db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[];
+  const row = tm.find((r) => r.name === metaName(tm.map((x) => x.name), live, cur));
+  const { dataMacros: _old, ...kept } = row ? parseObject(row.props) : {};
+  const empty = !Object.keys(dm.events ?? {}).length && !Object.keys(dm.named ?? {}).length;
+  const props = JSON.stringify(empty ? kept : { ...kept, dataMacros: dm });
+  if (row) db.prepare('UPDATE bc_tables SET props = ? WHERE name = ?').run(props, row.name);
+  else db.prepare('INSERT INTO bc_tables (name, props) VALUES (?, ?)').run(cur, props);
+  return true;
+}
+
+/** The datasheet layout (row height, frozen fields, totals, font, colours, alignment) in the table's bc_tables row, under
+ *  `sheetLayout` (other keys kept; an empty layout removes the key). It is read as `design.extra.sheetLayout` and is never
+ *  rewritten by a table save (writeTableMetadata). False for an unknown table. */
+export function setSheetLayout(db: DatabaseSync, name: string, layout: SheetLayout): boolean {
+  const live = liveTableNames(db);
+  const cur = pickName(live, name);
+  if (!cur) return false;
+  const tm = db.prepare('SELECT name, props FROM bc_tables').all() as { name: string; props: string }[];
+  const row = tm.find((r) => r.name === metaName(tm.map((x) => x.name), live, cur));
+  const { sheetLayout: _old, ...kept } = row ? parseObject(row.props) : {};
+  const props = JSON.stringify(Object.keys(layout).length ? { ...kept, sheetLayout: layout } : kept);
   if (row) db.prepare('UPDATE bc_tables SET props = ? WHERE name = ?').run(props, row.name);
   else db.prepare('INSERT INTO bc_tables (name, props) VALUES (?, ?)').run(cur, props);
   return true;
@@ -767,7 +808,8 @@ export function tableDesign(db: DatabaseSync, name: string): TableDesign {
   const tableMeta = metaName(tm.map((r) => r.name), live, cur);
   const row = tm.find((r) => r.name === tableMeta);
   if (row) {
-    const { description, validationRule, validationText, indexes, ...extra } = parseObject(row.props);
+    // dataMacros (T2) is not part of the design: tableDesign / writeTableMetadata leave it to getDataMacros / setDataMacros
+    const { description, validationRule, validationText, indexes, dataMacros: _dm, ...extra } = parseObject(row.props);
     if (typeof description === 'string') design.description = description;
     const ixs = storedIndexes(indexes);
     if (ixs.length) design.indexes = ixs;

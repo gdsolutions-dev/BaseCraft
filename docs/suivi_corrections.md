@@ -10,4 +10,4 @@
 
 ## Formulaire et état
 
-- rectangle de sélection : doit pouvoir commencer en dehors de l'objet.
+- rectangle de sélection : doit pouvoir commencer en dehors de l'objet. — ✅ fait (part aussi du fond gris autour de la feuille ; sélectionne dans chaque section traversée)

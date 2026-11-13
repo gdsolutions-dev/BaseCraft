@@ -27,6 +27,7 @@
   },
   "ribbon": {
     "label": "Lint",
+    "quickAccess": "Werkbalk Snelle toegang",
     "file": "Bestand",
     "tab": {
       "home": "Start",
@@ -110,6 +111,8 @@
       "viewDesign": "Ontwerpweergave",
       "newRecord": "Nieuw",
       "save": "Opslaan",
+      "undo": "Ongedaan maken",
+      "redo": "Opnieuw",
       "deleteRecord": "Verwijderen",
       "sortAsc": "Oplopend",
       "sortDesc": "Aflopend",
@@ -798,6 +801,8 @@
       "rectangle": "Vak",
       "pageBreak": "Pagina-einde",
       "tabControl": "TabCtl",
+      "toggleButton": "Wissel",
+      "navigationControl": "Navigatie",
       "chart": "Grafiek"
     },
     "format": {
@@ -806,6 +811,25 @@
       "fontSize": "Tekengrootte",
       "colors": "Kleuren",
       "format": "Opmaak"
+    },
+    "cond": {
+      "empty": "Geen regels. Voeg er een toe om dit besturingselement op te maken op basis van de waarde.",
+      "rule": "Regel {{n}}",
+      "and": "en",
+      "remove": "Verwijderen",
+      "add": "Nieuwe regel",
+      "invalid": "Regel {{n}}: de expressie kan niet worden gelezen.",
+      "noColor": "Geen kleur",
+      "op": {
+        "between": "Veldwaarde ligt tussen",
+        "equal": "Veldwaarde is gelijk aan",
+        "notEqual": "Veldwaarde is niet gelijk aan",
+        "greater": "Veldwaarde is groter dan",
+        "less": "Veldwaarde is kleiner dan",
+        "greaterEqual": "Veldwaarde is groter dan of gelijk aan",
+        "lessEqual": "Veldwaarde is kleiner dan of gelijk aan",
+        "expression": "Expressie is"
+      }
     }
   },
   "fieldType": {
@@ -828,6 +852,8 @@
     "caption": "Bijschrift",
     "required": "Vereist",
     "allowZeroLength": "Lege tekenreeks toegestaan",
+    "textFormat": "Tekstindeling",
+    "textFormats": { "plain": "Tekst zonder opmaak", "rich": "Opgemaakte tekst" },
     "indexed": "Geïndexeerd",
     "auto": "Automatisch",
     "numberSizes": {
@@ -942,6 +968,9 @@
     "tableRule_short": "Een of meer waarden zijn niet toegestaan volgens de validatieregel die voor “{{table}}” is ingesteld."
   },
   "datasheet": {
+    "more": { "rowHeight": "Rijhoogte…", "columnWidth": "Veldbreedte…", "rowHeightLabel": "Rijhoogte (punten):", "columnWidthLabel": "Kolombreedte:", "standardHeight": "Standaardhoogte", "standardWidth": "Standaardbreedte", "bestFit": "Passend maken", "hide": "Velden verbergen", "unhide": "Velden zichtbaar maken…", "freeze": "Velden blokkeren", "unfreeze": "Blokkering van alle velden opheffen", "unhideTitle": "Kolommen zichtbaar maken" },
+    "totals": { "label": "Totaal", "none": "Geen" },
+    "format": { "gridlines": "Rasterlijnen weergegeven", "gridColor": "Kleur van rasterlijnen", "auto": "Automatisch" },
     "goTo": {
       "first": "Eerste",
       "previous": "Vorige",
@@ -960,6 +989,15 @@
     "fieldError_record": "{{message}}",
     "unsupported": "Deze tabel wordt niet ondersteund door BaseCraft: de gegevens kunnen niet worden weergegeven.",
     "findCapped": "Zoeken en kopiëren gelden voor de eerste 100.000 records.",
+    "spellNotFound": "Niet in woordenboek",
+    "spellChangeTo": "Wijzigen in",
+    "spellSuggestions": "Suggesties",
+    "spellIgnore": "Negeren",
+    "spellIgnoreAll": "Alles negeren",
+    "spellChange": "Wijzigen",
+    "spellChangeAll": "Alles wijzigen",
+    "spellDone": "De spellingcontrole is voltooid.",
+    "spellUnavailable": "Er is geen spellingwoordenboek beschikbaar voor de taal van de interface. Het wordt de eerste keer gedownload, daarvoor is een internetverbinding nodig.",
     "pasteOneRow": "Plakken is beperkt tot één rij tegelijk.",
     "discardTitle": "Record kan niet worden opgeslagen",
     "saveTableLayout": "Wilt u de wijzigingen in de indeling van tabel '{{name}}' opslaan?",
@@ -1330,6 +1368,7 @@
   },
   "importText": {
     "titleExcel": "Excel-werkmap importeren",
+    "titleXml": "XML-bestand importeren",
     "title": "Tekstbestand importeren",
     "stepOf": "Stap {{n}} van {{total}}",
     "step": {
@@ -1344,6 +1383,7 @@
     },
     "source": {
       "introExcel": "Geef de Excel-werkmap (.xlsx, .xlsm) op die u wilt importeren en bepaal vervolgens hoe en waar de gegevens ervan in de huidige database worden opgeslagen.",
+      "introXml": "Geef het XML-bestand op dat u wilt importeren (records die uit velden bestaan, zoals BaseCraft en Access ze schrijven) en bepaal vervolgens hoe en waar de gegevens ervan in de huidige database worden opgeslagen.",
       "intro": "Geef het tekstbestand op dat u wilt importeren en bepaal vervolgens hoe en waar de gegevens ervan in de huidige database worden opgeslagen.",
       "file": "Bestandsnaam",
       "browse": "Bladeren…",
@@ -1477,6 +1517,7 @@
     },
     "error": {
       "excelUnsupported": "Dit bestand is geen leesbare Excel-werkmap (.xlsx of .xlsm).",
+      "xmlUnsupported": "Dit bestand is geen XML-gegevensbestand dat BaseCraft kan lezen (een hoofdelement met herhaalde recordelementen, elk met eenvoudige veldelementen; maximaal 100 MB; geen DTD).",
       "fileTooLarge": "Deze werkmap is groter dan 100 MB.",
       "noFile": "Geef het te importeren bestand op.",
       "fileNotFound": "Het bestand is niet gevonden of kan niet worden gelezen.",
@@ -1588,6 +1629,8 @@
     "PictureAlignment": "Afbeeldingsuitlijning",
     "PictureSizeMode": "Afbeeldingsgroottemodus",
     "LineSlant": "Lijnhelling",
+    "HyperlinkAddress": "Hyperlinkadres",
+    "NavigationTargets": "Navigatiedoelen",
     "Pages": "Pagina's",
     "Name": "Naam",
     "Tag": "Tag",
@@ -1812,6 +1855,9 @@
       "fontNotPortable": "Het lettertype \"{{detail}}\" is niet ingesloten: de tekst wordt gemeten en afgedrukt in Liberation Sans.",
       "unsupportedControl": "Dit soort besturingselement wordt niet afgedrukt.",
       "pictureMissing": "De gedeelde afbeelding „{{detail}}” staat niet meer in de galerij: de afbeelding wordt niet getoond en niet afgedrukt.",
+      "subreportMissing": "Het subrapport “{{detail}}” is niet gevonden of kan niet worden gelezen.",
+      "subreportRecursive": "Het subrapport “{{detail}}” bevat dit rapport (of gaat voorbij zeven niveaus): het wordt niet afgedrukt.",
+      "subreportBadLink": "De hoofd- en subvelden van dit subrapport komen niet overeen met de velden van de rapporten.",
       "aggregateNotAllowed": "Een totaal is in deze sectie niet toegestaan.",
       "sizeClamped": "Een grootte overschrijdt 55,88 cm, de limiet van Access: ze wordt tot die limiet verkleind.",
       "groupingMalformed": "Een groeperingsniveau is leeg of onjuist opgebouwd: er wordt niets gegroepeerd.",
@@ -1822,7 +1868,47 @@
     "invalidDefinition": "De definitie van dit rapport is ongeldig:",
     "pdfSaved": "Het pdf-bestand is opgeslagen.",
     "pdfFilter": "Pdf-bestanden",
+    "paper": {
+      "chou3": "Japanse envelop Chou nr. 3",
+      "chou4": "Japanse envelop Chou nr. 4",
+      "p4x6": "4x6 inch/10x15 cm",
+      "p5x7": "5x7 inch/13x18 cm",
+      "p35x5": "3,5x5 inch/L 89x127 mm",
+      "l2": "2L 127 x 178 mm",
+      "p8x10": "8x10 inch",
+      "ofuku": "Ofuku Hagaki 200 x 148 mm",
+      "envA2": "Envelop A2 111 x 146 mm",
+      "bristol4x6": "Bristolkaart 4x6 inch",
+      "bristol5x8": "Bristolkaart 5x8 inch",
+      "cardUs": "Letterkaart VS (8,5 x 11 inch)",
+      "cardA4": "A4-kaart (8,27 x 11,69 inch)",
+      "p8_5x13": "8,5x13 inch",
+      "p3x5": "3 x 5 inch",
+      "bristol3x5": "Bristolkaart 3 x 5 inch",
+      "b5iso": "B5 (ISO) 176 x 250 mm",
+      "letter": "Letter",
+      "legal": "Legal",
+      "statement": "Statement",
+      "executive": "Executive",
+      "a4": "A4",
+      "a5": "A5",
+      "b5": "B5 (JIS)",
+      "env10": "Envelop nr. 10",
+      "envDl": "Envelop DL",
+      "envC5": "Envelop C5",
+      "envC6": "Envelop C6",
+      "envMonarch": "Envelop Monarch",
+      "env675": "Envelop nr. 6 3/4",
+      "postcardJp": "Japanse briefkaart",
+      "a6": "A6"
+    },
     "pageSetup": {
+      "tabOptions": "Afdrukopties",
+      "tabPage": "Pagina",
+      "tabColumns": "Kolommen",
+      "paper": "Papier",
+      "size": "Formaat",
+      "dataOnly": "Alleen gegevens",
       "title": "Pagina-instelling",
       "orientation": "Afdrukstand",
       "portrait": "Staand",
@@ -1833,6 +1919,21 @@
       "left": "Links",
       "right": "Rechts",
       "invalid": "Elke marge moet tussen 0 en 10 cm liggen."
+    },
+    "columns": {
+      "grid": "Rasterinstellingen",
+      "columnSize": "Kolomgrootte",
+      "width": "Breedte (cm)",
+      "height": "Hoogte (cm)",
+      "rowSpacing": "Rijafstand (cm)",
+      "sameAsDetail": "Zelfde als sectie Details",
+      "title": "Kolommen",
+      "count": "Aantal kolommen",
+      "spacing": "Kolomafstand (cm)",
+      "layout": "Kolomindeling",
+      "down": "Omlaag, dan naar rechts",
+      "across": "Naar rechts, dan omlaag",
+      "invalid": "Kolommen: 1 tot 10; afstand: 0 tot 10 cm."
     },
     "sectionGroup": {
       "header": "Groepskop: {{expr}}",
@@ -2047,7 +2148,8 @@
       "line": "Lijn",
       "rectangle": "Rechthoek",
       "pageBreak": "Pagina-einde",
-      "tabControl": "Tabbladbesturingselement"
+      "tabControl": "Tabbladbesturingselement",
+      "toggleButton": "Wisselknop"
     },
     "tab": {
       "format": "Opmaak",
@@ -2094,6 +2196,7 @@
     "badSource": "De recordbron van dit formulier is onleesbaar: ze is verwijderd.",
     "headerFooter": "Formulierkop/-voet",
     "tabPage": "Pagina{{n}}",
+    "nav": { "reportLater": "Een rapport kan nog niet in een navigatiebesturingselement worden weergegeven; alleen formulieren." },
     "unbound": "Ongebonden",
     "saveFirstTitle": "Formulier opslaan",
     "saveFirst": "Wilt u de wijzigingen in het formulier “{{name}}” opslaan?",
@@ -2302,6 +2405,18 @@
     "no": "Onwaar",
     "excelFilter": "Excel-werkmappen",
     "textFilter": "Tekstbestanden",
+    "xmlFilter": "XML-bestanden",
+    "htmlFilter": "HTML-documenten",
+    "saveSteps": "Exportstappen opslaan",
+    "saveName": "Opslaan als",
+    "savedDefault": "Export - {{name}}",
+    "savedEmpty": "Geen opgeslagen export.",
+    "savedRun": "Uitvoeren",
+    "savedDelete": "Verwijderen",
+    "fmtText": "Tekstbestand",
+    "fmtExcel": "Excel-werkmap",
+    "fmtXml": "XML-bestand",
+    "fmtHtml": "HTML-document",
     "actionQuery": "“{{name}}” is een actiequery: er zijn geen gegevens om te exporteren.",
     "noSource": "Dit rapport heeft geen recordbron: er is niets om te exporteren.",
     "selectObject": "Selecteer eerst een tabel of query in het navigatiedeelvenster.",
@@ -2370,6 +2485,7 @@
     "fieldSizeTitle": "Veldgrootte",
     "fieldSizeLabel": "Veldgrootte (1 tot 255)",
     "fieldSizeInvalid": "Voer een geheel getal van 1 tot 255 in.",
+    "lookupValues": "Waarden (één per regel)",
     "formatNone": "(geen)",
     "validationTextTitle": "Validatiebericht",
     "fieldValidationTextLabel": "Bericht dat wordt weergegeven wanneer een waarde van \"{{field}}\" wordt geweigerd",
@@ -2399,6 +2515,8 @@
     "noTables": "Deze database bevat geen lokale tabel om te verplaatsen.",
     "self": "Het gegevensbestand kan niet de geopende database zijn. Kies een andere naam of map."
   },
+  "clipboard": { "empty": "Het klembord van het systeem bevat geen tekst.", "content": "{{text}}" },
+  "hyperlink": { "address": "Adres (https://, http:// of mailto:)", "text": "Weer te geven tekst", "invalid": "Het adres moet beginnen met https://, http:// of mailto:.", "open": "{{url}} openen?" },
   "migrate": {
     "title": "Wizard Verplaatsen naar een server",
     "intro": "Deze wizard verplaatst alle lokale tabellen van de huidige database naar een PostgreSQL- of SQL Server-database, met hun gegevens, sleutels, indexen en relaties, en vervangt ze daarna door gekoppelde tabellen met dezelfde namen. Eerst wordt een reservekopie van de database gemaakt. Validatieregels en berekende standaardwaarden blijven in de toepassing, die een front-endtoepassing wordt.",
@@ -2469,6 +2587,23 @@
     "saveFirstTitle": "Module opslaan",
     "saveFirst": "Wilt u de wijzigingen in de module '{{name}}' opslaan?"
   },
+  "dataMacro": {
+    "title": "Gegevensmacro's van “{{table}}”",
+    "namedTitle": "Benoemde macro's van “{{table}}”",
+    "events": "Tabelgebeurtenissen",
+    "named": "Benoemde macro's",
+    "noNamed": "Geen benoemde macro's.",
+    "empty": "(leeg)",
+    "edit": "Bewerken",
+    "rename": "Hernoemen…",
+    "delete": "Verwijderen",
+    "new": "Nieuwe benoemde macro…",
+    "close": "Sluiten",
+    "nameLabel": "Macronaam",
+    "nameExists": "Er bestaat al een benoemde macro met deze naam.",
+    "deleteAsk": "De gegevensmacro “{{name}}” van “{{table}}” verwijderen?",
+    "saveFailed": "De gegevensmacro's konden niet worden opgeslagen:\n{{detail}}"
+  },
   "macro": {
     "convert": {
       "title": "Macro converteren",
@@ -2485,6 +2620,10 @@
     },
     "newName": "Macro{{n}}",
     "action": {
+      "CreateRecord": "RecordMaken",
+      "RaiseError": "FoutGenereren",
+      "RunDataMacro": "GegevensmacroUitvoeren",
+      "SetField": "VeldInstellen",
       "Beep": "Piep",
       "ClearMacroError": "MacrofoutWissen",
       "CloseDatabase": "DatabaseSluiten",
@@ -2521,6 +2660,10 @@
       "UndoRecord": "RecordOngedaanMaken"
     },
     "arg": {
+      "Values": "Waarden (Veld = expressie, één per regel)",
+      "ErrorNumber": "Foutnummer",
+      "ErrorDescription": "Foutbeschrijving",
+      "Value": "Waarde",
       "FormName": "Formuliernaam",
       "View": "Weergave",
       "WhereCondition": "Where-voorwaarde",
@@ -2648,6 +2791,7 @@
       }
     },
     "category": {
+      "dataMacro": "Acties voor gegevensmacro's",
       "ui": "Opdrachten voor gebruikersinterface",
       "macro": "Macro-opdrachten",
       "system": "Systeemopdrachten",
@@ -2914,6 +3058,41 @@
       "ok": "Importeren",
       "done": "Geïmporteerde tabellen: {{names}}.",
       "skipped": "Niet geïmporteerde kolommen ({{table}}): {{names}}."
+    },
+    "access": {
+      "title": "Importeren uit Access",
+      "fileOnly": "Tabellen en hun gegevens worden geïmporteerd. Andere sleutels dan een AutoNummering, indexen en veldregels worden niet gelezen; query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd.",
+      "linked": "Gekoppelde tabellen van dit bestand worden niet aangeboden: {{names}}.",
+      "warnSize": "Dit bestand is groot: het importeren kan even duren.",
+      "missingTables": "Het bestand bevat niet meer: {{names}}. Er is niets gewijzigd."
+    },
+    "report": {
+      "title": "Importrapport: {{source}}",
+      "save": "Rapport opslaan",
+      "fileName": "Importrapport {{source}}.txt",
+      "level": {
+        "carried": "Ongewijzigd geïmporteerd",
+        "approximated": "Met een verschil geïmporteerd",
+        "ignored": "Niet geïmporteerd"
+      },
+      "reason": {
+        "tableNotImported": "Een tabel van deze relatie is niet geïmporteerd.",
+        "violations": "Sommige records hebben geen overeenkomend record in de hoofdtabel."
+      },
+      "line": {
+        "tableImported": "Tabel “{{object}}”: geïmporteerde rijen: {{n}}.",
+        "relationCreated": "Relatie “{{object}}” gemaakt.",
+        "keyAssumed": "Tabel “{{object}}”: het AutoNummering-veld “{{part}}” wordt als primaire sleutel genomen.",
+        "keyNotRead": "Tabel “{{object}}”: geen AutoNummering-veld, zonder primaire sleutel geïmporteerd.",
+        "relationNotEnforced": "Relatie “{{object}}” gemaakt zonder referentiële integriteit. {{reason}}",
+        "structureNotRead": "Indexen, veldregels, standaardwaarden, bijschriften en opzoeklijsten worden niet gelezen.",
+        "fieldSkipped": "Tabel “{{object}}”: kolom “{{part}}” niet geïmporteerd (een type dat BaseCraft niet leest).",
+        "valuesLost": "Tabel “{{object}}”, veld “{{part}}”: {{n}} waarden pasten niet en zijn leeg gelaten.",
+        "tableUnsupported": "Tabel “{{object}}” niet geïmporteerd. {{reason}}",
+        "tableLinked": "Tabel “{{object}}” is een gekoppelde tabel van het Access-bestand: ze wordt niet geïmporteerd.",
+        "relationIgnored": "Relatie “{{object}}” van het Access-bestand niet geïmporteerd. {{reason}}",
+        "tablesOnly": "Query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd."
+      }
     }
   },
   "link": {
@@ -3052,6 +3231,11 @@
     "title": "Zoeken en vervangen",
     "tabFind": "Zoeken",
     "tabReplace": "Vervangen",
+    "replaceWith": "Vervangen door:",
+    "replace": "Vervangen",
+    "replaceAll": "Alles vervangen",
+    "replaceAllWarning": "Deze bewerking Alles vervangen kan niet ongedaan worden gemaakt. Doorgaan?",
+    "replacedCount": "{{count}} vervangingen uitgevoerd.",
     "what": "Zoeken naar:",
     "lookIn": "Zoeken in:",
     "lookInField": "Huidig veld",
@@ -3130,6 +3314,121 @@
     "placeholder": "Typ een Python-instructie of ?expressie",
     "errorAt": "(Module {{module}}, regel {{line}})",
     "splitter": "Grootte van het Direct-venster wijzigen"
+  },
+  "wizard": {
+    "source": "Tabellen/Query's",
+    "available": "Beschikbare velden:",
+    "selected": "Geselecteerde velden:",
+    "fieldsQuestion": "Welke velden wilt u opnemen?",
+    "queryWhich": "Welke wizard wilt u gebruiken?",
+    "queryKind": {
+      "simple": "Wizard Eenvoudige query",
+      "crosstab": "Wizard Kruistabelquery",
+      "duplicates": "Wizard Query voor dubbele waarden zoeken",
+      "unmatched": "Wizard Query voor niet-overeenkomende records zoeken"
+    },
+    "queryName": {
+      "simple": "{{source}}-query",
+      "crosstab": "{{source}}-kruistabel",
+      "duplicates": "Dubbele waarden in {{source}}",
+      "unmatched": "{{a}} zonder overeenkomst in {{b}}"
+    },
+    "dupFields": "Welke velden kunnen dubbele informatie bevatten?",
+    "dupExtra": "Welke extra velden wilt u zien?",
+    "crossRows": "Welke velden wilt u als rijkoppen gebruiken?",
+    "crossColumn": "Welk veld wilt u als kolomkop gebruiken?",
+    "crossValue": "Welk getal wilt u berekenen voor elk snijpunt van kolom en rij?",
+    "unmatchedA": "Welke tabel of query bevat de records die u in de resultaten wilt?",
+    "unmatchedB": "Welke tabel of query bevat de gerelateerde records?",
+    "unmatchedKey": "Welk veld komt in beide voor?",
+    "detailOrSummary": "Wilt u een detailquery of een samenvattingsquery?",
+    "detail": "Detail (toont elk veld van elk record)",
+    "summary": "Samenvatting",
+    "countRecords": "Records in {{source}} tellen",
+    "queryTitle": "Welke titel wilt u voor de query?",
+    "openQuery": "De query openen om informatie weer te geven",
+    "openQueryDesign": "Het queryontwerp wijzigen",
+    "formLayout": "Welke indeling wilt u voor het formulier?",
+    "formLayouts": {
+      "columnar": "In kolommen",
+      "tabular": "Tabelvorm",
+      "datasheet": "Gegevensblad",
+      "justified": "Uitgevuld (weergegeven in kolommen)"
+    },
+    "formTitle": "Welke titel wilt u voor het formulier?",
+    "openForm": "Het formulier openen om informatie weer te geven of in te voeren",
+    "openFormDesign": "Het formulierontwerp wijzigen",
+    "reportGroups": "Wilt u groeperingsniveaus toevoegen (maximaal {{max}})?",
+    "reportSort": "Op welke volgorde wilt u de detailrecords sorteren (maximaal {{max}} velden)?",
+    "sortField": "Sorteerveld {{n}}",
+    "reportSummary": "Welke samenvattingswaarden wilt u berekenen?",
+    "detailAndSummary": "Detail en samenvatting",
+    "summaryOnly": "Alleen samenvatting",
+    "reportLayout": "Welke indeling wilt u voor het rapport?",
+    "stepped": "Indeling: Trapsgewijs",
+    "reportTitle": "Welke titel wilt u voor het rapport?",
+    "openReport": "Afdrukvoorbeeld van het rapport",
+    "openReportDesign": "Het rapportontwerp wijzigen",
+    "labelSheet": "Welk etiketformaat wilt u?",
+    "labelCustom": "Aangepast…",
+    "labelWidth": "Etiketbreedte (mm)",
+    "labelHeight": "Etikethoogte (mm)",
+    "labelColumns": "Etiketten naast elkaar",
+    "labelMarginLeft": "Linker- en rechtermarge van het vel (mm)",
+    "labelMarginTop": "Bovenmarge van het vel (mm)",
+    "labelNoFit": "Deze etiketten passen niet op het vel.",
+    "labelFont": "Lettergrootte",
+    "labelLines": "Wat wilt u op uw etiket? Typ tekst en voeg velden toe met de lijst.",
+    "labelLine": "Regel {{n}}",
+    "labelInsertField": "Veld invoegen…",
+    "labelRemoveLine": "Regel verwijderen",
+    "labelAddLine": "Regel toevoegen",
+    "labelSort": "Op welke velden wilt u sorteren?",
+    "labelName": "Welke naam wilt u voor uw rapport?",
+    "openLabels": "De etiketten bekijken zoals ze worden afgedrukt",
+    "labelsOf": "Etiketten {{source}}",
+    "moreForms": {
+      "multiple": "Meerdere items",
+      "datasheet": "Gegevensblad",
+      "split": "Gesplitst formulier",
+      "splitNote": "Niet beschikbaar: BaseCraft heeft nog geen gesplitst formulier.",
+      "modal": "Modaal dialoogvenster",
+      "modalNote": "OK en Annuleren sluiten het formulier. Het opent als een gewoon formulier: de eigenschappen Modaal en Pop-up bestaan nog niet."
+    },
+    "navigation": {
+      "horizontal": "Horizontale tabbladen",
+      "verticalLeft": "Verticale tabbladen, links",
+      "verticalRight": "Verticale tabbladen, rechts",
+      "horizontalVertical": "Horizontale tabbladen en verticale tabbladen, links",
+      "verticalNote": "Niet beschikbaar: het navigatiebesturingselement tekent alleen horizontale tabbladen.",
+      "name": "Navigatieformulier"
+    }
+  },
+  "dbtools": {
+    "close": "Sluiten",
+    "relReportEmpty": "Er is geen tabel zichtbaar in het venster Relaties.",
+    "depsNoSelection": "Selecteer eerst een tabel, query, formulier, rapport of macro in het navigatievenster.",
+    "depsNone": "Geen.",
+    "depsOnMe": "Objecten die van mij afhankelijk zijn",
+    "depsIDependOn": "Objecten waarvan ik afhankelijk ben",
+    "depsHint": "Klik op een object om het in de ontwerpweergave te openen. Gevonden in recordbronnen, rijbronnen, subformulieren, query’s en macroacties.",
+    "docFields": "Velden",
+    "docIndexes": "Indexen",
+    "docRelationships": "Relaties",
+    "docControls": "Besturingselementen",
+    "docRecordSource": "Recordbron",
+    "docName": "Naam",
+    "docType": "Type",
+    "docDescription": "Beschrijving",
+    "docSource": "Besturingselementbron",
+    "docParent": "Bovenliggende tabel",
+    "docChild": "Onderliggende tabel",
+    "docEnforced": "Referentiële integriteit",
+    "perfNoKey": "{{table}}: geen primaire sleutel. Definieer er een in de ontwerpweergave zodat records snel gevonden en gekoppeld kunnen worden.",
+    "perfRelation": "{{table}}.{{field}}: wordt gebruikt door relatie {{relation}} maar is niet geïndexeerd. Een index versnelt koppelingen en het opzoeken van gerelateerde records.",
+    "perfQuery": "{{table}}.{{field}}: de query {{query}} filtert of koppelt hierop, maar het veld is niet geïndexeerd.",
+    "perfOptimize": "Optimaliseren",
+    "perfNone": "Geen suggesties: elke tabel heeft een primaire sleutel en de velden die door relaties en opgeslagen query’s worden gebruikt, zijn geïndexeerd."
   },
   "imageGallery": {
     "none": "Geen",

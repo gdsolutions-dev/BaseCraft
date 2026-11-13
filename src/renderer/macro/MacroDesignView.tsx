@@ -6,6 +6,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplayContext } from '../../shared/expr/localize';
 import { localeInfo } from '../../shared/locale-format';
+import { dataMacroIssue } from '../../shared/macro/data-macro';
 import { sameName } from '../../shared/field-types';
 import { emptyMacro, parseMacroDef, validateMacro, type MacroDef } from '../../shared/macro/model';
 import { convertedModuleName, convertMacro } from '../../shared/macro/to-python';
@@ -55,7 +56,7 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
   const modal = useModal();
   const showError = useErrorDialog();
   // the Action Catalog is shown for a new macro, as Access
-  const [state, send] = useReducer(macroEdit, def, (d) => ({ ...initialEdit(d), catalog: !!tab.isNew }));
+  const [state, send] = useReducer(macroEdit, def, (d) => ({ ...initialEdit(d, tab.embedded ? embeddedSession(tab.embedded)?.data ?? null : null), catalog: !!tab.isNew }));
   const [singleStep, setSingleStep] = useState(false);   // Single Step: the next Run asks before each action
   const [region, setRegion] = useState<string | null>(null);
   const [lists, setLists] = useState<ObjectLists>(NO_LISTS);
@@ -100,15 +101,17 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     if (live.current.readOnly) { await message('dialog.op.readOnly'); return null; }
     try {
       await flush();
-      const issues = validateMacro(live.current.state.def);
-      if (issues.length) {
-        await message('macro.issues', { list: issues.map((x) => t(`macro.issue.${x.code}`, { path: x.path })).join('\n') });
+      const data = live.current.state.data;   // a data macro (T2): its own checks (actions allowed for the event, no Python)
+      const issues = validateMacro(live.current.state.def, { data: !!data });
+      const dataIssue = data && issues.length === 0 ? dataMacroIssue(live.current.state.def, data === 'named' ? undefined : data) : null;
+      if (issues.length || dataIssue) {
+        await message('macro.issues', { list: dataIssue ?? issues.map((x) => t(`macro.issue.${x.code}`, { path: x.path })).join('\n') });
         return null;
       }
       const doc = live.current.tab;
       if (doc.embedded) {   // into its design (R16): the design becomes dirty, nothing is written to the file
         const session = embeddedSession(doc.embedded);
-        if (!session?.save(live.current.state.def)) { await message('macro.embedded.ownerGone'); return null; }
+        if (!(await session?.save(live.current.state.def))) { await message('macro.embedded.ownerGone'); return null; }
         savedDef.current = live.current.state.def;
         send({ type: 'saved' });
         return doc.name;
@@ -234,7 +237,7 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     }
   };
 
-  const ctx = useMemo<BlockCtx>(() => ({ display, readOnly, send, lists, state }), [display, readOnly, lists, state]);
+  const ctx = useMemo<BlockCtx>(() => ({ display, readOnly, send, lists, state, ...(state.data ? { data: true } : {}) }), [display, readOnly, lists, state]);
   if (region === null) return <div className="macro-design" ref={root} />;
   return (
     <div className="macro-designer">

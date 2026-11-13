@@ -2,6 +2,7 @@
 // Module pur. Arrondis et intervalles passent par des chaînes décimales, jamais par de l'arithmétique flottante.
 import type { FieldDef, FieldType, NumberSize } from './field-types'
 import { parseDateTime, parseDecimal, roundDecimalString, type LocaleInfo } from './locale-format'
+import { sanitizeRich } from './rich-text'
 
 export type SqlValue = string | number | null
 export type CellInput = string | number | boolean | null
@@ -67,6 +68,7 @@ export function coerce(field: FieldDef, input: CellInput, info: LocaleInfo): Coe
     case 'longText':
     case 'hyperlink': {
       const s = typeof input === 'number' ? numberToText(input, info) : text
+      if (p.type === 'longText' && p.textFormat === 'rich') return ok(sanitizeRich(s)) // every write of a Rich Text value is sanitized (a trust boundary)
       return p.type === 'shortText' && [...s].length > (p.size ?? 255) ? fail('tooLong') : ok(s)
     }
     case 'dateTime': {

@@ -196,6 +196,13 @@ export function FieldPropertiesPanel({ props: p, disabled, onProp, ctx, rowKey, 
     }
     if (p.type !== 'autoNumber') check('required');
     if (TEXT_TYPES.includes(p.type)) check('allowZeroLength');
+    if (p.type === 'longText') {
+      control('textFormat', (
+        <select {...common('textFormat')} value={p.textFormat ?? 'plain'} onChange={(e) => onProp('textFormat', e.target.value === 'rich' ? 'rich' : undefined)}>
+          {(['plain', 'rich'] as const).map((v) => <option key={v} value={v}>{t('fieldProp.textFormats.' + v)}</option>)}
+        </select>
+      ));
+    }
     control('indexed', (
       // An AutoNumber is the table's key: its index is fixed.
       <select {...common('indexed')} disabled={disabled || p.type === 'autoNumber'} value={p.indexed} onChange={(e) => onProp('indexed', e.target.value)}>

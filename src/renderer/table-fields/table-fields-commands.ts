@@ -3,7 +3,7 @@
 import { createElement } from 'react';
 import type { DisplayContext } from '../../shared/expr/localize';
 import { toDisplay } from '../../shared/expr/localize';
-import { validateDesign, sameName, type FieldProps, type FieldType, type NumberSize, type TableDesign } from '../../shared/field-types';
+import { validateDesign, sameName, LOOKUP_TYPES, type FieldProps, type FieldType, type NumberSize, type TableDesign } from '../../shared/field-types';
 import { fieldDefaults } from '../settings-store';
 import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { i18n } from '../i18n';
@@ -13,6 +13,7 @@ import type { CommandHandlers } from '../shell/ribbon-model';
 import { saveTableInteractive } from '../table-design/save-table';
 import { addField, namedFormatPatch, patchField, patchTable, removeField, renameField, stepDecimals, toggleIndex, type FieldEdit } from './field-edit';
 import { editNameCaption } from './NameCaptionDialog';
+import { editLookup } from './LookupDialog';
 
 export interface TableFieldsEnv {
   table: string; design(): TableDesign | null; selectedField(): string | null; modal: ModalApi; readOnly: boolean;
@@ -141,6 +142,13 @@ export function tableFieldsCommands(env: TableFieldsEnv): CommandHandlers {
         ctx: { ...ctx, fields: [], criteria: false }, initial: shown, close, validate, label: t('tableFields.defaultValueLabel', { field: f.name }),
       }), { titleKey: 'builder.title' });
       return v === null ? null : patchField(d, f.name, { defaultValue: v || undefined });
+    }),
+    // Modify Lookups: the Lookup tab's essentials in one dialog (a field of a type without lookup is not offered it)
+    modifyLookups: () => run(env, true, async (d, field) => {
+      const f = fieldOf(d, field);
+      if (!LOOKUP_TYPES.includes(f.props.type)) return null;
+      const r = await editLookup(env.modal, f);
+      return r && patchField(d, f.name, { lookup: r.lookup });
     }),
     currencyFormat: () => withField(env, (p) => namedFormatPatch(p, 'currency')),
     percentFormat: () => withField(env, (p) => namedFormatPatch(p, 'percent')),

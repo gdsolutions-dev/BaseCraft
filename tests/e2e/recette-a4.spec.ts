@@ -36,12 +36,18 @@ const master = (page: Page) => {
     button: (k: string) => nav.getByRole('button', { name: fr.datasheet.nav[k] }) };
 };
 
-/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list). */
+/** Create › Form on `source`, selected in the Navigation Pane (as Access: no source list); the form opens unsaved: saved at once
+ *  (Ctrl+S, the proposed name: its source's). */
 async function autoForm(page: Page, source: string) {
   await vis(page, `nav-item-${source}`).click();
   await vis(page, 'ribbon-tab-create').click();
   await vis(page, 'cmd-createForm').click();
   await expect(vis(page, `doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
+  await expect(vis(page, `nav-item-form-${source}`)).toHaveCount(0);
+  await expect(vis(page, 'nav-record-count')).toBeVisible();   // its records shown: the view takes Save
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('modal-input')).toHaveValue(source);
+  await page.getByTestId('modal-btn-ok').click();
   await expect(vis(page, `nav-item-form-${source}`)).toBeVisible();
 }
 async function setProp(page: Page, name: string, value: string) {
@@ -251,12 +257,17 @@ test('Create › Form: Cancel creates nothing; a query (A3) gives a form named a
     await vis(page, 'source-picker-ok').click();
     await expect(vis(page, 'doc-tab-form-Liste')).toHaveAttribute('aria-selected', 'true');
     await expect(vis(page, 'form-ctl-Nom')).toHaveValue('Dupont');
-    expect(await forms()).toEqual(['Liste']);
+    expect(await forms()).toEqual([]);   // not saved yet (Access): Save names it after the query
     // a single-table query: the form is editable, the entry written to the table
     await vis(page, 'form-ctl-Nom').fill('Dupond');
     await page.keyboard.press('Shift+Enter');
     await expect(vis(page, 'doc-tab-form-Liste')).not.toContainText('•');
     expect(await rows(page, 'Clients')).toEqual([[1, 'Dupond', 'Paris']]);
+    await page.keyboard.press('Control+s');
+    await expect(page.getByTestId('modal-input')).toHaveValue('Liste');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(vis(page, 'nav-item-form-Liste')).toBeVisible();
+    expect(await forms()).toEqual(['Liste']);
   } finally {
     await app.close();
   }

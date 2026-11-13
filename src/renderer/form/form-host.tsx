@@ -2,7 +2,7 @@
 // écran 2), création d'un contrôle posé, menu de la barre de section (En-tête/pied de formulaire).
 import {
   AppWindow, ChevronDown, ChevronsUpDown, CircleDot, Group, Image as ImageIcon, LetterText, List, Minus, PanelTop, RectangleHorizontal,
-  SeparatorHorizontal, Square, SquareCheck, TextCursorInput,
+  Navigation, SeparatorHorizontal, Square, SquareCheck, TextCursorInput, ToggleLeft,
 } from 'lucide-react';
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,9 +16,10 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import { MAX_TWIPS } from '../designer/units';
 import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
+import { parseTargets } from './nav-targets';
 import { DesignChart } from './controls/ChartCtl';
 import { DesignButton, DesignImage } from './controls/ImageCtl';
-import { applies, color, controlLook, gridlineStyle, prop, type ThemeCtx } from './run-model';
+import { applies, color, controlLook, gridlineStyle, linkAddress, LINK_LOOK, prop, type ThemeCtx } from './run-model';
 import { useDocTheme } from '../design/doc-theme';
 
 /** Dans l'ordre de la maquette ; libellés : l'entrée de la galerie Contrôles du ruban. */
@@ -28,11 +29,13 @@ export const FORM_TOOLS: ToolDef[] = [
   { kind: 'commandButton', icon: RectangleHorizontal, labelKey: 'ribbon.cmd.button' },
   { kind: 'comboBox', icon: ChevronsUpDown, labelKey: 'ribbon.cmd.comboBox' },
   { kind: 'listBox', icon: List, labelKey: 'ribbon.cmd.listBox' },
+  { kind: 'toggleButton', icon: ToggleLeft, labelKey: 'ribbon.cmd.toggleButton' },
   { kind: 'checkBox', icon: SquareCheck, labelKey: 'ribbon.cmd.checkBox' },
   { kind: 'optionGroup', icon: Group, labelKey: 'ribbon.cmd.optionGroup' },
   { kind: 'optionButton', icon: CircleDot, labelKey: 'ribbon.cmd.optionButton' },
   { kind: 'tabControl', icon: PanelTop, labelKey: 'ribbon.cmd.tabControl' },
   { kind: 'subform', icon: AppWindow, labelKey: 'ribbon.cmd.subform' },
+  { kind: 'navigationControl', icon: Navigation, labelKey: 'ribbon.cmd.navigationControl' },
   { kind: 'image', icon: ImageIcon, labelKey: 'ribbon.cmd.image' },
   { kind: 'rectangle', icon: Square, labelKey: 'ribbon.cmd.rectangle' },
   { kind: 'line', icon: Minus, labelKey: 'ribbon.cmd.line' },
@@ -56,11 +59,12 @@ export function newFormControls(kind: ControlKind, rect: Rect, section: number, 
   const click = rect.width === DEFAULT_CLICK.width && rect.height === DEFAULT_CLICK.height;
   const r = { ...rect };
   if (click && (kind === 'checkBox' || kind === 'optionButton')) { r.width = BOX; r.height = BOX; }
+  if (click && kind === 'navigationControl') { r.width = 6804; r.height = 3402; }   // 12 × 6 cm: tabs over the form shown below
   if (click && kind === 'line') r.height = 0;   // un clic pose un trait horizontal
   if (click && kind === 'chart') { r.width = 4800; r.height = 2800; }   // un clic pose un graphique de taille utile (une étiquette de 2,5 cm ne montre rien)
   const props: Record<string, unknown> = {};
   if (TAB_KINDS.includes(kind)) props.TabIndex = nextTabIndex(s);
-  if (kind === 'optionGroup' || kind === 'label' || kind === 'commandButton') props.Caption = name;
+  if (kind === 'optionGroup' || kind === 'label' || kind === 'commandButton' || kind === 'toggleButton') props.Caption = name;
   if (kind === 'tabControl') props.Pages = [labels.tabPage(1), labels.tabPage(2)];
   const label = (g: Rect, caption: string): ControlDef =>
     ({ kind: 'label', name: nextName(doc, labels.prefix('label'), [name]), ...g, props: { Caption: caption } });
@@ -114,14 +118,14 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
   const source = () => live?.text ?? (controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound);
   const on = live?.checked ? ' is-on' : '';
   switch (c.kind) {
-    case 'label': return <div className="fz fz-text" style={st}>{String(prop(c, 'Caption') ?? '')}</div>;
+    case 'label': return <div className="fz fz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}>{String(prop(c, 'Caption') ?? '')}</div>;
     case 'textBox': return <div className="fz fz-text" style={st}><span className="fz-clip">{source()}</span></div>;
     case 'comboBox': return <div className="fz fz-text fz-combo" style={st}><span className="fz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
     case 'listBox': return <div className="fz fz-list" style={st}><span className="fz-clip">{source()}</span></div>;
     case 'checkBox': return <div className={`fz fz-check${on}`} style={{ borderColor: color(c, 'BorderColor', tc) }} />;
     case 'optionButton': return <div className={`fz fz-check fz-radio${on}`} />;
     case 'optionGroup': return <fieldset className="fz fz-group" style={st}><legend>{String(prop(c, 'Caption') ?? '')}</legend></fieldset>;
-    case 'commandButton': return <DesignButton c={c} style={st} />;
+    case 'commandButton': case 'toggleButton': return <DesignButton c={c} style={st} />;
     case 'subform': return <div className="fz fz-subform" style={st}><span className="fz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;
     case 'image': return <DesignImage c={c} className="fz fz-image" style={st} />;
     case 'chart': return <DesignChart c={c} className="fz fz-chart" style={st} />;
@@ -138,6 +142,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
       </svg>;
     }
     case 'pageBreak': return <div className="fz fz-pagebreak" />;
+    case 'navigationControl': return <div className="fz fz-tabs" style={st}><div className="fz-tabstrip">{parseTargets(prop(c, 'NavigationTargets')).map((x, i) => <span key={i} className={i === 0 ? 'is-on' : ''}>{x.caption}</span>)}</div></div>;
     case 'tabControl': {
       const v = prop(c, 'Pages');
       const pages = Array.isArray(v) ? v.map(String) : [];

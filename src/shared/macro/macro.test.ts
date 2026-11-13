@@ -97,8 +97,8 @@ describe('macro definition', () => {
 });
 
 describe('action catalogue', () => {
-  it('catalogue: 34 actions, four unsafe, every label in both languages', () => {
-    expect(ACTIONS).toHaveLength(34); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['RunCode', 'RunSQL', 'SetValue', 'SetWarnings']);
+  it('catalogue: 38 actions, four unsafe, every label in both languages', () => {
+    expect(ACTIONS).toHaveLength(38); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['RunCode', 'RunSQL', 'SetValue', 'SetWarnings']);
     for (const a of ACTIONS) for (const cat of [fr, en]) { expect(get(cat, `macro.action.${a.name}`)).toBeTruthy();
       for (const g of a.args) { expect(get(cat, `macro.arg.${g.name}`)).toBeTruthy(); for (const o of g.options ?? []) expect(get(cat, `macro.argValue.${g.name}.${o || 'empty'}`)).toBeTruthy(); } }
     expect(fr.macro.action.OpenForm).toBe('OuvrirFormulaire'); expect(actionDef('OpenReport')?.args.find((x) => x.name === 'View')?.default).toBe('preview');
@@ -106,7 +106,7 @@ describe('action catalogue', () => {
     expect(actionDef('GoToRecord')?.args.find((a) => a.name === 'Record')?.default).toBe('next'); });
   it('names are unique; every category, block and the unknown action have a label', () => {
     const names = ACTIONS.map((a) => a.name);
-    expect(new Set(names).size).toBe(34);
+    expect(new Set(names).size).toBe(38);
     for (const cat of [fr, en]) {
       for (const c of new Set(ACTIONS.map((a) => a.category))) expect(get(cat, `macro.category.${c}`), c).toBeTruthy();
       for (const b of ['comment', 'group', 'if', 'elseIf', 'else', 'submacro']) expect(get(cat, `macro.block.${b}`), b).toBeTruthy();

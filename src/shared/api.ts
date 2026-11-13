@@ -2,14 +2,17 @@
 // le rendu n'a pas les types Node et ne doit rien importer du processus principal.
 import type { CellInput, FieldErrorCode, SqlValue } from './coerce';
 import type { DesignError, TableDesign } from './field-types';
-import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec } from './exchange';
+import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec, SavedExport } from './exchange';
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
+import type { AccessImportInfo, AccessImportResult } from './access-import';
 import type { MigrateRequest, MigrateResult, ServerImportResult } from './migrate';
 import type { UiLanguage } from './i18n';
 import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { ChartData, ChartDataRequest } from './chart/query';
 import type { StartupOptions } from './startup';
+import type { DataMacros } from './macro/data-macro';
+import type { SheetLayout } from './sheet-layout';
 import type { Theme } from './design/theme';
 import type { PictureKind } from './pictures';
 
@@ -198,7 +201,8 @@ export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameI
   | { ok: false; reason: 'danglingKey'; table: string } // `table` has a FOREIGN KEY to a dropped table of the new name
   | { ok: false; reason: 'viewBroken'; view: string }; // SQLite refuses the rename: this view or trigger no longer parses
 // `table` left out when the refusing table cannot be found from the data (never a table without related records).
-export type DeleteResult = { ok: true; count: number } | { ok: false; reason: 'related'; table?: string };
+// `dataMacro`: a Before Delete data macro raised `message` (T2); nothing was deleted.
+export type DeleteResult = { ok: true; count: number } | { ok: false; reason: 'related'; table?: string } | { ok: false; reason: 'dataMacro'; message: string; table?: undefined };
 
 /** Objects stored in bc_objects (format 1.2). Tables and queries share one namespace; every other kind has its own. */
 export type ObjectKind = 'query' | 'form' | 'report' | 'macro' | 'module';
@@ -264,9 +268,12 @@ export const CH = {
   appLicenses: 'bc:app:licenses',
   appSetIcon: 'bc:app:setIcon', // the window icon: a small PNG the renderer re-encoded, or null for BaseCraft's (bc:badIcon)
   openExternal: 'bc:app:openExternal', // only one of AppInfo.links, never a URL made up by the renderer
+  openHyperlink: 'bc:app:openHyperlink', // a label's HyperlinkAddress: http:, https: or mailto: only (main re-checks it, hyperlink.ts)
   edit: 'bc:app:edit', // cut / copy / paste on the focused element of the sender
   beep: 'bc:app:beep', // the system's beep (macros: Beep, MessageBox)
   appWriteClipboard: 'bc:app:writeClipboard', // C3 R9: Write Conflict › Copy to Clipboard (a string of at most 10 MB)
+  appReadClipboard: 'bc:app:readClipboard', // Home › Clipboard dialog launcher: the system clipboard's text
+  spellPrepare: 'bc:app:spellPrepare', // Home › Spelling: the spell checker takes the interface language's dictionary (false: none exists)
   closeRequested: 'bc:app:closeRequested', // main → renderer: the window is asked to close
   closeAllowed: 'bc:app:closeAllowed', // renderer → main: every document agreed, close for real
   closeAck: 'bc:app:closeAck', // renderer → main: the close request arrived (the renderer is not hung)
@@ -285,7 +292,10 @@ export const CH = {
   tablesRename: 'bc:tables:rename',
   tablesDrop: 'bc:tables:drop',
   tablesSaveColumnWidths: 'bc:tables:saveColumnWidths',
+  tablesSaveSheetLayout: 'bc:tables:saveSheetLayout',
   tablesTestRules: 'bc:tables:testRules',
+  tablesDataMacros: 'bc:tables:dataMacros',
+  tablesSaveDataMacros: 'bc:tables:saveDataMacros',
   rowsCount: 'bc:rows:count',
   rowsPage: 'bc:rows:page',
   rowsInsert: 'bc:rows:insert',
@@ -331,6 +341,10 @@ export const CH = {
   reportsPrint: 'bc:reports:print',
   exchangeExportText: 'bc:exchange:exportText', // progress: importProgress
   exchangeExportExcel: 'bc:exchange:exportExcel',
+  exchangeExportMarkup: 'bc:exchange:exportMarkup',
+  exchangeSavedList: 'bc:exchange:savedList',
+  exchangeSavedSave: 'bc:exchange:savedSave',
+  exchangeSavedDelete: 'bc:exchange:savedDelete',
   baseSaveAs: 'bc:base:saveAs',
   baseCompact: 'bc:base:compact',
   baseSplitPick: 'bc:base:splitPick',
@@ -367,6 +381,9 @@ export const CH = {
   linksCanRemember: 'bc:links:canRemember',
   migrateRun: 'bc:migrate:run', // progress: importProgress
   migrateImport: 'bc:migrate:import', // R17, the same progress
+  accessImportInspect: 'bc:accessImport:inspect', // E1: External Data › Import › Access
+  accessImportRun: 'bc:accessImport:run', // progress: importProgress
+  accessImportSaveReport: 'bc:accessImport:saveReport',
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -380,7 +397,7 @@ export interface AppInfo {
   electron: string; chromium: string; node: string; sqlite: string;
   platform: string; arch: string;
   copyright: string; licence: string;
-  links: { homepage: string; issues: string; licence: string };
+  links: { homepage: string; issues: string; licence: string; site: string; releases: string };
 }
 
 /** One line of the licence inventory (scripts/licenses.mjs). */
@@ -402,6 +419,8 @@ export interface BasecraftApi {
     /** The third-party licence inventory shipped with the app (read by the main process, never a renderer path). */
     licenses(): Promise<LicenseEntry[]>;
     openExternal(url: string): Promise<void>;
+    /** Opens a link typed by the base author in the system browser or mail client; rejects bc:invalidArgument unless it is an http:, https: or mailto: URL. */
+    openHyperlink(url: string): Promise<void>;
     /** The window's icon (Windows, Linux; macOS: nothing): a PNG of at most 256 x 256 px and 1 MiB that the renderer decoded and
      *  re-encoded, or null for BaseCraft's. Rejects bc:badIcon for a PNG the main process reads as empty or too large. */
     setWindowIcon(png: Uint8Array | null): Promise<void>;
@@ -411,6 +430,14 @@ export interface BasecraftApi {
     beep(): Promise<void>;
     /** The system clipboard's text (C3 R9: the edited record of a Write Conflict). Rejects bc:invalidArgument beyond 10 MB. */
     writeClipboard(text: string): Promise<void>;
+    /** The system clipboard's text (empty when it holds none). */
+    readClipboard(): Promise<string>;
+    /** Home › Spelling (C2): sets the spell checker to the interface language and waits (up to 10 s) for its dictionary, which
+     *  Chromium downloads the first time. false: no dictionary (none for the language, or it could not be downloaded). */
+    spellPrepare(): Promise<boolean>;
+    /** Chromium's spell checker (webFrame, in the preload): false for every word until a dictionary is loaded. */
+    isMisspelled(word: string): boolean;
+    spellSuggestions(word: string): string[];
     /** The window's close button (or the system) asks to close: the documents get their say, then confirmClose().
      *  Without a subscriber, the close is confirmed at once. */
     onCloseRequested(cb: () => void): () => void;
@@ -501,6 +528,12 @@ export interface BasecraftApi {
     testRules(name: string): Promise<{ field: string; rows: number }[]>;
     /** Datasheet column widths (twips by field name) saved in the table's fields; bc:readOnly in read-only, bc:linkedTable for a link. */
     saveColumnWidths(name: string, widths: Record<string, number>): Promise<void>;
+    /** The rest of the datasheet's layout (row height, frozen fields, totals, font, colours, alignment), replacing the stored one, in the table's metadata (read back as `design.extra.sheetLayout`); same errors. */
+    saveSheetLayout(name: string, layout: SheetLayout): Promise<void>;
+    /** The table's data macros (T2), kept with its metadata, not in its design; none for a link (bc:linkedTable). */
+    dataMacros(name: string): Promise<DataMacros>;
+    /** Replaces them; bc:readOnly, bc:linkedTable, bc:notFound, bc:invalidDefinition (an action or expression a data macro may not have). */
+    saveDataMacros(name: string, macros: DataMacros): Promise<void>;
   };
   rows: {
     /** The rows `filter` keeps (all without one); a criterion that cannot be compiled rejects with bc:invalidFilter. */
@@ -540,7 +573,8 @@ export interface BasecraftApi {
   /** Import d'une feuille Excel (.xlsx / .xlsm, 100 Mo au plus : bc:fileTooLarge ; autre format ou fichier abîmé : bc:excelUnsupported).
    *  `sheet` null : la première ; `hasHeader` null : détecté. Même moteur, même progression que importText. */
   importExcel: {
-    pickFile(): Promise<string | null>;
+    /** 'xml': the XML file dialog (F1; the preview and run then read a flat XML file as a one-sheet workbook, bc:xmlUnsupported if it is not). */
+    pickFile(kind?: 'xml'): Promise<string | null>;
     preview(path: string, sheet: string | null, hasHeader: boolean | null): Promise<ExcelPreview>;
     run(path: string, sheet: string, hasHeader: boolean, plan: ImportPlan): Promise<ImportResult>;
   };
@@ -599,6 +633,12 @@ export interface BasecraftApi {
      *  `warnings.truncated`; the sheet is named after `defaultName`). Above 1,048,575 rows: { ok: false, reason: 'tooManyRows' },
      *  before the save dialog. */
     exportExcel(src: ExportSource, defaultName: string): Promise<ExportResult>;
+    /** As exportText, to an XML file in Access's data format or an HTML table (F1, F5); `defaultName` is the table or query name. */
+    exportMarkup(src: ExportSource, format: 'xml' | 'html', defaultName: string): Promise<ExportResult>;
+    /** F4: the saved exports of the base by name; save and delete write the base's options (read-only: bc:readOnly). */
+    savedList(): Promise<Record<string, SavedExport>>;
+    saveSaved(name: string, e: SavedExport): Promise<void>;
+    deleteSaved(name: string): Promise<void>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
   };
   /** Linked tables (C1). pick: the link dialog's file (null: cancelled), the only path inspect, create and relink accept.
@@ -641,5 +681,15 @@ export interface BasecraftApi {
      *  transaction; Stop is queries.cancel (cancelled). Same progress event. */
     importTables(kind: ServerKind, params: unknown, names: string[]): Promise<ServerImportResult>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
+  };
+  /** E1: External Data › Import › Access: the tables and data of an Access file into local tables. */
+  accessImport: {
+    /** `path`: a path links.pick gave. A protected file asks its password as the link dialog does (bridge.ts). */
+    inspect(path: string): Promise<AccessImportInfo>;
+    /** `remotes`: Access names inspect listed. Stop is queries.cancel (cancelled). */
+    run(path: string, remotes: string[]): Promise<AccessImportResult>;
+    onProgress(cb: (p: ImportProgress) => void): () => void;
+    /** Asks where, then writes `text` as UTF-8; false when the user cancels. */
+    saveReport(text: string, defaultName: string): Promise<boolean>;
   };
 }

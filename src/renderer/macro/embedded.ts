@@ -2,12 +2,15 @@
 // tab of its own. The session links that tab to its design: its Save writes the definition into the design (undoable, the design
 // becomes dirty), never into the file. A session lives as long as its tab (the macro view drops it when it goes).
 import type { DesignDoc } from '../../shared/design/model';
+import type { DataEvent } from '../../shared/macro/data-macro';
 import type { MacroDef } from '../../shared/macro/model';
 import type { DesignerAction, PropTarget } from '../designer/designer-model';
 import { targetExists } from '../designer/property-sheet-model';
 import type { AppDispatch } from '../shell/nav-menu';
 
-export interface EmbeddedSession { owner: string /* design tab id */; title: string; def: MacroDef; save(def: MacroDef): boolean /* false: owner or target gone */ }
+export interface EmbeddedSession { owner: string /* design tab id */; title: string; def: MacroDef; save(def: MacroDef): boolean | Promise<boolean> /* false: owner or target gone */
+  /** A table's data macro (T2): the event, or 'named'. The owner is then not a design tab: `data:<table>`, and Save writes into the base. */
+  data?: DataEvent | 'named' }
 
 const sessions = new Map<string, EmbeddedSession>();
 let seq = 0;

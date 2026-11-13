@@ -8,7 +8,7 @@ import { instantReport } from './instant';
 import { layoutReport } from './layout';
 import { readReport } from './model';
 import { itemAt, occurrences } from './flow';
-import { renderDocumentHtml, renderFlowHtml, renderPageHtml, reportCss } from './render';
+import { dataOnlyReport, renderDocumentHtml, renderFlowHtml, renderPageHtml, reportCss } from './render';
 import { lineHeight } from './text';
 import type { FontSpec, LaidOutBand, LaidOutItem, LaidOutPage, LaidOutReport } from './types';
 
@@ -58,6 +58,17 @@ describe('render (brief)', () => {
     expect(renderPageHtml(pageWithImage('data:image/png;base64,AA==', 'zoom'), rep)).toContain('object-fit:contain');
   });
   it('always light', () => expect(renderDocumentHtml(rep)).not.toContain('var(--'));
+});
+
+describe('render of a Rich Text value', () => {
+  const rich = (html: string) => renderPageHtml(page([textItem('', { lines: [], rich: { html, inset: [0, 0, 0, 0] } })]), rep);
+  it('draws the formatting, sanitized', () => {
+    const html = rich('<div><b>bold</b></div><ul><li>one</li></ul><img src=x onerror=alert(1)><script>alert(1)</script><span style="color:red;position:fixed" onclick="x">t</span>');
+    expect(html).toContain('<div><b>bold</b></div><ul><li>one</li></ul>');
+    expect(html).toContain('<span style="color:red">t</span>');
+    expect(html).not.toMatch(/<script|<img|onerror|onclick|position:fixed/i);
+  });
+  it('a plain text item stays escaped', () => expect(renderPageHtml(pageWithText('<b>x</b>'), rep)).toContain('&lt;b&gt;x&lt;/b&gt;'));
 });
 
 describe('render', () => {
@@ -410,5 +421,25 @@ describe('graphiques F5 : les huit nouveaux types dans un état', () => {
       const alone = svgs(await html([t, ...TYPES.filter((x) => x !== t).slice(0, 7)]))[0];
       expect(norm(alone!), t).toBe(all[i]);
     }
+  });
+});
+
+describe('Print Data Only', () => {
+  it('keeps the bound text and check boxes; drops labels, lines, boxes, pictures, colours and gridlines', () => {
+    const border = { width: 15, color: '#000000', style: 'solid' as const };
+    const grid = { top: border, right: null, bottom: null, left: null, padding: { left: 0, right: 0, top: 0, bottom: 0 } };
+    const rp = report([{ number: 1, bands: [band([
+      textItem('keep', { border, back: '#ffff00', grid }),
+      textItem('caption', { name: 'Cap' }),
+      { kind: 'rect', name: 'R', left: 0, top: 0, width: 10, height: 10, border, back: '#ff0000' },
+      { kind: 'line', name: 'L', x1: 0, y1: 0, x2: 10, y2: 0, border },
+      { kind: 'check', name: 'C', left: 0, top: 0, width: 200, height: 200, checked: true, color: '#000000' },
+      { kind: 'image', name: 'I', left: 0, top: 0, width: 10, height: 10, src: 'data:image/png;base64,AA==', sizeMode: 'zoom' },
+    ], { back: '#00ff00' })] }]);
+    const out = dataOnlyReport(rp, new Set(['Cap']));
+    expect(out.pages[0]!.bands[0]!.back).toBeNull();
+    expect(out.pages[0]!.bands[0]!.items.map((i) => i.kind)).toEqual(['text', 'check']);   // the label and the rest go
+    expect(out.pages[0]!.bands[0]!.items[0]).toMatchObject({ border: null, back: null, grid: undefined, lines: [{ text: 'keep' }] });
+    expect(rp.pages[0]!.bands[0]!.items).toHaveLength(6);   // the input is not changed
   });
 });

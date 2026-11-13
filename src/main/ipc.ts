@@ -1,8 +1,8 @@
 // Gestionnaires ipcMain de l'API window.basecraft : émetteur vérifié, arguments vérifiés, une session à la fois.
-import { app, clipboard, ipcMain, nativeTheme, safeStorage, shell, type BrowserWindow } from 'electron';
+import { app, clipboard, ipcMain, nativeTheme, safeStorage, session, shell, type BrowserWindow } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync, rmSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { CH, type AppInfo, type ContentState, type LicenseEntry, type LinkResult, type OpResult, type RelationResult, type SaveTableResult, type SessionState, type SettingsView } from '../shared/api';
 import { logLabels } from '../shared/autocorrect/labels';
@@ -15,16 +15,18 @@ import { RUNTIME } from '../shared/product';
 import { FILE_EXTENSION } from './db/file-format';
 import { HEARTBEAT_MS, keepAlive, releaseIfOurs } from './db/lock';
 import { isDesignChannel } from './design-channels';
+import { pickSpellLanguage } from './spellcheck';
 import { DbHost, type AsyncSession } from './db-host/client';
 import type { HostEvent, HostOpen } from './db-host/protocol';
-import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickSavePath, showNotice } from './dialogs';
+import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickSavePath, pickTextPath, showNotice } from './dialogs';
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg,
+  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
+import { viaTemp } from './exchange/atomic-file';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
@@ -76,7 +78,8 @@ function appInfo(): AppInfo {
     electron: process.versions.electron, chromium: process.versions.chrome, node: process.versions.node, sqlite: process.versions.sqlite ?? '',
     platform: process.platform, arch: process.arch,
     copyright: '© 2026 GD Solutions', licence: 'GNU AGPL v3',
-    links: { homepage: HOMEPAGE, issues: `${HOMEPAGE}/issues`, licence: `${HOMEPAGE}/blob/main/LICENSE` },
+    links: { homepage: HOMEPAGE, issues: `${HOMEPAGE}/issues`, licence: `${HOMEPAGE}/blob/main/LICENSE`,
+      site: 'https://gdsolutions-dev.github.io/BaseCraft/', releases: `${HOMEPAGE}/releases` },
   };
 }
 
@@ -396,7 +399,7 @@ function restartRefresh(): void {
 /** The calls Stop may end: reads of a query or table, action queries (one transaction, rolled back) and the server migration
  *  (C7 R10: its server transaction rolled back, the front-end untouched). Never a row write, an import or another design change. */
 const STOPPABLE = new Set(['describeSource', 'pageSource', 'actionCount', 'runAction', 'page', 'count', 'lookup',
-  'migrateToServer', 'importServerTables']); // C7 R10: its server transaction rolls back
+  'migrateToServer', 'importServerTables', 'importAccessTables']); // C7 R10: its server transaction rolls back
 
 /** R12: how long a server statement whose cancel was sent may take to answer before Stop kills the data process. */
 export const INTERRUPT_WAIT_MS = 5000;
@@ -468,15 +471,17 @@ async function runImport(run: () => Promise<unknown>): Promise<unknown> {
 
 /** One export at a time, and not during an import (they share the progress event). The data process writes the file at the
  *  path chosen in the save dialog; nothing is written into the base. */
-async function runExport(src: ReturnType<typeof exportSource>, spec: ReturnType<typeof exportSpec> | null, defaultName: string): Promise<unknown> {
+async function runExport(src: ReturnType<typeof exportSource>, spec: ReturnType<typeof exportSpec> | null, defaultName: string, markup?: 'xml' | 'html'): Promise<unknown> {
   if (importing) throw new Error('bc:invalidArgument');
   importing = true;
   try {
     // Excel (no spec): too many rows is told before the dialog
-    if (!spec && (await need().exportRowCount(src)) > MAX_EXCEL_ROWS) return { ok: false, reason: 'tooManyRows', limit: MAX_EXCEL_ROWS };
-    const { yes, no, textFilter, excelFilter } = catalog().exchange;
-    const path = await pickExportPath(defaultName, spec ? 'text' : 'excel', spec ? textFilter : excelFilter);
+    if (!spec && !markup && (await need().exportRowCount(src)) > MAX_EXCEL_ROWS) return { ok: false, reason: 'tooManyRows', limit: MAX_EXCEL_ROWS };
+    const { yes, no, textFilter, excelFilter, xmlFilter, htmlFilter } = catalog().exchange;
+    const path = markup ? await pickExportPath(defaultName, markup, markup === 'xml' ? xmlFilter : htmlFilter)
+      : await pickExportPath(defaultName, spec ? 'text' : 'excel', spec ? textFilter : excelFilter);
     if (path === null) return { ok: false, reason: 'cancelled' };
+    if (markup) return await need().exportMarkup(src, markup, defaultName, path, { yes, no });
     if (!spec) return await need().exportExcel(src, path, sheetName(defaultName));
     return await need().exportText(src, spec, path, { yes, no });
   } finally {
@@ -538,12 +543,24 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     e.sender[cmd as 'cut' | 'copy' | 'paste']();
   });
   handle(CH.beep, () => { shell.beep(); });
+  handle(CH.appReadClipboard, () => clipboard.readText());
+  // Spelling: Chromium's Hunspell dictionary of the interface language, downloaded on first use (Google's CDN) and kept in the user data folder
+  const spellPrepare = () => {
+    const ses = session.defaultSession;
+    const lang = pickSpellLanguage(ses.availableSpellCheckerLanguages, uiLanguage(), region());
+    if (lang && !ses.getSpellCheckerLanguages().includes(lang)) ses.setSpellCheckerLanguages([lang]);
+    return lang !== null;
+  };
+  handle(CH.spellPrepare, spellPrepare);
+  try { spellPrepare(); } catch (e) { console.error(e); }   // the download starts at launch, not at the first click
   handle(CH.appWriteClipboard, (text) => { clipboard.writeText(clipboardText(text)); });
   handle(CH.appSetIcon, (png) => {
     const bytes = iconBytes(png);
     const w = mainWindow();
     if (w && !w.isDestroyed()) setWindowIcon(w, bytes);
   });
+  // A link a base's author typed (a label's HyperlinkAddress): the renderer asks the user first, the main process only checks the scheme.
+  handle(CH.openHyperlink, (url) => shell.openExternal(hyperlinkUrl(url)));
   // The renderer never chooses the URL: only the links About shows may be opened, in the system browser.
   handle(CH.openExternal, (url) => {
     const links = appInfo().links;
@@ -628,6 +645,8 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.tablesRename, (a, b) => objectWrite(() => need().renameTable(lookupName(a), nameArg(b), logLabels(catalog().autoCorrect))));
   handle(CH.tablesDrop, (n) => tableOp(() => need().dropTable(lookupName(n))));
   handle(CH.tablesTestRules, (n) => need().testRules(lookupName(n)));
+  handle(CH.tablesDataMacros, (n) => need().dataMacros(lookupName(n)));
+  handle(CH.tablesSaveDataMacros, (n, m) => need().saveDataMacros(lookupName(n), dataMacrosArg(m)));
 
   handle(CH.rowsCount, (t, f) => need().count(lookupName(t), fieldFilters(f)));
   handle(CH.rowsPage, (t, r) => need().page(lookupName(t), pageRequest(r)));
@@ -671,6 +690,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.relationsDelete, (n) => tableOp(() => need().deleteRelation(lookupName(n))));
   handle(CH.relationsLayout, () => need().relationsLayout());
   handle(CH.tablesSaveColumnWidths, (n, w) => rowWrite(() => need().saveColumnWidths(lookupName(n), columnWidths(w))));
+  handle(CH.tablesSaveSheetLayout, (n, l) => rowWrite(() => need().saveSheetLayout(lookupName(n), sheetLayoutArg(l))));
   handle(CH.relationsSaveLayout, (l) => rowWrite(() => need().saveRelationsLayout(relationsLayout(l))));
   handle(CH.relationsCascadeChildren, (t) => need().cascadeChildren(lookupName(t)));
 
@@ -681,8 +701,8 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   });
   handle(CH.importPreview, (p, s) => need().importPreview(importPath(p, chosenImports), importSpecOrNull(s), catalog().importText.fieldPrefix));
   handle(CH.importRun, (p, plan) => { const path = importPath(p, chosenImports); const pl = importPlan(plan); return runImport(() => need().importRun(path, pl, importTexts())); });
-  handle(CH.importExcelPick, async () => {
-    const p = await pickExcelPath(catalog().exchange.excelFilter);
+  handle(CH.importExcelPick, async (kind) => {
+    const p = kind === 'xml' ? await pickExcelPath(catalog().exchange.xmlFilter, 'xml') : await pickExcelPath(catalog().exchange.excelFilter);
     if (p !== null) chosenImports.add(p);
     return p;
   });
@@ -752,6 +772,20 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     await whenIdle();
     return runImport(() => need().importServerTables(kind, params, names));
   });
+  // E1: the path is one links.pick returned; the file is only read. Progress and Stop as the other imports.
+  handle(CH.accessImportInspect, (p) => need().inspectAccessImport(linkPath(p, chosenLinks)));
+  handle(CH.accessImportRun, async (p, n) => {
+    const path = linkPath(p, chosenLinks); const names = nameList(n);
+    await whenIdle();
+    return runImport(() => need().importAccessTables(path, names));
+  });
+  handle(CH.accessImportSaveReport, async (t, n) => {
+    const text = reportBody(t); const name = bareFileName(n);
+    const path = await pickTextPath(name, catalog().exchange.textFilter);
+    if (path === null) return false;
+    await viaTemp(path, (tmp) => writeFile(tmp, text, 'utf8')); // a failure leaves the file already there untouched
+    return true;
+  });
 
   handle(CH.tablesCopy, (a, b, m) => {
     if (m !== undefined && m !== 'structure' && m !== 'data') throw new TypeError('bc:invalidArgument');
@@ -793,4 +827,9 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.reportsPrint, (r) => printDocument(printRequest(r)));
   handle(CH.exchangeExportText, (s, spec, name) => runExport(exportSource(s), exportSpec(spec), lookupName(name)));
   handle(CH.exchangeExportExcel, (s, name) => runExport(exportSource(s), null, lookupName(name)));
+  handle(CH.exchangeExportMarkup, (s, format, name) => runExport(exportSource(s), null, lookupName(name), markupFormat(format)));
+  // F4: the saved exports live in the base's options (the Runtime keeps them too, as it keeps the exports)
+  handle(CH.exchangeSavedList, () => need().savedExports());
+  handle(CH.exchangeSavedSave, (n, e) => rowWrite(() => need().saveSavedExport(nameArg(n), savedExport(e))));
+  handle(CH.exchangeSavedDelete, (n) => rowWrite(() => need().deleteSavedExport(lookupName(n))));
 }

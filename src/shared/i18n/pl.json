@@ -27,6 +27,7 @@
   },
   "ribbon": {
     "label": "Wstążka",
+    "quickAccess": "Pasek narzędzi Szybki dostęp",
     "file": "Plik",
     "tab": {
       "home": "Narzędzia główne",
@@ -110,6 +111,8 @@
       "viewDesign": "Widok projektu",
       "newRecord": "Nowy",
       "save": "Zapisz",
+      "undo": "Cofnij",
+      "redo": "Ponów",
       "deleteRecord": "Usuń",
       "sortAsc": "Rosnąco",
       "sortDesc": "Malejąco",
@@ -808,6 +811,8 @@
       "rectangle": "Prostokat",
       "pageBreak": "PodzialStrony",
       "tabControl": "Karty",
+      "toggleButton": "Przelacz",
+      "navigationControl": "Nawigacja",
       "chart": "Wykres"
     },
     "format": {
@@ -816,6 +821,25 @@
       "fontSize": "Rozmiar czcionki",
       "colors": "Kolory",
       "format": "Format"
+    },
+    "cond": {
+      "empty": "Brak reguł. Dodaj regułę, aby formatować ten formant według jego wartości.",
+      "rule": "Reguła {{n}}",
+      "and": "i",
+      "remove": "Usuń",
+      "add": "Nowa reguła",
+      "invalid": "Reguła {{n}}: nie można odczytać wyrażenia.",
+      "noColor": "Brak koloru",
+      "op": {
+        "between": "Wartość pola jest z zakresu",
+        "equal": "Wartość pola jest równa",
+        "notEqual": "Wartość pola jest różna od",
+        "greater": "Wartość pola jest większa niż",
+        "less": "Wartość pola jest mniejsza niż",
+        "greaterEqual": "Wartość pola jest większa lub równa",
+        "lessEqual": "Wartość pola jest mniejsza lub równa",
+        "expression": "Wyrażenie ma wartość"
+      }
     }
   },
   "fieldType": {
@@ -838,6 +862,8 @@
     "caption": "Podpis",
     "required": "Wymagane",
     "allowZeroLength": "Zezwalaj na ciąg o zerowej długości",
+    "textFormat": "Format tekstu",
+    "textFormats": { "plain": "Zwykły tekst", "rich": "Tekst sformatowany" },
     "indexed": "Indeksowane",
     "auto": "Auto",
     "numberSizes": {
@@ -952,6 +978,9 @@
     "tableRule_short": "Co najmniej jedna wartość jest zabroniona przez regułę poprawności ustawioną dla tabeli „{{table}}”."
   },
   "datasheet": {
+    "more": { "rowHeight": "Wysokość wiersza…", "columnWidth": "Szerokość pola…", "rowHeightLabel": "Wysokość wiersza (punkty):", "columnWidthLabel": "Szerokość kolumny:", "standardHeight": "Wysokość standardowa", "standardWidth": "Szerokość standardowa", "bestFit": "Dopasuj", "hide": "Ukryj pola", "unhide": "Odkryj pola…", "freeze": "Zablokuj pola", "unfreeze": "Odblokuj wszystkie pola", "unhideTitle": "Odkryj kolumny" },
+    "totals": { "label": "Suma", "none": "Brak" },
+    "format": { "gridlines": "Widoczne linie siatki", "gridColor": "Kolor linii siatki", "auto": "Automatyczny" },
     "goTo": {
       "first": "Pierwszy",
       "previous": "Poprzedni",
@@ -970,6 +999,15 @@
     "fieldError_record": "{{message}}",
     "unsupported": "Ta tabela nie jest obsługiwana przez BaseCraft: nie można wyświetlić jej danych.",
     "findCapped": "Wyszukiwanie i kopiowanie obejmują pierwsze 100 000 rekordów.",
+    "spellNotFound": "Brak w słowniku",
+    "spellChangeTo": "Zmień na",
+    "spellSuggestions": "Sugestie",
+    "spellIgnore": "Pomiń",
+    "spellIgnoreAll": "Pomiń wszystkie",
+    "spellChange": "Zmień",
+    "spellChangeAll": "Zmień wszystkie",
+    "spellDone": "Sprawdzanie pisowni zostało zakończone.",
+    "spellUnavailable": "Brak słownika pisowni dla języka interfejsu. Jest on pobierany przy pierwszym użyciu, co wymaga połączenia z Internetem.",
     "pasteOneRow": "Wklejanie jest ograniczone do jednego wiersza naraz.",
     "discardTitle": "Nie można zapisać rekordu",
     "saveTableLayout": "Czy chcesz zapisać zmiany układu tabeli '{{name}}'?",
@@ -1348,6 +1386,7 @@
   },
   "importText": {
     "titleExcel": "Importowanie skoroszytu programu Excel",
+    "titleXml": "Importowanie pliku XML",
     "title": "Importowanie pliku tekstowego",
     "stepOf": "Krok {{n}} z {{total}}",
     "step": {
@@ -1362,6 +1401,7 @@
     },
     "source": {
       "introExcel": "Określ skoroszyt programu Excel (.xlsx, .xlsm) do zaimportowania, a następnie sposób i miejsce zapisania jego danych w bieżącej bazie danych.",
+      "introXml": "Określ plik XML do zaimportowania (rekordy złożone z pól, tak jak zapisują je BaseCraft i Access), a następnie sposób i miejsce zapisania jego danych w bieżącej bazie danych.",
       "intro": "Określ plik tekstowy do zaimportowania, a następnie sposób i miejsce zapisania jego danych w bieżącej bazie danych.",
       "file": "Nazwa pliku",
       "browse": "Przeglądaj…",
@@ -1499,6 +1539,7 @@
     },
     "error": {
       "excelUnsupported": "Ten plik nie jest czytelnym skoroszytem programu Excel (.xlsx lub .xlsm).",
+      "xmlUnsupported": "Ten plik nie jest plikiem danych XML, który BaseCraft potrafi odczytać (element główny z powtarzanymi elementami rekordów, każdy z prostymi elementami pól; najwyżej 100 MB; bez DTD).",
       "fileTooLarge": "Ten skoroszyt jest większy niż 100 MB.",
       "noFile": "Określ plik do zaimportowania.",
       "fileNotFound": "Nie można znaleźć lub odczytać pliku.",
@@ -1610,6 +1651,8 @@
     "PictureAlignment": "Wyrównanie obrazu",
     "PictureSizeMode": "Tryb rozmiaru obrazu",
     "LineSlant": "Nachylenie linii",
+    "HyperlinkAddress": "Adres hiperłącza",
+    "NavigationTargets": "Cele nawigacji",
     "Pages": "Strony",
     "Name": "Nazwa",
     "Tag": "Znacznik",
@@ -1834,6 +1877,9 @@
       "fontNotPortable": "Czcionka „{{detail}}” nie jest osadzona: tekst jest mierzony i drukowany czcionką Liberation Sans.",
       "unsupportedControl": "Ten rodzaj formantu nie jest drukowany.",
       "pictureMissing": "Obraz udostępniony „{{detail}}” nie istnieje już w galerii: obraz nie jest wyświetlany ani drukowany.",
+      "subreportMissing": "Nie można znaleźć lub odczytać podraportu „{{detail}}”.",
+      "subreportRecursive": "Podraport „{{detail}}” zawiera ten raport (lub przekracza siedem poziomów): nie jest drukowany.",
+      "subreportBadLink": "Pola nadrzędne i podrzędne tego podraportu nie odpowiadają polom raportów.",
       "aggregateNotAllowed": "Suma nie jest dozwolona w tej sekcji.",
       "sizeClamped": "Rozmiar przekracza 55,88 cm, czyli limit programu Access: zostaje zmniejszony do tego limitu.",
       "groupingMalformed": "Poziom grupowania jest pusty lub nieprawidłowy: nic nie grupuje.",
@@ -1844,7 +1890,47 @@
     "invalidDefinition": "Definicja tego raportu jest nieprawidłowa:",
     "pdfSaved": "Plik PDF został zapisany.",
     "pdfFilter": "Pliki PDF",
+    "paper": {
+      "chou3": "Koperta japońska Chou nr 3",
+      "chou4": "Koperta japońska Chou nr 4",
+      "p4x6": "4x6 cali/10x15 cm",
+      "p5x7": "5x7 cali/13x18 cm",
+      "p35x5": "3,5x5 cali/L 89x127 mm",
+      "l2": "2L 127 x 178 mm",
+      "p8x10": "8x10 cali",
+      "ofuku": "Ofuku Hagaki 200 x 148 mm",
+      "envA2": "Koperta A2 111 x 146 mm",
+      "bristol4x6": "Karta Bristol 4x6 cali",
+      "bristol5x8": "Karta Bristol 5x8 cali",
+      "cardUs": "Karta Letter US (8,5 x 11 cali)",
+      "cardA4": "Karta A4 (8,27 x 11,69 cali)",
+      "p8_5x13": "8,5x13 cali",
+      "p3x5": "3 x 5 cali",
+      "bristol3x5": "Karta Bristol 3 x 5 cali",
+      "b5iso": "B5 (ISO) 176 x 250 mm",
+      "letter": "Letter",
+      "legal": "Legal",
+      "statement": "Statement",
+      "executive": "Executive",
+      "a4": "A4",
+      "a5": "A5",
+      "b5": "B5 (JIS)",
+      "env10": "Koperta nr 10",
+      "envDl": "Koperta DL",
+      "envC5": "Koperta C5",
+      "envC6": "Koperta C6",
+      "envMonarch": "Koperta Monarch",
+      "env675": "Koperta nr 6 3/4",
+      "postcardJp": "Pocztówka japońska",
+      "a6": "A6"
+    },
     "pageSetup": {
+      "tabOptions": "Opcje drukowania",
+      "tabPage": "Strona",
+      "tabColumns": "Kolumny",
+      "paper": "Papier",
+      "size": "Rozmiar",
+      "dataOnly": "Tylko dane",
       "title": "Ustawienia strony",
       "orientation": "Orientacja",
       "portrait": "Pionowo",
@@ -1855,6 +1941,21 @@
       "left": "Lewy",
       "right": "Prawy",
       "invalid": "Każdy margines musi mieścić się w zakresie od 0 do 10 cm."
+    },
+    "columns": {
+      "grid": "Ustawienia siatki",
+      "columnSize": "Rozmiar kolumn",
+      "width": "Szerokość (cm)",
+      "height": "Wysokość (cm)",
+      "rowSpacing": "Odstęp między wierszami (cm)",
+      "sameAsDetail": "Tak samo jak sekcja Szczegóły",
+      "title": "Kolumny",
+      "count": "Liczba kolumn",
+      "spacing": "Odstęp między kolumnami (cm)",
+      "layout": "Układ kolumn",
+      "down": "W dół, potem w prawo",
+      "across": "W prawo, potem w dół",
+      "invalid": "Kolumny: od 1 do 10; odstęp: od 0 do 10 cm."
     },
     "sectionGroup": {
       "header": "Nagłówek grupy: {{expr}}",
@@ -2071,7 +2172,8 @@
       "line": "Linia",
       "rectangle": "Prostokąt",
       "pageBreak": "Podział strony",
-      "tabControl": "Formant karty"
+      "tabControl": "Formant karty",
+      "toggleButton": "Przycisk przełączania"
     },
     "tab": {
       "format": "Format",
@@ -2120,6 +2222,7 @@
     "badSource": "Źródło rekordów tego formularza jest nieczytelne: zostało usunięte.",
     "headerFooter": "Nagłówek/stopka formularza",
     "tabPage": "Strona{{n}}",
+    "nav": { "reportLater": "Raportu nie można jeszcze wyświetlić w formancie nawigacji; tylko formularze." },
     "unbound": "Niepowiązane",
     "saveFirstTitle": "Zapisywanie formularza",
     "saveFirst": "Czy chcesz zapisać zmiany w formularzu „{{name}}”?",
@@ -2340,6 +2443,18 @@
     "no": "Fałsz",
     "excelFilter": "Skoroszyty programu Excel",
     "textFilter": "Pliki tekstowe",
+    "xmlFilter": "Pliki XML",
+    "htmlFilter": "Dokumenty HTML",
+    "saveSteps": "Zapisz kroki eksportu",
+    "saveName": "Zapisz jako",
+    "savedDefault": "Eksport - {{name}}",
+    "savedEmpty": "Brak zapisanych eksportów.",
+    "savedRun": "Uruchom",
+    "savedDelete": "Usuń",
+    "fmtText": "Plik tekstowy",
+    "fmtExcel": "Skoroszyt programu Excel",
+    "fmtXml": "Plik XML",
+    "fmtHtml": "Dokument HTML",
     "actionQuery": "„{{name}}” jest kwerendą funkcjonalną: nie ma danych do wyeksportowania.",
     "noSource": "Ten raport nie ma źródła rekordów: nie ma nic do wyeksportowania.",
     "selectObject": "Najpierw zaznacz tabelę lub kwerendę w okienku nawigacji.",
@@ -2416,6 +2531,7 @@
     "fieldSizeTitle": "Rozmiar pola",
     "fieldSizeLabel": "Rozmiar pola (od 1 do 255)",
     "fieldSizeInvalid": "Wprowadź liczbę całkowitą od 1 do 255.",
+    "lookupValues": "Wartości (po jednej w wierszu)",
     "formatNone": "(brak)",
     "validationTextTitle": "Komunikat poprawności",
     "fieldValidationTextLabel": "Komunikat wyświetlany po odrzuceniu wartości pola „{{field}}”",
@@ -2445,6 +2561,8 @@
     "noTables": "Ta baza nie zawiera żadnej tabeli lokalnej do przeniesienia.",
     "self": "Plik danych nie może być otwartą bazą. Wybierz inną nazwę lub folder."
   },
+  "clipboard": { "empty": "Schowek systemowy nie zawiera tekstu.", "content": "{{text}}" },
+  "hyperlink": { "address": "Adres (https://, http:// lub mailto:)", "text": "Tekst do wyświetlenia", "invalid": "Adres musi zaczynać się od https://, http:// lub mailto:.", "open": "Otworzyć {{url}}?" },
   "migrate": {
     "title": "Kreator przenoszenia na serwer",
     "intro": "Ten kreator przenosi wszystkie lokalne tabele bieżącej bazy danych do bazy danych PostgreSQL lub SQL Server, z ich danymi, kluczami, indeksami i relacjami, a następnie zastępuje je tabelami połączonymi o tych samych nazwach. Najpierw tworzona jest kopia zapasowa bazy danych. Reguły poprawności i obliczane wartości domyślne pozostają w aplikacji, która staje się aplikacją frontonu.",
@@ -2515,6 +2633,23 @@
     "saveFirstTitle": "Zapisz moduł",
     "saveFirst": "Czy zapisać zmiany w module „{{name}}”?"
   },
+  "dataMacro": {
+    "title": "Makra danych tabeli „{{table}}”",
+    "namedTitle": "Makra nazwane tabeli „{{table}}”",
+    "events": "Zdarzenia tabeli",
+    "named": "Makra nazwane",
+    "noNamed": "Brak makr nazwanych.",
+    "empty": "(puste)",
+    "edit": "Edytuj",
+    "rename": "Zmień nazwę…",
+    "delete": "Usuń",
+    "new": "Nowe makro nazwane…",
+    "close": "Zamknij",
+    "nameLabel": "Nazwa makra",
+    "nameExists": "Makro nazwane o tej nazwie już istnieje.",
+    "deleteAsk": "Usunąć makro danych „{{name}}” tabeli „{{table}}”?",
+    "saveFailed": "Nie można zapisać makr danych:\n{{detail}}"
+  },
   "macro": {
     "convert": {
       "title": "Konwertuj makro",
@@ -2531,6 +2666,10 @@
     },
     "newName": "Makro{{n}}",
     "action": {
+      "CreateRecord": "UtwórzRekord",
+      "RaiseError": "ZgłośBłąd",
+      "RunDataMacro": "UruchomMakroDanych",
+      "SetField": "UstawPole",
       "Beep": "Sygnał",
       "ClearMacroError": "WyczyśćBłądMakra",
       "CloseDatabase": "ZamknijBazęDanych",
@@ -2567,6 +2706,10 @@
       "UndoRecord": "CofnijRekord"
     },
     "arg": {
+      "Values": "Wartości (Pole = wyrażenie, jedno w wierszu)",
+      "ErrorNumber": "Numer błędu",
+      "ErrorDescription": "Opis błędu",
+      "Value": "Wartość",
       "FormName": "Nazwa formularza",
       "View": "Widok",
       "WhereCondition": "Warunek Gdzie",
@@ -2694,6 +2837,7 @@
       }
     },
     "category": {
+      "dataMacro": "Akcje makr danych",
       "ui": "Polecenia interfejsu użytkownika",
       "macro": "Polecenia makr",
       "system": "Polecenia systemowe",
@@ -2960,6 +3104,41 @@
       "ok": "Importuj",
       "done": "Zaimportowane tabele: {{names}}.",
       "skipped": "Nieimportowane kolumny ({{table}}): {{names}}."
+    },
+    "access": {
+      "title": "Importuj z programu Access",
+      "fileOnly": "Tabele i ich dane są importowane. Klucze inne niż Autonumerowanie, indeksy i reguły pól nie są odczytywane; kwerendy, formularze, raporty, makra i moduły nie są importowane.",
+      "linked": "Tabele połączone z tego pliku nie są oferowane: {{names}}.",
+      "warnSize": "Ten plik jest duży: import może potrwać.",
+      "missingTables": "Plik nie zawiera już: {{names}}. Nic nie zostało zmienione."
+    },
+    "report": {
+      "title": "Raport importu: {{source}}",
+      "save": "Zapisz raport",
+      "fileName": "Raport importu {{source}}.txt",
+      "level": {
+        "carried": "Zaimportowano bez zmian",
+        "approximated": "Zaimportowano z różnicą",
+        "ignored": "Nie zaimportowano"
+      },
+      "reason": {
+        "tableNotImported": "Jedna z tabel tej relacji nie została zaimportowana.",
+        "violations": "Niektóre rekordy nie mają odpowiadającego rekordu w tabeli głównej."
+      },
+      "line": {
+        "tableImported": "Tabela „{{object}}”: zaimportowane wiersze: {{n}}.",
+        "relationCreated": "Utworzono relację „{{object}}”.",
+        "keyAssumed": "Tabela „{{object}}”: pole Autonumerowanie „{{part}}” przyjęto jako klucz podstawowy.",
+        "keyNotRead": "Tabela „{{object}}”: brak pola Autonumerowanie, zaimportowano bez klucza podstawowego.",
+        "relationNotEnforced": "Utworzono relację „{{object}}” bez integralności referencyjnej. {{reason}}",
+        "structureNotRead": "Indeksy, reguły pól, wartości domyślne, podpisy i listy wyszukiwania nie są odczytywane.",
+        "fieldSkipped": "Tabela „{{object}}”: kolumna „{{part}}” nie została zaimportowana (typ, którego BaseCraft nie odczytuje).",
+        "valuesLost": "Tabela „{{object}}”, pole „{{part}}”: wartości, które się nie zmieściły ({{n}}), zostały puste.",
+        "tableUnsupported": "Tabela „{{object}}” nie została zaimportowana. {{reason}}",
+        "tableLinked": "Tabela „{{object}}” jest tabelą połączoną pliku Access: nie jest importowana.",
+        "relationIgnored": "Relacja „{{object}}” pliku Access nie została zaimportowana. {{reason}}",
+        "tablesOnly": "Kwerendy, formularze, raporty, makra i moduły nie są importowane."
+      }
     }
   },
   "link": {
@@ -3098,6 +3277,11 @@
     "title": "Znajdowanie i zamienianie",
     "tabFind": "Znajdź",
     "tabReplace": "Zamień",
+    "replaceWith": "Zamień na:",
+    "replace": "Zamień",
+    "replaceAll": "Zamień wszystko",
+    "replaceAllWarning": "Nie będzie można cofnąć tej operacji Zamień wszystko. Kontynuować?",
+    "replacedCount": "Wykonano zamian: {{count}}.",
     "what": "Znajdź:",
     "lookIn": "Szukaj w:",
     "lookInField": "Bieżące pole",
@@ -3176,6 +3360,121 @@
     "placeholder": "Wpisz instrukcję Pythona lub ?wyrażenie",
     "errorAt": "(Moduł {{module}}, wiersz {{line}})",
     "splitter": "Zmień rozmiar okna poleceń"
+  },
+  "wizard": {
+    "source": "Tabele/Kwerendy",
+    "available": "Dostępne pola:",
+    "selected": "Wybrane pola:",
+    "fieldsQuestion": "Które pola chcesz uwzględnić?",
+    "queryWhich": "Którego kreatora chcesz użyć?",
+    "queryKind": {
+      "simple": "Kreator prostych kwerend",
+      "crosstab": "Kreator kwerend krzyżowych",
+      "duplicates": "Kreator kwerend wyszukujących duplikaty",
+      "unmatched": "Kreator kwerend wyszukujących niepasujące rekordy"
+    },
+    "queryName": {
+      "simple": "Kwerenda {{source}}",
+      "crosstab": "Kwerenda krzyżowa {{source}}",
+      "duplicates": "Duplikaty w {{source}}",
+      "unmatched": "{{a}} bez dopasowania w {{b}}"
+    },
+    "dupFields": "Które pola mogą zawierać zduplikowane informacje?",
+    "dupExtra": "Które dodatkowe pola chcesz wyświetlić?",
+    "crossRows": "Które pola chcesz użyć jako nagłówki wierszy?",
+    "crossColumn": "Które pole chcesz użyć jako nagłówek kolumny?",
+    "crossValue": "Jaką liczbę chcesz obliczyć dla każdego przecięcia kolumny i wiersza?",
+    "unmatchedA": "Która tabela lub kwerenda zawiera rekordy, które chcesz uzyskać w wynikach?",
+    "unmatchedB": "Która tabela lub kwerenda zawiera powiązane rekordy?",
+    "unmatchedKey": "Które pole występuje w obu?",
+    "detailOrSummary": "Czy chcesz kwerendę szczegółową, czy podsumowującą?",
+    "detail": "Szczegółowa (pokazuje każde pole każdego rekordu)",
+    "summary": "Podsumowanie",
+    "countRecords": "Policz rekordy w {{source}}",
+    "queryTitle": "Jaki tytuł chcesz nadać kwerendzie?",
+    "openQuery": "Otwórz kwerendę, aby wyświetlić informacje",
+    "openQueryDesign": "Zmodyfikuj projekt kwerendy",
+    "formLayout": "Jaki układ ma mieć formularz?",
+    "formLayouts": {
+      "columnar": "W kolumnach",
+      "tabular": "Tabelaryczny",
+      "datasheet": "Arkusz danych",
+      "justified": "Wyjustowany (wyświetlany w kolumnach)"
+    },
+    "formTitle": "Jaki tytuł chcesz nadać formularzowi?",
+    "openForm": "Otwórz formularz, aby wyświetlić lub wprowadzić informacje",
+    "openFormDesign": "Zmodyfikuj projekt formularza",
+    "reportGroups": "Czy chcesz dodać poziomy grupowania (do {{max}})?",
+    "reportSort": "Jaką kolejność sortowania chcesz dla rekordów szczegółowych (do {{max}} pól)?",
+    "sortField": "Pole sortowania {{n}}",
+    "reportSummary": "Jakie wartości podsumowujące chcesz obliczyć?",
+    "detailAndSummary": "Szczegóły i podsumowanie",
+    "summaryOnly": "Tylko podsumowanie",
+    "reportLayout": "Jaki układ ma mieć raport?",
+    "stepped": "Układ: Schodkowy",
+    "reportTitle": "Jaki tytuł chcesz nadać raportowi?",
+    "openReport": "Podgląd raportu",
+    "openReportDesign": "Zmodyfikuj projekt raportu",
+    "labelSheet": "Jaki rozmiar etykiety chcesz zastosować?",
+    "labelCustom": "Niestandardowy…",
+    "labelWidth": "Szerokość etykiety (mm)",
+    "labelHeight": "Wysokość etykiety (mm)",
+    "labelColumns": "Etykiet w wierszu",
+    "labelMarginLeft": "Lewy i prawy margines arkusza (mm)",
+    "labelMarginTop": "Górny margines arkusza (mm)",
+    "labelNoFit": "Te etykiety nie mieszczą się na arkuszu.",
+    "labelFont": "Rozmiar czcionki",
+    "labelLines": "Co ma się znaleźć na etykiecie? Wpisz tekst i dodaj pola z listy.",
+    "labelLine": "Wiersz {{n}}",
+    "labelInsertField": "Wstaw pole…",
+    "labelRemoveLine": "Usuń wiersz",
+    "labelAddLine": "Dodaj wiersz",
+    "labelSort": "Według których pól posortować?",
+    "labelName": "Jaką nazwę nadać raportowi?",
+    "openLabels": "Zobacz etykiety tak, jak zostaną wydrukowane",
+    "labelsOf": "Etykiety {{source}}",
+    "moreForms": {
+      "multiple": "Wiele elementów",
+      "datasheet": "Arkusz danych",
+      "split": "Formularz dzielony",
+      "splitNote": "Niedostępne: BaseCraft nie ma jeszcze formularza dzielonego.",
+      "modal": "Okno dialogowe modalne",
+      "modalNote": "OK i Anuluj zamykają formularz. Otwiera się jak zwykły formularz: właściwości Modalny i Podręczny jeszcze nie istnieją."
+    },
+    "navigation": {
+      "horizontal": "Karty poziome",
+      "verticalLeft": "Karty pionowe, po lewej",
+      "verticalRight": "Karty pionowe, po prawej",
+      "horizontalVertical": "Karty poziome i karty pionowe, po lewej",
+      "verticalNote": "Niedostępne: formant nawigacji rysuje tylko karty poziome.",
+      "name": "Formularz nawigacji"
+    }
+  },
+  "dbtools": {
+    "close": "Zamknij",
+    "relReportEmpty": "W oknie Relacje nie jest wyświetlana żadna tabela.",
+    "depsNoSelection": "Najpierw zaznacz tabelę, kwerendę, formularz, raport lub makro w okienku nawigacji.",
+    "depsNone": "Brak.",
+    "depsOnMe": "Obiekty zależne od tego obiektu",
+    "depsIDependOn": "Obiekty, od których zależy ten obiekt",
+    "depsHint": "Kliknij obiekt, aby otworzyć go w widoku projektu. Wyszukiwanie obejmuje źródła rekordów, źródła wierszy, podformularze, kwerendy i akcje makr.",
+    "docFields": "Pola",
+    "docIndexes": "Indeksy",
+    "docRelationships": "Relacje",
+    "docControls": "Formanty",
+    "docRecordSource": "Źródło rekordów",
+    "docName": "Nazwa",
+    "docType": "Typ",
+    "docDescription": "Opis",
+    "docSource": "Źródło formantu",
+    "docParent": "Tabela nadrzędna",
+    "docChild": "Tabela podrzędna",
+    "docEnforced": "Więzy integralności",
+    "perfNoKey": "{{table}}: brak klucza podstawowego. Zdefiniuj go w widoku projektu, aby szybko znajdować i łączyć rekordy.",
+    "perfRelation": "{{table}}.{{field}}: używane przez relację {{relation}}, ale bez indeksu. Indeks przyspiesza sprzężenia i wyszukiwanie powiązanych rekordów.",
+    "perfQuery": "{{table}}.{{field}}: kwerenda {{query}} filtruje lub sprzęga według tego pola, ale nie ma ono indeksu.",
+    "perfOptimize": "Optymalizuj",
+    "perfNone": "Brak sugestii: każda tabela ma klucz podstawowy, a pola używane przez relacje i zapisane kwerendy mają indeksy."
   },
   "imageGallery": {
     "none": "Brak",

@@ -5,7 +5,9 @@ import { gestureEnd, isTypingKey, keyAction, placeRect, typedLabel, type Gesture
 const noMods = { alt: false, shift: false };
 const none = { ctrl: false, shift: false };
 const moveFrom = (section: number): Gesture => ({ kind: 'move', section, origin: { x: 0, y: 0 } });
-const bandFrom = (section: number): Gesture => ({ kind: 'band', section, origin: { x: 0, y: 0 } });
+// en-tête 24–74 px, Détail 98–198 px, pied de hauteur 0 à 222 px (repère de la feuille)
+const bodies = [{ x: 0, y: 24, height: 50 }, { x: 0, y: 98, height: 100 }, { x: 0, y: 222, height: 0 }];
+const bandFrom = (x: number, y: number): Gesture => ({ kind: 'band', origin: { x, y }, bodies });
 
 describe('pointer gestures', () => {
   it('drag converts px to twips (the reducer snaps)', () => expect(gestureEnd(moveFrom(1), { x: 10, y: 1, section: 1 }, noMods))
@@ -16,11 +18,18 @@ describe('pointer gestures', () => {
     expect(gestureEnd(moveFrom(1), { x: 0, y: 40, section: 0 }, { alt: true, shift: false })).toEqual([{ type: 'changeSection', to: 0, top: 600, free: true, drop: { x: 0, y: 600 } }]); });
   it('alt = free', () => expect(gestureEnd(moveFrom(1), { x: 10, y: 0, section: 1 }, { alt: true, shift: false })[0]).toMatchObject({ free: true }));
   it('a tiny move is a click', () => expect(gestureEnd(moveFrom(1), { x: 2, y: 2, section: 1 }, noMods)).toEqual([]));
-  it('tiny band = click (no rect select)', () => expect(gestureEnd(bandFrom(1), { x: 2, y: 1, section: 1 }, noMods)).toEqual([{ type: 'select', selection: { kind: 'doc' } }]));
-  it('band selects by rectangle, shift adds', () => expect(gestureEnd(bandFrom(1), { x: 100, y: 30, section: 1 }, { alt: false, shift: true }))
-    .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 0, width: 1500, height: 450 }, add: true }]));
-  it('band drawn up and left is normalized', () => expect(gestureEnd({ kind: 'band', section: 0, origin: { x: 100, y: 30 } }, { x: 0, y: 0, section: 0 }, noMods))
-    .toEqual([{ type: 'selectRect', section: 0, rect: { left: 0, top: 0, width: 1500, height: 450 }, add: false }]));
+  it('tiny band = click (no rect select)', () => expect(gestureEnd(bandFrom(0, 100), { x: 2, y: 101, section: 0 }, noMods)).toEqual([{ type: 'select', selection: { kind: 'doc' } }]));
+  it('band selects by rectangle, shift adds', () => expect(gestureEnd(bandFrom(0, 100), { x: 100, y: 130, section: 0 }, { alt: false, shift: true }))
+    .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 30, width: 1500, height: 450 }, add: true }]));
+  it('band drawn up and left is normalized', () => expect(gestureEnd(bandFrom(100, 130), { x: 0, y: 100, section: 0 }, noMods))
+    .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 30, width: 1500, height: 450 }, add: false }]));
+  it('band started outside the sheet selects in every section it crosses, the first one replacing the selection', () => {
+    const rect = (top: number) => ({ left: 750, top, width: 3750, height: 3000 });
+    expect(gestureEnd(bandFrom(300, 260), { x: 50, y: 60, section: 0 }, noMods)).toEqual([
+      { type: 'selectRect', section: 0, rect: rect(540), add: false }, { type: 'selectRect', section: 1, rect: rect(-570), add: true },
+      { type: 'selectRect', section: 2, rect: rect(-2430), add: true }]);
+    expect(gestureEnd(bandFrom(300, 0), { x: 350, y: 20, section: 0 }, noMods)).toEqual([{ type: 'select', selection: { kind: 'doc' } }]);   // au-dessus des sections
+  });
   it('resize and section height', () => {
     expect(gestureEnd({ kind: 'resize', handle: 'se', origin: { x: 0, y: 0 } }, { x: 10, y: 4, section: 0 }, { alt: true, shift: false }))
       .toEqual([{ type: 'resize', handle: 'se', dx: 150, dy: 60, free: true }]);
@@ -48,8 +57,8 @@ describe('pointer gestures', () => {
 
 describe('gestureEnd enclosed', () => {
   it('carries enclosed into selectRect only when true', () => {
-    expect(gestureEnd({ kind: 'band', section: 1, origin: { x: 0, y: 0 } }, { x: 100, y: 30, section: 1 }, { alt: false, shift: false, enclosed: true }))
-      .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 0, width: 1500, height: 450 }, add: false, enclosed: true }]);
+    expect(gestureEnd(bandFrom(0, 100), { x: 100, y: 130, section: 0 }, { alt: false, shift: false, enclosed: true }))
+      .toEqual([{ type: 'selectRect', section: 1, rect: { left: 0, top: 30, width: 1500, height: 450 }, add: false, enclosed: true }]);
   });
 });
 

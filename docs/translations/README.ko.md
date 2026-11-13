@@ -22,7 +22,7 @@ Windows · macOS · Linux</p>
 
 <p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>웹사이트</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">다운로드</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">UI 목업</a></p>
 
-<img src="../images/screenshot.png" alt="그룹화와 합계가 있는 BaseCraft 보고서 디자인 보기" width="900">
+<img src="../images/screenshot.png" alt="버튼과 매출 차트가 있는 BaseCraft 예제 데이터베이스의 시작 메뉴 폼" width="900">
 
 </div>
 

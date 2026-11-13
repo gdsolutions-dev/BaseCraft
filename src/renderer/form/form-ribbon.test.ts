@@ -9,7 +9,7 @@ const labels: FormLabels = { prefix: (k) => ({ label: 'Étiquette', textBox: 'Te
 describe('Form Design ribbon', () => {
   it('gallery commands map to the stage-A tools', () => {
     expect(GALLERY_TOOLS.select).toBeNull(); expect(GALLERY_TOOLS.button).toBe('commandButton');
-    expect(GALLERY_TOOLS.insertPageBreak).toBe('pageBreak'); expect(Object.keys(GALLERY_TOOLS)).toHaveLength(15); expect(GALLERY_TOOLS.hyperlink).toBeUndefined();
+    expect(GALLERY_TOOLS.insertPageBreak).toBe('pageBreak'); expect(GALLERY_TOOLS.toggleButton).toBe('toggleButton'); expect(Object.keys(GALLERY_TOOLS)).toHaveLength(17); expect(GALLERY_TOOLS.navigationControl).toBe('navigationControl'); expect(GALLERY_TOOLS.hyperlink).toBeUndefined();
   });
   it('header items show the Form Header and go there', () => {
     const d = headerItem(emptyFormDoc(null), 'title', { title: 'Clients', labels });

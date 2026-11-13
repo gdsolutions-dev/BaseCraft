@@ -46,8 +46,8 @@ export function DocumentView(p: DocViewProps) {
     // inner sections hidden with their tab too: a background tab's design or run view is never a shown `.doc`
     return (
       <>
-        {(!run || keep) && <section className="doc" hidden={run || !shown}><Design {...p} active={p.active && !run} /></section>}
-        {run && <section className="doc" hidden={!shown}>{!keep ? <View {...p} /> : p.tab.kind === 'query' ? <QueryRunView {...p} dispatch={back} sql={unsavedRunSql.get(id)} /> : <View {...p} dispatch={back} />}</section>}
+        {(!run || keep) && <section className="doc-body" hidden={run || !shown}><Design {...p} active={p.active && !run} /></section>}
+        {run && <section className="doc-body" hidden={!shown}>{!keep ? <View {...p} /> : p.tab.kind === 'query' ? <QueryRunView {...p} dispatch={back} sql={unsavedRunSql.get(id)} /> : <View {...p} dispatch={back} />}</section>}
       </>
     );
   }

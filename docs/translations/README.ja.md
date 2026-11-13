@@ -22,7 +22,7 @@ Windows · macOS · Linux</p>
 
 <p><a href="https://gdsolutions-dev.github.io/BaseCraft/"><strong>Web サイト</strong></a> · <a href="https://github.com/gdsolutions-dev/BaseCraft/releases">ダウンロード</a> · <a href="https://gdsolutions-dev.github.io/BaseCraft/maquettes/">UI モックアップ</a></p>
 
-<img src="../images/screenshot.png" alt="グループ化と集計を設定した BaseCraft のレポートのデザインビュー" width="900">
+<img src="../images/screenshot.png" alt="ボタンと売上グラフを備えた BaseCraft サンプルデータベースのスタートアップメニューフォーム" width="900">
 
 </div>
 

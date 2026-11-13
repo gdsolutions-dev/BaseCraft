@@ -8,11 +8,11 @@ import type { CommandId } from '../shell/ribbon-model';
 import { headerFooterShown, nextTabIndex, toggleHeaderFooter, type FormLabels } from './form-def';
 import { nextName } from './form-host';
 
-/** Les 15 contrôles de l'étape A ; null = Sélectionner. Les entrées 'later' de la galerie n'y sont pas. */
+/** Les 15 contrôles de l'étape A, plus le bouton bascule (D2) et le contrôle navigation (D4) ; null = Sélectionner. Les entrées 'later' de la galerie n'y sont pas. */
 export const GALLERY_TOOLS: Partial<Record<CommandId, ControlKind | null>> = {
   select: null, textBox: 'textBox', label: 'label', button: 'commandButton', tabControl: 'tabControl', optionGroup: 'optionGroup',
   insertPageBreak: 'pageBreak', comboBox: 'comboBox', line: 'line', listBox: 'listBox', rectangle: 'rectangle', checkBox: 'checkBox',
-  optionButton: 'optionButton', subform: 'subform', image: 'image',
+  optionButton: 'optionButton', subform: 'subform', image: 'image', toggleButton: 'toggleButton', navigationControl: 'navigationControl',
 };
 
 const GAP = 113;                                // 0,2 cm entre le logo et le titre
@@ -34,6 +34,17 @@ function firstFreeLeft(controls: ControlDef[], size: { width: number; height: nu
  * Affiche l'en-tête (et le pied, comme toggleHeaderFooter) s'il est masqué, puis y ajoute, noms rendus uniques : le logo et le titre
  * à la première place libre depuis la gauche (le titre après le logo ; un logo ajouté ensuite, après le titre), la date et l'heure au bord droit. La section grandit pour les contenir.
  */
+/** Insérer un lien hypertexte (D3) : une étiquette de 4 × 0,6 cm sous les contrôles du Détail, Caption = le texte, HyperlinkAddress = l'adresse. */
+export function insertHyperlink(doc: DesignDoc, link: { text: string; address: string }, labels: FormLabels): DesignDoc {
+  const index = doc.sections.findIndex((s) => s.kind === 'detail');
+  if (index < 0) return doc;
+  const detail = doc.sections[index];
+  const label: ControlDef = { kind: 'label', name: nextName(doc, labels.prefix('label'), []), left: 0, top: (detail.controls.length ? sectionBottomLimit(detail) : 0) + 57,
+    width: 2268, height: 340, props: { Caption: link.text, HyperlinkAddress: link.address } };
+  const controls = [...detail.controls, label];
+  const height = Math.max(detail.height, Math.min(sectionBottomLimit({ ...detail, controls }), MAX_TWIPS));
+  return { ...doc, sections: doc.sections.map((s, i) => (i === index ? { ...s, height, controls } : s)) };
+}
 export function headerItem(doc: DesignDoc, item: 'logo' | 'title' | 'dateTime', ctx: { title: string; picture?: string; labels: FormLabels }): DesignDoc {
   const d = headerFooterShown(doc) ? doc : toggleHeaderFooter(doc);
   const index = d.sections.findIndex((s) => s.kind === 'formHeader');

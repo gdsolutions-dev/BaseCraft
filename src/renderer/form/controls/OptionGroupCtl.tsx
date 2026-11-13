@@ -8,7 +8,7 @@ import { isUnbound } from '../control-values';
 import { controlEnabled, optionGroupValue, prop } from '../run-model';
 import { fieldOf, hasLabel, placed, tipOf, type CtlProps } from './run-ctx';
 
-const isOption = (k: ControlDef): boolean => (k.kind === 'optionButton' || k.kind === 'checkBox') && typeof k.props.OptionValue === 'number' && prop(k, 'Visible') !== false;
+const isOption = (k: ControlDef): boolean => (k.kind === 'optionButton' || k.kind === 'checkBox' || k.kind === 'toggleButton') && typeof k.props.OptionValue === 'number' && prop(k, 'Visible') !== false;
 
 export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { renderChild(k: ControlDef, origin: ControlDef, forId?: string): ReactNode }) {
   const tc = useDocTheme();
@@ -48,10 +48,10 @@ export function OptionGroupCtl({ c, x, style, renderChild }: CtlProps & { render
         const i = options.indexOf(k);
         return [
           <div key={k.name} role="radio" id={x.id(k.name)} data-testid={`form-ctl-${k.name}`} aria-checked={chosen === k.name}
-            className={`frun-radio${k.kind === 'checkBox' ? ' frun-square' : ''}`} style={placed(k, c, tc)}
+            className={`frun-radio${k.kind === 'checkBox' ? ' frun-square' : k.kind === 'toggleButton' ? ' frun-pill' : ''}`} style={placed(k, c, tc)}
             tabIndex={k.name === target && x.stops.has(c.name) ? 0 : -1} aria-disabled={disabled || prop(k, 'Enabled') === false || undefined}
             {...(hasLabel(k, x) ? { 'aria-labelledby': `${x.id(k.name)}-label` } : { 'aria-label': k.name })} {...tipOf(k)}
-            onClick={() => choose(k)} onKeyDown={(e) => keys(e, i)} />,
+            onClick={() => choose(k)} onKeyDown={(e) => keys(e, i)}>{k.kind === 'toggleButton' ? String(prop(k, 'Caption') ?? '') : null}</div>,
           ...(k.children ?? []).map((l) => renderChild(l, c, x.id(k.name))),
         ];
       })}

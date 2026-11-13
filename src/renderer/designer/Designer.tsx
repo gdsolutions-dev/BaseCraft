@@ -47,6 +47,8 @@ export interface DesignerHost {
   /** Mode Page d'un formulaire continu : `count` copies en lecture seule du corps du Détail sous celui qu'on modifie ; `row` = 1…count,
    *  l'écart avec l'enregistrement courant. Absent (mode Création, formulaire simple) : rien de plus n'est dessiné. */
   extraDetailRows?: { count: number; render(c: ControlDef, s: SectionDef, row: number): ReactNode };
+  /** Afficher les marges (états) : le cadre de la zone imprimable d'une page, en pointillés, depuis le coin haut gauche du canevas. */
+  pageGuide?: { width: number; height: number };
 }
 
 /** Ce que reçoit une surface fournie par l'hôte (`canvas`) : l'état et le réducteur du concepteur. */

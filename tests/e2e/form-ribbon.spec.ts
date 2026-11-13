@@ -25,7 +25,7 @@ const fiche: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'table', 
 /** Un outil de la galerie, puis un clic dans le Détail : le contrôle `name` apparaît (Étiquette1 : l'étiquette attachée de Texte1). */
 const TOOLS: [string, string][] = [['label', 'Étiquette2'], ['button', 'Commande1'], ['tabControl', 'OngletCtl1'], ['optionGroup', 'Cadre1'],
   ['insertPageBreak', 'SautPage1'], ['comboBox', 'Modifiable1'], ['line', 'Trait1'], ['listBox', 'Liste1'], ['rectangle', 'Rectangle1'],
-  ['checkBox', 'Case1'], ['optionButton', 'Option1'], ['subform', 'Enfant1'], ['image', 'Image1']];
+  ['checkBox', 'Case1'], ['optionButton', 'Option1'], ['subform', 'Enfant1'], ['image', 'Image1'], ['toggleButton', 'Bascule1']];
 
 test('Form ribbon: Controls gallery, Header/Footer, Format tab, Blank Form', async () => {
   test.setTimeout(180000);
@@ -41,8 +41,8 @@ test('Form ribbon: Controls gallery, Header/Footer, Format tab, Blank Form', asy
       'insertPageBreak', 'comboBox', 'line', 'toggleButton', 'listBox', 'rectangle', 'checkBox', 'unboundObjectFrame', 'attachment', 'optionButton', 'subform',
       'boundObjectFrame', 'image', 'webBrowser', 'chart', 'insertImage', 'insertModernChart'].map((c) => `cmd-${c}`));
     expect(await cmds(page, 'headerFooter')).toEqual(['cmd-logo', 'cmd-title', 'cmd-dateTime']);
-    await expect(page.getByTestId('cmd-hyperlink')).toHaveAttribute('data-planned', 'later');
-    await expect(page.getByTestId('cmd-subformInNewWindow')).toHaveAttribute('data-planned', 'later');
+    await expect(page.getByTestId('cmd-webBrowser')).toHaveAttribute('data-planned', 'later');
+    await expect(page.getByTestId('cmd-subformInNewWindow')).toBeDisabled();   // no subform selected
     // aucun contrôle sélectionné : Format n'offre que Objet et Sélectionner tout
     await page.getByTestId('ribbon-tab-format').click();
     for (const id of ['bold', 'font', 'fontColor', 'format', 'increaseDecimals', 'shapeOutline']) await expect(page.getByTestId(`cmd-${id}`), id).toBeDisabled();

@@ -40,6 +40,14 @@ test('marquee selection: partial by default, whole controls only with the option
     await design(page, 'form', 'FDeux');
     await drag(page, 3, 94);   // 94 px = 1410 twips: reaches into B, covers A whole
     expect(await selected(page)).toEqual({ A: 'true', B: 'true' });
+    // started on the background around the sheet (to its right, then below it, across the hidden footer): it still selects
+    const sheet = (await cur(page).locator('.dz-sheet').boundingBox())!, body = (await cur(page).locator('[data-section-body="1"]').boundingBox())!;
+    for (const [x, y] of [[sheet.x + sheet.width + 10, body.y + 65], [body.x + 100, sheet.y + sheet.height + 10]]) {
+      await cur(page).locator('[data-section-body="1"]').click({ position: { x: 300, y: 60 } });
+      expect(await selected(page)).toEqual({ A: 'false', B: 'false' });
+      await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move((x + body.x) / 2, (y + body.y) / 2); await page.mouse.move(body.x + 3, body.y + 5); await page.mouse.up();
+      expect(await selected(page)).toEqual({ A: 'true', B: 'true' });
+    }
 
     await page.getByTestId('ribbon-tab-file').click();
     await page.getByTestId('bs-options').click();

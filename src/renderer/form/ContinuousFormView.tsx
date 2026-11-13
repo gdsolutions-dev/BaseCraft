@@ -70,7 +70,7 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
     );
   };
   return (
-    <div className="frun" ref={root} data-testid="form-run">
+    <div className={selectors ? "frun frun-sel" : "frun"} ref={root} data-testid="form-run">
       {header && <div className="frun-fixed"><FormSection doc={doc} section={header} x={x} width={width} /></div>}
       <div className="frun-body" ref={body} style={overflow} data-testid="form-rows" onScroll={(e) => setPort({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}>
         {detail && (

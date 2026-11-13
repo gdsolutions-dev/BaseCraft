@@ -36,9 +36,9 @@ export type LinkTable = LinkFileInfo['tables'][number] & { readOnly?: boolean };
 /** The tables to tick, linked by `create` (true: links created). `server`: a server's texts (C4: skipped columns, no table, missing).
  *  C7 R17: `okKey` the OK button's label (« Importer »), `create` may answer `cancelled` (Stop: back to the list, no message), `busyNote`
  *  what shows while it runs (the import's progress and « Arrêter »). */
-export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote }: {
+export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote, missingKey = 'link.server.missingTables' }: {
   header: ReactNode; tables: LinkTable[]; create(names: string[]): Promise<LinkResult | { ok: false; reason: 'cancelled' }>; onClose(v: true | null): void;
-  server?: boolean; okKey?: string; busyNote?: ReactNode;
+  server?: boolean; okKey?: string; busyNote?: ReactNode; missingKey?: string;
 }) {
   const { t } = useTranslation();
   const free = tables.filter((x) => !x.taken && !x.unsupported).map((x) => x.name);
@@ -53,7 +53,7 @@ export function LinkForm({ header, tables, create, onClose, server = false, okKe
       const r = await create(tables.map((x) => x.name).filter((n) => picked.includes(n)));
       if (r.ok) return onClose(true);
       if (r.reason === 'cancelled') return;
-      setError(t(server && r.reason === 'missingTables' ? 'link.server.missingTables' : `link.error.${r.reason}`, { names: r.names.join(', ') }));
+      setError(t(server && r.reason === 'missingTables' ? missingKey : `link.error.${r.reason}`, { names: r.names.join(', ') }));
     } catch (e) {
       const m = errorMessage(e);
       setError(t(m.key, m.params));

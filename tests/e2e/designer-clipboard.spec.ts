@@ -131,13 +131,14 @@ test('Design view clipboard: copy, cut, paste controls in forms and reports, bet
     await expect(ctl(page, 'Étiquette1')).toHaveText('Nom:');
     await expect(ctl(page, 'Commande1')).toBeVisible();
 
-    // to a report: the command button is not a report control, the text box and its label are pasted
+    // to a report: the text box, its label and the command button (a report control, as in Access) are pasted
     await design(page, 'report', 'R');
     await cur(page).getByTestId('section-detail').click();
     await page.keyboard.press('Control+v');
     await expect(ctl(page, 'Texte1')).toBeVisible();
     await expect(ctl(page, 'Étiquette1')).toBeVisible();
-    await expect(cur(page).locator('[data-ctl]')).toHaveCount(3);
+    await expect(ctl(page, 'Commande1')).toBeVisible();
+    await expect(cur(page).locator('[data-ctl]')).toHaveCount(4);
     await page.keyboard.press('Control+z');
     await expect(cur(page).locator('[data-ctl]')).toHaveCount(1);
 

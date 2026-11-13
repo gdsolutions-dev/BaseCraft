@@ -41,7 +41,7 @@ export function itemAt(report: LaidOutReport, x: number, y: number): string | nu
   let hit: string | null = null;
   for (const b of report.pages[0]?.bands ?? []) for (const i of b.items) {
     const r = bounds(i), l = b.left + r.left, t = b.top + r.top;
-    if (x >= l && x <= l + r.width && y >= t && y <= t + r.height) hit = i.name;
+    if (i.name && x >= l && x <= l + r.width && y >= t && y <= t + r.height) hit = i.name;   // nameless: inside a subreport, its frame is the hit
   }
   return hit;
 }

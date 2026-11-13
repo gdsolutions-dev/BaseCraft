@@ -17,13 +17,13 @@ import { passThroughOf } from '../../shared/query/definition';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
 import { api } from '../bridge';
 import { promptParameters } from '../query/prompt-parameters';
-import { unsavedRunDoc } from '../query/unsaved-run';
+import { unsavedDesignSave, unsavedRunDoc } from '../query/unsaved-run';
 import { i18n } from '../i18n';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from '../datasheet/filter-model';
 import { FilterMenu, type BuiltList, type FilterMenuState } from '../datasheet/FilterMenu';
 import { fieldMenu } from '../datasheet/filter-menu-data';
-import { FindDialog } from '../datasheet/FindDialog';
-import { matchText } from '../datasheet/find-commands';
+import { FindDialog, type FindTab } from '../datasheet/FindDialog';
+import { matchText, replaceText } from '../datasheet/find-commands';
 import { editText, lookupList } from '../datasheet/datasheet-cells';
 import { onDataRefresh } from '../shell/data-refresh';
 import { confirmDelete, fieldErrorParams, showRelatedRefusal } from '../datasheet/record-messages';
@@ -42,7 +42,10 @@ import { fromStored, toStored } from '../../shared/expr/evaluate';
 import { infoOf, toText } from '../../shared/expr/library';
 import type { EventName } from '../../shared/design/events';
 import { buildCalcEnv, checkControlRule, controlDefaults, FAILED, Latest, unboundDefaults, type CalcResult } from './calc';
-import { boundField, controlTexts, isUnbound } from './control-values';
+import { boundField, controlTexts, isRichBox, isUnbound } from './control-values';
+import { richState, runRich, type RichState } from './rich-edit';
+import { Swatches } from '../datasheet/SheetColors';
+import { RibbonPopup } from '../designer/RibbonPopup';
 import type { ListState, RunCtx, RunnerApi, SubformHost, UnboundValue } from './controls/run-ctx';
 import { parseFormDoc } from './form-def';
 import { FormEvents, withOverrides } from './form-events';
@@ -52,7 +55,7 @@ import { formCancelled, formReady, memberValue, registerForm, type FindOptions, 
 import './form-nav-menu';
 import { FormRecords, type FormDataApi, type RecordError, type RecordEvents, type RecordSnapshot } from './record-controller';
 import { listOptions, loadRowSource, outOfList, rowOfText } from './row-source';
-import { errorsByControl, layoutLabels, prop, tabSequence } from './run-model';
+import { controlEnabled, errorsByControl, layoutLabels, prop, tabSequence } from './run-model';
 import { SingleFormView } from './SingleFormView';
 import { ContinuousFormView } from './ContinuousFormView';
 import { FormDatasheet } from './FormDatasheet';
@@ -83,10 +86,10 @@ const quiet = <T,>(p: Promise<T>, none: T): Promise<T> =>
 
 /** Les largeurs de colonne tirées en Feuille de données, à la sortie de l'onglet : la question d'Access (enregistrer la mise en forme ?).
  *  Rien tiré ou base en lecture seule : rien n'est demandé. Oui enregistre (échec : l'onglet reste), Non abandonne, Annuler reste. */
-export async function leaveSheetLayout(d: { widths: Record<string, number>; readOnly: boolean; name: string; messageKey?: string; confirm: ModalApi['confirm']; save(widths: Record<string, number>): Promise<boolean>;
+export async function leaveSheetLayout(d: { widths: Record<string, number>; /** more of the layout than widths is unsaved */ pending?: boolean; readOnly: boolean; name: string; messageKey?: string; confirm: ModalApi['confirm']; save(widths: Record<string, number>): Promise<boolean>;
   /** les sous-formulaires en Feuille de données : leurs largeurs tirées sont enregistrées (ou oubliées) avec celles du formulaire */
   others?: { dirty: boolean; save(): Promise<boolean>; drop(): void } }): Promise<boolean> {
-  const own = Object.keys(d.widths).length > 0;
+  const own = Object.keys(d.widths).length > 0 || !!d.pending;
   if (d.readOnly || (!own && !d.others?.dirty)) return true;
   const r = await d.confirm({ titleKey: 'form.saveFirstTitle', messageKey: d.messageKey ?? 'form.saveLayout', params: { name: d.name }, buttons: ['yes', 'no', 'cancel'] });
   if (r === 'no') { d.others?.drop(); return true; }
@@ -299,6 +302,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const [menu, setMenu] = useState<FilterMenuState | null>(null);
   const built = useRef(new Map<string, BuiltList>()); // what each field's list last set (R14)
   const [finding, setFinding] = useState(0);   // Home › Find: the Find dialog is open (O2 R10; its key: each opening starts it again)
+  const [findTab, setFindTab] = useState<FindTab>('find');   // the tab it opens on (Replace: the ribbon's Replace button)
   const foundIn = useRef<string | null>(null);   // the control whose value the last find matched
   const latest = useRef(new Latest());
   const checks = useRef<Promise<void>>(Promise.resolve());
@@ -438,7 +442,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const results = calc.key === shownKey ? calc.results : {};   // never a result computed for another record
   // Continuous Forms and Datasheet: the other rows' calculated controls, by row (its values as read: a row read again is
   // calculated again); a new cache when what they depend on changes (the old one's late results go nowhere: Latest)
-  const hasCalc = useMemo(() => all.some((c) => typeof c.props.ControlSource === 'string' && c.props.ControlSource.startsWith('=')), [all]);
+  const hasCalc = useMemo(() => all.some((c) => (typeof c.props.ControlSource === 'string' && c.props.ControlSource.startsWith('=')) || typeof c.props.FormatConditions === 'string'), [all]);   // conditional formats are calculated with them
   const rowCalc = useMemo(() => new WeakMap<SqlValue[], Record<string, CalcResult> | null>(), [all, info, base, calcTick]);
   const rowCalcRef = useRef(rowCalc);
   rowCalcRef.current = rowCalc;
@@ -1050,10 +1054,13 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
 
   // the record commands (ribbon, Shift+F9), on this form; `run` sends them to the subform that has the focus (Access)
   const handlers: Record<string, () => unknown> = {
-    newRecord, deleteRecord: () => deleteRecord(), save: () => attempt(() => records.save(true)),
+    newRecord, deleteRecord: () => deleteRecord(),
+    undo: () => { records.undoRecord(); clearTyped(); typedIn.current.clear(); setCalcTick((k) => k + 1); },   // Quick Access Toolbar: the record's entry undone (Access)
+    // a new or modified form run as it stands: Save saves its design once the record has nothing to save (Access)
+    save: () => { const design = tabId && !records.snapshot.dirty ? unsavedDesignSave.get(tabId) : undefined; return design ? design() : attempt(() => records.save(true)); },
     sortAsc: () => sortBy('asc'), sortDesc: () => sortBy('desc'), sortClear: () => sortBy(null),
     filter: filterMenu, filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
-    refresh: () => refresh(true), find: () => setFinding((k) => k + 1),
+    refresh: () => refresh(true), find: () => { setFindTab('find'); setFinding((k) => k + 1); }, replace: () => { setFindTab('replace'); setFinding((k) => k + 1); },
   };
   /** Requery: saves first; lists read again (once: a save made by the requery has already read them). `ask` (Shift+F9, on this
    *  form or its master): the source's parameters asked again first, here then in each subform (Cancel keeps the records).
@@ -1172,6 +1179,22 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   };
 
   const hasFilter = filter.items.length > 0 || !!filter.applied;
+  // A6: a rich text box that has the focus (or whose colour popup is open) gives the ribbon its text commands
+  const [richPop, setRichPop] = useState<'fore' | 'back' | null>(null);
+  const [richNow, setRichNow] = useState<RichState>({});
+  const richFocus = (() => { const c = focused !== null ? byName.get(focused) : undefined; return !!c && !!info && isRichBox(c, boundField(c, info)); })();
+  const richOn = (richFocus || richPop !== null) && !ro;
+  useEffect(() => {
+    if (!richFocus) return undefined;
+    const update = () => setRichNow(richState());
+    update();
+    document.addEventListener('selectionchange', update);
+    return () => document.removeEventListener('selectionchange', update);
+  }, [richFocus]);
+  useEffect(() => (tabId && richFocus ? registerCommandStates(tabId, {
+    textBold: { active: richNow.bold }, textItalic: { active: richNow.italic }, textUnderline: { active: richNow.underline },
+    bullets: { active: richNow.bullets }, numbering: { active: richNow.numbering }, textDirection: { active: richNow.direction },
+  }) : undefined), [tabId, richFocus, richNow]);
   // Toggle Filter follows the form that has the focus: this one, or the subform it is in (which reports its own)
   const [subFilters, setSubFilters] = useState<Record<string, boolean>>({});
   const focusedFilter = focused !== null && Object.hasOwn(subFilters, focused) ? subFilters[focused] : hasFilter;
@@ -1181,13 +1204,21 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     const on = (cmd: string) => () => cmds.current.run(cmd);
     return registerCommands(tabId, {
       // read-only (also a refused write before the session says so): no record command
-      ...(ro ? {} : { newRecord: on('newRecord'), deleteRecord: on('deleteRecord'), save: on('save') }),
+      ...(ro ? {} : { newRecord: on('newRecord'), deleteRecord: on('deleteRecord'), undo: on('undo') }),
+      ...(!ro || unsavedDesignSave.has(tabId) ? { save: on('save') } : {}),   // read-only source: Save still saves a new or modified design
       find: on('find'),   // the form that has the focus: this one or the subform it is in (run)
+      ...(ro ? {} : { replace: on('replace') }),
       sortAsc: on('sortAsc'), sortDesc: on('sortDesc'), sortClear: on('sortClear'), filter: on('filter'), filterSelection: on('filterSelection'),
       filterAdvanced: on('filterAdvanced'), ...(focusedFilter ? { filterToggle: on('filterToggle') } : {}), refresh: on('refresh'),
+      ...(richOn ? {
+        textBold: () => runRich('bold'), textItalic: () => runRich('italic'), textUnderline: () => runRich('underline'), bullets: () => runRich('bullets'),
+        numbering: () => runRich('numbering'), indentIncrease: () => runRich('indentIncrease'), indentDecrease: () => runRich('indentDecrease'),
+        textDirection: () => runRich('direction'), textFontColor: () => setRichPop('fore'), textHighlight: () => setRichPop('back'),
+      } : {}),
     });
-  }, [tabId, ro, focusedFilter, records]);
+  }, [tabId, ro, focusedFilter, records, richOn]);
   useEffect(() => (tabId ? registerModeGuard(tabId, (reason, target) => cmds.current.leave(reason, target)) : undefined), [tabId]);
+  useEffect(() => (tabId ? registerCommandStates(tabId, { undo: { enabled: snap.dirty } }) : undefined), [tabId, snap.dirty]);   // Undo: a record being edited
 
   // a subform: the master's moves save its record first; it follows the master's record (its record saved before it reads
   // again); its master drives it through `api`
@@ -1327,6 +1358,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   // the latest of these for the effects and the subforms' callbacks (declared here, read only once rendered)
   /** Before a tab control shows another page: the subforms of the page it leaves saved (they go with it); refused: it stays. */
   const leavePage = async (tc: string, page: number): Promise<boolean> => {
+    if (byName.get(tc)?.kind === 'navigationControl') return (await subs.current.get(tc)?.save()) ?? true;   // D4: the form of the tab left
     const on = (byName.get(tc)?.children ?? []).filter((k) => (typeof k.props.PageIndex === 'number' ? k.props.PageIndex : 0) === page);
     for (const k of flattenControls(on)) {
       const sf = k.kind === 'subform' ? subs.current.get(k.name) : undefined;
@@ -1394,6 +1426,73 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     if (!o.onlyCurrentField && foundIn.current) lastFocused.current = lastOwn.current = foundIn.current;
     return true;
   };
+  /** Replace (Find's Replace tab): the bound text boxes the user may edit: short or long text, not lookups, not rich text, not
+   *  locked or disabled or hidden, not calculated; `Look In: current field` keeps the focused one. */
+  const replaceTargets = (o: FindOptions) => {
+    const info = records.snapshot.info;
+    if (!info || ro) return [];
+    const at = focusedField();
+    const seen = new Set<SourceField>();
+    return all.flatMap((c) => {
+      const f = c.kind === 'textBox' ? boundField(c, info) : null;
+      if (!f || seen.has(f) || (o.onlyCurrentField && at && at.f !== f)) return [];
+      seen.add(f);
+      const ce = controlEnabled(c, records.snapshot, f);
+      if ((f.type !== 'shortText' && f.type !== 'longText') || f.props.lookup || isRichBox(c, f) || ce.disabled || ce.readOnly || prop(c, 'Visible') === false) return [];
+      return [{ c, f, k: info.fields.indexOf(f) }];
+    });
+  };
+  /** The text of a stored value (what Find compares), null when empty. */
+  const textOfStored = (f: SourceField, v: SqlValue | undefined): string | null => {
+    if (v === null || v === undefined) return null;
+    const val = fromStored(f, v);
+    return val === null ? null : toText(val, infoOf(region));
+  };
+  /** The matched text of `c` on the current record replaced as an edit of it: the control's update events, then the form's own
+   *  rules at the save (like a typed entry). False when nothing changes. */
+  const replaceIn = (c: ControlDef, f: SourceField, o: FindOptions, replaceWith: string, every: boolean): boolean => {
+    const s = records.snapshot;
+    const pend = Object.keys(s.pending).find((n) => sameName(n, f.name));
+    const text = pend !== undefined ? String(s.pending[pend] ?? '') : textOfStored(f, s.values[s.info!.fields.indexOf(f)]);
+    if (text === null || !matchText(text, o.what, o.match, o.matchCase, region)) return false;
+    const next = replaceText(text, o, replaceWith, every);
+    if (next === text) return false;
+    update(c, () => { records.edit(f.name, next); });
+    return true;
+  };
+  /** Replace One: the control the find stopped in, on the current record, when it still holds a match; then the next match is found. */
+  const replaceOne = async (o: FindOptions, replaceWith: string): Promise<boolean> => {
+    notInBefore();
+    must(await settle(), 'actionCancelled');
+    const t = replaceTargets(o).find((x) => x.c.name === foundIn.current);
+    if (t && !records.snapshot.isNew && replaceIn(t.c, t.f, o, replaceWith, false)) setCalcTick((n) => n + 1);
+    return findHere(o);
+  };
+  /** Replace All: every match of every record in the form's order, record by record; each is saved before the next (a refused
+   *  save shows its message and stops it). ponytail: the count is the replacements made, a Before Update that cancels one still counts. */
+  const replaceAll = async (o: FindOptions, replaceWith: string): Promise<number> => {
+    notInBefore();
+    must(await settle(), 'actionCancelled');
+    const targets = replaceTargets(o);
+    let count = 0, from = -1;
+    for (;;) {
+      const i = await records.find((row) => targets.some(({ f, k }) => { const x = textOfStored(f, row[k]); return x !== null && matchText(x, o.what, o.match, o.matchCase, region); }), { from, dir: 'down' });
+      if (i === null) break;
+      const s = records.snapshot;
+      if (i !== (s.isNew ? s.total : s.index)) {
+        try { await hub.goToRecord('goTo', i + 1); } catch (e) {
+          if (bcErrorCode(e) !== 'cantGoToRecord') throw e;
+          await showRefusal();
+          throw new Error('bc:saveRefused');
+        }
+      }
+      for (const { c, f } of targets) if (replaceIn(c, f, o, replaceWith, true)) count++;
+      if (!(await attempt(() => records.save()))) throw new Error('bc:saveRefused');   // its message is shown
+      from = i;
+    }
+    setCalcTick((n) => n + 1);
+    return count;
+  };
   const filterState = !hasFilter ? 'none' : filter.active ? 'on' : 'off';
   const onGo = (row: number) => void userAttempt(() => records.goTo(row));
   const nav = { messages, filter: filterState, onGo, onNew: () => void newRecord(), onToggleFilter: toggleFilter } as const;
@@ -1407,7 +1506,19 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
           onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined}
           onWidths={ro || !design ? undefined : (c, px) => { dragged.current = { ...dragged.current, [c]: px }; }} />
       )}
-      {finding > 0 && <FindDialog key={finding} find={findHere} close={() => { setFinding(0); back(); }} />}
+      {richPop && (
+        <RibbonPopup anchor={richPop === 'fore' ? 'textFontColor' : 'textHighlight'} testId={`rich-${richPop}-menu`} role="dialog"
+          labelKey={`ribbon.cmd.${richPop === 'fore' ? 'textFontColor' : 'textHighlight'}`} onClose={() => setRichPop(null)}>
+          <Swatches testId={`rich-${richPop}-choices`} value={undefined}
+            onPick={(color) => {
+              const fore = richPop === 'fore';
+              setRichPop(null);
+              runRich(fore ? 'foreColor' : 'highlight', color ?? (fore ? getComputedStyle(root.current ?? document.body).color : 'transparent'));
+            }} />
+        </RibbonPopup>
+      )}
+      {finding > 0 && <FindDialog key={finding} find={findHere} initialTab={findTab} close={() => { setFinding(0); back(); }}
+        replace={ro ? undefined : { one: replaceOne, all: replaceAll }} />}
       {menu && (
         <FilterMenu menu={menu} hasFilter={menu.kind === 'field' ? filter.items.some((x) => sameName(x.field, menu.field.name)) : hasFilter}
           onPick={(kind: SelectionFilter) => { if (menu.kind !== 'selection') return; setMenu(null); void setCriteria(menu.field.name, selectionCriteria(kind, menu.field, menu.value)); }}

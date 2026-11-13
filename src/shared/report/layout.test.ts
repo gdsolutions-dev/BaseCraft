@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from './fixtures/factures';
 import { layoutReport, MAX_PAGES, sortAndGroup } from './layout';
-import { readReport, type GroupLevel } from './model';
+import { readReport, type ColumnSetup, type GroupLevel } from './model';
 import { measure } from './text';
 import type { LaidOutBand, LaidOutPage, LaidOutReport, LayoutEnv, SectionEvent } from './types';
 import type { SqlValue } from '../coerce';
@@ -393,5 +393,68 @@ describe('layoutReport: flow (Layout view, L3)', () => {
   });
   it('an empty source: the report sections and the page sections, once', async () => {
     expect(seq((await flow(FACTURES_REPORT, [])).pages[0]!)).toEqual(['reportHeader', 'pageHeader', 'reportFooter', 'pageFooter']);
+  });
+});
+
+describe('layoutReport: columns (Page Setup > Columns)', () => {
+  const colsRun = (columns: ColumnSetup) =>
+    layoutReport({ ...readReport(FACTURES_REPORT, FACTURES_FIELDS), columns }, { fields: FACTURES_FIELDS, rows: FACTURES_ROWS }, frEnv());
+  const detailsOf = (r: LaidOutReport, page: number) => (r.pages[page - 1]?.bands ?? []).filter((b) => b.section === 'detail');
+  const BODY_LEFT = 567, BODY_WIDTH = 10772, GAP = 200, COL_W = (BODY_WIDTH - GAP) / 2;   // A4 portrait, 1 cm margins
+
+  it('Down, then Across: the left column fills to the bottom before the right one starts; every record is printed once', async () => {
+    const one = await colsRun({ count: 1, spacing: 0, across: false });
+    const two = await colsRun({ count: 2, spacing: GAP, across: false });
+    const count = (r: LaidOutReport) => r.pages.reduce((n, p) => n + p.bands.filter((b) => b.section === 'detail').length, 0);
+    expect(count(two)).toBe(count(one));
+    const page1 = detailsOf(two, 1);
+    expect(page1.every((b) => b.width === COL_W)).toBe(true);
+    const left = page1.filter((b) => b.left === BODY_LEFT), right = page1.filter((b) => b.left === BODY_LEFT + COL_W + GAP);
+    expect(right.length).toBeGreaterThan(0);
+    expect(Math.max(...left.map((b) => b.top + b.height))).toBeGreaterThan(14000);   // the left column is full first
+  });
+
+  it('Across, then Down: a row of records fills the columns from the left, then the next row', async () => {
+    const r = await colsRun({ count: 2, spacing: GAP, across: true });
+    const [a, b, c] = detailsOf(r, 1);
+    expect(a!.top).toBe(b!.top);             // the first two records share a row
+    expect(a!.left).toBe(BODY_LEFT);
+    expect(b!.left).toBe(BODY_LEFT + COL_W + GAP);
+    expect(c!.top).toBeGreaterThan(a!.top);  // the next row goes under the first
+    expect(c!.left).toBe(BODY_LEFT);
+  });
+
+  it('props.columns is read; a count out of range or a spacing that is not a number reads as one column', () => {
+    const withCols = (columns: unknown) => readReport(edit(FACTURES_REPORT, (c) => { (c.props as Record<string, unknown>).columns = columns; }), FACTURES_FIELDS).columns;
+    expect(withCols({ count: 3, spacing: 200, across: true })).toEqual({ count: 3, spacing: 200, across: true });
+    expect(withCols({ count: 99, spacing: 200, across: true })).toEqual({ count: 1, spacing: 0, across: false });
+    expect(withCols({ count: 2, spacing: 'x', across: false })).toEqual({ count: 1, spacing: 0, across: false });
+    expect(withCols(undefined)).toEqual({ count: 1, spacing: 0, across: false });
+  });
+  it('Column Size: an explicit width overrides the computed one, an explicit height sets each Detail cell, Row Spacing separates the rows', async () => {
+    const base = { count: 2, spacing: GAP, across: true };
+    const plain = detailsOf(await colsRun(base), 1);
+    const sized = detailsOf(await colsRun({ ...base, width: 3000, height: 500, rowSpacing: 100 }), 1);
+    expect(sized.every((b) => b.width === 3000 && b.height === 500)).toBe(true);
+    expect(sized[1]!.left).toBe(BODY_LEFT + 3000 + GAP);
+    expect(sized[2]!.top - sized[0]!.top).toBe(500 + 100);
+    expect(plain[0]!.height).not.toBe(500);
+    const downBands = (await colsRun({ count: 2, spacing: GAP, across: false, rowSpacing: 100 })).pages[0]!.bands;
+    const lcol = downBands.filter((x) => x.left === BODY_LEFT);   // the left column, top to bottom: a Detail is followed by the next one 100 twips lower, or by a group band
+    expect(lcol.some((x, k) => x.section === 'detail' && lcol[k + 1]?.section === 'detail' && lcol[k + 1]!.top === x.top + x.height + 100)).toBe(true);
+    const one = await colsRun({ count: 1, spacing: 0, across: false, width: 3000, height: 500, rowSpacing: 100 });   // one column: no effect
+    expect(detailsOf(one, 1).every((b) => b.width === BODY_WIDTH && b.height !== 500)).toBe(true);
+  });
+  it('Column Size is read: positive whole twips only', () => {
+    const withCols = (columns: unknown) => readReport(edit(FACTURES_REPORT, (c) => { (c.props as Record<string, unknown>).columns = columns; }), FACTURES_FIELDS).columns;
+    expect(withCols({ count: 2, spacing: 0, across: false, width: 3000, height: 500, rowSpacing: 100 })).toEqual({ count: 2, spacing: 0, across: false, width: 3000, height: 500, rowSpacing: 100 });
+    expect(withCols({ count: 2, spacing: 0, across: false, width: -1, height: 'x', rowSpacing: 0 })).toEqual({ count: 2, spacing: 0, across: false });
+  });
+  it('the Report Header and the Page Header span the whole width, under them the columns start', async () => {
+    const r = await colsRun({ count: 2, spacing: GAP, across: false });
+    const band = (s: string) => r.pages[0]!.bands.find((b) => b.section === s)!;
+    expect(band('reportHeader')).toMatchObject({ left: BODY_LEFT, width: BODY_WIDTH });
+    expect(band('pageHeader')).toMatchObject({ left: BODY_LEFT, width: BODY_WIDTH });
+    expect(detailsOf(r, 1)[0]!.top).toBeGreaterThanOrEqual(band('pageHeader').top + band('pageHeader').height);
   });
 });

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron';
 import { CH, type BasecraftApi, type SessionState, type SettingsView } from '../shared/api';
 import type { ImportProgress } from '../shared/import-text';
 
@@ -8,6 +8,10 @@ ipcRenderer.on(CH.closeRequested, () => {
   void ipcRenderer.invoke(CH.closeAck); // runs on the page's thread: a hung page never acknowledges
   if (onClose) onClose(); else void ipcRenderer.invoke(CH.closeAllowed);
 });
+
+// E2E only (main passes the argument when unpackaged): a fake spell checker, « wrong=right,… », for machines with no dictionary
+const fakeSpell = process.argv.find((a) => a.startsWith('--bc-e2e-misspelled='))?.split('=').slice(1).join('=');
+const fakes = new Map((fakeSpell ?? '').split(',').filter(Boolean).map((p) => p.split('=') as [string, string]));
 
 const api: BasecraftApi = {
   e2e: process.argv.includes('--bc-e2e'),
@@ -25,10 +29,21 @@ const api: BasecraftApi = {
     info: () => ipcRenderer.invoke(CH.appInfo),
     licenses: () => ipcRenderer.invoke(CH.appLicenses),
     openExternal: (url) => ipcRenderer.invoke(CH.openExternal, url),
+    openHyperlink: (url) => ipcRenderer.invoke(CH.openHyperlink, url),
     setWindowIcon: (png) => ipcRenderer.invoke(CH.appSetIcon, png),
     edit: (cmd) => ipcRenderer.invoke(CH.edit, cmd),
     beep: () => ipcRenderer.invoke(CH.beep),
     writeClipboard: (text) => ipcRenderer.invoke(CH.appWriteClipboard, text),
+    readClipboard: () => ipcRenderer.invoke(CH.appReadClipboard),
+    spellPrepare: async () => {
+      if (fakeSpell !== undefined) return true;
+      if (!(await ipcRenderer.invoke(CH.spellPrepare))) return false;
+      // a loaded dictionary finds a made-up word misspelled; none loaded finds nothing
+      for (let i = 0; i < 40; i++, await new Promise((r) => setTimeout(r, 250))) if (webFrame.isWordMisspelled('qzxkvjw')) return true;
+      return false;
+    },
+    isMisspelled: (word) => (fakeSpell !== undefined ? fakes.has(word) : webFrame.isWordMisspelled(word)),
+    spellSuggestions: (word) => (fakeSpell !== undefined ? [fakes.get(word) ?? word] : webFrame.getWordSuggestions(word)),
     onCloseRequested: (cb) => {
       onClose = cb;
       return () => { if (onClose === cb) onClose = null; };
@@ -96,10 +111,13 @@ const api: BasecraftApi = {
     list: () => ipcRenderer.invoke(CH.tablesList),
     design: (name) => ipcRenderer.invoke(CH.tablesDesign, name),
     testRules: (name) => ipcRenderer.invoke(CH.tablesTestRules, name),
+    dataMacros: (name) => ipcRenderer.invoke(CH.tablesDataMacros, name),
+    saveDataMacros: (name, macros) => ipcRenderer.invoke(CH.tablesSaveDataMacros, name, macros),
     save: (req) => ipcRenderer.invoke(CH.tablesSave, req),
     rename: (oldName, newName) => ipcRenderer.invoke(CH.tablesRename, oldName, newName),
     drop: (name) => ipcRenderer.invoke(CH.tablesDrop, name),
     saveColumnWidths: (name, widths) => ipcRenderer.invoke(CH.tablesSaveColumnWidths, name, widths),
+    saveSheetLayout: (name, layout) => ipcRenderer.invoke(CH.tablesSaveSheetLayout, name, layout),
     copy: (name, newName, mode) => ipcRenderer.invoke(CH.tablesCopy, name, newName, mode),
     append: (from, to) => ipcRenderer.invoke(CH.tablesAppend, from, to),
   },
@@ -133,7 +151,7 @@ const api: BasecraftApi = {
     deleteSpec: (name) => ipcRenderer.invoke(CH.importDeleteSpec, name),
   },
   importExcel: {
-    pickFile: () => ipcRenderer.invoke(CH.importExcelPick),
+    pickFile: (kind) => ipcRenderer.invoke(CH.importExcelPick, kind),
     preview: (path, sheet, hasHeader) => ipcRenderer.invoke(CH.importExcelPreview, path, sheet, hasHeader),
     run: (path, sheet, hasHeader, plan) => ipcRenderer.invoke(CH.importExcelRun, path, sheet, hasHeader, plan),
   },
@@ -166,6 +184,10 @@ const api: BasecraftApi = {
   exchange: {
     exportText: (src, spec, defaultName) => ipcRenderer.invoke(CH.exchangeExportText, src, spec, defaultName),
     exportExcel: (src, defaultName) => ipcRenderer.invoke(CH.exchangeExportExcel, src, defaultName),
+    exportMarkup: (src, format, defaultName) => ipcRenderer.invoke(CH.exchangeExportMarkup, src, format, defaultName),
+    savedList: () => ipcRenderer.invoke(CH.exchangeSavedList),
+    saveSaved: (name, e) => ipcRenderer.invoke(CH.exchangeSavedSave, name, e),
+    deleteSaved: (name) => ipcRenderer.invoke(CH.exchangeSavedDelete, name),
     onProgress: (cb) => {
       const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
       ipcRenderer.on(CH.importProgress, listener);
@@ -196,6 +218,16 @@ const api: BasecraftApi = {
       ipcRenderer.on(CH.importProgress, listener);
       return () => { ipcRenderer.removeListener(CH.importProgress, listener); };
     },
+  },
+  accessImport: {
+    inspect: (path) => ipcRenderer.invoke(CH.accessImportInspect, path),
+    run: (path, remotes) => ipcRenderer.invoke(CH.accessImportRun, path, remotes),
+    onProgress: (cb) => {
+      const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
+      ipcRenderer.on(CH.importProgress, listener);
+      return () => { ipcRenderer.removeListener(CH.importProgress, listener); };
+    },
+    saveReport: (text, defaultName) => ipcRenderer.invoke(CH.accessImportSaveReport, text, defaultName),
   },
 };
 

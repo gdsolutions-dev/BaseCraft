@@ -13,7 +13,7 @@ import { invalidQueryError } from '../../shared/query/definition';
 import { createTable, dataDesign, DesignValidationError, dropTable, isQueryName, listTables, NameExistsError, tableDesign } from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
 import { isLinkName } from '../links/store';
-import { deleteRows, insertRow, updateRow } from '../db/write-layer';
+import { deleteRowsWithMacros, insertRow, updateRow } from '../db/write-layer';
 import { compileAction } from './compile';
 import { paramValues, queryConn, resolve, run, type QueryCtx, type QueryDb, type QueryRef } from './source';
 
@@ -116,15 +116,16 @@ export async function runAction(x: QueryDb, ref: QueryRef, params: Record<string
     return await inTransactionAsync(db, async (): Promise<ActionResult> => {
       let total = rows.length;
       if (body.k === 'delete') {
-        const table = dataDesign(db, target).name;
+        const design = dataDesign(db, target);
         const ids = [...new Set(rows.map((r) => Number(r[0])))];
-        const all = deleteRows(db, table, ids);
+        const all = await deleteRowsWithMacros(db, design, ids, info, ctx.now);
         if (all.ok) return { ok: true, count: all.count };
         // refused: row by row, the rows related records hold are key violations (Access)
         for (const id of ids) {
           await row({ values: {}, nulled: [] }, async () => {
-            const one = deleteRows(db, table, [id]);
-            return one.ok ? { ok: true, rowid: id, values: [] } : { ok: false, errors: [{ field: '', code: 'related', ...(one.table !== undefined && { table: one.table }) }] };
+            const one = await deleteRowsWithMacros(db, design, [id], info, ctx.now);
+            return one.ok ? { ok: true, rowid: id, values: [] }
+              : { ok: false, errors: [one.reason === 'dataMacro' ? { field: '', code: 'validation', message: one.message } : { field: '', code: 'related', ...(one.table !== undefined && { table: one.table }) }] };
           });
         }
         if (!written) throw new Refused({ ok: false, reason: 'related', table: all.table ?? '' }); // nothing to run anyway

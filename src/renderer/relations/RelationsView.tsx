@@ -7,6 +7,9 @@ import { useTranslation } from 'react-i18next';
 import type { Relation, RelationsLayout } from '../../shared/api';
 import type { TableDesign } from '../../shared/field-types';
 import { api } from '../bridge';
+import { relationshipReportHtml } from '../database-tools/documents';
+import { showDocument } from '../database-tools/DocumentDialog';
+import { i18n } from '../i18n';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { useErrorDialog, useModal } from '../shell/Modal';
 import { registerCommands } from '../shell/ribbon-model';
@@ -124,11 +127,20 @@ export function RelationsView({ tab, readOnly, dispatch }: DocViewProps) {
     setSel({ relation: r.name });
   };
 
+  // Relationship Report: the window as it is now, in a document to print or save as PDF (landscape)
+  const report = async () => {
+    const { designs: ds, rels: rs, layout: l } = live.current;
+    const base = ((await api.base.state())?.fileName ?? '').replace(/\.[^.]*$/, '');
+    const html = relationshipReportHtml((k, o) => i18n.t(k, o) as string, { base, date: new Intl.DateTimeFormat(i18n.language, { dateStyle: 'long' }).format(new Date()), designs: ds, relations: rs, layout: l });
+    await showDocument(modal, 'ribbon.cmd.relationshipReport', html, `${base || 'BaseCraft'} - ${t('ribbon.cmd.relationshipReport')}`, true);
+  };
+
   const selTable = sel && 'table' in sel ? sel.table : null;
   useEffect(() => registerCommands(tab.id, {
     addTables: () => setAdding(true),
     editRelationships: editSelected,
     clearLayout,
+    relationshipReport: () => report().catch((e) => void showError(e)),
     allRelationships: () => show(related(live.current.rels)),
     closeRelationships: () => { void dispatch({ type: 'close', id: tab.id }); },
     ...(selTable !== null ? { hideTable: () => hide(selTable), directRelationships: () => show(related(live.current.rels, selTable)) } : {}),

@@ -6,13 +6,18 @@ import { ExprRuntimeError, ExprSyntaxError, type Value } from '../expr/ast';
 import { evaluate } from '../expr/evaluate';
 import { formatValue } from '../expr/format';
 import { infoOf, num, truthy } from '../expr/library';
+import { resolveColor } from '../design/colors';
+import { firstMatch } from '../design/format-conditions';
 import { sameName } from '../field-types';
 import type { ControlSource, ControlSpec, ReportIssue, SectionSpec } from './model';
+import { richToPlain } from '../rich-text';
 import { lineHeight, measure, wrap } from './text';
 import { computeAggregate, rowField, type AggSpec } from './totals';
-import type { LaidOutItem, LayoutEnv, ReportData, SectionEvent } from './types';
+import type { Border, LaidOutItem, LayoutEnv, ReportData, SectionEvent, SubLayout } from './types';
 
-export interface BandContext { row: number | null; scope: number[]; page: number; pages: number | null; formatCount: number }
+export interface BandContext { row: number | null; scope: number[]; page: number; pages: number | null; formatCount: number;
+  /** A subreport's content for the band's row (layoutReport's); absent or null: an empty frame. */
+  sub?(c: ControlSpec, row: number | null): Promise<SubLayout | null> }
 export interface FormattedBand { height: number; items: LaidOutItem[]; cuts: number[] /* y où l'on peut couper, croissants */; breaks: number[] /* y des sauts de page */;
   event: SectionEvent; issues: ReportIssue[] }
 
@@ -90,7 +95,17 @@ function textItem(c: ControlSpec, text: string, numeric: boolean, issues: Report
     }) };
 }
 
-interface Box { c: ControlSpec; item?: LaidOutItem; grow: number; shrunk: boolean }
+/** A small box of text drawn over a control (a group's caption, a tab): `text` at `left` inside the control, on `back`. */
+function tag(c: ControlSpec, text: string, left: number, back: string, border: Border | null, issues: ReportIssue[], height = lineHeight(c.font)): Extract<LaidOutItem, { kind: 'text' }> {
+  const width = Math.ceil(measure(text, c.font).width) + 120 + 2 * (border?.width ?? 0);
+  return textItem({ ...c, left: c.left + left, top: c.top, width, height, border, back, align: 'left', canGrow: false, margin: { top: 0, right: 0, bottom: 0, left: 60 }, gridlines: null },
+    text, false, issues);
+}
+
+interface Box { c: ControlSpec; item?: LaidOutItem; grow: number; shrunk: boolean; more?: LaidOutItem[] /* a subreport's content, in band coordinates */ }
+
+const moved = (i: LaidOutItem, dx: number, dy: number): LaidOutItem =>
+  i.kind === 'line' ? { ...i, x1: i.x1 + dx, x2: i.x2 + dx, y1: i.y1 + dy, y2: i.y2 + dy } : { ...i, left: i.left + dx, top: i.top + dy };
 
 /**
  * Formats section `s` for one row (or none) and one aggregate scope: `onFormat` sees the values, the visibility and the
@@ -122,11 +137,22 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
     const box: Box = { c, grow: 0, shrunk: false };
     const at = { name: c.name, left: c.left, top: c.top, width: c.width, height: c.height };
     switch (c.kind) {
-      case 'label': case 'textBox': case 'comboBox': {
-        const text = c.kind === 'label' ? c.caption
+      case 'label': case 'textBox': case 'comboBox': case 'listBox': {   // a list box prints its bound value, as a combo box does
+        // a text box on a Rich Text field: measured as its text (lists marked), drawn as its HTML
+        const bound = c.kind === 'textBox' && c.source.kind === 'field' ? c.source.name : null;
+        const rich = bound !== null && data.fields.some((f) => f.type === 'longText' && f.props.textFormat === 'rich' && sameName(f.name, bound));
+        let text = c.kind === 'label' ? c.caption
           : has ? formatValue(v, c.format ?? defaultFormat(c.source, data), { locale: env.locale, lang: env.lang, decimalPlaces: c.decimalPlaces ?? 'auto', ...(env.fourDigitYear ? { fourDigitYear: true } : {}) })
           : failed.get(c.name) ?? '';
-        const item = textItem(c, text, c.kind !== 'label' && has && (v?.t === 'num' || v?.t === 'date'), issues);
+        // conditional formatting: the first rule that holds for this row (the control's value is the subject; fields of the row only)
+        const fmt = c.conditions && c.kind !== 'label' ? await firstMatch(c.conditions, v, { field: event.field, now: () => env.now(), locale: env.locale, lang: env.lang,
+          ...(env.member ? { member: env.member } : {}), ...(env.callUser ? { callUser: env.callUser } : {}) }) : null;
+        const look = !fmt ? c : { ...c, font: { ...c.font, bold: c.font.bold || !!fmt.bold, italic: c.font.italic || !!fmt.italic, underline: c.font.underline || !!fmt.underline },
+          color: fmt.fore ? resolveColor(fmt.fore, 'light') : c.color, back: fmt.back ? resolveColor(fmt.back, 'light') : c.back };
+        const html = text;
+        if (rich) text = richToPlain(html);
+        const item = textItem(look, text, c.kind !== 'label' && has && (v?.t === 'num' || v?.t === 'date'), issues);
+        if (rich) item.rich = { html, inset: [c.margin.top, c.margin.right, c.margin.bottom, c.margin.left] };
         if (c.canShrink && text === '') box.shrunk = true;
         else { box.item = item; box.grow = item.height - c.height; }
         break;
@@ -137,11 +163,44 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
         box.item = { kind: 'check', ...at, checked, color: c.color, ...grid(c) };
         break;
       }
+      case 'commandButton': case 'toggleButton': {   // the face with its caption; a toggle button is sunken (darker face) when its value is true
+        let down = false;
+        if (c.kind === 'toggleButton') try { down = truthy(v, infoOf(env.locale)) === true; } catch (e) { if (!(e instanceof ExprRuntimeError)) throw e; }
+        box.item = textItem({ ...c, align: 'center', back: down && c.back ? '#b4b4b4' : c.back }, c.caption, false, issues);
+        break;
+      }
+      case 'optionGroup': {   // a frame with its caption (Caption) over the top edge; its option buttons are controls of their own
+        box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) };
+        box.more = c.caption ? [tag(c, c.caption, 113, '#ffffff', null, issues)] : [];
+        break;
+      }
+      case 'tabControl': {   // the page captions as tabs over a frame; the first page selected
+        const strip = lineHeight(c.font) + 60;
+        box.item = { kind: 'rect', ...at, top: c.top + strip, height: Math.max(0, c.height - strip), border: c.border, back: c.back, ...grid(c) };
+        let x = 0;
+        box.more = (c.pages ?? []).map((p, i) => { const t = tag(c, p, x, i === 0 ? '#ffffff' : '#e1e1e1', c.border, issues, strip); x += t.width; return t; });
+        break;
+      }
       case 'line':
         if (c.border) box.item = { kind: 'line', name: c.name, x1: c.left, x2: c.left + c.width, border: c.border,
           y1: c.slant ? c.top + c.height : c.top, y2: c.slant ? c.top : c.top + c.height };
         break;
-      case 'rectangle': case 'subform': box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) }; break;   // a subform: an empty frame
+      case 'rectangle': box.item = { kind: 'rect', ...at, border: c.border, back: c.back, ...grid(c) }; break;
+      case 'subform': {
+        // the subreport's bands for this row inside the frame (empty without a Source Object); it grows to its content
+        const sub = c.sub?.source ? await ctx.sub?.(c, ctx.row) ?? null : null;
+        if (sub) issues.push(...sub.issues);
+        if (sub && c.canShrink && sub.height === 0) { box.shrunk = true; break; }
+        const bw = c.border?.width ?? 0, w = c.width - 2 * bw;
+        const height = sub && c.canGrow ? Math.max(c.height, sub.height + 2 * bw) : c.height;
+        box.item = { kind: 'rect', ...at, height, border: c.border, back: c.back, ...grid(c) };
+        box.grow = height - c.height;
+        // ponytail: what starts outside the frame is dropped, what straddles its edge overflows (no clip); a clipping
+        // group item when a subreport wider than its control matters
+        box.more = sub?.items.filter((i) => (i.kind === 'line' ? Math.min(i.x1, i.x2) < w && Math.min(i.y1, i.y2) < height - 2 * bw : i.left < w && i.top < height - 2 * bw))
+          .map((i) => moved(i, c.left + bw, c.top + bw));
+        break;
+      }
       case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...(c.pictureAlign ? { pictureAlign: c.pictureAlign } : {}), ...(c.tiling ? { tiling: true } : {}), ...grid(c) }; break;
       case 'chart': if (c.chart) box.item = { kind: 'chart', ...at, ...c.chart }; break;
       case 'pageBreak': pageBreaks.push(c.top); continue;
@@ -168,16 +227,22 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
   };
   const shift = (y: number) => pushAt(y) - freedAbove(y);
 
-  const items: LaidOutItem[] = [];
+  // `between` a Set: a Can Grow memo of n lines gives n candidates, each looked up in O(1) (final review M5)
+  const span = (i: LaidOutItem) => i.kind === 'line' ? { top: Math.min(i.y1, i.y2), bottom: Math.max(i.y1, i.y2), between: new Set<number>() }
+    : { top: i.top, bottom: i.top + i.height, between: new Set(i.kind === 'text' ? i.lines.slice(1).map((l) => i.top + (i.border?.width ?? 0) + l.y) : []) };
+  const items: LaidOutItem[] = [], spans: ReturnType<typeof span>[] = [];
   for (const box of boxes) {
     const { c, item } = box;
     if (!item) continue;
-    const d = push.get(box)! - freedAbove(c.top);
-    items.push(item.kind === 'line' ? { ...item, y1: item.y1 + d, y2: item.y2 + d } : { ...item, top: item.top + d });
+    const d = push.get(box)! - freedAbove(c.top), frame = span(moved(item, 0, d));
+    items.push(moved(item, 0, d)); spans.push(frame);
+    // a subreport's frame can be cut wherever its content can: between its bands
+    for (const m of box.more ?? []) {
+      const inner = span(moved(m, 0, d));
+      items.push(moved(m, 0, d)); spans.push(inner);
+      for (const y of [inner.top, inner.bottom, ...inner.between]) frame.between.add(y);
+    }
   }
-  // `between` a Set: a Can Grow memo of n lines gives n candidates, each looked up in O(1) (final review M5)
-  const spans = items.map((i) => i.kind === 'line' ? { top: Math.min(i.y1, i.y2), bottom: Math.max(i.y1, i.y2), between: new Set<number>() }
-    : { top: i.top, bottom: i.top + i.height, between: new Set(i.kind === 'text' ? i.lines.slice(1).map((l) => i.top + (i.border?.width ?? 0) + l.y) : []) });
 
   let height = event.height + (s.canGrow ? pushAt(event.height) : 0);
   // a shrinking section loses the freed bands at its bottom, never ending above its last control

@@ -1,15 +1,18 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FocusEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Redo2, Save, Undo2 } from 'lucide-react';
 import {
   commandEnabled, commandState, commandsVersion, openPopupOf, ribbonContextKey, runCommand, subscribeCommands, tabAfterContextChange, viewPair,
   visibleTabs, type CommandId, type RibbonCommand, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
 import { RibbonPopup } from '../designer/RibbonPopup';
 
-/** Clipboard buttons act on the focused element (a text field, a pane item): a click on them must not take the focus. */
-const KEEP_FOCUS: ReadonlySet<string> = new Set(['cut', 'copy', 'paste']);
+/** Clipboard buttons act on the focused element (a text field, a pane item): a click on them must not take the focus. So do the
+ *  rich text buttons (A6): they act on the editor's selection, and its focus is what enables them. */
+const KEEP_FOCUS: ReadonlySet<string> = new Set(['cut', 'copy', 'paste', 'bullets', 'numbering', 'indentIncrease', 'indentDecrease', 'textDirection', 'textBold', 'textItalic', 'textUnderline', 'textFontColor', 'textHighlight']);
+/** Access's Quick Access Toolbar (Save, Undo, Redo), before the tabs: the window's title bar is the system's. */
+const QUICK_ACCESS: [CommandId, typeof Save][] = [['save', Save], ['undo', Undo2], ['redo', Redo2]];
 const STACK = 3; // small buttons per column, icon-only buttons per grid column, as in the mockup
 const TIP_WIDTH = 280; // .rtip max-width
 type Item = RibbonCommand | { size: 'sm' | 'xs'; cmds: RibbonCommand[] };
@@ -98,7 +101,9 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     // ponytail: a long label (Access's « Compacter et réparer une base de données ») needs a wider large button to stay on two lines;
     // decided by length, the 900 px layout e2e catches a label too long even for that.
     const size = `rbtn-${c.size}${c.size === 'lg' && label.length >= 24 ? ' rbtn-wide' : ''}`;
-    const content = <><Icon className={c.size === 'lg' ? 'ic ic-lg' : 'ic'} aria-hidden />{!iconOnly && <span>{label}</span>}</>;
+    // a menu command shows its down arrow under the label (Taille, Marges); a dialog launcher has none (Access's)
+    const content = <><Icon className={c.size === 'lg' ? 'ic ic-lg' : 'ic'} aria-hidden />{!iconOnly && <span>{label}</span>}
+      {c.popup === true && <ChevronDown className="rcaret" aria-hidden />}</>;
     if (c.planned) {
       const tipId = `rtip-${c.id}`;
       const shown = tip?.id === c.id ? tip.el : null;
@@ -134,7 +139,14 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
 
   return (
     <header className="ribbon" aria-label={t('ribbon.label')}>
-      <nav className="rtabs" role="tablist">
+      <div className="rtop">
+        <div className="rqat" role="toolbar" aria-label={t('ribbon.quickAccess')} data-testid="quick-access">
+          {QUICK_ACCESS.map(([id, Icon]) => (
+            <button key={id} data-testid={`qat-${id}`} className="rqat-btn" title={t(`ribbon.cmd.${id}`)} aria-label={t(`ribbon.cmd.${id}`)}
+              disabled={!commandEnabled(id, ctx)} onClick={() => runCommand(id)}><Icon className="ic" aria-hidden /></button>
+          ))}
+        </div>
+        <nav className="rtabs" role="tablist">
         <button className="rtab rtab-file" data-testid="ribbon-tab-file" disabled={!!ctx.builder} onClick={onFile}>{t('ribbon.file')}</button>
         {tabs.map((x, i) => (
           <Fragment key={x.id}>
@@ -144,7 +156,8 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
               onClick={() => select(x.id)}>{t(x.labelKey)}</button>
           </Fragment>
         ))}
-      </nav>
+        </nav>
+      </div>
       <div className="rbody-wrap">
         {/* The browser's own focus scroll stops at the body's edge, under an arrow: bring the focused command clear of the arrows
             (scroll-padding in shell.css). */}

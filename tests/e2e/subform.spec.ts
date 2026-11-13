@@ -101,6 +101,44 @@ test('Design view: a subform given its Source Object gets the link fields of the
   }
 });
 
+test('Design view: Subform in New Window needs one subform selected and opens its form in Design view', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-Fiche client').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await expect(page.getByTestId('cmd-subformInNewWindow')).toBeDisabled();
+    await page.getByTestId('ctl-Commandes').click();
+    await page.getByTestId('cmd-subformInNewWindow').click();
+    await expect(page.getByTestId('doc-tab-form-Saisie des commandes')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('cmd-subformInNewWindow')).toBeDisabled();   // its own design selects nothing
+  } finally {
+    await app.close();
+  }
+});
+
+test('Design view: Format Painter copies the format of the selected control to the next one clicked, then disarms; Escape disarms', async () => {
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await page.getByTestId('nav-item-form-Fiche client').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await page.getByTestId('ribbon-tab-format').click();
+    await expect(page.getByTestId('cmd-formatPainter')).toBeDisabled();   // nothing selected
+    await page.getByTestId('ctl-Nom').click();
+    await page.getByTestId('cmd-bold').click();
+    await page.getByTestId('cmd-formatPainter').click();
+    await expect(page.getByTestId('cmd-formatPainter')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('ctl-N°').click();
+    await expect(page.getByTestId('cmd-formatPainter')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('prop-FontWeight')).toHaveValue('bold');
+    await page.getByTestId('cmd-formatPainter').click();   // armed on N°, then Escape: the next control stays as it is
+    await page.keyboard.press('Escape');
+    await page.getByTestId('ctl-Remarque').click();
+    await expect(page.getByTestId('prop-FontWeight')).toHaveValue('normal');
+  } finally {
+    await app.close();
+  }
+});
+
 test('Form view: the subform follows the master record, adds linked rows, keeps a refused row, saves a new master on entry, cascade delete', async () => {
   const { app, page } = await launchApp({ args: [base()], env: FR });
   try {

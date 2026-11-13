@@ -59,6 +59,8 @@ async function instantForm(page: Page, navItem: string, source: string, name: st
   await page.getByTestId('cmd-createForm').click();
   await expect(page.getByTestId(`doc-tab-form-${source}`)).toHaveAttribute('aria-selected', 'true');
   await page.getByTestId(`doc-tab-close-form-${source}`).click();
+  await page.getByTestId('modal-btn-yes').click();   // saved when its tab closes, under the proposed name (its source's)
+  await page.getByTestId('modal-btn-ok').click();
   await page.getByTestId(`nav-item-form-${source}`).click({ button: 'right' });
   await page.getByTestId('nav-menu-rename').click();
   await page.getByTestId('modal-input').fill(name);

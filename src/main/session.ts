@@ -2,7 +2,7 @@
 // Elle vit dans le processus de données (db-host/host.ts, un utilityProcess) : le processus principal l'appelle par
 // db-host/client.ts, une file par session, chaque méthode devenant asynchrone.
 import { randomUUID } from 'node:crypto';
-import { realpathSync, renameSync } from 'node:fs';
+import { realpathSync, renameSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import type {
@@ -25,14 +25,16 @@ import { clearThemeOverrides, copyObject, deleteObject, getObject, listObjects, 
 import { acquireLock, peekLock, takeOverStaleLock, type HeldLock, type LockDeps, type LockInfo } from './db/lock';
 import { detectLocationRisk, type LocationRisk, type RiskProbe } from './db/location-risk';
 import { acquireExclusive, dataFileInUse, joinPresence, othersPresent, presenceEntry, sharedRefusal, type ExclusiveResult, type PresenceDeps } from './db/presence';
-import { countRows, fieldListRows, LOOKUP_MAX, lookupRows, NO_LIST, readRows, sourceListRows, type PageRequest, type RowPage } from './db/rows';
+import { aggregateRows, countRows, fieldListRows, LOOKUP_MAX, lookupRows, NO_LIST, readRows, sourceListRows, type PageRequest, type RowPage } from './db/rows';
 import {
   cascadeChildren, createTable, DanglingKeyError, DesignValidationError, dataDesign, dropTable, hasRealRowid, isQueryName, isTableName, listTables, NameExistsError, reconcile, renameTable,
-  sanitizeStoredProps, setColumnWidths, setTableDescription, tableDesign, usableProps, ViewBrokenError, type TableSummary,
+  getDataMacros, sanitizeStoredProps, setColumnWidths, setDataMacros, setSheetLayout, setTableDescription, tableDesign, usableProps, ViewBrokenError, type TableSummary,
 } from './db/schema';
 import { splitDatabase } from './db/split';
 import { importTables } from './migrate/import';
-import { copyRows, deleteRows, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
+import { importAccess } from './import/access-import';
+import type { AccessImportInfo, AccessImportResult } from '../shared/access-import';
+import { copyRows, deleteRowsWithMacros, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
 import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
@@ -41,9 +43,12 @@ import { addResource, getResources, listResources, removeResource, replaceResour
 import type { Theme } from '../shared/design/theme';
 import { peekStartup, saveStartupOptions, startupOptions } from './db/startup';
 import type { StartupOptions } from '../shared/startup';
+import type { SheetLayout } from '../shared/sheet-layout';
 import { writeTextExport } from './exchange/export-text';
 import { writeExcelExport } from './exchange/export-excel';
-import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, type ExportTextSpec } from '../shared/exchange';
+import { writeMarkupExport } from './exchange/export-markup';
+import { deleteSavedExport, loadSavedExports, saveSavedExport } from './exchange/saved';
+import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, type ExportTextSpec, type SavedExport } from '../shared/exchange';
 import { deleteSpec, loadSpecs, saveSpec } from './import/specs';
 import { previewText, runImport, type ImportTexts } from './import/text-import';
 import { excelSource, previewExcel, readSheet } from './exchange/excel-read';
@@ -56,7 +61,7 @@ import { loadSnapshot, passThroughServers, PT_TABLE, runNative, snapshotDesign }
 import { autoLookup, saveSourceRow } from './query/join-write';
 import { actionCount, runAction } from './query/action';
 import { activeContent, type ActiveContent } from './db/active-content';
-import { isWritable, LinkedSources, type SourceConn } from './links/connections';
+import { isWritable, LinkedSources, sourceKindOf, type SourceConn } from './links/connections';
 import {
   addLinks, addServerLinks, findLink, isLinkName, linkRows, relinkRows, relinkServerRows, removeLink, resolveSourcePath, setLinkDescription, setServerDesign, serverSourceFor, sourceRows,
   type LinkRow, type SourceRow,
@@ -69,10 +74,12 @@ import {
   type RemoteCtx,
 } from './connectors/remote-data';
 import { remoteActionCount, remoteRunAction } from './connectors/remote-action';
+import { inspectAccess } from './links/access';
 import { withMetadata } from './links/meta';
 import { refusedQueries, runMigration, switchLocal } from './migrate/run';
 import { fold } from '../shared/expr/sql';
 import { isModuleName, parseModuleDef } from '../shared/python/module-def';
+import { dataMacrosIssue, type DataMacros } from '../shared/macro/data-macro';
 import { chartData } from './chart-data';
 import type { ChartData, ChartDataRequest } from '../shared/chart/query';
 
@@ -105,6 +112,10 @@ const NO_LOCK: LockInfo = { user: '?', host: '?', pid: 0, sessionId: '?', heartb
 const localRowid = (r: RowRef): number => (typeof r === 'number' ? r : (() => { throw new Error('bc:invalidArgument'); })());
 const isPlaceholder = (i: LockInfo) => i.pid === 0 && i.sessionId === '?';
 
+/** A file above this size gets the import's size warning. Measured (E1): a 1.02 GiB file (800 000 rows, 6 fields) imported in 20 s with a
+ *  peak of 1.4 GB, so 1 GiB, the largest size tried, is the ceiling. */
+export const ACCESS_WARN_BYTES = 1024 * 1024 * 1024;
+
 export class Session {
   private db: DatabaseSync | null = null;
   private lock: HeldLock | null = null;
@@ -123,6 +134,8 @@ export class Session {
   private readonly sessionId: string;
   private readonly risk: LocationRisk;
   private readonly info: LocaleInfo;
+  private accessImporting = false;
+  private stopAccessImport = false;
   private readonly openFile: typeof openBaseFile;
   /** Write sequence of the cached query totals and sorted-order snapshots (readRows): moved by writeDb(), by another connection's commit, by a new connection. */
   private seq = 0;
@@ -892,16 +905,21 @@ export class Session {
    *  the result keeps 64 characters); never a name the front-end or an earlier table of the list uses (sameName: `public.compta_X`
    *  and `compta.X`, `Clients` and `clients`). */
   private offered(tables: RemoteTable[]): RemoteTable[] {
+    const names = this.freeNames(tables.map((t) => t.name));
+    return tables.map((t, i) => linkedAs(t, names[i]!));
+  }
+  /** `names` made free, in order: 1, 2… appended when the front-end, a link or an earlier name of the list uses one (cut to 64 characters). */
+  private freeNames(names: string[]): string[] {
     const front = this.conn();
     const used: string[] = [];
     const free = (n: string) => !used.some((u) => sameName(u, n)) && !this.shadowed(front, n) && !isLinkName(front, n);
-    return tables.map((t) => {
-      let name = t.name;
-      const chars = [...t.name];
-      const base = (n: number) => (chars.length <= 64 ? chars.slice(0, 64 - String(n).length).join('') : t.name); // too long: R6's refusal stays
+    return names.map((t) => {
+      let name = t;
+      const chars = [...t];
+      const base = (n: number) => (chars.length <= 64 ? chars.slice(0, 64 - String(n).length).join('') : t); // too long: R6's refusal stays
       for (let i = 1; !free(name); i++) name = `${base(i)}${i}`;
       used.push(name);
-      return linkedAs(t, name);
+      return name;
     });
   }
   /** The server link dialog (C4 Task 12): logs in to `params` with `user` and `password` (a refused login rejects
@@ -965,7 +983,10 @@ export class Session {
   loginDefaults(key: string): { user: string; label: string } { return this.remote.loginDefaults(key); }
   /** R12 (Stop): called out of db-host's queue, while another call runs: cancels the running remote statement (true), never
    *  touches the base. False: nothing remote running (a local query is stopped by the kill). */
-  interrupt(): Promise<boolean> { return this.remote.interrupt(); }
+  async interrupt(): Promise<boolean> {
+    if (this.accessImporting) { this.stopAccessImport = true; return true; } // read between two pages of the import
+    return this.remote.interrupt();
+  }
   /** Convert to Local Table (R12), one front-end transaction: the link removed first (PF16: createTable refuses a link's name),
    *  a local table of its design (`external` dropped), its rows copied as stored in rowid order (AutoNumber values kept). Rows
    *  the local table refuses: bc:unsupportedTable, nothing changed (as copyTable). The data file's relations are not copied. */
@@ -1001,6 +1022,24 @@ export class Session {
   saveColumnWidths(table: string, widths: Record<string, number>): void {
     this.noLink(table);
     setColumnWidths(this.writeDb(), table, widths);
+  }
+
+  /** The rest of a local table's datasheet layout (see setSheetLayout). */
+  saveSheetLayout(table: string, layout: SheetLayout): void {
+    this.noLink(table);
+    if (!setSheetLayout(this.writeDb(), table, layout)) throw new Error('bc:notFound');
+  }
+
+  /** The table's data macros (T2). */
+  dataMacros(table: string): DataMacros {
+    this.noLink(table);
+    return getDataMacros(this.conn(), tableDesign(this.conn(), table).name);
+  }
+  /** Replaces them: the caller's set is checked (dataMacrosIssue) before anything is written. */
+  saveDataMacros(table: string, macros: DataMacros): void {
+    this.noLink(table);
+    if (dataMacrosIssue(macros) !== null) throw new Error('bc:invalidDefinition');
+    if (!setDataMacros(this.writeDb(), table, macros)) throw new Error('bc:notFound');
   }
 
   async testRules(table: string): Promise<{ field: string; rows: number }[]> {
@@ -1056,7 +1095,7 @@ export class Session {
     const r = this.remoteWritten(table);
     if (r) return remoteDelete(this.remoteCtx(), r.sourceId, r.t, rowids);
     const { db, table: t } = this.where(table, true);
-    return deleteRows(db, dataDesign(db, t).name, rowids.map(localRowid));
+    return deleteRowsWithMacros(db, dataDesign(db, t), rowids.map(localRowid), this.info);
   }
   /** A table-field lookup resolves its Row Source in the file that owns the field (R6); a server link's, as the front-end
    *  resolves its names (C7 R12), its first LOOKUP_MAX rows read through pageSource. */
@@ -1249,7 +1288,8 @@ export class Session {
     try {
       const { where } = req;
       const { rows } = readRows(db, d, { offset: req.offset, limit: req.limit, filter, ...(where !== undefined ? { where } : {}) }, this.info.locale, req.sort ?? [], this.writeSeq());
-      return { rows: rows.map((r) => r.values), rowids: rows.map((r) => r.rowid), total: countRows(db, d.name, filter, this.info.locale, where) };
+      const aggregates = req.aggregates && aggregateRows(db, d, req.aggregates, filter, this.info.locale, where);
+      return { rows: rows.map((r) => r.values), rowids: rows.map((r) => r.rowid), total: countRows(db, d.name, filter, this.info.locale, where), ...(aggregates ? { aggregates } : {}) };
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('bc:invalidFilter')) throw new Error(e.message.startsWith('bc:invalidFilter|') ? e.message.replace('invalidFilter', 'invalidArgument') : 'bc:invalidArgument');   // R6: the unknown function's name stays
       throw e;
@@ -1336,6 +1376,17 @@ export class Session {
     const { fields } = await this.describeSource(src.ref, src.params);
     return writeExcelExport({ fields, path, sheet, tick, info: this.info, page: this.exportPager(src) });
   }
+  /** As exportText, to an XML file in Access's data format (`format` xml: `name`, the table or query, is the record element) or an
+   *  HTML table (F1, F5). */
+  async exportMarkup(src: ExportSource, format: 'xml' | 'html', name: string, path: string, texts: { yes: string; no: string },
+    tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
+    const { fields } = await this.describeSource(src.ref, src.params);
+    return writeMarkupExport({ format, name, fields, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src) });
+  }
+  /** F4: the saved exports (reads), saved and deleted by name (a read-only base: ReadOnlyError). */
+  savedExports(): Record<string, SavedExport> { return loadSavedExports(this.conn()); }
+  saveSavedExport(name: string, e: SavedExport): void { saveSavedExport(this.writeDb(), name, e); }
+  deleteSavedExport(name: string): void { deleteSavedExport(this.writeDb(), name); }
   saveImportSpec(name: string, spec: ImportSpec): void { saveSpec(this.writeDb(), name, spec); }
 
   /** Active content (R3) and the base's identity, for the main process's decision (trust.ts). */
@@ -1492,6 +1543,44 @@ export class Session {
       if (isLost(e)) throw new Error(`bc:linkUnavailable|cannotConnect|${connector.label(p)}`, { cause: e }); // rolled back with the connection
       throw e;
     } finally {
+      this.seq++; // tables were created
+    }
+  }
+
+  /** External Data › Import › Access (E1): the tables of the Access file `path` (a path the dialog picked) with the names they would take. */
+  inspectAccessImport(path: string): AccessImportInfo {
+    let kind: string | undefined;
+    try { kind = sourceKindOf(path); } catch { /* not readable: cannotOpen below */ }
+    if (kind !== 'access') throw new Error(`bc:linkUnavailable|cannotOpen|${path}`);
+    const { r } = this.links.accessReader(path);
+    const found = inspectAccess(r);
+    const names = this.freeNames(found.map((t) => t.name));
+    return {
+      tables: found.map((t, i) => ({ name: names[i]!, remote: t.name, taken: false as const,
+        ...(t.skipped.length ? { skipped: t.skipped } : {}), ...(t.unsupported ? { unsupported: t.unsupported } : {}) })),
+      linked: r.getTableNames({ normalTables: false, linkedTables: true }),
+      warnSize: statSync(path).size > ACCESS_WARN_BYTES,
+    };
+  }
+
+  /** Imports `remotes` (names inspectAccessImport offered) of the Access file `path` into local tables, in one transaction. One the
+   *  file no longer holds, or BaseCraft cannot hold: missingTables, nothing created. Stop: interrupt() sets the flag read between pages. */
+  async importAccessTables(path: string, remotes: string[], tick: (p: ImportProgress) => Promise<void> = async () => {}): Promise<AccessImportResult> {
+    const front = this.structureDb();
+    const { r, jet3 } = this.links.accessReader(path);
+    const found = inspectAccess(r);
+    const wanted = remotes.filter((n, i) => remotes.findIndex((m) => sameName(m, n)) === i);
+    const picked = wanted.map((n) => found.find((t) => !t.unsupported && t.name === n));
+    const missing = wanted.filter((_, i) => !picked[i]);
+    if (missing.length) return { ok: false, reason: 'missingTables', names: missing };
+    const names = this.freeNames(wanted);
+    this.stopAccessImport = false;
+    this.accessImporting = true;
+    try {
+      return await importAccess({ front, r, jet3, source: basename(path), tables: wanted.map((remote, i) => ({ remote, name: names[i]! })),
+        linked: r.getTableNames({ normalTables: false, linkedTables: true }), info: this.info, tick, stopped: () => this.stopAccessImport });
+    } finally {
+      this.accessImporting = false;
       this.seq++; // tables were created
     }
   }

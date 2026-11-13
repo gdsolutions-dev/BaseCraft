@@ -6,6 +6,13 @@
 .rz-text { --bc-ix: 2px; display: flex; align-items: flex-start; gap: 2px; padding: 0 2px; line-height: 1.15; white-space: nowrap; }
 .rz-text > svg { flex: none; margin-left: auto; align-self: center; }
 .rz-clip { overflow: hidden; text-overflow: ellipsis; }
+.rz-button { justify-content: center; border: 1px solid var(--bc-border); border-radius: var(--bc-radius); }
+.rz-group { overflow: visible; }
+.rz-legend { position: absolute; top: -0.6em; left: 6px; padding: 0 3px; background: var(--bc-surface); font-size: 12px; line-height: 1.2; }
+.rz-tabs { border: 1px solid var(--bc-border); }
+.rz-tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--bc-border); }
+.rz-tabstrip span { padding: 1px 8px; font-size: 12px; border: 1px solid var(--bc-border); border-top: 0; border-bottom: 0; background: var(--bc-surface-2); }
+.rz-tabstrip span.is-on { background: var(--bc-surface); }
 .rz-check { inset: auto; left: 0; top: 0; width: 12px; height: 12px; border: 1px solid var(--bc-border); }
 .rz-radio { border-radius: 50%; }
 .rz-image { display: grid; place-items: center; color: var(--bc-text-muted); }

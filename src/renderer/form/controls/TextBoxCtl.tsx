@@ -4,11 +4,18 @@ import { useLayoutEffect, useRef } from 'react';
 import { entryCaret } from '../../datasheet/edit-keys';
 import { currentSettings } from '../../settings-store';
 import { typedValue } from '../calc';
-import { controlTexts, isUnbound } from '../control-values';
+import { controlTexts, isRichBox, isUnbound } from '../control-values';
 import { controlEnabled, prop } from '../run-model';
+import { RichTextCtl } from './RichTextCtl';
 import { ctlAttrs, fieldOf, unboundText, type CtlProps } from './run-ctx';
 
-export function TextBoxCtl({ c, x, style }: CtlProps) {
+/** A box on a Rich Text field is the rich editor (the choice is the field's, so it never changes under a mounted box). */
+export function TextBoxCtl(p: CtlProps) {
+  const b = fieldOf(p.c, p.x);
+  return b && isRichBox(p.c, b.f) ? <RichTextCtl {...p} /> : <PlainTextBoxCtl {...p} />;
+}
+
+function PlainTextBoxCtl({ c, x, style }: CtlProps) {
   const src = prop(c, 'ControlSource');
   const b = fieldOf(c, x);
   const unbound = isUnbound(c);

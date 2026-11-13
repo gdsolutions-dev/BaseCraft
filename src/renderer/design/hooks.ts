@@ -14,7 +14,7 @@ import type { addMoreField, editValidation, moreFieldsFor, setDataType, setForma
 
 export interface DesignHooks {
   /** The shell's design commands, moved verbatim from App's registerCommands(SHELL_SCOPE): createTableDesign, createTable,
-   *  importText, importExcel, linkBaseCraft (C1), linkAccess (C2), linkPostgreSql (C4), linkSqlServer (C5), importPostgreSql and importSqlServer (C7), splitDatabase (C3), moveToServer (C7), relationships, createFormDesign, createBlankForm, createForm, createQueryDesign, createSqlQuery,
+   *  importText, importExcel, importXml, linkBaseCraft (C1), linkAccess (C2), linkPostgreSql (C4), linkSqlServer (C5), importPostgreSql and importSqlServer (C7), importAccess (E1), splitDatabase (C3), moveToServer (C7), relationships, createFormDesign, createBlankForm, createForm, createQueryDesign, createSqlQuery,
    *  viewSql, createReport, createReportDesign, createBlankReport, createMacro. */
   shellCommands(env: DesignShellEnv): Partial<Record<CommandId, () => void | Promise<void>>>;
   requestFieldList(kind: 'form' | 'report', name: string): void;
@@ -39,14 +39,14 @@ export interface DesignShellEnv {
   dispatch: AppDispatch;
   rawDispatch(a: AppAction): void;
   t(key: string, opts?: Record<string, unknown>): string;
-  live: { readonly current: { state: AppState; tables: TableSummary[]; objects: ObjectSummary[] } };
+  live: { readonly current: { state: AppState; tables: TableSummary[]; objects: ObjectSummary[]; navSelection?: { kind: string; name: string } | null } };
   sourceToCreate(titleKey: string): Promise<{ ref: RecordSourceRef; name: string } | null>;
   newForm(fieldList: boolean): void;
   newQueryName(): string;
   newReportName(): string;
   newMacroName(): string;
   newModuleName(): string;
-  setImporting(v: { source?: 'excel' }): void;
+  setImporting(v: { source?: 'excel' | 'xml' }): void;
   /** Every document closed, each asked about its changes (as before Compact); false: one stayed. */
   closeDocuments(): Promise<boolean>;
   /** pythonEditor, Ctrl+G: shows or hides the Immediate window and focuses its input. */

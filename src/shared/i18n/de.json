@@ -27,6 +27,7 @@
   },
   "ribbon": {
     "label": "Menüband",
+    "quickAccess": "Symbolleiste für den Schnellzugriff",
     "file": "Datei",
     "tab": {
       "home": "Start",
@@ -110,6 +111,8 @@
       "viewDesign": "Entwurfsansicht",
       "newRecord": "Neu",
       "save": "Speichern",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
       "deleteRecord": "Löschen",
       "sortAsc": "Aufsteigend",
       "sortDesc": "Absteigend",
@@ -798,6 +801,8 @@
       "rectangle": "Rechteck",
       "pageBreak": "Seitenumbruch",
       "tabControl": "Register",
+      "toggleButton": "Umschalt",
+      "navigationControl": "Navigation",
       "chart": "Diagramm"
     },
     "format": {
@@ -806,6 +811,25 @@
       "fontSize": "Schriftgrad",
       "colors": "Farben",
       "format": "Format"
+    },
+    "cond": {
+      "empty": "Keine Regeln. Fügen Sie eine hinzu, um dieses Steuerelement nach seinem Wert zu formatieren.",
+      "rule": "Regel {{n}}",
+      "and": "und",
+      "remove": "Löschen",
+      "add": "Neue Regel",
+      "invalid": "Regel {{n}}: Der Ausdruck kann nicht gelesen werden.",
+      "noColor": "Keine Farbe",
+      "op": {
+        "between": "Feldwert liegt zwischen",
+        "equal": "Feldwert ist gleich",
+        "notEqual": "Feldwert ist ungleich",
+        "greater": "Feldwert ist größer als",
+        "less": "Feldwert ist kleiner als",
+        "greaterEqual": "Feldwert ist größer oder gleich",
+        "lessEqual": "Feldwert ist kleiner oder gleich",
+        "expression": "Ausdruck ist"
+      }
     }
   },
   "fieldType": {
@@ -828,6 +852,8 @@
     "caption": "Beschriftung",
     "required": "Eingabe erforderlich",
     "allowZeroLength": "Leere Zeichenfolge",
+    "textFormat": "Textformat",
+    "textFormats": { "plain": "Nur Text", "rich": "Rich-Text" },
     "indexed": "Indiziert",
     "auto": "Automatisch",
     "numberSizes": {
@@ -942,6 +968,9 @@
     "tableRule_short": "Ein oder mehrere Werte sind durch die Gültigkeitsregel für „{{table}}“ nicht zulässig."
   },
   "datasheet": {
+    "more": { "rowHeight": "Zeilenhöhe…", "columnWidth": "Feldbreite…", "rowHeightLabel": "Zeilenhöhe (Punkt):", "columnWidthLabel": "Spaltenbreite:", "standardHeight": "Standardhöhe", "standardWidth": "Standardbreite", "bestFit": "Anpassen", "hide": "Felder ausblenden", "unhide": "Felder einblenden…", "freeze": "Felder fixieren", "unfreeze": "Fixierung aller Felder aufheben", "unhideTitle": "Spalten einblenden" },
+    "totals": { "label": "Summe", "none": "Keine" },
+    "format": { "gridlines": "Gitternetzlinien anzeigen", "gridColor": "Farbe der Gitternetzlinien", "auto": "Automatisch" },
     "goTo": {
       "first": "Erster",
       "previous": "Vorheriger",
@@ -960,6 +989,15 @@
     "fieldError_record": "{{message}}",
     "unsupported": "Diese Tabelle wird von BaseCraft nicht unterstützt: Ihre Daten können nicht angezeigt werden.",
     "findCapped": "Suchen und Kopieren erfassen die ersten 100.000 Datensätze.",
+    "spellNotFound": "Nicht im Wörterbuch",
+    "spellChangeTo": "Ändern in",
+    "spellSuggestions": "Vorschläge",
+    "spellIgnore": "Ignorieren",
+    "spellIgnoreAll": "Alle ignorieren",
+    "spellChange": "Ändern",
+    "spellChangeAll": "Alle ändern",
+    "spellDone": "Die Rechtschreibprüfung ist abgeschlossen.",
+    "spellUnavailable": "Für die Sprache der Benutzeroberfläche ist kein Rechtschreibwörterbuch verfügbar. Es wird beim ersten Mal heruntergeladen, wofür eine Internetverbindung nötig ist.",
     "pasteOneRow": "Das Einfügen ist auf jeweils eine Zeile beschränkt.",
     "discardTitle": "Datensatz kann nicht gespeichert werden",
     "saveTableLayout": "Möchten Sie die Änderungen am Layout der Tabelle „{{name}}“ speichern?",
@@ -1330,6 +1368,7 @@
   },
   "importText": {
     "titleExcel": "Excel-Arbeitsmappe importieren",
+    "titleXml": "XML-Datei importieren",
     "title": "Textdatei importieren",
     "stepOf": "Schritt {{n}} von {{total}}",
     "step": {
@@ -1344,6 +1383,7 @@
     },
     "source": {
       "introExcel": "Geben Sie die zu importierende Excel-Arbeitsmappe (.xlsx, .xlsm) an und legen Sie fest, wie und wo ihre Daten in der aktuellen Datenbank gespeichert werden.",
+      "introXml": "Geben Sie die zu importierende XML-Datei an (Datensätze aus Feldern, wie BaseCraft und Access sie schreiben) und legen Sie fest, wie und wo ihre Daten in der aktuellen Datenbank gespeichert werden.",
       "intro": "Geben Sie die zu importierende Textdatei an und legen Sie fest, wie und wo ihre Daten in der aktuellen Datenbank gespeichert werden.",
       "file": "Dateiname",
       "browse": "Durchsuchen…",
@@ -1477,6 +1517,7 @@
     },
     "error": {
       "excelUnsupported": "Diese Datei ist keine lesbare Excel-Arbeitsmappe (.xlsx oder .xlsm).",
+      "xmlUnsupported": "Diese Datei ist keine XML-Datendatei, die BaseCraft lesen kann (ein Stammelement mit wiederholten Datensatzelementen, jeweils mit einfachen Feldelementen; höchstens 100 MB; keine DTD).",
       "fileTooLarge": "Diese Arbeitsmappe ist größer als 100 MB.",
       "noFile": "Geben Sie die zu importierende Datei an.",
       "fileNotFound": "Die Datei wurde nicht gefunden oder kann nicht gelesen werden.",
@@ -1588,6 +1629,8 @@
     "PictureAlignment": "Bildausrichtung",
     "PictureSizeMode": "Bildgrößenanpassung",
     "LineSlant": "Linienneigung",
+    "HyperlinkAddress": "Hyperlink-Adresse",
+    "NavigationTargets": "Navigationsziele",
     "Pages": "Seiten",
     "Name": "Name",
     "Tag": "Bemerkung",
@@ -1812,6 +1855,9 @@
       "fontNotPortable": "Die Schriftart „{{detail}}“ ist nicht eingebettet: Text wird in Liberation Sans gemessen und gedruckt.",
       "unsupportedControl": "Diese Art von Steuerelement wird nicht gedruckt.",
       "pictureMissing": "Das freigegebene Bild „{{detail}}“ ist nicht mehr in der Galerie: das Bild wird weder angezeigt noch gedruckt.",
+      "subreportMissing": "Der Unterbericht „{{detail}}“ wurde nicht gefunden oder kann nicht gelesen werden.",
+      "subreportRecursive": "Der Unterbericht „{{detail}}“ enthält diesen Bericht (oder überschreitet sieben Ebenen): Er wird nicht gedruckt.",
+      "subreportBadLink": "Die Haupt- und Unterfelder dieses Unterberichts stimmen nicht mit den Feldern der Berichte überein.",
       "aggregateNotAllowed": "In diesem Bereich ist keine Summe zulässig.",
       "sizeClamped": "Eine Größe überschreitet 55,88 cm, die Grenze von Access: Sie wird auf diese Grenze reduziert.",
       "groupingMalformed": "Eine Gruppierungsebene ist leer oder fehlerhaft: Sie gruppiert nichts.",
@@ -1822,7 +1868,47 @@
     "invalidDefinition": "Die Definition dieses Berichts ist ungültig:",
     "pdfSaved": "Die PDF-Datei wurde gespeichert.",
     "pdfFilter": "PDF-Dateien",
+    "paper": {
+      "chou3": "Japanischer Umschlag Chou Nr. 3",
+      "chou4": "Japanischer Umschlag Chou Nr. 4",
+      "p4x6": "4x6 Zoll/10x15 cm",
+      "p5x7": "5x7 Zoll/13x18 cm",
+      "p35x5": "3,5x5 Zoll/L 89x127 mm",
+      "l2": "2L 127 x 178 mm",
+      "p8x10": "8x10 Zoll",
+      "ofuku": "Ofuku Hagaki 200 x 148 mm",
+      "envA2": "Umschlag A2 111 x 146 mm",
+      "bristol4x6": "Bristolkarte 4x6 Zoll",
+      "bristol5x8": "Bristolkarte 5x8 Zoll",
+      "cardUs": "Letter-Karte US (8,5 x 11 Zoll)",
+      "cardA4": "A4-Karte (8,27 x 11,69 Zoll)",
+      "p8_5x13": "8,5x13 Zoll",
+      "p3x5": "3 x 5 Zoll",
+      "bristol3x5": "Bristolkarte 3 x 5 Zoll",
+      "b5iso": "B5 (ISO) 176 x 250 mm",
+      "letter": "Letter",
+      "legal": "Legal",
+      "statement": "Statement",
+      "executive": "Executive",
+      "a4": "A4",
+      "a5": "A5",
+      "b5": "B5 (JIS)",
+      "env10": "Umschlag Nr. 10",
+      "envDl": "Umschlag DL",
+      "envC5": "Umschlag C5",
+      "envC6": "Umschlag C6",
+      "envMonarch": "Umschlag Monarch",
+      "env675": "Umschlag Nr. 6 3/4",
+      "postcardJp": "Japanische Postkarte",
+      "a6": "A6"
+    },
     "pageSetup": {
+      "tabOptions": "Druckoptionen",
+      "tabPage": "Seite",
+      "tabColumns": "Spalten",
+      "paper": "Papier",
+      "size": "Größe",
+      "dataOnly": "Nur Daten",
       "title": "Seite einrichten",
       "orientation": "Ausrichtung",
       "portrait": "Hochformat",
@@ -1833,6 +1919,21 @@
       "left": "Links",
       "right": "Rechts",
       "invalid": "Jeder Seitenrand muss zwischen 0 und 10 cm liegen."
+    },
+    "columns": {
+      "grid": "Rastereinstellungen",
+      "columnSize": "Spaltengröße",
+      "width": "Breite (cm)",
+      "height": "Höhe (cm)",
+      "rowSpacing": "Zeilenabstand (cm)",
+      "sameAsDetail": "Wie Detailbereich",
+      "title": "Spalten",
+      "count": "Anzahl der Spalten",
+      "spacing": "Spaltenabstand (cm)",
+      "layout": "Spaltenanordnung",
+      "down": "Nach unten, dann nach rechts",
+      "across": "Nach rechts, dann nach unten",
+      "invalid": "Spalten: 1 bis 10; Abstand: 0 bis 10 cm."
     },
     "sectionGroup": {
       "header": "Gruppenkopf: {{expr}}",
@@ -2047,7 +2148,8 @@
       "line": "Linie",
       "rectangle": "Rechteck",
       "pageBreak": "Seitenumbruch",
-      "tabControl": "Registersteuerelement"
+      "tabControl": "Registersteuerelement",
+      "toggleButton": "Umschaltfläche"
     },
     "tab": {
       "format": "Format",
@@ -2094,6 +2196,7 @@
     "badSource": "Die Datensatzherkunft dieses Formulars ist nicht lesbar: Sie wurde entfernt.",
     "headerFooter": "Formularkopf/-fuß",
     "tabPage": "Seite{{n}}",
+    "nav": { "reportLater": "Ein Bericht kann noch nicht in einem Navigationssteuerelement angezeigt werden; nur Formulare." },
     "unbound": "Ungebunden",
     "saveFirstTitle": "Formular speichern",
     "saveFirst": "Möchten Sie die Änderungen am Formular „{{name}}“ speichern?",
@@ -2302,6 +2405,18 @@
     "no": "Falsch",
     "excelFilter": "Excel-Arbeitsmappen",
     "textFilter": "Textdateien",
+    "xmlFilter": "XML-Dateien",
+    "htmlFilter": "HTML-Dokumente",
+    "saveSteps": "Exportschritte speichern",
+    "saveName": "Speichern unter",
+    "savedDefault": "Export - {{name}}",
+    "savedEmpty": "Kein gespeicherter Export.",
+    "savedRun": "Ausführen",
+    "savedDelete": "Löschen",
+    "fmtText": "Textdatei",
+    "fmtExcel": "Excel-Arbeitsmappe",
+    "fmtXml": "XML-Datei",
+    "fmtHtml": "HTML-Dokument",
     "actionQuery": "„{{name}}“ ist eine Aktionsabfrage: Sie hat keine Daten zum Exportieren.",
     "noSource": "Dieser Bericht hat keine Datensatzherkunft: Es gibt nichts zu exportieren.",
     "selectObject": "Wählen Sie zuerst im Navigationsbereich eine Tabelle oder Abfrage aus.",
@@ -2370,6 +2485,7 @@
     "fieldSizeTitle": "Feldgröße",
     "fieldSizeLabel": "Feldgröße (1 bis 255)",
     "fieldSizeInvalid": "Geben Sie eine ganze Zahl von 1 bis 255 ein.",
+    "lookupValues": "Werte (einer pro Zeile)",
     "formatNone": "(ohne)",
     "validationTextTitle": "Gültigkeitsmeldung",
     "fieldValidationTextLabel": "Meldung, die angezeigt wird, wenn ein Wert von „{{field}}“ abgelehnt wird",
@@ -2399,6 +2515,8 @@
     "noTables": "Diese Datenbank enthält keine lokale Tabelle zum Verschieben.",
     "self": "Die Datendatei darf nicht die geöffnete Datenbank sein. Wählen Sie einen anderen Namen oder Ordner."
   },
+  "clipboard": { "empty": "Die Zwischenablage des Systems enthält keinen Text.", "content": "{{text}}" },
+  "hyperlink": { "address": "Adresse (https://, http:// oder mailto:)", "text": "Anzuzeigender Text", "invalid": "Die Adresse muss mit https://, http:// oder mailto: beginnen.", "open": "{{url}} öffnen?" },
   "migrate": {
     "title": "Assistent zum Verschieben auf einen Server",
     "intro": "Dieser Assistent verschiebt alle lokalen Tabellen der aktuellen Datenbank mit ihren Daten, Schlüsseln, Indizes und Beziehungen in eine PostgreSQL- oder SQL Server-Datenbank und ersetzt sie dann durch verknüpfte Tabellen gleichen Namens. Zuerst wird eine Sicherungskopie der Datenbank erstellt. Gültigkeitsregeln und berechnete Standardwerte bleiben in der Anwendung, die zu einer Front-End-Anwendung wird.",
@@ -2469,6 +2587,23 @@
     "saveFirstTitle": "Modul speichern",
     "saveFirst": "Möchten Sie die Änderungen am Modul „{{name}}“ speichern?"
   },
+  "dataMacro": {
+    "title": "Datenmakros von „{{table}}“",
+    "namedTitle": "Benannte Makros von „{{table}}“",
+    "events": "Tabellenereignisse",
+    "named": "Benannte Makros",
+    "noNamed": "Kein benanntes Makro.",
+    "empty": "(leer)",
+    "edit": "Bearbeiten",
+    "rename": "Umbenennen …",
+    "delete": "Löschen",
+    "new": "Neues benanntes Makro …",
+    "close": "Schließen",
+    "nameLabel": "Makroname",
+    "nameExists": "Ein benanntes Makro mit diesem Namen ist bereits vorhanden.",
+    "deleteAsk": "Das Datenmakro „{{name}}“ von „{{table}}“ löschen?",
+    "saveFailed": "Die Datenmakros konnten nicht gespeichert werden:\n{{detail}}"
+  },
   "macro": {
     "convert": {
       "title": "Makro konvertieren",
@@ -2485,6 +2620,10 @@
     },
     "newName": "Makro{{n}}",
     "action": {
+      "CreateRecord": "DatensatzErstellen",
+      "RaiseError": "FehlerAuslösen",
+      "RunDataMacro": "AusführenDatenmakro",
+      "SetField": "SetzenFeld",
       "Beep": "Signalton",
       "ClearMacroError": "LöschenMakrofehler",
       "CloseDatabase": "SchließenDatenbank",
@@ -2521,6 +2660,10 @@
       "UndoRecord": "RückgängigDatensatz"
     },
     "arg": {
+      "Values": "Werte (Feld = Ausdruck, eine pro Zeile)",
+      "ErrorNumber": "Fehlernummer",
+      "ErrorDescription": "Fehlerbeschreibung",
+      "Value": "Wert",
       "FormName": "Formularname",
       "View": "Ansicht",
       "WhereCondition": "WHERE-Bedingung",
@@ -2648,6 +2791,7 @@
       }
     },
     "category": {
+      "dataMacro": "Aktionen für Datenmakros",
       "ui": "Benutzeroberflächenbefehle",
       "macro": "Makrobefehle",
       "system": "Systembefehle",
@@ -2914,6 +3058,41 @@
       "ok": "Importieren",
       "done": "Importierte Tabellen: {{names}}.",
       "skipped": "Nicht importierte Spalten ({{table}}): {{names}}."
+    },
+    "access": {
+      "title": "Aus Access importieren",
+      "fileOnly": "Tabellen und ihre Daten werden importiert. Andere Schlüssel als ein AutoWert, Indizes und Feldregeln werden nicht gelesen; Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert.",
+      "linked": "Verknüpfte Tabellen dieser Datei werden nicht angeboten: {{names}}.",
+      "warnSize": "Diese Datei ist groß: der Import kann einige Zeit dauern.",
+      "missingTables": "Die Datei enthält nicht mehr: {{names}}. Es wurde nichts geändert."
+    },
+    "report": {
+      "title": "Importbericht: {{source}}",
+      "save": "Bericht speichern",
+      "fileName": "Importbericht {{source}}.txt",
+      "level": {
+        "carried": "Unverändert importiert",
+        "approximated": "Mit einer Abweichung importiert",
+        "ignored": "Nicht importiert"
+      },
+      "reason": {
+        "tableNotImported": "Eine Tabelle dieser Beziehung wurde nicht importiert.",
+        "violations": "Einige Datensätze haben keinen passenden Datensatz in der Primärtabelle."
+      },
+      "line": {
+        "tableImported": "Tabelle „{{object}}“: importierte Zeilen: {{n}}.",
+        "relationCreated": "Beziehung „{{object}}“ erstellt.",
+        "keyAssumed": "Tabelle „{{object}}“: das AutoWert-Feld „{{part}}“ gilt als Primärschlüssel.",
+        "keyNotRead": "Tabelle „{{object}}“: kein AutoWert-Feld, ohne Primärschlüssel importiert.",
+        "relationNotEnforced": "Beziehung „{{object}}“ ohne referenzielle Integrität erstellt. {{reason}}",
+        "structureNotRead": "Indizes, Feldregeln, Standardwerte, Beschriftungen und Nachschlagelisten werden nicht gelesen.",
+        "fieldSkipped": "Tabelle „{{object}}“: Spalte „{{part}}“ nicht importiert (ein Typ, den BaseCraft nicht liest).",
+        "valuesLost": "Tabelle „{{object}}“, Feld „{{part}}“: {{n}} Werte passten nicht und wurden leer gelassen.",
+        "tableUnsupported": "Tabelle „{{object}}“ nicht importiert. {{reason}}",
+        "tableLinked": "Tabelle „{{object}}“ ist eine verknüpfte Tabelle der Access-Datei: sie wird nicht importiert.",
+        "relationIgnored": "Beziehung „{{object}}“ der Access-Datei nicht importiert. {{reason}}",
+        "tablesOnly": "Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert."
+      }
     }
   },
   "link": {
@@ -3052,6 +3231,11 @@
     "title": "Suchen und Ersetzen",
     "tabFind": "Suchen",
     "tabReplace": "Ersetzen",
+    "replaceWith": "Ersetzen durch:",
+    "replace": "Ersetzen",
+    "replaceAll": "Alle ersetzen",
+    "replaceAllWarning": "Dieser Vorgang „Alle ersetzen“ kann nicht rückgängig gemacht werden. Fortfahren?",
+    "replacedCount": "{{count}} Ersetzungen vorgenommen.",
     "what": "Suchen nach:",
     "lookIn": "Suchen in:",
     "lookInField": "Aktuelles Feld",
@@ -3130,6 +3314,121 @@
     "placeholder": "Python-Anweisung oder ?Ausdruck eingeben",
     "errorAt": "(Modul {{module}}, Zeile {{line}})",
     "splitter": "Größe des Direktfensters ändern"
+  },
+  "wizard": {
+    "source": "Tabellen/Abfragen",
+    "available": "Verfügbare Felder:",
+    "selected": "Ausgewählte Felder:",
+    "fieldsQuestion": "Welche Felder möchten Sie einbeziehen?",
+    "queryWhich": "Welchen Assistenten möchten Sie verwenden?",
+    "queryKind": {
+      "simple": "Assistent für einfache Abfragen",
+      "crosstab": "Assistent für Kreuztabellenabfragen",
+      "duplicates": "Assistent für Abfragen zum Suchen von Duplikaten",
+      "unmatched": "Assistent für Abfragen zum Suchen nicht übereinstimmender Datensätze"
+    },
+    "queryName": {
+      "simple": "{{source}}-Abfrage",
+      "crosstab": "{{source}}-Kreuztabelle",
+      "duplicates": "Duplikate in {{source}}",
+      "unmatched": "{{a}} ohne Übereinstimmung in {{b}}"
+    },
+    "dupFields": "In welchen Feldern können doppelte Informationen vorkommen?",
+    "dupExtra": "Welche zusätzlichen Felder möchten Sie anzeigen?",
+    "crossRows": "Welche Felder möchten Sie als Zeilenüberschriften verwenden?",
+    "crossColumn": "Welches Feld soll als Spaltenüberschrift verwendet werden?",
+    "crossValue": "Welche Zahl soll für jede Kreuzung von Spalte und Zeile berechnet werden?",
+    "unmatchedA": "Welche Tabelle oder Abfrage enthält die Datensätze für das Ergebnis?",
+    "unmatchedB": "Welche Tabelle oder Abfrage enthält die zugehörigen Datensätze?",
+    "unmatchedKey": "Welches Feld ist in beiden enthalten?",
+    "detailOrSummary": "Möchten Sie eine Detail- oder eine Zusammenfassungsabfrage?",
+    "detail": "Detail (zeigt jedes Feld jedes Datensatzes)",
+    "summary": "Zusammenfassung",
+    "countRecords": "Datensätze in {{source}} zählen",
+    "queryTitle": "Welchen Titel möchten Sie für Ihre Abfrage verwenden?",
+    "openQuery": "Abfrage öffnen, um Informationen anzuzeigen",
+    "openQueryDesign": "Abfrageentwurf ändern",
+    "formLayout": "Welches Layout soll Ihr Formular haben?",
+    "formLayouts": {
+      "columnar": "Einspaltig",
+      "tabular": "Tabellarisch",
+      "datasheet": "Datenblatt",
+      "justified": "Blocksatz (als einspaltig angezeigt)"
+    },
+    "formTitle": "Welchen Titel möchten Sie für Ihr Formular verwenden?",
+    "openForm": "Formular öffnen, um Informationen anzuzeigen oder einzugeben",
+    "openFormDesign": "Formularentwurf ändern",
+    "reportGroups": "Möchten Sie Gruppierungsebenen hinzufügen (bis zu {{max}})?",
+    "reportSort": "In welcher Reihenfolge sollen die Detaildatensätze sortiert werden (bis zu {{max}} Felder)?",
+    "sortField": "Sortierfeld {{n}}",
+    "reportSummary": "Welche Zusammenfassungswerte sollen berechnet werden?",
+    "detailAndSummary": "Detail und Zusammenfassung",
+    "summaryOnly": "Nur Zusammenfassung",
+    "reportLayout": "Welches Layout soll Ihr Bericht haben?",
+    "stepped": "Layout: Abgestuft",
+    "reportTitle": "Welchen Titel möchten Sie für Ihren Bericht verwenden?",
+    "openReport": "Seitenansicht des Berichts",
+    "openReportDesign": "Berichtsentwurf ändern",
+    "labelSheet": "Welche Etikettengröße möchten Sie?",
+    "labelCustom": "Benutzerdefiniert…",
+    "labelWidth": "Etikettenbreite (mm)",
+    "labelHeight": "Etikettenhöhe (mm)",
+    "labelColumns": "Etiketten nebeneinander",
+    "labelMarginLeft": "Linker und rechter Rand des Bogens (mm)",
+    "labelMarginTop": "Oberer Rand des Bogens (mm)",
+    "labelNoFit": "Diese Etiketten passen nicht auf den Bogen.",
+    "labelFont": "Schriftgrad",
+    "labelLines": "Was soll auf Ihrem Etikett stehen? Geben Sie Text ein und fügen Sie Felder über die Liste hinzu.",
+    "labelLine": "Zeile {{n}}",
+    "labelInsertField": "Feld einfügen…",
+    "labelRemoveLine": "Zeile entfernen",
+    "labelAddLine": "Zeile hinzufügen",
+    "labelSort": "Nach welchen Feldern soll sortiert werden?",
+    "labelName": "Welchen Namen soll Ihr Bericht erhalten?",
+    "openLabels": "Etiketten in der Druckvorschau anzeigen",
+    "labelsOf": "Etiketten {{source}}",
+    "moreForms": {
+      "multiple": "Mehrere Elemente",
+      "datasheet": "Datenblatt",
+      "split": "Geteiltes Formular",
+      "splitNote": "Nicht verfügbar: BaseCraft hat noch kein geteiltes Formular.",
+      "modal": "Modaler Dialog",
+      "modalNote": "OK und Abbrechen schließen das Formular. Es öffnet sich als gewöhnliches Formular: Die Eigenschaften „Modal“ und „Popup“ gibt es noch nicht."
+    },
+    "navigation": {
+      "horizontal": "Horizontale Register",
+      "verticalLeft": "Vertikale Register, links",
+      "verticalRight": "Vertikale Register, rechts",
+      "horizontalVertical": "Horizontale Register und vertikale Register, links",
+      "verticalNote": "Nicht verfügbar: Das Navigationssteuerelement zeichnet nur horizontale Register.",
+      "name": "Navigationsformular"
+    }
+  },
+  "dbtools": {
+    "close": "Schließen",
+    "relReportEmpty": "Im Fenster „Beziehungen“ ist keine Tabelle sichtbar.",
+    "depsNoSelection": "Wählen Sie zuerst im Navigationsbereich eine Tabelle, Abfrage, ein Formular, einen Bericht oder ein Makro aus.",
+    "depsNone": "Keine.",
+    "depsOnMe": "Objekte, die von mir abhängen",
+    "depsIDependOn": "Objekte, von denen ich abhänge",
+    "depsHint": "Klicken Sie auf ein Objekt, um es in der Entwurfsansicht zu öffnen. Gesucht wird in Datenherkünften, Datensatzherkünften von Listen, Unterformularen, Abfragen und Makroaktionen.",
+    "docFields": "Felder",
+    "docIndexes": "Indizes",
+    "docRelationships": "Beziehungen",
+    "docControls": "Steuerelemente",
+    "docRecordSource": "Datensatzquelle",
+    "docName": "Name",
+    "docType": "Typ",
+    "docDescription": "Beschreibung",
+    "docSource": "Steuerelementinhalt",
+    "docParent": "Primärtabelle",
+    "docChild": "Detailtabelle",
+    "docEnforced": "Referenzielle Integrität",
+    "perfNoKey": "{{table}}: kein Primärschlüssel. Legen Sie in der Entwurfsansicht einen fest, damit Datensätze schnell gefunden und verknüpft werden können.",
+    "perfRelation": "{{table}}.{{field}}: wird von der Beziehung {{relation}} verwendet, ist aber nicht indiziert. Ein Index beschleunigt Verknüpfungen und das Suchen verknüpfter Datensätze.",
+    "perfQuery": "{{table}}.{{field}}: wird von der Abfrage {{query}} zum Filtern oder Verknüpfen verwendet, ist aber nicht indiziert.",
+    "perfOptimize": "Optimieren",
+    "perfNone": "Keine Vorschläge: Jede Tabelle hat einen Primärschlüssel, und die von Beziehungen und gespeicherten Abfragen verwendeten Felder sind indiziert."
   },
   "imageGallery": {
     "none": "Keine",

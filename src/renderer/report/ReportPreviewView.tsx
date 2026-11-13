@@ -10,8 +10,8 @@ import { TYPE_HINT_KEYS } from '../../shared/chart/spec';
 import { trendLabels } from '../../shared/chart/trend';
 import { layoutReport } from '../../shared/report/layout';
 import { fourDigitYear } from '../settings-store';
-import { pageGeometry, readReport, type PageSetup, type ReportIssue } from '../../shared/report/model';
-import { renderPageHtml, reportCss } from '../../shared/report/render';
+import { pageGeometry, readReport, type ColumnSetup, type PageSetup, type ReportIssue } from '../../shared/report/model';
+import { dataOnlyReport, renderPageHtml, reportCss } from '../../shared/report/render';
 import type { LaidOutPage, LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
 import { RUNTIME } from '../../shared/product';
 import { api } from '../bridge';
@@ -23,7 +23,8 @@ import { onResourcesChanged } from '../design/resources';
 import { useBaseTheme } from '../design/theme-context';
 import { errorMessage as dialogError, useModal, type ModalApi } from '../shell/Modal';
 import { RibbonPopup } from '../designer/RibbonPopup';
-import { exportSource } from '../exchange/export';
+import { chooseMoreExport, exportSource, exportTitleKey } from '../exchange/export';
+import type { ExportFormat } from '../../shared/exchange';
 import { registerCommandStates, registerCommands } from '../shell/ribbon-model';
 import { localeInfo } from '../../shared/locale-format';
 import { promptParameters } from '../query/prompt-parameters';
@@ -31,10 +32,10 @@ import { callUserFunction } from '../python/expr-call';
 import { onUserFunctionsChanged } from '../python/user-function-names';
 import { memberValue } from '../form/form-instances';
 import type { CellInput } from '../../shared/coerce';
-import { docParameters, layoutSavedReport, loadDocCharts, loadDocResources, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, zoomFor, type AskParameters } from './load';
-import { unsavedRunDoc } from '../query/unsaved-run';
+import { docParameters, layoutSavedReport, loadDocCharts, loadDocResources, loadDocData, loadReportDoc, printRequestFor, ReportLoadError, subreportLoader, zoomFor, type AskParameters } from './load';
+import { unsavedDesignSave, unsavedRunDoc } from '../query/unsaved-run';
 import { reportEvents, reportShown, type ReportEvents } from './report-events';
-import { orientationStates, withPageSetup } from './page-setup';
+import { orientationStates, setupInput, withPageSetup, withSetup, type PageSetupChoice, type PageSetupInput } from './page-setup';
 import { PageSetupDialog, PageSetupMenu } from './PageSetupDialog';
 import { formulaLang } from '../../shared/i18n';
 import './preview.css';
@@ -93,6 +94,7 @@ export async function layoutEnv(): Promise<LayoutEnv> {
     chartLabels: { title: i18n.t('chart.defaultTitle'), empty: i18n.t('chart.emptyCategory'), trends: trendLabels(i18n.t), total: i18n.t('chart.waterfall.total'), increase: i18n.t('chart.waterfall.increase'), decrease: i18n.t('chart.waterfall.decrease'), cumulative: i18n.t('chart.pareto.cumulative'),
       hints: Object.fromEntries(TYPE_HINT_KEYS.map((k) => [k, i18n.t(k)])) },
     tick: () => new Promise((r) => setTimeout(r)), member: memberValue, callUser: callUserFunction,   // D3: Python functions; [Forms]!, [Reports]!, [TempVars]! (R11)
+    subreport: subreportLoader(api),   // ponytail: read again by every layout (Layout view: every edit); kept per source when that is slow
   };
 }
 
@@ -258,7 +260,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
         shownAt = Date.now();
         setPhase({ k: 'ready', report: { width, height, pages: pages.slice(), issues: [], ...(spec.background ? { background: spec.background } : {}) }, partial: true });
       };
-      const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, onPage: (p) => live() && onPage(p),
+      const report = await layoutReport(spec, data.current, { ...env, signal: ac.signal, subPath: [tab.name], onPage: (p) => live() && onPage(p),
         ...(events.current ? { hooks: events.current.hooks } : {}) });
       if (!live()) return;
       setFirst((f) => Math.max(0, Math.min(f, report.pages.length - 1)));
@@ -285,34 +287,47 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
 
   /** Page Setup dialog, Margins, Size, Portrait, Landscape: saved into the definition, then laid out again. BaseCraft Runtime
    *  saves no design (B5 R7): applied to this preview only. */
-  const applySetup = async (patch: Partial<PageSetup>) => {
-    const d = doc.current;
-    if (!d) return;
-    const def = withPageSetup(d, patch);
+  /** The definition `def` (in place of `d`): saved (unless unsaved or the runtime), then laid out again. */
+  const applyDoc = async (d: DesignDoc, def: DesignDoc) => {
     if (def === d) return;
     const r = RUNTIME || unsavedRunDoc.has(tab.id) ? null : await api.objects.save('report', tab.name, def, tab.name);   // unsaved: this preview only
     if (r && !r.ok) { await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: `dialog.op.${r.reason}`, buttons: ['ok'] }); return; }
     doc.current = def;
     await run('layout');
   };
-  const pageSetup = async () => {
+  const applySetup = async (patch: Partial<PageSetup>) => {
+    const d = doc.current;
+    if (d) await applyDoc(d, withPageSetup(d, patch));
+  };
+  /** Mise en page (Print Preview): its tabs. */
+  const setupDialog = async (tab: PageSetupInput['tab']) => {
     const d = doc.current;
     if (!d) return;
-    const next = await modal.custom<PageSetup>((close) => <PageSetupDialog initial={readReport(d, []).page} onClose={close} />,
+    const next = await modal.custom<PageSetupChoice>((close) => <PageSetupDialog input={setupInput(d, tab)} onClose={close} />,
       { titleKey: 'report.pageSetup.title' });
-    if (next) await applySetup(next);
+    if (!next) return;
+    await applyDoc(d, withSetup(d, next));
   };
+  const pageSetup = () => setupDialog('options');
+  const columnsDialog = () => setupDialog('columns');
 
+  /** The names of the report's label controls, and of the buttons, option groups and tab controls whose captions are text items too (Print Data Only drops them; the layout does not tell them apart). */
+  const labelNames = (): Set<string> => {
+    if (!doc.current) return new Set();
+    const spec = readReport(doc.current, []);
+    const sections = [spec.reportHeader, spec.pageHeader, ...spec.groupHeaders, spec.detail, ...spec.groupFooters, spec.pageFooter, spec.reportFooter];
+    return new Set(sections.flatMap((x) => (x ? x.controls : [])).filter((c) => ['label', 'commandButton', 'optionGroup', 'tabControl'].includes(c.kind)).map((c) => c.name));
+  };
   /** The laid-out report as it is shown, to the PDF file chosen or to the printer. */
   const output = async (to: 'pdf' | 'printer') => {
-    if (phase.k === 'ready') await outputReport(modal, tab.name, phase.report, to);
+    if (phase.k === 'ready') await outputReport(modal, tab.name, dataOnly ? dataOnlyReport(phase.report, labelNames()) : phase.report, to);
   };
 
   /** Print Preview › Text File: the report's record source (a parameter query asks for its values), not the formatted pages. */
-  const exportData = async (format: 'text' | 'excel') => {
+  const exportData = async (format: ExportFormat) => {
     const src = doc.current?.recordSource;
     if (!src) {
-      if (doc.current) await modal.confirm({ titleKey: format === 'excel' ? 'ribbon.cmd.exportExcel' : 'ribbon.cmd.exportText', messageKey: 'exchange.noSource', buttons: ['ok'] });
+      if (doc.current) await modal.confirm({ titleKey: exportTitleKey(format), messageKey: 'exchange.noSource', buttons: ['ok'] });
       return;
     }
     const where = tab.openArgs?.where;   // OpenReport's Where Condition: the export has the preview's rows
@@ -320,8 +335,8 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   };
 
   const baseTheme = useBaseTheme();
-  const cmds = useRef({ run, pageSetup, applySetup, output, closePreview, exportData });
-  cmds.current = { run, pageSetup, applySetup, output, closePreview, exportData };
+  const cmds = useRef({ run, pageSetup, applySetup, columnsDialog, output, closePreview, exportData });
+  cmds.current = { run, pageSetup, applySetup, columnsDialog, output, closePreview, exportData };
 
   useEffect(() => {
     void cmds.current.run('object');
@@ -340,27 +355,34 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const ready = phase.k === 'ready' && !phase.partial;
   useEffect(() => registerCommands(tab.id, {
     refresh: () => cmds.current.run('data'), // Shift+F9 (C5): the data again, then the layout
+    printDataOnly: () => void cmds.current.applySetup({ dataOnly: doc.current && readReport(doc.current, []).page.dataOnly ? undefined : true }),
     onePage: () => setPerView(1),
     twoPages: () => setPerView(2),
     morePages: () => setMenu((m) => (m === 'morePages' ? null : 'morePages')),
     previewZoom: () => setZoom((z) => (z === 'actual' ? 'fitPage' : 'actual')),
     pageSetupDialog: () => cmds.current.pageSetup(),
+    columns: () => cmds.current.columnsDialog(),
     portrait: () => cmds.current.applySetup({ orientation: 'portrait' }),
     landscape: () => cmds.current.applySetup({ orientation: 'landscape' }),
     margins: () => setMenu((m) => (m === 'margins' ? null : 'margins')),
     pageSize: () => setMenu((m) => (m === 'pageSize' ? null : 'pageSize')),
     exportText: () => cmds.current.exportData('text'), // always registered: the shell's handler would export the pane's selection
     exportExcel: () => cmds.current.exportData('excel'),
+    exportMore: async () => { const f = await chooseMoreExport(modal); if (f) await cmds.current.exportData(f); },
     closePreview: () => cmds.current.closePreview(),
+    ...(unsavedDesignSave.has(tab.id) ? { save: async () => { await unsavedDesignSave.get(tab.id)?.(); } } : {}),   // a new or modified report: Save saves its design (a new one's name asked)
     // only once laid out: until then the two commands show disabled
     ...(ready ? { print: () => cmds.current.output('printer'), exportPdf: () => cmds.current.output('pdf') } : {}),
-  }), [tab.id, dispatch, ready]);
+  }), [tab.id, dispatch, ready, tab.isNew]);
 
   // Portrait / Landscape pressed as the definition's page setup says (the rule of Design view); none while loading
   const laid = phase.k === 'ready' ? phase.report : null;
   const orientation = useMemo(() => (laid && doc.current ? readReport(doc.current, []).page.orientation : null), [laid]);   // doc.current is set before each layout
   // L3: Layout view off as soon as the definition read says AllowLayoutView = false (as Design view does), loading or not
-  const states = JSON.stringify({ ...(orientation ? orientationStates(orientation) : {}), ...(layoutAllowed === null ? {} : { viewLayout: { enabled: layoutAllowed } }) });
+  // Print Data Only (stored in the page setup): the pages and the print without their decoration
+  const dataOnly = useMemo(() => !!laid && !!doc.current && readReport(doc.current, []).page.dataOnly === true, [laid]);
+  const states = JSON.stringify({ ...(orientation ? orientationStates(orientation) : {}), ...(layoutAllowed === null ? {} : { viewLayout: { enabled: layoutAllowed } }),
+    printDataOnly: { enabled: true, active: dataOnly } });
   useEffect(() => registerCommandStates(tab.id, JSON.parse(states)), [tab.id, states]);
 
   useLayoutEffect(() => {
@@ -372,11 +394,13 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   }, []);
 
   const report = phase.k === 'ready' ? phase.report : null;
+  // the pages as shown (Print Data Only: their decoration and labels gone); the labels are the definition's label controls
+  const view = useMemo(() => (report && dataOnly ? dataOnlyReport(report, labelNames()) : report), [report, dataOnly]);
   const count = report?.pages.length ?? 0;
   const step = perView;
   // Mode État: every page under the other, fitted to the width, no page bar (every page is in the DOM: a very long report wants a window)
   const continuous = tab.mode === 'state';
-  const shown = useMemo(() => (report ? (continuous ? report.pages : report.pages.slice(first, first + step)) : []), [report, first, step, continuous]);
+  const shown = useMemo(() => (view ? (continuous ? view.pages : view.pages.slice(first, first + step)) : []), [view, first, step, continuous]);
   // the pages drawn only: thousands of pages, shown as they are laid out, are never all scanned at each update
   const drawn = useMemo(() => (report ? { ...report, pages: shown } : null), [report, shown]);
   const css = useMemo(() => (drawn ? reportCss(drawn, 'fonts/') : ''), [drawn]);
@@ -431,7 +455,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
             {shown.map((p) => (
               <div key={p.number} className="rp-sheet" style={{ width: pw * z, height: ph * z }}>
                 {/* renderPageHtml escapes every text and attribute (Task 7); the UI's CSP forbids scripts */}
-                <div style={{ transform: `scale(${z})`, transformOrigin: '0 0' }} dangerouslySetInnerHTML={{ __html: renderPageHtml(p, report) }} />
+                <div style={{ transform: `scale(${z})`, transformOrigin: '0 0' }} dangerouslySetInnerHTML={{ __html: renderPageHtml(p, view!) }} />
               </div>
             ))}
           </div>

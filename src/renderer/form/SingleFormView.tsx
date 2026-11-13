@@ -29,7 +29,7 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
   const nav = bound && effectiveProp(doc.props, 'NavigationButtons', 'form') !== false;
   const { snap } = x;
   return (
-    <div className="frun" ref={root} data-testid="form-run">
+    <div className={selectors ? "frun frun-sel" : "frun"} ref={root} data-testid="form-run">
       {header && <div className="frun-fixed"><FormSection doc={doc} section={header} x={x} width={width} /></div>}
       <div className="frun-body" ref={body} style={overflow}>
         {detail && (

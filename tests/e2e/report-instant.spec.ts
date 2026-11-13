@@ -15,7 +15,7 @@ async function createReport(page: Page) {
   await page.getByTestId('cmd-createReport').click();
 }
 
-test('Create > Report: a tabular report on the selected table, saved under a free name and shown in Print Preview', async () => {
+test('Create > Report: a tabular report on the selected table, shown in Print Preview unsaved; Save and closing name it after its source (a free name)', async () => {
   const { app, page } = await launchApp({ args: [seed('instantane')], env: { BASECRAFT_REGION: 'fr-FR' } });
   try {
     await createReport(page);   // nothing selected: the source list asks
@@ -32,13 +32,23 @@ test('Create > Report: a tabular report on the selected table, saved under a fre
     const first = cur(page).locator('.bc-page').first();
     await expect(first).toContainText('Factures');
     await expect(first).toContainText(/Page 1 sur \d+/);
+    await expect(page.getByTestId('nav-item-report-Factures')).toHaveCount(0);   // not saved yet (Access): Save proposes its source's name
+    await page.getByTestId('qat-save').click();
+    await expect(page.getByTestId('modal-input')).toHaveValue('Factures');
+    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('nav-group-report').getByTestId('nav-item-report-Factures')).toBeVisible();
 
     await page.getByTestId('nav-item-report-Factures').click();
-    await createReport(page);   // a selected report: its own record source
+    await createReport(page);   // a selected report: its own record source; a free name proposed
     await expect(page.getByTestId('doc-tab-report-Factures1')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('nav-item-report-Factures1')).toBeVisible();
     await expect(page.getByTestId('source-picker-list')).toHaveCount(0);
+    await expect(cur(page).getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);
+    await page.getByTestId('doc-tab-close-report-Factures1').click();   // closing asks: Yes saves it under the proposed name
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('modal-input')).toHaveValue('Factures1');
+    await page.getByTestId('modal-btn-ok').click();
+    await expect(page.getByTestId('nav-item-report-Factures1')).toBeVisible();
+    await expect(page.getByTestId('doc-tab-report-Factures1')).toHaveCount(0);
     await expect(page.getByTestId('nav-group-report').locator('[data-testid^="nav-item-report-"]')).toHaveCount(3);   // + Factures par client
   } finally {
     await app.close();

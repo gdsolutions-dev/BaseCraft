@@ -28,3 +28,6 @@
 .rl-ring { position: absolute; box-sizing: border-box; outline: 1.5px solid var(--bc-accent); outline-offset: 1px; pointer-events: none; }
 .rl-handle { position: absolute; width: 7px; margin-left: -3px; box-sizing: border-box; background: var(--bc-surface); border: 1.5px solid var(--bc-accent);
   border-radius: 2px; cursor: ew-resize; touch-action: none; }
+.rp-tabs { display: flex; gap: 2px; margin-bottom: var(--bc-space-3); border-bottom: 1px solid var(--bc-border); }
+.rp-tabs button { padding: 4px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: inherit; font: inherit; }
+.rp-tabs button[aria-selected="true"] { border-bottom-color: var(--bc-accent); font-weight: 600; }

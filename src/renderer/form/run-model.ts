@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 import type { SqlValue } from '../../shared/coerce';
 import { colorCss, type ColorValue } from '../../shared/design/colors';
+import type { FormatCondition } from '../../shared/design/format-conditions';
 import type { Mode, Theme } from '../../shared/design/theme';
 import { flattenControls, type ControlDef, type ControlKind, type DesignDoc, type SectionDef } from '../../shared/design/model';
 import { ownLabel } from '../../shared/design/layout';
@@ -11,6 +12,7 @@ import { sameName } from '../../shared/field-types';
 import { cssFamily, EMBEDDED_FONTS, isThemeFontRef, resolveFont } from '../../shared/fonts';
 import type { SourceField, SourceInfo } from '../../shared/record-source';
 import { twipsToPx } from '../designer/units';
+import type { CalcResult } from './calc';
 import { boundField, isUnbound } from './control-values';
 import { TAB_KINDS } from '../designer/field-controls';
 import { writableField, type RecordError, type RecordSnapshot } from './record-controller';
@@ -63,6 +65,15 @@ export function errorsByControl(errs: RecordError[], doc: DesignDoc, info: Sourc
   return { byControl, orphan };
 }
 
+/** The look of the conditional format that holds for this record (calc.ts stores it in the results under `cf:<control>`), if any. */
+export function conditionStyle(c: ControlDef, results: Record<string, CalcResult>): CSSProperties {
+  const r = results[`cf:${c.name}`];
+  if (!r?.ok) return {};
+  const f = JSON.parse(r.text) as FormatCondition;
+  return { ...(f.bold ? { fontWeight: 700 } : {}), ...(f.italic ? { fontStyle: 'italic' } : {}), ...(f.underline ? { textDecoration: 'underline' } : {}),
+    ...(f.fore ? { color: colorCss(f.fore) } : {}), ...(f.back ? { background: colorCss(f.back) } : {}) };
+}
+
 /** Position (twips -> px), the look (controlLook) and alignment, every value read through effectiveProp. */
 export function controlStyle(c: ControlDef, ctx?: ThemeCtx): CSSProperties {
   const st: CSSProperties = { position: 'absolute', left: twipsToPx(c.left), top: twipsToPx(c.top), width: twipsToPx(c.width), height: twipsToPx(c.height), boxSizing: 'border-box',
@@ -73,6 +84,11 @@ export function controlStyle(c: ControlDef, ctx?: ThemeCtx): CSSProperties {
   }
   return st;
 }
+
+/** A label's HyperlinkAddress (D3), trimmed; '' for any other control or a label without one. */
+export const linkAddress = (c: ControlDef): string => (c.kind === 'label' && typeof c.props.HyperlinkAddress === 'string' ? c.props.HyperlinkAddress.trim() : '');
+/** A hyperlink label is drawn as a link, whatever its fore colour: accent, underlined. */
+export const LINK_LOOK: CSSProperties = { color: 'var(--bc-accent)', textDecoration: 'underline' };
 
 /** Colours, border and font: the same in Form view and in the Design view's preview (form-host). */
 export function controlLook(c: ControlDef, ctx?: ThemeCtx): CSSProperties {

@@ -23,7 +23,7 @@ type Done = Extract<ImportResult, { ok: true }>;
 /** pendingRow(table): a datasheet of that table has a row being edited (the import is then refused). */
 /** queries: their names are taken too (tables and queries share one namespace). */
 /** appendTo: "Append to this table" preselected on that table (Navigation Pane › Import › Text File). */
-interface Props { source?: 'text' | 'excel'; tables: TableSummary[]; queries: string[]; pendingRow(table: string): boolean; onClose(): void; onImported(r: Done): void; appendTo?: string }
+interface Props { source?: 'text' | 'excel' | 'xml'; tables: TableSummary[]; queries: string[]; pendingRow(table: string): boolean; onClose(): void; onImported(r: Done): void; appendTo?: string }
 
 const DELIMS: [string, string][] = [['\t', 'tab'], [';', 'semicolon'], [',', 'comma'], [' ', 'space']];
 const INDEXED = ['no', 'yesDuplicates', 'yesNoDuplicates'] as const;
@@ -55,7 +55,8 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
   const [result, setResult] = useState<Done | null>(null);
   const [advanced, setAdvanced] = useState(false);
 
-  const excel = source === 'excel';
+  const excel = source === 'excel' || source === 'xml'; // F1: an XML file goes through the workbook path, as one sheet whose first row is the field names
+  const xml = source === 'xml';
   const [xl, setXl] = useState<ExcelPreview | null>(null);
   const steps = stepsFor(excel ? 'excel' : spec?.format ?? 'delimited', mode);
   const index = steps.indexOf(step);
@@ -144,7 +145,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
       } catch (e) {
         const code = bcErrorCode(e);
         if (code === 'invalidArgument') setError(t('importText.error.fileNotFound'));
-        else if (code === 'excelUnsupported' || code === 'fileTooLarge') setError(t(`importText.error.${code}`));
+        else if (code === 'excelUnsupported' || code === 'fileTooLarge' || code === 'xmlUnsupported') setError(t(xml ? 'importText.error.xmlUnsupported' : `importText.error.${code}`));
         else void showError(e);
         return false;
       }
@@ -234,7 +235,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
 
   const browse = async () => {
     try {
-      const p = await (excel ? api.importExcel.pickFile() : api.importText.pickFile());
+      const p = await (excel ? api.importExcel.pickFile(xml ? 'xml' : undefined) : api.importText.pickFile());
       if (p) { setPath(p); setError(null); }
     } catch (e) { void showError(e); }
   };
@@ -262,7 +263,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
       case 'source':
         return (
           <>
-            <p className="iw-intro">{t(excel ? 'importText.source.introExcel' : 'importText.source.intro')}</p>
+            <p className="iw-intro">{t(xml ? 'importText.source.introXml' : excel ? 'importText.source.introExcel' : 'importText.source.intro')}</p>
             <label className="iw-row iw-row-file">
               <span>{t('importText.source.file')}</span>
               {/* read-only: the main process only reads a file chosen in its own open dialog */}
@@ -296,7 +297,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
               </fieldset>
               <div className="iw-side">
                 <label className="iw-check">
-                  <input type="checkbox" data-testid="import-has-header" checked={xl!.hasHeader} onChange={(e) => void reparseExcel(xl!.sheet, e.target.checked)} />
+                  <input type="checkbox" data-testid="import-has-header" disabled={xml} checked={xl!.hasHeader} onChange={(e) => void reparseExcel(xl!.sheet, e.target.checked)} />
                   {t('importText.sheet.hasHeader')}
                 </label>
               </div>
@@ -461,7 +462,7 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
       <div ref={ref} className="modal card iw" role="dialog" aria-modal="true" aria-labelledby="iw-title" aria-describedby="iw-step"
         data-testid="import-wizard" onKeyDown={onKeyDown}>
         <header className="iw-head">
-          <h2 id="iw-title" className="modal-title">{t(excel ? 'importText.titleExcel' : 'importText.title')}</h2>
+          <h2 id="iw-title" className="modal-title">{t(xml ? 'importText.titleXml' : excel ? 'importText.titleExcel' : 'importText.title')}</h2>
           <div id="iw-step" className="iw-step" data-testid="import-step" data-step={result ? 'done' : step}>
             {!result && <span className="muted">{t('importText.stepOf', { n: index + 1, total: steps.length })} · </span>}{title}
           </div>

@@ -14,23 +14,25 @@ import { CommandButtonCtl } from './controls/CommandButtonCtl';
 import { ChartCtl } from './controls/ChartCtl';
 import { ImageCtl } from './controls/ImageCtl';
 import { LabelCtl } from './controls/LabelCtl';
+import { NavigationCtl } from './controls/NavigationCtl';
 import { ListBoxCtl } from './controls/ListBoxCtl';
 import { OptionGroupCtl } from './controls/OptionGroupCtl';
 import { labelTarget, placed, type RunCtx } from './controls/run-ctx';
 import { ShapeCtl } from './controls/ShapeCtl';
 import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
+import { ToggleButtonCtl } from './controls/ToggleButtonCtl';
 import { TextBoxCtl } from './controls/TextBoxCtl';
 import { EmptyCells } from './EmptyCells';
 import { useDocTheme } from '../design/doc-theme';
-import { gridlineStyle, prop, tabSequence, type ThemeCtx } from './run-model';
+import { conditionStyle, gridlineStyle, prop, tabSequence, type ThemeCtx } from './run-model';
 
 const BACK = PROPERTY_CATALOG.find((d) => d.name === 'BackColor')!;
 
 /** One control (and its attached labels), placed relative to `origin` (a container) or to the section. */
 function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDef | null, z?: number, forId?: string): ReactNode {
   if (prop(c, 'Visible') === false) return null;
-  const style = { ...placed(c, origin, tc), ...(z === undefined ? {} : { zIndex: z }) };
+  const style = { ...placed(c, origin, tc), ...conditionStyle(c, x.results), ...(z === undefined ? {} : { zIndex: z }) };
   const child = (k: ControlDef, o: ControlDef, id?: string) => renderControl(k, x, tc, o, undefined, id);
   const p = { c, x, style };
   let el: ReactNode;
@@ -40,12 +42,14 @@ function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDe
     case 'checkBox': case 'optionButton': el = <CheckBoxCtl {...p} />; break;
     case 'optionGroup': el = <OptionGroupCtl {...p} renderChild={child} />; break;
     case 'commandButton': el = <CommandButtonCtl {...p} />; break;
+    case 'toggleButton': el = <ToggleButtonCtl {...p} />; break;
     case 'image': el = <ImageCtl {...p} />; break;
     case 'line': case 'rectangle': case 'pageBreak': el = <ShapeCtl {...p} />; break;
     case 'tabControl': el = <TabCtl {...p} renderChild={child} />; break;
     case 'comboBox': el = <ComboBoxCtl {...p} />; break;
     case 'listBox': el = <ListBoxCtl {...p} />; break;
     case 'subform': el = <SubformCtl {...p} />; break;
+    case 'navigationControl': el = <NavigationCtl {...p} />; break;
     case 'chart': el = <ChartCtl {...p} />; break;
     default: el = null;
   }

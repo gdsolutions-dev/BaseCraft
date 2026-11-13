@@ -14,6 +14,15 @@ const writableSheet: RibbonContext = { hasBase: true, readOnly: false, mode: 'da
 beforeEach(() => setCommandContext(writableSheet));
 afterEach(() => { cleanups.splice(0).forEach((u) => u()); setActiveCommandTab(null); });
 
+describe('Help tab', () => {
+  it('opens a project page with no document and no base: enabled once the shell registers the handler', () => {
+    const ids: CommandId[] = ['showClipboard', 'help', 'whatsNew', 'showTraining', 'contactSupport', 'feedback'];
+    const h = vi.fn();
+    reg(SHELL_SCOPE, Object.fromEntries(ids.map((id) => [id, h])));
+    for (const id of ids) expect([id, commandEnabled(id, { hasBase: false, readOnly: false, mode: null, isNew: false, kind: null })]).toEqual([id, true]);
+  });
+});
+
 describe('command registry', () => {
   it('runs the active tab handler only', () => {
     const a = vi.fn(); const b = vi.fn();
@@ -141,11 +150,13 @@ describe('ribbon model', () => {
     expect(cmd('linkBaseCraft').planned).toBeUndefined();
     expect(cmd('linkBaseCraft').enabled(ctx({ mode: null }))).toBe(true);
     expect(cmd('linkBaseCraft').enabled(ctx({ readOnly: true }))).toBe(false);
-    // C2: External Data › Link Access Database, on a writable base; importing an Access file stays planned for stage E
+    // C2: External Data › Link Access Database, on a writable base; importing an Access file is importAccess (E1)
     expect(cmd('linkAccess').planned).toBeUndefined();
     expect(cmd('linkAccess').enabled(ctx({ mode: null }))).toBe(true);
     expect(cmd('linkAccess').enabled(ctx({ readOnly: true }))).toBe(false);
-    expect(cmd('importAccess').planned).toBe('E');
+    expect(cmd('importAccess').planned).toBeUndefined(); // E1
+    expect(cmd('importAccess').enabled(ctx({ mode: null }))).toBe(true);
+    expect(cmd('importAccess').enabled(ctx({ readOnly: true }))).toBe(false);
     // C1: the Linked Table Manager is delivered (C11), on a writable base, last of the import group
     expect(cmd('linkedTableManager').planned).toBeUndefined();
     expect(cmd('linkedTableManager').enabled(ctx({ mode: null }))).toBe(true);
@@ -244,7 +255,7 @@ describe('ribbon model', () => {
 const FORMAT_DONE = ['objectList', 'selectAll', 'font', 'fontSize', 'bold', 'italic', 'underline', 'fontColor', 'backColor', 'alignLeft', 'alignCenter', 'alignRight',
   'format', 'currencyFormat', 'percentFormat', 'commaFormat', 'increaseDecimals', 'decreaseDecimals', 'shapeFill', 'shapeOutline'] as const;
 const GALLERY_DONE = ['select', 'textBox', 'label', 'button', 'tabControl', 'optionGroup', 'insertPageBreak', 'comboBox', 'line', 'listBox', 'rectangle',
-  'checkBox', 'optionButton', 'subform', 'image'] as const;
+  'checkBox', 'optionButton', 'subform', 'image', 'toggleButton'] as const;
 const HEADER_DONE = ['logo', 'title', 'dateTime'] as const;
 
 describe('Arrange layout commands (L1 dispositions)', () => {
@@ -411,13 +422,13 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
   it('stage B placeholders name their batch', () => {
     const tag = (id: CommandId) => commands.find((c) => c.id === id)?.planned;
     expect(tag('createMacro')).toBeUndefined(); expect(tag('macroRun')).toBeUndefined(); expect(tag('crosstabQuery')).toBeUndefined();
-    expect(tag('beforeChange')).toBe('later'); expect(commands.some((c) => (c.planned as string) === 'B')).toBe(false);
+    expect(tag('beforeChange')).toBeUndefined(); expect(commands.some((c) => (c.planned as string) === 'B')).toBe(false);
     expect(fr.ribbon.planned.B1).toBe('Prévu dans le lot B1 — Macros et sécurité');
   });
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThanOrEqual(94); // exact count today: 94 (95 before Insert Modern Chart and Chart Settings left the planned set); lower it only when a command is delivered
+    expect(planned.length).toBeGreaterThanOrEqual(18); // exact count after merging main and Access import (E1) (18); 12 Arrange layout commands delivered (dispositions L1); Insert Image, Data Only (report designer), Replace, More (datasheet), the report's Subreport, the form's Insert Image, the datasheet's Totals and text formatting (bold, italic, underline, size, alignment, font, font colour, background colour, Datasheet Formatting), the five Help tab commands, the Clipboard launcher, Subform and Subreport in New Window, Format Painter since; Background Image and Conditional Formatting (E1, E2); the report gallery's Button, Tab Control, Option Group and List Box (D1); the Toggle Button of both galleries (D2); the Hyperlink of both galleries (D3); the form's Navigation Control (D4); Table Fields' Modify Lookups (T1); Spelling (C2); Import XML, Export XML, Saved Exports and Export More (the last one in two places) (F1, F4, F5); Query, Form and Report Wizards (H1, H2, H3); Labels (H4), Navigation and More Forms (H5); Relationship Report (K3); Object Dependencies (K2, three places); Database Documenter (K1); Analyze Performance (K4); the data macros' eight (five table events, Named Macro, Create Data Macros, Rename/Delete Macro) (T2); the rich text commands, Bullets, Numbering, the two indents, Text Direction and Text Highlight Color (A6)
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -446,10 +457,14 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       // B1 Task 9
       'createMacro',
       // L2 Task 3
-      'viewLayout'];
+      'viewLayout',
+      // T1 (Table Fields; Table Design's stays a placeholder)
+      'modifyLookups',
+      // C2
+      'spelling'];
 
     // the same ids stay other batches' placeholders in their own tabs (A6 Table Design and Table Fields, A3 Query Design, A5 Report Design)
-    const elsewhere: Record<string, RibbonTabId[]> = { propertySheet: ['design', 'queryDesign', 'reportDesign'], addExistingFields: ['reportDesign'],
+    const elsewhere: Record<string, RibbonTabId[]> = { propertySheet: ['design', 'queryDesign', 'reportDesign'], addExistingFields: ['reportDesign'], modifyLookups: ['design'],
       ...Object.fromEntries([...GALLERY_DONE, ...HEADER_DONE].map((id) => [id, ['reportDesign']])) };
     const shownIn = (id: string) => RIBBON.filter((t) => !elsewhere[id]?.includes(t.id)).flatMap((t) => t.groups.flatMap((g) => g.commands)).filter((c) => c.id === id);
     for (const id of done) expect(shownIn(id).every((c) => c.planned === undefined), id).toBe(true);
@@ -519,12 +534,11 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(inTab('reportDesign', 'viewDatasheet')).toEqual([]);
     expect(inTab('reportDesign', 'viewPrintPreview')).toEqual([undefined]);
     expect(inTab('reportDesign', 'textBox')).toEqual([undefined]);
-    expect(inTab('reportDesign', 'button')).toEqual(['later']);
-    expect(inTab('pageSetup', 'showMargins')).toEqual(['later']);
+    expect(inTab('reportDesign', 'button')).toEqual([undefined]);
+    expect(inTab('pageSetup', 'showMargins')).toEqual([undefined]);
     expect(inTab('printPreview', 'portrait')).toEqual([undefined]);
-    expect(inTab('relationshipDesign', 'relationshipReport')).toEqual(['later']);
-    for (const id of ['tabControl', 'optionGroup', 'listBox', 'subform'] as CommandId[]) expect(inTab('reportDesign', id), id).toEqual(['later']);
-    for (const id of ['select', 'label', 'insertPageBreak', 'comboBox', 'line', 'rectangle', 'checkBox', 'optionButton', 'image', 'addExistingFields', 'propertySheet'] as CommandId[]) {
+    expect(inTab('relationshipDesign', 'relationshipReport')).toEqual([undefined]);
+    for (const id of ['select', 'label', 'insertPageBreak', 'comboBox', 'line', 'rectangle', 'checkBox', 'optionButton', 'subform', 'image', 'tabControl', 'optionGroup', 'listBox', 'toggleButton', 'hyperlink', 'addExistingFields', 'propertySheet'] as CommandId[]) {
       expect(inTab('reportDesign', id), id).toEqual([undefined]);
     }
     expect(inTab('formDesign', 'textBox')).toEqual([undefined]); // A4's own entry (delivered by A4)
@@ -637,7 +651,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     const handlers = Object.fromEntries(ids.map((id) => [id, () => {}]));
     reg('m1', handlers);
     setActiveCommandTab('m1');
-    cleanups.push(registerCommandStates('m1', { expandActions: { enabled: false }, collapseActions: { enabled: false } }));
+    const offStates = registerCommandStates('m1', { expandActions: { enabled: false }, collapseActions: { enabled: false } });
     for (const ro of [false, true]) {
       const c = ctx({ kind: 'macro', mode: 'design', readOnly: ro });
       expect(ids.filter((id) => commandEnabled(id, c)), String(ro)).toEqual(ids.filter((id) => id !== 'expandActions' && id !== 'collapseActions'));
@@ -645,6 +659,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(tab.filter((c) => c.planned !== undefined).map((c) => c.id)).toEqual([]);
     expect(tab.filter((c) => c.active).map((c) => c.id)).toEqual(['singleStep', 'actionCatalog', 'showAllActions']);
     expect(tab.every((c) => !c.enabled(ctx({ kind: 'form', mode: 'design' })))).toBe(true);
+    offStates();   // the view's effect registers its new states after its cleanup (a selection made)
     cleanups.push(registerCommandStates('m1', {}));
     expect(commandEnabled('expandActions', ctx({ kind: 'macro', mode: 'design' }))).toBe(true);
     // an embedded macro (R16): no Run, no Single Step, the rest as usual
@@ -725,9 +740,9 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     const lay = ctx({ kind: 'form', mode: 'layout' });
     const fd = RIBBON.find((t) => t.id === 'formDesign')!.groups.flatMap((g) => g.commands);
     const on = (id: CommandId, c = lay) => fd.find((x) => x.id === id)!.enabled(c);
-    // L2b: the 15 gallery controls are placed in Layout view as in Design view (Access), never in a read-only base
+    // L2b: the 15 gallery controls (and the Toggle Button, D2) are placed in Layout view as in Design view (Access), never in a read-only base
     for (const id of ['select', 'textBox', 'label', 'button', 'tabControl', 'optionGroup', 'insertPageBreak', 'comboBox', 'line', 'listBox',
-      'rectangle', 'checkBox', 'optionButton', 'subform', 'image'] as const) {
+      'rectangle', 'checkBox', 'optionButton', 'subform', 'image', 'toggleButton'] as const) {
       expect(on(id), id).toBe(true);
       expect(on(id, ctx({ kind: 'form', mode: 'design' })), id).toBe(true);
       expect(on(id, { ...lay, readOnly: true }), id).toBe(false);
@@ -827,7 +842,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     const inTab = (tab: RibbonTabId, id: CommandId) => RIBBON.find((t) => t.id === tab)!.groups.flatMap((g) => g.commands).filter((c) => c.id === id).map((c) => c.planned);
     for (const id of FORMAT_DONE) expect(inTab('format', id), id).toEqual([undefined]);
     expect(inTab('tableFields', 'format')).toEqual([undefined]);   // delivered in Table Fields too (A6 Task 8)
-    expect(inTab('create', 'createBlankForm')).toEqual([undefined]); expect(inTab('formDesign', 'subformInNewWindow')).toEqual(['later']);
+    expect(inTab('create', 'createBlankForm')).toEqual([undefined]); expect(inTab('formDesign', 'subformInNewWindow')).toEqual([undefined]);
     const bold = RIBBON.find((t) => t.id === 'format')!.groups.flatMap((g) => g.commands).find((c) => c.id === 'bold')!;
     expect(bold.enabled(ctx({ mode: 'design', kind: 'form' }))).toBe(true); expect(bold.enabled(ctx({ mode: 'design', kind: 'form', readOnly: true }))).toBe(false);
     const selectAll = commands.find((c) => c.id === 'selectAll')!;
@@ -970,7 +985,9 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
       expect(c.enabled(ctx({ kind: 'table', mode: 'datasheet', readOnly: true })), id).toBe(true);
       expect(c.enabled(ctx({ kind: 'report', mode: 'design' })), id).toBe(false);
     }
-    expect(home.find((x) => x.id === 'replace')!.planned).toBe('later');
+    expect(home.find((x) => x.id === 'replace')!.planned).toBeUndefined();   // Replace is live in the datasheet (Find's Replace tab)
+    expect(home.find((x) => x.id === 'moreRecords')).toMatchObject({ popup: true });   // More: Row Height, Field Width
+    expect(home.find((x) => x.id === 'moreRecords')!.planned).toBeUndefined();
   });
 
   it('Table Design Property Sheet is active (A6), read-only base included, as in Query Design', () => {
@@ -1189,5 +1206,18 @@ describe('Insert Modern Chart and Chart Settings commands (F4)', () => {
     const cmd = all.filter((x) => x.id === 'chartSettings');
     expect(cmd.length).toBe(2);
     for (const c of cmd) { expect(c.planned).toBeUndefined(); expect(c.enabled(ctx({ kind: 'report' }))).toBe(true); expect(c.enabled(ctx({ mode: 'run' }))).toBe(false); }
+  });
+});
+
+describe('command states of one tab from several views', () => {
+  it('merge (a form\'s run view and the design behind it each register their own); each unregisters only its own', () => {
+    setActiveCommandTab('t3');
+    const a = registerCommandStates('t3', { viewLayout: { enabled: false } });
+    const b = registerCommandStates('t3', { undo: { enabled: true } });
+    expect([commandState('viewLayout')?.enabled, commandState('undo')?.enabled]).toEqual([false, true]);
+    a();
+    expect([commandState('viewLayout'), commandState('undo')?.enabled]).toEqual([undefined, true]);
+    b();
+    expect(commandState('undo')).toBeUndefined();
   });
 });

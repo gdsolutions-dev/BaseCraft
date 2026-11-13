@@ -12,7 +12,7 @@ export function boundField(c: ControlDef, info: SourceInfo): SourceField | null 
   return info.fields.find((f) => sameName(f.name, src)) ?? null;
 }
 
-const INPUTS: ControlDef['kind'][] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox'];
+const INPUTS: ControlDef['kind'][] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox', 'toggleButton'];
 /** An unbound input: a text box, check box, option group, combo or list box with no Control Source (its value lives in the form, not in a record). */
 export function isUnbound(c: ControlDef): boolean {
   return INPUTS.includes(c.kind) && !c.props.ControlSource;
@@ -32,4 +32,9 @@ export function controlTexts(c: ControlDef, f: SourceField, stored: SqlValue, pe
   const props = { ...f.props, format, decimalPlaces: dp(c.props.DecimalPlaces) ?? f.props.decimalPlaces };
   const [display, edit] = texts({ ...f, props }, stored, ctx);
   return { display, edit };
+}
+
+/** A text box bound to a Long Text field whose Text Format is Rich Text: edited and shown as its HTML subset (rich-text.ts). */
+export function isRichBox(c: ControlDef, f: SourceField | null): boolean {
+  return c.kind === 'textBox' && f?.type === 'longText' && f.props.textFormat === 'rich';
 }

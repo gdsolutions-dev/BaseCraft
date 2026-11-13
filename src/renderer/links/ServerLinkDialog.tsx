@@ -44,7 +44,7 @@ export async function importServerTables(modal: ModalApi, kind: ServerKind): Pro
 }
 
 /** The import's progress with « Arrêter » (queries.cancel). Escape does not close the dialog while it runs. */
-function ImportBusy({ progress }: { progress: ImportProgress | null }) {
+export function ImportBusy({ progress }: { progress: ImportProgress | null }) {
   const { t } = useTranslation();
   const [stopping, setStopping] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

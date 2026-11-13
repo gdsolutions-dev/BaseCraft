@@ -116,8 +116,10 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
     importExcelRun: (path: string, sheet: string, hasHeader: boolean, plan: ImportPlan, texts: ImportTexts) => s.importExcelRun(path, sheet, hasHeader, plan, texts, tick),
     exportText: (src: ExportSource, spec: ExportTextSpec, path: string, texts: { yes: string; no: string }) => s.exportText(src, spec, path, texts, tick),
     exportExcel: (src: ExportSource, path: string, sheet: string) => s.exportExcel(src, path, sheet, tick),
+    exportMarkup: (src: ExportSource, format: 'xml' | 'html', name: string, path: string, texts: { yes: string; no: string }) => s.exportMarkup(src, format, name, path, texts, tick),
     migrateToServer: (req: MigrateRequest) => s.migrateToServer(req, progress),
     importServerTables: (kind: ServerKind, params: unknown, names: string[]) => s.importServerTables(kind, params, names, progress),
+    importAccessTables: (path: string, remotes: string[]) => s.importAccessTables(path, remotes, progress),
     takeOverLock: () => { try { return s.takeOverLock(); } catch (e) { throw bcError(e); } }, // reopening in write mode
   };
   return new Proxy(s, { get: (t, k) => (typeof k === 'string' && k in own ? own[k] : Reflect.get(t, k)) });

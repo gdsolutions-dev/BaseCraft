@@ -75,12 +75,14 @@ test('recette B1: macros, Where Condition on a TempVar, RunSQL without warnings,
   try {
     expect(await content(page)).toBe('none');   // no active content yet: nothing to approve
 
-    // 1. Clients selected in the Navigation Pane, Create › Formulaire (saved under the table's name), renamed FClients
+    // 1. Clients selected in the Navigation Pane, Create › Formulaire (saved under the table's name when its tab closes), renamed FClients
     await page.getByTestId('nav-item-Clients').click();
     await page.getByTestId('ribbon-tab-create').click();
     await page.getByTestId('cmd-createForm').click();
     await expect(page.getByTestId('doc-tab-form-Clients')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('doc-tab-close-form-Clients').click();
+    await page.getByTestId('modal-btn-yes').click();   // Create › Form: the new form is saved when its tab closes, under the proposed name
+    await page.getByTestId('modal-btn-ok').click();
     await page.getByTestId('nav-item-form-Clients').click({ button: 'right' });
     await page.getByTestId('nav-menu-rename').click();
     await page.getByTestId('modal-input').fill('FClients');

@@ -24,7 +24,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 
 /** The words the renderer's formLabels(t) resolves to in the en locale (designer.ctlPrefix.*, form.tabPage). */
 const PREFIX: Record<ControlKind, string> = { label: 'Label', textBox: 'Text', checkBox: 'Check', optionGroup: 'Frame', optionButton: 'Option', comboBox: 'Combo',
-  listBox: 'List', commandButton: 'Command', subform: 'Child', image: 'Image', line: 'Line', rectangle: 'Box', pageBreak: 'PageBreak', tabControl: 'TabCtl', chart: 'Chart' };
+  listBox: 'List', commandButton: 'Command', subform: 'Child', image: 'Image', line: 'Line', rectangle: 'Box', pageBreak: 'PageBreak', tabControl: 'TabCtl', toggleButton: 'Toggle', navigationControl: 'Nav', chart: 'Chart' };
 export const LABELS = { prefix: (k: ControlKind) => PREFIX[k], tabPage: (n: number) => `Page${n}` };
 
 const SECTIONS: Record<Kind, readonly SectionKind[]> = { form: ['formHeader', 'detail', 'formFooter'],

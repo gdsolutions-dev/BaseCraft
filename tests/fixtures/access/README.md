@@ -35,6 +35,20 @@ validation, and every `// TO CONFIRM` there is replaced by what Access shows.
 - `Ventes-modifie.accdb`: a copy of `Ventes.accdb` where Durand's `Ville` is "Marseille" and a sixth order
   (3, 5,00, 27/10/2026, 1, 0, 1, 19,60, 1) is added.
 - Each file Compacted and Repaired before it is committed.
+- `Ventes-complet.accdb` (batch E2; untracked until the owner commits it, the tests on it are skipped while it is absent): the same
+  `Clients`, `Commandes` and `Divers` tables with the structure the import must carry, described here from what its export shows.
+  - `Clients`: primary key `N°` (AutoNumber); `Actif` Yes/No with default `No` (Format `Yes/No`); no rule, caption or required field.
+  - `Commandes`: primary key `N°`; `Client` required, with a lookup (combo box on `SELECT [N°], Nom FROM Clients;`, bound column 1,
+    2 columns, column width 0, 16 rows, limited to the list); `Montant` caption `Montant TTC`, default `0`, Format
+    `#,##0.00 €;-#,##0.00 €`; `Quantité` default `1`, validation rule `>0`, validation text `La quantité doit être positive`; the
+    numeric fields `Remise`, `Poids`, `Taux` and `Lot` default `0`; a unique two-field index `Idx` on `Client` then `Le`
+    (both ascending); a relationship `ClientsCommandes` from `Clients.N°` to `Commandes.Client` with cascade delete.
+  - `Divers`: no key and no index.
+  - Saved query `QParVille` (parameter `[Quelle ville ?]`) and `QTotaux`; form `FClients`, report `ECommandes`, macro `MOuvrirEtat`, module
+    `ModOutils` (the form holds no embedded macro).
+- `Ventes-complet.export/`: the output of `resources/access-export.ps1` for `Ventes-complet.accdb` (`manifest.json`, `structure.json`,
+  `queries/`, `forms/`, `reports/`, `macros/`, `modules/`). Committed so that tests and the "Use an export folder…" choice need no Access;
+  regenerate it with the script whenever `Ventes-complet.accdb` changes (the manifest's `source` must stay `Ventes-complet.accdb`).
 
 ## What to record from Access into `expected.ts`
 

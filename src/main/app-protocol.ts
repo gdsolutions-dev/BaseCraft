@@ -44,6 +44,11 @@ export function appRoots(): { renderer: string; python: string } {
   };
 }
 
+/** The Access export script (batch E2): beside the python resources when packaged, in resources/ in development. */
+export function accessExportScript(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'access-export.ps1') : join(__dirname, '../../resources/access-export.ps1');
+}
+
 /** Serves bc-app on the default session (the main window's). After ready. */
 export function registerAppProtocol(roots: { renderer: string; python: string }): void {
   protocol.handle(APP_SCHEME, async (req) => {

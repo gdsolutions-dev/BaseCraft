@@ -1,0 +1,5 @@
+Option Compare Database
+
+Function CalculDouble(x)
+    CalculDouble = x * 2
+End Function

@@ -3034,6 +3034,8 @@
       "titleSqlServer": "SQL Server からインポート",
       "ok": "インポート",
       "done": "インポートしたテーブル：{{names}}。",
+      "skippedInline": "インポートされない列: {{names}}",
+
       "skipped": "インポートされなかった列（{{table}}）：{{names}}。"
     },
     "access": {
@@ -3041,7 +3043,24 @@
       "fileOnly": "テーブルとそのデータをインポートします。オートナンバー型以外のキー、インデックス、フィールドの規則は読み込まれません。クエリ、フォーム、レポート、マクロ、モジュールはインポートされません。",
       "linked": "このファイルのリンクテーブルは対象外です：{{names}}。",
       "warnSize": "このファイルは大きいため、インポートに時間がかかることがあります。",
-      "missingTables": "ファイルに次のテーブルが含まれなくなりました: {{names}}。何も変更されていません。"
+      "missingTables": "ファイルに次のテーブルが含まれなくなりました: {{names}}。何も変更されていません。",
+      "structure": "構造",
+      "structureAccess": "Access で正確な構造を読み取る",
+      "structureFolder": "エクスポートフォルダーを使う…",
+      "changeFolder": "別のフォルダーを選ぶ…",
+      "structureFile": "ファイルのみ",
+      "accessNote": "Access はファイルのコピーを、画面に表示せずに開きます。データベースの内容は何も実行されず、ファイルは変更されません。",
+      "keepNote": "フォルダーには、テーブルの構造、クエリの SQL テキスト、フォーム、レポート、マクロ、VBA モジュール（テキスト形式）が入ります。テーブルの行やデータベースのパスワードは含まれません。",
+      "keepExport": "エクスポートフォルダーを残す",
+      "exporting": "Access で構造を読み取り中：{{done}} / {{total}} オブジェクト",
+      "exportFailed": {
+        "noAccess": "このコンピューターでは Microsoft Access を使用できません。何も変更されていません。",
+        "cannotOpen": "Access がファイルを開けませんでした。パスワードがある場合、パスワードにセミコロン (;) を含めることはできません。何も変更されていません。",
+        "timeout": "Access が時間内に応答しませんでした。何も変更されていません。",
+        "failed": "Access が構造を読み取れませんでした。何も変更されていません。",
+        "badFolder": "このエクスポートフォルダーは使用できません。不完全か、エクスポートではないか、選んだ場所に同じ名前のフォルダーが既にあります。何も変更されていません。",
+        "otherSource": "このエクスポートフォルダーは別のファイルから作成されたものです。何も変更されていません。"
+      }
     },
     "report": {
       "title": "インポートレポート：{{source}}",
@@ -3054,7 +3073,11 @@
       },
       "reason": {
         "tableNotImported": "このリレーションのテーブルの 1 つがインポートされませんでした。",
-        "violations": "一部のレコードに、主テーブルの対応するレコードがありません。"
+        "violations": "一部のレコードに、主テーブルの対応するレコードがありません。",
+        "defaultValue": "BaseCraft ではこの既定値を保持できません。",
+        "validationRule": "BaseCraft ではこの入力規則を保持できません。",
+        "inputMask": "BaseCraft ではこの入力マスクを保持できません。",
+        "lookup": "BaseCraft ではこのルックアップリストを保持できません。"
       },
       "line": {
         "tableImported": "テーブル「{{object}}」：インポートした行数：{{n}}。",
@@ -3068,7 +3091,14 @@
         "tableUnsupported": "テーブル「{{object}}」はインポートされません。{{reason}}",
         "tableLinked": "テーブル「{{object}}」は Access ファイルのリンクテーブルのため、インポートされません。",
         "relationIgnored": "Access ファイルのリレーション「{{object}}」はインポートされません。{{reason}}",
-        "tablesOnly": "クエリ、フォーム、レポート、マクロ、モジュールはインポートされません。"
+        "tablesOnly": "クエリ、フォーム、レポート、マクロ、モジュールはインポートされません。",
+        "structureExact": "テーブル「{{object}}」：キー、インデックス、フィールドのプロパティを Access から読み取りました。",
+        "keyApproximated": "テーブル「{{object}}」：Access の主キー（{{part}}）は一意インデックスとして保持し、主キーはオートナンバー型のフィールドのままです。",
+        "propertyDropped": "テーブル「{{object}}」、フィールド「{{part}}」：プロパティを 1 つインポートしませんでした。{{reason}}",
+        "propertyDroppedTable": "テーブル「{{object}}」：テーブルのプロパティを 1 つインポートしませんでした。{{reason}}",
+        "indexDropped": "テーブル「{{object}}」：インデックス「{{part}}」はインポートしませんでした（インポートしなかった列に関係するか、BaseCraft が受け付けません）。",
+        "indexDroppedTable": "テーブル「{{object}}」：ほかのインデックスはインポートしませんでした（BaseCraft はこれ以上受け付けません）。",
+        "structureNotReadTable": "テーブル「{{object}}」：構造を適用できませんでした。インデックス、フィールドの規則、既定値、標題、ルックアップリストは読み込まれません。"
       }
     }
   },

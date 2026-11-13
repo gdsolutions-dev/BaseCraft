@@ -1,0 +1,46 @@
+{
+    "format":  1,
+    "accessVersion":  "16.0",
+    "source":  "Ventes-complet.accdb",
+    "objects":  [
+                    {
+                        "type":  "query",
+                        "name":  "QParVille",
+                        "file":  "queries/1.sql",
+                        "queryType":  0,
+                        "connect":  "",
+                        "returnsRecords":  true
+                    },
+                    {
+                        "type":  "query",
+                        "name":  "QTotaux",
+                        "file":  "queries/2.sql",
+                        "queryType":  0,
+                        "connect":  "",
+                        "returnsRecords":  true
+                    },
+                    {
+                        "type":  "form",
+                        "name":  "FClients",
+                        "file":  "forms/1.txt"
+                    },
+                    {
+                        "type":  "report",
+                        "name":  "ECommandes",
+                        "file":  "reports/1.txt"
+                    },
+                    {
+                        "type":  "macro",
+                        "name":  "MOuvrirEtat",
+                        "file":  "macros/1.txt"
+                    },
+                    {
+                        "type":  "module",
+                        "name":  "ModOutils",
+                        "file":  "modules/1.txt"
+                    }
+                ],
+    "errors":  [
+
+               ]
+}

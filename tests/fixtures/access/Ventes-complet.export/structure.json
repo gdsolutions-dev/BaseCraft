@@ -1,0 +1,382 @@
+{
+    "tables":  [
+                   {
+                       "name":  "Clients",
+                       "validationRule":  "",
+                       "validationText":  "",
+                       "description":  "",
+                       "fields":  [
+                                      {
+                                          "name":  "N°",
+                                          "type":  4,
+                                          "size":  4,
+                                          "attributes":  17,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Nom",
+                                          "type":  10,
+                                          "size":  50,
+                                          "attributes":  2,
+                                          "required":  false,
+                                          "allowZeroLength":  true,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Ville",
+                                          "type":  10,
+                                          "size":  50,
+                                          "attributes":  2,
+                                          "required":  false,
+                                          "allowZeroLength":  true,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Inscrit",
+                                          "type":  8,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Actif",
+                                          "type":  1,
+                                          "size":  1,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "No",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "Format":  "Yes/No",
+                                                        "DisplayControl":  106
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Remarque",
+                                          "type":  12,
+                                          "size":  0,
+                                          "attributes":  2,
+                                          "required":  false,
+                                          "allowZeroLength":  true,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "TextFormat":  0
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Photo",
+                                          "type":  101,
+                                          "size":  4,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DisplayControl":  126
+                                                    }
+                                      }
+                                  ],
+                       "indexes":  [
+                                       {
+                                           "name":  "N°",
+                                           "primary":  false,
+                                           "unique":  false,
+                                           "foreign":  false,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "N°",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       },
+                                       {
+                                           "name":  "PrimaryKey",
+                                           "primary":  true,
+                                           "unique":  true,
+                                           "foreign":  false,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "N°",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       }
+                                   ]
+                   },
+                   {
+                       "name":  "Commandes",
+                       "validationRule":  "",
+                       "validationText":  "",
+                       "description":  "",
+                       "fields":  [
+                                      {
+                                          "name":  "N°",
+                                          "type":  4,
+                                          "size":  4,
+                                          "attributes":  17,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Client",
+                                          "type":  4,
+                                          "size":  4,
+                                          "attributes":  1,
+                                          "required":  true,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  111,
+                                                        "RowSourceType":  "Table/Query",
+                                                        "RowSource":  "SELECT [N°], Nom FROM Clients; ",
+                                                        "BoundColumn":  1,
+                                                        "ColumnCount":  2,
+                                                        "ColumnHeads":  false,
+                                                        "ColumnWidths":  "0",
+                                                        "ListRows":  16,
+                                                        "ListWidth":  "0twip",
+                                                        "LimitToList":  true,
+                                                        "AllowValueListEdits":  false
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Montant",
+                                          "type":  5,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "0",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "Caption":  "Montant TTC",
+                                                        "Format":  "#,##0.00 €;-#,##0.00 €",
+                                                        "DecimalPlaces":  255
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Le",
+                                          "type":  8,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Quantité",
+                                          "type":  3,
+                                          "size":  2,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "1",
+                                          "validationRule":  "\u003e0",
+                                          "validationText":  "La quantité doit être positive",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Remise",
+                                          "type":  6,
+                                          "size":  4,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "0",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Poids",
+                                          "type":  7,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "0",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Taux",
+                                          "type":  20,
+                                          "size":  16,
+                                          "attributes":  2,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "0",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  109
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Lot",
+                                          "type":  2,
+                                          "size":  1,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "0",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+                                                        "DecimalPlaces":  255,
+                                                        "DisplayControl":  109
+                                                    }
+                                      }
+                                  ],
+                       "indexes":  [
+                                       {
+                                           "name":  "ClientsCommandes",
+                                           "primary":  false,
+                                           "unique":  false,
+                                           "foreign":  true,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "Client",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       },
+                                       {
+                                           "name":  "Idx",
+                                           "primary":  false,
+                                           "unique":  true,
+                                           "foreign":  false,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "Client",
+                                                              "desc":  false
+                                                          },
+                                                          {
+                                                              "name":  "Le",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       },
+                                       {
+                                           "name":  "N°",
+                                           "primary":  false,
+                                           "unique":  false,
+                                           "foreign":  false,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "N°",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       },
+                                       {
+                                           "name":  "PrimaryKey",
+                                           "primary":  true,
+                                           "unique":  true,
+                                           "foreign":  false,
+                                           "fields":  [
+                                                          {
+                                                              "name":  "N°",
+                                                              "desc":  false
+                                                          }
+                                                      ]
+                                       }
+                                   ]
+                   },
+                   {
+                       "name":  "Divers",
+                       "validationRule":  "",
+                       "validationText":  "",
+                       "description":  "",
+                       "fields":  [
+                                      {
+                                          "name":  "Avant1900",
+                                          "type":  8,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      },
+                                      {
+                                          "name":  "Heure",
+                                          "type":  8,
+                                          "size":  8,
+                                          "attributes":  1,
+                                          "required":  false,
+                                          "allowZeroLength":  false,
+                                          "defaultValue":  "",
+                                          "validationRule":  "",
+                                          "validationText":  "",
+                                          "props":  {
+
+                                                    }
+                                      }
+                                  ],
+                       "indexes":  [
+
+                                   ]
+                   }
+               ]
+}

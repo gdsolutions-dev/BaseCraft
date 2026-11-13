@@ -26,9 +26,9 @@ export async function pickOpenPath(dir: string): Promise<string | null> {
   return r.canceled ? null : (r.filePaths[0] ?? null);
 }
 
-/** A folder (Options: the default folder), starting in `dir`; e2e: BASECRAFT_E2E_FOLDER_PATH. */
-export async function pickFolder(dir: string): Promise<string | null> {
-  if (e2e()) return process.env.BASECRAFT_E2E_FOLDER_PATH ?? null;
+/** A folder (Options: the default folder), starting in `dir`; e2e: BASECRAFT_E2E_FOLDER_PATH (or `seam`, another variable's name). */
+export async function pickFolder(dir: string, seam = 'BASECRAFT_E2E_FOLDER_PATH'): Promise<string | null> {
+  if (e2e()) return process.env[seam] ?? null;
   const opts = { defaultPath: dir, properties: ['openDirectory' as const] };
   const win = BrowserWindow.getFocusedWindow();
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);

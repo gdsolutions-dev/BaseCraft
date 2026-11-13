@@ -14,7 +14,7 @@
     "files": ["out/**/*", "!**/node_modules/**"],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": { "buildResources": "build" },
-    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }, { "from": "build/python", "to": "python" }],
+    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }, { "from": "build/python", "to": "python" }, { "from": "resources/access-export.ps1", "to": "access-export.ps1" }],
     "fileAssociations": [{ "ext": "basecraft", "name": "BaseCraft database", "role": "Editor", "rank": "Owner", "mimeType": "application/x-basecraft" }],
     "win": { "target": ["nsis", "zip"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },

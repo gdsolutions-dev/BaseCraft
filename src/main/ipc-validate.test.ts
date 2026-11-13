@@ -4,7 +4,7 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName,
+  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
@@ -631,6 +631,17 @@ describe('chartDataRequest', () => {
 });
 
 describe('Access import report (E1)', () => {
+  it('accessStructure / exportKeepDir: an unknown kind, or a folder pickExport did not give, is refused', () => {
+    const chosen = new Set(['/exports/a']);
+    expect(accessStructure(undefined, chosen)).toBeUndefined();
+    expect(accessStructure({ kind: 'file' }, chosen)).toEqual({ kind: 'file' });
+    expect(accessStructure({ kind: 'access', dir: '/elsewhere' }, chosen)).toEqual({ kind: 'access' });
+    expect(accessStructure({ kind: 'folder', dir: '/exports/a' }, chosen)).toEqual({ kind: 'folder', dir: '/exports/a' });
+    for (const v of [{ kind: 'other' }, { kind: 'folder' }, { kind: 'folder', dir: '/elsewhere' }, { kind: 'folder', dir: 1 }, null, 'access', {}]) expect(() => accessStructure(v, chosen)).toThrow(INVALID);
+    expect(exportKeepDir(undefined, chosen)).toBeUndefined();
+    expect(exportKeepDir('/exports/a', chosen)).toBe('/exports/a');
+    for (const v of ['/elsewhere', 1, null]) expect(() => exportKeepDir(v, chosen)).toThrow(INVALID);
+  });
   it('reportBody: a string of at most 5,000,000 characters', () => {
     expect(reportBody('x'.repeat(5_000_000))).toHaveLength(5_000_000);
     expect(() => reportBody('x'.repeat(5_000_001))).toThrow('bc:invalidArgument');

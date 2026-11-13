@@ -22,6 +22,7 @@ import { validExportSpec, validSavedExport, type ExportSource, type ExportTextSp
 import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-text';
 import { parseDataMacros, type DataMacros } from '../shared/macro/data-macro';
 import { BaseFileError, FILE_EXTENSION } from './db/file-format';
+import type { AccessStructureSource } from '../shared/access-import';
 import { definitionJson, MAX_DEFINITION_CHARS } from './db/objects';
 import { SETTING_CHECKS } from './settings';
 import { CONNECTORS, isServerKind } from './connectors/registry';
@@ -424,6 +425,17 @@ export function importPath(v: unknown, chosen: ReadonlySet<string>, maxBytes = M
 export const linkPath = (v: unknown, chosen: ReadonlySet<string>): string => importPath(v, chosen, Infinity);
 /** An import report's text (E1): a string of at most 5,000,000 characters. */
 export const reportBody = (v: unknown): string => (typeof v === 'string' && v.length <= 5_000_000 ? v : bad());
+/** Where the exact structure comes from (E2): the file alone, Access, or an export folder; `dir` must be a folder `pickExport` returned. */
+export function accessStructure(v: unknown, chosen: ReadonlySet<string>): AccessStructureSource | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'object' || v === null) bad();
+  const { kind, dir } = v as { kind?: unknown; dir?: unknown };
+  if (kind === 'file' || kind === 'access') return { kind };
+  if (kind === 'folder' && typeof dir === 'string' && chosen.has(dir)) return { kind, dir };
+  return bad();
+}
+/** Where the export folder is kept (E2): none, or a folder `pickExport` returned. */
+export const exportKeepDir = (v: unknown, chosen: ReadonlySet<string>): string | undefined => (v === undefined ? undefined : typeof v === 'string' && chosen.has(v) ? v : bad());
 /** A default file name for a save dialog: a bare name (no folder), 1 to 255 characters. */
 export const bareFileName = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 255 && !/[\\/]/.test(v) ? v : bad());
 /** The split's data file (C3 R13): as linkPath, a path its save dialog returned, absolute; it need not exist yet. */

@@ -2,15 +2,17 @@
 // is one transaction (all or nothing); relationships are applied after it, one by one, and what cannot be carried goes to the report.
 import type { DatabaseSync } from 'node:sqlite';
 import type MDBReader from 'mdb-reader';
+import type { AccessExport } from '../../shared/access-export';
 import type { AccessImportResult, ReportLine } from '../../shared/access-import';
 import type { Relation } from '../../shared/api';
-import { quoteIdent } from '../../shared/field-types';
+import { quoteIdent, sameName, type TableDesign } from '../../shared/field-types';
 import type { ImportProgress } from '../../shared/import-text';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { saveRelation } from '../db/relations';
 import { createTable } from '../db/schema';
 import { inTransactionAsync } from '../db/tx';
 import { accessDesign, stored } from '../links/access';
+import { withStructure } from './access-structure';
 
 /** One row of MSysRelationships: one field pair of a relationship (szObject: the child table, szReferencedObject: the parent). */
 export interface MSysRelRow { szRelationship: string; grbit: number; ccolumn: number; icolumn: number;
@@ -45,37 +47,67 @@ export const pageSize = () => (process.env.BASECRAFT_E2E === '1' ? Number(proces
 /** `tables`: picked tables, `remote` in the file, `name` free in `front`. Stop: `stopped()` read after every tick. */
 export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3: boolean; source: string;
   tables: { remote: string; name: string }[]; linked: string[]; info: LocaleInfo;
-  tick: (p: ImportProgress) => Promise<void>; stopped: () => boolean }): Promise<AccessImportResult> {
+  tick: (p: ImportProgress) => Promise<void>; stopped: () => boolean;
+  /** The export folder of the file (E2): its tables, matched to `tables[].remote` by sameName, give exact keys, indexes and properties. */
+  structure?: AccessExport }): Promise<AccessImportResult> {
   const read = d.tables.map((t) => ({ ...t, table: d.r.getTable(t.remote) }));
   const total = read.reduce((n, t) => n + t.table.rowCount, 0);
   const lines: ReportLine[] = [];
   let done = 0;
+  let missing = false; // a picked table the export does not hold
   try {
     await inTransactionAsync(d.front, async () => {
-      for (const { name, table } of read) {
+      for (const { name, remote, table } of read) {
         const { design: d0, skipped } = accessDesign(table, d.jet3);
-        const design = { ...d0, name };
-        createTable(d.front, design);
-        const ins = d.front.prepare(`INSERT INTO ${quoteIdent(name)} (${design.fields.map((f) => quoteIdent(f.name)).join(', ')}) VALUES (${design.fields.map(() => '?').join(', ')})`);
-        const columns = design.fields.map((f) => f.name);
-        const lost = new Map<string, number>();
-        const size = pageSize();
-        for (let offset = 0; offset < table.rowCount; offset += size) {
-          const page = table.getData({ columns, rowOffset: offset, rowLimit: size });
-          for (const row of page) {
-            ins.run(...design.fields.map((f) => {
-              const v = stored(f, row[f.name]);
-              if (v === null && row[f.name] !== null && row[f.name] !== undefined) lost.set(f.name, (lost.get(f.name) ?? 0) + 1);
-              return v;
-            }));
+        const plain = { ...d0, name };
+        const ext = d.structure?.tables.find((x) => sameName(x.name, remote));
+        if (!ext) missing = true;
+        const first = ext ? withStructure(plain, ext) : undefined;
+        const start = done;
+        // Copies the table's rows into a table made from `design`; the values lost per field are counted in `lost`.
+        const copy = async (design: TableDesign) => {
+          done = start;
+          createTable(d.front, design);
+          const ins = d.front.prepare(`INSERT INTO ${quoteIdent(name)} (${design.fields.map((f) => quoteIdent(f.name)).join(', ')}) VALUES (${design.fields.map(() => '?').join(', ')})`);
+          const columns = design.fields.map((f) => f.name);
+          const lost = new Map<string, number>();
+          const size = pageSize();
+          for (let offset = 0; offset < table.rowCount; offset += size) {
+            const page = table.getData({ columns, rowOffset: offset, rowLimit: size });
+            for (const row of page) {
+              ins.run(...design.fields.map((f) => {
+                const v = stored(f, row[f.name]);
+                if (v === null && row[f.name] !== null && row[f.name] !== undefined) lost.set(f.name, (lost.get(f.name) ?? 0) + 1);
+                return v;
+              }));
+            }
+            done += page.length;
+            await d.tick({ done, total, label: name });
+            if (d.stopped()) throw new Error('bc:cancelled');
           }
-          done += page.length;
-          await d.tick({ done, total, label: name });
-          if (d.stopped()) throw new Error('bc:cancelled');
+          return lost;
+        };
+        // One savepoint per table: a row refused by the carried structure redoes the table from the plain design.
+        d.front.exec('SAVEPOINT bcx_import_table');
+        let lost: Map<string, number>; let design = plain; let structured = !!first?.applied;
+        try {
+          design = first?.applied ? first.design : plain;
+          lost = await copy(design);
+        } catch (e) {
+          // Any failure of the first attempt other than Stop is retried once with the plain design; a second failure propagates.
+          if (!structured || (e instanceof Error && e.message === 'bc:cancelled')) throw e;
+          d.front.exec('ROLLBACK TO bcx_import_table');
+          structured = false; design = plain;
+          lost = await copy(design);
         }
+        d.front.exec('RELEASE bcx_import_table');
         lines.push({ code: 'tableImported', object: name, n: table.rowCount });
-        const key = design.fields.find((f) => f.props.type === 'autoNumber');
-        lines.push(key ? { code: 'keyAssumed', object: name, part: key.name } : { code: 'keyNotRead', object: name });
+        if (structured) lines.push({ code: 'structureExact', object: name }, ...first!.lines);
+        else {
+          const key = design.fields.find((f) => f.props.type === 'autoNumber');
+          lines.push(key ? { code: 'keyAssumed', object: name, part: key.name } : { code: 'keyNotRead', object: name });
+          if (first) lines.push(...first.lines, { code: 'structureNotRead', object: name });
+        }
         for (const c of skipped) lines.push({ code: 'fieldSkipped', object: name, part: c });
         for (const [part, n] of lost) lines.push({ code: 'valuesLost', object: name, part, n });
       }
@@ -100,6 +132,7 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
     lines.push(res.ok ? { code: 'relationCreated', object: res.relation.name } : { code: 'relationIgnored', object: access, reason: res.reason });
   }
   for (const s of skipped) lines.push({ code: 'relationIgnored', object: s.access, reason: s.reason });
-  lines.push({ code: 'structureNotRead' }, { code: 'tablesOnly' });
+  if (missing) lines.push({ code: 'structureNotRead' });
+  lines.push({ code: 'tablesOnly' });
   return { ok: true, tables: read.map((t) => ({ name: t.name, remote: t.remote, rows: t.table.rowCount })), report: { source: d.source, lines } };
 }

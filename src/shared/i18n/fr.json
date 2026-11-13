@@ -2953,6 +2953,8 @@
       "titleSqlServer": "Importer depuis SQL Server",
       "ok": "Importer",
       "done": "Tables importées : {{names}}.",
+      "skippedInline": "colonnes non importées : {{names}}",
+
       "skipped": "Colonnes non importées ({{table}}) : {{names}}."
     },
     "access": {
@@ -2960,7 +2962,24 @@
       "fileOnly": "Les tables et leurs données sont importées. Les clés autres qu'un NuméroAuto, les index et les règles de champ ne sont pas lus ; les requêtes, formulaires, états, macros et modules ne sont pas importés.",
       "linked": "Les tables liées de ce fichier ne sont pas proposées : {{names}}.",
       "warnSize": "Ce fichier est volumineux : l'import peut prendre du temps.",
-      "missingTables": "Le fichier ne contient plus : {{names}}. Rien n'a été modifié."
+      "missingTables": "Le fichier ne contient plus : {{names}}. Rien n'a été modifié.",
+      "structure": "Structure",
+      "structureAccess": "Lire la structure exacte avec Access",
+      "structureFolder": "Utiliser un dossier d'export…",
+      "changeFolder": "Choisir un autre dossier…",
+      "structureFile": "Fichier seul",
+      "accessNote": "Access ouvre une copie du fichier, hors de vue. Rien de la base ne s'exécute, et le fichier n'est pas modifié.",
+      "keepNote": "Le dossier contient la structure des tables, le texte SQL des requêtes, et les formulaires, états, macros et modules VBA en texte. Il ne contient aucune ligne des tables ni aucun mot de passe de la base.",
+      "keepExport": "Conserver le dossier d'export",
+      "exporting": "Lecture de la structure avec Access : {{done}} objets sur {{total}}",
+      "exportFailed": {
+        "noAccess": "Microsoft Access n'est pas disponible sur cet ordinateur. Rien n'a été modifié.",
+        "cannotOpen": "Access n'a pas pu ouvrir le fichier. S'il a un mot de passe, celui-ci ne doit pas contenir de point-virgule (;). Rien n'a été modifié.",
+        "timeout": "Access n'a pas répondu à temps. Rien n'a été modifié.",
+        "failed": "Access n'a pas pu lire la structure. Rien n'a été modifié.",
+        "badFolder": "Ce dossier d'export est inutilisable : il est incomplet ou ce n'est pas un export, ou un dossier de ce nom existe déjà à l'endroit choisi. Rien n'a été modifié.",
+        "otherSource": "Ce dossier d'export a été fait à partir d'un autre fichier. Rien n'a été modifié."
+      }
     },
     "report": {
       "title": "Rapport d'import : {{source}}",
@@ -2973,7 +2992,11 @@
       },
       "reason": {
         "tableNotImported": "Une table de cette relation n'a pas été importée.",
-        "violations": "Certains enregistrements n'ont pas de correspondant dans la table principale."
+        "violations": "Certains enregistrements n'ont pas de correspondant dans la table principale.",
+        "defaultValue": "BaseCraft ne peut pas conserver cette valeur par défaut.",
+        "validationRule": "BaseCraft ne peut pas conserver cette règle de validation.",
+        "inputMask": "BaseCraft ne peut pas conserver ce masque de saisie.",
+        "lookup": "BaseCraft ne peut pas conserver cette liste de choix."
       },
       "line": {
         "tableImported": "Table « {{object}} » : lignes importées : {{n}}.",
@@ -2987,7 +3010,14 @@
         "tableUnsupported": "Table « {{object}} » non importée. {{reason}}",
         "tableLinked": "La table « {{object}} » est une table liée du fichier Access : elle n'est pas importée.",
         "relationIgnored": "Relation « {{object}} » du fichier Access non importée. {{reason}}",
-        "tablesOnly": "Les requêtes, formulaires, états, macros et modules ne sont pas importés."
+        "tablesOnly": "Les requêtes, formulaires, états, macros et modules ne sont pas importés.",
+        "structureExact": "Table « {{object}} » : clés, index et propriétés de champ lus dans Access.",
+        "keyApproximated": "Table « {{object}} » : la clé primaire d'Access ({{part}}) est conservée comme index unique ; le champ NuméroAuto reste la clé primaire.",
+        "propertyDropped": "Table « {{object}} », champ « {{part}} » : une propriété n'a pas été importée. {{reason}}",
+        "propertyDroppedTable": "Table « {{object}} » : une propriété de la table n'a pas été importée. {{reason}}",
+        "indexDropped": "Table « {{object}} » : index « {{part}} » non importé (il porte sur une colonne non importée, ou BaseCraft le refuse).",
+        "indexDroppedTable": "Table « {{object}} » : d'autres index n'ont pas été importés (BaseCraft n'en accepte pas davantage).",
+        "structureNotReadTable": "Table « {{object}} » : sa structure n'a pas pu être appliquée. Les index, les règles de champ, les valeurs par défaut, les légendes et les listes de choix ne sont pas lus."
       }
     }
   },

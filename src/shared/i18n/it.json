@@ -3080,6 +3080,8 @@
       "titleSqlServer": "Importa da SQL Server",
       "ok": "Importa",
       "done": "Tabelle importate: {{names}}.",
+      "skippedInline": "colonne non importate: {{names}}",
+
       "skipped": "Colonne non importate ({{table}}): {{names}}."
     },
     "access": {
@@ -3087,7 +3089,24 @@
       "fileOnly": "Le tabelle e i loro dati vengono importati. Le chiavi diverse da un Contatore, gli indici e le regole dei campi non vengono letti; query, maschere, report, macro e moduli non vengono importati.",
       "linked": "Le tabelle collegate di questo file non vengono proposte: {{names}}.",
       "warnSize": "Questo file è grande: l'importazione può richiedere tempo.",
-      "missingTables": "Il file non contiene più: {{names}}. Nulla è stato modificato."
+      "missingTables": "Il file non contiene più: {{names}}. Nulla è stato modificato.",
+      "structure": "Struttura",
+      "structureAccess": "Leggi la struttura esatta con Access",
+      "structureFolder": "Usa una cartella di esportazione…",
+      "changeFolder": "Scegli un'altra cartella…",
+      "structureFile": "Solo il file",
+      "accessNote": "Access apre una copia del file, senza mostrarsi. Nulla del database viene eseguito e il file non viene modificato.",
+      "keepNote": "La cartella contiene la struttura delle tabelle, il testo SQL delle query, e le maschere, i report, le macro e i moduli VBA come testo. Non contiene alcuna riga delle tabelle né alcuna password del database.",
+      "keepExport": "Conserva la cartella di esportazione",
+      "exporting": "Lettura della struttura con Access: {{done}} oggetti su {{total}}",
+      "exportFailed": {
+        "noAccess": "Microsoft Access non è disponibile su questo computer. Non è stato modificato nulla.",
+        "cannotOpen": "Access non è riuscito ad aprire il file. Se ha una password, questa non deve contenere il punto e virgola (;). Non è stato modificato nulla.",
+        "timeout": "Access non ha risposto in tempo. Non è stato modificato nulla.",
+        "failed": "Access non è riuscito a leggere la struttura. Non è stato modificato nulla.",
+        "badFolder": "Questa cartella di esportazione non è utilizzabile: è incompleta o non è un'esportazione, oppure nel percorso scelto esiste già una cartella con questo nome. Non è stato modificato nulla.",
+        "otherSource": "Questa cartella di esportazione è stata creata da un altro file. Non è stato modificato nulla."
+      }
     },
     "report": {
       "title": "Rapporto di importazione: {{source}}",
@@ -3100,7 +3119,11 @@
       },
       "reason": {
         "tableNotImported": "Una tabella di questa relazione non è stata importata.",
-        "violations": "Alcuni record non hanno un record corrispondente nella tabella principale."
+        "violations": "Alcuni record non hanno un record corrispondente nella tabella principale.",
+        "defaultValue": "BaseCraft non può mantenere questo valore predefinito.",
+        "validationRule": "BaseCraft non può mantenere questa regola di convalida.",
+        "inputMask": "BaseCraft non può mantenere questa maschera di input.",
+        "lookup": "BaseCraft non può mantenere questo elenco di ricerca."
       },
       "line": {
         "tableImported": "Tabella «{{object}}»: righe importate: {{n}}.",
@@ -3114,7 +3137,14 @@
         "tableUnsupported": "Tabella «{{object}}» non importata. {{reason}}",
         "tableLinked": "La tabella «{{object}}» è una tabella collegata del file Access: non viene importata.",
         "relationIgnored": "Relazione «{{object}}» del file Access non importata. {{reason}}",
-        "tablesOnly": "Query, maschere, report, macro e moduli non vengono importati."
+        "tablesOnly": "Query, maschere, report, macro e moduli non vengono importati.",
+        "structureExact": "Tabella «{{object}}»: chiavi, indici e proprietà dei campi letti da Access.",
+        "keyApproximated": "Tabella «{{object}}»: la chiave primaria di Access ({{part}}) viene mantenuta come indice univoco; il campo Contatore resta la chiave primaria.",
+        "propertyDropped": "Tabella «{{object}}», campo «{{part}}»: una proprietà non è stata importata. {{reason}}",
+        "propertyDroppedTable": "Tabella «{{object}}»: una proprietà della tabella non è stata importata. {{reason}}",
+        "indexDropped": "Tabella «{{object}}»: indice «{{part}}» non importato (riguarda una colonna non importata, oppure BaseCraft lo rifiuta).",
+        "indexDroppedTable": "Tabella «{{object}}»: altri indici non sono stati importati (BaseCraft non ne accetta di più).",
+        "structureNotReadTable": "Tabella «{{object}}»: non è stato possibile applicarne la struttura. Indici, regole dei campi, valori predefiniti, didascalie ed elenchi di ricerca non vengono letti."
       }
     }
   },

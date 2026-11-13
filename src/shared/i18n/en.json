@@ -2953,6 +2953,8 @@
       "titleSqlServer": "Import from SQL Server",
       "ok": "Import",
       "done": "Tables imported: {{names}}.",
+      "skippedInline": "columns not imported: {{names}}",
+
       "skipped": "Columns not imported ({{table}}): {{names}}."
     },
     "access": {
@@ -2960,7 +2962,24 @@
       "fileOnly": "Tables and their data are imported. Keys other than an AutoNumber, indexes and field rules are not read; queries, forms, reports, macros and modules are not imported.",
       "linked": "Linked tables of this file are not offered: {{names}}.",
       "warnSize": "This file is large: the import may take a while.",
-      "missingTables": "The file no longer holds: {{names}}. Nothing was changed."
+      "missingTables": "The file no longer holds: {{names}}. Nothing was changed.",
+      "structure": "Structure",
+      "structureAccess": "Read the exact structure with Access",
+      "structureFolder": "Use an export folder…",
+      "changeFolder": "Choose another folder…",
+      "structureFile": "File only",
+      "accessNote": "Access opens a copy of the file, out of sight. Nothing of the database runs, and the file is not changed.",
+      "keepNote": "The folder holds the structure of the tables, the SQL text of the queries, and the forms, reports, macros and VBA modules as text. It holds no row of the tables and no password of the database.",
+      "keepExport": "Keep the export folder",
+      "exporting": "Reading the structure with Access: {{done}} of {{total}} objects",
+      "exportFailed": {
+        "noAccess": "Microsoft Access is not available on this computer. Nothing was changed.",
+        "cannotOpen": "Access could not open the file. If it has a password, the password must not contain a semicolon (;). Nothing was changed.",
+        "timeout": "Access did not answer in time. Nothing was changed.",
+        "failed": "Access could not read the structure. Nothing was changed.",
+        "badFolder": "This export folder cannot be used: it is incomplete or not an export, or a folder of that name already exists in the chosen place. Nothing was changed.",
+        "otherSource": "This export folder was made from another file. Nothing was changed."
+      }
     },
     "report": {
       "title": "Import report: {{source}}",
@@ -2973,7 +2992,11 @@
       },
       "reason": {
         "tableNotImported": "A table of this relation was not imported.",
-        "violations": "Some rows have no matching row in the main table."
+        "violations": "Some rows have no matching row in the main table.",
+        "defaultValue": "BaseCraft cannot keep this default value.",
+        "validationRule": "BaseCraft cannot keep this validation rule.",
+        "inputMask": "BaseCraft cannot keep this input mask.",
+        "lookup": "BaseCraft cannot keep this lookup list."
       },
       "line": {
         "tableImported": "Table “{{object}}”: rows imported: {{n}}.",
@@ -2987,7 +3010,14 @@
         "tableUnsupported": "Table “{{object}}” not imported. {{reason}}",
         "tableLinked": "Table “{{object}}” is a linked table of the Access file: it is not imported.",
         "relationIgnored": "Relation “{{object}}” of the Access file not imported. {{reason}}",
-        "tablesOnly": "Queries, forms, reports, macros and modules are not imported."
+        "tablesOnly": "Queries, forms, reports, macros and modules are not imported.",
+        "structureExact": "Table “{{object}}”: keys, indexes and field properties read from Access.",
+        "keyApproximated": "Table “{{object}}”: the Access primary key ({{part}}) is kept as a unique index; the AutoNumber field stays the primary key.",
+        "propertyDropped": "Table “{{object}}”, field “{{part}}”: a property was not imported. {{reason}}",
+        "propertyDroppedTable": "Table “{{object}}”: a table property was not imported. {{reason}}",
+        "indexDropped": "Table “{{object}}”: index “{{part}}” not imported (it covers a column that was not imported, or BaseCraft refuses it).",
+        "indexDroppedTable": "Table “{{object}}”: other indexes were not imported (BaseCraft accepts no more).",
+        "structureNotReadTable": "Table “{{object}}”: its structure could not be applied. Indexes, field rules, default values, captions and lookup lists are not read."
       }
     }
   },

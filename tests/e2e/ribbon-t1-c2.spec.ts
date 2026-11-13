@@ -114,7 +114,7 @@ test('Spelling with the real checker: it finds the words, or says that no dictio
     await page.getByTestId('ribbon-tab-home').click();
     await page.getByTestId('cmd-spelling').click();
     const word = page.getByTestId('spell-word'), modal = page.getByTestId('modal');
-    await expect(word.or(modal)).toBeVisible({ timeout: 30_000 });
+    await expect(word.or(modal.filter({ hasNot: word }))).toBeVisible({ timeout: 30_000 });   // the Spelling dialog is a modal too
     if (await word.isVisible()) await expect(word).toHaveText('phrse');
     else {
       await expect(modal).toContainText('dictionnaire');

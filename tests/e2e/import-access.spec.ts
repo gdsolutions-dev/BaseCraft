@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { copyFileSync, mkdtempSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTable } from '../../src/main/db/schema';
@@ -28,6 +28,7 @@ test('External Data › Access imports tables with their rows and ends on the re
     await page.getByTestId('ribbon-tab-externalData').click();
     await page.getByTestId('cmd-importAccess').click();
     await expect(title(page)).toHaveText(fr.import.access.title);
+    await page.getByTestId('import-structure-file').check(); // this PC may have Access, which would be the default: the file alone is tested here
     await expect(page.getByTestId('import-file-only')).toHaveText(fr.import.access.fileOnly);
     await expect(page.getByTestId('link-table-Clients1')).toBeVisible(); // the name in use is numbered
     await expect(page.getByTestId('link-skipped-Clients1')).toContainText('Photo');
@@ -68,6 +69,7 @@ test('a protected file asks its password: wrong, then right', async () => {
     await input.fill(ACCESS_PASSWORD);
     await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('link-dialog')).toBeVisible();
+    await page.getByTestId('import-structure-file').check();
     await page.getByTestId('link-table-Divers').check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('import-report')).toContainText(fr.import.server.done.replace('{{names}}', 'Divers'));
@@ -88,6 +90,7 @@ test('closing the report with Escape still refreshes the Navigation Pane', async
   try {
     await page.getByTestId('ribbon-tab-externalData').click();
     await page.getByTestId('cmd-importAccess').click();
+    await page.getByTestId('import-structure-file').check();
     await page.getByTestId('link-table-Commandes').check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('import-report')).toBeVisible();
@@ -96,6 +99,39 @@ test('closing the report with Escape still refreshes the Navigation Pane', async
     await expect(page.getByTestId('nav-item-Commandes')).toBeVisible();
   } finally {
     await app.close();
+  }
+});
+
+const COMPLET = join(FIXTURES, 'Ventes-complet.accdb');
+const EXPORT_DIR = join(FIXTURES, 'Ventes-complet.export');
+
+test('an export folder gives the keys and rules in Table Design', async () => {
+  test.skip(!existsSync(COMPLET), "Ventes-complet.accdb is not committed: copy it from the owner's originals");
+  test.setTimeout(120_000);
+  const dir = mkdtempSync(join(tmpdir(), 'basecraft-import-access-'));
+  const copy = join(dir, 'Ventes-complet.accdb');
+  copyFileSync(COMPLET, copy);
+  const { app, page } = await launchApp({ args: [seedBase('Front', (db) => createTable(db, t('Notes', [f('N°', 'autoNumber')])))], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: copy, BASECRAFT_E2E_EXPORT_DIR: EXPORT_DIR } });
+  try {
+    await page.getByTestId('ribbon-tab-externalData').click();
+    await page.getByTestId('cmd-importAccess').click();
+    await page.getByTestId('import-structure-folder').check();
+    await expect(page.getByTestId('import-export-dir')).toHaveText(EXPORT_DIR);
+    await page.getByTestId('link-table-Commandes').check(); await page.getByTestId('link-table-Clients').check();
+    await page.getByTestId('link-ok').click();
+    await expect(page.getByTestId('report-carried').getByTestId('report-line-structureExact')).toHaveCount(2);
+    await expect(page.getByTestId('report-line-keyAssumed')).toHaveCount(0);
+    await page.getByTestId('import-close').click();
+    // Commandes opened in Table Design: Quantité's Validation Rule and Default Value show the values of structure.json
+    await page.getByTestId('nav-item-Commandes').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await page.getByTestId('design-row-4-name').click();
+    await expect(page.getByTestId('design-row-4-name')).toHaveValue('Quantité');
+    await expect(page.getByTestId('prop-validationRule')).toHaveValue('> 0'); // structure.json's >0, as the designer writes it
+    await expect(page.getByTestId('prop-defaultValue')).toHaveValue('1');
+  } finally {
+    await app.close();
+    try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { console.warn(`could not remove the temp folder ${dir}`); }
   }
 });
 

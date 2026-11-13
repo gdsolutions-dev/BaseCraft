@@ -4,7 +4,7 @@ import type { CellInput, FieldErrorCode, SqlValue } from './coerce';
 import type { DesignError, TableDesign } from './field-types';
 import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec, SavedExport } from './exchange';
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
-import type { AccessImportInfo, AccessImportResult } from './access-import';
+import type { AccessImportInfo, AccessImportResult, AccessStructureSource } from './access-import';
 import type { MigrateRequest, MigrateResult, ServerImportResult } from './migrate';
 import type { UiLanguage } from './i18n';
 import type { FieldType, NumberSize } from './field-types';
@@ -384,6 +384,7 @@ export const CH = {
   accessImportInspect: 'bc:accessImport:inspect', // E1: External Data › Import › Access
   accessImportRun: 'bc:accessImport:run', // progress: importProgress
   accessImportSaveReport: 'bc:accessImport:saveReport',
+  accessImportPickExport: 'bc:accessImport:pickExport', // E2: the folder of an export
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -686,8 +687,11 @@ export interface BasecraftApi {
   accessImport: {
     /** `path`: a path links.pick gave. A protected file asks its password as the link dialog does (bridge.ts). */
     inspect(path: string): Promise<AccessImportInfo>;
-    /** `remotes`: Access names inspect listed. Stop is queries.cancel (cancelled). */
-    run(path: string, remotes: string[]): Promise<AccessImportResult>;
+    /** `remotes`: Access names inspect listed. `structure`: absent = the file alone. `keepDir`: with kind 'access', where the export folder is
+     *  kept (a folder pickExport gave). Stop is queries.cancel (cancelled), also during the export. */
+    run(path: string, remotes: string[], structure?: AccessStructureSource, keepDir?: string): Promise<AccessImportResult>;
+    /** Asks for a folder; null when cancelled. Only a folder this gave is accepted by run, as `structure.dir` or as `keepDir`. */
+    pickExport(): Promise<string | null>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
     /** Asks where, then writes `text` as UTF-8; false when the user cancels. */
     saveReport(text: string, defaultName: string): Promise<boolean>;

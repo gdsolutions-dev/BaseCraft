@@ -3057,6 +3057,8 @@
       "titleSqlServer": "Importeren uit SQL Server",
       "ok": "Importeren",
       "done": "Geïmporteerde tabellen: {{names}}.",
+      "skippedInline": "niet-geïmporteerde kolommen: {{names}}",
+
       "skipped": "Niet geïmporteerde kolommen ({{table}}): {{names}}."
     },
     "access": {
@@ -3064,7 +3066,24 @@
       "fileOnly": "Tabellen en hun gegevens worden geïmporteerd. Andere sleutels dan een AutoNummering, indexen en veldregels worden niet gelezen; query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd.",
       "linked": "Gekoppelde tabellen van dit bestand worden niet aangeboden: {{names}}.",
       "warnSize": "Dit bestand is groot: het importeren kan even duren.",
-      "missingTables": "Het bestand bevat niet meer: {{names}}. Er is niets gewijzigd."
+      "missingTables": "Het bestand bevat niet meer: {{names}}. Er is niets gewijzigd.",
+      "structure": "Structuur",
+      "structureAccess": "De exacte structuur met Access lezen",
+      "structureFolder": "Een exportmap gebruiken…",
+      "changeFolder": "Andere map kiezen…",
+      "structureFile": "Alleen het bestand",
+      "accessNote": "Access opent een kopie van het bestand, buiten beeld. Van de database wordt niets uitgevoerd en het bestand wordt niet gewijzigd.",
+      "keepNote": "De map bevat de structuur van de tabellen, de SQL-tekst van de query's, en de formulieren, rapporten, macro's en VBA-modules als tekst. Er staat geen rij van de tabellen in en geen wachtwoord van de database.",
+      "keepExport": "De exportmap bewaren",
+      "exporting": "Structuur lezen met Access: {{done}} van {{total}} objecten",
+      "exportFailed": {
+        "noAccess": "Microsoft Access is niet beschikbaar op deze computer. Er is niets gewijzigd.",
+        "cannotOpen": "Access kon het bestand niet openen. Als het een wachtwoord heeft, mag dat geen puntkomma (;) bevatten. Er is niets gewijzigd.",
+        "timeout": "Access antwoordde niet op tijd. Er is niets gewijzigd.",
+        "failed": "Access kon de structuur niet lezen. Er is niets gewijzigd.",
+        "badFolder": "Deze exportmap kan niet worden gebruikt: hij is onvolledig of geen export, of er bestaat al een map met die naam op de gekozen plaats. Er is niets gewijzigd.",
+        "otherSource": "Deze exportmap is gemaakt van een ander bestand. Er is niets gewijzigd."
+      }
     },
     "report": {
       "title": "Importrapport: {{source}}",
@@ -3077,7 +3096,11 @@
       },
       "reason": {
         "tableNotImported": "Een tabel van deze relatie is niet geïmporteerd.",
-        "violations": "Sommige records hebben geen overeenkomend record in de hoofdtabel."
+        "violations": "Sommige records hebben geen overeenkomend record in de hoofdtabel.",
+        "defaultValue": "BaseCraft kan deze standaardwaarde niet behouden.",
+        "validationRule": "BaseCraft kan deze validatieregel niet behouden.",
+        "inputMask": "BaseCraft kan dit invoermasker niet behouden.",
+        "lookup": "BaseCraft kan deze opzoeklijst niet behouden."
       },
       "line": {
         "tableImported": "Tabel “{{object}}”: geïmporteerde rijen: {{n}}.",
@@ -3091,7 +3114,14 @@
         "tableUnsupported": "Tabel “{{object}}” niet geïmporteerd. {{reason}}",
         "tableLinked": "Tabel “{{object}}” is een gekoppelde tabel van het Access-bestand: ze wordt niet geïmporteerd.",
         "relationIgnored": "Relatie “{{object}}” van het Access-bestand niet geïmporteerd. {{reason}}",
-        "tablesOnly": "Query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd."
+        "tablesOnly": "Query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd.",
+        "structureExact": "Tabel “{{object}}”: sleutels, indexen en veldeigenschappen gelezen uit Access.",
+        "keyApproximated": "Tabel “{{object}}”: de primaire sleutel van Access ({{part}}) blijft behouden als unieke index; het AutoNummering-veld blijft de primaire sleutel.",
+        "propertyDropped": "Tabel “{{object}}”, veld “{{part}}”: een eigenschap is niet geïmporteerd. {{reason}}",
+        "propertyDroppedTable": "Tabel “{{object}}”: een tabeleigenschap is niet geïmporteerd. {{reason}}",
+        "indexDropped": "Tabel “{{object}}”: index “{{part}}” niet geïmporteerd (hij betreft een niet-geïmporteerde kolom, of BaseCraft weigert hem).",
+        "indexDroppedTable": "Tabel “{{object}}”: andere indexen zijn niet geïmporteerd (BaseCraft accepteert er niet meer).",
+        "structureNotReadTable": "Tabel “{{object}}”: de structuur kon niet worden toegepast. Indexen, veldregels, standaardwaarden, bijschriften en opzoeklijsten worden niet gelezen."
       }
     }
   },

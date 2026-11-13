@@ -8,7 +8,7 @@ import { defaultSpec, type ImportPlan } from '../../shared/import-text';
 import { localeInfo } from '../../shared/locale-format';
 import en from '../../shared/i18n/en.json';
 import type { ImportTexts } from '../import/text-import';
-import { ReadOnlyError } from '../session';
+import { ReadOnlyError, Session } from '../session';
 import { createDispatcher, openSession } from './host';
 import { HOST_METHODS, READ_METHODS, type HostEvent, type HostReply, type HostRequest } from './protocol';
 
@@ -173,6 +173,14 @@ describe('with a real session', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it('importAccessTables forwards structure, keepDir and script in their positions (the tick is replaced by the host)', async () => {
+    const spy = vi.spyOn(Session.prototype, 'importAccessTables').mockResolvedValue({ ok: false, reason: 'cancelled' });
+    const structure = { kind: 'folder' as const, dir: 'D' };
+    await d(req(1, 'importAccessTables', 'a.accdb', ['T'], undefined, structure, 'K', 'S.ps1'));
+    expect(value(1)).toEqual({ ok: false, reason: 'cancelled' });
+    expect(spy.mock.calls[0]).toEqual(['a.accdb', ['T'], expect.any(Function), structure, 'K', 'S.ps1']);
+    spy.mockRestore();
+  });
   it('a read issued during an import sees the committed result; progress arrives as events', async () => {
     const csv = path.join(dir, 'v.csv');
     fs.writeFileSync(csv, 'Nom,Qte\n' + Array.from({ length: 3000 }, (_, i) => `n${i},${i}`).join('\n') + '\n');

@@ -24,7 +24,7 @@ export function SourceHeader({ path, kind }: { path: string; kind: string }) {
   const { t } = useTranslation();
   return (
     <>
-      <p data-testid="link-path">{t('link.source', { path })}</p>
+      <p className="path-text" data-testid="link-path">{t('link.source', { path })}</p>
       <p className="muted" data-testid="link-kind">{t(`link.kind.${kind}`)}</p>
     </>
   );
@@ -36,9 +36,9 @@ export type LinkTable = LinkFileInfo['tables'][number] & { readOnly?: boolean };
 /** The tables to tick, linked by `create` (true: links created). `server`: a server's texts (C4: skipped columns, no table, missing).
  *  C7 R17: `okKey` the OK button's label (« Importer »), `create` may answer `cancelled` (Stop: back to the list, no message), `busyNote`
  *  what shows while it runs (the import's progress and « Arrêter »). */
-export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote, missingKey = 'link.server.missingTables' }: {
+export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote, missingKey = 'link.server.missingTables', skippedKey }: {
   header: ReactNode; tables: LinkTable[]; create(names: string[]): Promise<LinkResult | { ok: false; reason: 'cancelled' }>; onClose(v: true | null): void;
-  server?: boolean; okKey?: string; busyNote?: ReactNode; missingKey?: string;
+  server?: boolean; okKey?: string; busyNote?: ReactNode; missingKey?: string; skippedKey?: string;
 }) {
   const { t } = useTranslation();
   const free = tables.filter((x) => !x.taken && !x.unsupported).map((x) => x.name);
@@ -75,7 +75,7 @@ export function LinkForm({ header, tables, create, onClose, server = false, okKe
                 {x.readOnly && <em className="muted" data-testid={`link-readonly-${x.name}`}> — {t('link.server.readOnly')}</em>}
               </label>
               {x.unsupported && <p className="muted" data-testid={`link-unsupported-${x.name}`}>{t('link.unsupported', { reason: t(`designError.${x.unsupported}`) })}</p>}
-              {!!x.skipped?.length && <p className="muted" data-testid={`link-skipped-${x.name}`}>{t(server ? 'link.server.skipped' : 'link.skipped', { names: x.skipped.join(', ') })}</p>}
+              {!!x.skipped?.length && <p className="muted" data-testid={`link-skipped-${x.name}`}>{t(skippedKey ?? (server ? 'link.server.skipped' : 'link.skipped'), { names: x.skipped.join(', ') })}</p>}
             </div>
           ))}
           </div>

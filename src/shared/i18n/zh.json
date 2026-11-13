@@ -3034,6 +3034,8 @@
       "titleSqlServer": "从 SQL Server 导入",
       "ok": "导入",
       "done": "已导入的表：{{names}}。",
+      "skippedInline": "未导入的列：{{names}}",
+
       "skipped": "未导入的列（{{table}}）：{{names}}。"
     },
     "access": {
@@ -3041,7 +3043,24 @@
       "fileOnly": "将导入表及其数据。自动编号以外的键、索引和字段规则不会被读取；查询、窗体、报表、宏和模块不会被导入。",
       "linked": "此文件中的链接表不提供导入：{{names}}。",
       "warnSize": "此文件较大，导入可能需要一些时间。",
-      "missingTables": "文件不再包含：{{names}}。未更改任何内容。"
+      "missingTables": "文件不再包含：{{names}}。未更改任何内容。",
+      "structure": "结构",
+      "structureAccess": "用 Access 读取准确的结构",
+      "structureFolder": "使用导出文件夹…",
+      "changeFolder": "选择其他文件夹…",
+      "structureFile": "仅文件",
+      "accessNote": "Access 会在后台打开该文件的副本。数据库中的任何内容都不会运行，文件也不会被更改。",
+      "keepNote": "该文件夹包含表的结构、查询的 SQL 文本，以及以文本形式保存的窗体、报表、宏和 VBA 模块。其中不包含表的任何行，也不包含数据库的密码。",
+      "keepExport": "保留导出文件夹",
+      "exporting": "正在用 Access 读取结构：{{done}} / {{total}} 个对象",
+      "exportFailed": {
+        "noAccess": "此计算机上没有可用的 Microsoft Access。未做任何更改。",
+        "cannotOpen": "Access 无法打开该文件。如果文件有密码，密码中不能包含分号 (;)。未做任何更改。",
+        "timeout": "Access 未在规定时间内响应。未做任何更改。",
+        "failed": "Access 无法读取结构。未做任何更改。",
+        "badFolder": "无法使用此导出文件夹：它不完整或不是导出结果，或者所选位置已存在同名文件夹。未做任何更改。",
+        "otherSource": "此导出文件夹由另一个文件生成。未做任何更改。"
+      }
     },
     "report": {
       "title": "导入报告：{{source}}",
@@ -3054,7 +3073,11 @@
       },
       "reason": {
         "tableNotImported": "此关系中的一个表未被导入。",
-        "violations": "部分记录在主表中没有对应的记录。"
+        "violations": "部分记录在主表中没有对应的记录。",
+        "defaultValue": "BaseCraft 无法保留此默认值。",
+        "validationRule": "BaseCraft 无法保留此验证规则。",
+        "inputMask": "BaseCraft 无法保留此输入掩码。",
+        "lookup": "BaseCraft 无法保留此查阅列表。"
       },
       "line": {
         "tableImported": "表“{{object}}”：已导入的行数：{{n}}。",
@@ -3068,7 +3091,14 @@
         "tableUnsupported": "表“{{object}}”未导入。{{reason}}",
         "tableLinked": "表“{{object}}”是 Access 文件中的链接表，不会被导入。",
         "relationIgnored": "Access 文件中的关系“{{object}}”未导入。{{reason}}",
-        "tablesOnly": "查询、窗体、报表、宏和模块不会被导入。"
+        "tablesOnly": "查询、窗体、报表、宏和模块不会被导入。",
+        "structureExact": "表“{{object}}”：键、索引和字段属性已从 Access 读取。",
+        "keyApproximated": "表“{{object}}”：Access 的主键（{{part}}）保留为唯一索引；主键仍是自动编号字段。",
+        "propertyDropped": "表“{{object}}”，字段“{{part}}”：有一个属性未导入。{{reason}}",
+        "propertyDroppedTable": "表“{{object}}”：有一个表属性未导入。{{reason}}",
+        "indexDropped": "表“{{object}}”：索引“{{part}}”未导入（它涉及未导入的列，或被 BaseCraft 拒绝）。",
+        "indexDroppedTable": "表“{{object}}”：其他索引未导入（BaseCraft 不接受更多索引）。",
+        "structureNotReadTable": "表“{{object}}”：无法应用其结构。索引、字段规则、默认值、标题和查阅列表不会被读取。"
       }
     }
   },

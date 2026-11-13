@@ -3034,6 +3034,8 @@
       "titleSqlServer": "SQL Server에서 가져오기",
       "ok": "가져오기",
       "done": "가져온 테이블: {{names}}.",
+      "skippedInline": "가져오지 않는 열: {{names}}",
+
       "skipped": "가져오지 않은 열({{table}}): {{names}}."
     },
     "access": {
@@ -3041,7 +3043,24 @@
       "fileOnly": "테이블과 해당 데이터를 가져옵니다. 일련 번호 외의 키, 인덱스, 필드 규칙은 읽지 않으며, 쿼리, 폼, 보고서, 매크로, 모듈은 가져오지 않습니다.",
       "linked": "이 파일의 연결된 테이블은 제공되지 않습니다: {{names}}.",
       "warnSize": "이 파일이 커서 가져오는 데 시간이 걸릴 수 있습니다.",
-      "missingTables": "파일에 더 이상 다음이 없습니다: {{names}}. 변경된 내용이 없습니다."
+      "missingTables": "파일에 더 이상 다음이 없습니다: {{names}}. 변경된 내용이 없습니다.",
+      "structure": "구조",
+      "structureAccess": "Access로 정확한 구조 읽기",
+      "structureFolder": "내보내기 폴더 사용…",
+      "changeFolder": "다른 폴더 선택…",
+      "structureFile": "파일만",
+      "accessNote": "Access가 파일의 복사본을 화면에 표시하지 않고 엽니다. 데이터베이스의 어떤 것도 실행되지 않으며 파일은 변경되지 않습니다.",
+      "keepNote": "폴더에는 테이블의 구조, 쿼리의 SQL 텍스트, 그리고 폼, 보고서, 매크로, VBA 모듈이 텍스트로 들어 있습니다. 테이블의 행이나 데이터베이스의 암호는 들어 있지 않습니다.",
+      "keepExport": "내보내기 폴더 유지",
+      "exporting": "Access로 구조를 읽는 중: 개체 {{total}}개 중 {{done}}개",
+      "exportFailed": {
+        "noAccess": "이 컴퓨터에서는 Microsoft Access를 사용할 수 없습니다. 변경된 내용이 없습니다.",
+        "cannotOpen": "Access가 파일을 열 수 없었습니다. 암호가 있는 경우 암호에 세미콜론(;)이 들어 있으면 안 됩니다. 변경된 내용이 없습니다.",
+        "timeout": "Access가 제때 응답하지 않았습니다. 변경된 내용이 없습니다.",
+        "failed": "Access가 구조를 읽을 수 없었습니다. 변경된 내용이 없습니다.",
+        "badFolder": "이 내보내기 폴더는 사용할 수 없습니다. 불완전하거나 내보내기가 아니거나, 선택한 위치에 같은 이름의 폴더가 이미 있습니다. 변경된 내용이 없습니다.",
+        "otherSource": "이 내보내기 폴더는 다른 파일로 만든 것입니다. 변경된 내용이 없습니다."
+      }
     },
     "report": {
       "title": "가져오기 보고서: {{source}}",
@@ -3054,7 +3073,11 @@
       },
       "reason": {
         "tableNotImported": "이 관계의 테이블 하나를 가져오지 않았습니다.",
-        "violations": "일부 레코드에 주 테이블의 대응하는 레코드가 없습니다."
+        "violations": "일부 레코드에 주 테이블의 대응하는 레코드가 없습니다.",
+        "defaultValue": "BaseCraft는 이 기본값을 유지할 수 없습니다.",
+        "validationRule": "BaseCraft는 이 유효성 검사 규칙을 유지할 수 없습니다.",
+        "inputMask": "BaseCraft는 이 입력 마스크를 유지할 수 없습니다.",
+        "lookup": "BaseCraft는 이 조회 목록을 유지할 수 없습니다."
       },
       "line": {
         "tableImported": "테이블 “{{object}}”: 가져온 행 수: {{n}}.",
@@ -3068,7 +3091,14 @@
         "tableUnsupported": "테이블 “{{object}}”을(를) 가져오지 않았습니다. {{reason}}",
         "tableLinked": "테이블 “{{object}}”은(는) Access 파일의 연결된 테이블이므로 가져오지 않습니다.",
         "relationIgnored": "Access 파일의 관계 “{{object}}”을(를) 가져오지 않았습니다. {{reason}}",
-        "tablesOnly": "쿼리, 폼, 보고서, 매크로, 모듈은 가져오지 않습니다."
+        "tablesOnly": "쿼리, 폼, 보고서, 매크로, 모듈은 가져오지 않습니다.",
+        "structureExact": "테이블 “{{object}}”: 키, 인덱스, 필드 속성을 Access에서 읽었습니다.",
+        "keyApproximated": "테이블 “{{object}}”: Access의 기본 키({{part}})는 고유 인덱스로 유지되며, 기본 키는 계속 일련 번호 필드입니다.",
+        "propertyDropped": "테이블 “{{object}}”, 필드 “{{part}}”: 속성 하나를 가져오지 않았습니다. {{reason}}",
+        "propertyDroppedTable": "테이블 “{{object}}”: 테이블 속성 하나를 가져오지 않았습니다. {{reason}}",
+        "indexDropped": "테이블 “{{object}}”: 인덱스 “{{part}}”을(를) 가져오지 않았습니다(가져오지 않은 열에 걸려 있거나 BaseCraft가 거부합니다).",
+        "indexDroppedTable": "테이블 “{{object}}”: 다른 인덱스를 가져오지 않았습니다(BaseCraft는 그 이상 허용하지 않습니다).",
+        "structureNotReadTable": "테이블 “{{object}}”: 구조를 적용할 수 없었습니다. 인덱스, 필드 규칙, 기본값, 캡션, 조회 목록은 읽지 않습니다."
       }
     }
   },

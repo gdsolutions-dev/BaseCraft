@@ -3057,6 +3057,8 @@
       "titleSqlServer": "Aus SQL Server importieren",
       "ok": "Importieren",
       "done": "Importierte Tabellen: {{names}}.",
+      "skippedInline": "nicht importierte Spalten: {{names}}",
+
       "skipped": "Nicht importierte Spalten ({{table}}): {{names}}."
     },
     "access": {
@@ -3064,7 +3066,24 @@
       "fileOnly": "Tabellen und ihre Daten werden importiert. Andere Schlüssel als ein AutoWert, Indizes und Feldregeln werden nicht gelesen; Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert.",
       "linked": "Verknüpfte Tabellen dieser Datei werden nicht angeboten: {{names}}.",
       "warnSize": "Diese Datei ist groß: der Import kann einige Zeit dauern.",
-      "missingTables": "Die Datei enthält nicht mehr: {{names}}. Es wurde nichts geändert."
+      "missingTables": "Die Datei enthält nicht mehr: {{names}}. Es wurde nichts geändert.",
+      "structure": "Struktur",
+      "structureAccess": "Exakte Struktur mit Access lesen",
+      "structureFolder": "Exportordner verwenden…",
+      "changeFolder": "Anderen Ordner wählen…",
+      "structureFile": "Nur die Datei",
+      "accessNote": "Access öffnet eine Kopie der Datei, unsichtbar. Von der Datenbank läuft nichts, und die Datei wird nicht geändert.",
+      "keepNote": "Der Ordner enthält die Struktur der Tabellen, den SQL-Text der Abfragen sowie die Formulare, Berichte, Makros und VBA-Module als Text. Er enthält keine Zeile der Tabellen und kein Kennwort der Datenbank.",
+      "keepExport": "Exportordner behalten",
+      "exporting": "Struktur wird mit Access gelesen: {{done}} von {{total}} Objekten",
+      "exportFailed": {
+        "noAccess": "Microsoft Access ist auf diesem Computer nicht verfügbar. Es wurde nichts geändert.",
+        "cannotOpen": "Access konnte die Datei nicht öffnen. Hat sie ein Kennwort, darf es kein Semikolon (;) enthalten. Es wurde nichts geändert.",
+        "timeout": "Access hat nicht rechtzeitig geantwortet. Es wurde nichts geändert.",
+        "failed": "Access konnte die Struktur nicht lesen. Es wurde nichts geändert.",
+        "badFolder": "Dieser Exportordner ist nicht verwendbar: Er ist unvollständig oder kein Export, oder am gewählten Ort existiert bereits ein Ordner mit diesem Namen. Es wurde nichts geändert.",
+        "otherSource": "Dieser Exportordner stammt aus einer anderen Datei. Es wurde nichts geändert."
+      }
     },
     "report": {
       "title": "Importbericht: {{source}}",
@@ -3077,7 +3096,11 @@
       },
       "reason": {
         "tableNotImported": "Eine Tabelle dieser Beziehung wurde nicht importiert.",
-        "violations": "Einige Datensätze haben keinen passenden Datensatz in der Primärtabelle."
+        "violations": "Einige Datensätze haben keinen passenden Datensatz in der Primärtabelle.",
+        "defaultValue": "BaseCraft kann diesen Standardwert nicht beibehalten.",
+        "validationRule": "BaseCraft kann diese Gültigkeitsregel nicht beibehalten.",
+        "inputMask": "BaseCraft kann diese Eingabeformatmaske nicht beibehalten.",
+        "lookup": "BaseCraft kann diese Nachschlageliste nicht beibehalten."
       },
       "line": {
         "tableImported": "Tabelle „{{object}}“: importierte Zeilen: {{n}}.",
@@ -3091,7 +3114,14 @@
         "tableUnsupported": "Tabelle „{{object}}“ nicht importiert. {{reason}}",
         "tableLinked": "Tabelle „{{object}}“ ist eine verknüpfte Tabelle der Access-Datei: sie wird nicht importiert.",
         "relationIgnored": "Beziehung „{{object}}“ der Access-Datei nicht importiert. {{reason}}",
-        "tablesOnly": "Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert."
+        "tablesOnly": "Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert.",
+        "structureExact": "Tabelle „{{object}}“: Schlüssel, Indizes und Feldeigenschaften aus Access gelesen.",
+        "keyApproximated": "Tabelle „{{object}}“: Der Primärschlüssel von Access ({{part}}) wird als eindeutiger Index beibehalten; das AutoWert-Feld bleibt der Primärschlüssel.",
+        "propertyDropped": "Tabelle „{{object}}“, Feld „{{part}}“: Eine Eigenschaft wurde nicht importiert. {{reason}}",
+        "propertyDroppedTable": "Tabelle „{{object}}“: Eine Tabelleneigenschaft wurde nicht importiert. {{reason}}",
+        "indexDropped": "Tabelle „{{object}}“: Index „{{part}}“ nicht importiert (er betrifft eine nicht importierte Spalte, oder BaseCraft lehnt ihn ab).",
+        "indexDroppedTable": "Tabelle „{{object}}“: weitere Indizes wurden nicht importiert (BaseCraft akzeptiert nicht mehr).",
+        "structureNotReadTable": "Tabelle „{{object}}“: Ihre Struktur konnte nicht angewendet werden. Indizes, Feldregeln, Standardwerte, Beschriftungen und Nachschlagelisten werden nicht gelesen."
       }
     }
   },

@@ -106,9 +106,11 @@ test('Query Design › Crosstab: the Crosstab row, a read-only datasheet, Column
     await expect(page.getByTestId('query-props-top')).toHaveCount(0); // no Top, Unique Values or Output All Fields
     await expect(page.getByTestId('query-props-distinct')).toHaveCount(0);
     await expect(page.getByTestId('query-props-outputAll')).toHaveCount(0);
+    await expect(page.getByTestId('doc-tab-query-QVentesMois')).not.toContainText('•');
     await page.getByTestId('query-props-headings').fill('10;9;11');
     await page.getByTestId('query-props-headings').press('Enter');
-    await expect(page.getByTestId('query-props-headings')).toHaveValue('10;9;11'); // committed before the save reads the grid
+    await expect(page.getByTestId('query-props-headings')).toHaveValue('10;9;11');
+    await expect(page.getByTestId('doc-tab-query-QVentesMois')).toContainText('•');   // committed to the query before Ctrl+S
     await save(page);
     expect(await sqlOf(page, 'QVentesMois')).toMatch(/\nPIVOT Month\(\[Le\]\) AS \[Mois\] IN \(10, 9, 11\);$/);
     await page.getByTestId('status-view-datasheet').click();

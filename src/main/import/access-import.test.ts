@@ -7,7 +7,10 @@ import type MDBReader from 'mdb-reader';
 import { localeInfo } from '../../shared/locale-format';
 import { listRelations } from '../db/relations';
 import { registerFunctions, SYSTEM_DDL } from '../db/file-format';
+import { tableDesign } from '../db/schema';
+import type { AccessExport } from '../../shared/access-export';
 import { loadAccessCache, openAccess } from '../links/access';
+import { readAccessExport } from './access-export';
 import { accessRelations, importAccess, PAGE, pageSize, type MSysRelRow } from './access-import';
 
 const FIX = join(__dirname, '../../../tests/fixtures/access');
@@ -20,9 +23,9 @@ const all = (db: DatabaseSync, t: string) => db.prepare(`SELECT * FROM "${t}" OR
 const userTables = (db: DatabaseSync) => (db.prepare(`SELECT name FROM pragma_table_list WHERE schema = 'main' AND name NOT LIKE 'bc\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'`).all() as { name: string }[]).map((r) => r.name);
 
 type Tables = { remote: string; name: string }[];
-const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean } = {}) =>
+const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean; structure?: AccessExport } = {}) =>
   importAccess({ front, r, jet3: o.jet3 ?? false, source: 'Ventes.accdb', tables, linked: o.linked ?? [], info: localeInfo('fr-FR'),
-    tick: async () => {}, stopped: o.stopped ?? (() => false) });
+    tick: async () => {}, stopped: o.stopped ?? (() => false), structure: o.structure });
 
 const row = (o: Partial<MSysRelRow>): MSysRelRow => ({ szRelationship: 'ClientsCommandes', grbit: 0, ccolumn: 1, icolumn: 0,
   szObject: 'Commandes', szColumn: 'Client', szReferencedObject: 'Clients', szReferencedColumn: 'N°', ...o });
@@ -88,6 +91,107 @@ describe('importAccess', () => {
     expect(stopped).toEqual({ ok: false, reason: 'cancelled' });
     expect(userTables(front)).toEqual([]);
     expect((await run(front, open('Ventes.accdb'), [{ remote: 'Clients', name: 'Clients' }])).ok).toBe(true);
+  });
+
+  describe('with the export folder (E2)', () => {
+    const FIXTURE = join(FIX, 'Ventes-complet.export');
+    const present = fs.existsSync(join(FIX, 'Ventes-complet.accdb'));
+    const readExport = (): AccessExport => { const r = readAccessExport(FIXTURE, 'Ventes-complet.accdb'); if (!r.ok) throw new Error(r.reason); return r.export; };
+    const count = (db: DatabaseSync, t: string) => (db.prepare(`SELECT count(*) AS n FROM "${t}"`).get() as { n: number }).n;
+    const pair: Tables = [{ remote: 'Clients', name: 'Clients' }, { remote: 'Commandes', name: 'Commandes' }];
+
+    it.skipIf(!present)('Ventes-complet with its export: keys, the two-field index, rules and the lookup are in the table designs', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'structureExact', object: 'Commandes' });
+      expect(lines).toContainEqual({ code: 'structureExact', object: 'Clients' });
+      expect(lines.some((l) => l.code === 'keyAssumed' || l.code === 'keyNotRead' || l.code === 'structureNotRead')).toBe(false);
+      expect(lines).toContainEqual({ code: 'relationCreated', object: 'ClientsCommandes' });
+      const d = tableDesign(front, 'Commandes');
+      const p = (n: string) => d.fields.find((f) => f.name === n)!.props;
+      expect(d.indexes).toEqual([{ name: 'Idx', unique: true, fields: [{ name: 'Client', desc: false }, { name: 'Le', desc: false }] }]);
+      expect(p('N°').primaryKey).toBe(true);
+      expect(p('Client').required).toBe(true);
+      expect(['N°', 'Montant', 'Le', 'Quantité', 'Remise', 'Poids', 'Taux', 'Lot'].filter((n) => p(n).required)).toEqual([]);
+      expect(p('Client').lookup).toEqual({ kind: 'table', table: 'SELECT [N°], Nom FROM Clients; ', limitToList: true, displayControl: 'comboBox', boundColumn: 1,
+        columnCount: 2, columnHeads: false, columnWidths: [0], listRows: 16, listWidth: 0, allowValueListEdits: false });
+      expect(p('Client').decimalPlaces).toBe('auto');
+      expect(p('Montant')).toMatchObject({ caption: 'Montant TTC', defaultValue: '0', format: '#,##0.00 €;-#,##0.00 €', decimalPlaces: 'auto' });
+      expect(p('Quantité')).toMatchObject({ validationRule: '>0', validationText: 'La quantité doit être positive', defaultValue: '1', decimalPlaces: 'auto' });
+      for (const n of ['Remise', 'Poids', 'Taux', 'Lot']) expect(p(n)).toMatchObject({ defaultValue: '0', decimalPlaces: 'auto' });
+      expect(d.fields.filter((f) => f.props.caption !== undefined).map((f) => f.name)).toEqual(['Montant']);
+      expect(d.fields.filter((f) => f.props.validationRule !== undefined).map((f) => f.name)).toEqual(['Quantité']);
+      // Clients: key, three text fields that take an empty string, the plain Long Text, the Yes/No with its default and format
+      const c = tableDesign(front, 'Clients');
+      const q = (n: string) => c.fields.find((f) => f.name === n)!.props;
+      expect(c.indexes ?? []).toEqual([]);
+      expect(q('N°').primaryKey).toBe(true);
+      for (const n of ['Nom', 'Ville', 'Remarque']) expect(q(n)).toMatchObject({ allowZeroLength: true, required: false });
+      expect(q('Remarque').textFormat).toBe('plain');
+      // a Yes/No default `No` is carried as the literal the table designer stores
+      expect(q('Actif')).toMatchObject({ format: 'Yes/No', defaultValue: 'False' });
+      expect(c.fields.some((f) => f.name === 'Photo')).toBe(false);
+      expect(lines.some((l) => l.code === 'propertyDropped' || l.code === 'indexDropped')).toBe(false);
+      expect(count(front, 'Commandes')).toBe(5);
+    });
+
+    it.skipIf(!present)('a row the carried structure refuses: the table is imported without it and reported', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const tbl = ex.tables.find((t) => t.name === 'Commandes')!;
+      tbl.indexes.push({ name: 'UniqueLot', primary: false, unique: true, foreign: false, fields: [{ name: 'Lot', desc: false }] }); // Lot holds 1 twice
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'structureNotRead', object: 'Commandes' });
+      expect(lines).toContainEqual({ code: 'keyAssumed', object: 'Commandes', part: 'N°' });
+      expect(lines).toContainEqual({ code: 'structureExact', object: 'Clients' });
+      expect(lines.filter((l) => l.code === 'structureNotRead')).toHaveLength(1);
+      expect(count(front, 'Commandes')).toBe(5);
+      expect(tableDesign(front, 'Commandes').fields.find((f) => f.name === 'Lot')!.props.indexed).toBe('no');
+      expect(userTables(front).sort()).toEqual(['Clients', 'Commandes']);
+    });
+
+    it.skipIf(!present)('a structure withStructure cannot apply at all: the table gets the file-only lines and structureNotRead', async () => {
+      const front = memoryBase(); const ex = readExport();
+      ex.tables.find((t) => t.name === 'Commandes')!.validationText = 'x'.repeat(300);
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'keyAssumed', object: 'Commandes', part: 'N°' });
+      expect(lines).toContainEqual({ code: 'structureNotRead', object: 'Commandes' });
+      // The reason withStructure gave comes first, then structureNotRead.
+      const why = lines.findIndex((l) => l.code === 'propertyDropped' && l.object === 'Commandes' && l.part === undefined);
+      expect(why).toBeGreaterThanOrEqual(0);
+      expect(why).toBeLessThan(lines.findIndex((l) => l.code === 'structureNotRead' && l.object === 'Commandes'));
+      expect(lines).not.toContainEqual({ code: 'structureExact', object: 'Commandes' });
+      expect(lines).toContainEqual({ code: 'structureExact', object: 'Clients' });
+      expect(count(front, 'Commandes')).toBe(5);
+    });
+
+    it.skipIf(!present)('a table the export does not hold keeps the file-only level', async () => {
+      const front = memoryBase(); const ex = readExport();
+      ex.tables = ex.tables.filter((t) => t.name !== 'Clients');
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'keyAssumed', object: 'Clients', part: 'N°' });
+      expect(lines).toContainEqual({ code: 'structureExact', object: 'Commandes' });
+      expect(lines.filter((l) => l.code === 'structureNotRead')).toEqual([{ code: 'structureNotRead' }]);
+      expect(lines.slice(-2)).toEqual([{ code: 'structureNotRead' }, { code: 'tablesOnly' }]);
+    });
+
+    it.skipIf(!present)('a table is matched to the export by sameName', async () => {
+      const front = memoryBase(); const ex = readExport();
+      ex.tables.find((t) => t.name === 'Commandes')!.name = 'COMMANDES';
+      const res = await run(front, open('Ventes-complet.accdb'), [{ remote: 'Commandes', name: 'Commandes' }], { structure: ex });
+      expect(res.ok && res.report.lines).toContainEqual({ code: 'structureExact', object: 'Commandes' });
+    });
+
+    it.skipIf(!present)('without structure, the lines are those of the file alone', async () => {
+      const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair);
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines.some((l) => l.code === 'structureExact')).toBe(false);
+      expect(lines).toContainEqual({ code: 'keyAssumed', object: 'Commandes', part: 'N°' });
+      expect(lines.slice(-2)).toEqual([{ code: 'structureNotRead' }, { code: 'tablesOnly' }]);
+    });
   });
 
   // Reader doubles: a table is { columns, rows }; the relationship rows are literal.

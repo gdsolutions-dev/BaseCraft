@@ -2,8 +2,10 @@
 // Elle vit dans le processus de données (db-host/host.ts, un utilityProcess) : le processus principal l'appelle par
 // db-host/client.ts, une file par session, chaque méthode devenant asynchrone.
 import { randomUUID } from 'node:crypto';
-import { realpathSync, renameSync, statSync } from 'node:fs';
-import { basename } from 'node:path';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import type {
   ActionResult, AutoCorrectReport, PropertyItem, PropertyUpdate, CascadeChild, CompactResult, DeleteResult, QueryRef, RunActionOptions, FieldFilter, LinkFileInfo, LinkInfo, LinkResult, LinkState, LogLabels, LookupData, LookupRow, NameChange, ObjectKind, ObjectSummary, ObjRef, OpResult, Relation,
@@ -33,7 +35,9 @@ import {
 import { splitDatabase } from './db/split';
 import { importTables } from './migrate/import';
 import { importAccess } from './import/access-import';
-import type { AccessImportInfo, AccessImportResult } from '../shared/access-import';
+import { hasAccess, readAccessExport, runAccessExport } from './import/access-export';
+import type { AccessExport } from '../shared/access-export';
+import type { AccessImportInfo, AccessImportResult, AccessStructureSource } from '../shared/access-import';
 import { copyRows, deleteRowsWithMacros, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
 import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
@@ -136,6 +140,7 @@ export class Session {
   private readonly info: LocaleInfo;
   private accessImporting = false;
   private stopAccessImport = false;
+  private exportAbort: AbortController | null = null; // the running Access export, ended by interrupt()
   private readonly openFile: typeof openBaseFile;
   /** Write sequence of the cached query totals and sorted-order snapshots (readRows): moved by writeDb(), by another connection's commit, by a new connection. */
   private seq = 0;
@@ -984,7 +989,7 @@ export class Session {
   /** R12 (Stop): called out of db-host's queue, while another call runs: cancels the running remote statement (true), never
    *  touches the base. False: nothing remote running (a local query is stopped by the kill). */
   async interrupt(): Promise<boolean> {
-    if (this.accessImporting) { this.stopAccessImport = true; return true; } // read between two pages of the import
+    if (this.accessImporting) { this.stopAccessImport = true; this.exportAbort?.abort(); return true; } // the flag is read between two pages of the import
     return this.remote.interrupt();
   }
   /** Convert to Local Table (R12), one front-end transaction: the link removed first (PF16: createTable refuses a link's name),
@@ -1560,12 +1565,17 @@ export class Session {
         ...(t.skipped.length ? { skipped: t.skipped } : {}), ...(t.unsupported ? { unsupported: t.unsupported } : {}) })),
       linked: r.getTableNames({ normalTables: false, linkedTables: true }),
       warnSize: statSync(path).size > ACCESS_WARN_BYTES,
+      canExport: hasAccess(),
     };
   }
 
   /** Imports `remotes` (names inspectAccessImport offered) of the Access file `path` into local tables, in one transaction. One the
-   *  file no longer holds, or BaseCraft cannot hold: missingTables, nothing created. Stop: interrupt() sets the flag read between pages. */
-  async importAccessTables(path: string, remotes: string[], tick: (p: ImportProgress) => Promise<void> = async () => {}): Promise<AccessImportResult> {
+   *  file no longer holds, or BaseCraft cannot hold: missingTables, nothing created. Stop: interrupt() sets the flag read between pages
+   *  and ends a running export. `structure` (batch E2): the exact structure from Microsoft Access (`script`: access-export.ps1's path, given
+   *  by the main process; the export runs in a temporary folder, deleted on every path, and is copied to `keepDir` first when given) or
+   *  from an export folder; a refusal is `export` and nothing is created. */
+  async importAccessTables(path: string, remotes: string[], tick: (p: ImportProgress) => Promise<void> = async () => {},
+    structure?: AccessStructureSource, keepDir?: string, script?: string): Promise<AccessImportResult> {
     const front = this.structureDb();
     const { r, jet3 } = this.links.accessReader(path);
     const found = inspectAccess(r);
@@ -1576,10 +1586,44 @@ export class Session {
     const names = this.freeNames(wanted);
     this.stopAccessImport = false;
     this.accessImporting = true;
+    let temp: string | undefined;
     try {
+      let exported: AccessExport | undefined;
+      if (structure?.kind === 'folder') {
+        const read = readAccessExport(structure.dir, basename(path));
+        if (!read.ok) return { ok: false, reason: 'export', failure: read.reason };
+        exported = read.export;
+      } else if (structure?.kind === 'access') {
+        if (!script || !hasAccess()) return { ok: false, reason: 'export', failure: 'noAccess' };
+        const kept = keepDir === undefined ? undefined : join(keepDir, `${basename(path)}.export`);
+        if (kept !== undefined && existsSync(kept)) return { ok: false, reason: 'export', failure: 'badFolder' };
+        temp = mkdtempSync(join(tmpdir(), 'basecraft-export-'));
+        const out = join(temp, 'out');
+        mkdirSync(out);
+        this.exportAbort = new AbortController();
+        const run = await runAccessExport({ script, source: path, out, password: this.links.accessPassword(path), signal: this.exportAbort.signal,
+          tick: (done, total) => void tick({ done, total, label: 'import.access.exporting' }) });
+        const stopped = this.exportAbort.signal.aborted;
+        this.exportAbort = null;
+        if (stopped) return { ok: false, reason: 'cancelled' };
+        if (!run.ok) return { ok: false, reason: 'export', failure: run.reason };
+        const read = readAccessExport(out, basename(path));
+        if (!read.ok) return { ok: false, reason: 'export', failure: read.reason };
+        exported = read.export;
+        if (kept !== undefined) {
+          try { cpSync(out, kept, { recursive: true, errorOnExist: true, force: false }); } catch {
+            rmSync(kept, { recursive: true, force: true });
+            return { ok: false, reason: 'export', failure: 'failed' }; // permissions, disk full: not the existing-folder case
+          }
+        }
+      }
       return await importAccess({ front, r, jet3, source: basename(path), tables: wanted.map((remote, i) => ({ remote, name: names[i]! })),
-        linked: r.getTableNames({ normalTables: false, linkedTables: true }), info: this.info, tick, stopped: () => this.stopAccessImport });
+        linked: r.getTableNames({ normalTables: false, linkedTables: true }), info: this.info, tick, stopped: () => this.stopAccessImport,
+        ...(exported ? { structure: exported } : {}) });
     } finally {
+      this.exportAbort = null;
+      // Access may still hold its copy for a moment after being ended: the async rm retries (rmSync does not). Best effort.
+      if (temp) await rm(temp, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }).catch(() => undefined);
       this.accessImporting = false;
       this.seq++; // tables were created
     }

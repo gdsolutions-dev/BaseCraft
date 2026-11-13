@@ -17,7 +17,7 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
   CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember, // C4: the server link dialog
   CH.migrateRun, CH.migrateImport, // C7 R1, R17
-  CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport, // E1: External Data › Import › Access
+  CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport, CH.accessImportPickExport, // E1: External Data › Import › Access
 ]);
 
 export const isDesignChannel = (ch: string): boolean => DESIGN_CHANNELS.has(ch);

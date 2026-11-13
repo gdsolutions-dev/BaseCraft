@@ -266,6 +266,11 @@ export class LinkedSources {
     return { r, jet3: isJet3(r) };
   }
 
+  /** This session's password for the Access file `p`, for the export script's stdin (batch E2); never returned to the renderer. */
+  accessPassword(p: string): string | undefined {
+    return this.passwords.get(realKey(p));
+  }
+
   /** inspectSource with this session's password for `p` (C2 R7). */
   inspect(p: string): { kind: SourceKind; tables: SourceTable[] } {
     return inspectSource(p, this.deps.appVersion, this.passwords.get(realKey(p)));

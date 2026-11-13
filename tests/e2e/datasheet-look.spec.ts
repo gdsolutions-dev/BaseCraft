@@ -112,8 +112,8 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await expect(page.locator('#portal textarea')).toHaveValue(/^12345678,9/);
     await page.keyboard.press('Escape');
     const montantOn = await shot(colLeft(2), colLeft(2) + 41);   // selected
-    await dragEdge(colLeft(2) + 41, colLeft(2) + 150);   // widened: the value again
-    expect((await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
+    await dragEdge(colLeft(2) + 41, colLeft(2) + 150);   // widened: the value again (polled: the grid redraws after the drag)
+    await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
 
     // unticked, a datasheet opened afterwards shows the value (clipped on screen): not the #### drawn above
     await page.getByTestId('ribbon-tab-file').click();

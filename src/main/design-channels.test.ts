@@ -42,7 +42,7 @@ describe('design channels', () => {
     expect(isDesignChannel(CH.linksUnlock)).toBe(false); // C2 R7: Runtime users unlock too
   });
   it('the Access import is design (E1: absent from the Runtime)', () => {
-    for (const ch of [CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport]) expect(isDesignChannel(ch)).toBe(true);
+    for (const ch of [CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport, CH.accessImportPickExport]) expect(isDesignChannel(ch)).toBe(true);
   });
   it('the server migration is a design channel (C7 R1: absent from the Runtime)', () => {
     expect(isDesignChannel(CH.migrateRun)).toBe(true);

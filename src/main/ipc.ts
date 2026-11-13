@@ -18,11 +18,12 @@ import { isDesignChannel } from './design-channels';
 import { pickSpellLanguage } from './spellcheck';
 import { DbHost, type AsyncSession } from './db-host/client';
 import type { HostEvent, HostOpen } from './db-host/protocol';
+import { accessExportScript } from './app-protocol';
 import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickSavePath, pickTextPath, showNotice } from './dialogs';
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
   relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
@@ -68,6 +69,8 @@ let importing = false;
 const chosenImports = new Set<string>();
 /** Files the user chose in the link dialog (C1): the only ones inspect, create and relink accept. */
 const chosenLinks = new Set<string>();
+/** Folders the user chose for an Access export (E2): the only ones accessImport.run accepts as an export folder or as where to keep one. */
+const chosenExports = new Set<string>();
 /** Data files the user chose in the split's save dialog (C3 R13): the only targets base.split accepts. */
 const chosenSplit = new Set<string>();
 
@@ -774,10 +777,17 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   });
   // E1: the path is one links.pick returned; the file is only read. Progress and Stop as the other imports.
   handle(CH.accessImportInspect, (p) => need().inspectAccessImport(linkPath(p, chosenLinks)));
-  handle(CH.accessImportRun, async (p, n) => {
+  handle(CH.accessImportRun, async (p, n, st, keep) => {
     const path = linkPath(p, chosenLinks); const names = nameList(n);
+    const structure = accessStructure(st, chosenExports); const keepDir = exportKeepDir(keep, chosenExports);
     await whenIdle();
-    return runImport(() => need().importAccessTables(path, names));
+    // The script's path is the main process's own, never the renderer's.
+    return runImport(() => need().importAccessTables(path, names, undefined, structure, keepDir, accessExportScript()));
+  });
+  handle(CH.accessImportPickExport, async () => {
+    const p = await startDir().then((d) => pickFolder(d, 'BASECRAFT_E2E_EXPORT_DIR'));
+    if (p !== null) chosenExports.add(p);
+    return p;
   });
   handle(CH.accessImportSaveReport, async (t, n) => {
     const text = reportBody(t); const name = bareFileName(n);

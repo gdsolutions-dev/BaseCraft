@@ -57,6 +57,8 @@ const openImport = async (page: Page) => {
   await page.getByTestId('ribbon-tab-externalData').click();
   await page.getByTestId('cmd-importAccess').click();
 };
+/** E1 is the file-only import: this PC may have Access, which would be the default choice (batch E2). */
+const fileOnly = (page: Page) => page.getByTestId('import-structure-file').check();
 /** Past the password prompt of a protected file. */
 async function password(page: Page) {
   await page.getByTestId('modal-input').fill(ACCESS_PASSWORD);
@@ -73,6 +75,7 @@ for (const file of ['Ventes.accdb', 'Ventes.mdb', 'Ventes-mdp.accdb', 'Ventes-md
     try {
       await openImport(page);
       if (locked) await password(page);
+      await fileOnly(page);
       for (const n of ['Clients', 'Commandes', 'Divers']) await page.getByTestId(`link-table-${n}`).check();
       await page.getByTestId('link-ok').click();
       const report = page.getByTestId('import-report');
@@ -122,6 +125,7 @@ test('recette E1: a second import offers Clients1; a stopped import leaves the N
     env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: join(dir, 'Ventes.accdb'), BASECRAFT_E2E_IMPORT_PAGE: '1' } });
   try {
     await openImport(page);
+    await fileOnly(page);
     for (const n of ['Clients', 'Commandes', 'Divers']) await page.getByTestId(`link-table-${n}`).check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('import-report')).toBeVisible();
@@ -146,6 +150,7 @@ test('recette E1: a second import offers Clients1; a stopped import leaves the N
 
     // third import succeeds
     await openImport(page);
+    await fileOnly(page);
     await page.getByTestId('link-table-Clients1').check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('import-report')).toContainText(fr.import.server.done.replace('{{names}}', 'Clients1'));

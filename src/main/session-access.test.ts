@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import fs, { copyFileSync, existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs, { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
 import { createBaseFile, openBaseFile } from './db/file-format';
@@ -8,6 +8,14 @@ import { createTable } from './db/schema';
 import { ReadOnlyError, Session, type SessionDeps } from './session';
 import { f, t } from '../shared/test-fixtures';
 import { ACCESS_PASSWORD } from '../../tests/fixtures/access/expected';
+import { hasAccess } from './import/access-export';
+
+// E2: `noAccess` makes hasAccess() answer false, as on a PC without Microsoft Access.
+let noAccess = false;
+vi.mock('./import/access-export', async (orig) => {
+  const real = await orig<typeof import('./import/access-export')>();
+  return { ...real, hasAccess: () => !noAccess && real.hasAccess() };
+});
 
 // C2 Task 3: a front-end with a local Notes; Ventes.accdb (`access`) and Ventes-mdp.accdb (`protectedCopy`) copied beside it.
 const fixture = (name: string) => join(__dirname, '../../tests/fixtures/access', name);
@@ -202,5 +210,40 @@ describe('Access import in the session (E1 Task 3)', () => {
     const ro = Session.open(fe, { ...deps, sessionId: 'b' }); opened.push(ro); // s holds the lock: this one is read-only
     expect(ro.state.readOnly).toBe(true);
     await expect(ro.importAccessTables(access, ['Clients'])).rejects.toThrow();
+  });
+});
+
+describe('Access import with the exact structure (E2 Task 4)', () => {
+  const FIXTURE = join(__dirname, '../../tests/fixtures/access/Ventes-complet.export');
+  const COMPLET = join(__dirname, '../../tests/fixtures/access/Ventes-complet.accdb');
+  const present = existsSync(COMPLET);
+  const tableNames = () => s.listTables().map((x) => x.name);
+  let complet: string;
+  beforeEach(() => { noAccess = false; complet = join(dir, 'Ventes-complet.accdb'); if (present) copyFileSync(COMPLET, complet); });
+
+  it('inspectAccessImport tells whether this PC can export', () => {
+    expect(s.inspectAccessImport(access).canExport).toBe(hasAccess());
+    noAccess = true;
+    expect(s.inspectAccessImport(access).canExport).toBe(false);
+  });
+  it.skipIf(!present)('a folder export gives the exact structure', async () => {
+    const r = await s.importAccessTables(complet, ['Commandes', 'Clients'], undefined, { kind: 'folder', dir: FIXTURE });
+    expect(r.ok && r.report.lines).toContainEqual({ code: 'structureExact', object: 'Commandes' });
+  });
+  it.skipIf(!present)('a folder made from another file, and a broken one, create nothing', async () => {
+    const before = tableNames();
+    const emptyDir = join(dir, 'empty'); mkdirSync(emptyDir);
+    expect(await s.importAccessTables(access, ['Clients'], undefined, { kind: 'folder', dir: FIXTURE })).toEqual({ ok: false, reason: 'export', failure: 'otherSource' });
+    expect(await s.importAccessTables(complet, ['Clients'], undefined, { kind: 'folder', dir: emptyDir })).toEqual({ ok: false, reason: 'export', failure: 'badFolder' });
+    expect(tableNames()).toEqual(before);
+  });
+  it('kind access without Access: failure noAccess, nothing created, no temporary folder', async () => {
+    noAccess = true;
+    const before = tableNames();
+    const tmps = () => readdirSync(os.tmpdir()).filter((n) => n.startsWith('basecraft-export-'));
+    const left = tmps();
+    expect(await s.importAccessTables(access, ['Clients'], undefined, { kind: 'access' }, undefined, 'script.ps1')).toEqual({ ok: false, reason: 'export', failure: 'noAccess' });
+    expect(tableNames()).toEqual(before);
+    expect(tmps()).toEqual(left);
   });
 });

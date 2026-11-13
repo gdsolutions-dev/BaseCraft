@@ -52,7 +52,8 @@ export function ImportBusy({ progress }: { progress: ImportProgress | null }) {
   const hold = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } };
   return (
     <div ref={ref} tabIndex={-1} data-testid="import-progress" className="migrate-progress" onKeyDown={hold}>
-      <p className="modal-message" role="status">{progress?.label ? t('migrate.progress', { table: progress.label, done: progress.done, total: progress.total }) : t('migrate.connecting')}</p>
+      <p className="modal-message" role="status">{progress?.label?.startsWith('import.') ? t(progress.label, { done: progress.done, total: progress.total }) // E2: the label is a text key (the export's steps)
+          : progress?.label ? t('migrate.progress', { table: progress.label, done: progress.done, total: progress.total }) : t('migrate.connecting')}</p>
       <progress max={progress?.total || 1} value={progress?.done ?? 0} />
       <div className="modal-buttons">
         <button type="button" className="btn" data-testid="import-stop" disabled={stopping}
@@ -128,7 +129,7 @@ export function ServerLinkDialog({ kind, initial, relink, pick, importing, onClo
       } finally { off(); }
     };
     return <LinkForm server header={<SourceHeader path={info.server.label} kind={kind} />} tables={info.server.tables} create={create}
-      okKey="import.server.ok" busyNote={<ImportBusy progress={progress} />} onClose={(v) => { if (v === null) onClose(null); }} />;
+      okKey="import.server.ok" skippedKey="import.server.skippedInline" busyNote={<ImportBusy progress={progress} />} onClose={(v) => { if (v === null) onClose(null); }} />;
   }
   if (info) {
     return <LinkForm server header={<SourceHeader path={info.server.label} kind={kind} />} tables={info.server.tables}

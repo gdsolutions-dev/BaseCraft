@@ -30,6 +30,15 @@ BaseCraft recupera la forma de construir pequeñas aplicaciones de datos al esti
 
 > **Estado: desarrollo temprano.** Las etapas A a D están completas en la versión preliminar 0.5.0, y la etapa F (últimas funciones de diseño de formularios e informes) está en curso: orden de tabulación, temas, imágenes y gráficos están hechos. Se esperan cambios incompatibles antes de la 1.0.
 
+## Capturas de pantalla
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formulario con subformulario" width="440"><br><sub>Formulario con subformulario</sub></td><td align="center"><img src="../images/report-preview.png" alt="Vista previa de informe con agrupación y subtotales" width="440"><br><sub>Vista previa de informe con agrupación y subtotales</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Vista Diseño de informe y hoja de propiedades" width="440"><br><sub>Vista Diseño de informe y hoja de propiedades</sub></td><td align="center"><img src="../images/query-design.png" alt="Diseño de consulta" width="440"><br><sub>Diseño de consulta</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relaciones" width="440"><br><sub>Relaciones</sub></td><td align="center"><img src="../images/datasheet.png" alt="Hoja de datos ordenada y filtrada" width="440"><br><sub>Hoja de datos ordenada y filtrada</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Diseñador de macros y catálogo de acciones" width="440"><br><sub>Diseñador de macros y catálogo de acciones</sub></td></tr>
+</table>
+
 ## Por qué
 
 Quienes gestionan datos estructurados en el escritorio suelen acabar con:

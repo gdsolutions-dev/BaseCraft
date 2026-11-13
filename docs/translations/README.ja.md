@@ -30,6 +30,15 @@ BaseCraft は、テーブル、クエリ、フォーム、レポート、マク�
 
 > **ステータス: 開発初期段階。** ステージ A から D はプレビュー版 0.5.0 で完了しており、ステージ F（フォームとレポートのデザイン機能の仕上げ）が進行中です。タブオーダー、テーマ、画像、グラフは完了しています。1.0 より前に互換性のない変更が入る可能性があります。
 
+## スクリーンショット
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="サブフォーム付きのフォーム" width="440"><br><sub>サブフォーム付きのフォーム</sub></td><td align="center"><img src="../images/report-preview.png" alt="グループ化と小計を含むレポートのプレビュー" width="440"><br><sub>グループ化と小計を含むレポートのプレビュー</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="レポートのデザインビューとプロパティシート" width="440"><br><sub>レポートのデザインビューとプロパティシート</sub></td><td align="center"><img src="../images/query-design.png" alt="クエリのデザイン" width="440"><br><sub>クエリのデザイン</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="リレーションシップ" width="440"><br><sub>リレーションシップ</sub></td><td align="center"><img src="../images/datasheet.png" alt="並べ替えとフィルターを適用したデータシート" width="440"><br><sub>並べ替えとフィルターを適用したデータシート</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="マクロデザイナーとアクションカタログ" width="440"><br><sub>マクロデザイナーとアクションカタログ</sub></td></tr>
+</table>
+
 ## 背景
 
 デスクトップで構造化データを管理する人は、たいてい次のどちらかに行き着きます。

@@ -30,6 +30,15 @@ BaseCraft riporta il modo di Access di costruire piccole applicazioni di dati �
 
 > **Stato: sviluppo iniziale.** Le fasi da A a D sono complete nell'anteprima 0.5.0, e la fase F (ultime funzioni di progettazione di maschere e report) è in corso: ordine di tabulazione, temi, immagini e grafici sono fatti. Aspettati modifiche incompatibili prima della 1.0.
 
+## Schermate
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Maschera con sottomaschera" width="440"><br><sub>Maschera con sottomaschera</sub></td><td align="center"><img src="../images/report-preview.png" alt="Anteprima di report con raggruppamento e subtotali" width="440"><br><sub>Anteprima di report con raggruppamento e subtotali</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Struttura del report e finestra delle proprietà" width="440"><br><sub>Struttura del report e finestra delle proprietà</sub></td><td align="center"><img src="../images/query-design.png" alt="Struttura della query" width="440"><br><sub>Struttura della query</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relazioni" width="440"><br><sub>Relazioni</sub></td><td align="center"><img src="../images/datasheet.png" alt="Foglio dati ordinato e filtrato" width="440"><br><sub>Foglio dati ordinato e filtrato</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Progettazione macro e catalogo azioni" width="440"><br><sub>Progettazione macro e catalogo azioni</sub></td></tr>
+</table>
+
 ## Perché
 
 Chi gestisce dati strutturati sul desktop di solito finisce con:

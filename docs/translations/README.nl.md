@@ -30,6 +30,15 @@ BaseCraft brengt de Access-manier van kleine gegevenstoepassingen bouwen terug �
 
 > **Status: vroege ontwikkeling.** Fase A tot en met D zijn voltooid in preview 0.5.0, en fase F (laatste ontwerpfuncties voor formulieren en rapporten) is bezig: tabvolgorde, thema's, afbeeldingen en grafieken zijn klaar. Verwacht brekende wijzigingen vóór 1.0.
 
+## Schermafbeeldingen
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formulier met subformulier" width="440"><br><sub>Formulier met subformulier</sub></td><td align="center"><img src="../images/report-preview.png" alt="Rapportvoorbeeld met groepering en subtotalen" width="440"><br><sub>Rapportvoorbeeld met groepering en subtotalen</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Ontwerpweergave van een rapport met eigenschappenvenster" width="440"><br><sub>Ontwerpweergave van een rapport met eigenschappenvenster</sub></td><td align="center"><img src="../images/query-design.png" alt="Queryontwerp" width="440"><br><sub>Queryontwerp</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relaties" width="440"><br><sub>Relaties</sub></td><td align="center"><img src="../images/datasheet.png" alt="Gegevensblad, gesorteerd en gefilterd" width="440"><br><sub>Gegevensblad, gesorteerd en gefilterd</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Macro-ontwerper en actiecatalogus" width="440"><br><sub>Macro-ontwerper en actiecatalogus</sub></td></tr>
+</table>
+
 ## Waarom
 
 Wie op een desktop gestructureerde gegevens beheert, belandt meestal bij:

@@ -30,6 +30,15 @@ BaseCraft retrouve la manière Access de construire de petites applications de d
 
 > **État : développement précoce.** Les étapes A à D sont terminées dans la préversion 0.5.0, et l'étape F (dernières fonctions de conception des formulaires et états) est en cours : ordre de tabulation, thèmes, images et graphiques sont faits. Attendez-vous à des changements incompatibles avant la 1.0.
 
+## Captures d'écran
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formulaire avec sous-formulaire" width="440"><br><sub>Formulaire avec sous-formulaire</sub></td><td align="center"><img src="../images/report-preview.png" alt="Aperçu d'un état avec regroupement et sous-totaux" width="440"><br><sub>Aperçu d'un état avec regroupement et sous-totaux</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Mode Création d'un état et feuille de propriétés" width="440"><br><sub>Mode Création d'un état et feuille de propriétés</sub></td><td align="center"><img src="../images/query-design.png" alt="Création de requête" width="440"><br><sub>Création de requête</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relations" width="440"><br><sub>Relations</sub></td><td align="center"><img src="../images/datasheet.png" alt="Feuille de données triée et filtrée" width="440"><br><sub>Feuille de données triée et filtrée</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Concepteur de macros et catalogue d'actions" width="440"><br><sub>Concepteur de macros et catalogue d'actions</sub></td></tr>
+</table>
+
 ## Pourquoi
 
 Les personnes qui gèrent des données structurées sur un poste de bureau finissent généralement avec :

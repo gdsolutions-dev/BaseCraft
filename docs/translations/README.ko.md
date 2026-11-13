@@ -30,6 +30,15 @@ BaseCraft는 작은 데이터 애플리케이션을 만드는 Access 방식(테�
 
 > **상태: 초기 개발 단계.** A~D 단계는 프리뷰 0.5.0에서 완료되었고, F 단계(폼과 보고서 디자인 기능 마무리)가 진행 중입니다. 탭 순서, 테마, 이미지, 차트가 완료되었습니다. 1.0 이전에는 호환성을 깨는 변경이 있을 수 있습니다.
 
+## 스크린샷
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="하위 폼이 있는 폼" width="440"><br><sub>하위 폼이 있는 폼</sub></td><td align="center"><img src="../images/report-preview.png" alt="그룹화와 소계가 있는 보고서 미리 보기" width="440"><br><sub>그룹화와 소계가 있는 보고서 미리 보기</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="보고서 디자인 보기와 속성 시트" width="440"><br><sub>보고서 디자인 보기와 속성 시트</sub></td><td align="center"><img src="../images/query-design.png" alt="쿼리 디자인" width="440"><br><sub>쿼리 디자인</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="관계" width="440"><br><sub>관계</sub></td><td align="center"><img src="../images/datasheet.png" alt="정렬 및 필터를 적용한 데이터시트" width="440"><br><sub>정렬 및 필터를 적용한 데이터시트</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="매크로 디자이너와 작업 카탈로그" width="440"><br><sub>매크로 디자이너와 작업 카탈로그</sub></td></tr>
+</table>
+
 ## 왜 BaseCraft인가
 
 데스크톱에서 정형 데이터를 다루는 사람들은 대개 이런 상황에 놓입니다.

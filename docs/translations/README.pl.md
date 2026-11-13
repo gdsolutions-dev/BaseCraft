@@ -30,6 +30,15 @@ BaseCraft przywraca sposób budowania małych aplikacji danych znany z Accessa �
 
 > **Status: wczesny etap rozwoju.** Etapy od A do D są ukończone w wersji zapoznawczej 0.5.0, a etap F (ostatnie funkcje projektowania formularzy i raportów) jest w toku: kolejność tabulacji, motywy, obrazy i wykresy są gotowe. Przed wersją 1.0 spodziewaj się zmian łamiących zgodność.
 
+## Zrzuty ekranu
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formularz z podformularzem" width="440"><br><sub>Formularz z podformularzem</sub></td><td align="center"><img src="../images/report-preview.png" alt="Podgląd raportu z grupowaniem i sumami częściowymi" width="440"><br><sub>Podgląd raportu z grupowaniem i sumami częściowymi</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Widok projektu raportu i arkusz właściwości" width="440"><br><sub>Widok projektu raportu i arkusz właściwości</sub></td><td align="center"><img src="../images/query-design.png" alt="Projekt kwerendy" width="440"><br><sub>Projekt kwerendy</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relacje" width="440"><br><sub>Relacje</sub></td><td align="center"><img src="../images/datasheet.png" alt="Arkusz danych posortowany i przefiltrowany" width="440"><br><sub>Arkusz danych posortowany i przefiltrowany</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Projektant makr i katalog akcji" width="440"><br><sub>Projektant makr i katalog akcji</sub></td></tr>
+</table>
+
 ## Dlaczego
 
 Osoby zarządzające danymi strukturalnymi na komputerze zwykle trafiają na:

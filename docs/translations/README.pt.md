@@ -30,6 +30,15 @@ O BaseCraft traz de volta o jeito Access de criar pequenos aplicativos de dados 
 
 > **Status: desenvolvimento inicial.** As etapas A a D estão concluídas na prévia 0.5.0, e a etapa F (últimos recursos de design de formulários e relatórios) está em andamento: ordem de tabulação, temas, imagens e gráficos estão prontos. Espere mudanças incompatíveis antes da 1.0.
 
+## Capturas de tela
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formulário com subformulário" width="440"><br><sub>Formulário com subformulário</sub></td><td align="center"><img src="../images/report-preview.png" alt="Visualização de relatório com agrupamento e subtotais" width="440"><br><sub>Visualização de relatório com agrupamento e subtotais</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Modo Design de relatório e folha de propriedades" width="440"><br><sub>Modo Design de relatório e folha de propriedades</sub></td><td align="center"><img src="../images/query-design.png" alt="Design de consulta" width="440"><br><sub>Design de consulta</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Relações" width="440"><br><sub>Relações</sub></td><td align="center"><img src="../images/datasheet.png" alt="Folha de dados ordenada e filtrada" width="440"><br><sub>Folha de dados ordenada e filtrada</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Designer de macros e catálogo de ações" width="440"><br><sub>Designer de macros e catálogo de ações</sub></td></tr>
+</table>
+
 ## Por quê
 
 Quem gerencia dados estruturados no desktop costuma acabar com:

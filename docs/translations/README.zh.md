@@ -30,6 +30,15 @@ BaseCraft 重现了 Access 构建小型数据应用的方式——表、查询�
 
 > **状态：早期开发中。** 阶段 A 至 D 已在预览版 0.5.0 中完成，阶段 F（窗体和报表设计的最后功能）正在进行：Tab 键次序、主题、图像和图表已完成。1.0 之前可能出现不兼容的变更。
 
+## 截图
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="带子窗体的窗体" width="440"><br><sub>带子窗体的窗体</sub></td><td align="center"><img src="../images/report-preview.png" alt="含分组与小计的报表预览" width="440"><br><sub>含分组与小计的报表预览</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="报表设计视图与属性表" width="440"><br><sub>报表设计视图与属性表</sub></td><td align="center"><img src="../images/query-design.png" alt="查询设计" width="440"><br><sub>查询设计</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="关系" width="440"><br><sub>关系</sub></td><td align="center"><img src="../images/datasheet.png" alt="已排序并筛选的数据表" width="440"><br><sub>已排序并筛选的数据表</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="宏设计器与操作目录" width="440"><br><sub>宏设计器与操作目录</sub></td></tr>
+</table>
+
 ## 为什么做 BaseCraft
 
 在桌面上管理结构化数据的人，通常最终会面对：

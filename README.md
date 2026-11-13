@@ -30,6 +30,15 @@ BaseCraft brings back the Access way of building small data applications — tab
 
 > **Status: early development.** Stages A to D are complete in preview 0.5.0, and stage F (last form and report design features) is under way: tab order, themes, images and charts are done. Expect breaking changes before 1.0.
 
+## Screenshots
+
+<table>
+<tr><td align="center"><img src="docs/images/orders-form.png" alt="Form with a subform" width="440"><br><sub>Form with a subform</sub></td><td align="center"><img src="docs/images/report-preview.png" alt="Report preview with grouping and subtotals" width="440"><br><sub>Report preview with grouping and subtotals</sub></td></tr>
+<tr><td align="center"><img src="docs/images/report-design.png" alt="Report Design view and Property Sheet" width="440"><br><sub>Report Design view and Property Sheet</sub></td><td align="center"><img src="docs/images/query-design.png" alt="Query Design" width="440"><br><sub>Query Design</sub></td></tr>
+<tr><td align="center"><img src="docs/images/relationships.png" alt="Relationships" width="440"><br><sub>Relationships</sub></td><td align="center"><img src="docs/images/datasheet.png" alt="Datasheet, sorted and filtered" width="440"><br><sub>Datasheet, sorted and filtered</sub></td></tr>
+<tr><td align="center"><img src="docs/images/macro-designer.png" alt="Macro Designer and Action Catalog" width="440"><br><sub>Macro Designer and Action Catalog</sub></td></tr>
+</table>
+
 ## Why
 
 People who manage structured data on a desktop usually end up with:

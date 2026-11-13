@@ -30,6 +30,15 @@ BaseCraft bringt die Access-Art, kleine Datenanwendungen zu bauen, zurück – T
 
 > **Status: frühe Entwicklung.** Die Stufen A bis D sind in der Vorschauversion 0.5.0 abgeschlossen, und Stufe F (letzte Entwurfsfunktionen für Formulare und Berichte) läuft: Aktivierreihenfolge, Designs, Bilder und Diagramme sind fertig. Bis 1.0 sind inkompatible Änderungen zu erwarten.
 
+## Screenshots
+
+<table>
+<tr><td align="center"><img src="../images/orders-form.png" alt="Formular mit Unterformular" width="440"><br><sub>Formular mit Unterformular</sub></td><td align="center"><img src="../images/report-preview.png" alt="Berichtsvorschau mit Gruppierung und Zwischensummen" width="440"><br><sub>Berichtsvorschau mit Gruppierung und Zwischensummen</sub></td></tr>
+<tr><td align="center"><img src="../images/report-design.png" alt="Berichtsentwurf und Eigenschaftenblatt" width="440"><br><sub>Berichtsentwurf und Eigenschaftenblatt</sub></td><td align="center"><img src="../images/query-design.png" alt="Abfrageentwurf" width="440"><br><sub>Abfrageentwurf</sub></td></tr>
+<tr><td align="center"><img src="../images/relationships.png" alt="Beziehungen" width="440"><br><sub>Beziehungen</sub></td><td align="center"><img src="../images/datasheet.png" alt="Datenblatt, sortiert und gefiltert" width="440"><br><sub>Datenblatt, sortiert und gefiltert</sub></td></tr>
+<tr><td align="center"><img src="../images/macro-designer.png" alt="Makro-Designer und Aktionskatalog" width="440"><br><sub>Makro-Designer und Aktionskatalog</sub></td></tr>
+</table>
+
 ## Warum
 
 Wer strukturierte Daten am Desktop verwaltet, landet meist bei:

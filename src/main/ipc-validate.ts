@@ -274,6 +274,12 @@ export function themeApplyArgs(t: unknown, kind: unknown, names: unknown): { the
   return { theme: themeArg(t), kind, names: names as string[] };
 }
 
+/** The Navigation Pane options to save: a plain object; the main process re-reads it through readNavOptions. */
+export function navOptionsArg(v: unknown): Record<string, unknown> {
+  if (!isObj(v)) bad();
+  return v;
+}
+
 /** The startup options to save: exactly the twenty-four keys, each of its exact type, and already in the form readStartup reads back
  *  (a title that cleanTitle would change, an icon that is no PNG, a form that is no object name are refused, never repaired). */
 export function startupOptions(v: unknown): StartupOptions {
@@ -436,6 +442,10 @@ export function accessStructure(v: unknown, chosen: ReadonlySet<string>): Access
 }
 /** Where the export folder is kept (E2): none, or a folder `pickExport` returned. */
 export const exportKeepDir = (v: unknown, chosen: ReadonlySet<string>): string | undefined => (v === undefined ? undefined : typeof v === 'string' && chosen.has(v) ? v : bad());
+/** Whether the saved queries come along (E3): absent or a boolean. */
+export const exportQueries = (v: unknown): boolean | undefined => (v === undefined || typeof v === 'boolean' ? v : bad());
+/** Whether the forms and reports come along (E4): the same rule. */
+export const exportDesigns = exportQueries;
 /** A default file name for a save dialog: a bare name (no folder), 1 to 255 characters. */
 export const bareFileName = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 255 && !/[\\/]/.test(v) ? v : bad());
 /** The split's data file (C3 R13): as linkPath, a path its save dialog returned, absolute; it need not exist yet. */

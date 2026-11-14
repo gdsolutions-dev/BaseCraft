@@ -3,12 +3,14 @@
 // fonctions pas encore livrées (A6, plus tard) sont des emplacements désactivés dont l'info-bulle nomme le lot (comme le ruban).
 // Les lots A3, A4, A5 remplacent Ouvrir et Mode création de leurs objets en inscrivant les mêmes id (ces éléments sont des
 // replis : un lot l'emporte quel que soit l'ordre d'import).
-import { ClipboardPaste, Copy, EyeOff, FileText, FolderInput, FileSpreadsheet, FolderOutput, PencilRuler, Pencil, Scissors, Settings, Sheet, Trash2 } from 'lucide-react';
+import { ClipboardPaste, Copy, Eye, EyeOff, FolderPlus, FileText, FolderInput, FileSpreadsheet, FolderOutput, PencilRuler, Pencil, Scissors, Settings, Sheet, Trash2 } from 'lucide-react';
 import type { AutoCorrectReport, ObjectKind, OpResult, RenameResult } from '../../shared/api';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocKind } from '../state/app-state';
 import { afterRename, guardRename } from './autocorrect';
+import { addGroup, nameTaken } from './navigation-options-model';
+import { addTargets, addToGroup, customOf, hideInGroup, inCustomGroup, isHiddenHere, removeFromGroup, unhideInGroup } from './nav-group-items';
 import { nameErrorKey } from './name-error';
 import { hasDocumentView } from './document-views';
 import { designNotLink, registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
@@ -52,6 +54,8 @@ async function rename(c: NavMenuContext) {
 }
 
 async function remove(c: NavMenuContext) {
+  const n = c.nav, x = { kind: c.kind, name: c.name };
+  if (n && inCustomGroup(n, x)) { const p = removeFromGroup(n, x); if (p) n.set(p); return; } // a shortcut in a custom group: only it goes, no question (Access)
   const table = c.kind === 'table';
   // « Suppressions de documents » off (read now): no question; a refusal (relations…) is still explained by `op`
   if ((await api.app.getSettings()).confirmDocumentDeletions) {
@@ -80,8 +84,26 @@ async function copy(c: NavMenuContext) {
   }
 }
 
+/** Add to group: the custom category's other groups, then New Group (named by a prompt, a taken name refused). */
+const groupsMenu = (c: NavMenuContext): NavMenuItem[] => {
+  const n = c.nav!, x = { kind: c.kind, name: c.name };
+  const label = (g: { id: string; name: string }) => g.name === '' ? i18n.t(`nav.group.${g.id}`) : g.name;
+  return [
+    ...addTargets(n, x).map((g): NavMenuItem => ({ id: `group-${g.id}`, group: 'object', order: 0, labelKey: label(g), literal: true, run: () => { const p = addToGroup(n, x, g.id); if (p) n.set(p); } })),
+    { id: 'newGroup', group: 'object', order: 0, labelKey: 'nav.menu.newGroup', sepBefore: true, run: async () => {
+      const cat = customOf(n)!;
+      const name = await c.modal.prompt({ titleKey: 'nav.options.addGroupTitle', labelKey: 'nav.menu.newGroupLabel', initial: '', validate: (v) => (!v.trim() ? i18n.t('designError.nameEmpty') : nameTaken(cat.groups.map(label), v) ? i18n.t('nav.options.duplicate') : null) });
+      if (name === null) return;
+      const id = crypto.randomUUID();
+      const o = addGroup(n.opts, n.category, id, name);
+      if (o === n.opts) return;
+      n.set({ categories: addToGroup({ ...n, opts: o }, x, id)?.categories ?? o.categories });
+    } },
+  ];
+};
+
 // run mode (BaseCraft Runtime) shows the properties without saving a description (a design change)
-const properties = (c: NavMenuContext) => showObjectProperties(c.modal, { kind: c.kind as ObjectKind | 'table', name: c.name }, c.readOnly || c.runtime, c.dispatch);
+const properties = (c: NavMenuContext) => showObjectProperties(c.modal, { kind: c.kind as ObjectKind | 'table', name: c.name }, c.readOnly || c.runtime, c.dispatch, c.nav && { opts: c.nav.opts, set: c.nav.set });
 
 /** Generic Open and Design View, the double-click's path (a table's Run view is its datasheet): enabled once the kind has a
  *  view for that mode. A batch delivering its views replaces them by registering the same ids. */
@@ -96,7 +118,9 @@ const common = (propertiesLabel: string, exportPlanned: NavMenuItem['planned'] |
   { id: 'design', group: 'open', order: 20, labelKey: 'nav.menu.design', icon: PencilRuler, visible: design, ...view('design') }, // a link: read-only, after a warning (App, C1 R8)
   ...(exportPlanned ? [{ id: 'export', group: 'transfer', order: 20, labelKey: 'nav.menu.export', icon: FolderOutput, planned: exportPlanned } as NavMenuItem] : []),
   { id: 'rename', group: 'object', order: 10, labelKey: 'nav.menu.rename', icon: Pencil, visible: designNotLink, enabled: (c) => writable(c) && !c.openTab, run: rename }, // an open object keeps its name (Access)
-  { id: 'hide', group: 'object', order: 20, labelKey: 'nav.menu.hide', icon: EyeOff, planned: 'later' },
+  { id: 'addToGroup', group: 'object', order: 15, labelKey: 'nav.menu.addToGroup', icon: FolderPlus, visible: (c) => design(c) && !!c.nav && !!customOf(c.nav), enabled: writable, children: groupsMenu },
+  { id: 'hide', group: 'object', order: 20, labelKey: 'nav.menu.hide', icon: EyeOff, visible: (c) => design(c) && !(c.nav && isHiddenHere(c.nav, c)), enabled: (c) => writable(c) && !!c.nav, run: (c) => { const p = hideInGroup(c.nav!, c); if (p) c.nav!.set(p); } },
+  { id: 'unhide', group: 'object', order: 20, labelKey: 'nav.menu.unhide', icon: Eye, visible: (c) => design(c) && !!c.nav && isHiddenHere(c.nav, c), enabled: writable, run: (c) => { const p = unhideInGroup(c.nav!, c); if (p) c.nav!.set(p); } },
   { id: 'delete', group: 'object', order: 30, labelKey: 'nav.menu.delete', icon: Trash2, visible: design, enabled: writable, run: remove },
   { id: 'copy', group: 'clipboard', order: 20, labelKey: 'nav.menu.copy', icon: Copy, enabled: writable, run: copy },
   { id: 'properties', group: 'properties', order: 10, labelKey: propertiesLabel, icon: Settings, run: properties },

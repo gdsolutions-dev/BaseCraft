@@ -79,6 +79,8 @@ const api: BasecraftApi = {
     enableContent: () => ipcRenderer.invoke(CH.baseEnableContent),
     startup: () => ipcRenderer.invoke(CH.baseStartup),
     saveStartup: (o) => ipcRenderer.invoke(CH.baseSaveStartup, o),
+    navOptions: () => ipcRenderer.invoke(CH.baseNavOptions),
+    saveNavOptions: (o) => ipcRenderer.invoke(CH.baseSaveNavOptions, o),
   },
   theme: {
     get: () => ipcRenderer.invoke(CH.baseTheme),
@@ -221,7 +223,7 @@ const api: BasecraftApi = {
   },
   accessImport: {
     inspect: (path) => ipcRenderer.invoke(CH.accessImportInspect, path),
-    run: (path, remotes, structure, keepDir) => ipcRenderer.invoke(CH.accessImportRun, path, remotes, structure, keepDir),
+    run: (path, remotes, structure, keepDir, queries, designs) => ipcRenderer.invoke(CH.accessImportRun, path, remotes, structure, keepDir, queries, designs),
     pickExport: () => ipcRenderer.invoke(CH.accessImportPickExport),
     onProgress: (cb) => {
       const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);

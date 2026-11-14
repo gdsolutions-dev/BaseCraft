@@ -44,7 +44,7 @@ validation, and every `// TO CONFIRM` there is replaced by what Access shows.
     numeric fields `Remise`, `Poids`, `Taux` and `Lot` default `0`; a unique two-field index `Idx` on `Client` then `Le`
     (both ascending); a relationship `ClientsCommandes` from `Clients.N°` to `Commandes.Client` with cascade delete.
   - `Divers`: no key and no index.
-  - Saved query `QParVille` (parameter `[Quelle ville ?]`) and `QTotaux`; form `FClients`, report `ECommandes`, macro `MOuvrirEtat`, module
+  - Saved query `QParVille` (parameter `[Quelle ville ?]`) and `QTotaux`; form `FClients`, report `ECommandes` (two group levels, `Client` then `Lot`, each with a header and a footer), macro `MOuvrirEtat`, module
     `ModOutils` (the form holds no embedded macro).
 - `Ventes-complet.export/`: the output of `resources/access-export.ps1` for `Ventes-complet.accdb` (`manifest.json`, `structure.json`,
   `queries/`, `forms/`, `reports/`, `macros/`, `modules/`). Committed so that tests and the "Use an export folder…" choice need no Access;

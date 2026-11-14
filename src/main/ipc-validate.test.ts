@@ -4,7 +4,7 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir,
+  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir, exportQueries, exportDesigns,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
@@ -213,6 +213,11 @@ describe('ipc argument checks', () => {
     expect(Object.getPrototypeOf(named.tables)).toBeNull();
     expect(Object.keys(named.tables)).toEqual(['__proto__', 'constructor', 'prototype']);
     expect(Object.getOwnPropertyDescriptor(named.tables, '__proto__')?.value).toEqual({ x: 1, y: 2 });
+  });
+
+  it('navOptionsArg takes a plain object only', () => {
+    expect(navOptionsArg({ category: 'type' })).toEqual({ category: 'type' });
+    for (const v of [null, 'x', 3, [], undefined]) expect(() => navOptionsArg(v)).toThrow('bc:invalidArgument');
   });
 
   it('settingValue takes the O2 keys with their exact type', () => {
@@ -641,6 +646,10 @@ describe('Access import report (E1)', () => {
     expect(exportKeepDir(undefined, chosen)).toBeUndefined();
     expect(exportKeepDir('/exports/a', chosen)).toBe('/exports/a');
     for (const v of ['/elsewhere', 1, null]) expect(() => exportKeepDir(v, chosen)).toThrow(INVALID);
+    for (const v of [undefined, true, false]) expect(exportQueries(v)).toBe(v);
+    for (const v of ['yes', 1, null, {}]) expect(() => exportQueries(v)).toThrow(INVALID);
+    for (const v of [undefined, true, false]) expect(exportDesigns(v)).toBe(v);
+    for (const v of ['yes', 1, null, {}]) expect(() => exportDesigns(v)).toThrow(INVALID);
   });
   it('reportBody: a string of at most 5,000,000 characters', () => {
     expect(reportBody('x'.repeat(5_000_000))).toHaveLength(5_000_000);

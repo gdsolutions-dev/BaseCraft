@@ -42,7 +42,7 @@ test('Navigation Pane: the Macros group, double-click runs, menu order, Rename, 
     expect(await menuLayout(page)).toEqual(['open', 'design', '|', 'export', '|', 'rename', 'hide', 'delete', '|', 'cut', 'copy', 'paste', '|', 'properties']);
     await expect(page.getByTestId('nav-menu-open')).toHaveText('Exécuter');
     await expect(page.getByTestId('nav-menu-properties')).toHaveText("Propriétés de l'objet");
-    for (const id of ['export', 'hide']) {
+    for (const id of ['export']) {
       await expect(page.getByTestId(`nav-menu-${id}`)).toHaveAttribute('aria-disabled', 'true');
       await expect(page.getByTestId(`nav-menu-${id}`)).toHaveAttribute('title', fr.ribbon.planned.later);
     }

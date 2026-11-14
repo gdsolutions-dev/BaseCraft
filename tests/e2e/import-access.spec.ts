@@ -117,11 +117,20 @@ test('an export folder gives the keys and rules in Table Design', async () => {
     await page.getByTestId('cmd-importAccess').click();
     await page.getByTestId('import-structure-folder').check();
     await expect(page.getByTestId('import-export-dir')).toHaveText(EXPORT_DIR);
+    await expect(page.getByTestId('import-queries')).toBeChecked();
+    await page.getByTestId('import-structure-file').check();
+    await expect(page.getByTestId('import-queries')).toBeHidden();
+    await expect(page.getByTestId('import-designs')).toBeHidden();
+    await page.getByTestId('import-structure-folder').check();
+    await expect(page.getByTestId('import-queries')).toBeChecked();
+    await expect(page.getByTestId('import-designs')).toBeChecked();
     await page.getByTestId('link-table-Commandes').check(); await page.getByTestId('link-table-Clients').check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('report-carried').getByTestId('report-line-structureExact')).toHaveCount(2);
     await expect(page.getByTestId('report-line-keyAssumed')).toHaveCount(0);
+    await expect(page.getByTestId('report-line-queryImported')).toHaveCount(2);
     await page.getByTestId('import-close').click();
+    await expect(page.getByTestId('nav-item-query-QTotaux')).toBeVisible();
     // Commandes opened in Table Design: Quantité's Validation Rule and Default Value show the values of structure.json
     await page.getByTestId('nav-item-Commandes').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -129,6 +138,30 @@ test('an export folder gives the keys and rules in Table Design', async () => {
     await expect(page.getByTestId('design-row-4-name')).toHaveValue('Quantité');
     await expect(page.getByTestId('prop-validationRule')).toHaveValue('> 0'); // structure.json's >0, as the designer writes it
     await expect(page.getByTestId('prop-defaultValue')).toHaveValue('1');
+  } finally {
+    await app.close();
+    try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { console.warn(`could not remove the temp folder ${dir}`); }
+  }
+});
+
+test('the queries box unticked imports no query', async () => {
+  test.skip(!existsSync(COMPLET), "Ventes-complet.accdb is not committed: copy it from the owner's originals");
+  test.setTimeout(120_000);
+  const dir = mkdtempSync(join(tmpdir(), 'basecraft-import-access-'));
+  const copy = join(dir, 'Ventes-complet.accdb');
+  copyFileSync(COMPLET, copy);
+  const { app, page } = await launchApp({ args: [seedBase('Front', (db) => createTable(db, t('Notes', [f('N°', 'autoNumber')])))], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_LINK_PATH: copy, BASECRAFT_E2E_EXPORT_DIR: EXPORT_DIR } });
+  try {
+    await page.getByTestId('ribbon-tab-externalData').click();
+    await page.getByTestId('cmd-importAccess').click();
+    await page.getByTestId('import-structure-folder').check();
+    await expect(page.getByTestId('import-export-dir')).toHaveText(EXPORT_DIR);
+    await page.getByTestId('import-queries').uncheck();
+    await page.getByTestId('import-designs').uncheck();
+    await page.getByTestId('link-table-Clients').check();
+    await page.getByTestId('link-ok').click();
+    await expect(page.getByTestId('report-line-tablesOnly')).toBeVisible();
+    await expect(page.getByTestId('report-line-queryImported')).toHaveCount(0);
   } finally {
     await app.close();
     try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { console.warn(`could not remove the temp folder ${dir}`); }

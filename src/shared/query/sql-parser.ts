@@ -60,6 +60,11 @@ class SqlParser {
   /** Bare SQL word (ASCII case-insensitive). */
   private isWord(w: string, t: Token = this.tok): boolean { return t.t === 'id' && t.bare === true && asciiLower(t.v) === w; }
   private eatWord(w: string): boolean { if (this.isWord(w)) { this.p++; return true; } return false; }
+  /** At `WITH OWNERACCESS OPTION` (not a table alias named With). */
+  private ownerAccess(): boolean {
+    const w = (i: number, s: string) => { const t = this.at(i); return t.t === 'id' && !!t.bare && asciiLower(t.v) === s; };
+    return w(0, 'with') && w(1, 'owneraccess') && w(2, 'option');
+  }
   private expectWord(w: string): void { if (!this.eatWord(w)) this.fail(); }
 
   /** One level deeper in the query tree; past MAX_QUERY_NESTING, tooComplex at `t`. */
@@ -96,7 +101,7 @@ class SqlParser {
   /** An expression; `toks` ends it earlier (PIVOT's expression stops at its IN). */
   private expr(toks: Token[] = this.toks): Expr {
     const { e, end } = parseExprAt(toks, this.p, QUERY_PARSE);
-    for (let i = this.p; i < end; i++) if (toks[i].t === 'id' && this.isOp('.', toks[i + 1])) this.table(toks[i]);
+    for (let i = this.p; i < end; i++) if (toks[i].t === 'id' && (this.isOp('.', toks[i + 1]) || this.isOp('!', toks[i + 1]))) this.table(toks[i]);
     this.p = end;
     return e;
   }
@@ -120,6 +125,7 @@ class SqlParser {
     else if (this.eatWord('update')) body = this.update();
     else if (this.eatWord('delete')) body = this.delete();
     else return this.fail();
+    if (this.ownerAccess()) this.p += 3; // Access's `WITH OWNERACCESS OPTION`: accepted, dropped
     const semicolon = this.eatOp(';');
     const t = this.tok;
     if (t.t !== 'eof') {
@@ -292,7 +298,7 @@ class SqlParser {
     }
     const name = this.table();
     const t = this.tok;
-    if (this.eatWord('as') || (t.t === 'id' && !(t.bare && SQL_WORDS.has(asciiLower(t.v))))) return { k: 'source', name, alias: this.table() };
+    if (this.eatWord('as') || (t.t === 'id' && !(t.bare && SQL_WORDS.has(asciiLower(t.v))) && !this.ownerAccess())) return { k: 'source', name, alias: this.table() };
     return { k: 'source', name };
   }
 
@@ -318,7 +324,7 @@ class SqlParser {
     do {
       const n = this.name();
       let target: Expr = { k: 'id', name: n.v };
-      if (this.eatOp('.')) {
+      if (this.eatOp('.') || this.eatOp('!')) {
         const f = this.tok;
         if (f.t !== 'id' || (!f.bare && f.v === '')) this.fail();
         this.p++;

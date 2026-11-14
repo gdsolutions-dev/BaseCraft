@@ -25,6 +25,9 @@ export async function importAccessTables(modal: ModalApi): Promise<boolean> {
   return imported || closed === true;
 }
 
+// The reason of these lines is shown as it is: a control's Access type, a control's new name (the event kind only picks the sentence)
+const RAW_REASONS = ['designControlReplaced', 'designControlRenamed', 'designEventDropped'];
+
 function AccessImportDialog({ path, info, onClose, onImported }: { path: string; info: AccessImportInfo; onClose(v: true | null): void; onImported(): void }) {
   const { t } = useTranslation();
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -35,20 +38,24 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
   const [dir, setDir] = useState<string | null>(null);
   const [keepDir, setKeepDir] = useState<string | null>(null);
   const [keep, setKeep] = useState(false);
+  const [queries, setQueries] = useState(true); // E3: the saved queries come with an export
+  const [designs, setDesigns] = useState(true); // E4: so do the forms and reports
   const [failure, setFailure] = useState<string | null>(null);
   // A reason is a code: shown as the text the Relationships window or the table designer already has, or as this report's own
-  const OWN_REASONS = ['tableNotImported', 'violations', 'defaultValue', 'validationRule', 'inputMask', 'lookup'];
-  const reasonKey = (code: string, reason: string) => OWN_REASONS.includes(reason) ? `import.report.reason.${reason}`
+  const OWN_REASONS = ['tableNotImported', 'violations', 'defaultValue', 'validationRule', 'inputMask', 'lookup',
+    'unknownFunction', 'dataDefinition', 'notRead', 'notBound', 'nameInvalid', 'duplicate', 'unreadable'];
+  const reasonKey = (code: string, reason: string) => code === 'designSkipped' && (reason === 'notRead' || reason === 'duplicate') ? `import.report.reason.design_${reason}` : OWN_REASONS.includes(reason) ? `import.report.reason.${reason}`
     : code === 'tableUnsupported' || code.startsWith('propertyDropped') ? `designError.${reason}` : `relations.error.${reason}`;
   // The line's own sentence is trimmed: a line without a reason ends on a space
   const rt = (key: string, params?: Record<string, unknown>) =>
-    t(key, typeof params?.reason === 'string' ? { ...params, reason: t(reasonKey(key.slice(key.lastIndexOf('.') + 1), params.reason)) } : params).trim();
+    t(key, typeof params?.reason === 'string' && !RAW_REASONS.some((c) => key.includes(`.${c}`)) ? { ...params, reason: t(reasonKey(key.slice(key.lastIndexOf('.') + 1), params.reason), { part: params.part }) } : params).trim();
 
   if (done) {
     const { report } = done;
     return (
       <div data-testid="import-report" className="link-dialog">
         <p className="modal-message">{t('import.server.done', { names: done.tables.map((x) => x.name).join(', ') })}</p>
+        <div className="link-list">{/* capped and scrolling: the window opens at its top, the buttons stay in view */}
         {LEVELS.map((level) => {
           const lines = report.lines.filter((l) => REPORT_LEVEL[l.code] === level);
           return lines.length > 0 && (
@@ -64,6 +71,7 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
             </section>
           );
         })}
+        </div>
         {saveError && <p className="modal-error" role="alert" data-testid="report-save-error">{saveError}</p>}
         <div className="modal-buttons">
           <button type="button" className="btn" data-testid="report-save" onClick={async () => {
@@ -94,7 +102,7 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
     const off = api.accessImport.onProgress(setProgress);
     try {
       const structure: AccessStructureSource = kind === 'folder' && dir !== null ? { kind, dir } : { kind: kind === 'access' ? 'access' : 'file' };
-      const r = await api.accessImport.run(path, names.map((n) => info.tables.find((x) => x.name === n)!.remote), structure, kind === 'access' && keep && keepDir !== null ? keepDir : undefined);
+      const r = await api.accessImport.run(path, names.map((n) => info.tables.find((x) => x.name === n)!.remote), structure, kind === 'access' && keep && keepDir !== null ? keepDir : undefined, kind !== 'file' ? queries : undefined, kind !== 'file' ? designs : undefined);
       if (r.ok) { onImported(); setDone(r); }
       if (!r.ok && r.reason === 'export') { setFailure(r.failure); return { ok: false as const, reason: 'cancelled' as const }; } // stays on the list: another choice can be picked
       return r;
@@ -120,6 +128,14 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
             <p className="muted path-text"><span data-testid="import-export-dir">{dir}</span> <button type="button" className="btn" data-testid="import-structure-folder-change" onClick={() => { void chooseFolder(); }}>{t('import.access.changeFolder')}</button></p>
           )}
         </div>
+        {kind !== 'file' && (
+          <div>
+            <label><input type="checkbox" data-testid="import-queries" checked={queries} onChange={(e) => setQueries(e.target.checked)} /> {t('import.access.queries')}</label>
+            <p className="muted" data-testid="import-queries-note">{t('import.access.queriesNote')}</p>
+            <label><input type="checkbox" data-testid="import-designs" checked={designs} onChange={(e) => setDesigns(e.target.checked)} /> {t('import.access.designs')}</label>
+            <p className="muted" data-testid="import-designs-note">{t('import.access.designsNote')}</p>
+          </div>
+        )}
         <label><input type="radio" name="import-structure" data-testid="import-structure-file" checked={kind === 'file'} onChange={() => { setKind('file'); setFailure(null); }} /> {t('import.access.structureFile')}</label>
       </fieldset>
       {failure && <p className="modal-error" role="alert" data-testid="import-export-failure">{t(`import.access.exportFailed.${failure}`)}</p>}

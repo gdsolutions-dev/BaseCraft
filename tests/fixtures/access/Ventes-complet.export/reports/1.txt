@@ -1,7 +1,7 @@
 Version =21
 VersionRequired =20
 PublishOption =1
-Checksum =28040102
+Checksum =-1081499976
 Begin Report
     LayoutForPrint = NotDefault
     DividingLines = NotDefault
@@ -14,7 +14,7 @@ Begin Report
     GridY =10
     Width =22372
     DatasheetFontHeight =11
-    ItemSuffix =54
+    ItemSuffix =60
     Right =19594
     Bottom =5589
     DatasheetGridlinesColor =15263976
@@ -22,7 +22,7 @@ Begin Report
         0xc9ecca2a62a0e640
     End
     GUID = Begin
-        0x9da9efe9bea29f4986dc01c5664ebc69
+        0xef80732b16907042b0643ebf6872b57e
     End
     NameMap = Begin
         0x0acc0e5500000000000000000000000000000000000000000000000000000000 ,
@@ -33,20 +33,21 @@ Begin Report
         0x6c00690065006e00740073000000000000000000000000000000000000000000 ,
         0x000007000000000000000000000000000000000000004e00b000000000000000 ,
         0x0000000000000000000000000000000007000000000000000000000000000000 ,
-        0x000000004d006f006e00740061006e0074000000000000000000000000000000 ,
-        0x000000000000000007000000000000000000000000000000000000004c006500 ,
+        0x000000004c006f00740000000000000000000000000000000000000000000000 ,
+        0x07000000000000000000000000000000000000004d006f006e00740061006e00 ,
+        0x7400000000000000000000000000000000000000000000000700000000000000 ,
+        0x0000000000000000000000004c00650000000000000000000000000000000000 ,
+        0x0000000000000700000000000000000000000000000000000000510075006100 ,
+        0x6e00740069007400e90000000000000000000000000000000000000000000000 ,
+        0x0700000000000000000000000000000000000000520065006d00690073006500 ,
         0x0000000000000000000000000000000000000000000007000000000000000000 ,
-        0x000000000000000000005100750061006e00740069007400e900000000000000 ,
-        0x0000000000000000000000000000000007000000000000000000000000000000 ,
-        0x00000000520065006d0069007300650000000000000000000000000000000000 ,
-        0x000000000000070000000000000000000000000000000000000050006f006900 ,
-        0x6400730000000000000000000000000000000000000000000000070000000000 ,
-        0x0000000000000000000000000000540061007500780000000000000000000000 ,
-        0x0000000000000000000000000700000000000000000000000000000000000000 ,
-        0x4c006f007400000000000000e9599bff29609343a7c9bfc456abbffb06000000 ,
-        0x9da9efe9bea29f4986dc01c5664ebc694d006f006e00740061006e0074000000 ,
-        0x00000000000000000000000000000000000000000c0000000500000000000000 ,
-        0x00000000000000000000
+        0x0000000000000000000050006f00690064007300000000000000000000000000 ,
+        0x0000000000000000000007000000000000000000000000000000000000005400 ,
+        0x61007500780000000000000034167105033c964a91d650b1cab46f3606000000 ,
+        0xef80732b16907042b0643ebf6872b57e4c006f00740000000000000025f316b7 ,
+        0x0856624ba54b1ac9337d425706000000ef80732b16907042b0643ebf6872b57e ,
+        0x4d006f006e00740061006e007400000000000000000000000000000000000000 ,
+        0x000000000c000000050000000000000000000000000000000000
     End
     RecordSource ="Commandes"
     DatasheetFontName ="Aptos"
@@ -457,6 +458,11 @@ Begin Report
             GroupFooter = NotDefault
             ControlSource ="Client"
         End
+        Begin BreakLevel
+            GroupHeader = NotDefault
+            GroupFooter = NotDefault
+            ControlSource ="Lot"
+        End
         Begin FormHeader
             KeepTogether = NotDefault
             CanGrow = NotDefault
@@ -465,7 +471,7 @@ Begin Report
             BackColor =15783096
             Name ="EntêteÉtat"
             GUID = Begin
-                0x6eeb98c896ca724b92471fae83dfbd78
+                0x1ee1d61eadfa5f49bc310839d3271739
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1
@@ -483,7 +489,7 @@ Begin Report
                     Name ="Auto_Logo0"
                     ControlTipText ="Auto_Logo0"
                     GUID = Begin
-                        0x77b2d210c2205c47806f8498dc0b3051
+                        0x95e47a4467512b469bfed764a1a39876
                     End
                     ImageData = Begin
                         0x89504e470d0a1a0a0000000d4948445200000020000000200806000000737a7a ,
@@ -629,7 +635,7 @@ Begin Report
                     Caption ="Commandes"
                     FontName ="Aptos Display"
                     GUID = Begin
-                        0x6d714d9833563d43b0b96754f6408fc8
+                        0x83ff6ac430d4a2449397fa47d58ac246
                     End
                     HorizontalAnchor =2
                     LayoutCachedLeft =1054
@@ -661,7 +667,7 @@ Begin Report
                     ControlSource ="=Date()"
                     Format ="Long Date"
                     GUID = Begin
-                        0xc174efda361cdc4087ee1fb9193bf609
+                        0x0db7a4e8836bf54eb9361acf90bc096a
                     End
 
                     LayoutCachedLeft =5777
@@ -690,7 +696,7 @@ Begin Report
                     ControlSource ="=Time()"
                     Format ="Long Time"
                     GUID = Begin
-                        0xec8b51beaffb094bb52f736292a515ff
+                        0x48415984c321174081aa68e84f48baf6
                     End
 
                     LayoutCachedLeft =5777
@@ -710,7 +716,7 @@ Begin Report
             Height =425
             Name ="ZoneEntêtePage"
             GUID = Begin
-                0x9d660db38795704ea0093e3eb6ecd310
+                0xa20f40d75b29134f8e27ad1a5f53b990
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1
@@ -729,7 +735,7 @@ Begin Report
                     Name ="Étiquette0"
                     Caption ="N°"
                     GUID = Begin
-                        0x14f30a5d7658984082f7184f42ecd2c8
+                        0x7abe77612b2757408784a063f450a7b9
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -754,7 +760,7 @@ Begin Report
                     Name ="Étiquette1"
                     Caption ="Client"
                     GUID = Begin
-                        0x3008a45538d26b4da7b8bf6f6f3db193
+                        0xc66cd2f0b3cedb4bb1fa9eea68b4d810
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -777,7 +783,7 @@ Begin Report
                     Name ="Étiquette2"
                     Caption ="Montant TTC"
                     GUID = Begin
-                        0xb98d255e61d2ef4b88cc2a8d5c153764
+                        0xf894cef4ecd36b4eac02ce36202ff9bf
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -802,7 +808,7 @@ Begin Report
                     Name ="Étiquette3"
                     Caption ="Le"
                     GUID = Begin
-                        0x71196c5bfc317f42bed7ef6bb0411b08
+                        0x18503ae26d57f2418d7aa4db887838a6
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -827,7 +833,7 @@ Begin Report
                     Name ="Étiquette4"
                     Caption ="Quantité"
                     GUID = Begin
-                        0xfc738fd6c18f804f802349ac0b8b6b82
+                        0x7129c362d795ad4584a3475f0da89e8f
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -852,7 +858,7 @@ Begin Report
                     Name ="Étiquette5"
                     Caption ="Remise"
                     GUID = Begin
-                        0x4123048300c6ca4e8103bb8a3f0bdf1d
+                        0xbd4be28a7dc949459535ae6c736e74e6
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -877,7 +883,7 @@ Begin Report
                     Name ="Étiquette6"
                     Caption ="Poids"
                     GUID = Begin
-                        0x4f582c1513ad00418dfc603187f92089
+                        0x62d9a18ab82853428ebaab665bc5fb55
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -902,7 +908,7 @@ Begin Report
                     Name ="Étiquette7"
                     Caption ="Taux"
                     GUID = Begin
-                        0x552bfbc04b123b40bbbd6dbeb3cde147
+                        0x2c9d8533dbea1e438297f2c0ae4c272f
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -927,7 +933,7 @@ Begin Report
                     Name ="Étiquette8"
                     Caption ="Lot"
                     GUID = Begin
-                        0x6ff79e071bd6d04eb8f18157706d7da1
+                        0x12d8459b537af049bc3c359a75ca0f7e
                     End
                     GridlineStyleBottom =1
                     GridlineColor =10921638
@@ -946,10 +952,10 @@ Begin Report
             KeepTogether = NotDefault
             CanGrow = NotDefault
             CanShrink = NotDefault
-            Height =393
+            Height =398
             Name ="EntêteGroupe0"
             GUID = Begin
-                0x13c8ef0e0bb64242bbddce4634254d7b
+                0xd6a203cea695c242a7385dbf279fcd11
             End
             AutoHeight =255
             AlternateBackColor =15921906
@@ -963,7 +969,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide43"
                     GUID = Begin
-                        0x004634f14ff3f74db70f8d418abe3f20
+                        0x1f78249da36e7345a3216ded5c585fde
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =3557
@@ -983,7 +989,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide45"
                     GUID = Begin
-                        0x0e81e5ae77fc3c4d89a6d77421168821
+                        0x4a3b1ea2a9c07c4f88eec791d3147c83
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =5057
@@ -1003,7 +1009,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide46"
                     GUID = Begin
-                        0x6fa96aaa783367449ceed239a73ef9ed
+                        0x883a8c63ce2bab4b8e86051dcf9317f4
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =6557
@@ -1023,7 +1029,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide47"
                     GUID = Begin
-                        0x6090c66994fb504ab743faca96e767b2
+                        0x5a9da9f84d7f8f4e83a5c615eaace5bc
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =8057
@@ -1043,7 +1049,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide48"
                     GUID = Begin
-                        0xdfc643910f0c8f479fdac762fa2ee17b
+                        0x3b8286c612a9bf459e33a0115cfee426
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =9557
@@ -1063,7 +1069,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide49"
                     GUID = Begin
-                        0x5c082fc740c25b4c86de428f6ab82629
+                        0x1783e6f89ebdc444909e452b3f327f53
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =11057
@@ -1083,7 +1089,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide50"
                     GUID = Begin
-                        0xc37a84f39ad03b42b5da12a6e6b01aed
+                        0xacfc6f970b1de046a76fe98192c0cc47
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =12557
@@ -1103,7 +1109,7 @@ Begin Report
                     Height =334
                     Name ="CelluleVide51"
                     GUID = Begin
-                        0xc2bf5c158311944b8f8266a65466b469
+                        0xe345be3c91f038499420cb34db043d63
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =14057
@@ -1128,7 +1134,7 @@ Begin Report
                     Height =334
                     ColumnInfo ="\"\";\"\";\"\";\"\";\"10\";\"100\""
                     GUID = Begin
-                        0xc965d9b93a59094fa422bf90c1d23124
+                        0xa258ce511aa7a049b5d3dc7ac665839a
                     End
                     Name ="Groupe de Client"
                     ControlSource ="Client"
@@ -1156,6 +1162,40 @@ Begin Report
                 End
             End
         End
+        Begin BreakHeader
+            KeepTogether = NotDefault
+            CanGrow = NotDefault
+            CanShrink = NotDefault
+            Height =517
+            BreakLevel =1
+            Name ="EntêteGroupe1"
+            GUID = Begin
+                0x0cfb1f631b2b604e9b1c099513390fc0
+            End
+            AlternateBackColor =15921906
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    IMESentenceMode =3
+                    Left =680
+                    Top =56
+                    Height =291
+                    FontWeight =700
+                    Name ="Texte54"
+                    ControlSource ="Lot"
+                    GUID = Begin
+                        0xaa7d2d26c24abc468fce890ea2842d44
+                    End
+
+                    LayoutCachedLeft =680
+                    LayoutCachedTop =56
+                    LayoutCachedWidth =2381
+                    LayoutCachedHeight =347
+                End
+            End
+        End
         Begin Section
             KeepTogether = NotDefault
             CanGrow = NotDefault
@@ -1163,7 +1203,7 @@ Begin Report
             Height =399
             Name ="Détail"
             GUID = Begin
-                0xeb7ce578a7b83b45831074145a03a00c
+                0x45ebd3cecd53094eadf457f395a380ee
             End
             AutoHeight =1
             AlternateBackColor =15921906
@@ -1184,7 +1224,7 @@ Begin Report
                     Name ="N°"
                     ControlSource ="N°"
                     GUID = Begin
-                        0xd15f70b8e024d741a0ee7801d0ac190a
+                        0xcb929b784fad064bb009aa2942ba4c30
                     End
                     GridlineColor =10921638
 
@@ -1214,7 +1254,7 @@ Begin Report
                     ControlSource ="Montant"
                     Format ="#,##0.00 €;-#,##0.00 €"
                     GUID = Begin
-                        0xe9599bff29609343a7c9bfc456abbffb
+                        0x25f316b70856624ba54b1ac9337d4257
                     End
                     GridlineColor =10921638
 
@@ -1245,7 +1285,7 @@ Begin Report
                     Name ="Le"
                     ControlSource ="Le"
                     GUID = Begin
-                        0x830b93edcadd36468fee7dafa03347ff
+                        0x53a3de3e7a52f948806aee77fb49f3fe
                     End
                     GridlineColor =10921638
                     ShowDatePicker =1
@@ -1275,7 +1315,7 @@ Begin Report
                     Name ="Quantité"
                     ControlSource ="Quantité"
                     GUID = Begin
-                        0x9fea63e143cfc04abf8308712b23b523
+                        0x731e3cd08abfb3418fc544406966e81e
                     End
                     GridlineColor =10921638
 
@@ -1304,7 +1344,7 @@ Begin Report
                     Name ="Remise"
                     ControlSource ="Remise"
                     GUID = Begin
-                        0x240fbcc41a2f73458cfe81b2c39d2dab
+                        0x48df3c995c980b4ea77f4e2756133879
                     End
                     GridlineColor =10921638
 
@@ -1333,7 +1373,7 @@ Begin Report
                     Name ="Poids"
                     ControlSource ="Poids"
                     GUID = Begin
-                        0x759b271ebda3b64daab52ed927f19939
+                        0x385dafe95bb8164da03b9111da598df6
                     End
                     GridlineColor =10921638
 
@@ -1362,7 +1402,7 @@ Begin Report
                     Name ="Taux"
                     ControlSource ="Taux"
                     GUID = Begin
-                        0x20d3858baf2f694caecbd9b55d0f20ed
+                        0x0fcdf283a0d84c48a1de71f71d1aabf9
                     End
                     GridlineColor =10921638
 
@@ -1391,7 +1431,7 @@ Begin Report
                     Name ="Lot"
                     ControlSource ="Lot"
                     GUID = Begin
-                        0x85d76c2058184141849f56a3cdda815d
+                        0x34167105033c964a91d650b1cab46f36
                     End
                     GridlineColor =10921638
 
@@ -1413,7 +1453,7 @@ Begin Report
                     Height =335
                     Name ="CelluleVide52"
                     GUID = Begin
-                        0x2d000a052c9f23449d73a63366b3b6c9
+                        0xa294e9a0177dbf49865a96feed460550
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =60
@@ -1431,21 +1471,107 @@ Begin Report
             KeepTogether = NotDefault
             CanGrow = NotDefault
             CanShrink = NotDefault
-            Height =396
+            Height =1134
+            BreakLevel =1
+            Name ="PiedGroupe2"
+            GUID = Begin
+                0x552aff46d3a7874680e07a426012773f
+            End
+            AutoHeight =255
+            AlternateBackColor =15921906
+            AlternateBackThemeColorIndex =1
+            AlternateBackShade =95.0
+            BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    IMESentenceMode =3
+                    Left =1814
+                    Top =283
+                    Height =291
+                    Name ="Texte56"
+                    ControlSource ="=Count([lot])"
+                    GUID = Begin
+                        0xea4f06b18bd2d940b5df0c2fea6123b4
+                    End
+
+                    LayoutCachedLeft =1814
+                    LayoutCachedTop =283
+                    LayoutCachedWidth =3515
+                    LayoutCachedHeight =574
+                    Begin
+                        Begin Label
+                            Left =113
+                            Top =283
+                            Width =789
+                            Height =291
+                            Name ="Étiquette57"
+                            Caption ="Nb lot"
+                            GUID = Begin
+                                0x723be8fdbb509540bb5f74012558e889
+                            End
+                            LayoutCachedLeft =113
+                            LayoutCachedTop =283
+                            LayoutCachedWidth =902
+                            LayoutCachedHeight =574
+                        End
+                    End
+                End
+            End
+        End
+        Begin BreakFooter
+            KeepTogether = NotDefault
+            CanGrow = NotDefault
+            CanShrink = NotDefault
+            Height =461
             Name ="PiedGroupe1"
             GUID = Begin
-                0x2018f26077b1cc40aa9ced2a9d023f6d
+                0xb0897f5a12c358488f4d9ff573160f2a
             End
             AlternateBackColor =15921906
             AlternateBackThemeColorIndex =1
             AlternateBackShade =95.0
             BackThemeColorIndex =1
+            Begin
+                Begin TextBox
+                    IMESentenceMode =3
+                    Left =1984
+                    Top =170
+                    Height =291
+                    Name ="Texte58"
+                    ControlSource ="=Count([Client])"
+                    GUID = Begin
+                        0x7b2926fab4f1be41ae475be37351be1d
+                    End
+
+                    LayoutCachedLeft =1984
+                    LayoutCachedTop =170
+                    LayoutCachedWidth =3685
+                    LayoutCachedHeight =461
+                    Begin
+                        Begin Label
+                            Left =283
+                            Top =170
+                            Width =909
+                            Height =291
+                            Name ="Étiquette59"
+                            Caption ="Nb client"
+                            GUID = Begin
+                                0x480a91cacaef6d439946e235f6d6d305
+                            End
+                            LayoutCachedLeft =283
+                            LayoutCachedTop =170
+                            LayoutCachedWidth =1192
+                            LayoutCachedHeight =461
+                        End
+                    End
+                End
+            End
         End
         Begin PageFooter
             Height =291
             Name ="ZonePiedPage"
             GUID = Begin
-                0x8b4cb18041d96147b80cee2b2cda8323
+                0xf495f741ff105d4faebba7068aa2f3ec
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1
@@ -1463,7 +1589,7 @@ Begin Report
                     Name ="Texte42"
                     ControlSource ="=\"Page \" & [Page] & \" sur \" & [Pages]"
                     GUID = Begin
-                        0xc91ecd2b19ee994f9633cde6f8e163f8
+                        0xca69e390d1928445b8e26a85dce66cdb
                     End
 
                     LayoutCachedLeft =9386
@@ -1479,7 +1605,7 @@ Begin Report
             Height =535
             Name ="PiedÉtat"
             GUID = Begin
-                0x472f2c54ac676646b03ae04e2871d23d
+                0x0db6d2c3fa5206449fc0253dd7ef5707
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1
@@ -1502,7 +1628,7 @@ Begin Report
                     Format ="#,##0.00 €;-#,##0.00 €"
                     ControlTipText ="Montant Total"
                     GUID = Begin
-                        0x641aed3d7b7a1f409ad0bc44ff47ca59
+                        0x18f2567a9b65e84dad8cf5834a01ac29
                     End
                     GridlineStyleTop =1
                     GridlineColor =10921638
@@ -1527,7 +1653,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide27"
                     GUID = Begin
-                        0xa823f41e2130584c8ede0983e1049d58
+                        0x8183f4ca193edb4fbdf074613dd480ac
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =3557
@@ -1548,7 +1674,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide28"
                     GUID = Begin
-                        0xb6ac1fb54e86904fb9362dceb325f6c3
+                        0xf98b43ed269b6444989c22bc2d351d37
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =60
@@ -1566,7 +1692,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide30"
                     GUID = Begin
-                        0xd2375222c5f82546b09a5ab4edb514a9
+                        0x6017c74d4346a3409e0263069e76fcae
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =6557
@@ -1586,7 +1712,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide31"
                     GUID = Begin
-                        0x97c380016a503e41a63b52fd375833e8
+                        0xf1d2d25cec146f4894c84de37a03d6a2
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =8057
@@ -1606,7 +1732,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide32"
                     GUID = Begin
-                        0x32b6474a114def41a814c10208b3bc8c
+                        0xf6b5ad1b865f38438244fe9fec339b34
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =9557
@@ -1626,7 +1752,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide33"
                     GUID = Begin
-                        0xdb80234b172eb048a577cda3c14aa6b0
+                        0xbf4f7a5dae907141b5195fe566bfa4a5
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =11057
@@ -1646,7 +1772,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide34"
                     GUID = Begin
-                        0x4ec469cde3d36b4dbd294b44794dc78f
+                        0x914a59831fda564090b6c2c69ca3fc9b
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =12557
@@ -1666,7 +1792,7 @@ Begin Report
                     Height =394
                     Name ="CelluleVide35"
                     GUID = Begin
-                        0xd53f50398b517942b2a0491c68a31b52
+                        0x63f136a5deeca945a3a9bcd20b1bcacc
                     End
                     GridlineColor =10921638
                     LayoutCachedLeft =14057

@@ -1,5 +1,6 @@
 // What run code reaches of the designers (B5): only through `design` (design/entry.ts), null in BaseCraft Runtime.
 import type { ObjectSummary, TableSummary } from '../../shared/api';
+import type { NavGroup, NavObject } from '../../shared/nav-view';
 import type { RecordSourceRef } from '../../shared/record-source';
 import type { EditListDialog } from '../datasheet/EditListDialog';
 import type { ImportTextWizard } from '../import-text/ImportTextWizard';
@@ -31,6 +32,8 @@ export interface DesignHooks {
   EditListDialog: typeof EditListDialog;
   /** D1 R12: the Immediate window (bottom pane); the shell keeps it mounted once opened. */
   ImmediateWindow: typeof ImmediateWindow;
+  /** The Tables and Related Views category: reads every definition once, answers the grouping of a list of objects. */
+  loadRelated(): Promise<(objs: NavObject[]) => NavGroup[]>;
 }
 
 /** The App closures those handlers read — no more. */

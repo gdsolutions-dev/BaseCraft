@@ -137,7 +137,7 @@ describe('alterTable (guards and edge cases)', () => {
     writeTableMetadata(db, { ...tableDesign(db, 'T'), description: 'd', extra: { color: 'red' } });
     const fields = replaceField(baseFields, f('Nom', 'shortText', { indexed: 'yesDuplicates' }));
     expect(await alterTable(db, 'T', { ...t('Personnes "VIP" été', fields), description: 'd' }, same(baseNames), { allowDataLoss: false, info: fr })).toEqual({ ok: true });
-    expect(listTables(db)).toEqual([{ name: 'Personnes "VIP" été', description: 'd' }]);
+    expect(listTables(db)).toEqual([expect.objectContaining({ name: 'Personnes "VIP" été', description: 'd' })]);
     expect(tableDesign(db, 'Personnes "VIP" été').extra).toEqual({ color: 'red' });
     expect(rowsOf(db, 'Personnes "VIP" été').map((r) => r.Nom)).toEqual(['Dupont', 'Durand']);
     expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'bcx_%'`).all()).toEqual([{ name: 'bcx_Personnes "VIP" été.Nom' }]);

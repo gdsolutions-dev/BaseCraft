@@ -3,7 +3,8 @@
 import { useTranslation } from 'react-i18next';
 import { api } from '../bridge';
 import type { ModalApi } from '../shell/Modal';
-import { dependencies, type DepKind, type DepObject, type DepRef } from './dependencies';
+import { dependencies, type DepKind, type DepRef } from './dependencies';
+import { loadDepWorld } from './load-world';
 import './database-tools.css';
 
 const KINDS: string[] = ['table', 'query', 'form', 'report', 'macro'];
@@ -14,10 +15,7 @@ export async function pickDependency(modal: ModalApi, sel: { kind: string; name:
     await modal.confirm({ titleKey: 'ribbon.cmd.objectDependencies', messageKey: 'dbtools.depsNoSelection', buttons: ['ok'] });
     return null;
   }
-  const [tables, list] = await Promise.all([api.tables.list(), api.objects.list()]);
-  const objects: DepObject[] = await Promise.all(list.filter((o) => o.kind !== 'module').map(async (o) =>
-    ({ kind: o.kind as DepObject['kind'], name: o.name, definition: await api.objects.get(o.kind, o.name).then((x) => x.definition, () => null) })));
-  const deps = dependencies({ tables: tables.map((x) => x.name), objects }, { kind: sel.kind as DepKind, name: sel.name });
+  const deps = dependencies(await loadDepWorld(api), { kind: sel.kind as DepKind, name: sel.name });
   return modal.custom<DepRef>((close) => <DependenciesView target={sel} deps={deps} onPick={close} />, { titleKey: 'ribbon.cmd.objectDependencies' });
 }
 

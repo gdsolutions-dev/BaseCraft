@@ -23,6 +23,7 @@ import { planAutoCorrect, propertyTargets, type AutoCorrectPlan, type AutoCorrec
 import { saveTableChanges } from '../shared/autocorrect/sql';
 import { compactBase, vacuumInto, type CopyDeps } from './db/copy-file';
 import { backupCopy, BaseFileError, createBaseFile, openBaseFile } from './db/file-format';
+import { navForget } from './db/navigation';
 import { clearThemeOverrides, copyObject, deleteObject, getObject, listObjects, renameObject, saveObject, setObjectDescription } from './db/objects';
 import { acquireLock, peekLock, takeOverStaleLock, type HeldLock, type LockDeps, type LockInfo } from './db/lock';
 import { detectLocationRisk, type LocationRisk, type RiskProbe } from './db/location-risk';
@@ -35,8 +36,8 @@ import {
 import { splitDatabase } from './db/split';
 import { importTables } from './migrate/import';
 import { importAccess } from './import/access-import';
-import { hasAccess, readAccessExport, runAccessExport } from './import/access-export';
-import type { AccessExport } from '../shared/access-export';
+import { hasAccess, readAccessExport, readExportDesigns, readExportQueries, runAccessExport } from './import/access-export';
+import type { AccessExport, ExportDesign, ExportQuery } from '../shared/access-export';
 import type { AccessImportInfo, AccessImportResult, AccessStructureSource } from '../shared/access-import';
 import { copyRows, deleteRowsWithMacros, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
 import { inTransaction, inTransactionAsync } from './db/tx';
@@ -45,6 +46,8 @@ import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelat
 import { baseTheme, saveBaseTheme } from './db/theme';
 import { addResource, getResources, listResources, removeResource, replaceResource, type ResourceInfo } from './db/resources';
 import type { Theme } from '../shared/design/theme';
+import { navOptions, saveNavOptions } from './db/navigation';
+import type { NavOptions } from '../shared/nav-view';
 import { peekStartup, saveStartupOptions, startupOptions } from './db/startup';
 import type { StartupOptions } from '../shared/startup';
 import type { SheetLayout } from '../shared/sheet-layout';
@@ -756,7 +759,8 @@ export class Session {
   dropTable(name: string): OpResult {
     const link = this.linkOf(name);
     if (!link) return dropTable(this.structureDb(), name);
-    removeLink(this.writeDb(), link.name);
+    const db = this.writeDb();
+    inTransaction(db, () => { removeLink(db, link.name); navForget(db, 'table', link.name); });
     this.closeUnused([link.sourceId]);
     return { ok: true };
   }
@@ -1402,6 +1406,9 @@ export class Session {
   saveStartup(o: StartupOptions): void {
     saveStartupOptions(o.dataFile !== startupOptions(this.conn()).dataFile ? this.structureDb() : this.writeDb(), o);
   }
+  /** Navigation Pane options: read-only allowed. */
+  navOptions(): NavOptions { return navOptions(this.conn()); }
+  saveNavOptions(o: NavOptions): void { saveNavOptions(this.writeDb(), o); }
   /** Default theme of the base (F2): read-only allowed; an invalid stored value reads as the built-in theme. */
   baseTheme(): Theme { return baseTheme(this.conn()); }
   saveBaseTheme(t: Theme): void { saveBaseTheme(this.writeDb(), t); }
@@ -1575,7 +1582,7 @@ export class Session {
    *  by the main process; the export runs in a temporary folder, deleted on every path, and is copied to `keepDir` first when given) or
    *  from an export folder; a refusal is `export` and nothing is created. */
   async importAccessTables(path: string, remotes: string[], tick: (p: ImportProgress) => Promise<void> = async () => {},
-    structure?: AccessStructureSource, keepDir?: string, script?: string): Promise<AccessImportResult> {
+    structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean): Promise<AccessImportResult> {
     const front = this.structureDb();
     const { r, jet3 } = this.links.accessReader(path);
     const found = inspectAccess(r);
@@ -1589,10 +1596,14 @@ export class Session {
     let temp: string | undefined;
     try {
       let exported: AccessExport | undefined;
+      let queryTexts: ExportQuery[] | undefined;
+      let designTexts: ExportDesign[] | undefined;
       if (structure?.kind === 'folder') {
         const read = readAccessExport(structure.dir, basename(path));
         if (!read.ok) return { ok: false, reason: 'export', failure: read.reason };
         exported = read.export;
+        if (queries) queryTexts = readExportQueries(structure.dir, exported);
+        if (designs) designTexts = readExportDesigns(structure.dir, exported);
       } else if (structure?.kind === 'access') {
         if (!script || !hasAccess()) return { ok: false, reason: 'export', failure: 'noAccess' };
         const kept = keepDir === undefined ? undefined : join(keepDir, `${basename(path)}.export`);
@@ -1610,6 +1621,8 @@ export class Session {
         const read = readAccessExport(out, basename(path));
         if (!read.ok) return { ok: false, reason: 'export', failure: read.reason };
         exported = read.export;
+        if (queries) queryTexts = readExportQueries(out, exported); // before the temporary folder goes
+        if (designs) designTexts = readExportDesigns(out, exported);
         if (kept !== undefined) {
           try { cpSync(out, kept, { recursive: true, errorOnExist: true, force: false }); } catch {
             rmSync(kept, { recursive: true, force: true });
@@ -1619,7 +1632,7 @@ export class Session {
       }
       return await importAccess({ front, r, jet3, source: basename(path), tables: wanted.map((remote, i) => ({ remote, name: names[i]! })),
         linked: r.getTableNames({ normalTables: false, linkedTables: true }), info: this.info, tick, stopped: () => this.stopAccessImport,
-        ...(exported ? { structure: exported } : {}) });
+        ...(exported ? { structure: exported } : {}), ...(queryTexts ? { queries: queryTexts } : {}), ...(designTexts ? { designs: designTexts } : {}) });
     } finally {
       this.exportAbort = null;
       // Access may still hold its copy for a moment after being ended: the async rm retries (rmSync does not). Best effort.

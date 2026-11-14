@@ -28,7 +28,10 @@ export interface LexConfig {
   parseDate: (text: string) => string | null;
 }
 
-const WORD = /[\p{L}_][\p{L}\p{M}\p{Nd}_]*/uy;
+/** A name character: a letter, `_`, a digit or mark (not first), or any other non-ASCII symbol that is neither white space nor a
+ *  control character (Access writes `Commandes.N°` unbracketed). ASCII is unchanged. */
+const SYMBOL = String.raw`[^\x00-\x7F\p{Z}\p{C}«»]`; // « » delimit the builder's placeholders: never part of a name
+const WORD = new RegExp(String.raw`(?:[\p{L}_]|${SYMBOL})(?:[\p{L}\p{M}\p{Nd}_]|${SYMBOL})*`, 'uy');
 const OPS = ['<=', '>=', '<>', '<', '>', '=', '+', '-', '*', '/', '\\', '^', '&', '(', ')', '.', ';', '!'];
 /** `(word` : `(SELECT` opens a subquery, always written in canonical SQL, even inside a displayed expression. */
 const PAREN_WORD = /\(\s*([\p{L}_][\p{L}\p{M}\p{Nd}_]*)/uy;

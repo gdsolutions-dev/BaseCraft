@@ -227,7 +227,7 @@ describe('session (lock lifecycle and data access)', () => {
     expect(await s.renameTable('Clients', 'a.b')).toEqual({ ok: false, reason: 'nameInvalid' });
     expect(await s.renameTable('Clients', 'Contacts')).toMatchObject({ ok: true });
     expect(s.dropTable('Fournisseurs')).toEqual({ ok: true });
-    expect(s.listTables()).toEqual([{ name: 'Contacts' }]);
+    expect(s.listTables()).toEqual([expect.objectContaining({ name: 'Contacts' })]);
   });
 
   it('relations: saved, listed, guarded drop, delete results, layout; read-only refuses every write', async () => {
@@ -405,10 +405,10 @@ describe('session (objects and record sources)', () => {
     const a = create();
     await a.saveTable({ originalName: null, design: { ...clients, extra: { futur: 1 } }, mapping: [], allowDataLoss: false });
     expect(a.setDescription('table', 'clients', 'Nos clients')).toEqual({ ok: true });
-    expect(a.listTables()).toEqual([{ name: 'Clients', description: 'Nos clients' }]);
+    expect(a.listTables()).toEqual([expect.objectContaining({ name: 'Clients', description: 'Nos clients' })]);
     expect(a.tableDesign('Clients')).toMatchObject({ description: 'Nos clients', extra: { futur: 1 } });
     expect(a.setDescription('table', 'Clients', '')).toEqual({ ok: true }); // empty: removed
-    expect(a.listTables()).toEqual([{ name: 'Clients' }]);
+    expect(a.listTables()).toEqual([expect.objectContaining({ name: 'Clients' })]);
     expect(a.setDescription('table', 'Absente', 'x')).toEqual({ ok: false, reason: 'notFound' });
     expect(a.saveObject('form', 'F', { formatVersion: '1.0' }, null)).toEqual({ ok: true });
     const before = a.listObjects('form')[0]!;

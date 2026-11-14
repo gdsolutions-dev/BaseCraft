@@ -11,7 +11,7 @@ import { bcErrorCode, useErrorDialog, useModal } from './Modal';
 /** The file the owner picks; what is stored is the 256 px PNG made from it. */
 const MAX_ICON_FILE = 5 * 1024 * 1024;
 
-export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly string[]; baseName: string; onApplied(o: StartupOptions): void }) {
+export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly string[]; baseName: string; onApplied(o: StartupOptions): void; onNavigationOptions?(): void }) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const showError = useErrorDialog();
@@ -157,6 +157,7 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
         </div>
         <h2>{t('options.db.navigation')}</h2>
         <div className="bs-options">
+          <button className="btn" data-testid="opt-db-navoptions" onClick={p.onNavigationOptions}>{t('nav.pane.options').replace(/&(?=\S)/g, '')}</button>
           {box('opt-db-navpane', 'showNavPane', t('options.db.showNavPane'))}
         </div>
         <h2>{t('options.db.ribbonSection')}</h2>

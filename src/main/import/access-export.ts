@@ -2,7 +2,8 @@
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import { dirname, join, resolve, sep, win32 } from 'node:path'
-import type { AccessExport, ExportFailure, ExportManifest, ExportObject, ExportTable } from '../../shared/access-export'
+import type { AccessExport, ExportDesign, ExportFailure, ExportManifest, ExportObject, ExportQuery, ExportTable } from '../../shared/access-export'
+import { MAX_ACCESS_TEXT } from '../../shared/access-text'
 import { sameName } from '../../shared/field-types'
 
 // System executables by absolute path: a bare name is also searched in the current folder, where one could be planted.
@@ -156,4 +157,40 @@ export function readAccessExport(dir: string, source: string):
   if (!manifest.objects.every((o: ExportObject) => safeFile(dir, o.file) !== undefined)) return bad
   if (!sameName(manifest.source, source)) return { ok: false, reason: 'otherSource' }
   return { ok: true, export: { manifest, tables: s.tables as unknown as ExportTable[] } }
+}
+
+const MAX_QUERY = 1_048_576; // UTF-16 units
+
+// The text of `file` (UTF-8, a BOM dropped) or null: missing, empty, over `max` UTF-16 units, outside `dir` or unreadable.
+function readText(dir: string, file: string, max: number): string | null {
+  try {
+    const real = safeFile(dir, file);
+    // a UTF-8 unit takes at most 3 bytes: a bigger file is over the limit before it is read
+    if (real && fs.statSync(real).size <= max * 3 + 3) {
+      const text = fs.readFileSync(real, 'utf8').replace(/^﻿/, '');
+      if (text.trim() !== '' && text.length <= max) return text;
+    }
+  } catch { /* unreadable: null */ }
+  return null;
+}
+
+/** The query entries of `ex.manifest.objects`, in manifest order, each with the text of its file (UTF-8, a BOM dropped, trailing
+ *  white space and one trailing ';' kept as written, at most 1 048 576 UTF-16 units). Reads nothing outside `dir`. */
+export function readExportQueries(dir: string, ex: AccessExport): ExportQuery[] {
+  return ex.manifest.objects.filter((o) => o.type === 'query').map((o) => (
+    { name: o.name, sql: readText(dir, o.file, MAX_QUERY), queryType: o.queryType ?? 0, connect: o.connect ?? '' }));
+}
+
+/** Total of the form and report texts kept by one readExportDesigns call (UTF-16 units). */
+export const MAX_ACCESS_TEXTS = 268_435_456;
+
+/** The form and report entries of `ex.manifest.objects`, in manifest order, each with the text of its file (at most MAX_ACCESS_TEXT). */
+export function readExportDesigns(dir: string, ex: AccessExport, cap = MAX_ACCESS_TEXTS): ExportDesign[] {
+  let kept = 0;   // UTF-16 units of the texts kept so far: past the cap, the next objects are not read
+  return ex.manifest.objects.flatMap((o) => {
+    if (o.type !== 'form' && o.type !== 'report') return [];
+    const text = kept >= cap ? null : readText(dir, o.file, MAX_ACCESS_TEXT);
+    kept += text?.length ?? 0;
+    return [{ kind: o.type, name: o.name, text }];
+  });
 }

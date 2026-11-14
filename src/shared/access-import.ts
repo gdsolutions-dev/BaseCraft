@@ -18,7 +18,27 @@ export type ReportCode =
   | 'tableUnsupported'     // ignored      object: table, reason: a DesignErrorCode
   | 'tableLinked'          // ignored      object: a linked table of the Access file
   | 'relationIgnored'      // ignored      object: Access's relationship name, reason: 'tableNotImported' | a RelationResult reason
-  | 'tablesOnly';          // ignored      one line per import: queries, forms, reports, macros and modules
+  | 'queryImported'       // carried      object: query's name here, part: its name in Access when it changed
+  | 'queryKeptAsText'     // approximated object: query, reason: 'unknownFunction' (part: the function) | 'dataDefinition' | 'notRead' | 'notBound' — saved as SQL text
+  | 'querySourceMissing'  // approximated object: query, part: the table or query it reads that was not imported
+  | 'queryPassThrough'    // approximated object: query, part: the connection's kind — saved as SQL text, its source to be chosen again
+  | 'querySkipped'        // ignored      object: query's name in Access, reason: 'nameInvalid' | 'duplicate' | 'unreadable'
+  | 'formImported'        // carried      object: form's name here, part: its name in Access when it changed
+  | 'reportImported'      // carried      same for a report
+  | 'designSkipped'       // ignored      object: form or report's name in Access, reason: 'nameInvalid' | 'duplicate' | 'unreadable' | 'notRead'
+  | 'designPropertiesIgnored' // ignored  object, n: property values not carried, part: `Name (count)` joined by ', '
+  | 'designControlReplaced'   // approximated object, part: control, reason: its Access type — a label stands in its place
+  | 'designEventDropped'  // ignored      object, part: the event or control, reason: 'procedure' | 'expression' | 'embeddedMacro'
+  | 'designExpressionKept'    // approximated object, part: control (or 'grouping') — the expression is kept as written
+  | 'designSectionDropped'    // ignored  object, part: Access section type
+  | 'designControlRenamed'    // approximated object, part: old name, reason: new name
+  | 'designPageDefault'   // approximated object: a report whose page setup was not read
+  | 'designSourceMissing' // approximated object, part: a source this import did not bring (absent: the record source was not understood)
+  | 'designSubformTable'  // approximated object, part: `Table.X` or `Query.X` shown by a subform
+  | 'macrosOnly'          // ignored      one line per import with forms and reports: macros and modules
+  | 'designsOnly'         // ignored      one line per import with forms and reports but without queries: queries, macros and modules
+  | 'formsOnly'           // ignored      one line per import with queries: forms, reports, macros and modules
+  | 'tablesOnly';         // ignored      one line per import without queries: queries, forms, reports, macros and modules
 
 export const REPORT_LEVEL: Readonly<Record<ReportCode, ReportLevel>> = {
   tableImported: 'carried', relationCreated: 'carried', structureExact: 'carried',
@@ -26,6 +46,11 @@ export const REPORT_LEVEL: Readonly<Record<ReportCode, ReportLevel>> = {
   keyAssumed: 'approximated', keyNotRead: 'approximated', relationNotEnforced: 'approximated', structureNotRead: 'approximated',
   fieldSkipped: 'ignored', valuesLost: 'ignored', tableUnsupported: 'ignored', tableLinked: 'ignored',
   relationIgnored: 'ignored', tablesOnly: 'ignored',
+  queryImported: 'carried', queryKeptAsText: 'approximated', querySourceMissing: 'approximated', queryPassThrough: 'approximated',
+  querySkipped: 'ignored', formsOnly: 'ignored',
+  formImported: 'carried', reportImported: 'carried', designSkipped: 'ignored', designPropertiesIgnored: 'ignored', designControlReplaced: 'approximated',
+  designEventDropped: 'ignored', designExpressionKept: 'approximated', designSectionDropped: 'ignored', designControlRenamed: 'approximated',
+  designPageDefault: 'approximated', designSourceMissing: 'approximated', designSubformTable: 'approximated', macrosOnly: 'ignored', designsOnly: 'ignored',
 };
 
 export interface ReportLine { code: ReportCode; object?: string; part?: string; n?: number; reason?: string }
@@ -40,13 +65,16 @@ export interface AccessImportInfo {
 /** Where the exact structure comes from: none (the file alone), Access (the session runs the export), or an export folder `pickExport` gave. */
 export type AccessStructureSource = { kind: 'file' } | { kind: 'access' } | { kind: 'folder'; dir: string };
 export type AccessImportResult =
-  | { ok: true; tables: { name: string; remote: string; rows: number }[]; report: ImportReport }
+  | { ok: true; tables: { name: string; remote: string; rows: number }[]; queries: { name: string; remote: string }[];
+    forms: { name: string; remote: string }[]; reports: { name: string; remote: string }[]; report: ImportReport }
   | { ok: false; reason: 'missingTables'; names: string[] } | { ok: false; reason: 'cancelled' }
   | { ok: false; reason: 'export'; failure: ExportFailure };
 
 /** The text key (after `import.report.line.`) of a line: structureNotRead with an object, and propertyDropped or indexDropped without a field or index, have their own sentence. */
-export const lineKey = ({ code, object, part }: ReportLine): string =>
-  code === 'structureNotRead' && object !== undefined ? 'structureNotReadTable' : code === 'propertyDropped' && part === undefined ? 'propertyDroppedTable' : code === 'indexDropped' && part === undefined ? 'indexDroppedTable' : code;
+export const lineKey = ({ code, object, part, reason }: ReportLine): string =>
+  code === 'structureNotRead' && object !== undefined ? 'structureNotReadTable' : code === 'propertyDropped' && part === undefined ? 'propertyDroppedTable' : code === 'indexDropped' && part === undefined ? 'indexDroppedTable'
+    : code === 'queryImported' && part !== undefined ? 'queryImportedAs' : code === 'formImported' && part !== undefined ? 'formImportedAs' : code === 'reportImported' && part !== undefined ? 'reportImportedAs'
+    : code === 'designEventDropped' ? `designEventDropped_${reason}` : code === 'designSourceMissing' && part === undefined ? 'designSourceNotRead' : code === 'queryPassThrough' && part === undefined ? 'queryPassThroughPlain' : code;
 
 const ORDER: ReportLevel[] = ['ignored', 'approximated', 'carried'];
 

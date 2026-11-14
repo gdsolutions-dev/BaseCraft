@@ -4,6 +4,7 @@ import { sameName } from '../../shared/field-types';
 import { isSqlSource } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
 import { parseTargets } from '../form/nav-targets';
+import { fold, type NavGroup, type NavObject } from '../../shared/nav-view';
 
 export type DepKind = 'table' | 'query' | 'form' | 'report' | 'macro';
 export interface DepRef { kind: DepKind; name: string }
@@ -101,4 +102,26 @@ export function dependencies(world: DepWorld, target: DepRef): { dependsOnMe: De
     dependsOnMe: world.objects.filter((o) => refsOf(o, world).some(same)).map((o) => ({ kind: o.kind, name: o.name })).sort(byKindName),
     iDependOn: (self ? refsOf(self, world) : []).sort(byKindName),
   };
+}
+
+/** Tables and Related Views: one group per table (the table, then everything that depends on it, directly or not, in `objs` order),
+ *  then `unrelated`. An object may sit in several groups. Modules, and objects nothing links to a table, are unrelated. */
+export function relatedGroups(world: DepWorld, objs: NavObject[]): NavGroup[] {
+  const key = (r: { kind: string; name: string }) => `${r.kind}:${fold(r.name)}`;
+  const groups: NavGroup[] = [];
+  const placed = new Set<string>();
+  const dependents = new Map<string, string[]>(); // reverse graph: object key -> keys of the objects naming it
+  for (const o of world.objects) for (const r of refsOf(o, world)) dependents.set(key(r), [...(dependents.get(key(r)) ?? []), key(o)]);
+  for (const t of objs.filter((o) => o.kind === 'table')) {
+    const reach = new Set<string>([key(t)]);
+    const todo = [key(t)];
+    for (let k = todo.pop(); k !== undefined; k = todo.pop()) {
+      for (const d of dependents.get(k) ?? []) if (!reach.has(d)) { reach.add(d); todo.push(d); }
+    }
+    const items = [t, ...objs.filter((o) => o !== t && o.kind !== 'table' && reach.has(key(o)))];
+    items.forEach((o) => placed.add(key(o)));
+    groups.push({ id: `table:${t.name}`, label: t.name, items });
+  }
+  groups.push({ id: 'unrelated', label: { key: 'nav.group.unrelated' }, items: objs.filter((o) => !placed.has(key(o))) });
+  return groups;
 }

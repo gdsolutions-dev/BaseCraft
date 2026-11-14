@@ -298,6 +298,8 @@ class Parser {
       this.p++;
       path.push(n.v);
     }
+    // in SQL, `Table!Field` is `Table.Field` (Access writes it so); any other chain is a member or badMember
+    if (!root && this.opts.qualified && path.length === 2) return { k: 'id', name: path[1]!, table: t.v };
     if (!root || path.length !== MEMBER_ROOTS[root].arity) {
       throw new ExprSyntaxError('badMember', { start: t.start, end: this.toks[this.p - 1]!.end });
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dependencies, refsOf, sqlSources, type DepObject } from './dependencies';
+import { dependencies, refsOf, relatedGroups, sqlSources, type DepObject } from './dependencies';
+import type { NavObject } from '../../shared/nav-view';
 
 const form = (recordSource: unknown, controls: Record<string, unknown>[] = []) => ({ formatVersion: '1.0', recordSource, props: {},
   sections: [{ kind: 'detail', height: 100, props: {}, controls: controls.map((props, i) => ({ kind: 'subform', name: `c${i}`, left: 0, top: 0, width: 1, height: 1, props })) }] });
@@ -40,5 +41,40 @@ describe('object dependencies', () => {
   it('a table depends on nothing; a pass-through query names nothing', () => {
     expect(dependencies(world, { kind: 'table', name: 'Clients' }).iDependOn).toEqual([]);
     expect(refsOf({ kind: 'query', name: 'P', definition: { formatVersion: '2.0', sql: 'SELECT * FROM Clients' } }, world)).toEqual([]);
+  });
+});
+
+describe('relatedGroups cycles and names', () => {
+  const m = (name: string, target: string): DepObject => ({ kind: 'macro', name, definition: { formatVersion: '1.0', items: [{ k: 'action', action: 'RunMacro', args: { MacroName: target } }] } });
+  const o = (kind: NavObject['kind'], name: string): NavObject => ({ kind, name });
+  it('terminates on a cycle A -> B -> A', () => {
+    const q: DepObject = { kind: 'query', name: 'Q', definition: { formatVersion: '1.0', sql: 'SELECT * FROM T' } };
+    const g = relatedGroups({ tables: ['T'], objects: [q, m('A', 'B'), m('B', 'A'), { kind: 'macro', name: 'C', definition: { formatVersion: '1.0', items: [{ k: 'action', action: 'OpenQuery', args: { QueryName: 'Q' } }] } }] },
+      [o('table', 'T'), o('query', 'Q'), o('macro', 'A'), o('macro', 'B'), o('macro', 'C')]);
+    expect(g.map((x) => [x.id, x.items.map((i) => i.name)])).toEqual([['table:T', ['T', 'Q', 'C']], ['unrelated', ['A', 'B']]]);
+  });
+  it('a name differing by case or accent still links', () => {
+    const q: DepObject = { kind: 'query', name: 'Q', definition: { formatVersion: '1.0', sql: 'SELECT * FROM clients' } };
+    const g = relatedGroups({ tables: ['Clients'], objects: [q] }, [o('table', 'Clients'), o('query', 'Q')]);
+    expect(g[0]!.items.map((i) => i.name)).toEqual(['Clients', 'Q']);
+  });
+});
+
+describe('relatedGroups', () => {
+  const q = (name: string, sql: string): DepObject => ({ kind: 'query', name, definition: { formatVersion: '1.0', sql } });
+  const w = { tables: ['Clients', 'Commandes'], objects: [
+    q('QCmd', 'SELECT * FROM Clients INNER JOIN Commandes ON Clients.Id = Commandes.ClientId'),
+    { kind: 'form' as const, name: 'FCli', definition: form({ kind: 'table', name: 'Clients' }) },
+    { kind: 'report' as const, name: 'RQ', definition: form({ kind: 'query', name: 'QCmd' }) },
+    { kind: 'macro' as const, name: 'M', definition: null },
+  ] };
+  const o = (kind: NavObject['kind'], name: string): NavObject => ({ kind, name });
+  it('one group per table with its transitive dependents, then unrelated', () => {
+    const objs = [o('table', 'Clients'), o('table', 'Commandes'), o('form', 'FCli'), o('query', 'QCmd'), o('report', 'RQ'), o('macro', 'M'), o('module', 'Mod')];
+    const g = relatedGroups(w, objs);
+    expect(g.map((x) => [x.id, x.items.map((i) => i.name)])).toEqual([
+      ['table:Clients', ['Clients', 'FCli', 'QCmd', 'RQ']], ['table:Commandes', ['Commandes', 'QCmd', 'RQ']], ['unrelated', ['M', 'Mod']]]);
+    expect(g[0].label).toBe('Clients');
+    expect(g[2].label).toEqual({ key: 'nav.group.unrelated' });
   });
 });

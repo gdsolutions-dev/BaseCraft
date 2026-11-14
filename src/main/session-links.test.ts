@@ -18,6 +18,7 @@ import { clients, f, t } from '../shared/test-fixtures';
 import type { ImportTexts } from './import/text-import';
 import type { SaveTableRequest, SessionState } from '../shared/api';
 import { DEFAULT_STARTUP } from '../shared/startup';
+import { DEFAULT_NAV_OPTIONS } from '../shared/nav-view';
 
 // A front-end with a local Notes, linked to data.basecraft (seedSales + its relation) and to plain.sqlite (T, W).
 let dir: string;
@@ -196,6 +197,13 @@ describe('linked tables in the session (C1 Task 3)', () => {
     expect(s.dropTable('Clients')).toEqual({ ok: true });
     expect(tablesOf(data)).toContain('Clients');
     expect(s.listTables().some((x) => x.name === 'Clients')).toBe(false);
+  });
+
+  it('deleting a link forgets its navigation keys', () => {
+    s.saveNavOptions({ ...DEFAULT_NAV_OPTIONS, categories: [{ id: 'k', name: 'K', groups: [{ id: 'g', name: 'G', items: ['table:Clients'] }] }], hidden: ['table:Clients'] });
+    s.dropTable('Clients');
+    const o = s.navOptions();
+    expect([o.categories[0].groups[0].items, o.hidden]).toEqual([[], []]);
   });
 
   it('a linked table appends into a local one, read on its own connection', async () => {

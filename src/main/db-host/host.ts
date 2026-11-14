@@ -121,8 +121,8 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
     migrateToServer: (req: MigrateRequest) => s.migrateToServer(req, progress),
     importServerTables: (kind: ServerKind, params: unknown, names: string[]) => s.importServerTables(kind, params, names, progress),
     // Same positions as the session's method: the third one (the tick) is the host's own.
-    importAccessTables: (path: string, remotes: string[], _tick: undefined, structure?: AccessStructureSource, keepDir?: string, script?: string) =>
-      s.importAccessTables(path, remotes, progress, structure, keepDir, script),
+    importAccessTables: (path: string, remotes: string[], _tick: undefined, structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean) =>
+      s.importAccessTables(path, remotes, progress, structure, keepDir, script, queries, designs),
     takeOverLock: () => { try { return s.takeOverLock(); } catch (e) { throw bcError(e); } }, // reopening in write mode
   };
   return new Proxy(s, { get: (t, k) => (typeof k === 'string' && k in own ? own[k] : Reflect.get(t, k)) });

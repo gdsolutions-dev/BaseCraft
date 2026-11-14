@@ -3,6 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { TableSummary } from '../../shared/api';
 import type { AppAction, DocKind, DocTab } from '../state/app-state';
+import type { NavOptions } from '../../shared/nav-view';
 import type { ModalApi } from './Modal';
 import type { PlannedIn } from './ribbon-model';
 
@@ -21,6 +22,8 @@ export interface NavMenuContext {
   openTab?: string;
   /** The open tabs (Name AutoCorrect refuses a rename while a dependent has unsaved changes). */
   tabs?: DocTab[];
+  /** The group the item was right-clicked in, and the pane's view options (Add to group, Hide in this Group...). */
+  nav?: { opts: NavOptions; category: string; group: string; set(patch: Partial<NavOptions>): void };
 }
 
 /** Design items a linked table lacks: its structure and name belong to its file (C1 R2, R8; its Design view opens read-only). */
@@ -35,6 +38,11 @@ export interface NavMenuItem {
   id: string; group: NavMenuGroup; order: number; labelKey: string; icon?: LucideIcon;
   visible?(c: NavMenuContext): boolean; enabled?(c: NavMenuContext): boolean; run?(c: NavMenuContext): void | Promise<void>;
   submenu?: NavMenuItem[]; planned?: PlannedIn;
+  /** A submenu that depends on the context (an object's groups): resolved into `submenu` when the menu is built. */
+  children?(c: NavMenuContext): NavMenuItem[];
+  /** Pane menus: defined = a check mark (a radio, or a checkbox when `toggle`). `literal`: labelKey is shown as is (an object's name),
+   *  `labelValues` interpolate it. `heading`: a non-focusable title row. `sepBefore`: a separator before this submenu item. */
+  checked?(c: NavMenuContext): boolean; toggle?: boolean; literal?: boolean; labelValues?: Record<string, string>; heading?: boolean; sepBefore?: boolean;
 }
 
 interface Batch { items: NavMenuItem[]; fallback: boolean }
@@ -59,7 +67,7 @@ const ordered = (kind: DocKind): NavMenuItem[] => {
 
 /** `c.kind`'s menu: its non-empty groups in Access order (a separator between two), items by `order`, hidden ones left out. */
 export function navMenuGroups(c: NavMenuContext): NavMenuItem[][] {
-  const items = merged(ordered(c.kind)).filter((x) => !x.visible || x.visible(c));
+  const items = merged(ordered(c.kind)).filter((x) => !x.visible || x.visible(c)).map((x) => (x.children ? { ...x, submenu: x.children(c) } : x));
   return NAV_MENU_GROUPS.map((g) => items.filter((x) => x.group === g)).filter((g) => g.length > 0);
 }
 

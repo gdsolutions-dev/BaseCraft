@@ -1,35 +1,39 @@
 // Volet de navigation : groupes Tables, Requêtes, Formulaires, États, Macros ; recherche, double-clic, menu contextuel tiré du
 // registre nav-menu.ts (éléments du socle : nav-menu-items.ts).
-import { ChevronRight, Link2, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
+import { ChevronDown, ChevronRight, Link2, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObjectSummary, TableSummary } from '../../shared/api';
+import { formatDateTime, isoToStored } from '../../shared/locale-format';
+import { fold, groupObjects, weekStartOf, type NavGroup, type NavObject, type NavOptions } from '../../shared/nav-view';
+import { design } from '../design/entry';
+import { getClip } from '../exchange/object-clipboard';
+import { pasteClip } from '../exchange/paste';
 import type { AppAction, DocTab } from '../state/app-state';
 import { DOC_ICONS } from './DocumentTabs';
 import { useModal } from './Modal';
 import { hasDocumentView } from './document-views';
 import { NavMenu } from './NavMenu';
-import { runNavItem, setNavClipboardRunner, type NavMenuContext } from './nav-menu';
+import { runNavItem, setNavClipboardRunner, type NavMenuContext, type NavMenuItem } from './nav-menu';
+import { backgroundMenu, headerMenu } from './nav-pane-menu';
 import './nav-menu-items';
 import '../links/nav-menu-links'; // C1: Refresh Link, Convert to Local Table (run items)
 export { nameErrorKey } from './nav-menu-items';
 
-/** Same folding as bc_fold (accents and case ignored). */
-const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('und');
-
 type NavKind = 'table' | 'query' | 'form' | 'report' | 'macro' | 'module';
-interface Item { kind: NavKind; name: string; description?: string | null; link?: TableSummary['link'] }
-const GROUPS: { kind: NavKind; labelKey: string }[] = [
-  { kind: 'table', labelKey: 'nav.tables' }, { kind: 'query', labelKey: 'nav.queries' },
-  { kind: 'form', labelKey: 'nav.forms' }, { kind: 'report', labelKey: 'nav.reports' }, { kind: 'macro', labelKey: 'nav.macros' },
-  { kind: 'module', labelKey: 'nav.modules' },
-];
+interface Item extends NavObject { link?: TableSummary['link'] }
 const itemKey = (x: Item) => `${x.kind}:${x.name}`;
 /** Tables keep their test id; objects carry their kind (a form may share a table's name). */
 const itemTestId = (x: Item) => (x.kind === 'table' ? `nav-item-${x.name}` : `nav-item-${x.kind}-${x.name}`);
 
 interface Props {
   tables: TableSummary[]; objects: ObjectSummary[]; readOnly: boolean;
+  /** The pane's view options (category, filter, sort, View By...) and their change (merged, kept in the base by the shell). */
+  navOptions: NavOptions; onNavOptions(patch: Partial<NavOptions>): void;
+  /** Navigation Options... (the dialog is the shell's). */
+  onOpenOptions?(): void;
+  /** The region the dates are shown in (week start, created and modified columns). */
+  region: string;
   visible: boolean; onToggle(): void; dispatch: Dispatch<AppAction>;
   /** Run mode (B3 R10): the menus are the Runtime's. */
   runtime: boolean;
@@ -44,24 +48,55 @@ interface Props {
   tabs?: DocTab[];
 }
 
-export function NavPane({ tables, objects, readOnly, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip, openTabOf, tabs }: Props) {
+export function NavPane({ tables, objects, readOnly, navOptions, onNavOptions, onOpenOptions, region, visible, onToggle, dispatch, onSelect, runtime, shortcutMenus, strip, openTabOf, tabs }: Props) {
   const { t } = useTranslation();
   const modal = useModal();
   const [query, setQuery] = useState('');
   const [selected, setSelectedKey] = useState<string | null>(null);
   const setSelected = (x: Item) => { setSelectedKey(itemKey(x)); onSelect?.({ kind: x.kind, name: x.name }); };
-  const [menu, setMenu] = useState<{ item: Item; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ item: Item; group: string; x: number; y: number } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  const [paneMenu, setPaneMenu] = useState<{ kind: 'header' | 'background'; x: number; y: number } | null>(null);
+  const closePaneMenu = useCallback(() => setPaneMenu(null), []);
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set()); // collapsed groups, by category and group id
 
-  const q = fold(query.trim());
-  const items: Item[] = [
+  const q = navOptions.searchBar ? fold(query.trim()) : '';
+  const items = useMemo<Item[]>(() => [
     ...tables.map((x) => ({ ...x, kind: 'table' as const })),
     ...objects.flatMap((o) => (o.kind === 'query' || o.kind === 'form' || o.kind === 'report' || o.kind === 'macro' || o.kind === 'module' ? [{ ...o, kind: o.kind }] : [])),
-  ];
-  const shown = items.filter((x) => fold(x.name).includes(q));
+  ], [tables, objects]);
+
+  // Tables and Related Views reads every definition: loaded once per change of the objects, and only for that category (the
+  // Runtime has no designers, its pane then groups by type)
+  const related = navOptions.category === 'related' && !!design;
+  const [relate, setRelate] = useState<((objs: NavObject[]) => NavGroup[]) | null>(null);
+  const namesKey = items.map(itemKey).join('|'); // the definitions are read again when the set of objects changes, not on every refresh
+  useEffect(() => {
+    if (!related) return;
+    let live = true;
+    void design!.loadRelated().then((f) => { if (live) setRelate(() => f); }, (e) => console.error(e)); // until it loads (or if it fails) the pane groups by type
+    return () => { live = false; };
+  }, [related, namesKey]);
+  const relatedList = useMemo(() => (related && relate ? relate(items) : undefined), [related, relate, items]);
+  const viewOptions = useMemo(() => ({ ...navOptions, filterGroup: null, ...(navOptions.category === 'related' && !design ? { category: 'type' } : {}) }), [navOptions]);
+  const allGroups = useMemo(
+    () => groupObjects(items, viewOptions, { now: new Date(), weekStart: weekStartOf(region), related: relatedList }),
+    [items, viewOptions, relatedList, region],
+  );
+  const groups: NavGroup[] = navOptions.filterGroup && allGroups.some((g) => g.id === navOptions.filterGroup)
+    ? allGroups.filter((g) => g.id === navOptions.filterGroup) : allGroups;
+  const labelOf = (l: NavGroup['label']) => (typeof l === 'string' ? l : t(l.key, l.values));
+  const shown = (g: NavGroup) => (q ? g.items.filter((x) => fold(x.name).includes(q)) : g.items) as Item[];
+  const visibleGroups = groups.filter((g) => !q || navOptions.category === 'type' || shown(g).length > 0);
+  const total = visibleGroups.reduce((n, g) => n + shown(g).length, 0);
+  const categoryName = navOptions.categories.find((c) => c.id === navOptions.category)?.name
+    || t(`nav.category.${['type', 'related', 'created', 'modified'].includes(navOptions.category) ? navOptions.category : 'custom'}`);
+  const headLabel = navOptions.filterGroup && groups.length === 1 && groups[0]!.id === navOptions.filterGroup ? labelOf(groups[0]!.label) : categoryName;
+  const date = (iso?: string) => (iso ? formatDateTime(isoToStored(iso), region) : '');
 
   /** The menu's context for `x`: `reselect` makes the selection follow a renamed object or leave a deleted one. */
-  const ctxOf = (x: Item): NavMenuContext => ({
+  const ctxOf = (x: Item, group?: string): NavMenuContext => ({
+    ...(group ? { nav: { opts: viewOptions, category: viewOptions.category, group, set: onNavOptions } } : {}),
     kind: x.kind, name: x.name, readOnly, runtime, modal, dispatch, ...(x.link ? { link: x.link } : {}), openTab: openTabOf?.(x.kind, x.name), tabs: tabs ?? [],
     reselect: (to) => {
       if (selected !== itemKey(x)) return;
@@ -72,6 +107,17 @@ export function NavPane({ tables, objects, readOnly, visible, onToggle, dispatch
   const runner = useRef<(id: 'cut' | 'copy' | 'paste') => boolean>(() => false);
   runner.current = (id) => { const x = items.find((i) => itemKey(i) === selected); return !!x && runNavItem(ctxOf(x), id); };
   useEffect(() => setNavClipboardRunner((id) => runner.current(id)), []);
+
+  /** The pane's own menus (header, background): the menu context is a stub, none of their items needs an object. */
+  const paneCtx: NavMenuContext = { kind: 'table', name: '', readOnly, runtime, modal, dispatch, reselect: () => undefined, tabs: tabs ?? [] };
+  const paneMenuGroups = (kind: 'header' | 'background'): NavMenuItem[][] => {
+    const env = {
+      opts: navOptions, groups: allGroups, customCategories: navOptions.categories.map((c) => ({ id: c.id, name: c.name })), relatedAvailable: !!design, runtime,
+      canPaste: !readOnly && getClip() !== null, set: onNavOptions, showAllGroups: () => setClosed(new Set()),
+      paste: () => void pasteClip({ modal, dispatch }), openOptions: () => onOpenOptions?.(),
+    };
+    return kind === 'header' ? headerMenu(env) : backgroundMenu(env);
+  };
 
   if (!visible) {
     if (!strip) return null;
@@ -90,33 +136,52 @@ export function NavPane({ tables, objects, readOnly, visible, onToggle, dispatch
     : x.kind === 'macro' ? runNavItem(ctxOf(x), 'open') : dispatch({ type: 'open', kind: x.kind, name: x.name, mode: x.kind === 'table' ? 'datasheet' : x.kind === 'module' ? 'design' : 'run' });
 
   return (
-    <aside className="nav" data-testid="nav-pane" aria-label={t('nav.title')}>
-      <div className="nav-head">
-        <span className="nav-filter">{t('nav.allObjects')}</span>
+    <aside className="nav" data-testid="nav-pane" data-view={navOptions.viewBy} aria-label={t('nav.title')}>
+      <div className="nav-head" onContextMenu={(e) => { // Access: right-click on the pane's header gives the background menu
+        e.preventDefault();
+        if (!shortcutMenus) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        setPaneMenu({ kind: 'background', x: e.clientX || r.left + 24, y: e.clientY || r.bottom });
+      }}>
+        <button className="nav-filter" data-testid="nav-head-menu" aria-haspopup="menu" onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setPaneMenu({ kind: 'header', x: r.left, y: r.bottom });
+        }}>{headLabel}<ChevronDown className="ic ic-sm" aria-hidden /></button>
         <button className="iconbtn" data-testid="nav-hide" title={t('nav.hide')} aria-label={t('nav.hide')} onClick={onToggle}>
           <PanelLeftClose className="ic" aria-hidden />
         </button>
       </div>
-      <label className="search">
-        <Search className="ic" aria-hidden />
-        <input data-testid="nav-search" type="search" placeholder={t('nav.search')} aria-label={t('nav.search')}
-          value={query} onChange={(e) => setQuery(e.target.value)} />
-      </label>
-      <div className="nav-list">
-        {GROUPS.map((g) => {
-          const Icon = DOC_ICONS[g.kind];
-          const list = shown.filter((x) => x.kind === g.kind);
+      {navOptions.searchBar && (
+        <label className="search">
+          <Search className="ic" aria-hidden />
+          <input data-testid="nav-search" type="search" placeholder={t('nav.search')} aria-label={t('nav.search')}
+            value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+      )}
+      <div className="nav-list" tabIndex={0} onContextMenu={(e) => { // Shift+F10 on the list itself gives 0,0
+        if ((e.target as HTMLElement).closest('.nitem')) return;
+        e.preventDefault();
+        if (!shortcutMenus) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        setPaneMenu({ kind: 'background', x: e.clientX || r.left + 24, y: e.clientY || r.top + 24 });
+      }}>
+        {visibleGroups.map((g) => {
+          const list = shown(g);
+          const key = `${navOptions.category}/${g.id}`;
           return (
-            <details key={g.kind} className="ngroup" open data-testid={`nav-group-${g.kind}`}>
+            <details key={g.id} className="ngroup" open={!closed.has(key)} data-testid={`nav-group-${g.id}`}
+              onToggle={(e) => { const o = e.currentTarget.open; setClosed((c) => (o === !c.has(key) ? c : new Set([...c].filter((k) => k !== key).concat(o ? [] : [key])))); }}>
               <summary>
-                <ChevronRight className="ic ic-sm chev" aria-hidden />{t(g.labelKey)}
-                <span className="count" data-testid={`nav-count-${g.kind}`}>{list.length}</span>
+                <ChevronRight className="ic ic-sm chev" aria-hidden />{labelOf(g.label)}
+                <span className="count" data-testid={`nav-count-${g.id}`}>{list.length}</span>
               </summary>
-              {list.map((x) => (
-                <button key={x.name} data-testid={itemTestId(x)} title={x.description || x.name}
-                  className={`nitem${itemKey(x) === selected ? ' is-selected' : ''}`}
-                  onClick={() => setSelected(x)}
-                  onDoubleClick={() => open(x)}
+              {list.map((x) => {
+                const Icon = DOC_ICONS[x.kind];
+                return (
+                <button key={itemKey(x)} data-testid={itemTestId(x)} title={x.description || x.name}
+                  className={`nitem${itemKey(x) === selected ? ' is-selected' : ''}${x.hidden ? ' is-hidden' : ''}`}
+                  onClick={() => { setSelected(x); if (navOptions.singleClick) open(x); }}
+                  onDoubleClick={() => { if (!navOptions.singleClick) open(x); }} // single-click mode: the click already opened it
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') { e.preventDefault(); open(x); return; }
                     if (e.key === 'F2') { e.preventDefault(); runNavItem(ctxOf(x), 'rename'); return; } // refused while the object is open
@@ -129,18 +194,26 @@ export function NavPane({ tables, objects, readOnly, visible, onToggle, dispatch
                     e.currentTarget.focus(); // the menu gives the focus back to the item when it closes
                     setSelected(x);
                     const r = e.currentTarget.getBoundingClientRect(); // keyboard (Shift+F10) gives 0,0
-                    setMenu({ item: x, x: e.clientX || r.left + 24, y: e.clientY || r.bottom });
+                    setMenu({ item: x, group: g.id, x: e.clientX || r.left + 24, y: e.clientY || r.bottom });
                   }}>
                   {x.link ? <Link2 className="ic" aria-hidden data-testid={`nav-item-link-${x.name}`} /> : <Icon className="ic" aria-hidden />}<span>{x.name}</span>
+                  {navOptions.viewBy === 'details' && (<>
+                    <span className="nitem-created">{date(x.created)}</span><span className="nitem-modified">{date(x.modified)}</span>
+                    <span className="nitem-desc">{x.description}</span>
+                  </>)}
                 </button>
-              ))}
+                );
+              })}
             </details>
           );
         })}
-        {q && shown.length === 0 && <p className="nav-empty muted">{t('nav.noMatch')}</p>}
+        {q && total === 0 && <p className="nav-empty muted">{t('nav.noMatch')}</p>}
       </div>
       {menu && (
-        <NavMenu x={menu.x} y={menu.y} onClose={closeMenu} ctx={ctxOf(menu.item)} />
+        <NavMenu x={menu.x} y={menu.y} onClose={closeMenu} ctx={ctxOf(menu.item, menu.group)} />
+      )}
+      {paneMenu && (
+        <NavMenu x={paneMenu.x} y={paneMenu.y} onClose={closePaneMenu} ctx={paneCtx} testId="nav-pane-menu" groups={paneMenuGroups(paneMenu.kind)} />
       )}
     </aside>
   );

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { inTransaction } from './tx';
 import { readOptions, updateOptions } from './file-format';
+import { navForget, navRename } from './navigation';
 import { isLinkName } from '../links/store';
 import { parseDataMacros, type DataMacros } from '../../shared/macro/data-macro';
 import type { SheetLayout } from '../../shared/sheet-layout';
@@ -281,14 +282,16 @@ const TABLE_KEYS = ['description', 'validationRule', 'validationText', 'indexes'
 export function writeTableMetadata(db: DatabaseSync, design: TableDesign): void {
   inTransaction(db, () => {
     const old = db.prepare('SELECT props FROM bc_tables WHERE name = ?').get(design.name) as { props: string } | undefined;
-    const { sheetLayout: _layout, ...extra } = design.extra ?? {}; // the datasheet's layout is saved by setSheetLayout alone: a stale copy in the design never overwrites it
+    const { sheetLayout: _layout, created: _c, modified: _m, ...extra } = design.extra ?? {}; // the datasheet's layout is saved by setSheetLayout alone: a stale copy in the design never overwrites it
     const incoming: Record<string, unknown> = { ...extra };
     for (const k of TABLE_KEYS) if (design[k] !== undefined) incoming[k] = design[k];
     const { description: _gone, validationRule: _rule, validationText: _text, indexes: oldIndexes, ...kept } = old ? parseObject(old.props) : {};
     // Stored entries this version cannot read (a newer one's) are kept as they are, after the design's.
     const unreadable = Array.isArray(oldIndexes) ? oldIndexes.filter((x) => !readableIndex(x)) : [];
     if (unreadable.length) incoming.indexes = [...(design.indexes ?? []), ...unreadable];
-    const props = { ...kept, ...incoming };
+    const now = new Date().toISOString();
+    const oldCreated = kept.created; // the dates are the base's own: a design's stale copy never overwrites them
+    const props = { ...kept, ...incoming, created: typeof oldCreated === 'string' ? oldCreated : now, modified: now };
     db.prepare(
       `INSERT INTO bc_tables (name, props) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET name = excluded.name, props = excluded.props`,
     ).run(design.name, JSON.stringify(props));
@@ -722,6 +725,7 @@ export function renameTable(db: DatabaseSync, oldName: string, newName: string):
     renameInLookups(db, live, cur, newName);
     renameInRelations(db, live, cur, newName); // the REFERENCES clauses were rewritten by SQLite (legacy_alter_table OFF)
     moveInLayout(db, cur, newName);
+    navRename(db, 'table', cur, newName);
   });
 }
 
@@ -754,6 +758,7 @@ export function dropTable(db: DatabaseSync, name: string): OpResult {
     const k = foreignKeys(db).find((x) => x.child !== cur && parentOf(live, x) === cur);
     if (k) return { ok: false, reason: 'referenced', table: k.child };
     removeTable(db, cur);
+    navForget(db, 'table', cur);
     return { ok: true };
   });
 }
@@ -778,8 +783,13 @@ export function listTables(db: DatabaseSync): TableSummary[] {
   return live.map((name) => {
     const mn = metaName(meta.map((r) => r.name), live, name);
     const m = meta.find((r) => r.name === mn);
-    const d = m ? parseObject(m.props).description : undefined;
-    return typeof d === 'string' ? { name, description: d } : { name };
+    const p = m ? parseObject(m.props) : {};
+    return {
+      name,
+      ...(typeof p.description === 'string' ? { description: p.description } : {}),
+      ...(typeof p.created === 'string' ? { created: p.created } : {}),
+      ...(typeof p.modified === 'string' ? { modified: p.modified } : {}),
+    };
   });
 }
 
@@ -809,7 +819,7 @@ export function tableDesign(db: DatabaseSync, name: string): TableDesign {
   const row = tm.find((r) => r.name === tableMeta);
   if (row) {
     // dataMacros (T2) is not part of the design: tableDesign / writeTableMetadata leave it to getDataMacros / setDataMacros
-    const { description, validationRule, validationText, indexes, dataMacros: _dm, ...extra } = parseObject(row.props);
+    const { description, validationRule, validationText, indexes, dataMacros: _dm, created: _c, modified: _m, ...extra } = parseObject(row.props);
     if (typeof description === 'string') design.description = description;
     const ixs = storedIndexes(indexes);
     if (ixs.length) design.indexes = ixs;

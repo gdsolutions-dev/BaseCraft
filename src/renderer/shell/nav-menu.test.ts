@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { accessKey, navItemEnabled, navMenuGroups, placeMenu, registerNavMenuItems, type NavMenuContext, type NavMenuItem } from './nav-menu';
+import { DEFAULT_NAV_OPTIONS } from '../../shared/nav-view';
 
 // The macro menu is assembled from the real registrations (foundation, A6, B1); the modules behind the items' actions are stubbed.
 const stub = vi.hoisted(() => ({ hasView: vi.fn(() => false), runMacroByName: vi.fn(async () => {}) }));
@@ -124,18 +125,18 @@ describe('macro menu (B1)', () => {
   };
   beforeEach(() => { stub.hasView.mockReturnValue(false); stub.runMacroByName.mockClear(); });
 
-  it("Run, Design View | Export | Rename, Hide, Delete | Cut, Copy, Paste | Object Properties; Export and Hide are planned for later", async () => {
+  it("Run, Design View | Export | Rename, Hide, Delete | Cut, Copy, Paste | Object Properties; Export is planned for later", async () => {
     const { navMenuGroups } = await load();
     const groups = navMenuGroups(ctx({ kind: 'macro', name: 'MBip' }));
     expect(groups.map((g) => g.map((x) => x.id))).toEqual([['open', 'design'], ['export'], ['rename', 'hide', 'delete'], ['cut', 'copy', 'paste'], ['properties']]);
-    expect(groups.flat().filter((x) => x.planned).map((x) => [x.id, x.planned])).toEqual([['export', 'later'], ['hide', 'later']]);
+    expect(groups.flat().filter((x) => x.planned).map((x) => [x.id, x.planned])).toEqual([['export', 'later']]);
     expect(groups.flat().map((x) => x.labelKey)).toEqual(['nav.menu.run', 'nav.menu.design', 'nav.menu.export', 'nav.menu.rename', 'nav.menu.hide', 'nav.menu.delete',
       'nav.menu.cut', 'nav.menu.copy', 'nav.menu.paste', 'nav.menu.objectProperties']);
   });
 
   it('at runtime Design View, Rename, Delete, Cut and Paste are hidden', async () => {
     const { navMenuGroups } = await load();
-    expect(navMenuGroups(ctx({ kind: 'macro', runtime: true })).map((g) => g.map((x) => x.id))).toEqual([['open'], ['export'], ['hide'], ['copy'], ['properties']]);
+    expect(navMenuGroups(ctx({ kind: 'macro', runtime: true })).map((g) => g.map((x) => x.id))).toEqual([['open'], ['export'], ['copy'], ['properties']]);
   });
 
   it('Run runs the macro by its name; Design View is enabled once a Design view is registered, and opens the macro in it', async () => {
@@ -158,7 +159,7 @@ describe('macro menu (B1)', () => {
     const { navMenuGroups, navItemEnabled } = await load();
     stub.hasView.mockReturnValue(true); // Design View is not what is under test
     const c = ctx({ kind: 'macro', readOnly: true });
-    expect(navMenuGroups(c).flat().filter((x) => x.run && !navItemEnabled(x, c)).map((x) => x.id)).toEqual(['rename', 'delete', 'cut', 'paste']);
+    expect(navMenuGroups(c).flat().filter((x) => x.run && !navItemEnabled(x, c)).map((x) => x.id)).toEqual(['rename', 'hide', 'delete', 'cut', 'paste']);
   });
 });
 
@@ -273,7 +274,7 @@ describe('linked table menu (C1)', () => {
     expect(navMenuGroups(ctx({ kind: 'table', link })).map((g) => g.map((x) => x.id)))
       .toEqual([['open', 'design'], ['export'], ['hide', 'delete'], ['linkedTableManager', 'refreshLink', 'convertToLocal'], ['properties']]);
     expect(navMenuGroups(ctx({ kind: 'table', link, runtime: true })).map((g) => g.map((x) => x.id)))
-      .toEqual([['open'], ['export'], ['hide'], ['refreshLink'], ['properties']]);
+      .toEqual([['open'], ['export'], ['refreshLink'], ['properties']]);
     expect(navMenuGroups(ctx({ kind: 'table' })).flat().map((x) => x.id)).not.toContain('linkedTableManager');
   });
 
@@ -285,10 +286,10 @@ describe('linked table menu (C1)', () => {
     expect(all).toContain('design');
   });
 
-  it('at runtime a link keeps Open, Export, Refresh Link and Properties (Hide stays a placeholder)', async () => {
+  it('at runtime a link keeps Open, Export, Refresh Link and Properties', async () => {
     const { navMenuGroups } = await load();
     expect(navMenuGroups(ctx({ kind: 'table', link, runtime: true })).map((g) => g.map((x) => x.id)))
-      .toEqual([['open'], ['export'], ['hide'], ['refreshLink'], ['properties']]);
+      .toEqual([['open'], ['export'], ['refreshLink'], ['properties']]);
   });
 
   it('Convert to Local Table needs a writable base; Refresh Link does not', async () => {
@@ -297,5 +298,37 @@ describe('linked table menu (C1)', () => {
     const items = navMenuGroups(c).flat();
     expect(navItemEnabled(items.find((x) => x.id === 'convertToLocal')!, c)).toBe(false);
     expect(navItemEnabled(items.find((x) => x.id === 'refreshLink')!, c)).toBe(true);
+  });
+});
+
+describe('group items (nav views)', () => {
+  const opts = { ...DEFAULT_NAV_OPTIONS, category: 'c1', categories: [{ id: 'c1', name: 'V', groups: [{ id: 'a', name: 'A', items: ['table:T'] }, { id: 'b', name: 'B', items: [] }] }] };
+  const nav = (group: string, o = opts, category = 'c1') => ({ opts: o, category, group, set: vi.fn() });
+  const load = async () => {
+    vi.resetModules();
+    const m = await import('./nav-menu');
+    await import('./nav-menu-items');
+    return { ...m, all: (c: NavMenuContext) => m.navMenuGroups(c).flat() };
+  };
+  it('Add to group only in a custom category (design), listing the other groups then New Group; Hide / Unhide swap', async () => {
+    const { all } = await load();
+    const c = ctx({ kind: 'table', name: 'T', nav: nav('a') });
+    const add = all(c).find((x) => x.id === 'addToGroup')!;
+    expect(add.submenu!.map((x) => x.id)).toEqual(['group-b', 'newGroup']);
+    expect(all(ctx({ kind: 'table', name: 'T', nav: nav('type', opts, 'type') })).map((x) => x.id)).not.toContain('addToGroup');
+    expect(all(ctx({ kind: 'table', name: 'T', runtime: true, nav: nav('a') })).map((x) => x.id)).not.toContain('hide');
+    expect(all(c).map((x) => x.id)).toContain('hide');
+    expect(all(c).map((x) => x.id)).not.toContain('unhide');
+    const hidden = nav('a', { ...opts, hiddenIn: ['c1|a|table:T'] });
+    expect(all(ctx({ kind: 'table', name: 'T', nav: hidden })).map((x) => x.id)).toContain('unhide');
+  });
+  it('items are disabled on a read-only base; run applies the patch', async () => {
+    const { all, navItemEnabled } = await load();
+    const n = nav('a');
+    const c = ctx({ kind: 'table', name: 'T', nav: n });
+    const hide = all(c).find((x) => x.id === 'hide')!;
+    expect(navItemEnabled(hide, ctx({ kind: 'table', name: 'T', nav: n, readOnly: true }))).toBe(false);
+    hide.run!(c);
+    expect(n.set).toHaveBeenCalledWith({ hiddenIn: ['c1|a|table:T'] });
   });
 });

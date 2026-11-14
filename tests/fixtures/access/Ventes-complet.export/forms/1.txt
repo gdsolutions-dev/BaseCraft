@@ -1,7 +1,7 @@
 Version =21
 VersionRequired =20
 PublishOption =1
-Checksum =742046008
+Checksum =-1551050949
 Begin Form
     DividingLines = NotDefault
     AllowDesignChanges = NotDefault
@@ -20,7 +20,7 @@ Begin Form
         0xdd4bcc2662a0e640
     End
     GUID = Begin
-        0x61ee3fdc5b015542ab00e80e6203b5fc
+        0x76cdad234da0b142b86cd3371f313b0a
     End
     NameMap = Begin
         0x0acc0e5500000000000000000000000000000000000000000000000000000000 ,
@@ -226,7 +226,7 @@ Begin Form
             BackColor =15783096
             Name ="EntêteFormulaire"
             GUID = Begin
-                0x2a8b58e35112404ebecea78a6fe27d89
+                0x8ac5f2fe46c9984d9795fcd8c0475235
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1
@@ -242,7 +242,7 @@ Begin Form
                     Height =463
                     Name ="Auto_Logo0"
                     GUID = Begin
-                        0x7757cb7fbc96774f8d15970c65e06b76
+                        0xf0054a61f91dac44a20dc49f9f6da101
                     End
                     ImageData = Begin
                         0x89504e470d0a1a0a0000000d4948445200000020000000200806000000737a7a ,
@@ -385,7 +385,7 @@ Begin Form
                     Caption ="Clients"
                     FontName ="Aptos Display"
                     GUID = Begin
-                        0x07765d80e9e1584498ef2b8460114604
+                        0x65daeba2b144fc4d81ae0c4e77e10bfa
                     End
                     HorizontalAnchor =2
                     LayoutCachedLeft =2794
@@ -413,7 +413,7 @@ Begin Form
                     Caption ="Ouvrir état"
                     OnClick ="MOuvrirEtat"
                     GUID = Begin
-                        0xb0b85b19de5a38488e51e03f9652c137
+                        0x5f42142bf0547945b86fa41150fa5f93
                     End
                     HorizontalAnchor =2
 
@@ -438,7 +438,7 @@ Begin Form
                     Width =694
                     Height =291
                     GUID = Begin
-                        0xb64e422595969a48868a35c01e46320c
+                        0xa88473766171a44280429f69304dcd9f
                     End
                     Name ="Modifiable30"
                     ControlSource ="Clients"
@@ -461,7 +461,7 @@ Begin Form
                             Name ="Étiquette31"
                             Caption ="Recherche client"
                             GUID = Begin
-                                0x62938fd7ef05204c9b0845b590583356
+                                0xf487a6ae4605c245939019a6e1ac0e99
                             End
                             LayoutCachedLeft =300
                             LayoutCachedTop =60
@@ -477,7 +477,7 @@ Begin Form
                     Height =463
                     Name ="CelluleVide37"
                     GUID = Begin
-                        0x31f151189f00ea4199ee715b3af7a33e
+                        0x74e749a76f9cd34b838dd6723a47ab71
                     End
                     LayoutCachedLeft =300
                     LayoutCachedTop =411
@@ -492,7 +492,7 @@ Begin Form
             Height =8164
             Name ="Détail"
             GUID = Begin
-                0x5b9ece757ddaec46a097b9de27f4551e
+                0x6e1509b826580749baeb08e5443a39eb
             End
             AutoHeight =1
             AlternateBackColor =15921906
@@ -515,7 +515,7 @@ Begin Form
                     Name ="N°"
                     ControlSource ="N°"
                     GUID = Begin
-                        0xf6d498818c61d140a5ccf9e98342ef2d
+                        0x0fdd93dea06fd14ab5cde1bb63772edd
                     End
                     BottomPadding =150
 
@@ -540,7 +540,7 @@ Begin Form
                             Name ="Étiquette0"
                             Caption ="N°"
                             GUID = Begin
-                                0xbbd74ba03a197846842a924abc667785
+                                0x2142e679ef5b9f4998cd9982c8b8cdb9
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -566,7 +566,7 @@ Begin Form
                     Name ="Nom"
                     ControlSource ="Nom"
                     GUID = Begin
-                        0xbbeec033b9dde54794a4cee9d532d600
+                        0x69a5bc6b5fd5db4bae56885c9039bcc8
                     End
                     BottomPadding =150
 
@@ -593,7 +593,7 @@ Begin Form
                             Name ="Étiquette3"
                             Caption ="Nom"
                             GUID = Begin
-                                0xff1052494c471e40925ab4e29bb9e16d
+                                0x5c41cea54f43874981fdb418f1d07131
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -621,7 +621,7 @@ Begin Form
                     Name ="Ville"
                     ControlSource ="Ville"
                     GUID = Begin
-                        0xe1582bcb3613cc4bb8d1efd95413e5f2
+                        0xa743ee502ab4274989c1ced956937d0a
                     End
                     BottomPadding =150
 
@@ -648,7 +648,7 @@ Begin Form
                             Name ="Étiquette6"
                             Caption ="Ville"
                             GUID = Begin
-                                0xda908c18c42c3b4f8a20a97d75989605
+                                0x3b3362b7864d1041b34a2f631a2ad85e
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -677,7 +677,7 @@ Begin Form
                     Name ="Inscrit"
                     ControlSource ="Inscrit"
                     GUID = Begin
-                        0x967ab4896c1b1f49a1ca7f3a34ed75a2
+                        0x200c36941e33b446ad71100708f486bd
                     End
                     BottomPadding =150
 
@@ -704,7 +704,7 @@ Begin Form
                             Name ="Étiquette9"
                             Caption ="Inscrit"
                             GUID = Begin
-                                0xfb20043fc1546f439620562b92e83e0d
+                                0x959003c09239a145a97ca39fc91cd57d
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -726,7 +726,7 @@ Begin Form
                     Name ="Actif"
                     ControlSource ="Actif"
                     GUID = Begin
-                        0x0f308a7e08649e42af19f64e9cc5dabc
+                        0x212f21591f2e074bbdba5c67f46e3c4e
                     End
                     BottomPadding =150
 
@@ -753,7 +753,7 @@ Begin Form
                             Name ="Étiquette12"
                             Caption ="Actif"
                             GUID = Begin
-                                0xafd69a2239989f449bf8d0de4040a307
+                                0xf5531f3b6edefe44b046bba2e8e20cf1
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -783,7 +783,7 @@ Begin Form
                     Name ="Remarque"
                     ControlSource ="Remarque"
                     GUID = Begin
-                        0x42b840d16f929742af42a2e305d2c119
+                        0xedf94ed9fb75c04fad30c3c0ac708a3d
                     End
                     BottomPadding =150
 
@@ -810,7 +810,7 @@ Begin Form
                             Name ="Étiquette15"
                             Caption ="Remarque"
                             GUID = Begin
-                                0xa1a9164890919a4f9266f91812ddfa3b
+                                0x644a02d635d0fb40970af257a0927e5e
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -831,7 +831,7 @@ Begin Form
                     Name ="Photo"
                     ControlSource ="Photo"
                     GUID = Begin
-                        0x5581baefa7d2884c84d19ffdc068254a
+                        0x29973f0f50353c4c9bd4c0a511875619
                     End
                     BottomPadding =150
                     TabIndex =6
@@ -859,7 +859,7 @@ Begin Form
                             Name ="Étiquette18"
                             Caption ="Photo"
                             GUID = Begin
-                                0xc031c1d7746e2c4badd364120f977aa9
+                                0xc5074730300bbe4099a6759d52767d7c
                             End
                             BottomPadding =150
                             LayoutCachedLeft =343
@@ -883,7 +883,7 @@ Begin Form
                     LinkChildFields ="Client"
                     LinkMasterFields ="N°"
                     GUID = Begin
-                        0x740825c0df491440a84c315497b4fa15
+                        0xcda709c25bcc424c88aac5497664bb32
                     End
                     BottomPadding =150
 
@@ -901,7 +901,7 @@ Begin Form
             Height =0
             Name ="PiedFormulaire"
             GUID = Begin
-                0x8218d0c465dd05468f9f8319756e9836
+                0x6b34d2fa5baa5d4d82e3edd04e6da927
             End
             AutoHeight =1
             AlternateBackThemeColorIndex =1

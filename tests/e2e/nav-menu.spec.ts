@@ -22,12 +22,9 @@ test('C6: a table\'s context menu — Access order, access keys, placeholders, k
     await expect(page.getByTestId('nav-menu-open')).toHaveText('Ouvrir');
     await expect(page.getByTestId('nav-menu-open').locator('u')).toHaveText('O'); // access key underlined
     await expect(page.getByTestId('nav-menu-properties')).toHaveText('Propriétés de la table');
-    // a placeholder: disabled but reachable, its tooltip names the batch, activating it does nothing
-    const hide = page.getByTestId('nav-menu-hide');
-    await expect(hide).toHaveAttribute('aria-disabled', 'true');
-    await expect(hide).toHaveAttribute('title', fr.ribbon.planned.later);
+    // Hide in this Group is live (Navigation Pane views)
+    await expect(page.getByTestId('nav-menu-hide')).toBeEnabled();
     await expect(page.getByTestId('nav-menu-cut')).toBeEnabled(); // A6: Cut is live
-    await hide.click({ force: true });
     await expect(page.getByTestId('nav-menu')).toBeVisible();
 
     // keyboard: the first item has the focus, arrows move (placeholders included), Escape closes and gives the focus back
@@ -97,7 +94,7 @@ test('C6: a table\'s context menu — Access order, access keys, placeholders, k
     await expect(page.getByTestId('object-properties-description')).toHaveValue('Nos clients');
     await page.getByTestId('object-properties-cancel').click();
     expect(await page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.tables.list()))
-      .toEqual([{ name: 'Clients', description: 'Nos clients' }]);
+      .toMatchObject([{ name: 'Clients', description: 'Nos clients' }]);
   } finally {
     await app.close();
   }
@@ -189,7 +186,7 @@ test('C6: read-only base — Properties shows the description read-only and OK s
     await expect(desc).toHaveValue('');
     await p.getByTestId('object-properties-ok').click();
     await expect(p.getByTestId('object-properties')).toHaveCount(0);
-    expect(await a.page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.tables.list())).toEqual([{ name: 'Clients' }]);
+    expect(await a.page.evaluate(() => (window as unknown as { basecraft: BasecraftApi }).basecraft.tables.list())).toMatchObject([{ name: 'Clients' }]);
   } finally {
     await b.app.close();
     await a.app.close();
@@ -218,7 +215,7 @@ test('C6: Properties while the table is open in Design view — saving the desig
       const bc = (window as unknown as { basecraft: BasecraftApi }).basecraft;
       return { list: await bc.tables.list(), field: (await bc.tables.design('Clients')).fields[1]!.props.description };
     });
-    expect(await api()).toEqual({ list: [{ name: 'Clients', description: 'Fichier clients' }], field: 'Nom du client' });
+    expect(await api()).toMatchObject({ list: [{ name: 'Clients', description: 'Fichier clients' }], field: 'Nom du client' });
   } finally {
     await app.close();
   }

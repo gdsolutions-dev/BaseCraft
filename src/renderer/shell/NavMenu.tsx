@@ -1,16 +1,18 @@
 // Rendu du menu contextuel du volet de navigation depuis le registre (nav-menu.ts) : groupes séparés, sous-menus, clavier
 // complet (flèches, Origine/Fin, Entrée, Échap, touches d'accès soulignées), emplacements prévus atteignables avec leur info-bulle.
-import { ChevronRight } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useErrorDialog } from './Modal';
 import { accessKey, foldKey, navItemEnabled, navMenuGroups, placeMenu, type NavMenuContext, type NavMenuItem } from './nav-menu';
 
 type Anchor = () => { left: number; right: number; top: number; bottom: number };
 
-interface Props { ctx: NavMenuContext; x: number; y: number; onClose(): void }
+/** `groups`: another menu than the object's (the pane's header and background menus); `testId`: its test id prefix. */
+interface Props { ctx: NavMenuContext; x: number; y: number; onClose(): void; groups?: NavMenuItem[][]; testId?: string }
 
-export function NavMenu({ ctx, x, y, onClose }: Props) {
+export function NavMenu({ ctx, x, y, onClose, groups, testId = 'nav-menu' }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const showError = useErrorDialog();
   const [before] = useState(() => document.activeElement as HTMLElement | null); // read before the menu takes the focus
@@ -26,14 +28,22 @@ export function NavMenu({ ctx, x, y, onClose }: Props) {
   };
   return (
     <div ref={ref} style={{ display: 'contents' }}>
-      <MenuLevel testId="nav-menu" groups={navMenuGroups(ctx)} ctx={ctx} onRun={run} onExit={onClose} autoFocus
+      <MenuLevel testId={testId} groups={groups ?? navMenuGroups(ctx)} ctx={ctx} onRun={run} onExit={onClose} autoFocus
         anchor={() => ({ left: x, right: x, top: y, bottom: y })} />
     </div>
   );
 }
 
 const focusables = (menu: HTMLElement) =>
-  [...menu.querySelectorAll<HTMLElement>(':scope > [role="menuitem"]:not([disabled]), :scope > .ctxmenu-entry > [role="menuitem"]:not([disabled])')];
+  [...menu.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"]:not([disabled]), :scope > .ctxmenu-entry > [role^="menuitem"]:not([disabled])')];
+
+/** An item's label split around its access key; a literal one has none. */
+const itemLabel = (t: TFunction, x: NavMenuItem) =>
+  x.literal ? { before: x.labelKey, key: '', after: '' } : accessKey(t(x.labelKey, x.labelValues));
+
+/** A submenu's groups: cut where an item says `sepBefore`. */
+const splitSub = (items: NavMenuItem[]): NavMenuItem[][] =>
+  items.reduce<NavMenuItem[][]>((gs, x) => (x.sepBefore || !gs.length ? [...gs, [x]] : [...gs.slice(0, -1), [...gs[gs.length - 1]!, x]]), []);
 
 /** anchor: the point the menu opens at, or the item a submenu belongs to; the menu is placed inside the window (placeMenu). */
 function MenuLevel({ testId, groups, ctx, onRun, onExit, autoFocus, sub, anchor, id }: {
@@ -71,7 +81,7 @@ function MenuLevel({ testId, groups, ctx, onRun, onExit, autoFocus, sub, anchor,
     else if (e.key === 'Escape' || (sub && e.key === 'ArrowLeft')) onExit();
     else if (e.key === 'Tab') onExit();
     else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      const hit = groups.flat().find((x) => navItemEnabled(x, ctx) && foldKey(accessKey(t(x.labelKey)).key) === foldKey(e.key));
+      const hit = groups.flat().find((x) => navItemEnabled(x, ctx) && !x.heading && foldKey(itemLabel(t, x).key) === foldKey(e.key));
       if (!hit) return;
       if (hit.submenu) ref.current?.querySelector<HTMLElement>(`[data-testid="${testId}-${hit.id}"]`)?.focus();
       activate(hit);
@@ -85,19 +95,22 @@ function MenuLevel({ testId, groups, ctx, onRun, onExit, autoFocus, sub, anchor,
       {groups.map((g, gi) => [
         gi > 0 && <div key={`sep-${gi}`} className="ctxmenu-sep" role="separator" />,
         ...g.map((item) => {
-          const label = accessKey(t(item.labelKey));
+          const label = itemLabel(t, item);
+          if (item.heading) return <div key={item.id} className="ctxmenu-heading" role="presentation" data-testid={`${testId}-${item.id}`}>{label.before}</div>;
+          const checked = item.checked?.(ctx);
           const Icon = item.icon;
           const enabled = navItemEnabled(item, ctx);
           const tid = `${testId}-${item.id}`;
           const subId = `${uid}-${item.id}`;
           const button = (
-            <button key={item.id} role="menuitem" data-testid={tid} tabIndex={-1}
+            <button key={item.id} data-testid={tid} tabIndex={-1}
               disabled={!item.planned && !enabled} aria-disabled={item.planned ? true : undefined} data-planned={item.planned}
               title={item.planned ? t(`ribbon.planned.${item.planned}`) : undefined}
+              role={checked === undefined ? 'menuitem' : item.toggle ? 'menuitemcheckbox' : 'menuitemradio'} aria-checked={checked}
               aria-haspopup={item.submenu ? 'menu' : undefined} aria-expanded={item.submenu ? open === item.id : undefined}
               aria-controls={item.submenu && open === item.id ? subId : undefined}
               onClick={() => activate(item)} onMouseEnter={() => setOpen(item.submenu && enabled ? item.id : null)}>
-              {Icon ? <Icon className="ic ic-sm" aria-hidden /> : <span className="ic ic-sm" aria-hidden />}
+              {Icon ? <Icon className="ic ic-sm" aria-hidden /> : checked ? <Check className="ic ic-sm" aria-hidden /> : <span className="ic ic-sm" aria-hidden />}
               <span>{label.before}{label.key && <u>{label.key}</u>}{label.after}</span>
               {item.submenu && <ChevronRight className="ic ic-sm ctxmenu-chev" aria-hidden />}
             </button>
@@ -107,7 +120,7 @@ function MenuLevel({ testId, groups, ctx, onRun, onExit, autoFocus, sub, anchor,
             <div key={item.id} className="ctxmenu-entry" role="none">
               {button}
               {open === item.id && (
-                <MenuLevel testId={tid} id={subId} groups={[item.submenu]} ctx={ctx} onRun={onRun} autoFocus sub
+                <MenuLevel testId={tid} id={subId} groups={splitSub(item.submenu)} ctx={ctx} onRun={onRun} autoFocus sub
                   anchor={() => ref.current!.querySelector(`[data-testid="${tid}"]`)!.getBoundingClientRect()}
                   onExit={() => { setOpen(null); ref.current?.querySelector<HTMLElement>(`[data-testid="${tid}"]`)?.focus(); }} />
               )}

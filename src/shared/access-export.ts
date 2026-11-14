@@ -45,4 +45,8 @@ export interface AccessExport {
   manifest: ExportManifest
   tables: ExportTable[]
 }
+/** A query of an export folder, with its text. `sql` null: the file is missing, empty, over the limit or not readable. */
+export interface ExportQuery { name: string; sql: string | null; queryType: number; connect: string }
+/** A form or report of an export folder. `text` null: the file is missing, empty, over MAX_ACCESS_TEXT or not readable. */
+export interface ExportDesign { kind: 'form' | 'report'; name: string; text: string | null }
 export type ExportFailure = 'noAccess' | 'cannotOpen' | 'timeout' | 'failed' | 'badFolder' | 'otherSource'

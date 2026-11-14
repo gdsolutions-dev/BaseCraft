@@ -68,6 +68,8 @@ interface Props {
   readOnly: boolean; onSaveAs(): void; onCompact(): void; // A6
   /** Options › Base de données active (B3): the forms to choose from; the title and icon saved, to apply at once (R11). */
   forms: readonly string[]; onStartupApplied(o: StartupOptions): void;
+  /** The Navigation Options dialog (the shell's), from Base de données active. */
+  onNavigationOptions?(): void;
   /** A base behind a stale lock that is not recovered yet: its options cannot be read, so the section waits for the take-over. */
   needsRecovery: boolean;
   /** The open base's path (the section « Filtrer les options de recherche pour … » names it), null without a base. */
@@ -144,7 +146,7 @@ export function Backstage(p: Props) {
         ) : (
           <OptionsPage settings={p.settings} cat={cat} onCat={setCat} designers={!!design}
             thisDb={offered && !p.readOnly ? { value: year4, onChange: saveYear4 } : null}
-            currentDb={offered && design ? <design.CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} baseName={splitPath(p.basePath ?? '').name.replace(/\.[^.]*$/, '')} /> : null} />
+            currentDb={offered && design ? <design.CurrentDatabaseOptions readOnly={p.readOnly} forms={p.forms} onApplied={p.onStartupApplied} onNavigationOptions={p.onNavigationOptions} baseName={splitPath(p.basePath ?? '').name.replace(/\.[^.]*$/, '')} /> : null} />
         )}
       </main>
     </div>

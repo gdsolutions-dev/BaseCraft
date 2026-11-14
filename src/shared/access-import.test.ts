@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REPORT_LEVEL, reportText } from './access-import';
+import { lineKey, REPORT_LEVEL, reportText, type ReportLine } from './access-import';
 
 const t = (k: string, p?: Record<string, unknown>) => `${k}${p ? JSON.stringify(p) : ''}`;
 
@@ -30,5 +30,28 @@ describe('access-import report', () => {
     const text = reportText({ source: 'Ventes.accdb', lines: [{ code: 'indexDropped', object: 'Commandes' }, { code: 'indexDropped', object: 'Commandes', part: 'I1' }] }, t);
     expect(text).toContain('import.report.line.indexDroppedTable{"object":"Commandes"}\n');
     expect(text).toContain('import.report.line.indexDropped{"object":"Commandes","part":"I1"}\n');
+  });
+  it('the query codes have their levels and texts', () => {
+    expect([REPORT_LEVEL.queryImported, REPORT_LEVEL.queryKeptAsText, REPORT_LEVEL.querySourceMissing, REPORT_LEVEL.queryPassThrough, REPORT_LEVEL.querySkipped, REPORT_LEVEL.formsOnly])
+      .toEqual(['carried', 'approximated', 'approximated', 'approximated', 'ignored', 'ignored']);
+    const lines: ReportLine[] = [{ code: 'queryImported', object: 'Q' }, { code: 'queryImported', object: 'Q1', part: 'Q' }, { code: 'queryKeptAsText', object: 'Q', reason: 'notRead' },
+      { code: 'querySourceMissing', object: 'Q', part: 'T' }, { code: 'queryPassThrough', object: 'Q', part: 'ODBC' }, { code: 'queryPassThrough', object: 'Q' },
+      { code: 'querySkipped', object: 'Q', reason: 'duplicate' }, { code: 'formsOnly' }];
+    const text = reportText({ source: 'Ventes.accdb', lines }, t);
+    for (const k of ['queryImported{"object":"Q"}', 'queryImportedAs{"object":"Q1","part":"Q"}', 'queryKeptAsText{"object":"Q","reason":"notRead"}', 'querySourceMissing{"object":"Q","part":"T"}',
+      'queryPassThrough{"object":"Q","part":"ODBC"}', 'queryPassThroughPlain{"object":"Q"}', 'querySkipped{"object":"Q","reason":"duplicate"}', 'formsOnly{}']) {
+      expect(text).toContain(`import.report.line.${k}\n`);
+    }
+    expect(lines.map(lineKey)).toEqual(['queryImported', 'queryImportedAs', 'queryKeptAsText', 'querySourceMissing', 'queryPassThrough', 'queryPassThroughPlain', 'querySkipped', 'formsOnly']);
+  });
+  it('the design codes have their levels and their keys', () => {
+    expect([REPORT_LEVEL.formImported, REPORT_LEVEL.reportImported, REPORT_LEVEL.designSkipped, REPORT_LEVEL.designPropertiesIgnored, REPORT_LEVEL.designControlReplaced, REPORT_LEVEL.designEventDropped,
+      REPORT_LEVEL.designExpressionKept, REPORT_LEVEL.designSectionDropped, REPORT_LEVEL.designControlRenamed, REPORT_LEVEL.designPageDefault, REPORT_LEVEL.designSourceMissing, REPORT_LEVEL.designSubformTable, REPORT_LEVEL.macrosOnly])
+      .toEqual(['carried', 'carried', 'ignored', 'ignored', 'approximated', 'ignored', 'approximated', 'ignored', 'approximated', 'approximated', 'approximated', 'approximated', 'ignored']);
+    const lines: ReportLine[] = [{ code: 'formImported', object: 'F' }, { code: 'formImported', object: 'F1', part: 'F' }, { code: 'reportImported', object: 'E' }, { code: 'reportImported', object: 'E1', part: 'E' },
+      { code: 'designEventDropped', object: 'F', part: 'OnClick', reason: 'procedure' }, { code: 'designEventDropped', object: 'F', part: 'OnOpen', reason: 'expression' }, { code: 'designEventDropped', object: 'F', part: 'OnLoad', reason: 'embeddedMacro' },
+      { code: 'designSourceMissing', object: 'F', part: 'T' }, { code: 'designSourceMissing', object: 'F' }, { code: 'macrosOnly' }];
+    expect(lines.map(lineKey)).toEqual(['formImported', 'formImportedAs', 'reportImported', 'reportImportedAs', 'designEventDropped_procedure', 'designEventDropped_expression', 'designEventDropped_embeddedMacro',
+      'designSourceMissing', 'designSourceNotRead', 'macrosOnly']);
   });
 });

@@ -2,7 +2,7 @@
 // is one transaction (all or nothing); relationships are applied after it, one by one, and what cannot be carried goes to the report.
 import type { DatabaseSync } from 'node:sqlite';
 import type MDBReader from 'mdb-reader';
-import type { AccessExport } from '../../shared/access-export';
+import type { AccessExport, ExportDesign, ExportQuery } from '../../shared/access-export';
 import type { AccessImportResult, ReportLine } from '../../shared/access-import';
 import type { Relation } from '../../shared/api';
 import { quoteIdent, sameName, type TableDesign } from '../../shared/field-types';
@@ -10,8 +10,10 @@ import type { ImportProgress } from '../../shared/import-text';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { saveRelation } from '../db/relations';
 import { createTable } from '../db/schema';
-import { inTransactionAsync } from '../db/tx';
+import { inTransaction, inTransactionAsync } from '../db/tx';
 import { accessDesign, stored } from '../links/access';
+import { importDesigns } from './access-designs';
+import { importQueries } from './access-queries';
 import { withStructure } from './access-structure';
 
 /** One row of MSysRelationships: one field pair of a relationship (szObject: the child table, szReferencedObject: the parent). */
@@ -49,12 +51,23 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
   tables: { remote: string; name: string }[]; linked: string[]; info: LocaleInfo;
   tick: (p: ImportProgress) => Promise<void>; stopped: () => boolean;
   /** The export folder of the file (E2): its tables, matched to `tables[].remote` by sameName, give exact keys, indexes and properties. */
-  structure?: AccessExport }): Promise<AccessImportResult> {
+  structure?: AccessExport;
+  /** The queries of the export folder (E3), saved after the tables in the same transaction. */
+  queries?: ExportQuery[];
+  /** The forms and reports of the export folder (E4), saved after the queries in the same transaction. */
+  designs?: ExportDesign[] }): Promise<AccessImportResult> {
   const read = d.tables.map((t) => ({ ...t, table: d.r.getTable(t.remote) }));
   const total = read.reduce((n, t) => n + t.table.rowCount, 0);
   const lines: ReportLine[] = [];
   let done = 0;
+  const queryLines: ReportLine[] = [];
   let missing = false; // a picked table the export does not hold
+  let queries: { name: string; remote: string }[] = [];
+  let queriesRead = false;
+  const designLines: ReportLine[] = [];
+  let forms: { name: string; remote: string }[] = [];
+  let reports: { name: string; remote: string }[] = [];
+  let designsRead = false;
   try {
     await inTransactionAsync(d.front, async () => {
       for (const { name, remote, table } of read) {
@@ -111,6 +124,28 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
         for (const c of skipped) lines.push({ code: 'fieldSkipped', object: name, part: c });
         for (const [part, n] of lost) lines.push({ code: 'valuesLost', object: name, part, n });
       }
+      if (d.queries) {
+        // a savepoint: a failure no query explains undoes the queries only, never the tables
+        try {
+          const q = inTransaction(d.front, () => importQueries(d.front, d.queries!, d.tables));
+          queries = q.queries;
+          queryLines.push(...q.lines);
+          queriesRead = true;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'bc:cancelled') throw e;
+        }
+      }
+      if (d.designs) {
+        // a savepoint of its own: a failure no object explains undoes the forms and reports only
+        try {
+          const f = inTransaction(d.front, () => importDesigns(d.front, d.designs!, { tables: d.tables, queries }));
+          forms = f.forms; reports = f.reports;
+          designLines.push(...f.lines);
+          designsRead = true;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'bc:cancelled') throw e;
+        }
+      }
     });
   } catch (e) {
     if (e instanceof Error && e.message === 'bc:cancelled') return { ok: false, reason: 'cancelled' };
@@ -133,6 +168,6 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
   }
   for (const s of skipped) lines.push({ code: 'relationIgnored', object: s.access, reason: s.reason });
   if (missing) lines.push({ code: 'structureNotRead' });
-  lines.push({ code: 'tablesOnly' });
-  return { ok: true, tables: read.map((t) => ({ name: t.name, remote: t.remote, rows: t.table.rowCount })), report: { source: d.source, lines } };
+  lines.push(...queryLines, ...designLines, { code: designsRead ? (queriesRead ? 'macrosOnly' : 'designsOnly') : queriesRead ? 'formsOnly' : 'tablesOnly' });
+  return { ok: true, tables: read.map((t) => ({ name: t.name, remote: t.remote, rows: t.table.rowCount })), queries, forms, reports, report: { source: d.source, lines } };
 }

@@ -3,17 +3,22 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObjectKind, OpResult } from '../../shared/api';
+import { refKey, type NavOptions } from '../../shared/nav-view';
 import { sameName } from '../../shared/field-types';
 import { api } from '../bridge';
 import { formatDateTime, isoToStored } from '../../shared/locale-format';
 import { errorMessage, type ModalApi } from './Modal';
 import type { AppDispatch } from './nav-menu';
+import { setHidden } from './nav-group-items';
+
+/** The pane's options, for the Hidden attribute (absent: no checkbox). */
+export interface HideCtl { opts: NavOptions; set(patch: Partial<NavOptions>): void }
 
 export const MAX_DESCRIPTION = 255;
 interface Target { kind: ObjectKind | 'table'; name: string; description: string; created?: string; modified?: string; source?: string /* a link's file (C1) */ }
 
 /** Reads the object's current properties, then shows the dialog; a saved description refreshes the pane's lists. */
-export async function showObjectProperties(modal: ModalApi, ref: { kind: ObjectKind | 'table'; name: string }, readOnly: boolean, dispatch: AppDispatch): Promise<void> {
+export async function showObjectProperties(modal: ModalApi, ref: { kind: ObjectKind | 'table'; name: string }, readOnly: boolean, dispatch: AppDispatch, hide?: HideCtl): Promise<void> {
   const { kind } = ref;
   let target: Target | undefined;
   if (kind === 'table') {
@@ -25,18 +30,21 @@ export async function showObjectProperties(modal: ModalApi, ref: { kind: ObjectK
   }
   if (!target) throw new Error('bc:notFound');
   const { region } = await api.app.getSettings(); // dates shown as the region shows them, like the datasheets
-  const saved = await modal.custom<string>((close) => <PropertiesForm target={target} region={region} readOnly={readOnly} onClose={close} />, { titleKey: 'objectProperties.title' });
+  const saved = await modal.custom<string>((close) => <PropertiesForm target={target} region={region} readOnly={readOnly} hide={hide} onClose={close} />, { titleKey: 'objectProperties.title' });
   if (saved === null) return;
   dispatch(kind === 'table' ? { type: 'tableDescribed', name: target.name, description: saved } : { type: 'listsChanged' });
 }
 
 /** Closes with the saved description, or null when nothing was saved. */
-function PropertiesForm({ target, region, readOnly, onClose }: { target: Target; region: string; readOnly: boolean; onClose(v: string | null): void }) {
+function PropertiesForm({ target, region, readOnly, hide, onClose }: { target: Target; region: string; readOnly: boolean; hide?: HideCtl; onClose(v: string | null): void }) {
   const { t } = useTranslation();
   const [text, setText] = useState(target.description);
   const [error, setError] = useState<string | null>(null);
+  const was = !!hide?.opts.hidden.includes(refKey(target));
+  const [hidden, setHiddenBox] = useState(was);
   const date = (iso: string) => formatDateTime(isoToStored(iso), region);
   const ok = async () => {
+    if (!readOnly && hide && hidden !== was) hide.set(setHidden(hide.opts, target, hidden));
     if (readOnly || text === target.description) return onClose(null);
     let r: OpResult;
     try { r = await api.objects.setDescription(target.kind, target.name, text); } catch (e) { const m = errorMessage(e); setError(t(m.key, m.params)); return; }
@@ -56,6 +64,12 @@ function PropertiesForm({ target, region, readOnly, onClose }: { target: Target;
         <textarea data-testid="object-properties-description" rows={3} maxLength={MAX_DESCRIPTION} value={text} readOnly={readOnly}
           onChange={(e) => { setText(e.target.value); setError(null); }} />
       </label>
+      {hide && (
+        <div className="modal-field">
+          <span>{t('objectProperties.attributes')}</span>
+          <label><input type="checkbox" data-testid="object-properties-hidden" checked={hidden} disabled={readOnly} onChange={(e) => setHiddenBox(e.target.checked)} /> {t('objectProperties.hidden')}</label>
+        </div>
+      )}
       {target.created && row('created', date(target.created))}
       {target.modified && row('modified', date(target.modified))}
       {error && <p className="modal-error" role="alert" data-testid="object-properties-error">{error}</p>}

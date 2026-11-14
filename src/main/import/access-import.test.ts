@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
@@ -7,11 +7,15 @@ import type MDBReader from 'mdb-reader';
 import { localeInfo } from '../../shared/locale-format';
 import { listRelations } from '../db/relations';
 import { registerFunctions, SYSTEM_DDL } from '../db/file-format';
+import { listObjects } from '../db/objects';
 import { tableDesign } from '../db/schema';
-import type { AccessExport } from '../../shared/access-export';
+import type { AccessExport, ExportDesign, ExportQuery } from '../../shared/access-export';
 import { loadAccessCache, openAccess } from '../links/access';
-import { readAccessExport } from './access-export';
+import { readAccessExport, readExportDesigns, readExportQueries } from './access-export';
+import { importQueries } from './access-queries';
 import { accessRelations, importAccess, PAGE, pageSize, type MSysRelRow } from './access-import';
+
+vi.mock('./access-queries', async (orig) => { const m = await orig<typeof import('./access-queries')>(); return { ...m, importQueries: vi.fn(m.importQueries) }; });
 
 const FIX = join(__dirname, '../../../tests/fixtures/access');
 const tmp = fs.mkdtempSync(join(os.tmpdir(), 'bcaimp-'));
@@ -23,9 +27,9 @@ const all = (db: DatabaseSync, t: string) => db.prepare(`SELECT * FROM "${t}" OR
 const userTables = (db: DatabaseSync) => (db.prepare(`SELECT name FROM pragma_table_list WHERE schema = 'main' AND name NOT LIKE 'bc\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'`).all() as { name: string }[]).map((r) => r.name);
 
 type Tables = { remote: string; name: string }[];
-const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean; structure?: AccessExport } = {}) =>
+const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean; structure?: AccessExport; queries?: ExportQuery[]; designs?: ExportDesign[] } = {}) =>
   importAccess({ front, r, jet3: o.jet3 ?? false, source: 'Ventes.accdb', tables, linked: o.linked ?? [], info: localeInfo('fr-FR'),
-    tick: async () => {}, stopped: o.stopped ?? (() => false), structure: o.structure });
+    tick: async () => {}, stopped: o.stopped ?? (() => false), structure: o.structure, queries: o.queries, designs: o.designs });
 
 const row = (o: Partial<MSysRelRow>): MSysRelRow => ({ szRelationship: 'ClientsCommandes', grbit: 0, ccolumn: 1, icolumn: 0,
   szObject: 'Commandes', szColumn: 'Client', szReferencedObject: 'Clients', szReferencedColumn: 'N°', ...o });
@@ -185,6 +189,53 @@ describe('importAccess', () => {
       expect(res.ok && res.report.lines).toContainEqual({ code: 'structureExact', object: 'Commandes' });
     });
 
+    it.skipIf(!present)('with the queries of the export folder: saved, reported, and the report ends with formsOnly', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex, queries: readExportQueries(FIXTURE, ex) });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'queryImported', object: 'QParVille' });
+      expect(lines).toContainEqual({ code: 'queryImported', object: 'QTotaux' });
+      expect(lines.at(-1)).toEqual({ code: 'formsOnly' });
+      expect(lines.some((l) => l.code === 'tablesOnly')).toBe(false);
+      expect(res.ok && res.queries).toEqual([{ name: 'QParVille', remote: 'QParVille' }, { name: 'QTotaux', remote: 'QTotaux' }]);
+      expect(listObjects(front, 'query').map((o) => o.name)).toEqual(['QParVille', 'QTotaux']);
+    });
+
+    it.skipIf(!present)('with the forms and reports of the export folder: saved, reported, and the report ends with macrosOnly', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex, queries: readExportQueries(FIXTURE, ex), designs: readExportDesigns(FIXTURE, ex) });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'formImported', object: 'FClients' });
+      expect(lines).toContainEqual({ code: 'reportImported', object: 'ECommandes' });
+      expect(lines.at(-1)).toEqual({ code: 'macrosOnly' });
+      expect(lines.some((l) => l.code === 'formsOnly' || l.code === 'tablesOnly')).toBe(false);
+      expect(res.ok && res.forms).toEqual([{ name: 'FClients', remote: 'FClients' }]);
+      expect(res.ok && res.reports).toEqual([{ name: 'ECommandes', remote: 'ECommandes' }]);
+      expect(listObjects(front, 'form').map((o) => o.name)).toEqual(['FClients']);
+    });
+
+    it.skipIf(!present)('with the forms and reports but without the queries: the report ends with designsOnly', async () => {
+      const ex = readExport();
+      const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { structure: ex, designs: readExportDesigns(FIXTURE, ex) });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'formImported', object: 'FClients' });
+      expect(lines.at(-1)).toEqual({ code: 'designsOnly' });
+      expect(lines.some((l) => l.code === 'macrosOnly' || l.code === 'formsOnly' || l.code === 'tablesOnly')).toBe(false);
+    });
+
+    it.skipIf(!present)('a Stop during the tables leaves no query', async () => {
+      const front = memoryBase(); const ex = readExport(); let ticks = 0;
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex, queries: readExportQueries(FIXTURE, ex), stopped: () => ++ticks >= 2 });
+      expect(res).toEqual({ ok: false, reason: 'cancelled' });
+      expect(listObjects(front, 'query')).toEqual([]);
+    });
+
+    it.skipIf(!present)('without queries: the report ends with tablesOnly and queries is empty', async () => {
+      const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { structure: readExport() });
+      expect(res.ok && res.queries).toEqual([]);
+      expect(res.ok && res.report.lines.at(-1)).toEqual({ code: 'tablesOnly' });
+    });
+
     it.skipIf(!present)('without structure, the lines are those of the file alone', async () => {
       const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair);
       const lines = res.ok ? res.report.lines : [];
@@ -210,6 +261,39 @@ describe('importAccess', () => {
     Commandes: { columns: [long('N°', true), long('Client')], rows: childRows },
   });
   const both: Tables = [{ remote: 'Clients', name: 'Clients' }, { remote: 'Commandes', name: 'Commandes' }];
+
+  it('an unexpected failure of the queries keeps the tables and ends the report with tablesOnly', async () => {
+    const front = memoryBase();
+    vi.mocked(importQueries).mockImplementationOnce(() => { throw new Error('boom'); });
+    const res = await run(front, double({ T: { columns: [text('A')], rows: [{ A: 'x' }] } }), [{ remote: 'T', name: 'T' }], { queries: [{ name: 'Q', sql: 'SELECT T.A FROM T', queryType: 0, connect: '' }] });
+    expect(res.ok && res.queries).toEqual([]);
+    expect(res.ok && res.report.lines.at(-1)).toEqual({ code: 'tablesOnly' });
+    expect(all(front, 'T')).toEqual([['x']]);
+    expect(listObjects(front, 'query')).toEqual([]);
+  });
+
+  it('an unexpected failure of the designs keeps the tables and the queries and ends the report as before', async () => {
+    const front = memoryBase();
+    const boom = { kind: 'form', name: 'B', get text(): string { throw new Error('boom'); } } as unknown as ExportDesign;
+    const ok: ExportDesign = { kind: 'form', name: 'A', text: 'Begin Form\n Begin\n  Begin Section\n   Begin\n   End\n  End\n End\nEnd\n' };
+    const res = await run(front, double({ T: { columns: [text('A')], rows: [{ A: 'x' }] } }), [{ remote: 'T', name: 'T' }],
+      { queries: [{ name: 'Q', sql: 'SELECT T.A FROM T', queryType: 0, connect: '' }], designs: [ok, boom] });
+    expect(res.ok && res.forms).toEqual([]);
+    expect(res.ok && res.report.lines.at(-1)).toEqual({ code: 'formsOnly' });
+    expect(all(front, 'T')).toEqual([['x']]);
+    expect(listObjects(front, 'query').map((o) => o.name)).toEqual(['Q']);
+    expect(listObjects(front, 'form')).toEqual([]);
+  });
+
+  it('the savepoint removes the queries the real import saved before it threw', async () => {
+    const front = memoryBase();
+    const real = await vi.importActual<typeof import('./access-queries')>('./access-queries');
+    vi.mocked(importQueries).mockImplementationOnce((db, q, t) => { real.importQueries(db, q, t); expect(listObjects(db, 'query')).toHaveLength(1); throw new Error('boom'); });
+    const res = await run(front, double({ T: { columns: [text('A')], rows: [{ A: 'x' }] } }), [{ remote: 'T', name: 'T' }], { queries: [{ name: 'Q', sql: 'SELECT T.A FROM T', queryType: 0, connect: '' }] });
+    expect(listObjects(front, 'query')).toEqual([]);
+    expect(all(front, 'T')).toEqual([['x']]);
+    expect(res.ok && res.report.lines.at(-1)).toEqual({ code: 'tablesOnly' });
+  });
 
   it('an empty table is created with no row', async () => {
     const front = memoryBase();

@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { join, relative, win32 } from 'node:path';
-import { exportArgs, powershellPath, readAccessExport, regPath, runAccessExport } from './access-export';
+import { exportArgs, powershellPath, readAccessExport, readExportDesigns, readExportQueries, regPath, runAccessExport } from './access-export';
 
 const FIXTURE = join(__dirname, '../../../tests/fixtures/access/Ventes-complet.export');
 const SRC = 'Ventes-complet.accdb';
@@ -106,6 +106,61 @@ describe('access-export', () => {
       const t = setup();
       fs.symlinkSync(t.sibling, join(t.dir, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
       bad(t.dir, 'link/f.txt');
+    });
+  });
+  describe('readExportQueries', () => {
+    const exportOf = (dir: string) => { const r = readAccessExport(dir, SRC); if (!r.ok) throw new Error(r.reason); return r.export; };
+    it('the two queries of the fixture, in manifest order', () => {
+      const qs = readExportQueries(FIXTURE, exportOf(FIXTURE));
+      expect(qs.map((q) => [q.name, q.queryType, q.connect])).toEqual([['QParVille', 0, ''], ['QTotaux', 0, '']]);
+      expect(qs[0].sql).toMatch(/^SELECT Clients\.\*, Clients\.Ville\r?\nFROM Clients/);
+      expect(qs[1].sql).toContain('N°');
+    });
+    it('a BOM is dropped', () => {
+      const dir = copyWith({});
+      fs.writeFileSync(join(dir, 'queries/1.sql'), '\uFEFFSELECT 1;\n');
+      expect(readExportQueries(dir, exportOf(dir))[0].sql).toBe('SELECT 1;\n');
+    });
+    it('a missing, empty, oversized or outside file gives sql null and reads nothing outside', () => {
+      const missing = copyWith({}); fs.rmSync(join(missing, 'queries/1.sql'));
+      const empty = copyWith({}); fs.writeFileSync(join(empty, 'queries/1.sql'), '');
+      const big = copyWith({}); fs.writeFileSync(join(big, 'queries/1.sql'), 'x'.repeat(1_048_577));
+      const limit = copyWith({}); fs.writeFileSync(join(limit, 'queries/1.sql'), 'x'.repeat(1_048_576));
+      const outside = copyWith({});
+      const secret = `${outside}-outside.sql`;
+      fs.writeFileSync(secret, 'SELECT secret');
+      // read while the folder is valid, then the manifest entry is pointed outside in memory
+      const ex = exportOf(outside);
+      ex.manifest.objects[0].file = `..\\${relative(tmp, secret)}`;
+      expect(readExportQueries(outside, ex)[0].sql).toBeNull();
+      ex.manifest.objects[0].file = `../${relative(tmp, secret)}`;
+      expect(readExportQueries(outside, ex)[0].sql).toBeNull();
+      const fresh0 = () => exportOf(FIXTURE); // a missing file makes the folder unreadable as a whole: the manifest comes from the intact fixture
+      const gone = fresh0();
+      expect(readExportQueries(missing, gone).map((q) => q.sql === null)).toEqual([true, false]); // the other query is unaffected
+      for (const dir of [empty, big]) expect(readExportQueries(dir, fresh0())[0].sql).toBeNull();
+      expect(readExportQueries(limit, fresh0())[0].sql).toHaveLength(1_048_576);
+    });
+  });
+  describe('readExportDesigns', () => {
+    const exportOf = (dir: string) => { const r = readAccessExport(dir, SRC); if (!r.ok) throw new Error(r.reason); return r.export; };
+    it('the fixture form and report, in manifest order', () => {
+      const d = readExportDesigns(FIXTURE, exportOf(FIXTURE));
+      expect(d.map((x) => [x.kind, x.name])).toEqual([['form', 'FClients'], ['report', 'ECommandes']]);
+      expect(d[0].text).toContain('Begin Form');
+    });
+    it('past the total cap, the next objects get text null', () => {
+      const ex = exportOf(FIXTURE);
+      const f = ex.manifest.objects.find((o) => o.type === 'form')!;
+      const two = { ...ex, manifest: { ...ex.manifest, objects: [f, f] } };
+      const d = readExportDesigns(FIXTURE, two, 1);
+      expect(d.map((x) => x.text === null)).toEqual([false, true]);
+    });
+    it('a missing or empty file gives text null', () => {
+      const missing = copyWith({}); fs.rmSync(join(missing, 'forms/1.txt'));
+      const empty = copyWith({}); fs.writeFileSync(join(empty, 'reports/1.txt'), '');
+      expect(readExportDesigns(missing, exportOf(FIXTURE)).map((x) => x.text === null)).toEqual([true, false]);
+      expect(readExportDesigns(empty, exportOf(FIXTURE)).map((x) => x.text === null)).toEqual([false, true]);
     });
   });
   it('readAccessExport: a JSON file over 10 MB is refused', () => {

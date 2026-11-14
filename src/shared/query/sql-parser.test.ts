@@ -311,3 +311,40 @@ describe('names holding "]" round-trip: written "]]" inside the brackets', () =>
     }
   });
 });
+
+describe('Access writings (E3)', () => {
+  const same = (a: string, b: string) => expect(parseSql(a)).toEqual(parseSql(b));
+  it('an unbracketed name with a non-ASCII symbol', () => {
+    same('SELECT Commandes.N° FROM Commandes', 'SELECT Commandes.[N°] FROM Commandes');
+    same('SELECT Count(Commandes.N°) AS CompteDeN° FROM Commandes', 'SELECT Count(Commandes.[N°]) AS [CompteDeN°] FROM Commandes');
+    same('SELECT Prix€ FROM T WHERE Prix€>1', 'SELECT [Prix€] FROM T WHERE [Prix€]>1');
+  });
+  it('ASCII is unchanged', () => {
+    same('SELECT a-b FROM T', 'SELECT [a]-[b] FROM T');
+    expect(() => parseSql('SELECT a$ FROM T')).toThrow();
+  });
+  it('table!field is table.field', () => {
+    same('SELECT [T]![a], T!b FROM T', 'SELECT T.a, T.b FROM T');
+    same('UPDATE T SET T!a = [U]![b]', 'UPDATE T SET T.a = U.b');
+  });
+  it('known member roots keep their reading', () => {
+    const q = 'SELECT a FROM T WHERE a = Forms!F!c';
+    expect(printSql(parseSql(q))).toContain('[Forms]![F]![c]');
+    expect(() => parseSql('SELECT a FROM T WHERE a = A!B!C')).toThrow(/badMember/);
+  });
+  it('WITH OWNERACCESS OPTION is accepted and dropped', () => {
+    same('SELECT a FROM T WITH OWNERACCESS OPTION;', 'SELECT a FROM T;');
+    same('SELECT a FROM T UNION SELECT a FROM U WITH OWNERACCESS OPTION', 'SELECT a FROM T UNION SELECT a FROM U');
+    expect(() => parseSql('WITH x AS (SELECT 1) SELECT a FROM T')).toThrow(/forbiddenStatement/);
+    expect(() => parseSql('SELECT a FROM T WITH OWNERACCESS')).toThrow();
+  });
+  it('the printed text of each reads back to the same tree', () => {
+    for (const s of ['SELECT Commandes.N° FROM Commandes', 'SELECT [T]![a] FROM T', 'SELECT a FROM T WITH OWNERACCESS OPTION;']) {
+      expect(parseSql(printSql(parseSql(s)))).toEqual(parseSql(s));
+    }
+  });
+  it('a name takes no operator character: a≥1 is a name in the select list, an error after WHERE', () => {
+    expect(() => parseSql('SELECT a FROM T WHERE a ≥ 1')).toThrow();
+    same('SELECT a≥1 FROM T', 'SELECT [a≥1] FROM T');
+  });
+});

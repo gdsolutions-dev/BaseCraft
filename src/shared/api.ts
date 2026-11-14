@@ -11,6 +11,7 @@ import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { ChartData, ChartDataRequest } from './chart/query';
 import type { StartupOptions } from './startup';
+import type { NavOptions } from './nav-view';
 import type { DataMacros } from './macro/data-macro';
 import type { SheetLayout } from './sheet-layout';
 import type { Theme } from './design/theme';
@@ -29,7 +30,7 @@ export type LocationRisk = 'local' | 'network' | 'synced';
 export type ServerKind = 'postgresql' | 'sqlserver';
 export const isServerKind = (k: string): k is ServerKind => k === 'postgresql' || k === 'sqlserver';
 /** link.kind: a source kind ('basecraft', 'sqlite', 'access', or a server's: 'postgresql'); path: a file's resolved (R5), a server's label. */
-export interface TableSummary { name: string; description?: string; link?: { kind: string; path: string } }
+export interface TableSummary { name: string; description?: string; created?: string; modified?: string; link?: { kind: string; path: string } }
 /** A linked file's state (C1): readOnly = readable, not writable (held by another session, read-only on disk, or a read-only front-end).
  *  needsPassword (C2 R7): a protected Access file whose password this session was not given (links.unlock). */
 export type LinkState = 'ok' | 'readOnly' | 'missingFile' | 'missingTable' | 'needsMigration' | 'newerMajor' | 'cannotOpen' | 'unsupportedKind' | 'needsPassword'
@@ -352,6 +353,8 @@ export const CH = {
   baseEnableContent: 'bc:base:enableContent',
   baseStartup: 'bc:base:startup',
   baseSaveStartup: 'bc:base:saveStartup',
+  baseNavOptions: 'bc:base:navOptions',
+  baseSaveNavOptions: 'bc:base:saveNavOptions',
   baseTheme: 'bc:base:theme',
   baseSaveTheme: 'bc:base:saveTheme',
   baseApplyTheme: 'bc:base:applyTheme',
@@ -476,6 +479,10 @@ export interface BasecraftApi {
     startup(): Promise<StartupOptions>;
     /** Saves the six options (the other keys of the stored section are kept). Rejects bc:readOnly. */
     saveStartup(o: StartupOptions): Promise<void>;
+    /** The base's Navigation Pane options, read tolerantly (a wrong value reads as the default). Allowed read-only. */
+    navOptions(): Promise<NavOptions>;
+    /** Saves the pane options (unknown stored keys are kept). Rejects bc:readOnly. */
+    saveNavOptions(o: NavOptions): Promise<void>;
   };
   /** Default theme of the base (F2). */
   theme: {
@@ -688,8 +695,8 @@ export interface BasecraftApi {
     /** `path`: a path links.pick gave. A protected file asks its password as the link dialog does (bridge.ts). */
     inspect(path: string): Promise<AccessImportInfo>;
     /** `remotes`: Access names inspect listed. `structure`: absent = the file alone. `keepDir`: with kind 'access', where the export folder is
-     *  kept (a folder pickExport gave). Stop is queries.cancel (cancelled), also during the export. */
-    run(path: string, remotes: string[], structure?: AccessStructureSource, keepDir?: string): Promise<AccessImportResult>;
+     *  kept (a folder pickExport gave). `queries`: with an export (access or folder), also import its saved queries. `designs`: likewise its forms and reports. Stop is queries.cancel (cancelled), also during the export. */
+    run(path: string, remotes: string[], structure?: AccessStructureSource, keepDir?: string, queries?: boolean, designs?: boolean): Promise<AccessImportResult>;
     /** Asks for a folder; null when cancelled. Only a folder this gave is accepted by run, as `structure.dir` or as `keepDir`. */
     pickExport(): Promise<string | null>;
     onProgress(cb: (p: ImportProgress) => void): () => void;

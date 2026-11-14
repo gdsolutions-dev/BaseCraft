@@ -292,6 +292,20 @@ const doc = (): DesignDoc => ({
   ],
 });
 
+describe('validateDesignDoc names', () => {
+  const named = (names: string[]) => ({ formatVersion: '1.0', recordSource: null, props: {}, sections: [{ kind: 'detail', height: 100, props: {},
+    controls: names.map((name) => ({ kind: 'label', name, left: 0, top: 0, width: 1, height: 1, props: {} })) }] });
+  it('20 000 distinct controls validate in under a second', () => {
+    const d = named(Array.from({ length: 20000 }, (_, i) => `C${i}`));
+    const t = Date.now();
+    expect(validateDesignDoc(d)).toEqual([]);
+    expect(Date.now() - t).toBeLessThan(1000);
+  });
+  it('a duplicate differing by case or composition is reported at its path', () => {
+    expect(validateDesignDoc(named(['Abc', 'x', 'ABC', 'e\u0301', '\u00e9']))).toEqual(['sections[0].controls[2].name', 'sections[0].controls[4].name']);
+  });
+});
+
 describe('validateDesignDoc', () => {
   it('accepts a well-formed document and keeps unknown keys', () => {
     const d = { ...doc(), futureKey: { x: 1 } } as DesignDoc & { futureKey: unknown };
@@ -371,7 +385,7 @@ describe('chart control (F4)', () => {
     for (const n of ['Left', 'Width', 'Visible', 'HorizontalAnchor', 'OnClick']) expect(rows(n).appliesTo).toContain('chart');
     for (const n of ['BackStyle', 'BorderStyle']) expect(rows(n).appliesTo).not.toContain('chart');   // le graphique a ChartBack* et ChartBorder*
     expect(rows('ChartBorderStyle')).toMatchObject({ tab: 'format', default: 'transparent', appliesTo: ['chart'] });
-    for (const n of ['LinkMasterFields', 'LinkChildFields']) { expect(rows(n)).toMatchObject({ appliesTo: ['subform', 'chart'] }); expect(rows(n).objects).toBeUndefined(); }   // sous-état : lignes gardées ; graphique d'état : filtré par la feuille
+    for (const n of ['LinkMasterFields', 'LinkChildFields']) { expect(rows(n)).toMatchObject({ appliesTo: ['subform', 'chart'] }); expect(rows(n).objects).toBeUndefined(); }   // sous-00e9tat : lignes gardées ; graphique d'état : filtré par la feuille
   });
 });
 

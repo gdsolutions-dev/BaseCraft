@@ -26,6 +26,8 @@ import { DocumentTabs } from './shell/DocumentTabs';
 import { askLogin } from './shell/LoginDialog';
 import { ModalProvider, useErrorDialog, useModal } from './shell/Modal';
 import { NavPane } from './shell/NavPane';
+import { showNavigationOptions } from './shell/NavigationOptions';
+import { DEFAULT_NAV_OPTIONS, groupObjects, weekStartOf, type NavObject, type NavOptions } from '../shared/nav-view';
 import { setNavImportText } from './shell/nav-menu-items';
 import { setNavImportExcel } from './exchange/exchange-menu';
 import { setNavLeaveTable } from './links/nav-menu-links';
@@ -88,6 +90,7 @@ function Shell() {
   const [session, setSession] = useState<SessionState | null | undefined>(undefined); // undefined: not known yet
   const [tables, setTables] = useState<TableSummary[]>([]);
   const [objects, setObjects] = useState<ObjectSummary[]>([]);
+  const [navOptions, setNavOptions] = useState<NavOptions>(DEFAULT_NAV_OPTIONS); // the Navigation Pane's view, kept in the base
   const [backstage, setBackstage] = useState<BackstageView | null>(null);
   const modalTab = useModalTab();
   const [importing, setImporting] = useState<false | { appendTo?: string; source?: 'text' | 'excel' | 'xml' }>(false);
@@ -103,8 +106,8 @@ function Shell() {
   const openShift = useRef(false);
   /** This opening's AutoExec, stopped on a blocked action: « Activer le contenu » runs it again once (R6). */
   const blockedAutoExec = useRef<string | null>(null);
-  const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui });
-  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui };
+  const live = useRef({ state, tables, objects, readOnly: false, navSelection, session, settings, ui, navOptions });
+  live.current = { state, tables, objects, readOnly: !!session?.readOnly, navSelection, session, settings, ui, navOptions };
   const pythonRunning = usePythonRunning(); // busy(): R4
 
   /** Bumped by each read and each settingsChanged broadcast: a read overtaken meanwhile is older, dropped. */
@@ -288,9 +291,13 @@ function Shell() {
 
   const tablesKey = session ? `${session.path}|${session.readOnly}|${!!session.needsRecovery}` : '';
   useEffect(() => {
-    if (tablesKey) { void refreshTables(); void refreshObjects(); }
-    else { setTables([]); setObjects([]); }
+    if (tablesKey) { void refreshTables(); void refreshObjects(); void api.base.navOptions().then(setNavOptions, () => setNavOptions(DEFAULT_NAV_OPTIONS)); }
+    else { setTables([]); setObjects([]); setNavOptions(DEFAULT_NAV_OPTIONS); }
   }, [tablesKey, refreshTables, refreshObjects]);
+
+  // a rename or a delete moved the references kept in the base's nav options (main-process navRename / navForget): read them again
+  const namesKey = [...tables.map((x) => `table:${x.name}`), ...objects.map((x) => `${x.kind}:${x.name}`)].join('|');
+  useEffect(() => { if (tablesKey) void api.base.navOptions().then(setNavOptions, () => undefined); }, [namesKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { document.title = session ? appTitle || `${session.fileName} – ${t(PRODUCT_TITLE_KEY)}` : t(PRODUCT_TITLE_KEY); }, [session, appTitle, t]);
   const active = state.tabs.find((x) => x.id === state.activeId) ?? null;
@@ -405,7 +412,7 @@ function Shell() {
     saveAs: () => switchBase(api.base.saveAs),
     tableProperties: () => {
       const tab = live.current.state.tabs.find((x) => x.id === live.current.state.activeId); // gated: a table's datasheet
-      if (tab) return showObjectProperties(modal, { kind: 'table', name: tab.name }, live.current.readOnly, dispatch);
+      if (tab) return showObjectProperties(modal, { kind: 'table', name: tab.name }, live.current.readOnly, dispatch, { opts: live.current.navOptions, set: changeNavOptions });
     },
     viewForm: () => {
       const tab = live.current.state.tabs.find((x) => x.id === live.current.state.activeId); // gated: a saved form
@@ -657,6 +664,29 @@ function Shell() {
   };
 
   const readOnly = !!session?.readOnly;
+  /** Merged into the pane's options; kept in the base unless it is read-only (then until it closes). */
+  const changeNavOptions = (patch: Partial<NavOptions>) => {
+    const next = { ...live.current.navOptions, ...patch };
+    live.current.navOptions = next; // two changes in one tick (a menu's set, then another) merge
+    setNavOptions(next);
+    if (!readOnly) void api.base.saveNavOptions(next).catch(showError);
+  };
+  /** Navigation Options: the groups of each category (Tables and Related Views reads the definitions), then the dialog; OK keeps a read-only base unchanged. */
+  const openNavigationOptions = async () => {
+    const o = live.current.navOptions;
+    const items: NavObject[] = [...tables.map((x) => ({ ...x, kind: 'table' as const })), ...objects.flatMap((x) => (x.kind === 'query' || x.kind === 'form' || x.kind === 'report' || x.kind === 'macro' || x.kind === 'module' ? [{ ...x, kind: x.kind }] : []))];
+    const env = { now: new Date(), weekStart: weekStartOf(live.current.settings?.region ?? navigator.language), related: design ? (await design.loadRelated().catch((e) => { console.error(e); return null; }))?.(items) : undefined };
+    const groupsOf = (id: string) => groupObjects(items, { ...DEFAULT_NAV_OPTIONS, category: id, sort: null }, env)
+      .map((g) => ({ id: g.id, label: typeof g.label === 'string' ? g.label : t(g.label.key, g.label.values) }));
+    const categories = [
+      { id: 'type', label: t('nav.category.type'), groups: groupsOf('type') },
+      ...(design ? [{ id: 'related', label: t('nav.options.related'), groups: groupsOf('related') }] : []),
+      ...o.categories.map((c) => ({ id: c.id, label: c.name || t('nav.category.custom'), groups: c.groups.map((g) => ({ id: g.id, label: g.name || t(`nav.group.${g.id}`) })) })),
+    ];
+    const next = await showNavigationOptions(modal, o, categories);
+    if (!next) return;
+    if (live.current.readOnly) void showError(new Error('bc:readOnly')); else changeNavOptions(next);
+  };
   const showBackstage = session === null || backstage !== null;
   const dialogOpen = state.tabs.some((x) => x.dialog);
 
@@ -670,7 +700,7 @@ function Shell() {
       <div className="work">
         {session && (
           <div className="contents" ref={inertRef(!!modalTab)}>
-            <NavPane tables={tables} objects={objects} readOnly={readOnly}
+            <NavPane tables={tables} objects={objects} readOnly={readOnly} navOptions={navOptions} onNavOptions={changeNavOptions} onOpenOptions={() => void openNavigationOptions()} region={settings?.region ?? navigator.language}
               visible={state.navVisible} strip={state.navStrip} runtime={ui.runMode} shortcutMenus={ui.shortcutMenus} onToggle={() => rawDispatch({ type: 'toggleNav' })} dispatch={dispatch} onSelect={setNavSelection}
               tabs={state.tabs} openTabOf={(k, n) => state.tabs.find((x) => !x.embedded && isDoc(x, k, n))?.id} />
           </div>
@@ -688,7 +718,7 @@ function Shell() {
           hasBase={!!session} settings={settings}
           onNew={() => void switchBase(api.base.create)} onOpen={(p, shift) => void switchBase(() => api.base.open(p), shift)}
           onCloseBase={() => void closeBase()} readOnly={readOnly} needsRecovery={!!session?.needsRecovery} basePath={session?.path ?? null}
-          forms={objects.filter((x) => x.kind === 'form').map((x) => x.name)} onStartupApplied={onStartupApplied}
+          forms={objects.filter((x) => x.kind === 'form').map((x) => x.name)} onStartupApplied={onStartupApplied} onNavigationOptions={design ? () => void openNavigationOptions() : undefined}
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />
       )}
     </div>

@@ -4,6 +4,9 @@ import { Code } from 'lucide-react';
 import { EditListDialog } from '../datasheet/EditListDialog';
 import { FormDesignView, requestFieldList as requestFormFieldList } from '../form/FormDesignView';
 import { ImportTextWizard } from '../import-text/ImportTextWizard';
+import { api } from '../bridge';
+import { relatedGroups } from '../database-tools/dependencies';
+import { loadDepWorld } from '../database-tools/load-world';
 import { linkedTableManagerItem } from '../links/LinkedTableManager';
 import { MacroDesignView } from '../macro/MacroDesignView';
 import { ImmediateWindow } from '../python/ImmediateWindow';
@@ -46,4 +49,5 @@ export const design: DesignHooks | null = {
   CurrentDatabaseOptions,
   tableFieldsCommands, FIELD_TYPES, moreFieldsFor, addMoreField, setDataType, setFormat, editValidation,
   EditListDialog, ImmediateWindow,
+  loadRelated: async () => { const world = await loadDepWorld(api); return (objs) => relatedGroups(world, objs); },
 };

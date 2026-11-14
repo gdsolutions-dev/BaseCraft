@@ -29,7 +29,7 @@ export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription', 'autoCorrectDependents', 'applyProperties',
   'describeSource', 'pageSource', 'chartData', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
-  'startup', 'saveStartup', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
+  'startup', 'saveStartup', 'navOptions', 'saveNavOptions', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
   'listResources', 'getResources', 'addResource', 'replaceResource', 'removeResource',
   'exportText',
   'exportRowCount',

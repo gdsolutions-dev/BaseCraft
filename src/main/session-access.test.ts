@@ -237,6 +237,19 @@ describe('Access import with the exact structure (E2 Task 4)', () => {
     expect(await s.importAccessTables(complet, ['Clients'], undefined, { kind: 'folder', dir: emptyDir })).toEqual({ ok: false, reason: 'export', failure: 'badFolder' });
     expect(tableNames()).toEqual(before);
   });
+  it.skipIf(!present)('queries: true with an export folder imports the queries', async () => {
+    const r = await s.importAccessTables(complet, ['Clients', 'Commandes', 'Divers'], undefined, { kind: 'folder', dir: FIXTURE }, undefined, undefined, true);
+    expect(r.ok && r.queries.map((q) => q.name)).toEqual(['QParVille', 'QTotaux']);
+    expect(s.listObjects('query').map((o) => o.name)).toEqual(['QParVille', 'QTotaux']);
+  });
+  it.skipIf(!present)('queries: true with the file only imports none', async () => {
+    const r = await s.importAccessTables(complet, ['Clients'], undefined, { kind: 'file' }, undefined, undefined, true);
+    expect(r.ok && r.queries).toEqual([]);
+  });
+  it.skipIf(!present)('without the flag nothing changes', async () => {
+    const r = await s.importAccessTables(complet, ['Clients'], undefined, { kind: 'folder', dir: FIXTURE });
+    expect(r.ok && r.report.lines.at(-1)).toEqual({ code: 'tablesOnly' });
+  });
   it('kind access without Access: failure noAccess, nothing created, no temporary folder', async () => {
     noAccess = true;
     const before = tableNames();

@@ -1,5 +1,5 @@
 // Modèle de conception partagé des formulaires (A4) et des états (A5) : contrat A3/A4/A5, section 1.3. Module pur.
-import { isValidObjectName, sameName } from '../field-types';
+import { foldName, isValidObjectName, sameName } from '../field-types';
 import type { RecordSourceRef } from '../record-source';
 
 export type Unit = 'twip';   // stockage en twips (1 cm = 567), affichage en cm
@@ -36,7 +36,7 @@ const isRef = (v: unknown) => isObj(v) && (
 export function validateDesignDoc(doc: unknown): string[] {
   if (!isObj(doc)) return ['$'];
   const errors: string[] = [];
-  const names: string[] = [];
+  const names = new Set<string>();   // folded names (sameName is a === b || foldName(a) === foldName(b), so foldName alone is the same test)
   if (doc.formatVersion !== '1.0') errors.push('formatVersion');
   if (doc.recordSource !== null && !isRef(doc.recordSource)) errors.push('recordSource');
   if (!isObj(doc.props)) errors.push('props');
@@ -44,8 +44,8 @@ export function validateDesignDoc(doc: unknown): string[] {
   const control = (c: unknown, at: string): void => {
     if (!isObj(c)) { errors.push(at); return; }
     if (!CONTROL_KINDS.includes(c.kind as ControlKind)) errors.push(`${at}.kind`);
-    if (typeof c.name !== 'string' || !isValidObjectName(c.name) || names.some((n) => sameName(n, c.name as string))) errors.push(`${at}.name`);
-    else names.push(c.name);
+    if (typeof c.name !== 'string' || !isValidObjectName(c.name) || names.has(foldName(c.name))) errors.push(`${at}.name`);
+    else names.add(foldName(c.name));
     for (const k of ['left', 'top', 'width', 'height']) if (!isUint(c[k])) errors.push(`${at}.${k}`);
     if (!isObj(c.props)) errors.push(`${at}.props`);
     if (c.children !== undefined) {

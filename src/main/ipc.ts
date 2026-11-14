@@ -11,6 +11,7 @@ import { sheetName } from '../shared/export-format';
 import { isUiLanguage, resolveUiLanguage } from '../shared/i18n';
 import { catalogs } from '../shared/i18n/catalogs';
 import { regionTag } from '../shared/locale-format';
+import { readNavOptions } from '../shared/nav-view';
 import { RUNTIME } from '../shared/product';
 import { FILE_EXTENSION } from './db/file-format';
 import { HEARTBEAT_MS, keepAlive, releaseIfOurs } from './db/lock';
@@ -23,8 +24,8 @@ import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg,
+  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { viaTemp } from './exchange/atomic-file';
@@ -661,6 +662,8 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   // Startup options (B3): a read-only base reads them; saving rejects (ReadOnlyError) like any write.
   handle(CH.baseStartup, () => need().startup());
   handle(CH.baseSaveStartup, (o) => rowWrite(() => need().saveStartup(startupOptions(o))));
+  handle(CH.baseNavOptions, () => need().navOptions());
+  handle(CH.baseSaveNavOptions, (o) => rowWrite(() => need().saveNavOptions(readNavOptions(navOptionsArg(o)))));
 
   // Default theme (F2): a read-only base reads it; saving rejects like any write; open views refetch on the broadcast.
   handle(CH.baseTheme, () => need().baseTheme());
@@ -777,12 +780,12 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   });
   // E1: the path is one links.pick returned; the file is only read. Progress and Stop as the other imports.
   handle(CH.accessImportInspect, (p) => need().inspectAccessImport(linkPath(p, chosenLinks)));
-  handle(CH.accessImportRun, async (p, n, st, keep) => {
+  handle(CH.accessImportRun, async (p, n, st, keep, q, dz) => {
     const path = linkPath(p, chosenLinks); const names = nameList(n);
-    const structure = accessStructure(st, chosenExports); const keepDir = exportKeepDir(keep, chosenExports);
+    const structure = accessStructure(st, chosenExports); const keepDir = exportKeepDir(keep, chosenExports); const queries = exportQueries(q); const designs = exportDesigns(dz);
     await whenIdle();
     // The script's path is the main process's own, never the renderer's.
-    return runImport(() => need().importAccessTables(path, names, undefined, structure, keepDir, accessExportScript()));
+    return runImport(() => need().importAccessTables(path, names, undefined, structure, keepDir, accessExportScript(), queries, designs));
   });
   handle(CH.accessImportPickExport, async () => {
     const p = await startDir().then((d) => pickFolder(d, 'BASECRAFT_E2E_EXPORT_DIR'));

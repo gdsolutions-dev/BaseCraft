@@ -399,3 +399,9 @@ describe('display lexing of subqueries', () => {
     expect(() => toDisplay('In (SELECT [b] FROM [T])', FR, { ...SUBQ, criteria: true })).toThrow(typed);
   });
 });
+
+describe('`!` outside a query (E3: unchanged)', () => {
+  it('[a]![b] in a plain expression', () => {
+    expect(() => parseCanonical('[a]![b]')).toThrow(expect.objectContaining({ code: 'badMember' }));
+  });
+});

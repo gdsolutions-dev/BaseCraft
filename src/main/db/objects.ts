@@ -4,6 +4,7 @@ import type { ObjectKind, ObjectSummary, OpResult } from '../../shared/api';
 import { isReservedName, isValidObjectName, sameName } from '../../shared/field-types';
 import { isTableName } from './schema';
 import { isLinkName } from '../links/store';
+import { navForget, navRename } from './navigation';
 import { inTransaction } from './tx';
 
 export type { ObjectKind, ObjectSummary };
@@ -110,6 +111,7 @@ export function saveObject(db: DatabaseSync, kind: ObjectKind, name: string, def
     if (cur === undefined) return fail('notFound');
     if (taken(db, kind, name, cur)) return fail('nameExists');
     db.prepare('UPDATE bc_objects SET name = ?, definition = ?, modified = ? WHERE kind = ? AND name = ?').run(name, json, now, kind, cur);
+    if (name !== cur) navRename(db, kind, cur, name);
     return { ok: true };
   });
 }
@@ -122,15 +124,19 @@ export function renameObject(db: DatabaseSync, kind: ObjectKind, oldName: string
     if (cur === undefined) return fail('notFound');
     if (taken(db, kind, newName, cur)) return fail('nameExists');
     db.prepare('UPDATE bc_objects SET name = ? WHERE kind = ? AND name = ?').run(newName, kind, cur);
+    navRename(db, kind, cur, newName);
     return { ok: true };
   });
 }
 
 export function deleteObject(db: DatabaseSync, kind: ObjectKind, name: string): OpResult {
-  const cur = find(db, kind, name);
-  if (cur === undefined) return fail('notFound');
-  db.prepare('DELETE FROM bc_objects WHERE kind = ? AND name = ?').run(kind, cur);
-  return { ok: true };
+  return inTransaction(db, () => {
+    const cur = find(db, kind, name);
+    if (cur === undefined) return fail('notFound');
+    db.prepare('DELETE FROM bc_objects WHERE kind = ? AND name = ?').run(kind, cur);
+    navForget(db, kind, cur);
+    return { ok: true };
+  });
 }
 
 /** Properties dialog: the description ('' or null removes it); the object counts as modified, as in Access. */

@@ -31,3 +31,9 @@ export function basecraftCompletions(before: string, cat: CompletionCatalog): Co
   return members('docmd', DOCMD_NAMES) ?? members('db', ['open_recordset', 'execute']) ?? members('tempvars', ['keys', 'items', 'clear'])
     ?? members('app', ['current_project', 'quit'], 'property') ?? members('me', ME)
 }
+
+/** D2: a list opened by typing (not after a dot / Ctrl+Space): at least 2 identifier characters, and not a name being declared. */
+export function typedWordOk(before: string): boolean {
+  const m = before.match(/(\w*)$/)
+  return !!m && m[1].length >= 2 && !/\b(?:def|class)\s+\w*$/.test(before)
+}

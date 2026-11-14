@@ -37,11 +37,17 @@ export async function launchApp(
     args: [opts.runtime ? 'out-runtime' : '.', ...(opts.args ?? [])], // runtime: the Runtime build, out-runtime (npm run build:runtime)
     env,
   });
-  const page = await app.firstWindow();
-  // The window stays hidden (main/index.ts): the page must still behave as focused for the grid's editors.
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
-  await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
+  // waitOpen false: a startup that quits at once (AutoExec = Quit) can close the window under these steps; that is not a failure.
+  let page = undefined as unknown as Page;
+  try {
+    page = await app.firstWindow();
+    // The window stays hidden (main/index.ts): the page must still behave as focused for the grid's editors.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await page.waitForSelector('[data-testid="app-root"]', { state: 'attached' });
+  } catch (e) {
+    if (opts.waitOpen !== false) throw e;
+  }
   // A base named on the command line opens in the main process after the window loads (main/index.ts): wait until it is open
   // (its lock taken, or found held by another instance). A second instance launched next then always finds the first one's
   // lock and opens read-only, however slow the machine; a fixed wait for the banner raced both the open and the lock.
@@ -248,3 +254,9 @@ export async function checkView(page: Page, id: string, check: (view: Locator) =
   await check(page.getByTestId(`view-item-${id}`));
   await page.keyboard.press('Escape');
 }
+
+/** The text of a SQL view or module editor (CodeMirror): its document. */
+export const editorText = (box: Locator): Promise<string> => box.evaluate((el) => [...el.querySelectorAll('.cm-line')].map((l) => l.textContent).join(String.fromCharCode(10)));
+/** `expect(box).toHaveValue(want)` for a CodeMirror editor. */
+export const expectSql = (box: Locator, want: string | RegExp) =>
+  want instanceof RegExp ? expect.poll(() => editorText(box)).toMatch(want) : expect.poll(() => editorText(box)).toBe(want);

@@ -49,6 +49,7 @@
       "macroDesign": "Macro-ontwerp"
     },
     "group": {
+      "window": "Venster",
       "builderClose": "Sluiten",
       "view": "Weergaven",
       "records": "Records",
@@ -105,6 +106,8 @@
       "expandCollapse": "Uitvouwen/samenvouwen"
     },
     "cmd": {
+      "sizeToFit": "Aanpassen aan formulier",
+      "switchWindows": "Van venster wisselen",
       "builderSaveAs": "Opslaan als",
       "builderClose": "Sluiten",
       "viewDatasheet": "Gegevensbladweergave",
@@ -555,6 +558,16 @@
     "copyLabel": "Naam van de kopie",
     "copyDefault": "Kopie van {{name}}"
   },
+  "owin": {
+    "minimize": "Minimaliseren",
+    "maximize": "Maximaliseren",
+    "restore": "Herstellen",
+    "switch": "Van venster wisselen",
+    "sizeToFit": "Grootte aanpassen aan formulier",
+    "cascade": "Trapsgewijs",
+    "tile": "Naast elkaar",
+    "none": "Geen geopend venster"
+  },
   "tabs": {
     "close": "“{{name}}” ({{kind}}) sluiten",
     "unsaved": "(niet-opgeslagen wijzigingen)",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "Database1",
+    "pictureFilter": "Afbeeldingen",
     "copyName": "Kopie van {{name}}",
     "compactOnClose": "BaseCraft comprimeert de database voordat deze wordt gesloten. Dit kan even duren: het sluiten wordt vanzelf voltooid.",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "Een themanaam heeft 1 tot 60 tekens en geen stuurtekens.",
       "themeReserved": "Deze naam is die van een thema dat met BaseCraft wordt geleverd: kies een andere.",
       "themeExists": "Er is al een aangepast thema met deze naam.",
+      "invalidThemeFile": "Dit bestand is geen leesbaar Office-thema (.thmx).",
+      "pictureOutsideBase": "Een gekoppelde afbeelding moet in de map van de database of een van de submappen staan.",
       "invalidPicture": "Het bestand is geen PNG-, JPEG-, GIF- of WebP-afbeelding.",
       "pictureTooLarge": "Afbeelding te groot (maximaal 1 MB).",
+      "attachmentTooLarge": "Een bestand is groter dan 25 MB: er is niets toegevoegd.",
+      "attachmentOpen": "Het bestand kan niet worden geopend.",
       "unknown": "Er is een onverwachte fout opgetreden: {{detail}}",
       "fileTooLarge": "Het bestand is groter dan 2 GB: het kan niet worden geïmporteerd.",
       "importInterrupted": "De import is onderbroken (de database is gesloten of alleen-lezen geworden). Er is niets geïmporteerd.",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "Deze Access-database is beveiligd met een wachtwoord: {{detail}}",
       "linkUnavailable_needsLogin": "Aanmelding geannuleerd: de gekoppelde tabellen van {{detail}} zijn niet beschikbaar.",
       "linkUnavailable_cannotConnect": "Kan de server {{detail}} niet bereiken. Controleer de servernaam, de poort en het netwerk.",
+      "odbc_failed": "De ODBC-bron meldde een fout: {{detail}}",
+      "odbc_unavailable": "ODBC-import is niet beschikbaar op deze computer: {{detail}} is niet gevonden. Installeer op Linux en macOS unixODBC.",
       "linkUnavailable_certificate": "Deze werkplek vertrouwt het certificaat van de server {{detail}} niet. Laat het certificaat van de certificeringsinstantie installeren of kies, als u dit netwerk vertrouwt, in Beheer gekoppelde tabellen de versleutelingsoptie zonder controle van het certificaat (bijvoorbeeld „Versleuteld, het servercertificaat vertrouwen”).",
       "linkUnavailable_serverVersion": "De server {{detail}} gebruikt een versie die BaseCraft niet ondersteunt (minimaal PostgreSQL 14 of SQL Server 2016).",
       "linkUnavailable_passwordExpired": "Het wachtwoord van deze aanmelding is verlopen op de server {{detail}}. Wijzig het met het beheerprogramma van de server en maak daarna opnieuw verbinding.",
@@ -752,6 +772,7 @@
       "nameExists": "Er bestaat al een object met deze naam.",
       "nameInvalid": "Deze naam is ongeldig.",
       "readOnly": "De database is alleen-lezen geopend.",
+      "moduleNameClash": "Deze naam geeft dezelfde codemodule als een ander formulier, rapport of bestaande module. Kies een andere naam.",
       "notFound": "Dit object bestaat niet meer.",
       "hasRelations": "Deze tabel maakt deel uit van relaties: verwijder eerst de relaties.",
       "external": "De tabel “{{table}}” is buiten BaseCraft om gewijzigd; het ontwerp ervan kan hier niet worden gewijzigd.",
@@ -860,6 +881,7 @@
     },
     "fieldList": "Lijst met velden",
     "ctlPrefix": {
+      "attachment": "Bijlage",
       "label": "Label",
       "textBox": "Tekst",
       "checkBox": "Selectie",
@@ -913,9 +935,13 @@
     "currency": "Valuta",
     "dateTime": "Datum/tijd",
     "yesNo": "Ja/nee",
-    "hyperlink": "Hyperlink"
+    "hyperlink": "Hyperlink",
+    "attachment": "Bijlage",
+    "calculated": "Berekend"
   },
   "fieldProp": {
+    "calculated": "Expressie",
+    "resultType": "Resultaattype",
     "size": "Veldgrootte",
     "numberSize": "Veldgrootte",
     "precision": "Precisie",
@@ -1043,7 +1069,7 @@
   "datasheet": {
     "more": { "rowHeight": "Rijhoogte…", "columnWidth": "Veldbreedte…", "rowHeightLabel": "Rijhoogte (punten):", "columnWidthLabel": "Kolombreedte:", "standardHeight": "Standaardhoogte", "standardWidth": "Standaardbreedte", "bestFit": "Passend maken", "hide": "Velden verbergen", "unhide": "Velden zichtbaar maken…", "freeze": "Velden blokkeren", "unfreeze": "Blokkering van alle velden opheffen", "unhideTitle": "Kolommen zichtbaar maken" },
     "totals": { "label": "Totaal", "none": "Geen" },
-    "format": { "gridlines": "Rasterlijnen weergegeven", "gridColor": "Kleur van rasterlijnen", "auto": "Automatisch" },
+    "format": { "gridlines": "Rasterlijnen weergegeven", "gridColor": "Kleur van rasterlijnen", "auto": "Automatisch", "cellEffect": "Celeffect", "flat": "Plat", "raised": "Verhoogd", "sunken": "Verdiept" },
     "goTo": {
       "first": "Eerste",
       "previous": "Vorige",
@@ -1692,6 +1718,13 @@
     "GridX": "Raster X",
     "GridY": "Raster Y",
     "RecordSelectors": "Recordkiezers",
+    "AutoResize": "Automatisch formaat",
+    "AutoCenter": "Automatisch centreren",
+    "ControlBox": "Systeemmenuvak",
+    "MinMaxButtons": "Knoppen Min Max",
+    "CloseButton": "Knop Sluiten",
+    "PopUp": "Pop-up",
+    "Modal": "Modaal",
     "Left": "Links",
     "Top": "Boven",
     "Height": "Hoogte",
@@ -1785,8 +1818,9 @@
     "ColumnWidth": "Kolombreedte"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "Geen", "min": "Knop Minimaliseren", "max": "Knop Maximaliseren", "both": "Beide"},
     "LegendPosition": {"top": "Boven", "bottom": "Onder", "left": "Links", "right": "Rechts"},
-    "ChartType": {"columnClustered": "Gegroepeerde kolom", "columnStacked": "Kolom, gestapeld", "columnStacked100": "Kolom, gestapeld 100%", "barClustered": "Gegroepeerde balk", "barStacked": "Balk, gestapeld", "barStacked100": "Balk, gestapeld 100%", "line": "Lijn", "lineStacked": "Lijn, gestapeld", "lineStacked100": "Lijn, gestapeld 100%", "area": "Vlak, gegroepeerd", "areaStacked": "Vlak, gestapeld", "areaStacked100": "Vlak, gestapeld 100%", "pie": "Cirkel", "radar": "Radar", "radarFilled": "Gevulde radar", "combo": "Combinatie", "doughnut": "Donut", "arc": "Boog", "scatter": "Spreiding", "bubble": "Bellen", "boxWhisker": "Box-and-whisker", "funnel": "Trechter", "pareto": "Pareto", "waterfall": "Waterval"},
+    "ChartType": {"columnClustered": "Gegroepeerde kolom", "columnStacked": "Kolom, gestapeld", "columnStacked100": "Kolom, gestapeld 100%", "barClustered": "Gegroepeerde balk", "barStacked": "Balk, gestapeld", "barStacked100": "Balk, gestapeld 100%", "line": "Lijn", "lineStacked": "Lijn, gestapeld", "lineStacked100": "Lijn, gestapeld 100%", "area": "Vlak, gegroepeerd", "areaStacked": "Vlak, gestapeld", "areaStacked100": "Vlak, gestapeld 100%", "pie": "Cirkel", "radar": "Radar", "radarFilled": "Gevulde radar", "combo": "Combinatie", "doughnut": "Donut", "arc": "Boog", "scatter": "Spreiding", "bubble": "Bellen", "boxWhisker": "Box-and-whisker", "funnel": "Trechter", "pareto": "Pareto", "waterfall": "Waterval", "wordCloud": "Woordenwolk"},
     "ChartDateGroup": {"none": "Geen", "year": "Jaar", "quarter": "Kwartaal", "month": "Maand", "day": "Dag"},
     "ChartBackStyle": {"normal": "Standaard", "transparent": "Transparant"},
     "ChartBorderStyle": {"transparent": "Transparant", "solid": "Doorlopend", "dashed": "Streepjes", "dotted": "Stippen"},
@@ -1813,6 +1847,10 @@
       "transparent": "Transparant"
     },
     "BorderStyle": {
+      "none": "Geen",
+      "thin": "Dun",
+      "sizable": "Vergrootbaar",
+      "dialog": "Dialoogvenster",
       "transparent": "Transparant",
       "solid": "Ononderbroken",
       "dashed": "Streepjes",
@@ -1840,7 +1878,8 @@
     },
     "PictureType": {
       "embedded": "Ingesloten",
-      "shared": "Gedeeld"
+      "shared": "Gedeeld",
+      "linked": "Gekoppeld"
     },
     "SizeMode": {
       "clip": "Bijsnijden",
@@ -2171,7 +2210,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "Opbouwfunctie kiezen", "macro": "Macro-opbouwfunctie", "function": "Functie-opbouwfunctie" },
+    "choose": { "title": "Opbouwfunctie kiezen", "macro": "Macro-opbouwfunctie", "function": "Functie-opbouwfunctie", "code": "Codebuilder" },
     "function": { "title": "Functie-opbouwfunctie", "empty": "Geen enkele module bevat een openbare functie." },
     "title": "Expressiebouwer",
     "expression": "Voer een expressie in:",
@@ -2386,8 +2425,9 @@
     "showTable": {
       "title": "Tabellen toevoegen",
       "tables": "Tabellen",
+      "links": "Koppelingen",
       "queries": "Query's",
-      "both": "Beide",
+      "all": "Alles",
       "add": "Geselecteerde tabellen toevoegen",
       "close": "Sluiten",
       "none": "Geen objecten.",
@@ -2410,6 +2450,7 @@
       "label": "Tabelnaam"
     },
     "sqlOnly": "Deze query kan alleen in de SQL-weergave worden weergegeven.",
+    "sqlFormat": "SQL opmaken",
     "passThrough": {
       "notice": "Pass-through-query: deze tekst wordt ongewijzigd naar de server {{label}} verzonden, zonder dat BaseCraft hem leest. De server past zijn eigen machtigingen toe; de validatieregels en relaties van BaseCraft gelden niet voor wat hij wijzigt.",
       "noticeNoServer": "Pass-through-query: kies de server in het eigenschappenblad.",
@@ -2476,6 +2517,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "Importstappen opslaan",
+    "savedImportDefault": "Import - {{name}}",
+    "savedImportEmpty": "Geen opgeslagen import.",
     "yes": "Waar",
     "no": "Onwaar",
     "excelFilter": "Excel-werkmappen",
@@ -2545,6 +2590,7 @@
     "twoPrimary": "Slechts één index kan de primaire sleutel zijn."
   },
   "tableFields": {
+    "calculatedLabel": "Expressie van \"{{field}}\" (berekend veld; leeg: opgeslagen veld)",
     "newField": "Veld",
     "newTable": "Tabel",
     "designOpen": "De tabel \"{{name}}\" is geopend in de ontwerpweergave. Sluit of sla de tabel op voordat u de velden hier wijzigt.",
@@ -2591,6 +2637,7 @@
     "self": "Het gegevensbestand kan niet de geopende database zijn. Kies een andere naam of map."
   },
   "clipboard": { "empty": "Het klembord van het systeem bevat geen tekst.", "content": "{{text}}" },
+  "attachments": {"title": "Bijlagen", "add": "Toevoegen…", "remove": "Verwijderen", "open": "Openen", "saveAs": "Opslaan als…", "saveAll": "Alles opslaan…", "none": "Geen bijlagen.", "previous": "Vorige bijlage", "next": "Volgende bijlage", "manage": "Dubbelklik om de bijlagen te beheren", "openConfirm": "“{{name}}” openen? Een bestand uit een database kan schadelijke code bevatten: open het alleen als u deze database vertrouwt.", "openConfirmRunnable": "“{{name}}” is een programma of script: openen voert het uit op deze computer. Open het alleen als u deze database en de maker ervan vertrouwt."},
   "hyperlink": { "address": "Adres (https://, http:// of mailto:)", "text": "Weer te geven tekst", "invalid": "Het adres moet beginnen met https://, http:// of mailto:.", "open": "{{url}} openen?" },
   "migrate": {
     "title": "Wizard Verplaatsen naar een server",
@@ -2633,6 +2680,8 @@
     "noSchema": "Het schema {{schema}} bestaat niet op de server.",
     "nameTaken": "De server heeft al tabellen met deze namen: {{names}}. Verwijder ze of kies een ander schema.",
     "nameTooLong": "Deze namen overschrijden de limiet van PostgreSQL (63 bytes): {{names}}. Wijzig eerst hun naam.",
+    "nameClash": "Meerdere gegevensbestanden bevatten tabellen met de namen {{names}}. Er is niets verplaatst: hernoem ze in hun gegevensbestanden (ze moeten uniek zijn op de server) en probeer het opnieuw.",
+    "partial": "Deze tabellen van reeds verplaatste gegevensbestanden staan op de server en hun koppelingen zijn gewijzigd: {{names}}. De andere bestanden zijn ongewijzigd gebleven.",
     "invalidDesign": "Het ontwerp van deze velden is ongeldig: {{names}}. Corrigeer het in de ontwerpweergave en probeer het opnieuw.",
     "cancelled": "Verplaatsen geannuleerd: er is niets gewijzigd.",
     "failed": "Het verplaatsen is mislukt ({{table}}): {{error}}. Er is niets gewijzigd op de server of in de database.",
@@ -2688,6 +2737,7 @@
       "done": "Conversie van macro '{{macro}}' voltooid: module '{{module}}' gemaakt.",
       "todo": "{{count}} item(s) vragen uw aandacht: zoek naar TODO in de module."
     },
+    "convertEvents": { "none": "Er is geen ingesloten macro om te converteren.", "done": "De ingesloten macro's van '{{object}}' zijn geconverteerd: {{count}} gebeurtenis(sen) voeren nu de procedures van module '{{module}}' uit." },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "De ingesloten macro verwijderen?",
@@ -2953,7 +3003,6 @@
     "moveUp": "Omhoog",
     "moveDown": "Omlaag",
     "remove": "Verwijderen",
-    "saveBeforeRun": "De macro moet worden opgeslagen voordat deze wordt uitgevoerd. Nu opslaan?",
     "step": {
       "title": "Macro stap voor stap",
       "condition": "Voorwaarde",
@@ -2968,17 +3017,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "Pas de werkbalk Snelle toegang boven de tabbladen van het lint aan.",
+      "choose": "Kies een opdracht:",
+      "add": "Toevoegen",
+      "remove": "Verwijderen",
+      "up": "Omhoog",
+      "down": "Omlaag",
+      "reset": "Opnieuw instellen",
+      "current": "Opdrachten op de werkbalk"
+    },
+    "trust": {
+      "header": "Vertrouwenscentrum: waar deze computer de actieve inhoud van een database vertrouwt.",
+      "locations": "Vertrouwde locaties",
+      "locationsNote": "Door de beheerder ingesteld in een systeembestand; BaseCraft leest het alleen.",
+      "none": "Geen vertrouwde locatie.",
+      "subfolders": "met submappen",
+      "approvalsTitle": "Goedkeuringen",
+      "approvals": "Door deze gebruiker gegeven goedkeuringen: {{count}}",
+      "clear": "Alle goedkeuringen verwijderen",
+    "admin": "beheerder",
+    "add": "Nieuwe locatie toevoegen...",
+    "remove": "Verwijderen",
+    "subfoldersAlso": "Submappen van deze locatie worden ook vertrouwd",
+    "description": "Beschrijving",
+    "network": "Vertrouwde locaties op mijn netwerk toestaan (niet aanbevolen)",
+    "networkRefused": "Een netwerklocatie kan niet worden vertrouwd zolang netwerklocaties niet zijn toegestaan."
+    },
     "cat": {
       "general": "Algemeen",
       "currentDb": "Huidige database",
       "client": "Clientinstellingen",
       "datasheet": "Gegevensblad",
-      "designers": "Objectontwerpers"
+      "designers": "Objectontwerpers",
+      "quickAccess": "Werkbalk Snelle toegang",
+      "ribbon": "Lint aanpassen",
+      "trust": "Vertrouwenscentrum"
     },
     "general": {
+      "screenTipStyle": "Stijl van knopinfo:",
+      "screenTipsOn": "Knopinfo weergeven",
+      "screenTipsOff": "Geen knopinfo weergeven",
+      "interfaceZoom": "Zoom van de interface (%)",
+      "interfaceZoomReset": "Zoom herstellen",
+      "previewZoom": "Zoom van afdrukvoorbeeld",
+      "previewFit": "Aanpassen aan venster",
+      "previewActual": "100%",
+      "screenTipShortcuts": "Sneltoetsen weergeven in knopinfo",
       "header": "Algemene opties voor het werken met {{product}}.",
       "ui": "Opties voor gebruikersinterface",
       "creation": "Databases maken",
+      "sortOrderNew": "Sorteervolgorde voor nieuwe databases:",
+      "sortOrderLegacy": "Algemeen – Verouderd",
+      "sortOrderGeneral": "Algemeen",
+      "sortOrderSpanishTraditional": "Spaans – Traditioneel",
       "defaultFolder": "Standaardmap voor databases:",
       "browse": "Bladeren…"
     },
@@ -3039,9 +3131,13 @@
       "docWindow": "Opties voor documentvensters",
       "statusBar": "Statusbalk weergeven",
       "documentTabs": "Documenttabbladen weergeven",
+      "docOverlapping": "Overlappende vensters",
+      "docTabbed": "Documenten met tabbladen",
       "specialKeys": "Speciale toetsen gebruiken",
       "specialKeysHelp": "F11: het navigatiedeelvenster weergeven of verbergen.",
       "compactOnClose": "Comprimeren bij sluiten",
+      "sortOrder": "Sorteervolgorde van deze database:",
+      "sortOrderPending": "Wordt toegepast bij de volgende Comprimeren en herstellen: {{order}}",
       "frontEnd": "Front-endtoepassing (de lokale tabellen dienen alleen als referentie)",
       "dataFile": "Gedeeld gegevensbestand (in gedeelde modus geopend door meerdere werkstations)",
       "datasheetDesign": "Ontwerpwijzigingen voor tabellen in de gegevensbladweergave inschakelen",
@@ -3101,6 +3197,7 @@
     "datasheet": {
       "header": "Pas het uiterlijk van gegevensbladen in {{product}} aan.",
       "gridSection": "Rasterlijnen en celeffecten",
+      "defaultCellEffect": "Standaard celeffect",
       "gridlines": "Standaard weergegeven rasterlijnen",
       "horizontal": "Horizontaal",
       "vertical": "Verticaal",
@@ -3136,6 +3233,7 @@
 
       "skipped": "Niet geïmporteerde kolommen ({{table}}): {{names}}."
     },
+    "odbc": { "title": "Importeren uit een ODBC-database", "dsn": "Gegevensbron (DSN)", "connection": "Of verbindingsreeks", "modeImport": "De brongegevens importeren in een nieuwe tabel in de huidige database", "modeLink": "Koppelen aan de gegevensbron door een gekoppelde tabel te maken" },
     "access": {
       "title": "Importeren uit Access",
       "fileOnly": "Tabellen en hun gegevens worden geïmporteerd. Andere sleutels dan een AutoNummering, indexen en veldregels worden niet gelezen; query's, formulieren, rapporten, macro's en modules worden niet geïmporteerd.",
@@ -3255,7 +3353,7 @@
       "sqlite": "SQLite-bestand",
       "access": "Access-database",
       "postgresql": "PostgreSQL-server",
-      "sqlserver": "SQL Server-server"
+      "sqlserver": "SQL Server-server", "odbc": "ODBC-database"
     },
     "tables": "Tabellen",
     "selectAll": "Alles selecteren",
@@ -3271,6 +3369,7 @@
     "designTitle": "Gekoppelde tabel",
     "designWarning": "“{{name}}” is een gekoppelde tabel: de structuur ervan hoort bij het bronbestand en kan hier niet worden gewijzigd. Wilt u de tabel toch openen, alleen-lezen?",
     "designBanner": "Gekoppelde tabel, alleen-lezen: de structuur ervan hoort bij {{path}}.",
+    "designBannerServer": "Aan een server gekoppelde tabel: de structuur ervan hoort bij {{path}}. Gewijzigde BaseCraft-eigenschappen worden in deze database opgeslagen.",
     "skipped": "Niet-gekoppelde kolommen, van een type dat BaseCraft niet leest (bijlage, OLE-object, meerwaardig veld, binair, Datum/tijd uitgebreid): {{names}}",
     "unsupported": "Tabel niet ondersteund: {{reason}}",
     "password": {
@@ -3593,6 +3692,7 @@
     "default": "Instellen als standaardthema van deze database",
     "save": "Huidig thema opslaan…",
     "browse": "Thema's zoeken…",
+    "thmxFilter": "Office-thema's",
     "delete": "Dit aangepaste thema verwijderen",
     "saveTitle": "Huidig thema opslaan",
     "nameLabel": "Themanaam:",
@@ -3654,7 +3754,7 @@
       "legendNone": "(Geen)",
       "legendHint": "Met een legenda wordt alleen de eerste waarde getekend.",
       "legendIgnored": "Dit diagramtype negeert het legendaveld.",
-      "typeHint": {"doughnut": "De grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "arc": "Halve ring: de grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "funnel": "De fasen worden gesorteerd op de eerste waarde; het legendaveld wordt genegeerd.", "scatter": "Het eerste asveld is X en moet een getal zijn; de eerste waarde is Y. Een legendaveld verdeelt de punten over reeksen.", "bubble": "Het eerste asveld is X (een getal), de eerste waarde is Y en de tweede waarde is de grootte van de bel.", "boxWhisker": "Elke categorie is een box; de aslvelden geven de categorie en de eerste waarde de waarnemingen (het legendaveld wordt genegeerd).", "pareto": "De balken zijn gesorteerd op de eerste waarde, de grootste eerst; de lijn toont het cumulatieve percentage op de rechteras (het legendaveld wordt genegeerd).", "waterfall": "Elke categorie is een stap van de eerste waarde (leeg = 0) op een lopend totaal; een laatste balk toont het totaal (het legendaveld wordt genegeerd)."},
+      "typeHint": {"doughnut": "De grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "arc": "Halve ring: de grootte van de segmenten volgt uit de eerste waarde; het legendaveld wordt genegeerd.", "funnel": "De fasen worden gesorteerd op de eerste waarde; het legendaveld wordt genegeerd.", "scatter": "Het eerste asveld is X en moet een getal zijn; de eerste waarde is Y. Een legendaveld verdeelt de punten over reeksen.", "bubble": "Het eerste asveld is X (een getal), de eerste waarde is Y en de tweede waarde is de grootte van de bel.", "boxWhisker": "Elke categorie is een box; de aslvelden geven de categorie en de eerste waarde de waarnemingen (het legendaveld wordt genegeerd).", "pareto": "De balken zijn gesorteerd op de eerste waarde, de grootste eerst; de lijn toont het cumulatieve percentage op de rechteras (het legendaveld wordt genegeerd).", "waterfall": "Elke categorie is een stap van de eerste waarde (leeg = 0) op een lopend totaal; een laatste balk toont het totaal (het legendaveld wordt genegeerd).", "wordCloud": "De woorden komen uit het asveld, de grootte uit de eerste waarde (rijen van hetzelfde woord worden opgeteld; het legendaveld wordt genegeerd)."},
       "rowsHint": "De waarden worden bij dit grafiektype ongewijzigd getekend: geen aggregatiefunctie.",
       "axisXHint": "Het eerste veld is X.",
       "values": "Waarden (Y-as)",
@@ -3664,6 +3764,44 @@
       "expand": "Sectie uitvouwen",
       "close": "Sluiten",
       "format": {"series": "Gegevensreeks", "heading": "Gegevensreeks opmaken: {{name}}", "fullName": "Volledige naam", "seriesType": "Reekstype", "seriesTypes": {"column": "Kolom", "line": "Lijn", "area": "Vlak"}, "plotOn": "Reeks uitzetten op", "primary": "Primair", "secondary": "Secundair", "fill": "Opvulkleur van de reeks", "border": "Randkleur van de reeks", "labels": "Gegevenslabel weergeven", "trend": "Opties voor trendlijn", "trendName": "Naam van de trendlijn", "noValues": "Selecteer eerst een waarde op het tabblad Gegevens.", "legendHint": "Met een legendaveld geldt de opmaak voor alle reeksen samen: uitgeschakeld.", "roundHint": "Geen effect bij dit grafiektype (cirkel, radar).", "axisHint": "Geen secundaire as bij staaf- of gestapelde grafieken.", "trendHint": "Geen trendlijn bij staaf- of gestapelde grafieken.", "noEffect": "Geen effect bij dit diagramtype.", "noTrend": "Geen trendlijn bij dit diagramtype.", "noAxis": "Geen secundaire as bij dit diagramtype.", "waterfallColors": "Waterval-kleuren", "lineOptions": "Lijnopties", "lineWidth": "Lijndikte", "dash": "Lijnstijl", "marker": "Markeringen weergeven", "gap": "Ontbrekende waarden", "trendKinds": {"none": "Geen", "linear": "Lineair", "exponential": "Exponentieel", "logarithmic": "Logaritmisch", "polynomial": "Polynomiaal", "power": "Macht", "movingAverage": "Voortschrijdend gemiddelde"}, "dashes": {"solid": "Ononderbroken", "dashed": "Gestreept", "dotted": "Gestippeld"}, "gaps": {"gap": "Een gat laten", "zero": "Als nul weergeven", "connect": "Punten verbinden"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "Toevoegen aan de werkbalk Snelle toegang",
+    "qatRemove": "Verwijderen uit de werkbalk Snelle toegang",
+    "newTab": "Nieuw tabblad",
+    "newGroup": "Nieuwe groep",
+    "rename": "Naam wijzigen",
+    "show": "Tabblad {{name}} weergeven",
+    "ribbonHeader": "Het lint aanpassen: tabbladen weergeven of verbergen, de volgorde wijzigen, aangepaste tabbladen en groepen maken.",
+    "ribbonNote": "Een aangepaste groep neemt elke meegeleverde opdracht op, op elk tabblad, ook hulpmiddeltabbladen. Selecteer een ingebouwde groep om die te hernoemen. Hulpmiddeltabbladen verschijnen alleen bij hun object.",
+    "ribbonTabs": "Tabbladen van het lint",
+    "toolTabs": "Hulpmiddeltabbladen",
+    "formTemplate": "Formuliersjabloon:",
+    "reportTemplate": "Rapportsjabloon:",
+    "templateNote": "Naam van een formulier of rapport van de huidige database: nieuwe formulieren en rapporten nemen de eigenschappen en sectie-instellingen over (standaard Normal). Bestaat het niet, dan gelden de oorspronkelijke waarden.",
+    "errorSection": "Foutcontrole",
+    "errorEnable": "Foutcontrole inschakelen",
+    "errorUnassociated": "Controleren op niet-gekoppeld label en besturingselement",
+    "errorNewLabels": "Controleren op nieuwe niet-gekoppelde labels",
+    "errorProperties": "Controleren op ongeldige besturingselementeigenschappen",
+    "errorReport": "Controleren op veelvoorkomende rapportfouten",
+    "errorShortcut": "Controleren op fouten in sneltoetsen",
+    "errorColor": "Kleur van de foutindicator:",
+    "errorIndicator": "Fout in dit item",
+    "errAssociate": "Label aan besturingselement koppelen",
+    "errIgnore": "Fout negeren",
+    "err": {
+      "unassociated": "Het label {{name}} is niet gekoppeld aan het aangrenzende besturingselement.",
+      "newLabel": "Het nieuwe label {{name}} is niet gekoppeld aan een besturingselement.",
+      "unknownField": "Het veld \"{{field}}\" bestaat niet in de bron.",
+      "invalidExpression": "De expressie \"{{field}}\" is ongeldig.",
+      "aggregateNotAllowed": "Een aggregatiefunctie is hier niet toegestaan.",
+      "widthExceedsPage": "Het rapport is breder dan het afdrukbare gebied van de pagina.",
+      "groupingInvalid": "Een sortering of groepering van het rapport is ongeldig: \"{{field}}\".",
+      "groupingMalformed": "Een sorteer- of groeperingsniveau van het rapport is leeg.",
+      "shortcutInvalid": "De sneltoets in \"{{name}}\" is geen letter of cijfer.",
+      "shortcutDuplicate": "De sneltoets \"{{field}}\" wordt al door een ander besturingselement gebruikt."
     }
   }
 }

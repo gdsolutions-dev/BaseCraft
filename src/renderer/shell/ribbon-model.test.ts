@@ -3,10 +3,11 @@ import fr from '../../shared/i18n/fr.json';
 import en from '../../shared/i18n/en.json';
 import {
   MODAL_SCOPE, RIBBON, SHELL_SCOPE, commandEnabled, commandState, commandsVersion, isCommandAvailable, openPopupOf, registerCommandStates, registerCommands, runCommand,
-  setActiveCommandTab, setOpenPopup,
-  ribbonContextKey, setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
+  setActiveCommandTab, setOpenPopup, setRibbonCustom,
+  customizedTabs, quickAccessChoices, toolTabsForOptions, ribbonContextKey, setCommandContext, subscribeCommands, tabAfterContextChange, visibleTabs, type CommandId, type PlannedIn, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
 import { parseSql } from '../../shared/query/sql-parser';
+import { NO_RIBBON_CUSTOM } from '../../shared/ribbon-custom';
 
 const cleanups: (() => void)[] = [];
 const reg = (tab: string, h: Parameters<typeof registerCommands>[1]) => { const u = registerCommands(tab, h); cleanups.push(u); return u; };
@@ -366,7 +367,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
     expect(commands.find((c) => c.id === 'linkedTableManager')?.planned).toBeUndefined();
     expect(commands.find((c) => c.id === 'splitDatabase')?.planned).toBeUndefined(); // C3
     expect(commands.filter((c) => c.planned === 'C').map((c) => c.id)).toEqual([]);
-    expect(commands.find((c) => c.id === 'importOdbc')?.planned).toBe('later');
+    expect(commands.find((c) => c.id === 'importOdbc')?.planned).toBeUndefined(); // backlog C4
     expect(commands.find((c) => c.id === 'passThroughQuery')).toMatchObject({ labelKey: 'ribbon.cmd.passThroughQuery', size: 'sm' }); // C6 R10
     expect(commands.find((c) => c.id === 'passThroughQuery')?.planned).toBeUndefined();
   });
@@ -428,7 +429,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
 
   it('a placeholder has a valid batch and is never enabled; the implemented commands are not placeholders', () => {
     const planned = commands.filter((c) => c.planned !== undefined);
-    expect(planned.length).toBeGreaterThanOrEqual(18); // exact count after merging main and Access import (E1) (18); 12 Arrange layout commands delivered (dispositions L1); Insert Image, Data Only (report designer), Replace, More (datasheet), the report's Subreport, the form's Insert Image, the datasheet's Totals and text formatting (bold, italic, underline, size, alignment, font, font colour, background colour, Datasheet Formatting), the five Help tab commands, the Clipboard launcher, Subform and Subreport in New Window, Format Painter since; Background Image and Conditional Formatting (E1, E2); the report gallery's Button, Tab Control, Option Group and List Box (D1); the Toggle Button of both galleries (D2); the Hyperlink of both galleries (D3); the form's Navigation Control (D4); Table Fields' Modify Lookups (T1); Spelling (C2); Import XML, Export XML, Saved Exports and Export More (the last one in two places) (F1, F4, F5); Query, Form and Report Wizards (H1, H2, H3); Labels (H4), Navigation and More Forms (H5); Relationship Report (K3); Object Dependencies (K2, three places); Database Documenter (K1); Analyze Performance (K4); the data macros' eight (five table events, Named Macro, Create Data Macros, Rename/Delete Macro) (T2); the rich text commands, Bullets, Numbering, the two indents, Text Direction and Text Highlight Color (A6)
+    expect(planned.length).toBeGreaterThanOrEqual(13); // exact count: 13 after the backlog batch C5b (the report gallery Attachment); 14 after the backlog batches C4 (ODBC import) and C5 (Attachment); before: after merging main and Access import (E1) (18); 12 Arrange layout commands delivered (dispositions L1); Insert Image, Data Only (report designer), Replace, More (datasheet), the report's Subreport, the form's Insert Image, the datasheet's Totals and text formatting (bold, italic, underline, size, alignment, font, font colour, background colour, Datasheet Formatting), the five Help tab commands, the Clipboard launcher, Subform and Subreport in New Window, Format Painter since; Background Image and Conditional Formatting (E1, E2); the report gallery's Button, Tab Control, Option Group and List Box (D1); the Toggle Button of both galleries (D2); the Hyperlink of both galleries (D3); the form's Navigation Control (D4); Table Fields' Modify Lookups (T1); Spelling (C2); Import XML, Export XML, Saved Exports and Export More (the last one in two places) (F1, F4, F5); Query, Form and Report Wizards (H1, H2, H3); Labels (H4), Navigation and More Forms (H5); Relationship Report (K3); Object Dependencies (K2, three places); Database Documenter (K1); Analyze Performance (K4); the data macros' eight (five table events, Named Macro, Create Data Macros, Rename/Delete Macro) (T2); the rich text commands, Bullets, Numbering, the two indents, Text Direction and Text Highlight Color (A6); ODBC Database import (backlog C4)
     for (const c of planned) {
       expect(PLANNED, c.id).toContain(c.planned);
       for (const x of contexts) expect(c.enabled(x), c.id).toBe(false);
@@ -1092,7 +1093,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "themes: themes themeColors themeFonts",
           "controls: select textBox label button tabControl hyperlink navigationControl optionGroup insertPageBreak comboBox line toggleButton listBox rectangle checkBox unboundObjectFrame attachment optionButton subform boundObjectFrame image webBrowser chart insertImage insertModernChart",
           "headerFooter: logo title dateTime",
-          "tools: addExistingFields propertySheet tabOrder chartSettings subformInNewWindow viewCode",
+          "tools: addExistingFields propertySheet tabOrder chartSettings subformInNewWindow viewCode convertMacros",
         ],
         "format": [
           "selection: objectList selectAll",
@@ -1110,6 +1111,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "sort: filter sortAsc sortDesc sortClear filterSelection filterAdvanced filterToggle",
           "records: refresh newRecord save deleteRecord recordsTotals spelling moreRecords",
           "find: find replace goTo selectMenu",
+          "window: sizeToFit switchWindows",
           "textFormatting: textFont textFontSize bullets numbering indentIncrease indentDecrease textDirection textBold textItalic textUnderline textFontColor textHighlight textBackColor textAlignLeft textAlignCenter textAlignRight datasheetGridlines alternateRowColor datasheetFormatting",
           "zoom: zoom",
         ],
@@ -1148,7 +1150,7 @@ describe('ribbon catalog (C11: every Access tab, group and command; placeholders
           "groupingTotals: groupSort reportTotals hideDetails",
           "controls: select textBox label button tabControl hyperlink optionGroup insertPageBreak comboBox line toggleButton listBox rectangle checkBox unboundObjectFrame attachment optionButton subform boundObjectFrame image webBrowser chart insertImage insertModernChart",
           "headerFooter: pageNumbers logo title dateTime",
-          "tools: addExistingFields propertySheet chartSettings subreportInNewWindow viewCode",
+          "tools: addExistingFields propertySheet chartSettings subreportInNewWindow viewCode convertMacros",
         ],
         "table": [
           "properties: tableProperties",
@@ -1219,5 +1221,44 @@ describe('command states of one tab from several views', () => {
     expect([commandState('viewLayout'), commandState('undo')?.enabled]).toEqual([undefined, true]);
     b();
     expect(commandState('undo')).toBeUndefined();
+  });
+});
+
+describe('Quick Access Toolbar choices', () => {
+  it('Save, Undo, Redo and delivered commands; each has its label', () => {
+    const c = quickAccessChoices();
+    for (const id of ['save', 'undo', 'redo', 'find']) expect(c.has(id), id).toBe(true);
+    const at = (k: string) => k.split('.').reduce<unknown>((o, p) => (o as Record<string, unknown> | undefined)?.[p], en);
+    for (const [id, x] of c) expect(typeof at(x.labelKey), id).toBe('string');
+  });
+});
+
+describe('Customize Ribbon (model)', () => {
+  const base: RibbonContext = { hasBase: true, readOnly: false, mode: null, isNew: false, kind: null };
+  afterEach(() => setRibbonCustom(NO_RIBBON_CUSTOM));
+  it('hides, renames and reorders the main tabs; Home is never hidden', () => {
+    setRibbonCustom({ ...NO_RIBBON_CUSTOM, hidden: ['home', 'help'], names: { create: 'Make' }, order: ['create', 'home'] });
+    const tabs = visibleTabs(base);
+    expect(tabs.map((t) => t.id)).toEqual(['create', 'home', 'externalData', 'databaseTools']);
+    expect(tabs[0]!.label).toBe('Make');
+  });
+  it('builds custom tabs from delivered commands, menu ones included; an unknown one is left out', () => {
+    setRibbonCustom({ ...NO_RIBBON_CUSTOM, tabs: [{ id: 'c1', label: 'Mine', groups: [
+      { id: 'g1', label: 'Find', commands: ['find', 'moreRecords', 'nope'] }, { id: 'g2', label: 'Empty', commands: ['nope'] }] }] });
+    const mine = visibleTabs(base).find((t) => t.id === ('c1' as RibbonTabId))!;
+    expect(mine.label).toBe('Mine');
+    expect(mine.groups.map((g) => [g.label, g.commands.map((c) => c.id)])).toEqual([['Find', ['find', 'moreRecords']]]);
+    expect(visibleTabs({ ...base, ribbon: 'simplified' }).map((t) => t.id)).toEqual(['home']);   // the simplified ribbon is the base's own
+  });
+  it('custom groups inside built-in and contextual tabs, renamed built-in groups and tabs', () => {
+    setRibbonCustom({ ...NO_RIBBON_CUSTOM, names: { formDesign: 'Mise en forme' }, groupNames: { 'create.tables': 'Mes tables' },
+      groups: { create: [{ id: 'g1', label: 'Plus', commands: ['find'] }], formDesign: [{ id: 'g2', label: 'Extra', commands: ['find'] }] } });
+    const tabs = customizedTabs();
+    const create = tabs.find((t) => t.id === 'create')!;
+    expect(create.groups.map((g) => g.label ?? g.labelKey).slice(-1)).toEqual(['Plus']);
+    expect(create.groups.some((g) => g.label === 'Mes tables')).toBe(true);
+    const fd = tabs.find((t) => t.id === 'formDesign')!;
+    expect([fd.label, fd.groups.at(-1)!.label]).toEqual(['Mise en forme', 'Extra']);
+    expect(toolTabsForOptions({ ...NO_RIBBON_CUSTOM, names: { formDesign: 'X' } }).find((t) => t.id === 'formDesign')!.label).toBe('X');
   });
 });

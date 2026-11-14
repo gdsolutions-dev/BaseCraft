@@ -8,7 +8,7 @@ import type { CrosstabQuery, FromItem, JoinKind, OrderItem, ParamDecl, Query, Se
 
 /** SQL words that end an expression or a name: a bare one is never a field, an alias or a source (`[From]` is). Access
  *  reserves them too. */
-const SQL_WORDS: ReadonlySet<string> = new Set([
+export const SQL_WORDS: ReadonlySet<string> = new Set([
   'select', 'distinct', 'distinctrow', 'top', 'percent', 'as', 'into', 'from', 'where', 'group', 'by', 'having', 'order',
   'asc', 'desc', 'union', 'all', 'inner', 'left', 'right', 'outer', 'join', 'on', 'insert', 'values', 'update', 'set',
   'delete', 'parameters', 'transform', 'pivot',

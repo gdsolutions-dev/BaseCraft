@@ -28,7 +28,7 @@ export function ChartSeriesFormat(p: { spec: ChartSpec; readOnly: boolean; idPre
   const legended = spec.legend !== '' && !ignoresLegend(spec.type);
   const ap = seriesFormatApplies(spec);
   const round = family === 'pie' || family === 'radar';
-  const flat = round || family === 'doughnut' || family === 'arc' || family === 'funnel';   // rien ne s'y règle
+  const flat = round || family === 'doughnut' || family === 'arc' || family === 'funnel' || family === 'wordCloud';   // rien ne s'y règle
   const newer = ['scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'].includes(family);
   const styleOk = ap.fill || ap.border;
   const nameOk = styleOk || ap.labels;

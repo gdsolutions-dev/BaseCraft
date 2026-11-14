@@ -6,22 +6,22 @@ import { TRENDLINES, type Trendline } from './trend';
 
 export type ChartType = 'columnClustered' | 'columnStacked' | 'columnStacked100' | 'barClustered' | 'barStacked' | 'barStacked100'
   | 'line' | 'lineStacked' | 'lineStacked100' | 'area' | 'areaStacked' | 'areaStacked100' | 'pie' | 'radar' | 'radarFilled' | 'combo'
-  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall';
+  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall' | 'wordCloud';
 export const CHART_TYPES: readonly ChartType[] = ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100',
   'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo',
-  'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'];
+  'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall', 'wordCloud'];
 /** Les types F5, dans l'ordre du menu des nouveaux types. */
-export const F5_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'];
+export const F5_CHART_TYPES: readonly ChartType[] = ['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall', 'wordCloud'];
 export type ChartFamily = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'radar' | 'combo'
-  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall';
+  | 'doughnut' | 'arc' | 'scatter' | 'bubble' | 'boxWhisker' | 'funnel' | 'pareto' | 'waterfall' | 'wordCloud';
 /** Famille d'un type : histogramme, barres, courbe, zone, secteurs, radar (simple ou rempli), combiné. */
 export const chartFamily = (t: ChartType): ChartFamily => (F5_CHART_TYPES.includes(t) ? (t as ChartFamily) : t === 'pie' ? 'pie' : t === 'combo' ? 'combo' : t.startsWith('radar') ? 'radar' : t.startsWith('column') ? 'column' : t.startsWith('bar') ? 'bar' : t.startsWith('area') ? 'area' : 'line');
 /** Mode de données : `grouped` (GROUP BY, agrégats) ou `rows` (enregistrements bruts : nuage de points, bulles, boîte à moustaches). */
 export const chartDataMode = (t: ChartType): 'grouped' | 'rows' => (t === 'scatter' || t === 'bubble' || t === 'boxWhisker' ? 'rows' : 'grouped');
 /** Vrai quand la famille se dessine sur des axes (faux : secteurs, radar, anneau, arc, entonnoir). */
-export const usesAxes = (f: ChartFamily): boolean => !(f === 'pie' || f === 'radar' || f === 'doughnut' || f === 'arc' || f === 'funnel');
+export const usesAxes = (f: ChartFamily): boolean => !(f === 'pie' || f === 'radar' || f === 'doughnut' || f === 'arc' || f === 'funnel' || f === 'wordCloud');
 /** Vrai quand la Légende est ignorée et qu'une seule série (première Valeur, lignes d'une catégorie additionnées) est tracée. */
-export const singleSeries = (f: ChartFamily): boolean => f === 'pie' || f === 'doughnut' || f === 'arc' || f === 'funnel' || f === 'pareto' || f === 'waterfall';
+export const singleSeries = (f: ChartFamily): boolean => f === 'pie' || f === 'doughnut' || f === 'arc' || f === 'funnel' || f === 'wordCloud' || f === 'pareto' || f === 'waterfall';
 /** Empilement : aucun (groupé), cumulé, ou cumulé en parts de la catégorie (100 %). */
 export const chartStack = (t: ChartType): 'none' | 'stack' | 'percent' => (t.endsWith('Stacked100') ? 'percent' : t.endsWith('Stacked') ? 'stack' : 'none');
 export type Agg = 'none' | 'sum' | 'avg' | 'min' | 'max' | 'count';
@@ -114,10 +114,10 @@ export function formatApplies(type: ChartType): ReadonlySet<FormatGroup> {
   const f = chartFamily(type);
   const extra: Partial<Record<ChartFamily, FormatGroup[]>> = { doughnut: ['hole'], arc: ['hole'], bubble: [...AXIS_GROUPS, 'bubble'], scatter: [...AXIS_GROUPS],
     pareto: [...AXIS_GROUPS, 'paretoSec'], waterfall: [...AXIS_GROUPS, 'waterfall'], boxWhisker: [...AXIS_GROUPS] };
-  const none = f === 'pie' || f === 'radar' || f === 'funnel';
+  const none = f === 'pie' || f === 'radar' || f === 'funnel' || f === 'wordCloud';
   const g = new Set<FormatGroup>([...FRAME_GROUPS, ...(extra[f] ?? (none ? [] : [...AXIS_GROUPS, 'secAxis']))]);
   if (f === 'boxWhisker') g.delete('legend');   // une seule série
   return g;
 }
 /** Types qui ignorent le champ Légende (une seule série dessinée) : Chart Settings le désactive, les mises en forme de série s'appliquent quand même. */
-export const ignoresLegend = (t: ChartType): boolean => ['doughnut', 'arc', 'boxWhisker', 'funnel', 'pareto', 'waterfall'].includes(t);
+export const ignoresLegend = (t: ChartType): boolean => ['doughnut', 'arc', 'boxWhisker', 'funnel', 'wordCloud', 'pareto', 'waterfall'].includes(t);

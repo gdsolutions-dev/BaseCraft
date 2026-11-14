@@ -202,7 +202,7 @@ export async function remoteInsert(ctx: RemoteCtx, sourceId: string, t: RemoteTa
 export async function remoteInsertOn(ctx: RemoteCtx, c: Connection, sourceId: string, t: RemoteTable, values: Record<string, CellInput>, opts: WriteOptions): Promise<SentWrite> {
   const p = await checked(ctx, 'insert', t.design, values, opts, true);
   if (!p.ok) return { r: p, byServer: false };
-  return { r: written(ctx, sourceId, await c.insert(t, p.values), p.nulled), byServer: true };
+  return { r: written(ctx, sourceId, await c.insert(t, p.values, { autoNumber: opts.allowAutoNumber }), p.nulled), byServer: true };
 }
 
 /** R12: the update of `at` on `c`; a table rule: the row read by a check-only update (a conflict returns as today), the rule

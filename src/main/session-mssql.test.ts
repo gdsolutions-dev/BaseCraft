@@ -477,11 +477,10 @@ describe.skipIf(!mssqlUrl)('action queries on the migrated sales base (live, C7 
     expect(await rows(s, 'Commandes')).toHaveLength(5); // nothing written
   }), 60_000);
 
-  it('an Append supplying AutoNumber values is refused, nothing written', () => migrated(async (s) => {
-    await expect(s.runAction(sql('INSERT INTO Journal ([N°], Texte) VALUES (7, "x")'), {}, OPTS)).rejects.toThrow('bc:serverNotSupported|appendAutoNumber|sqlserver');
-    await expect(s.runAction(sql('INSERT INTO Journal VALUES (7, "x")'), {}, OPTS)).rejects.toThrow('bc:serverNotSupported|appendAutoNumber|sqlserver');
-    expect(await rows(s, 'Journal')).toEqual([]);
-    expect(await s.runAction(sql('INSERT INTO Journal (Texte) VALUES ("y")'), {}, OPTS)).toEqual({ ok: true, count: 1 }); // the server numbers
+  it('an Append supplying AutoNumber values writes them; the server then numbers after them', () => migrated(async (s) => {
+    expect(await s.runAction(sql('INSERT INTO Journal ([N°], Texte) VALUES (7, "x")'), {}, OPTS)).toEqual({ ok: true, count: 1 });
+    expect(await s.runAction(sql('INSERT INTO Journal (Texte) VALUES ("y")'), {}, OPTS)).toEqual({ ok: true, count: 1 });
+    expect(await rows(s, 'Journal')).toEqual([[7, 'x'], [8, 'y']]);
   }), 60_000);
 
   it('Make-Table on a server source is refused', () => migrated(async (s) => {

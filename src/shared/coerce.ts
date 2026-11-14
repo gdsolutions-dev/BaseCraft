@@ -53,7 +53,7 @@ export function numberToText(n: number, info: LocaleInfo): string {
 
 export function coerce(field: FieldDef, input: CellInput, info: LocaleInfo): CoerceResult {
   const p = field.props
-  if (p.type === 'autoNumber') return fail('readOnly')
+  if (p.type === 'autoNumber' || p.type === 'attachment') return fail('readOnly') // an attachment's cell is set by the attachment operations only
   if (p.type === 'yesNo') {
     if (input === null) return ok(0)
     const s = String(input).trim().toLowerCase()

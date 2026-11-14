@@ -1,25 +1,25 @@
 // « Ajouter des tables », comme dans Access : un volet ancré à droite de la requête (pas une boîte modale), onglets
-// Tables / Requêtes / Les deux, recherche, sélection multiple, « Ajouter les tables sélectionnées » (le volet reste ouvert
+// Tables / Liens / Requêtes / Tous, recherche, sélection multiple, « Ajouter les tables sélectionnées » (le volet reste ouvert
 // pour en ajouter d'autres ; un double-clic ajoute un objet), croix pour le fermer.
 import { useId, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-type Tab = 'tables' | 'queries' | 'both';
-const TABS: readonly Tab[] = ['tables', 'queries', 'both'];
+type Tab = 'tables' | 'links' | 'queries' | 'all';
+const TABS: readonly Tab[] = ['tables', 'links', 'queries', 'all'];
 
-export function ShowTableDialog({ tables, queries, onAdd, onClose }: { tables: string[]; queries: string[]; onAdd(names: string[]): void; onClose(): void }) {
+export function ShowTableDialog({ tables, links, queries, onAdd, onClose }: { tables: string[]; links: string[]; queries: string[]; onAdd(names: string[]): void; onClose(): void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('tables');
   const [picked, setPicked] = useState<string[]>([]);
   const [search, setSearch] = useState('');
-  const all = tab === 'tables' ? tables : tab === 'queries' ? queries : [...tables, ...queries].sort((a, b) => a.localeCompare(b));
+  const all = tab === 'tables' ? tables : tab === 'links' ? links : tab === 'queries' ? queries : [...tables, ...links, ...queries].sort((a, b) => a.localeCompare(b));
   const names = all.filter((n) => n.toLowerCase().includes(search.trim().toLowerCase()));
   const uid = useId();
   const choose = (x: Tab) => { setTab(x); setPicked([]); };
   /** ARIA tabs: Left/Right (and Home/End) move to a tab and select it. */
   const tabKey = (e: KeyboardEvent) => {
     const i = TABS.indexOf(tab);
-    const next = { ArrowLeft: TABS[(i + 2) % 3], ArrowRight: TABS[(i + 1) % 3], Home: TABS[0], End: TABS[2] }[e.key];
+    const next = { ArrowLeft: TABS[(i + 3) % 4], ArrowRight: TABS[(i + 1) % 4], Home: TABS[0], End: TABS[3] }[e.key];
     if (!next) return;
     e.preventDefault();
     choose(next);

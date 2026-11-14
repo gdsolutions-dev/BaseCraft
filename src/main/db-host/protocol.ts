@@ -3,11 +3,12 @@
 import type { SessionState } from '../../shared/api';
 import type { ImportProgress } from '../../shared/import-text';
 import type { Session } from '../session';
+import type { SortOrderId } from '../../shared/sort-orders';
 
 export type HostRequest = { id: number; method: string; args: unknown[] };
 export type HostReply = { id: number; ok: true; value: unknown } | { id: number; ok: false; name: string; message: string };
 export type HostEvent = { event: 'stateChanged'; state: SessionState } | ({ event: 'importProgress' } & ImportProgress);
-export interface HostOpen { path: string; create: boolean; appVersion: string; region: string; sessionId: string;
+export interface HostOpen { path: string; create: boolean; /** The new base's sort order (Options › General). */ sortOrder?: SortOrderId; appVersion: string; region: string; sessionId: string;
   /** Shared-data settings of the workstation (C3 R7, R11); `settleMs` is the e2e seam of R5. */
   shared: { openMode: 'shared' | 'exclusive'; updateRetries: number; updateRetryMs: number; settleMs?: number };
   /** The Runtime's <userData>/front-ends: a front-end on a share opens from its local copy there (C3 R14). */
@@ -15,7 +16,11 @@ export interface HostOpen { path: string; create: boolean; appVersion: string; r
   /** e2e only (unpackaged + BASECRAFT_E2E=1): folders whose front-ends count as on a share for that copy alone. */
   frontEndNetworkDirs?: string[];
   /** e2e only (unpackaged + BASECRAFT_E2E=1 + BASECRAFT_E2E_FAKE_SERVER=1): server sources read the fake connector (C4). */
-  fakeServer?: true }
+  fakeServer?: true;
+  /** D1: resources/odbc.ps1 (Windows), main's own path: the ODBC links read through it at login and Refresh Link. */
+  odbcScript?: string;
+  /** e2e only (unpackaged + BASECRAFT_E2E=1 + BASECRAFT_E2E_FAKE_ODBC=1): the ODBC runner is a fake (D1). */
+  fakeOdbc?: true }
 
 /**
  * The only session methods a request may name (besides 'open'): those the main process calls. A batch that adds an IPC
@@ -24,30 +29,31 @@ export interface HostOpen { path: string; create: boolean; appVersion: string; r
 export const HOST_METHODS: ReadonlySet<string> = new Set<keyof Session>([
   'listTables', 'tableDesign', 'saveTable', 'renameTable', 'dropTable', 'testRules', 'dataMacros', 'saveDataMacros', 'copyTable', 'appendTable',
   'count', 'page', 'insert', 'update', 'delete', 'lookup',
+  'attachmentList', 'attachmentAdd', 'attachmentRemove', 'attachmentGet', 'attachmentPreview', 'attachmentFaces',
   'listRelations', 'saveRelation', 'deleteRelation', 'relationsLayout', 'saveRelationsLayout', 'saveColumnWidths', 'saveSheetLayout', 'cascadeChildren',
   'importPreview', 'importRun', 'importExcelPreview', 'importExcelRun', 'importSpecs', 'saveImportSpec', 'deleteImportSpec',
   'listObjects', 'getObject', 'saveObject', 'renameObject', 'deleteObject', 'copyObject', 'setDescription', 'autoCorrectDependents', 'applyProperties',
   'describeSource', 'pageSource', 'chartData', 'saveSource', 'autoLookup', 'actionCount', 'runAction',
   'activeContent', 'setContentEnabled', 'dbUuid',
-  'startup', 'saveStartup', 'navOptions', 'saveNavOptions', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
+  'startup', 'saveStartup', 'sortOrder', 'setSortOrder', 'navOptions', 'saveNavOptions', 'baseTheme', 'saveBaseTheme', 'applyThemeToAll',
   'listResources', 'getResources', 'addResource', 'replaceResource', 'removeResource',
   'exportText',
   'exportRowCount',
   'exportExcel',
-  'exportMarkup', 'savedExports', 'saveSavedExport', 'deleteSavedExport',
+  'exportMarkup', 'savedExports', 'saveSavedExport', 'deleteSavedExport', 'savedImports', 'saveSavedImport', 'deleteSavedImport',
   'saveCopy',
   'compact',
   'splitDatabase',
   'inspectLinkFile', 'inspectAccessImport', 'createLinks', 'listLinks', 'refreshLinks', 'relink', 'convertLink', 'unlockAccess', 'serverKeys', 'setCredential', 'login', 'loginDefaults',
   'inspectServer', 'createServerLinks', 'relinkServer',
-  'migrateToServer', 'importServerTables', 'importAccessTables',
+  'migrateToServer', 'importServerTables', 'importAccessTables', 'odbcDsns', 'inspectOdbc', 'importOdbcTables', 'linkOdbcTables',
   'takeOverLock', 'tick', 'dataStamp', 'close',
   'interrupt', // R12: answered out of the queue (host.ts), while another call runs
 ]);
 
 /** R16: the HOST_METHODS that only read (retried once on a transient SQLITE_CORRUPT). */
 export const READ_METHODS: ReadonlySet<string> = new Set<keyof Session>([
-  'listTables', 'tableDesign', 'dataMacros', 'count', 'page', 'lookup', 'cascadeChildren', 'listRelations', 'relationsLayout',
-  'describeSource', 'pageSource', 'chartData', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'savedExports', 'startup', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
+  'listTables', 'tableDesign', 'dataMacros', 'count', 'page', 'lookup', 'attachmentList', 'attachmentGet', 'attachmentPreview', 'attachmentFaces', 'cascadeChildren', 'listRelations', 'relationsLayout',
+  'describeSource', 'pageSource', 'chartData', 'autoLookup', 'actionCount', 'listObjects', 'getObject', 'importSpecs', 'savedExports', 'savedImports', 'startup', 'sortOrder', 'baseTheme', 'listResources', 'getResources', 'autoCorrectDependents',
   'activeContent', 'dbUuid', 'dataStamp',
 ]);

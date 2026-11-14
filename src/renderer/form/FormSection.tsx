@@ -18,6 +18,7 @@ import { NavigationCtl } from './controls/NavigationCtl';
 import { ListBoxCtl } from './controls/ListBoxCtl';
 import { OptionGroupCtl } from './controls/OptionGroupCtl';
 import { labelTarget, placed, type RunCtx } from './controls/run-ctx';
+import { AttachmentCtl } from './controls/AttachmentCtl';
 import { ShapeCtl } from './controls/ShapeCtl';
 import { SubformCtl } from './controls/SubformCtl';
 import { TabCtl } from './controls/TabCtl';
@@ -51,6 +52,7 @@ function renderControl(c: ControlDef, x: RunCtx, tc: ThemeCtx, origin: ControlDe
     case 'subform': el = <SubformCtl {...p} />; break;
     case 'navigationControl': el = <NavigationCtl {...p} />; break;
     case 'chart': el = <ChartCtl {...p} />; break;
+    case 'attachment': el = <AttachmentCtl {...p} />; break;
     default: el = null;
   }
   const container = c.kind === 'optionGroup' || c.kind === 'tabControl';

@@ -77,7 +77,7 @@ export class FormEvents {
   /** The form's (no control) or the control's property names a macro. */
   has(event: EventName, c?: ControlDef): boolean {
     const k = readEvent((c ?? this.doc).props[event]).kind;
-    return k === 'macro' || k === 'embedded' || k === 'python';
+    return k === 'macro' || k === 'embedded' || k === 'python' || k === 'procedure';
   }
 
   /** Runs the event's macro now; true when it cancels (R7). */

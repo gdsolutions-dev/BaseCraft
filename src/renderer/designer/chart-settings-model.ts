@@ -92,7 +92,7 @@ export function seriesFormatApplies(spec: ChartSpec): { fill: boolean; border: b
   const legended = spec.legend !== '' && !ignoresLegend(spec.type);   // avec une légende, la mise en forme se règle pour l'ensemble des séries
   const off = { fill: false, border: false, labels: false, trend: false, secondary: false };
   switch (family) {
-    case 'pie': case 'radar': case 'doughnut': case 'arc': case 'funnel': return off;
+    case 'pie': case 'radar': case 'doughnut': case 'arc': case 'funnel': case 'wordCloud': return off;
     case 'scatter': case 'bubble': return { ...off, fill: !legended, border: !legended, labels: !legended };
     case 'boxWhisker': return { ...off, fill: true, border: true };
     case 'pareto': return { ...off, fill: true, border: true, labels: true };

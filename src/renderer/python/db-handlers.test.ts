@@ -5,6 +5,7 @@ const api = vi.hoisted(() => ({
   sources: { describe: vi.fn(), page: vi.fn(), save: vi.fn() },
   rows: { insert: vi.fn(), update: vi.fn(), delete: vi.fn() },
   queries: { runAction: vi.fn() },
+  attachments: { list: vi.fn(), read: vi.fn(), saveTo: vi.fn() },
 }))
 vi.mock('../bridge', () => ({ api }))
 vi.mock('../i18n', () => ({
@@ -100,5 +101,24 @@ describe('db.execute refusals', () => {
     await expect(h['db.execute']!(['DELETE FROM Clients', {}])).rejects.toMatchObject({ code: 'related', message: 'query.action.related{"table":"Clients"}' })
     api.queries.runAction.mockResolvedValue({ ok: false, reason: 'readOnly' })
     await expect(h['db.execute']!(['DELETE FROM Clients', {}])).rejects.toMatchObject({ code: 'readOnly', message: 'dialog.op.readOnly{"table":""}' })
+  })
+
+  it('attachments: the files of an Attachment column of a table or of an updatable query, as base64, and save_to', async () => {
+    api.sources.describe.mockResolvedValue(info({ fields: [{ name: 'Id', type: 'autoNumber', props: {} }, { name: 'Pieces', type: 'attachment', props: {}, origin: { table: 'Clients', field: 'Pieces' } }], keyTable: 'Clients' }))
+    const t = (await open('Commandes')).handle
+    api.attachments.list.mockResolvedValue([{ id: 1, name: 'a.txt', type: 'txt', bytes: 2 }])
+    expect(await h['db.attachments']!([t, 7, 'pieces'])).toEqual([{ id: 1, name: 'a.txt', type: 'txt', bytes: 2 }])
+    expect(api.attachments.list).toHaveBeenLastCalledWith('Commandes', 'Pieces', 7)
+    api.attachments.read.mockResolvedValue({ name: 'a.txt', data: Uint8Array.from([65, 66]) })
+    expect(await h['db.attachmentData']!([t, 7, 'Pieces', 1])).toBe('QUI=')
+    await h['db.attachmentSave']!([t, 7, 'Pieces', 1, 'C:/x/a.txt'])
+    expect(api.attachments.saveTo).toHaveBeenLastCalledWith('Commandes', 'Pieces', 7, 1, 'C:/x/a.txt')
+    const q = (await open('RCommandes')).handle
+    await h['db.attachments']!([q, 3, 'Pieces'])
+    expect(api.attachments.list).toHaveBeenLastCalledWith('Clients', 'Pieces', 3)
+    api.sources.describe.mockResolvedValue(info({ updatable: false, fields: [{ name: 'Pieces', type: 'attachment', props: {}, origin: { table: 'Clients', field: 'Pieces' } }], keyTable: 'Clients' }))
+    const ro = (await open('SELECT * FROM Commandes')).handle
+    await expect(h['db.attachments']!([ro, 3, 'Pieces'])).rejects.toThrow(/badArgument/)
+    await expect(h['db.attachments']!([t, 3, 'Id'])).rejects.toThrow(/badArgument/)
   })
 })

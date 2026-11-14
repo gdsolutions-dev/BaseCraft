@@ -61,7 +61,7 @@ function checkProps(db: DatabaseSync, kind: 'form' | 'report', target: PropertyT
     if (!d) { if (EVENT_LIKE.test(key) && !KNOWN_PROPS.has(key)) out.push(`${at}: unknown event ${key}`); continue; }
     if (!d.appliesTo.includes(target) || (d.objects && !d.objects.includes(kind))) { out.push(`${at}: ${key} does not apply to a ${target} of a ${kind}`); continue; }
     const b = readEvent(value);
-    if (b.kind === 'none') continue;
+    if (b.kind === 'none' || b.kind === 'procedure') continue;   // B6: [Event Procedure] runs the code-behind module's function, whenever it exists
     if (b.kind === 'python') { const f = findPythonFunction(db, b.name); if (!f.ok) out.push(`${at}: ${f.message}`); continue; }
     // readEvent reads an invalid embedded macro as 'other': give the validator's paths instead of a bare badEmbedded
     if (b.kind === 'other' && value !== null && typeof value === 'object' && 'embedded' in value) { out.push(...macroProblems((value as { embedded: unknown }).embedded, `${at}.embedded.`)); continue; }

@@ -9,7 +9,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { saveObject } from '../../src/main/db/objects';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
-import { inFile, launchApp, layoutFromDom, openDbOptions, seedBase, SALES_QUERIES } from './helpers';
+import { inFile, launchApp, layoutFromDom, openDbOptions, seedBase, SALES_QUERIES, expectSql, editorText } from './helpers';
 
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 const LOG = 'Journal de la correction automatique de nom';
@@ -63,7 +63,7 @@ test('recette O4: Name AutoCorrect options, a field rename corrects the query, f
     await page.getByTestId('nav-item-query-QVentes').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
     await page.getByTestId('status-view-sql').click();
-    await expect(cur(page).getByTestId('query-sql')).toHaveValue(/\[Clients\]\.\[NomClient\]/);
+    await expectSql(cur(page).getByTestId('query-sql'), /\[Clients\]\.\[NomClient\]/);
     expect(controls(path, 'form', 'FClients')).toEqual([['Nom', 'NomClient'], ['Ville', 'Cité']]);
     expect(controls(path, 'report', 'RClients')).toEqual([['Nom', 'NomClient']]);
     expect((defOf<DesignDoc>(path, 'report', 'RClients').props.grouping as { expression: string }[])[0]!.expression).toBe('Cité');

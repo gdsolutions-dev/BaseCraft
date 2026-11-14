@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ExcelJS from 'exceljs';
+import { sheetOf } from './fixtures/xlsx-fixture';
 import { launchApp, seedBase, seedReportsE2E, seedSalesE2E } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
@@ -134,11 +134,6 @@ test('Print Preview › Text File exports the report\'s record source', async ()
 });
 
 const outXlsx = () => join(mkdtempSync(join(tmpdir(), 'basecraft-export-')), 'sortie.xlsx');
-async function sheetOf(path: string) {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(path);
-  return wb.worksheets[0]!;
-}
 async function confirmDone(page: Page, rows: number) {
   await expect(page.getByTestId('modal')).toContainText(done(rows));
   await page.getByTestId('modal-btn-ok').click();
@@ -155,12 +150,12 @@ test('Excel: Navigation Pane and ribbon export a table (typed cells, bold frozen
     await confirmDone(page, 4);
     let ws = await sheetOf(out);
     expect(ws.name).toBe('Clients');
-    expect(ws.getRow(1).values).toEqual([undefined, 'N°', 'Nom', 'Ville']);
-    expect(ws.getCell('A1').font?.bold).toBe(true);
-    expect(ws.views[0]).toMatchObject({ state: 'frozen', ySplit: 1 });
+    expect(ws.row(1)).toEqual(['N°', 'Nom', 'Ville']);
+    expect(ws.sheetXml).toContain('<c r="A1" s="1"'); // bold header
+    expect(ws.sheetXml).toContain('state="frozen"');
     expect(ws.rowCount).toBe(5);
-    expect(ws.getCell('B2').value).toBe('Dupont');
-    expect(ws.getCell('A2').value).toBe(1);
+    expect(ws.cell('B2')).toBe('Dupont');
+    expect(ws.cell('A2')).toBe(1);
 
     // the ribbon, with the datasheet that is open (Commandes: a currency and a date column)
     await page.getByTestId('nav-item-Commandes').dblclick();
@@ -171,7 +166,7 @@ test('Excel: Navigation Pane and ribbon export a table (typed cells, bold frozen
     ws = await sheetOf(out);
     expect(ws.name).toBe('Commandes');
     expect(ws.rowCount).toBe(6);
-    expect(ws.getCell('D2').value).toBeInstanceOf(Date);
+    expect(ws.cell('D2')).toBeInstanceOf(Date);
 
     // a save path that cannot be written: explained, the file is untouched
     await app.evaluate(() => { process.env.BASECRAFT_E2E_EXPORT_PATH = '/nonexistent-folder/x/sortie.xlsx'; });
@@ -194,7 +189,7 @@ test('Print Preview › Excel exports the record source of the report', async ()
     await confirmDone(page, 75);
     const ws = await sheetOf(out);
     expect(ws.name).toBe('Factures par client');
-    expect(ws.getCell('A1').font?.bold).toBe(true);
+    expect(ws.sheetXml).toContain('<c r="A1" s="1"');
     expect(ws.rowCount).toBe(76);
   } finally {
     await app.close();

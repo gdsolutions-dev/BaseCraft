@@ -23,6 +23,7 @@ import { TableDesignView } from '../table-design/TableDesignView';
 import { addMoreField, editValidation, moreFieldsFor, setDataType, setFormat, tableFieldsCommands } from '../table-fields/table-fields-commands';
 import type { DesignHooks } from './hooks';
 import { shellDesignCommands } from './shell-design-commands';
+import { seedTemplate } from './templates';
 
 registerDocumentView('table', 'design', TableDesignView);
 registerDocumentView('relations', 'run', RelationsView);
@@ -45,6 +46,7 @@ registerNavMenuItems('table', [linkedTableManagerItem]);
 export const design: DesignHooks | null = {
   shellCommands: shellDesignCommands,
   requestFieldList: (kind, name) => (kind === 'form' ? requestFormFieldList : requestReportFieldList)(name),
+  seedTemplate,
   ImportWizard: ImportTextWizard,
   CurrentDatabaseOptions,
   tableFieldsCommands, FIELD_TYPES, moreFieldsFor, addMoreField, setDataType, setFormat, editValidation,

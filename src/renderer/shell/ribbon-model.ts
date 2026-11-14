@@ -1,6 +1,6 @@
 // Ruban décrit par des données, et registre des commandes : le document actif fournit les actions.
 import {
-  ALargeSmall, AlignCenter, AlignLeft, AlignRight, AlignStartVertical, Anchor, AppWindow, ArrowDown, ArrowDownToLine, ArrowDownZA,
+  ALargeSmall, Layers, Maximize2, AlignCenter, AlignLeft, AlignRight, AlignStartVertical, Anchor, AppWindow, ArrowDown, ArrowDownToLine, ArrowDownZA,
   ArrowLeftToLine, ArrowRightLeft, ArrowRightToLine, ArrowUp, ArrowUpAZ, ArrowUpNarrowWide, ArrowUpToLine, Asterisk, Baseline,
   BetweenHorizontalStart, BetweenVerticalStart, Blend, Bold, BookOpen, Box, Braces, BringToFront, Brush, Cable, CalendarClock, ChartBar,
   ChartColumn, ChartPie, ChevronsDown, ChevronsUp, ChevronsUpDown, CircleDot, CircleHelp, CirclePlus, ClipboardList, ClipboardPaste,
@@ -11,13 +11,14 @@ import {
   KeyRound, LayoutGrid, LayoutTemplate, LetterText, LifeBuoy, Link, List, ListChecks, ListFilter, ListMinus, ListOrdered, ListPlus,
   ListTree, ListX, Merge, MessageSquare, Minus, MousePointer2, Navigation, Network, Paintbrush, PaintBucket, PanelRight, PanelTop,
   Palette, Paperclip, PencilLine, PencilRuler, PenLine, Percent, PilcrowRight, Play, Plus, Printer, RectangleHorizontal, RectangleVertical,
-  RefreshCw, Replace, Rows2, Rows3, Ruler, Save, Scaling, Scan, ScanSearch, Scissors, ScrollText, Search, SendToBack,
+  Redo2, RefreshCw, Replace, Rows2, Rows3, Ruler, Save, Scaling, Scan, ScanSearch, Scissors, ScrollText, Search, SendToBack,
   SeparatorHorizontal, Server, Settings, Settings2, Shapes, Sheet, ShieldCheck, Sigma, SlidersHorizontal, Sparkles, SpellCheck, Split,
   Square, SquareCheck, SquareDashed, SquareDashedMousePointer, SquareFunction, SquarePlus, SquareSplitHorizontal, SquareSplitVertical,
   StepForward, SwatchBook, Table, Table2, TableProperties, Tag, Tags, TextCursorInput, ToggleLeft, Trash, Trash2, Type, Underline,
-  UnfoldVertical, Ungroup, Wallpaper, Wand, WandSparkles, Wrench, X, Zap, ZoomIn, type LucideIcon,
+  UnfoldVertical, Ungroup, Undo2, Wallpaper, Wand, WandSparkles, Wrench, X, Zap, ZoomIn, type LucideIcon,
 } from 'lucide-react';
 import type { ObjectKind } from '../../shared/api';
+import { NO_RIBBON_CUSTOM, type RibbonCustom } from '../../shared/ribbon-custom';
 import { sameView, type DocKind, type DocMode } from '../state/app-state';
 
 // One member per line (C4): each batch appends its own line.
@@ -78,6 +79,8 @@ export type CommandId =
   | 'alternateRowColor'
   | 'datasheetFormatting'
   | 'zoom'
+  | 'sizeToFit'   // Home › Window (overlapping windows only)
+  | 'switchWindows'
   | 'createTable'
   | 'queryWizard'
   | 'createQueryDesign'
@@ -410,9 +413,10 @@ export const tabCommandState = (tabId: string, id: CommandId): CommandState | un
  *  ribbon, runMode (B3, the base's startup options, R10): the simplified ribbon (File, Home, Print Preview only), and run mode
  *  (no Design view). Both absent: the full ribbon with Design view (keeps the JSON compare of `setCommandContext` cheap).
  *  datasheetDesign false (O1 R9): no Table Fields tab in a table's Datasheet view.
- *  linked (C1 R8): the active document is a linked table's Design view, shown read-only (its structure belongs to its file). */
+ *  linked (C1 R8): the active document is a linked table's Design view, shown read-only (its structure belongs to its file);
+ *  'meta': a server link's, whose BaseCraft properties are saved in the front-end (Save, Builder). */
 export interface RibbonContext { hasBase: boolean; readOnly: boolean; mode: DocMode | null; isNew: boolean; kind: DocKind | ObjectKind | null; builder?: boolean;
-  embedded?: boolean; ribbon?: 'simplified'; runMode?: true; datasheetDesign?: false; linked?: true }
+  embedded?: boolean; ribbon?: 'simplified'; runMode?: true; overlapping?: true; datasheetDesign?: false; linked?: true | 'meta' }
 
 /**
  * Ruling C11: every Access command has its entry from now on. One not delivered yet carries `planned`, the batch or stage that
@@ -452,7 +456,7 @@ export interface RibbonCommand {
   popup?: true | 'dialog';   // opens a menu, or a dialog (a field, colour choices) (aria-haspopup; aria-expanded while it is open, see setOpenPopup)
 }
 /** split: its views show as Affichage (Access's split button) when two or more are shown, see viewPair. */
-export interface RibbonGroup { id: string; labelKey: string; commands: RibbonCommand[]; visible?(ctx: RibbonContext): boolean; split?: true }
+export interface RibbonGroup { id: string; labelKey: string; label?: string; commands: RibbonCommand[]; visible?(ctx: RibbonContext): boolean; split?: true }
 export type RibbonTabId =
   | 'home'
   | 'create'
@@ -474,7 +478,7 @@ export type RibbonTabId =
 
 /** passive: shown in its context without being selected (Table Fields and Table: a datasheet keeps Home, as in Access). */
 export interface RibbonTab {
-  id: RibbonTabId; labelKey: string; contextual?: boolean; passive?: boolean; visible?(ctx: RibbonContext): boolean; groups: RibbonGroup[];
+  id: RibbonTabId; labelKey: string; label?: string; contextual?: boolean; passive?: boolean; visible?(ctx: RibbonContext): boolean; groups: RibbonGroup[];
 }
 
 /** The tabs of the simplified ribbon (R10), besides File: Home and the report's Print Preview. */
@@ -483,7 +487,7 @@ export const SIMPLIFIED_TABS: ReadonlySet<RibbonTabId> = new Set<RibbonTabId>(['
 /** In front of the Query Builder, only Home and the builder's contextual tabs (Access: the document behind waits); they are the
  *  builder's own, so a simplified ribbon (the base's options) does not take them away: its Close and Save As stay reachable. */
 export const visibleTabs = (ctx: RibbonContext): RibbonTab[] =>
-  RIBBON.filter((t) => (!t.visible || t.visible(ctx)) && (!ctx.builder || t.id === 'home' || !!t.contextual)
+  customizedTabs().filter((t) => (!t.visible || t.visible(ctx)) && (!ctx.builder || t.id === 'home' || !!t.contextual)
     && (ctx.ribbon !== 'simplified' || ctx.builder || SIMPLIFIED_TABS.has(t.id)));
 
 /** C10, on a change of context (object kind or mode): entering it selects its first contextual tab; leaving it restores the tab
@@ -502,7 +506,7 @@ export const ribbonContextKey = (c: Pick<RibbonContext, 'kind' | 'mode'>): strin
   `${c.kind}|${c.mode && sameView(c.mode, 'design') ? 'design' : c.mode}`;
 
 const doc = (c: RibbonContext) => c.mode !== null;
-const writable = (c: RibbonContext) => c.mode !== null && !c.readOnly && !c.linked;
+const writable = (c: RibbonContext) => c.mode !== null && !c.readOnly && (!c.linked || c.linked === 'meta');
 const hasBaseWritable = (c: RibbonContext) => c.hasBase && !c.readOnly;
 const sheet = (c: RibbonContext) => c.mode === 'datasheet';
 /** Records are shown: a datasheet, or a query (datasheet) or form in Run view. A report preview has no records to edit. */
@@ -669,7 +673,7 @@ const REPORT_CONTROLS: Delivered = {
   rectangle: reportControl('rectangle', Square), checkBox: reportControl('checkBox', SquareCheck), optionButton: reportControl('optionButton', CircleDot),
   toggleButton: reportControl('toggleButton', ToggleLeft), image: reportControl('image', Image), subform: reportControl('subform', AppWindow),
   button: reportControl('button', RectangleHorizontal), tabControl: reportControl('tabControl', PanelTop), optionGroup: reportControl('optionGroup', Group),
-  listBox: reportControl('listBox', List), hyperlink: reportControl('hyperlink', Link),
+  listBox: reportControl('listBox', List), hyperlink: reportControl('hyperlink', Link), attachment: reportControl('attachment', Paperclip),
 };
 /** Arrange › layout commands (dispositions): handlers exist only when applicable, so a missing handler greys the command. */
 const layoutCmd = (id: CommandId, icon: LucideIcon, size: RibbonCommand['size']): RibbonCommand =>
@@ -691,7 +695,7 @@ const delivered = (placeholders: RibbonCommand[], ids: CommandId[], enabled: Rib
   Object.fromEntries(placeholders.filter((c) => ids.includes(c.id)).map(({ planned: _planned, ...c }) => [c.id, { ...c, enabled }]));
 // the 15 stage-A controls and the Toggle Button (form-ribbon.ts GALLERY_TOOLS): the next click in a section places it, as with the Toolbox
 const FORM_CONTROLS: CommandId[] = ['select', 'textBox', 'label', 'button', 'tabControl', 'optionGroup', 'insertPageBreak', 'comboBox', 'line',
-  'listBox', 'rectangle', 'checkBox', 'optionButton', 'subform', 'image', 'toggleButton'];
+  'listBox', 'rectangle', 'checkBox', 'optionButton', 'subform', 'image', 'toggleButton', 'attachment'];
 
 export const RIBBON: RibbonTab[] = [
   {
@@ -720,6 +724,11 @@ export const RIBBON: RibbonTab[] = [
       group('find', { id: 'find', icon: Search, labelKey: 'ribbon.cmd.find', size: 'lg', enabled: records }, { id: 'replace', icon: Replace, labelKey: 'ribbon.cmd.replace', size: 'sm', enabled: (c) => (sheet(c) || (c.mode === 'run' && c.kind === 'form')) && !c.readOnly },
         { id: 'goTo', icon: ArrowRightToLine, labelKey: 'ribbon.cmd.goTo', size: 'sm', enabled: records, popup: true },
         { id: 'selectMenu', icon: MousePointer2, labelKey: 'ribbon.cmd.selectMenu', size: 'sm', enabled: records, popup: true }),
+      // Access shows it with overlapping windows only (the document tabs have no windows to size or switch)
+      { ...group('window',
+        { id: 'sizeToFit', icon: Maximize2, labelKey: 'ribbon.cmd.sizeToFit', size: 'lg', enabled: (c) => !!c.overlapping && c.kind === 'form' },
+        { id: 'switchWindows', icon: Layers, labelKey: 'ribbon.cmd.switchWindows', size: 'lg', enabled: (c) => !!c.overlapping && c.hasBase, popup: true }),
+        visible: (c) => !!c.overlapping },
       group('textFormatting',
         { ...sheetText('textFont', Type, 'sm'), popup: true }, { ...sheetText('textFontSize', ALargeSmall, 'sm'), popup: true },
         richOnly('bullets', List), richOnly('numbering', ListOrdered), richOnly('indentIncrease', IndentIncrease),
@@ -765,8 +774,8 @@ export const RIBBON: RibbonTab[] = [
         { id: 'importAccess', icon: Database, labelKey: 'ribbon.cmd.importAccess', size: 'lg', enabled: (c) => c.hasBase && !c.readOnly }, // E1
         { id: 'importSqlServer', icon: Server, labelKey: 'ribbon.cmd.importSqlServer', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }, // C7 R17
         { id: 'importPostgreSql', icon: Cylinder, labelKey: 'ribbon.cmd.importPostgreSql', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly },
-        plan('later', 'importOdbc', Cable),
-        plan('later', 'savedImports', FolderInput),
+        { id: 'importOdbc', icon: Cable, labelKey: 'ribbon.cmd.importOdbc', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }, // C4
+        { id: 'savedImports', icon: FolderInput, labelKey: 'ribbon.cmd.savedImports', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly },
         { id: 'linkedTableManager', icon: Link, labelKey: 'ribbon.cmd.linkedTableManager', size: 'sm', enabled: (c) => c.hasBase && !c.readOnly }),
       group('export', { id: 'savedExports', icon: FolderOutput, labelKey: 'ribbon.cmd.savedExports', size: 'sm', enabled: (c) => c.hasBase }, exportExcel, exportText, exportPdf, plan('later', 'exportAccess', Database),
         exportXml, exportMore),
@@ -795,7 +804,7 @@ export const RIBBON: RibbonTab[] = [
       viewGroup(viewDatasheet),
       group('tools',
         { id: 'primaryKey', icon: KeyRound, labelKey: 'ribbon.cmd.primaryKey', size: 'lg', enabled: designWritable },
-        { id: 'builder', icon: Wand, labelKey: 'ribbon.cmd.builder', size: 'lg', enabled: designWritable },
+        { id: 'builder', icon: Wand, labelKey: 'ribbon.cmd.builder', size: 'lg', enabled: (c) => designWritable(c) || (c.mode === 'design' && !c.readOnly && c.linked === 'meta') },
         { id: 'testValidationRules', icon: ShieldCheck, labelKey: 'ribbon.cmd.testValidationRules', size: 'sm', enabled: (c) => c.mode === 'design' && !c.linked },
         { id: 'insertRows', icon: BetweenHorizontalStart, labelKey: 'ribbon.cmd.insertRows', size: 'sm', enabled: designWritable },
         { id: 'deleteRows', icon: ListX, labelKey: 'ribbon.cmd.deleteRows', size: 'sm', enabled: designWritable },
@@ -812,7 +821,7 @@ export const RIBBON: RibbonTab[] = [
       group('addDelete', fieldCmd('addShortText', Type, 'lg'), fieldCmd('addNumber', Hash, 'lg'), fieldCmd('addCurrency', Euro, 'lg'),
         fieldCmd('addDateTime', CalendarClock), fieldCmd('addYesNo', SquareCheck), { ...fieldCmd('moreFields', CirclePlus), popup: true }, fieldCmd('deleteField', Trash2)),
       group('properties', fieldCmd('nameCaption', Tag), fieldCmd('defaultValue', TextCursorInput), fieldCmd('fieldSize', Ruler), fieldCmd('modifyLookups', ListChecks),
-        plan('later', 'modifyExpression', SquareFunction)),
+        fieldCmd('modifyExpression', SquareFunction)),
       group('formatting', { ...fieldCmd('dataType', Shapes), popup: true }, { ...fieldCmd('format', Brush), popup: true },
         fieldCmd('currencyFormat', Euro, 'xs'), fieldCmd('percentFormat', Percent, 'xs'), fieldCmd('commaFormat', Hash, 'xs'),
         fieldCmd('increaseDecimals', DecimalsArrowRight, 'xs'), fieldCmd('decreaseDecimals', DecimalsArrowLeft, 'xs')),
@@ -879,7 +888,7 @@ export const RIBBON: RibbonTab[] = [
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: formEditor },
         { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: formEditor },
         { id: 'tabOrder', icon: ArrowDown, labelKey: 'ribbon.cmd.tabOrder', size: 'sm', enabled: designOf('form') },
-        chartSettingsCmd, { id: 'subformInNewWindow', icon: ExternalLink, labelKey: 'ribbon.cmd.subformInNewWindow', size: 'sm', enabled: formEditor }, { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: formEditor }),
+        chartSettingsCmd, { id: 'subformInNewWindow', icon: ExternalLink, labelKey: 'ribbon.cmd.subformInNewWindow', size: 'sm', enabled: formEditor }, { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: formEditor }, { id: 'convertMacros', icon: FileCode2, labelKey: 'ribbon.cmd.convertMacros', size: 'sm', enabled: (c) => formEditor(c) && !c.readOnly }),
     ],
   },
   {
@@ -901,7 +910,7 @@ export const RIBBON: RibbonTab[] = [
       // in a read-only base they open read-only (the designer refuses the changes)
       group('tools', { id: 'addExistingFields', icon: ListPlus, labelKey: 'ribbon.cmd.addExistingFields', size: 'sm', enabled: designOf('report') },
         { id: 'propertySheet', icon: PanelRight, labelKey: 'ribbon.cmd.propertySheet', size: 'lg', enabled: reportEditor }, chartSettingsCmd,
-        { id: 'subreportInNewWindow', icon: ExternalLink, labelKey: 'ribbon.cmd.subreportInNewWindow', size: 'sm', enabled: reportEditor }, { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: reportEditor }),
+        { id: 'subreportInNewWindow', icon: ExternalLink, labelKey: 'ribbon.cmd.subreportInNewWindow', size: 'sm', enabled: reportEditor }, { id: 'viewCode', icon: Code, labelKey: 'ribbon.cmd.viewCode', size: 'sm', enabled: reportEditor }, { id: 'convertMacros', icon: FileCode2, labelKey: 'ribbon.cmd.convertMacros', size: 'sm', enabled: (c) => reportEditor(c) && !c.readOnly }),
     ],
   },
   {
@@ -970,3 +979,65 @@ export const RIBBON: RibbonTab[] = [
 let openPopup: CommandId | null = null;
 export function setOpenPopup(id: CommandId | null): void { if (openPopup !== id) { openPopup = id; changed(); } }
 export const openPopupOf = (): CommandId | null => openPopup;
+
+/** Shortcut keys shown in ScreenTips (those App's key handler and the document views really answer). */
+export const SHORTCUT_KEYS: Partial<Record<CommandId, string>> = { save: 'Ctrl+S', find: 'Ctrl+F', refresh: 'Shift+F9', propertySheet: 'F4' };
+
+/** What the Quick Access Toolbar may hold: Save, Undo, Redo, and every delivered ribbon command (a menu opens under the button
+ *  that was clicked, see commandAnchor). The first entry of an id wins. */
+let choicesCache: Map<string, { icon: LucideIcon; labelKey: string }> | undefined;
+export function quickAccessChoices(): Map<string, { icon: LucideIcon; labelKey: string }> {
+  if (choicesCache) return choicesCache;
+  const m = new Map<string, { icon: LucideIcon; labelKey: string }>([['save', { icon: Save, labelKey: 'ribbon.cmd.save' }], ['undo', { icon: Undo2, labelKey: 'ribbon.cmd.undo' }], ['redo', { icon: Redo2, labelKey: 'ribbon.cmd.redo' }]]);
+  for (const t of RIBBON) for (const g of t.groups) for (const c of g.commands) if (!c.planned && !m.has(c.id)) m.set(c.id, { icon: c.icon, labelKey: c.labelKey });
+  return (choicesCache = m);
+}
+
+// ---------- Customize Ribbon ----------
+let custom: RibbonCustom = NO_RIBBON_CUSTOM;
+/** The workstation's customization (publishSettings calls it): the ribbon shows its tabs from the next render. */
+export function setRibbonCustom(c: RibbonCustom): void { if (c !== custom) { custom = c; changed(); } }
+
+/** The delivered command with this id that a custom group may hold (the one quickAccessChoices lists), as a small button. */
+function customCommand(id: string): RibbonCommand | undefined {
+  for (const t of RIBBON) for (const g of t.groups) for (const c of g.commands) if (c.id === id && !c.planned) return { ...c, size: 'sm' };
+  return undefined;
+}
+/** The main tabs of Customize Ribbon: the built-in ones that can be hidden, renamed, moved, and the custom tabs. Contextual tabs stay as delivered. */
+export const isMainTab = (t: RibbonTab): boolean => !t.contextual;
+
+/** RIBBON with the customization applied; RIBBON itself when there is none. Home is never hidden (the view switch and Close live there);
+ *  a command this version does not know is left out of its custom group, an empty custom group is not shown. */
+export function customizedTabs(c: RibbonCustom = custom): RibbonTab[] {
+  if (c === NO_RIBBON_CUSTOM) return RIBBON;
+  const own = (gs: RibbonCustom['tabs'][number]['groups']): RibbonGroup[] => gs.flatMap((g) => {
+    const commands = g.commands.flatMap((id) => customCommand(id) ?? []);
+    return commands.length ? [{ id: g.id, labelKey: '', label: g.label, commands }] : [];
+  });
+  // built-in tabs: renamed tab and groups, then the custom groups added to them
+  const builtIn = RIBBON.map((t): RibbonTab => ({ ...t, label: c.names[t.id] ?? t.label,
+    groups: [...t.groups.map((g) => { const n = c.groupNames?.[`${t.id}.${g.id}`]; return n ? { ...g, label: n } : g; }), ...own(c.groups?.[t.id] ?? [])] }));
+  const fromCustom = c.tabs.map((t): RibbonTab => ({ id: t.id as RibbonTabId, labelKey: '', label: t.label, groups: own(t.groups) }));
+  const main = [...builtIn.filter(isMainTab), ...fromCustom].filter((t) => t.id === 'home' || !c.hidden.includes(t.id));
+  const rank = (t: RibbonTab) => { const i = c.order.indexOf(t.id); return i < 0 ? c.order.length + main.indexOf(t) : i; };
+  return [...main.sort((a, b) => rank(a) - rank(b)), ...builtIn.filter((t) => !isMainTab(t))];
+}
+/** The built-in groups of a tab (Customize Ribbon lists them, to rename them). */
+export const builtInGroups = (tabId: string): RibbonGroup[] => RIBBON.find((t) => t.id === tabId)?.groups ?? [];
+/** The contextual tabs, listed under Tool Tabs in Customize Ribbon. */
+export const toolTabsForOptions = (c: RibbonCustom): { id: string; labelKey: string; label?: string }[] =>
+  RIBBON.filter((t) => !isMainTab(t)).map((t) => ({ id: t.id, labelKey: t.labelKey, label: c.names[t.id] }));
+
+/** The ribbon button a command was last started from (ribbon or Quick Access Toolbar): its menu opens under that one. */
+let clicked: HTMLElement | null = null;
+export const setClickedButton = (el: HTMLElement | null): void => { clicked = el; };
+/** The button a command's menu anchors to: the one just clicked if it is the command's, else the first button of the command. */
+export const commandAnchor = (id: string): HTMLElement | null =>
+  (clicked?.isConnected && clicked.dataset.cmd === id ? clicked : document.querySelector<HTMLElement>(`[data-cmd="${CSS.escape(id)}"]`));
+/** The ids Customize Ribbon lists, in the order shown: the built-in main tabs and the custom ones (hidden ones too). */
+export function mainTabsForOptions(c: RibbonCustom): { id: string; labelKey: string; label?: string; custom: boolean }[] {
+  const all = [...RIBBON.filter(isMainTab).map((t) => ({ id: t.id as string, labelKey: t.labelKey, label: c.names[t.id], custom: false })),
+    ...c.tabs.map((t) => ({ id: t.id, labelKey: '', label: t.label, custom: true }))];
+  const rank = (t: { id: string }) => { const i = c.order.indexOf(t.id); return i < 0 ? c.order.length + all.indexOf(t as never) : i; };
+  return all.sort((a, b) => rank(a) - rank(b));
+}

@@ -32,7 +32,8 @@ import type { PropertySheetContext } from '../designer/sheet-types';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { nameErrorKey } from '../shell/nav-menu-items';
-import { firstPythonCall, viewCode } from '../designer/view-code';
+import { convertObjectMacros } from '../designer/convert-events-run';
+import { firstCode, viewCode } from '../designer/view-code';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand } from '../shell/ribbon-model';
 import { editsDesign, sameView, type DocMode } from '../state/app-state';
 import { emptyFormDoc, fieldControls, FORM_SECTIONS, FormDefError, headerFooterShown, nextFreeTop, parseFormDoc, shouldReload, toggleHeaderFooter, withPageTabOrder, withTabOrder } from './form-def';
@@ -339,7 +340,8 @@ export function FormDesignView({ tab, active, readOnly, dispatch }: DocViewProps
       conditionalFormatting: () => cmds.current.conditions(),
       formatPainter: () => painter.toggle(),
       subformInNewWindow: () => { const n = subObjectOf(live.current.state); if (n) void dispatch({ type: 'open', kind: 'form', name: n, mode: 'design' }); },
-      viewCode: () => { const { state: s } = live.current; viewCode(firstPythonCall(s.doc, s.selection), (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }, () => { runCommand('createModule'); }).catch(showError); },
+      convertMacros: () => { const { state: s } = live.current; convertObjectMacros({ kind: 'form', name: tab.name, doc: s.doc, readOnly: live.current.readOnly, modal, edit: (apply) => send({ type: 'edit', apply }) }).catch(showError); },
+      viewCode: () => { const { state: s } = live.current; viewCode(firstCode(s.doc, s.selection, 'form'), 'form', tab.name, (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }).catch(showError); },
     });
     const offGuard = registerModeGuard(tab.id, (reason, target) => cmds.current.leave(reason, target));
     return () => { off(); offGuard(); };

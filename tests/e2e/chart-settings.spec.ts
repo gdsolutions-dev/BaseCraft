@@ -301,15 +301,15 @@ test('A chart whose source table is missing: the pane shows the source error, no
   } finally { await app.close(); }
 });
 
-test('Insert Modern Chart lists the new types after Combo (no Word Cloud); Doughnut arms the tool', async () => {
+test('Insert Modern Chart lists the new types after Combo, Word Cloud last; Doughnut arms the tool', async () => {
   test.setTimeout(120000);
   const { app, page } = await launchApp({ args: [await seed('chart-settings-f5-menu')], env: FR });
   try {
     await openDesign(page);
     await page.getByTestId('cmd-insertModernChart').click();
     const ids = await page.getByTestId('chart-type-popup').locator('[data-testid^="chart-type-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-    expect(ids.slice(ids.indexOf('chart-type-combo'))).toEqual(['chart-type-combo', 'chart-type-doughnut', 'chart-type-arc', 'chart-type-funnel', 'chart-type-scatter', 'chart-type-bubble', 'chart-type-boxWhisker', 'chart-type-pareto', 'chart-type-waterfall']);
-    await expect(page.getByTestId('chart-type-wordCloud')).toHaveCount(0);
+    expect(ids.slice(ids.indexOf('chart-type-combo'))).toEqual(['chart-type-combo', 'chart-type-doughnut', 'chart-type-arc', 'chart-type-funnel', 'chart-type-scatter', 'chart-type-bubble', 'chart-type-boxWhisker', 'chart-type-pareto', 'chart-type-waterfall', 'chart-type-wordCloud']);
+    await expect(page.getByTestId('chart-type-wordCloud')).toBeVisible();
     await page.getByTestId('chart-type-doughnut').click();
     await draw(page, page.locator('[data-section-body="1"]'));
     await expect(page.getByTestId('ctl-Graphique1')).toBeVisible();

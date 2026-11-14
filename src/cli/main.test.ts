@@ -54,3 +54,33 @@ describe('resources', () => {
     expect(await run(['resources', 'nope.txt'], { out: () => {}, err: () => {} })).toBe(2);
   });
 });
+
+describe('attachments', () => {
+  it('lists the files of an Attachment field and extracts them', async () => {
+    const fs = await import('node:fs'), path = await import('node:path'), { tmp } = await import('./test-tmp');
+    const { DatabaseSync } = await import('node:sqlite'), { registerFunctions } = await import('../main/db/file-format'), { addAttachments } = await import('../main/db/attachments');
+    const p = tmp(), spec = p.replace('x.basecraft', 's.json'), out = p.replace('x.basecraft', 'extracted');
+    fs.writeFileSync(spec, JSON.stringify([
+      { op: 'table.create', name: 'Clients', fields: [{ name: 'Nom', type: 'shortText' }, { name: 'Pieces', type: 'attachment' }] },
+      { op: 'rows.insert', table: 'Clients', rows: [{ Nom: 'A' }, { Nom: 'B' }] },
+    ]));
+    const io = { out: () => {}, err: () => {} };
+    expect(await run(['new', p], io)).toBe(0);
+    expect(await run(['script', spec, p], io)).toBe(0);
+    const db = new DatabaseSync(p); registerFunctions(db);
+    addAttachments(db, 'Clients', 'Pieces', 2, [{ name: 'a.txt', data: Uint8Array.from([65, 66]) }, { name: 'b.bin', data: Uint8Array.from([1]) }]);
+    db.close();
+    const json = async (...a: string[]) => { const o: string[] = []; const code = await run(['attachments', p, ...a], { out: (s) => o.push(s), err: () => {} }); return { code, v: o.length ? JSON.parse(o.join('')) : null }; };
+    expect((await json('clients', 'pieces')).v).toEqual([{ rowid: 2, files: [{ id: 1, name: 'a.txt', type: 'txt', bytes: 2 }, { id: 2, name: 'b.bin', type: 'bin', bytes: 1 }] }]);
+    expect((await json('Clients', 'Pieces', '1')).v).toEqual([]);
+    expect((await json('Clients', 'Pieces', '2', '--extract', out)).code).toBe(0);
+    expect([...fs.readFileSync(path.join(out, 'a.txt'))]).toEqual([65, 66]);
+    expect(fs.readdirSync(out).sort()).toEqual(['a.txt', 'b.bin']);
+    const errs: string[] = [];
+    expect(await run(['attachments', p, 'Clients', 'Pieces', '2', '--extract', out], { out: () => {}, err: (s) => errs.push(s) })).toBe(1);   // never over a file
+    expect(await run(['attachments', p, 'Clients', 'Nom'], { out: () => {}, err: (s) => errs.push(s) })).toBe(1);
+    expect(errs.join('')).toContain('not an Attachment field');
+    expect(await run(['attachments', p, 'Clients'], { out: () => {}, err: () => {} })).toBe(2);
+    expect(await run(['attachments', p, 'Clients', 'Pieces', 'x'], { out: () => {}, err: () => {} })).toBe(2);
+  });
+});

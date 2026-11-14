@@ -49,3 +49,26 @@ test('Python recordsets: read, add/update/delete, execute, Required refusal, to_
     expect(await imm(page, '?len(db.open_recordset("Commandes").to_pandas())')).toBe('3')
   } finally { await app.close() }
 })
+
+test('Python DAO-style cursor: edit/update/move_next, add_new, Required refusal keeps the edit open', async () => {
+  test.setTimeout(240_000)
+  const base = await seedBase('pydao', async (db) => {
+    createTable(db, commandes)
+    for (const [c, m] of [['A', 10], ['B', 20], ['C', 30]] as const) await insertRow(db, commandes, { Client: c, Montant: m, Date: '2026-01-02', Payee: false }, localeInfo('en-US'))
+  })
+  const { app, page } = await launchApp({ args: [base] })
+  try {
+    await expect.poll(() => page.evaluate(() => (window as unknown as { basecraft: { base: { state(): Promise<unknown> } } }).basecraft.base.state().then(Boolean))).toBe(true)
+    await imm(page, 'rs = db.open_recordset("Commandes")')
+    await imm(page, 'while not rs.eof:\n    rs.edit()\n    rs["Montant"] = rs["Montant"] * 2\n    rs.update()\n    rs.move_next()')
+    expect((await rowsOf(page)).map((r) => r[2])).toEqual([20, 40, 60])
+    expect(await imm(page, '?(rs.eof, rs.record_count)')).toBe('(True, 3)')
+    await imm(page, 'rs.add_new()\nrs["Montant"] = 1')
+    expect(await rejection(page, 'rs.update()')).toMatch(/Client/)
+    await imm(page, 'rs.cancel_update()')
+    expect(await imm(page, '?len(db.open_recordset("Commandes"))')).toBe('3')
+    await imm(page, 'rs.move_first(); rs.delete(); rs.move_next()')
+    expect((await rowsOf(page)).map((r) => r[1])).toEqual(['B', 'C'])
+    expect(await imm(page, '?rs["Client"]')).toBe('B')
+  } finally { await app.close() }
+})

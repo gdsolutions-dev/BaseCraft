@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TableSummary } from '../../shared/api';
-import { EXCEL_SPEC, type ExcelPreview } from '../../shared/exchange';
+import { EXCEL_SPEC, type ExcelPreview, type SavedImport } from '../../shared/exchange';
 import type { TableDesign } from '../../shared/field-types';
 import { IMPORT_TYPES, type ImportField, type ImportProgress, type ImportResult, type ImportSpec, type PrimaryKeyChoice, type TextPreview } from '../../shared/import-text';
 import { autoIndexed, withAutoIndex } from '../../shared/auto-index';
@@ -54,6 +54,8 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<Done | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [done, setDone] = useState<SavedImport | null>(null); // the import just run, to keep as a Saved Import
+  const [save, setSave] = useState<string | null>(null); // the name to keep it under (null: not kept)
 
   const excel = source === 'excel' || source === 'xml'; // F1: an XML file goes through the workbook path, as one sheet whose first row is the field names
   const xml = source === 'xml';
@@ -221,7 +223,11 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
     const off = api.importText.onProgress(setProgress);
     try {
       const r = excel ? await api.importExcel.run(loaded, xl!.sheet, spec.hasHeader, plan) : await api.importText.run(loaded, plan);
-      if (r.ok) { setResult(r); onImported(r); }
+      if (r.ok) {
+        setResult(r); onImported(r);
+        setDone({ source, plan, ...(excel ? { sheet: xl!.sheet } : {}) });
+        setSave(null);
+      }
       else if (r.reason === 'nameExists') { setStep('finish'); setError(t('dialog.op.nameExists')); } // taken meanwhile: table or query
       else if (r.reason === 'danglingKey') { setStep('finish'); setError(t('importText.error.danglingKey', { name: table, table: r.table })); }
       else { setStep('fields'); setError(r.errors.map((x) => t(`designError.${x.code}`, { field: x.field ?? '' })).join('\n')); }
@@ -231,6 +237,14 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
       off();
       setProgress(null);
     }
+  };
+
+  /** Close after the import: the steps are kept first when asked (a failure is shown, the box stays). */
+  const closeDone = async () => {
+    if (save?.trim() && done) {
+      try { await api.exchange.saveSavedImport(save.trim(), done); } catch (e) { void showError(e); return; }
+    }
+    onClose();
   };
 
   const browse = async () => {
@@ -474,13 +488,24 @@ export function ImportTextWizard({ source = 'text', tables: all, queries, pendin
               <p data-testid="import-summary-errors">{result.errors > 0
                 ? t('importText.finish.errors', { count: result.errors, table: result.errorTable })
                 : t('importText.finish.noErrors')}</p>
+              <label className="modal-field">
+                <input type="checkbox" data-testid="import-save-check" checked={save !== null}
+                  onChange={(e) => setSave(e.target.checked ? t('exchange.savedImportDefault', { name: result.table }) : null)} />
+                {t('exchange.saveImportSteps')}
+              </label>
+              {save !== null && (
+                <label className="modal-field">
+                  <span>{t('exchange.saveName')}</span>
+                  <input data-testid="import-save-name" maxLength={64} value={save} onChange={(e) => setSave(e.target.value)} />
+                </label>
+              )}
             </div>
           ) : renderStep()}
         </div>
         {error && <div className="modal-error iw-error" role="alert" data-testid="import-error">{error}</div>}
         <footer className="modal-buttons iw-buttons">
           {result ? (
-            <button className="btn btn-primary" data-testid="import-btn-close" onClick={onClose}>{t('importText.button.close')}</button>
+            <button className="btn btn-primary" data-testid="import-btn-close" onClick={() => void closeDone()}>{t('importText.button.close')}</button>
           ) : (
             <>
               <button className="btn" data-testid="import-btn-advanced" disabled={!spec || running || excel} onClick={() => setAdvanced(true)}>{t('importText.button.advanced')}</button>

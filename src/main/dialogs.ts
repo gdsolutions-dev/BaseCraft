@@ -6,7 +6,7 @@ import { FILE_EXTENSION } from './db/file-format';
 import type { ExportFormat } from '../shared/exchange';
 
 const filters = [{ name: 'BaseCraft', extensions: [FILE_EXTENSION.slice(1)] }];
-const e2e = () => process.env.BASECRAFT_E2E === '1' && !app.isPackaged;
+export const e2e = () => process.env.BASECRAFT_E2E === '1' && !app.isPackaged;
 
 /** `dir`: the folder the dialog starts in (the default folder or Documents: settings.ts dialogDir). */
 export async function pickSavePath(defaultName: string, dir: string): Promise<string | null> {
@@ -74,6 +74,24 @@ export async function pickExcelPath(filterName: string, kind: 'excel' | 'xml' = 
   return r.canceled ? null : (r.filePaths[0] ?? null);
 }
 
+/** An image file to link (PictureType linked); the main process alone then reads it. e2e: BASECRAFT_E2E_PICTURE_PATH. */
+export async function pickPicturePath(filterName: string): Promise<string | null> {
+  if (e2e()) return process.env.BASECRAFT_E2E_PICTURE_PATH ?? null;
+  const opts = { filters: [{ name: filterName, extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }], properties: ['openFile' as const] };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return r.canceled ? null : (r.filePaths[0] ?? null);
+}
+
+/** An Office theme file (.thmx) to import; e2e: BASECRAFT_E2E_THEME_PATH. */
+export async function pickThemePath(filterName: string): Promise<string | null> {
+  if (e2e()) return process.env.BASECRAFT_E2E_THEME_PATH ?? null;
+  const opts = { filters: [{ name: filterName, extensions: ['thmx'] }], properties: ['openFile' as const] };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return r.canceled ? null : (r.filePaths[0] ?? null);
+}
+
 /** Where to write an export (A6); `defaultName` is a bare name (no folder), the extension follows `format`. */
 export async function pickExportPath(defaultName: string, format: ExportFormat, filterName: string): Promise<string | null> {
   if (e2e()) return process.env.BASECRAFT_E2E_EXPORT_PATH ?? null;
@@ -113,4 +131,22 @@ export function showNotice(message: string, ok: string): () => void {
   const done = new AbortController();
   dialog.showMessageBox({ type: 'info', message, buttons: [ok], signal: done.signal }).catch(console.error);
   return () => done.abort();
+}
+
+/** Files to attach (C5), several allowed; e2e: BASECRAFT_E2E_ATTACH_PATHS, paths separated by « | ». */
+export async function pickAttachmentPaths(): Promise<string[]> {
+  if (e2e()) return (process.env.BASECRAFT_E2E_ATTACH_PATHS ?? '').split('|').filter(Boolean);
+  const opts = { defaultPath: app.getPath('documents'), properties: ['openFile' as const, 'multiSelections' as const] };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return r.canceled ? [] : r.filePaths;
+}
+
+/** Where to save one attachment (Save As); e2e: BASECRAFT_E2E_ATTACH_SAVE_PATH. */
+export async function pickAttachmentSavePath(name: string): Promise<string | null> {
+  if (e2e()) return process.env.BASECRAFT_E2E_ATTACH_SAVE_PATH ?? null;
+  const opts = { defaultPath: join(app.getPath('documents'), name) };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  return r.canceled || !r.filePath ? null : r.filePath;
 }

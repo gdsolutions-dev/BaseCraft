@@ -105,6 +105,10 @@ const lookupCell = (shown: string, bound: SqlValue, readonly: boolean): LookupCe
 /** `lookup`: the field's list (given only for a Lookup field): the cell shows the list text, or the raw value when absent. */
 export function toCell(field: FieldDef, value: SqlValue, ctx: { locale: string; lang?: 'fr' | 'en'; fourDigitYear?: boolean; readOnly: boolean; lookup?: LookupList }): GridCell {
   const readonly = ctx.readOnly || field.props.type === 'autoNumber';
+  if (field.props.type === 'attachment') { // a paperclip and the number of files; the box opens on a double-click (the view)
+    const shown = `📎 (${typeof value === 'number' ? value : 0})`;
+    return { kind: GridCellKind.Text, data: shown, displayData: shown, allowOverlay: false, readonly: true };
+  }
   if (ctx.lookup) return lookupCell(value === null ? '' : ctx.lookup.text.get(value) ?? texts(field, value, ctx)[0], value, readonly);
   if (field.props.type === 'yesNo') {
     return { kind: GridCellKind.Boolean, data: value !== null && Number(value) !== 0, allowOverlay: false, readonly };

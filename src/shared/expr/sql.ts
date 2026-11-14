@@ -16,7 +16,7 @@ import { ExprRuntimeError, ExprSyntaxError, type BinOp, type Expr, type ExprRunt
 import { between, binary, compare, fromStored, like, unary, type EvalEnv } from './evaluate';
 import { createAccumulator, type Accumulator, type AggregateName } from './aggregate';
 import { AGGREGATES } from './catalog';
-import { bool, date, fail, fromSerial, infoOf, LIBRARY, num, str, toSerial, truthy } from './library';
+import { bool, currentTextKey, date, fail, fromSerial, infoOf, LIBRARY, num, str, textGroupKey, toSerial, truthy } from './library';
 import type { SqlValue } from '../coerce';
 import { defaultProps, quoteIdent, sameName, type FieldProps, type FieldType, type NumberSize } from '../field-types';
 import type { SelectQuery } from '../query/ast';
@@ -114,7 +114,7 @@ type ListItem = Value | { t: 'err'; code: ExprRuntimeErrorCode };
 /** The last list `bc_insub` read, decoded, and its answers by text tested (a text against the same list, the same answer:
  *  compare depends on nothing else). Another list (bytes), region or Not starts it again.
  *  ponytail: one list remembered; two In subqueries in one statement take turns decoding. */
-let lastList: { bytes: Uint8Array | null; l: unknown; not: unknown; items: (() => Value)[]; byText: Map<string, Value> } | null = null;
+let lastList: { k: unknown; bytes: Uint8Array | null; l: unknown; not: unknown; items: (() => Value)[]; byText: Map<string, Value> } | null = null;
 function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
   if (a === b) return true;
   if (a === null || b === null || a.length !== b.length) return false;
@@ -122,9 +122,9 @@ function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
   return true;
 }
 function inSub(l: unknown, not: unknown, v: unknown, list: Uint8Array | null): Value {
-  if (!lastList || lastList.l !== l || lastList.not !== not || !sameBytes(lastList.bytes, list)) {
+  if (!lastList || lastList.k !== currentTextKey() || lastList.l !== l || lastList.not !== not || !sameBytes(lastList.bytes, list)) {
     const items = list === null ? [] : JSON.parse(utf8d.decode(list)) as ListItem[];
-    lastList = { bytes: list, l, not, items: items.map((item) => () => (item !== null && item.t === 'err' ? fail(item.code) : item)), byText: new Map() };
+    lastList = { k: currentTextKey(), bytes: list, l, not, items: items.map((item) => () => (item !== null && item.t === 'err' ? fail(item.code) : item)), byText: new Map() };
   }
   if (typeof v !== 'string') return inItems(l, not, v, lastList.items); // a number, a date… : no cache (rarely a column of In)
   const known = lastList.byText.get(v);
@@ -167,8 +167,8 @@ export const SQL_FUNCTIONS: Record<string, { deterministic: boolean; fn: (...a: 
   bc_gkey: {
     deterministic: true,
     fn: (x) => {
-      if (typeof x === 'string') return x.normalize('NFC').toLowerCase();
-      return x instanceof Uint8Array && tagOf(x)?.t === 'empty' ? '' : x as SqlOut;
+      if (typeof x === 'string') return textGroupKey(x);
+      return x instanceof Uint8Array && tagOf(x)?.t === 'empty' ? textGroupKey('') : x as SqlOut;
     },
   },
   /** Sort key of an encoded value, as the table sort: a text folded (bc_fold), a date its serial number, Yes/No -1/0 (Yes

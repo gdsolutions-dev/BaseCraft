@@ -51,7 +51,7 @@ export function visibleRange(scrollTop: number, viewport: number, rowHeight: num
 
 export interface SheetColumn { control: string; field: string | null; title: string; width: number /* px */ }
 
-const SHEET_KINDS: ControlDef['kind'][] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox'];
+const SHEET_KINDS: ControlDef['kind'][] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 'listBox', 'attachment'];
 
 /** The Detail's input controls (an option group is one, not its options), in tab order (TabIndex, then document order; Tab
  *  Stop does not matter); title: the attached label's Caption without its trailing `:`, else the control's name. */

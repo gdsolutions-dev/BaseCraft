@@ -97,6 +97,12 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     const b = (await sheet(page).getByTestId('data-grid-canvas').boundingBox())!;
     return page.screenshot({ clip: { x: b.x + from + 1, y: b.y + HEADER + 2, width: to - from - 2, height: 26 } });
   };
+  /** `shot`, once the grid has stopped redrawing (two identical pixel reads in a row; slower machines draw late). */
+  const settled = async (from: number, to: number) => {
+    let last = await shot(from, to);
+    await expect.poll(async () => { const now = await shot(from, to); const same = now.equals(last); last = now; return same; }).toBe(true);
+    return last;
+  };
   const narrow = async () => {   // Montant (41 px: the drag's own offset), then Le
     await dragEdge(colLeft(3) - 1, colLeft(2) + 40);
     await dragEdge(colLeft(2) + 40 + DEFAULT_COL_PX - 1, colLeft(2) + 80);
@@ -104,14 +110,14 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
   try {
     await open(page, 'Commandes');
     await narrow();
-    const dateOn = await shot(colLeft(2) + 41, colLeft(2) + 80);
+    const dateOn = await settled(colLeft(2) + 41, colLeft(2) + 80);
     await clickAt(page, colLeft(2) + 20, 0, 30, 2);
     await page.keyboard.press('Control+c');
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toMatch(/^12.345.678,90.€$/);
     await page.keyboard.press('F2');
     await expect(page.locator('#portal textarea')).toHaveValue(/^12345678,9/);
     await page.keyboard.press('Escape');
-    const montantOn = await shot(colLeft(2), colLeft(2) + 41);   // selected
+    const montantOn = await settled(colLeft(2), colLeft(2) + 41);   // selected
     await dragEdge(colLeft(2) + 41, colLeft(2) + 150);   // widened: the value again (polled: the grid redraws after the drag)
     await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
 
@@ -125,8 +131,9 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await open(page, 'Commandes');
     await narrow();
     await clickAt(page, colLeft(2) + 20, 0, 30, 2);
-    expect((await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
-    expect((await shot(colLeft(2) + 41, colLeft(2) + 80)).equals(dateOn)).toBe(true);   // a date column is the same either way
+    await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
+    // a date column is the same either way
+    await expect.poll(async () => (await shot(colLeft(2) + 41, colLeft(2) + 80)).equals(dateOn)).toBe(true);
   } finally {
     await app.close();
   }

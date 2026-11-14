@@ -18,7 +18,7 @@ import { isTheme, type Theme } from '../shared/design/theme';
 import { pngSize } from '../shared/png';
 import { cleanTitle, isValidIcon, MAX_APP_TITLE, type StartupOptions } from '../shared/startup';
 import type { CellInput, SqlValue } from '../shared/coerce';
-import { validExportSpec, validSavedExport, type ExportSource, type ExportTextSpec, type SavedExport } from '../shared/exchange';
+import { validExportSpec, validSavedExport, validSavedImport, type ExportSource, type ExportTextSpec, type SavedExport, type SavedImport } from '../shared/exchange';
 import { validSpec, type ImportPlan, type ImportSpec } from '../shared/import-text';
 import { parseDataMacros, type DataMacros } from '../shared/macro/data-macro';
 import { BaseFileError, FILE_EXTENSION } from './db/file-format';
@@ -28,6 +28,7 @@ import { SETTING_CHECKS } from './settings';
 import { CONNECTORS, isServerKind } from './connectors/registry';
 import type { ServerKind } from './connectors/connector';
 import type { MigrateRequest } from '../shared/migrate';
+import { MAX_ODBC, type OdbcRequest } from '../shared/odbc';
 
 export { MAX_DEFINITION_CHARS };
 
@@ -93,6 +94,9 @@ export function expectedValues(v: unknown): Record<string, SqlValue> | undefined
 
 /** C3 R9: the text Write Conflict › Copy to Clipboard puts there, at most 10 MB (UTF-16 code units). */
 export const clipboardText = (v: unknown): string => (typeof v === 'string' && v.length <= 10 * 1024 * 1024 ? v : bad());
+
+/** Home › Spelling on Windows: the words of one cell to check, at most 5000 strings of at most 100 characters. */
+export const spellWords = (v: unknown): string[] => (Array.isArray(v) && v.length <= 5000 && v.every((w) => typeof w === 'string' && w.length <= 100) ? (v as string[]) : bad());
 
 /** A hyperlink to open (D3): an http:, https: or mailto: URL; anything else is refused. Returns the normalised URL. */
 export const hyperlinkUrl = (v: unknown): string => safeUrl(v) ?? bad();
@@ -241,7 +245,7 @@ export function relationsLayout(v: unknown): RelationsLayout {
   return { tables };
 }
 
-const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile', 'fourDigitYear', 'checkTruncatedNumbers', 'filterListIndexed', 'filterListNonIndexed', 'trackNameAutoCorrect', 'performNameAutoCorrect', 'logNameAutoCorrect'] as const;
+const BOOLEAN_STARTUP_KEYS = ['showNavPane', 'runMode', 'statusBar', 'documentTabs', 'overlappingWindows', 'specialKeys', 'compactOnClose', 'datasheetDesign', 'fullMenus', 'shortcutMenus', 'iconForForms', 'frontEnd', 'dataFile', 'fourDigitYear', 'checkTruncatedNumbers', 'filterListIndexed', 'filterListNonIndexed', 'trackNameAutoCorrect', 'performNameAutoCorrect', 'logNameAutoCorrect'] as const;
 const STARTUP_KEYS = ['appTitle', 'appIcon', 'startupForm', 'ribbon', 'filterListMax', ...BOOLEAN_STARTUP_KEYS];
 /** A theme to save as the base default (F2). */
 export function themeArg(v: unknown): Theme {
@@ -257,7 +261,7 @@ export function resourceNameArg(v: unknown): string {
 
 /** The names to read from the gallery: unknown ones are simply omitted from the answer. */
 export function resourceNamesArg(v: unknown): string[] {
-  if (!Array.isArray(v) || v.length > 100 || !v.every((n) => typeof n === 'string' && n.length <= 255)) throw new TypeError('bc:invalidArgument');
+  if (!Array.isArray(v) || v.length > 100 || !v.every((n) => typeof n === 'string' && n.length <= 1030)) throw new TypeError('bc:invalidArgument');
   return v as string[];
 }
 
@@ -463,6 +467,17 @@ export const serverKey = (v: unknown): string => (typeof v === 'string' && v.len
 /** A server kind this BaseCraft has a connector for (C4 R1). */
 export const serverKind = (v: unknown): ServerKind => (typeof v === 'string' && isServerKind(v) && CONNECTORS[v] ? v : bad());
 /** A server's params as its connector reads them (`Connector.params`: never a password; bc:invalidArgument). */
+/** C4: an ODBC login request: exactly one of a DSN and a connection string, bounded, no NUL. */
+export function odbcRequest(v: unknown): OdbcRequest {
+  if (!isObj(v) || Object.keys(v).some((k) => !(k in MAX_ODBC))) return bad();
+  const out = {} as OdbcRequest;
+  for (const [k, max] of Object.entries(MAX_ODBC) as [keyof OdbcRequest, number][]) {
+    const x = v[k];
+    if (typeof x !== 'string' || x.length > max || x.includes('\x00')) return bad();
+    out[k] = x;
+  }
+  return (out.dsn === '') === (out.connection.trim() === '') ? bad() : out;
+}
 export const serverParams = (kind: ServerKind, v: unknown): unknown => CONNECTORS[kind]!.params(v);
 /** C7 R1: the migration wizard's run: a kind with a connector, its params as the connector reads them, a schema of 1 to 128
  *  characters (no other key). */
@@ -522,6 +537,7 @@ export function exportSource(v: unknown): ExportSource {
 export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? bad();
 export const markupFormat = (v: unknown): 'xml' | 'html' => (v === 'xml' || v === 'html' ? v : bad());
 export const savedExport = (v: unknown): SavedExport => validSavedExport(v) ?? bad();
+export const savedImport = (v: unknown): SavedImport => validSavedImport(v) ?? bad();
 
 /** A3 action queries: a query or SQL ref (never a table), at most MAX_PARAMS parameter values, the run's two options. */
 export const queryRef = (v: unknown): QueryRef => { const r = sourceRef(v); return r.kind === 'table' ? bad() : r; };

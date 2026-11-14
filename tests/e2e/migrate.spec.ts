@@ -3,7 +3,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { liveParams, noLiveServer, withSchema } from '../../src/main/connectors/postgres/live';
 import { pgLabel } from '../../src/main/connectors/postgres/params';
+import { openBaseFile } from '../../src/main/db/file-format';
 import { saveObject } from '../../src/main/db/objects';
+import { saveRelation } from '../../src/main/db/relations';
+import { createTable } from '../../src/main/db/schema';
+import { addLinks } from '../../src/main/links/store';
+import { localeInfo } from '../../src/shared/locale-format';
+import { f, t } from '../../src/shared/test-fixtures';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import { launchApp, openDbOptions, seedBase, SALES_QUERIES } from './helpers';
 
@@ -138,4 +144,42 @@ test('Cancel on a page of the wizard does nothing; the Runtime has no « Vers un
   } finally {
     await app.close();
   }
+});
+
+test('C8: a front-end linked to two data files moves both to the server, each backed up, every link relinked', async () => {
+  test.skip(noLiveServer(), 'BASECRAFT_PG_TEST_URL is not set');
+  test.setTimeout(180_000);
+  await withSchema(async (_admin, schema) => {
+    const sales = seedBase('Ventes-donnees', (db) => { seedSales(db); seedSalesRelation(db); });
+    const stock = seedBase('Stock-donnees', (db) => {
+      createTable(db, t('Produits', [f('N°', 'autoNumber'), f('Nom', 'shortText')]));
+      createTable(db, t('Lignes', [f('N°', 'autoNumber'), f('Produit', 'number', { numberSize: 'longInteger' })]));
+      db.exec(`INSERT INTO "Produits" ("Nom") VALUES ('A'), ('B')`);
+      db.exec(`INSERT INTO "Lignes" ("Produit") VALUES (1), (2), (2)`);
+      const r = saveRelation(db, { name: '', parentTable: 'Produits', parentFields: ['N°'], childTable: 'Lignes', childFields: ['Produit'],
+        enforce: true, cascadeUpdate: false, cascadeDelete: false, joinType: 1 }, null, localeInfo('fr-FR'));
+      if (!r.ok) throw new Error(r.reason);
+    });
+    const front = seedBase('Ventes', () => {});
+    const db = openBaseFile(front, 'write', '0.0.0').db;
+    addLinks(db, front, 'basecraft', sales, ['Clients', 'Commandes']);
+    addLinks(db, front, 'basecraft', stock, ['Produits', 'Lignes']);
+    db.close();
+    const { app, page } = await launchApp({ args: [front], env: ENV });
+    try {
+      await runWizard(page, schema);
+      const report = page.getByTestId('migrate-report');
+      await expect(report).toBeVisible({ timeout: 60_000 });
+      for (const line of ['Clients : 4 enregistrement(s)', 'Produits : 2 enregistrement(s)', 'Lignes : 3 enregistrement(s)',
+        'ClientsCommandes : clé étrangère créée', 'ProduitsLignes : clé étrangère créée']) await expect(report).toContainText(line);
+      expect(readdirSync(dirname(sales)).filter((x) => x.startsWith('Ventes-donnees.backup-'))).toHaveLength(1);
+      expect(readdirSync(dirname(stock)).filter((x) => x.startsWith('Stock-donnees.backup-'))).toHaveLength(1);
+      await page.getByTestId('migrate-close').click();
+      await page.getByTestId('nav-item-Produits').dblclick();
+      await expect(page.getByTestId('datasheet').getByTestId('data-grid-canvas')).toBeVisible();
+      await expect(page.getByTestId('glide-cell-1-1')).toHaveText('B');
+    } finally {
+      await app.close();
+    }
+  });
 });

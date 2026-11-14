@@ -19,7 +19,7 @@ import type { LocaleInfo } from '../../shared/locale-format';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { findControl, setProps, type PropTarget, type Selection } from './designer-model';
 import type { SheetTab } from './sheet-types';
-import { readPictureType } from '../../shared/pictures';
+import { readPictureType, type PictureType } from '../../shared/pictures';
 import { formatApplies, readChartSeries, readChartSpec, type ChartType, type FormatGroup } from '../../shared/chart/spec';
 import { MAX_TWIPS } from './units';
 
@@ -154,7 +154,7 @@ export function pictureRows(_props: Record<string, unknown>, target: PropertyTar
 export function pictureLabel(props: Record<string, unknown>, embedded = '(Embedded)'): string {
   const pic = props.Picture;
   if (typeof pic !== 'string' || pic === '') return '';
-  return readPictureType(props.PictureType) === 'shared' ? pic : embedded;
+  return readPictureType(props.PictureType) === 'embedded' ? embedded : pic;
 }
 
 const err = (code: string): string => `sheet.error.${code}`;
@@ -246,9 +246,9 @@ export const fontWarning = (name: string): string | null => (name.trim() && !res
 
 /** Changer le Type d'image en une seule édition (une annulation) : il ne convertit jamais l'image, il change la lecture de `Picture`.
  *  Vers Partagé (`names` = galerie), `Picture` est effacée sauf si elle nomme une image de la galerie ; vers Incorporé, un nom est effacé (une URL de données reste). */
-export function setPictureType(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], type: 'shared' | 'embedded', names: Set<string> | null): DesignDoc {
+export function setPictureType(doc: DesignDoc, docKind: 'form' | 'report', targets: PropTarget[], type: PictureType, names: Set<string> | null): DesignDoc {
   const shared = type === 'shared';
   const pic = PROPERTY_CATALOG.find((d) => d.name === 'Picture')!;
-  const clear = targets.filter((x) => { const v = readProp(doc, docKind, x, pic); return typeof v === 'string' && v !== '' && (shared ? !names?.has(v) : !v.startsWith('data:image/')); });
-  return setProps(setProps(doc, targets, 'PictureType', shared ? 'shared' : undefined), clear, 'Picture', undefined);
+  const clear = targets.filter((x) => { const v = readProp(doc, docKind, x, pic); return typeof v === 'string' && v !== '' && (type === 'linked' || (shared ? !names?.has(v) : !v.startsWith('data:image/'))); });
+  return setProps(setProps(doc, targets, 'PictureType', type === 'embedded' ? undefined : type), clear, 'Picture', undefined);
 }

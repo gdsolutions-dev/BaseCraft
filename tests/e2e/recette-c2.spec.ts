@@ -154,6 +154,7 @@ test('recette C2: a front-end links an Access file — cells as Access shows the
     // 4. QTotaux built in the QBE on the linked Commandes: Client Group By, Montant Sum, N° Count
     await page.getByTestId('ribbon-tab-create').click();
     await page.getByTestId('cmd-createQueryDesign').click();
+    await page.getByTestId('show-table-tab-links').click();
     await page.getByTestId('show-table-Commandes').check();
     await page.getByTestId('show-table-add').click();
     await page.getByTestId('show-table-close').click();

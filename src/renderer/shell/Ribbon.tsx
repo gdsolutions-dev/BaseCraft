@@ -1,18 +1,27 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FocusEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, Redo2, Save, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   commandEnabled, commandState, commandsVersion, openPopupOf, ribbonContextKey, runCommand, subscribeCommands, tabAfterContextChange, viewPair,
-  visibleTabs, type CommandId, type RibbonCommand, type RibbonContext, type RibbonTabId,
+  quickAccessChoices, setClickedButton, SHORTCUT_KEYS, visibleTabs, type CommandId, type RibbonCommand, type RibbonContext, type RibbonTabId,
 } from './ribbon-model';
-import { RibbonPopup } from '../designer/RibbonPopup';
+import { PopupMenu, RibbonPopup } from '../designer/RibbonPopup';
+import { api } from '../bridge';
+import { currentSettings } from '../settings-store';
 
 /** Clipboard buttons act on the focused element (a text field, a pane item): a click on them must not take the focus. So do the
  *  rich text buttons (A6): they act on the editor's selection, and its focus is what enables them. */
 const KEEP_FOCUS: ReadonlySet<string> = new Set(['cut', 'copy', 'paste', 'bullets', 'numbering', 'indentIncrease', 'indentDecrease', 'textDirection', 'textBold', 'textItalic', 'textUnderline', 'textFontColor', 'textHighlight']);
-/** Access's Quick Access Toolbar (Save, Undo, Redo), before the tabs: the window's title bar is the system's. */
-const QUICK_ACCESS: [CommandId, typeof Save][] = [['save', Save], ['undo', Undo2], ['redo', Redo2]];
+/** The ScreenTip (the button's title) per the workstation's options: none, or the label with the command's shortcut key. */
+function tipOf(label: string, id: string): string | undefined {
+  const s = currentSettings();
+  if (!s.screenTips) return undefined;
+  const key = s.screenTipShortcuts ? SHORTCUT_KEYS[id as CommandId] : undefined;
+  return key ? `${label} (${key})` : label;
+}
+/** Right-click on a ribbon or Quick Access Toolbar button (Access): add it to the toolbar, or remove it. */
+const writeQuickAccess = (ids: string[]) => { api.app.setSetting('quickAccess', ids).catch(() => { /* a refused write leaves the toolbar as it was */ }); };
 const STACK = 3; // small buttons per column, icon-only buttons per grid column, as in the mockup
 const TIP_WIDTH = 280; // .rtip max-width
 type Item = RibbonCommand | { size: 'sm' | 'xs'; cmds: RibbonCommand[] };
@@ -21,6 +30,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
   const { t } = useTranslation();
   useSyncExternalStore(subscribeCommands, commandsVersion); // re-render when the active document's commands change
   const tabs = visibleTabs(ctx);
+  const choices = quickAccessChoices();
   // C10: a new object kind or mode brings its contextual tab forward; leaving it gives back the tab selected before.
   const key = ribbonContextKey(ctx);
   const [sel, setSel] = useState(() => ({ ...tabAfterContextChange(tabs, { selected: 'home', before: 'home' }), key }));
@@ -32,6 +42,13 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
   const [tip, setTip] = useState<{ id: CommandId; el: HTMLElement } | null>(null);
   const showTip = (id: CommandId) => (e: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => setTip({ id, el: e.currentTarget });
   const hideTip = () => setTip(null);
+  const [qatMenu, setQatMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const onQat = (id: string) => (e: MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    if (!choices.has(id)) return;   // a command this version does not deliver cannot be on the toolbar
+    const r = e.currentTarget.getBoundingClientRect();   // the keyboard's menu key gives 0,0
+    setQatMenu({ id, x: e.clientX || r.left, y: e.clientY || r.bottom });
+  };
   // Left-aligned with its button; near the window's right edge, right-aligned with it instead (its width follows its text).
   const tipStyle = (el: HTMLElement) => {
     const r = el.getBoundingClientRect();
@@ -72,11 +89,11 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     const Icon = (shown.find(isOn) ?? target).icon;
     return (
       <div key="view-split" className="rsplit" data-testid="ribbon-view-split">
-        <button data-testid="cmd-view" className="rbtn-lg rsplit-main" title={label} disabled={!commandEnabled(target.id, ctx)}
+        <button data-testid="cmd-view" data-cmd="view" className="rbtn-lg rsplit-main" title={tipOf(label, 'view')} disabled={!commandEnabled(target.id, ctx)}
           onClick={() => runCommand(target.id)}>
           <Icon className="ic ic-lg" aria-hidden /><span>{label}</span>
         </button>
-        <button data-testid="cmd-viewMenu" className="rsplit-menu" aria-label={label} aria-haspopup="menu" aria-expanded={openPopupOf() === 'viewMenu'}
+        <button data-testid="cmd-viewMenu" data-cmd="viewMenu" className="rsplit-menu" aria-label={label} aria-haspopup="menu" aria-expanded={openPopupOf() === 'viewMenu'}
           disabled={!shown.some((c) => commandEnabled(c.id, ctx))} onClick={() => setViewMenuOpen(true)}>
           <ChevronDown aria-hidden />
         </button>
@@ -127,11 +144,11 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     }
     const on = commandState(c.id)?.active ?? c.active?.(ctx);
     return (
-      <button key={c.id} data-testid={`cmd-${c.id}`} className={`${size}${on ? ' is-on' : ''}`} title={label}
+      <button key={c.id} data-testid={`cmd-${c.id}`} data-cmd={c.id} className={`${size}${on ? ' is-on' : ''}`} title={tipOf(label, c.id)}
         aria-label={iconOnly ? label : undefined} aria-pressed={c.active ? !!on : undefined} disabled={!commandEnabled(c.id, ctx)}
         aria-haspopup={c.popup === 'dialog' ? 'dialog' : c.popup ? 'menu' : undefined} aria-expanded={c.popup ? openPopupOf() === c.id : undefined}
         onMouseDown={KEEP_FOCUS.has(c.id) ? (e) => e.preventDefault() : undefined}
-        onClick={() => runCommand(c.id)}>
+        onContextMenu={onQat(c.id)} onClick={(e) => { setClickedButton(e.currentTarget); runCommand(c.id); }}>
         {content}
       </button>
     );
@@ -141,10 +158,13 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
     <header className="ribbon" aria-label={t('ribbon.label')}>
       <div className="rtop">
         <div className="rqat" role="toolbar" aria-label={t('ribbon.quickAccess')} data-testid="quick-access">
-          {QUICK_ACCESS.map(([id, Icon]) => (
-            <button key={id} data-testid={`qat-${id}`} className="rqat-btn" title={t(`ribbon.cmd.${id}`)} aria-label={t(`ribbon.cmd.${id}`)}
-              disabled={!commandEnabled(id, ctx)} onClick={() => runCommand(id)}><Icon className="ic" aria-hidden /></button>
-          ))}
+          {currentSettings().quickAccess.flatMap((id) => {
+            const c = choices.get(id);
+            if (!c) return [];   // a command this version does not know (settings.json is edited by hand)
+            const label = t(c.labelKey);
+            return [<button key={id} data-testid={`qat-${id}`} data-cmd={id} className="rqat-btn" title={tipOf(label, id)} aria-label={label}
+              disabled={!commandEnabled(id as CommandId, ctx)} onContextMenu={onQat(id)} onClick={(e) => { setClickedButton(e.currentTarget); runCommand(id as CommandId); }}><c.icon className="ic" aria-hidden /></button>];
+          })}
         </div>
         <nav className="rtabs" role="tablist">
         <button className="rtab rtab-file" data-testid="ribbon-tab-file" disabled={!!ctx.builder} onClick={onFile}>{t('ribbon.file')}</button>
@@ -153,7 +173,7 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
             {x.contextual && i > 0 && !tabs[i - 1].contextual && <span className="rtab-sep" aria-hidden />}
             <button role="tab" aria-selected={x === current} data-testid={`ribbon-tab-${x.id}`}
               className={`rtab${x.contextual ? ' rtab-ctx' : ''}${x === current ? ' is-active' : ''}`}
-              onClick={() => select(x.id)}>{t(x.labelKey)}</button>
+              onClick={() => select(x.id)}>{x.label ?? t(x.labelKey)}</button>
           </Fragment>
         ))}
         </nav>
@@ -175,13 +195,13 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
             }
             const split = g.split && shown.length > 1;
             return (
-              <div key={g.id} className="rgroup" role="group" aria-label={t(g.labelKey)} data-testid={`ribbon-group-${g.id}`}>
+              <div key={g.id} className="rgroup" role="group" aria-label={g.label ?? t(g.labelKey)} data-testid={`ribbon-group-${g.id}`}>
                 <div className="ritems">
                   {split ? viewSplit(shown) : items.map((it, i) => (!('cmds' in it) ? button(it)
                     : it.size === 'sm' ? <div key={i} className="rstack">{it.cmds.map(button)}</div>
                     : <div key={i} className="rgrid" style={{ gridTemplateColumns: `repeat(${Math.ceil(it.cmds.length / STACK)}, auto)` }}>{it.cmds.map(button)}</div>))}
                 </div>
-                <div className="rlabel" aria-hidden>{t(g.labelKey)}</div>
+                <div className="rlabel" aria-hidden>{g.label ?? t(g.labelKey)}</div>
               </div>
             );
           })}
@@ -195,6 +215,18 @@ export function Ribbon({ ctx, onFile }: { ctx: RibbonContext; onFile: () => void
             onClick={() => scroll(1)}><ChevronRight className="ic" aria-hidden /></button>
         )}
       </div>
+      {qatMenu && (() => {
+        const on = currentSettings().quickAccess.includes(qatMenu.id);
+        return (
+          <PopupMenu x={qatMenu.x} y={qatMenu.y} testId="qat-menu" labelKey="ribbon.quickAccess" onClose={() => setQatMenu(null)}>
+            <button type="button" role="menuitem" data-testid={on ? 'qat-menu-remove' : 'qat-menu-add'} onClick={() => {
+              const ids = currentSettings().quickAccess;
+              writeQuickAccess(on ? ids.filter((x) => x !== qatMenu.id) : [...ids, qatMenu.id]);
+              setQatMenu(null);
+            }}>{t(on ? 'customize.qatRemove' : 'customize.qatAdd')}</button>
+          </PopupMenu>
+        );
+      })()}
     </header>
   );
 }

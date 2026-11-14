@@ -36,14 +36,23 @@
 .qcell > .pval-error { flex-basis: 100%; padding: 2px var(--bc-space-2); white-space: normal; font-size: 11.5px; }
 
 .qd-sql { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--bc-space-2); padding: var(--bc-space-3); }
-.qd-sql-text { flex: 1; min-height: 0; resize: none; padding: var(--bc-space-3); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
-  background: var(--bc-surface); color: var(--bc-text); font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace; tab-size: 4; }
-.qd-sql-text:focus { outline: 2px solid var(--bc-accent); outline-offset: -1px; }
+.qd-sql-bar { display: flex; }
+.qd-sql-edit { flex: 1; min-height: 0; display: flex; }
+.qd-sql-edit .cm-editor { flex: 1; min-width: 0; background: var(--bc-surface); color: var(--bc-text); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); }
+.qd-sql-edit .cm-scroller { font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace; }
+.qd-sql-edit .cm-content { caret-color: var(--bc-text); padding: var(--bc-space-3); }
+.qd-sql-edit .cm-cursor { border-left-color: var(--bc-text); }
+.qd-sql-edit .cm-focused { outline: 2px solid var(--bc-accent); outline-offset: -1px; }
+.qd-sql-edit .cm-selectionBackground { background: color-mix(in srgb, var(--bc-accent) 35%, transparent); }
+.sql-kw { color: var(--bc-accent); }
+.sql-str { color: var(--bc-warning); }
+.sql-id { color: var(--bc-text); }
+.sql-num, .sql-date { color: var(--bc-danger); }
 .qd-sql > p { margin: 0; }
 
 /* Paramètres de la requête, feuille de propriétés */
 .qp-grid { border-collapse: collapse; width: 100%; margin-bottom: var(--bc-space-2); }
-.qp-grid th { text-align: left; font-weight: 600; padding: 2px var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
+.qp-grid th { text-align: left; padding: 2px var(--bc-space-2); border-bottom: 1px solid var(--bc-border); }
 .qp-grid td { padding: 2px; }
 .qp-grid input, .qp-grid select { width: 100%; height: 30px; box-sizing: border-box; }
 .query-params { max-height: 60vh; overflow: auto; }
@@ -57,7 +66,7 @@
 .qd-side { flex: none; width: 260px; display: flex; flex-direction: column; gap: var(--bc-space-2); padding: var(--bc-space-3);
   border-left: 1px solid var(--bc-border); background: var(--bc-surface); }
 .qd-side-head { display: flex; align-items: center; justify-content: space-between; }
-.qd-side-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.qd-side-head h2 { margin: 0; font-size: 16px; }
 .qd-side .qd-tabs { margin-bottom: 0; }
 .qd-side-search { width: 100%; height: 30px; box-sizing: border-box; padding: 0 var(--bc-space-2); border: 1px solid var(--bc-border); border-radius: var(--bc-radius);
   background: var(--bc-surface); color: var(--bc-text); }

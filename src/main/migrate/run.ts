@@ -18,7 +18,7 @@ import { hasRealRowid, quoteIdent, removeTable, tableDesign } from '../db/schema
 import { saveStartupOptions, startupOptions } from '../db/startup';
 import { inTransaction } from '../db/tx';
 import { linkMeta, type LinkMeta } from '../links/meta';
-import { addServerLinks } from '../links/store';
+import { addServerLinks, linkRows, relinkServerRows } from '../links/store';
 import { remoteExpandCrosstab } from '../query/crosstab';
 import { resolve } from '../query/source';
 import { MigrateRefusal, migrationPlan, type ServerForeignKey, type ServerTable } from './plan';
@@ -62,6 +62,19 @@ export function switchLocal(front: DatabaseSync, kind: ServerKind, params: unkno
     front.exec('PRAGMA defer_foreign_keys=ON; DELETE FROM bc_relations');
     for (const t of tables) remove(front, t.name);
     addServerLinks(front, kind, params, tables, metas);
+    saveStartupOptions(front, { ...startupOptions(front), frontEnd: true });
+  });
+}
+
+/** R9 for a split front-end: each link of the data file `sourceId` moves to the server table of its remote name (under its own
+ *  name, with that table's meta), the front-end option set; one SQLite transaction. The data file is left as it is. */
+export function relinkData(front: DatabaseSync, sourceId: string, kind: ServerKind, params: unknown, tables: RemoteTable[], metas: LinkMeta[]): void {
+  inTransaction(front, () => {
+    const moved = linkRows(front).filter((l) => l.sourceId === sourceId).flatMap((l) => {
+      const i = tables.findIndex((x) => sameName(x.name, l.remote));
+      return i < 0 ? [] : [{ name: l.name, table: { ...tables[i]!, name: l.name }, meta: metas[i] }];
+    });
+    relinkServerRows(front, moved.map((m) => m.name), kind, params, moved.map((m) => m.table), moved.map((m) => m.meta));
     saveStartupOptions(front, { ...startupOptions(front), frontEnd: true });
   });
 }
@@ -205,4 +218,50 @@ export async function runMigration(d: RunDeps): Promise<MigrateResult> {
     ...(queriesUnchecked !== undefined && { queriesUnchecked }),
   };
   return { ok: true, report };
+}
+
+export interface DataFile { id: string; db: DatabaseSync; backup: () => string }
+
+/** C8: a split front-end linked to several BaseCraft data files. Every file is planned first (reads only), so a refusal, or a table
+ *  name used by two files (or already on the server), is reported before anything is written: no suffix is invented, because
+ *  the server name is the data file's own and a renamed table would no longer match the link or the queries naming it. Then one
+ *  runMigration per file (its own backup and server transaction, its links relinked at once, relations kept per file). A later
+ *  file's failure leaves the earlier ones migrated and linked (each is whole): the result says which tables. */
+export async function runMigrationFiles(d: Omit<RunDeps, 'front' | 'backup' | 'switchLocal'>, files: DataFile[],
+  relink: (f: DataFile, tables: RemoteTable[], metas: LinkMeta[]) => void): Promise<MigrateResult> {
+  const w = d.caps.migrate ? d.c.schema : undefined;
+  if (!w) throw new Error('bc:invalidArgument');
+  const taken = await w.names(d.schema);
+  if (taken === null) return { ok: false, reason: 'noSchema', schema: d.schema };
+  const plans: ReturnType<typeof migrationPlan>[] = [];
+  const names: string[] = [], clash: string[] = [];
+  for (const f of files) {
+    try { plans.push(migrationPlan(f.db, d.schema, w.limits, taken)); } catch (e) {
+      if (!(e instanceof MigrateRefusal)) throw e;
+      return e.reason === 'noTables' ? { ok: false, reason: 'noTables' } : { ok: false, reason: e.reason, names: e.names };
+    }
+    for (const t of plans.at(-1)!.tables) (names.some((n) => sameName(n, t.name)) ? clash : names).push(t.name);
+  }
+  if (clash.length) return { ok: false, reason: 'nameClash', names: clash };
+
+  const rowsOf = (p: ReturnType<typeof migrationPlan>) => p.tables.reduce((m, t) => m + t.rows, 0);
+  const total = plans.reduce((n, p) => n + rowsOf(p), 0);
+  const backups: string[] = [], reports: MigrationReport[] = [], moved: string[] = [];
+  let offset = 0;
+  for (const [i, f] of files.entries()) {
+    const r = await runMigration({ ...d, front: f.db, backup: () => { const p = f.backup(); backups.push(p); return p; },
+      switchLocal: (tables, metas) => relink(f, tables, metas), tick: (p) => d.tick({ ...p, done: p.done + offset, total }) });
+    if (!r.ok) {
+      if (i === 0) return r;
+      const backupPath = backups.join(', ');
+      if (r.reason === 'failed' || r.reason === 'cancelled') return { ...r, backupPath, migrated: moved };
+      return { ok: false, reason: 'failed', error: `bc:unknown|${r.reason}`, backupPath, migrated: moved };
+    }
+    reports.push(r.report);
+    moved.push(...r.report.tables.map((t) => t.name));
+    offset += rowsOf(plans[i]!);
+  }
+  const last = reports.at(-1)!;
+  return { ok: true, report: { ...last, backupPath: backups.join(', '), tables: reports.flatMap((r) => r.tables), indexes: reports.flatMap((r) => r.indexes),
+    relations: reports.flatMap((r) => r.relations), approximated: reports.flatMap((r) => r.approximated), frontEndOnly: reports.flatMap((r) => r.frontEndOnly) } };
 }

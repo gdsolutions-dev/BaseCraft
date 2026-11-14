@@ -14,7 +14,7 @@ const withDetail = (...controls: ControlDef[]) => { const d = emptyFormDoc(null)
 describe('form host', () => {
   it('tools in the mockup order, labelled by their ribbon gallery entry', () => {
     expect(FORM_TOOLS.map((x) => x.kind)).toEqual(['label', 'textBox', 'commandButton', 'comboBox', 'listBox', 'toggleButton', 'checkBox', 'optionGroup', 'optionButton',
-      'tabControl', 'subform', 'navigationControl', 'image', 'rectangle', 'line', 'pageBreak']);
+      'tabControl', 'subform', 'navigationControl', 'image', 'attachment', 'rectangle', 'line', 'pageBreak']);
     expect(FORM_TOOLS.find((x) => x.kind === 'commandButton')!.labelKey).toBe('ribbon.cmd.button');
     expect(FORM_TOOLS.find((x) => x.kind === 'pageBreak')!.labelKey).toBe('ribbon.cmd.insertPageBreak');
   });

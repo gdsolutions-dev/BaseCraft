@@ -1,8 +1,8 @@
 // Onglets de documents ; la vue de chacun vient du registre documentViews (type + mode).
 import { AppWindow, FileCode2, FileSearch, FileText, Network, Table, X, Zap, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { TableSummary } from '../../shared/api';
-import type { AppAction, AppState, DocKind, DocTab } from '../state/app-state';
+import { isServerKind, type TableSummary } from '../../shared/api';
+import { hosted, isPopup, type AppAction, type AppState, type DocKind, type DocTab } from '../state/app-state';
 import { docTabId, showsKind } from './doc-tab-ids';
 import { DocumentView } from './document-views';
 import { inertRef, setModalTabSlot, useModalTab } from './modal-tab';
@@ -29,7 +29,7 @@ interface Props { state: AppState; readOnly: boolean; linkOf(tab: DocTab): Table
 export function DocumentTabs({ state, readOnly, linkOf, dispatch, onClose, showTabs, formIcon }: Props) {
   const { t } = useTranslation();
   const modalTab = useModalTab();   // a Query Builder: its tab is the only one that answers until it closes
-  const tabs = state.tabs.filter((x) => !x.dialog);   // a dialog form is shown by DialogHost (R12), not as a tab
+  const tabs = state.tabs.filter(hosted);   // a dialog form is shown by DialogHost (R12), a pop-up by PopupHost: not as tabs
   const front = frontTabId(state);
   if (!tabs.length) {
     return <main className="docs card"><div className="doc-empty muted">{t('nav.openHint')}</div></main>;
@@ -81,7 +81,7 @@ export function DocumentTabs({ state, readOnly, linkOf, dispatch, onClose, showT
         // opener stays active: its dialog closing is no coming back to it (no reading again under a macro's SetValue that follows)
         return (
           <section key={x.id} id={`doc-${x.id}`} role={showTabs ? 'tabpanel' : undefined} className="doc" hidden={!!modalTab || x.id !== front}>
-            <DocumentView tab={x} active={x.id === front} readOnly={readOnly || !!link} link={link} dispatch={dispatch} tabs={state.tabs}
+            <DocumentView tab={x} active={x.id === front} readOnly={readOnly || (!!link && !isServerKind(link.kind))} link={link} dispatch={dispatch} tabs={state.tabs}
               designOpen={state.tabs.some((o) => o.id !== x.id && o.kind === 'table' && o.name === x.name && o.mode === 'design')} />
           </section>
         );
@@ -91,14 +91,14 @@ export function DocumentTabs({ state, readOnly, linkOf, dispatch, onClose, showT
 }
 
 /** The tab shown in front: the active one, or under a dialog form the tab that opened the first dialog (R12). */
-function frontTabId(state: AppState): string | null {
+export function frontTabId(state: AppState): string | null {
   let tab = state.tabs.find((x) => x.id === state.activeId);
-  while (tab?.dialog) { const opener = tab.openerId; tab = state.tabs.find((x) => x.id === opener); }
+  while (tab && (tab.dialog || isPopup(tab))) { const opener = tab.openerId; tab = state.tabs.find((x) => x.id === opener); }
   return tab?.id ?? null;
 }
 
 /** The name of the document that opened the Query Builder (the active one), as its tab shows it. */
-function modalLabel(state: AppState, t: (k: string) => string): string {
+export function modalLabel(state: AppState, t: (k: string) => string): string {
   const tab = state.tabs.find((x) => x.id === state.activeId);
   return !tab ? '' : tab.kind === 'relations' ? t('relations.title') : tab.name;
 }

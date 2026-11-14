@@ -2,13 +2,16 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type AggregateOptions } from 'node:sqlite';
-import { BC_LINKS_DDL, BC_OBJECTS_DDL, BC_RELATIONS_DDL, BC_RESOURCES_DDL, BC_SOURCES_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
+import { BC_ATTACHMENTS_DDL, BC_LINKS_DDL, BC_OBJECTS_DDL, BC_RELATIONS_DDL, BC_RESOURCES_DDL, BC_SOURCES_DDL, MIGRATIONS } from './migrations'; // migrations.ts only imports types from here
+import { withTextOrder } from '../../shared/expr/library';
 import { fold, SQL_AGGREGATES, SQL_FUNCTIONS } from '../../shared/expr/sql';
 import { inTransaction } from './tx';
+import { readSortOrder } from './sort-order';
+import { DEFAULT_NEW_SORT_ORDER, sortKey, type SortOrderId } from '../../shared/sort-orders';
 
 export const FILE_EXTENSION = '.basecraft';
 export const APPLICATION_ID = 0x42435246; // 'BCRF'
-export const CURRENT_FORMAT = { major: 1, minor: 4 };
+export const CURRENT_FORMAT = { major: 1, minor: 5 };
 
 /** Every CREATE TABLE of a new base's bc_* tables, in order (createBaseFile runs them; openPlainSqlite runs them as TEMP). */
 export const SYSTEM_DDL: readonly string[] = [
@@ -21,6 +24,7 @@ export const SYSTEM_DDL: readonly string[] = [
   BC_SOURCES_DDL,
   BC_LINKS_DDL,
   BC_RESOURCES_DDL,
+  BC_ATTACHMENTS_DDL,
 ];
 
 export interface BaseMeta {
@@ -53,18 +57,29 @@ export interface OpenedBase {
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1');
 
 export function registerFunctions(db: DatabaseSync): void {
+  // The base's sort order (sort-order.ts): bc_okey is a text's key; bc_skey (queries' ORDER BY) takes it for texts. `legacy` is bc_fold, as bc_skey already is.
+  const order = readSortOrder(db).applied;
+  const key = sortKey(order);
+  // Every function that may compare texts (compareText) runs with the base's order as the text order.
+  const own = <A extends unknown[], R>(fn: (...a: A) => R) => withTextOrder(order, fn);
   db.function('bc_fold', { deterministic: true }, (x) => (x === null || x === undefined ? null : fold(String(x))));
   // Fonctions des expressions compilées par sql.ts : seulement dans les requêtes générées, jamais dans le schéma.
-  for (const [name, { deterministic, fn }] of Object.entries(SQL_FUNCTIONS)) db.function(name, { deterministic, varargs: true, useBigIntArguments: true }, fn);
+  for (const [name, { deterministic, fn }] of Object.entries(SQL_FUNCTIONS)) db.function(name, { deterministic, varargs: true, useBigIntArguments: true }, own(fn));
+  db.function('bc_okey', { deterministic: true }, (x) => (x === null || x === undefined ? null : key(String(x))));
+  if (order !== 'legacy') {
+    const skey = SQL_FUNCTIONS.bc_skey!.fn;
+    db.function('bc_skey', { deterministic: true, varargs: true, useBigIntArguments: true }, (x) => (typeof x === 'string' ? key(x) : skey(x)));
+  }
   for (const [name, a] of Object.entries(SQL_AGGREGATES)) {
-    db.aggregate(name, { ...a, varargs: true, useBigIntArguments: true } as unknown as AggregateOptions);
+    db.aggregate(name, { ...a, step: own(a.step), result: own(a.result), varargs: true, useBigIntArguments: true } as unknown as AggregateOptions);
   }
 }
 
 /** Every function registerFunctions adds (the SQL authorizer allows only these, plus count, rank and row_number). */
-export const REGISTERED_FUNCTIONS: ReadonlySet<string> = new Set(['bc_fold', ...Object.keys(SQL_FUNCTIONS), ...Object.keys(SQL_AGGREGATES)]);
+export const REGISTERED_FUNCTIONS: ReadonlySet<string> = new Set(['bc_fold', 'bc_okey', ...Object.keys(SQL_FUNCTIONS), ...Object.keys(SQL_AGGREGATES)]);
 
-export function createBaseFile(filePath: string, appVersion: string): void {
+/** `sortOrder`: the new base's order (Options › General); absent: the default of a new base. */
+export function createBaseFile(filePath: string, appVersion: string, sortOrder: SortOrderId = DEFAULT_NEW_SORT_ORDER): void {
   if (fs.existsSync(filePath)) throw new BaseFileError('exists');
   const db = new DatabaseSync(filePath);
   try {
@@ -77,7 +92,7 @@ export function createBaseFile(filePath: string, appVersion: string): void {
     ins.run('app_version', appVersion);
     ins.run('db_uuid', crypto.randomUUID());
     ins.run('created_at', new Date().toISOString());
-    ins.run('options', '{}');
+    ins.run('options', JSON.stringify({ sortOrder }));
     db.exec('COMMIT');
   } catch (e) {
     db.close();

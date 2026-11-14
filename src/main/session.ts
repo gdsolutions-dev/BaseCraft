@@ -6,15 +6,17 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, realpathSync, renameSync, r
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type {
   ActionResult, AutoCorrectReport, PropertyItem, PropertyUpdate, CascadeChild, CompactResult, DeleteResult, QueryRef, RunActionOptions, FieldFilter, LinkFileInfo, LinkInfo, LinkResult, LinkState, LogLabels, LookupData, LookupRow, NameChange, ObjectKind, ObjectSummary, ObjRef, OpResult, Relation,
   RelationResult, RelationsLayout, RenameResult, RowRef, SaveTableRequest, SaveTableResult, ServerLinkInfo, SessionState, SplitResult,
 } from '../shared/api';
-import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from '../shared/record-source';
+import type { RecordSourceRef, SourceField, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from '../shared/record-source';
 import type { CellInput, SqlValue } from '../shared/coerce';
-import { defaultProps, foldName, lookupOf, quoteIdent, sameName, serverComputed, shownColumns, validateDesign, type FieldDef, type FieldProps, type TableDesign } from '../shared/field-types';
-import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from '../shared/import-text';
+import { defaultProps, foldName, isCalculated, lookupOf, quoteIdent, sameName, serverComputed, shownColumns, validateDesign, type FieldDef, type FieldProps, type TableDesign } from '../shared/field-types';
+import { sanitizeTableName, type ImportPlan, type ImportProgress, type ImportResult, type ImportSpec, type TextPreview } from '../shared/import-text';
+import type { OdbcRequest } from '../shared/odbc';
+import { CACHE_TEXTS, connectionString, defaultRunner, importOdbcTable, linkConnection, odbcLabel, splitPassword, type OdbcRunner, type OdbcTable } from './import/odbc';
 import type { MigrateRequest, MigrateResult, ServerImportResult } from '../shared/migrate';
 import { localeInfo, type LocaleInfo } from '../shared/locale-format';
 import { alterTable } from './db/alter';
@@ -22,7 +24,7 @@ import { applyAutoCorrect, applyPropertyUpdates } from './db/autocorrect';
 import { planAutoCorrect, propertyTargets, type AutoCorrectPlan, type AutoCorrectWorld } from '../shared/autocorrect/plan';
 import { saveTableChanges } from '../shared/autocorrect/sql';
 import { compactBase, vacuumInto, type CopyDeps } from './db/copy-file';
-import { backupCopy, BaseFileError, createBaseFile, openBaseFile } from './db/file-format';
+import { backupCopy, BaseFileError, createBaseFile, openBaseFile, registerFunctions, SYSTEM_DDL } from './db/file-format';
 import { navForget } from './db/navigation';
 import { clearThemeOverrides, copyObject, deleteObject, getObject, listObjects, renameObject, saveObject, setObjectDescription } from './db/objects';
 import { acquireLock, peekLock, takeOverStaleLock, type HeldLock, type LockDeps, type LockInfo } from './db/lock';
@@ -44,18 +46,22 @@ import { inTransaction, inTransactionAsync } from './db/tx';
 import { countViolations } from './db/rules';
 import { deleteRelation, listRelations, relationsLayout, saveRelation, saveRelationsLayout } from './db/relations';
 import { baseTheme, saveBaseTheme } from './db/theme';
+import { attachmentNames, addAttachments, facesOf, purgeOrphanSets, getAttachment, listAttachments, previewAttachment, removeAttachment, type AttachmentInfo } from './db/attachments';
+import type { AttachmentFace } from '../shared/attachments';
 import { addResource, getResources, listResources, removeResource, replaceResource, type ResourceInfo } from './db/resources';
 import type { Theme } from '../shared/design/theme';
 import { navOptions, saveNavOptions } from './db/navigation';
 import type { NavOptions } from '../shared/nav-view';
+import { applyPendingSortOrder, readSortOrder, restoreSortOrder, setPendingSortOrder, type SortOrderState } from './db/sort-order';
+import type { SortOrderId } from '../shared/sort-orders';
 import { peekStartup, saveStartupOptions, startupOptions } from './db/startup';
 import type { StartupOptions } from '../shared/startup';
 import type { SheetLayout } from '../shared/sheet-layout';
 import { writeTextExport } from './exchange/export-text';
 import { writeExcelExport } from './exchange/export-excel';
 import { writeMarkupExport } from './exchange/export-markup';
-import { deleteSavedExport, loadSavedExports, saveSavedExport } from './exchange/saved';
-import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, type ExportTextSpec, type SavedExport } from '../shared/exchange';
+import { deleteSavedExport, deleteSavedImport, loadSavedExports, loadSavedImports, saveSavedExport, saveSavedImport } from './exchange/saved';
+import { EXCEL_SPEC, type ExcelPreview, type ExportResult, type ExportSource, type ExportTextSpec, type SavedExport, type SavedImport } from '../shared/exchange';
 import { deleteSpec, loadSpecs, saveSpec } from './import/specs';
 import { previewText, runImport, type ImportTexts } from './import/text-import';
 import { excelSource, previewExcel, readSheet } from './exchange/excel-read';
@@ -70,7 +76,7 @@ import { actionCount, runAction } from './query/action';
 import { activeContent, type ActiveContent } from './db/active-content';
 import { isWritable, LinkedSources, sourceKindOf, type SourceConn } from './links/connections';
 import {
-  addLinks, addServerLinks, findLink, isLinkName, linkRows, relinkRows, relinkServerRows, removeLink, resolveSourcePath, setLinkDescription, setServerDesign, serverSourceFor, sourceRows,
+  addLinks, addOdbcLinks, addServerLinks, findLink, ODBC, isLinkName, linkRows, relinkRows, patchLinkMeta, relinkServerRows, removeLink, resolveSourcePath, setLinkDescription, setServerDesign, serverSourceFor, sourceRows,
   type LinkRow, type SourceRow,
 } from './links/store';
 import { CONNECTORS, isServerKind, type ConnectorRegistry } from './connectors/registry';
@@ -82,10 +88,11 @@ import {
 } from './connectors/remote-data';
 import { remoteActionCount, remoteRunAction } from './connectors/remote-action';
 import { inspectAccess } from './links/access';
-import { withMetadata } from './links/meta';
-import { refusedQueries, runMigration, switchLocal } from './migrate/run';
+import { META_KEYS, withMetadata } from './links/meta';
+import { refusedQueries, relinkData, runMigration, runMigrationFiles, switchLocal, type DataFile } from './migrate/run';
 import { fold } from '../shared/expr/sql';
 import { isModuleName, parseModuleDef } from '../shared/python/module-def';
+import { codeBehindRefusal, copyCodeBehind, deleteCodeBehind, hasCodeBehind, renameCodeBehind } from './db/code-behind';
 import { dataMacrosIssue, type DataMacros } from '../shared/macro/data-macro';
 import { chartData } from './chart-data';
 import type { ChartData, ChartDataRequest } from '../shared/chart/query';
@@ -104,7 +111,16 @@ export interface SessionDeps {
   origin?: string; // the original of a local copy (C3 R14): links resolve against its folder, fileName is its name
   runtime?: boolean; // BaseCraft Runtime: a front-end's local tables are read-only (C3 R15)
   connectors?: ConnectorRegistry; // test seam (C4 R1); default CONNECTORS
+  odbcScript?: string; // D1: resources/odbc.ps1 (Windows), main's own path, for the ODBC links read at login and Refresh
+  odbcRunner?: OdbcRunner; // test seam (D1, e2e); default defaultRunner(odbcScript)
 }
+
+const ODBC_KEY = /^odbc:\/\/(.+)$/;
+/** D1: an ODBC source's stored params (tolerant: a file edited elsewhere). */
+const odbcParams = (s: SourceRow): { connection: string; user: string; label: string } => {
+  const p = (s.params ?? {}) as Record<string, unknown>;
+  return { connection: typeof p.connection === 'string' ? p.connection : '', user: typeof p.user === 'string' ? p.user : '', label: typeof p.label === 'string' ? p.label : '' };
+};
 
 export class ReadOnlyError extends Error {
   constructor() {
@@ -156,6 +172,8 @@ export class Session {
   private readonly links: LinkedSources;
   /** C4: the server sources' connections and credentials. */
   private readonly remote: RemoteSources;
+  /** D1: the logins of the ODBC sources (by source id) of this session: never written, never pushed from the store. */
+  private readonly odbcCreds = new Map<string, { user: string; password: string }>();
   /** R16: moves on every dataStamp() while a server connection is open. */
   private remoteTicks = 0;
   /** C6 R1, R7: each pass-through's last result, by foldName; dropped when the query is saved, renamed or deleted, and at close.
@@ -576,7 +594,7 @@ export class Session {
     const sources = sourceRows(front);
     const links = linkRows(front).filter((l) => !this.shadowed(front, l.name)).map((l): TableSummary => {
       const s = sources.find((x) => x.id === l.sourceId);
-      const link = { kind: s?.kind ?? '', path: !s ? '' : isServerKind(s.kind) ? this.serverLabel(s) : resolveSourcePath(s, this.frontEndPath) };
+      const link = { kind: s?.kind ?? '', path: !s ? '' : s.kind === ODBC ? odbcParams(s).label : isServerKind(s.kind) ? this.serverLabel(s) : resolveSourcePath(s, this.frontEndPath) };
       return { name: l.name, ...(l.description !== undefined ? { description: l.description } : {}), link };
     });
     const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -651,6 +669,7 @@ export class Session {
 
   /** `labels`: the log table's texts (O4 R9), in the UI language; without them nothing is logged (tests only; ipc always passes labels). */
   async saveTable(req: SaveTableRequest, labels?: LogLabels, offerPropertyUpdates = false): Promise<SaveTableResult> {
+    if (req.originalName !== null && this.remoteOf(req.originalName)) return this.saveLinkMeta(req.originalName, req.design);
     if (req.originalName !== null) this.noLink(req.originalName);
     const db = this.structureDb();
     try {
@@ -673,6 +692,23 @@ export class Session {
       if (e instanceof DanglingKeyError) return { ok: false, reason: 'danglingKey', table: e.table };
       throw e;
     }
+  }
+
+  /** The Design view of a server link (C7 R11): its BaseCraft properties (META_KEYS, the table's texts) saved in bc_links.props.meta,
+   *  each as it differs from what the server gives; its structure stays the server's (fields not already linked are ignored). */
+  private saveLinkMeta(name: string, design: TableDesign): SaveTableResult {
+    const db = this.writeDb();
+    const link = this.linkOf(name)!;
+    const fields: Record<string, Partial<FieldProps>> = {};
+    for (const fd of design.fields) {
+      const cached = link.server?.fields.find((x) => sameName(x.name, fd.name));
+      if (!cached) continue;
+      const own = fd.props as Record<string, unknown>, theirs = cached.props as Record<string, unknown>;
+      fields[cached.name] = Object.fromEntries(META_KEYS.filter((k) => k !== 'columnWidth').map((k) => [k, JSON.stringify(own[k]) === JSON.stringify(theirs[k]) ? undefined : own[k]]));
+    }
+    const table = Object.fromEntries((['description', 'validationRule', 'validationText'] as const).flatMap((k) => (design[k] ? [[k, design[k]]] : [])));
+    patchLinkMeta(db, link.name, fields, table);
+    return { ok: true };
   }
 
   async renameTable(oldName: string, newName: string, labels?: LogLabels): Promise<RenameResult> {
@@ -734,7 +770,7 @@ export class Session {
     const src = dataDesign(at.db, at.table);
     const dst = this.dataDesign(to);
     if (!at.link && sameName(src.name, dst.name)) return { appended: 0, refused: 0 };
-    const map = dst.fields.filter((d) => d.props.type !== 'autoNumber').flatMap((d) => {
+    const map = dst.fields.filter((d) => d.props.type !== 'autoNumber' && d.props.type !== 'attachment').flatMap((d) => {
       const s = src.fields.find((x) => sameName(x.name, d.name));
       return s ? [{ from: s.name, to: d.name }] : [];
     });
@@ -806,7 +842,7 @@ export class Session {
     }
     const c = conn();
     const state = c.db && !isTableName(c.db, l.remote) ? 'missingTable' : c.state;
-    return { name: l.name, sourceId: l.sourceId, kind, path: c.path, state, ...(c.holder ? { holder: c.holder, stale: c.stale ?? false } : {}), risk: c.risk,
+    return { name: l.name, sourceId: l.sourceId, kind, path: kind === ODBC ? odbcParams(s!).label : c.path, state, ...(c.holder ? { holder: c.holder, stale: c.stale ?? false } : {}), risk: c.risk,
       ...(c.shared ? { shared: true as const } : {}) };
   }
   /** Closes the sources of `ids` no link uses any more (their locks released); linkedLocks follows. */
@@ -859,9 +895,79 @@ export class Session {
       return c;
     };
     const infos: LinkInfo[] = [];
-    for (const l of links) infos.push(this.serverRow(l.sourceId) ? await this.refreshServer(l) : this.linkInfo(l, () => refresh(l.sourceId)));
+    for (const l of links) infos.push(this.serverRow(l.sourceId) ? await this.refreshServer(l) : l.odbc ? await this.refreshOdbc(l) : this.linkInfo(l, () => refresh(l.sourceId)));
     if (this.syncLinkedLocks()) this.deps.onStateChanged?.(this._state);
     return infos;
+  }
+  /** D1: Refresh Link of an ODBC link: its source's tables read again with this session's login (the first refresh of the session
+   *  has none: needsLogin, as a server's; opening the table asks it). Another error: cannotConnect with that `error`. */
+  private async refreshOdbc(l: LinkRow): Promise<LinkInfo> {
+    const info = (state?: LinkState, error?: string): LinkInfo => ({ ...this.linkInfo(findLink(this.conn(), l.name) ?? l, () => this.source(l.sourceId)), ...(state ? { state } : {}), ...(error ? { error } : {}) });
+    if (!this.odbcCreds.has(l.sourceId)) return info('needsLogin');
+    try {
+      await this.loadOdbc(l.sourceId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (!msg.startsWith('bc:')) throw e;
+      return info('cannotConnect', msg);
+    }
+    return info();
+  }
+  /** D1: the in-memory copy of the tables the links of source `id` stand for, read with the login of this session. */
+  private async loadOdbc(id: string): Promise<void> {
+    const s = sourceRows(this.conn()).find((x) => x.id === id);
+    const cred = this.odbcCreds.get(id);
+    if (!s || !cred) throw new Error('bc:invalidArgument');
+    const items = linkRows(this.conn()).filter((l) => l.sourceId === id && l.odbc).map((l) => ({ name: l.name, table: l.odbc!.table, schema: l.odbc!.schema }));
+    this.links.setOdbc(id, await this.odbcCache(linkConnection(odbcParams(s).connection, cred.user, cred.password), items, this.odbcRunner()));
+  }
+  private odbcRunner(): OdbcRunner { return this.deps.odbcRunner ?? defaultRunner(this.deps.odbcScript ?? ''); }
+  /** One in-memory SQLite (query_only, as an Access link's) holding `items`, each read through the ODBC runner. */
+  private async odbcCache(connection: string, items: { name: string; table: string; schema: string }[], runner: OdbcRunner): Promise<DatabaseSync> {
+    const db = new DatabaseSync(':memory:');
+    try {
+      registerFunctions(db);
+      for (const ddl of SYSTEM_DDL) db.exec(ddl);
+      for (const it of items) {
+        const r = await importOdbcTable(db, runner, connection, { name: it.table, schema: it.schema }, it.name, this.info, CACHE_TEXTS, async () => {});
+        if (!r.result.ok) throw new Error('bc:unsupportedTable');
+      }
+      db.exec('PRAGMA query_only=ON');
+      return db;
+    } catch (e) { db.close(); throw e; }
+  }
+  /** D1: External Data > ODBC Database > Link: `names` (inspectOdbc's) linked, read-only, to the tables of the source. Their rows are
+   *  read now and kept in memory for the session (Refresh Link reads them again); the connection string is stored without its
+   *  password, the login only in this session. One the source no longer lists: missingTables, nothing linked. */
+  async linkOdbcTables(req: OdbcRequest, names: string[], script: string, runner: OdbcRunner = this.deps.odbcRunner ?? defaultRunner(script)): Promise<LinkResult> {
+    const front = this.writeDb();
+    const found = await runner.tables(connectionString(req));
+    const offered = this.freeNames(found.map((t) => sanitizeTableName(t.name, 'Table')));
+    const wanted = names.filter((n, i) => names.findIndex((m) => sameName(m, n)) === i);
+    const picked = wanted.map((n) => found[offered.indexOf(n)]);
+    const missing = wanted.filter((_, i) => !picked[i]);
+    if (missing.length) return { ok: false, reason: 'missingTables', names: missing };
+    const { base, password } = splitPassword(connectionString({ ...req, user: '', password: '' }));
+    const cred = { user: req.user, password: req.password || password };
+    const items = wanted.map((name, i) => ({ name, table: (picked[i] as OdbcTable).name, schema: (picked[i] as OdbcTable).schema }));
+    const cache = await this.odbcCache(linkConnection(base, cred.user, cred.password), items, runner); // nothing is stored when the read fails
+    try {
+      const id = addOdbcLinks(front, { connection: base, user: req.user, label: odbcLabel(req) }, items);
+      this.odbcCreds.set(id, cred);
+      this.links.setOdbc(id, cache);
+    } catch (e) { cache.close(); throw e; }
+    return { ok: true };
+  }
+  /** D1: the login dialog's answer for an ODBC source (key `odbc://<id>`): its tables read with it (true); a login the source
+   *  refuses (bc:odbc|failed|...) is false; anything else rejects. */
+  private async loginOdbc(id: string, user: string, password: string): Promise<boolean> {
+    const had = this.odbcCreds.get(id);
+    this.odbcCreds.set(id, { user, password });
+    try { await this.loadOdbc(id); return true; } catch (e) {
+      if (had) this.odbcCreds.set(id, had); else this.odbcCreds.delete(id);
+      if (e instanceof Error && e.message.startsWith('bc:odbc|failed|')) return false;
+      throw e;
+    }
   }
   /** `l`'s table as its server holds it now (null: gone). */
   private serverTable(c: Connection, l: LinkRow): Promise<RemoteTable | null> {
@@ -895,7 +1001,7 @@ export class Session {
   relink(names: string[], path: string): LinkResult {
     const front = this.writeDb();
     const links = this.linksNamed(names);
-    if (links.some((l) => this.serverRow(l.sourceId))) throw new Error('bc:invalidArgument'); // a server link moves by relinkServer
+    if (links.some((l) => this.serverRow(l.sourceId) || l.odbc)) throw new Error('bc:invalidArgument'); // a server link moves by relinkServer; an ODBC link is not moved (D1)
     if (this.isSelf(path)) return { ok: false, reason: 'self', names: [] };
     const { kind, tables } = this.links.inspect(path);
     const missing = links.filter((l) => !tables.some((t) => !t.unsupported && sameName(t.name, l.remote))).map((l) => l.name);
@@ -987,9 +1093,15 @@ export class Session {
   serverKeys(): string[] { return this.remote.keys(); }
   setCredential(key: string, user: string, password: string): void { this.remote.setCredential(key, { user, password }); }
   /** R10: the login dialog's answer: connects with it (true) or the server refuses it (false, forgotten). */
-  login(key: string, user: string, password: string): Promise<boolean> { return this.remote.login(key, { user, password }); }
+  login(key: string, user: string, password: string): Promise<boolean> {
+    const id = ODBC_KEY.exec(key)?.[1];
+    return id !== undefined ? this.loginOdbc(id, user, password) : this.remote.login(key, { user, password });
+  }
   /** The login dialog's defaults: the source's `user` param and the connector's label. */
-  loginDefaults(key: string): { user: string; label: string } { return this.remote.loginDefaults(key); }
+  loginDefaults(key: string): { user: string; label: string } {
+    const s = sourceRows(this.conn()).find((x) => x.id === ODBC_KEY.exec(key)?.[1]);
+    return s?.kind === ODBC ? { user: odbcParams(s).user, label: odbcParams(s).label } : this.remote.loginDefaults(key);
+  }
   /** R12 (Stop): called out of db-host's queue, while another call runs: cancels the running remote statement (true), never
    *  touches the base. False: nothing remote running (a local query is stopped by the kill). */
   async interrupt(): Promise<boolean> {
@@ -1027,15 +1139,16 @@ export class Session {
   }
 
   /** Datasheet column widths of a local table; a link's belong to its file. */
-  // ponytail: Access saves a link's layout in the front-end; add with bc_links.props.meta later.
   saveColumnWidths(table: string, widths: Record<string, number>): void {
+    const server = this.remoteOf(table); // a server link keeps them in bc_links.props.meta (C7 R11)
+    if (server) return patchLinkMeta(this.writeDb(), server.link.name, Object.fromEntries(Object.entries(widths).map(([k, w]) => [k, { columnWidth: w }])));
     this.noLink(table);
     setColumnWidths(this.writeDb(), table, widths);
   }
 
   /** The rest of a local table's datasheet layout (see setSheetLayout). */
   saveSheetLayout(table: string, layout: SheetLayout): void {
-    this.noLink(table);
+    if (this.linkOf(table)) return; // ponytail: a link keeps its column widths only (saveColumnWidths); the rest of its layout lasts the session
     if (!setSheetLayout(this.writeDb(), table, layout)) throw new Error('bc:notFound');
   }
 
@@ -1106,6 +1219,31 @@ export class Session {
     const { db, table: t } = this.where(table, true);
     return deleteRowsWithMacros(db, dataDesign(db, t), rowids.map(localRowid), this.info);
   }
+  /** Attachment fields (C5): on the file that owns the table (a linked BaseCraft file's own bc_attachments); a server link: bc:serverNotSupported. */
+  attachmentList(table: string, field: string, rowid: RowRef): AttachmentInfo[] {
+    const { db, table: t } = this.where(table);
+    return listAttachments(db, t, field, localRowid(rowid));
+  }
+  attachmentAdd(table: string, field: string, rowid: RowRef, files: { name: string; data: Uint8Array }[]): string[] {
+    const { db, table: t } = this.where(table, true);
+    return addAttachments(db, t, field, localRowid(rowid), files);
+  }
+  attachmentRemove(table: string, field: string, rowid: RowRef, id: number): void {
+    const { db, table: t } = this.where(table, true);
+    removeAttachment(db, t, field, localRowid(rowid), id);
+  }
+  attachmentGet(table: string, field: string, rowid: RowRef, id: number): { name: string; data: Uint8Array } {
+    const { db, table: t } = this.where(table);
+    return getAttachment(db, t, field, localRowid(rowid), id);
+  }
+  attachmentFaces(table: string, field: string, rowids: RowRef[]): (AttachmentFace | null)[] {
+    const { db, table: t } = this.where(table);
+    return facesOf(db, t, field, rowids.map(localRowid));
+  }
+  attachmentPreview(table: string, field: string, rowid: RowRef, id: number): string | null {
+    const { db, table: t } = this.where(table);
+    return previewAttachment(db, t, field, localRowid(rowid), id);
+  }
   /** A table-field lookup resolves its Row Source in the file that owns the field (R6); a server link's, as the front-end
    *  resolves its names (C7 R12), its first LOOKUP_MAX rows read through pageSource. */
   async lookup(table: string, field: string): Promise<LookupData> {
@@ -1139,7 +1277,7 @@ export class Session {
     if (opts.localOnly) return out;
     const links = this.usableLinks();
     // C2 R8: an Access file has no relations, not loaded for them; a server's are not read in C4
-    const skip = new Set(sourceRows(front).filter((x) => x.kind === 'access' || isServerKind(x.kind)).map((x) => x.id));
+    const skip = new Set(sourceRows(front).filter((x) => x.kind === 'access' || x.kind === ODBC || isServerKind(x.kind)).map((x) => x.id));
     for (const id of new Set(links.map((l) => l.sourceId))) {
       if (skip.has(id)) continue;
       try {
@@ -1199,16 +1337,26 @@ export class Session {
     if (kind === 'module') { if (!isModuleName(name.normalize('NFC'))) return { ok: false, reason: 'badModuleName' }; parseModuleDef(definition); }
     if (kind === 'query') checkQueryDefinition(this.qc(), name.normalize('NFC'), definition, this.deps.connectors ?? CONNECTORS);
     if (kind === 'query') { this.dropSnapshot(name); if (originalName !== null) this.dropSnapshot(originalName); }
-    return saveObject(db, kind, name, definition, originalName);
+    if (!hasCodeBehind(kind)) return saveObject(db, kind, name, definition, originalName);
+    const to = name.normalize('NFC'), renamed = originalName !== null && !sameName(originalName, to);
+    if (originalName === null || renamed) { const no = codeBehindRefusal(db, kind, to, originalName ?? undefined, renamed ? originalName : undefined); if (no) return no; }
+    return inTransaction(db, () => {
+      const r = saveObject(db, kind, name, definition, originalName);
+      if (r.ok && renamed) renameCodeBehind(db, kind, originalName, to);
+      return r;
+    });
   }
   async renameObject(kind: ObjectKind, oldName: string, newName: string, labels?: LogLabels): Promise<RenameResult> {
     if (kind === 'query') this.dropSnapshot(oldName);
     const db = this.writeDb();
     const to = newName.normalize('NFC');
     if (kind === 'module' && !isModuleName(to)) return { ok: false, reason: 'badModuleName' };
+    const no = hasCodeBehind(kind) && !sameName(oldName, to) ? codeBehindRefusal(db, kind, to, oldName, oldName) : null;
+    if (no) return no;
     const { r, autoCorrect } = await this.autoCorrected(kind === 'module' || oldName === to ? [] : [{ k: 'object', kind, from: oldName, to }], labels, (then) =>
       inTransactionAsync(db, async () => {
         const x = renameObject(db, kind, oldName, newName);
+        if (x.ok && hasCodeBehind(kind)) renameCodeBehind(db, kind, oldName, to);
         if (x.ok) await then?.(db);
         return x;
       }));
@@ -1216,11 +1364,24 @@ export class Session {
   }
   deleteObject(kind: ObjectKind, name: string): OpResult {
     if (kind === 'query') this.dropSnapshot(name);
-    return deleteObject(this.writeDb(), kind, name);
+    const db = this.writeDb();
+    return inTransaction(db, () => {
+      const r = deleteObject(db, kind, name);
+      if (r.ok && hasCodeBehind(kind)) deleteCodeBehind(db, kind, name);
+      return r;
+    });
   }
   copyObject(kind: ObjectKind, name: string, newName: string): OpResult {
     const db = this.writeDb();
-    return kind === 'module' && !isModuleName(newName.normalize('NFC')) ? { ok: false, reason: 'badModuleName' } : copyObject(db, kind, name, newName);
+    if (kind === 'module' && !isModuleName(newName.normalize('NFC'))) return { ok: false, reason: 'badModuleName' };
+    if (!hasCodeBehind(kind)) return copyObject(db, kind, name, newName);
+    const no = codeBehindRefusal(db, kind, newName.normalize('NFC'), undefined, name);
+    if (no) return no;
+    return inTransaction(db, () => {
+      const r = copyObject(db, kind, name, newName);
+      if (r.ok) copyCodeBehind(db, kind, name, newName);
+      return r;
+    });
   }
   /** Properties dialog: a table keeps it in its metadata, an object in bc_objects. */
   setDescription(kind: ObjectKind | 'table', name: string, description: string | null): OpResult {
@@ -1265,7 +1426,8 @@ export class Session {
     const d = at.link ? tableDesign(at.db, at.table) : this.sourceTable(ref.name).d;
     const updatable = at.link ? at.writable && hasRealRowid(at.db, d) : !this.localReadOnly;
     const fields = d.fields.map((x) => ({ name: x.name, type: x.props.type, props: x.props, origin: { table: d.name, field: x.name } }));
-    return { fields, updatable, keyTable: d.name, parameters: [] };
+    const readOnly = d.fields.filter((x) => isCalculated(x.props)).map((x) => x.name); // Calculated fields: stored by the write layer, read-only in a form
+    return { fields, updatable, keyTable: d.name, parameters: [], ...(readOnly.length && !at.link ? { tables: [{ table: d.name, role: 'key' as const, readOnly, lookupBy: [] }] } : {}) };
   }
   /** Filtered as rows.page filters (compileFilter), and by `req.where`; `total` counts the kept rows. Contract 1.2: a sort or filter field the
    *  table lacks rejects bc:notFound, a criterion compileFilter refuses rejects bc:invalidArgument (rows.page keeps
@@ -1366,16 +1528,23 @@ export class Session {
     if (ctx.qc.remote!(b.source)) return remoteAutoLookup(ctx, b, values);
     return autoLookup(ctx.qc.dbOf(b.source, false), b, values, this.info);
   }
-  private exportPager(src: ExportSource): (offset: number, limit: number) => Promise<SourcePage> {
+  /** `fields`: the source's columns; an Attachment column of a table is exported as its files' names (a query's: its raw value, ponytail). */
+  private exportPager(src: ExportSource, fields: SourceField[] = []): (offset: number, limit: number) => Promise<SourcePage> {
     const { ref, params, sort, filter, where } = src;
-    return (offset, limit) => this.pageSource(ref, { offset, limit, ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
+    const att = ref.kind === 'table' && !this.remoteOf(ref.name) ? fields.flatMap((f, i) => (f.type === 'attachment' ? [i] : [])) : [];
+    return async (offset, limit) => {
+      const p = await this.pageSource(ref, { offset, limit, ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}) });
+      if (!att.length || ref.kind !== 'table') return p;
+      const { db, d } = this.sourceTable(ref.name);
+      return { ...p, rows: p.rows.map((row, r) => row.map((v, i) => (att.includes(i) && typeof p.rowids[r] === 'number' ? attachmentNames(db, d, d.fields.find((x) => x.name === fields[i]!.name)!, p.rowids[r] as number) : v))) };
+    };
   }
   /** Writes the source (the datasheet's pages: pageSource, with its parameters, sort and filter) to `path`, a path the main
    *  process got from a save dialog. Reads only: allowed on a read-only base. Throws bc:writeFailed; the old file is kept. */
   async exportText(src: ExportSource, spec: ExportTextSpec, path: string, texts: { yes: string; no: string },
     tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
     const { fields } = await this.describeSource(src.ref, src.params);
-    return writeTextExport({ fields, spec, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src) });
+    return writeTextExport({ fields, spec, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src, fields) });
   }
   /** The rows an export of `src` holds (the main process refuses an Excel export above the sheet limit before asking where). */
   async exportRowCount(src: ExportSource): Promise<number> { return (await this.exportPager(src)(0, 0)).total; }
@@ -1383,19 +1552,22 @@ export class Session {
    *  limit resolves { ok: false, reason: 'tooManyRows' } and writes nothing. */
   async exportExcel(src: ExportSource, path: string, sheet: string, tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
     const { fields } = await this.describeSource(src.ref, src.params);
-    return writeExcelExport({ fields, path, sheet, tick, info: this.info, page: this.exportPager(src) });
+    return writeExcelExport({ fields, path, sheet, tick, info: this.info, page: this.exportPager(src, fields) });
   }
   /** As exportText, to an XML file in Access's data format (`format` xml: `name`, the table or query, is the record element) or an
    *  HTML table (F1, F5). */
   async exportMarkup(src: ExportSource, format: 'xml' | 'html', name: string, path: string, texts: { yes: string; no: string },
     tick?: (done: number, total: number) => Promise<void>): Promise<ExportResult> {
     const { fields } = await this.describeSource(src.ref, src.params);
-    return writeMarkupExport({ format, name, fields, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src) });
+    return writeMarkupExport({ format, name, fields, path, tick, texts: { ...texts, info: this.info }, page: this.exportPager(src, fields) });
   }
   /** F4: the saved exports (reads), saved and deleted by name (a read-only base: ReadOnlyError). */
   savedExports(): Record<string, SavedExport> { return loadSavedExports(this.conn()); }
   saveSavedExport(name: string, e: SavedExport): void { saveSavedExport(this.writeDb(), name, e); }
   deleteSavedExport(name: string): void { deleteSavedExport(this.writeDb(), name); }
+  savedImports(): Record<string, SavedImport> { return loadSavedImports(this.conn()); }
+  saveSavedImport(name: string, i: SavedImport): void { saveSavedImport(this.writeDb(), name, i); }
+  deleteSavedImport(name: string): void { deleteSavedImport(this.writeDb(), name); }
   saveImportSpec(name: string, spec: ImportSpec): void { saveSpec(this.writeDb(), name, spec); }
 
   /** Active content (R3) and the base's identity, for the main process's decision (trust.ts). */
@@ -1406,6 +1578,9 @@ export class Session {
   saveStartup(o: StartupOptions): void {
     saveStartupOptions(o.dataFile !== startupOptions(this.conn()).dataFile ? this.structureDb() : this.writeDb(), o);
   }
+  /** C7: the base's sort order (applied, and the one waiting for Compact and Repair). */
+  sortOrder(): SortOrderState { return readSortOrder(this.conn()); }
+  setSortOrder(id: SortOrderId): void { setPendingSortOrder(this.writeDb(), id); }
   /** Navigation Pane options: read-only allowed. */
   navOptions(): NavOptions { return navOptions(this.conn()); }
   saveNavOptions(o: NavOptions): void { saveNavOptions(this.writeDb(), o); }
@@ -1514,23 +1689,35 @@ export class Session {
   async migrateToServer(req: MigrateRequest, tick: (p: ImportProgress) => Promise<void> = async () => {}): Promise<MigrateResult> {
     if (this._state.readOnly) return { ok: false, reason: 'readOnly' };
     if (startupOptions(this.conn()).dataFile) return { ok: false, reason: 'dataFile' }; // its front-ends link these tables (R2)
-    if (listTables(this.conn()).length === 0) return { ok: false, reason: 'noTables' }; // before connecting (the plan checks it again)
+    // A split front-end holds no table: its data file is migrated directly (relations, rows, designs read there), then its links follow.
+    const data = listTables(this.conn()).length === 0 ? this.dataFilesOf() : [];
+    if (!data.length && listTables(this.conn()).length === 0) return { ok: false, reason: 'noTables' }; // before connecting (the plan checks it again)
     let front: DatabaseSync;
     try { front = this.structureDb(); } catch (e) { if (e instanceof ReadOnlyError) return { ok: false, reason: 'readOnly' }; throw e; }
+    let files: DataFile[] = [];
+    try { files = data.map((f) => ({ id: f.id, db: this.sourceDb(f.id, false).db, backup: () => backupCopy(f.path) })); } catch { return { ok: false, reason: 'noTables' }; }
     const { connector, p } = this.connectorOf(req.kind, req.params);
     try {
       // no statement timeout on the run's connection (an index or a count on a GB-size table); Stop stays (R10). The links keep p's.
-      const r = await this.remote.once(req.kind, { ...(p as object), timeout: 0 }, true, (c, caps) => runMigration({
-        front, c, caps, kind: req.kind, params: p, label: connector.label(p), schema: req.schema, tick,
-        backup: () => backupCopy(this.path),
-        switchLocal: (tables, metas) => switchLocal(front, req.kind, p, tables, metas),
-        queries: () => refusedQueries(this.remoteCtx(), c, caps, serverSourceFor(front, req.kind, p)),
-      }));
+      const r = await this.remote.once(req.kind, { ...(p as object), timeout: 0 }, true, (c, caps) => {
+        const run = { c, caps, kind: req.kind, params: p, label: connector.label(p), schema: req.schema, tick,
+          queries: () => refusedQueries(this.remoteCtx(), c, caps, serverSourceFor(front, req.kind, p)) };
+        return files.length
+          ? runMigrationFiles(run, files, (f, tables, metas) => relinkData(front, f.id, req.kind, p, tables, metas))
+          : runMigration({ ...run, front, backup: () => backupCopy(this.path), switchLocal: (tables, metas) => switchLocal(front, req.kind, p, tables, metas) });
+      });
       if (r.ok) this.closeUnused([]); // the linked locks follow, the state with them
       return r;
     } finally {
       this.seq++; // every table became a link
     }
+  }
+
+  /** The BaseCraft data files the links of a split front-end go to (C8: one or several). */
+  private dataFilesOf(): { id: string; path: string }[] {
+    const front = this.conn();
+    return sourceRows(front).filter((s) => s.kind === 'basecraft' && linkRows(front).some((l) => l.sourceId === s.id))
+      .map((s) => ({ id: s.id, path: resolveSourcePath(s, this.frontEndPath) }));
   }
 
   /** External Data › Import › PostgreSQL / SQL Server (C7 R17): a structure call. `names` are names inspectServer offered (a name the
@@ -1557,6 +1744,42 @@ export class Session {
     } finally {
       this.seq++; // tables were created
     }
+  }
+
+  /** External Data › Import › ODBC Database (C4): the DSNs of this computer. `script`: resources/odbc.ps1 (Windows). */
+  odbcDsns(script: string, runner: OdbcRunner = this.deps.odbcRunner ?? defaultRunner(script)): Promise<string[]> { return runner.dsns(); }
+
+  /** The tables the source offers, with the names they would take here. Nothing is created. */
+  async inspectOdbc(req: OdbcRequest, script: string, runner: OdbcRunner = this.deps.odbcRunner ?? defaultRunner(script)): Promise<{ label: string; tables: ServerLinkInfo['tables'] }> {
+    const found = await runner.tables(connectionString(req));
+    const names = this.freeNames(found.map((t) => sanitizeTableName(t.name, 'Table')));
+    return { label: odbcLabel(req), tables: found.map((t, i) => ({ name: names[i]!, remote: t.name, ...(t.schema ? { schema: t.schema } : {}), taken: false, readOnly: false })) };
+  }
+
+  /** Copies the tables `names` (inspectOdbc's) into new local tables, one transaction each (ponytail: a failure leaves the tables copied
+   *  before it; the server import is all or nothing). One the source no longer lists: missingTables, nothing created. */
+  async importOdbcTables(req: OdbcRequest, names: string[], texts: ImportTexts, script: string, tick: (p: ImportProgress) => Promise<void> = async () => {},
+    runner: OdbcRunner = this.deps.odbcRunner ?? defaultRunner(script)): Promise<ServerImportResult> {
+    const db = this.structureDb();
+    const connection = connectionString(req);
+    const found = await runner.tables(connection);
+    const offered = this.freeNames(found.map((t) => sanitizeTableName(t.name, 'Table')));
+    const wanted = names.filter((n, i) => names.findIndex((m) => sameName(m, n)) === i);
+    const picked = wanted.map((n) => found[offered.indexOf(n)]);
+    const missing = wanted.filter((_, i) => !picked[i]);
+    if (missing.length) return { ok: false, reason: 'missingTables', names: missing };
+    const done: Extract<ServerImportResult, { ok: true }>['tables'] = [];
+    try {
+      for (const [i, t] of picked.entries()) {
+        const name = wanted[i]!;
+        const r = await importOdbcTable(db, runner, connection, t!, name, this.info, texts, (d, total) => tick({ done: d, total, label: name }));
+        if (!r.result.ok) throw new Error('bc:unsupportedTable'); // a design BaseCraft refuses (the name was free a moment ago)
+        done.push({ name, remote: t!.name, rows: r.rows, skipped: r.skipped });
+      }
+    } finally {
+      this.seq++; // tables were created
+    }
+    return { ok: true, tables: done };
   }
 
   /** External Data › Import › Access (E1): the tables of the Access file `path` (a path the dialog picked) with the names they would take. */
@@ -1645,9 +1868,11 @@ export class Session {
   /** Compact and Repair (A6): needs the write lock, which it keeps; the handle is closed for the swap, then reopened. */
   async compact(): Promise<CompactResult> {
     this.structureDb();
+    let order: SortOrderState | null = null;
     try {
-      return await compactBase({
+      const r = await compactBase({
         db: () => this.conn(), path: this.path,
+        beforeCopy: () => { purgeOrphanSets(this.conn()); order = applyPendingSortOrder(this.conn()); }, // unreferenced files go first. C7: the copy, and the reopened base, take the new order; the backup keeps the old
         close: () => { this.db?.close(); this.db = null; },
         reopen: () => {
           const db = this.openFile(this.path, 'write', this.deps.appVersion, { migrate: this.deps.migrate }).db;
@@ -1655,7 +1880,10 @@ export class Session {
           this.db = db;
         },
       });
+      if (!r.ok && order && this.db) restoreSortOrder(this.db, order); // corrupt: nothing was replaced
+      return r;
     } catch (e) {
+      if (order && this.db) { try { restoreSortOrder(this.db, order); } catch (e2) { console.error(e2); } } // the compact failed: the order chosen stays pending
       // No connection left (the reopen failed): the main process closes the base (BaseLostError, kept across the host).
       if (!this.db && e instanceof Error) e.name = 'BaseLostError';
       throw e;

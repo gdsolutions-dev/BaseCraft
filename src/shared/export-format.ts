@@ -6,7 +6,7 @@ import type { SourceField } from './record-source';
 
 export interface CellTexts { info: LocaleInfo; yes: string; no: string }
 
-const TEXT_TYPES = new Set(['shortText', 'longText', 'hyperlink']);
+const TEXT_TYPES = new Set(['shortText', 'longText', 'hyperlink', 'attachment']); // an Attachment cell is written as its files' names
 export const isTextField = (f: SourceField): boolean => TEXT_TYPES.has(f.type);
 
 /** null : champ vide. Texte : tel que stocké ; nombres : chiffres canoniques, séparateur décimal régional ; dates : date courte

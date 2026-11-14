@@ -7,6 +7,7 @@ import { LIB_FILES } from './install-lib'
 
 export type PythonState = 'off' | 'loading' | 'idle' | 'running'
 export type BridgeHandler = (args: unknown[]) => Promise<unknown>
+export type JediCompletions = { prefix: number; items: { label: string; type: string; detail: string }[] }
 export type ExportsResult = { exports: ModuleExport[]; error: { line: number; col: number; message: string } | null }
 
 export class PythonError extends Error {
@@ -160,6 +161,14 @@ export function createPythonHost() {
     exec: async (code: string) => { await gated({ op: 'exec', code }) },
     call: (module: string, fn: string, args: unknown[], opts?: { quiet?: boolean }) => gated({ op: 'call', module, fn, args }, !!opts?.quiet),
     exports: (source: string) => send({ op: 'exports', source }) as Promise<ExportsResult>,
+    /** Jedi completions at (line from 1, column from 0). Not counted as a run (no busy state, no interrupt target): the caller times it out. */
+    complete: async (source: string, line: number, column: number): Promise<JediCompletions> => {
+      if (!contentEnabled()) throw new Error('bc:contentDisabled')
+      await ensure()
+      const s = session
+      if (!s) throw new Error('bc:pythonRestarted')
+      return await Promise.race([s.server.request({ op: 'complete', source, line, column }), s.dead]) as JediCompletions
+    },
     reset: async () => { await send({ op: 'reset' }) },
     /** R6: asks Python to stop; a call still running 2 s later costs the worker (restarted by the next need). */
     interrupt(): void {

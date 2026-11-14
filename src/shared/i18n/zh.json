@@ -49,6 +49,7 @@
       "macroDesign": "宏设计"
     },
     "group": {
+      "window": "窗口",
       "builderClose": "关闭",
       "view": "视图",
       "records": "记录",
@@ -105,6 +106,8 @@
       "expandCollapse": "展开/折叠"
     },
     "cmd": {
+      "sizeToFit": "调整到适合窗体大小",
+      "switchWindows": "切换窗口",
       "builderSaveAs": "另存为",
       "builderClose": "关闭",
       "viewDatasheet": "数据表视图",
@@ -555,6 +558,16 @@
     "copyLabel": "副本的名称",
     "copyDefault": "{{name}} 的副本"
   },
+  "owin": {
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原",
+    "switch": "切换窗口",
+    "sizeToFit": "调整为窗体大小",
+    "cascade": "层叠",
+    "tile": "平铺",
+    "none": "没有打开的窗口"
+  },
   "tabs": {
     "close": "关闭“{{name}}”（{{kind}}）",
     "unsaved": "（有未保存的更改）",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "数据库1",
+    "pictureFilter": "图片",
     "copyName": "{{name}} 副本",
     "compactOnClose": "BaseCraft 正在关闭前压缩数据库。这可能需要一些时间：关闭会自动完成。",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "主题名称为 1 到 60 个字符,且不含控制字符。",
       "themeReserved": "此名称是 BaseCraft 自带主题的名称,请选择其他名称。",
       "themeExists": "已有同名的自定义主题。",
+      "invalidThemeFile": "此文件不是可读取的 Office 主题 (.thmx)。",
+      "pictureOutsideBase": "链接的图片必须位于数据库所在的文件夹或其子文件夹中。",
       "invalidPicture": "该文件不是 PNG、JPEG、GIF 或 WebP 图像。",
       "pictureTooLarge": "图像太大(最大 1 MB)。",
+      "attachmentTooLarge": "有文件超过 25 MB：未添加任何内容。",
+      "attachmentOpen": "无法打开该文件。",
       "unknown": "发生意外错误：{{detail}}",
       "fileTooLarge": "文件大于 2 GB：无法导入。",
       "importInterrupted": "导入已中断（数据库已关闭或变为只读）。未导入任何内容。",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "此 Access 数据库受密码保护：{{detail}}",
       "linkUnavailable_needsLogin": "登录已取消：来自 {{detail}} 的链接表不可用。",
       "linkUnavailable_cannotConnect": "无法访问服务器 {{detail}}。请检查服务器名称、端口和网络。",
+      "odbc_failed": "ODBC 数据源报告了错误: {{detail}}",
+      "odbc_unavailable": "此计算机上无法使用 ODBC 导入: 找不到 {{detail}}。在 Linux 和 macOS 上,请安装 unixODBC。",
       "linkUnavailable_certificate": "此工作站不信任服务器 {{detail}} 的证书。请安装其证书颁发机构的证书；如果你信任此网络，请在链接表管理器中选择不验证证书的加密选项（例如“加密，信任服务器证书”）。",
       "linkUnavailable_serverVersion": "服务器 {{detail}} 运行的 BaseCraft 不支持的版本（至少需要 PostgreSQL 14 或 SQL Server 2016）。",
       "linkUnavailable_passwordExpired": "此登录名的密码已在服务器 {{detail}} 上过期。请使用服务器的管理工具更改密码，然后重新连接。",
@@ -752,6 +772,7 @@
       "nameExists": "已存在同名对象。",
       "nameInvalid": "此名称无效。",
       "readOnly": "数据库以只读方式打开。",
+      "moduleNameClash": "此名称会使代码模块与另一个窗体、报表或现有模块重名。请选择其他名称。",
       "notFound": "此对象已不存在。",
       "hasRelations": "此表参与了关系：请先删除其关系。",
       "external": "表“{{table}}”已在 BaseCraft 之外被更改；无法在此更改其设计。",
@@ -852,6 +873,7 @@
     },
     "fieldList": "字段列表",
     "ctlPrefix": {
+      "attachment": "附件",
       "label": "标签",
       "textBox": "文本",
       "checkBox": "复选框",
@@ -908,9 +930,13 @@
     "currency": "货币",
     "dateTime": "日期/时间",
     "yesNo": "是/否",
-    "hyperlink": "超链接"
+    "hyperlink": "超链接",
+    "attachment": "附件",
+    "calculated": "计算"
   },
   "fieldProp": {
+    "calculated": "表达式",
+    "resultType": "结果类型",
     "size": "字段大小",
     "numberSize": "字段大小",
     "precision": "精度",
@@ -1038,7 +1064,7 @@
   "datasheet": {
     "more": { "rowHeight": "行高…", "columnWidth": "字段宽度…", "rowHeightLabel": "行高(磅):", "columnWidthLabel": "列宽:", "standardHeight": "标准高度", "standardWidth": "标准宽度", "bestFit": "最佳匹配", "hide": "隐藏字段", "unhide": "取消隐藏字段…", "freeze": "冻结字段", "unfreeze": "取消冻结所有字段", "unhideTitle": "取消隐藏列" },
     "totals": { "label": "汇总", "none": "无" },
-    "format": { "gridlines": "显示的网格线", "gridColor": "网格线颜色", "auto": "自动" },
+    "format": { "gridlines": "显示的网格线", "gridColor": "网格线颜色", "auto": "自动", "cellEffect": "单元格效果", "flat": "平面", "raised": "凸起", "sunken": "凹陷" },
     "goTo": {
       "first": "第一项",
       "previous": "上一项",
@@ -1681,6 +1707,13 @@
     "GridX": "网格线 X",
     "GridY": "网格线 Y",
     "RecordSelectors": "记录选择器",
+    "AutoResize": "自动调整大小",
+    "AutoCenter": "自动居中",
+    "ControlBox": "控制框",
+    "MinMaxButtons": "最小化最大化按钮",
+    "CloseButton": "关闭按钮",
+    "PopUp": "弹出方式",
+    "Modal": "独占",
     "Left": "左",
     "Top": "上",
     "Height": "高度",
@@ -1774,8 +1807,9 @@
     "ColumnWidth": "列宽"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "无", "min": "最小化按钮", "max": "最大化按钮", "both": "两者都有"},
     "LegendPosition": {"top": "顶部", "bottom": "底部", "left": "左侧", "right": "右侧"},
-    "ChartType": {"columnClustered": "簇状柱形图", "columnStacked": "堆积柱形图", "columnStacked100": "百分比堆积柱形图", "barClustered": "簇状条形图", "barStacked": "堆积条形图", "barStacked100": "百分比堆积条形图", "line": "折线图", "lineStacked": "堆积折线图", "lineStacked100": "百分比堆积折线图", "area": "簇状面积图", "areaStacked": "堆积面积图", "areaStacked100": "百分比堆积面积图", "pie": "饼图", "radar": "雷达图", "radarFilled": "填充雷达图", "combo": "组合图", "doughnut": "圆环图", "arc": "弧形图", "scatter": "散点图", "bubble": "气泡图", "boxWhisker": "箱形图", "funnel": "漏斗图", "pareto": "帕累托图", "waterfall": "瀑布图"},
+    "ChartType": {"columnClustered": "簇状柱形图", "columnStacked": "堆积柱形图", "columnStacked100": "百分比堆积柱形图", "barClustered": "簇状条形图", "barStacked": "堆积条形图", "barStacked100": "百分比堆积条形图", "line": "折线图", "lineStacked": "堆积折线图", "lineStacked100": "百分比堆积折线图", "area": "簇状面积图", "areaStacked": "堆积面积图", "areaStacked100": "百分比堆积面积图", "pie": "饼图", "radar": "雷达图", "radarFilled": "填充雷达图", "combo": "组合图", "doughnut": "圆环图", "arc": "弧形图", "scatter": "散点图", "bubble": "气泡图", "boxWhisker": "箱形图", "funnel": "漏斗图", "pareto": "帕累托图", "waterfall": "瀑布图", "wordCloud": "词云"},
     "ChartDateGroup": {"none": "无", "year": "年", "quarter": "季度", "month": "月", "day": "日"},
     "ChartBackStyle": {"normal": "标准", "transparent": "透明"},
     "ChartBorderStyle": {"transparent": "透明", "solid": "实线", "dashed": "虚线", "dotted": "点线"},
@@ -1802,6 +1836,10 @@
       "transparent": "透明"
     },
     "BorderStyle": {
+      "none": "无",
+      "thin": "细边框",
+      "sizable": "可调边框",
+      "dialog": "对话框边框",
       "transparent": "透明",
       "solid": "实线",
       "dashed": "短划线",
@@ -1829,7 +1867,8 @@
     },
     "PictureType": {
       "embedded": "嵌入",
-      "shared": "共享"
+      "shared": "共享",
+      "linked": "链接"
     },
     "SizeMode": {
       "clip": "剪裁",
@@ -2159,7 +2198,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "选择生成器", "macro": "宏生成器", "function": "函数生成器" },
+    "choose": { "title": "选择生成器", "macro": "宏生成器", "function": "函数生成器", "code": "代码生成器" },
     "function": { "title": "函数生成器", "empty": "没有模块包含公共函数。" },
     "title": "表达式生成器",
     "expression": "输入表达式：",
@@ -2373,8 +2412,9 @@
     "showTable": {
       "title": "添加表",
       "tables": "表",
+      "links": "链接",
       "queries": "查询",
-      "both": "两者",
+      "all": "全部",
       "add": "添加所选表",
       "close": "关闭",
       "none": "没有对象。",
@@ -2397,6 +2437,7 @@
       "label": "表名称"
     },
     "sqlOnly": "此查询只能在 SQL 视图中显示。",
+    "sqlFormat": "格式化 SQL",
     "passThrough": {
       "notice": "传递查询：此文本按原样发送到服务器 {{label}}，BaseCraft 不会读取它。服务器应用其自己的权限；BaseCraft 的验证规则和关系不适用于服务器所做的更改。",
       "noticeNoServer": "传递查询：请在属性表中选择其服务器。",
@@ -2457,6 +2498,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "保存导入步骤",
+    "savedImportDefault": "导入 - {{name}}",
+    "savedImportEmpty": "没有已保存的导入。",
     "yes": "真",
     "no": "假",
     "excelFilter": "Excel 工作簿",
@@ -2522,6 +2567,7 @@
     "twoPrimary": "只能有一个索引作为主键。"
   },
   "tableFields": {
+    "calculatedLabel": "“{{field}}”的表达式 (计算字段；为空：存储字段)",
     "newField": "字段",
     "newTable": "表",
     "designOpen": "表“{{name}}”已在设计视图中打开。请先关闭或保存它，然后再在此更改其字段。",
@@ -2568,6 +2614,7 @@
     "self": "数据文件不能是当前打开的数据库。请选择其他名称或文件夹。"
   },
   "clipboard": { "empty": "系统剪贴板中没有文本。", "content": "{{text}}" },
+  "attachments": {"title": "附件", "add": "添加…", "remove": "删除", "open": "打开", "saveAs": "另存为…", "saveAll": "全部保存…", "none": "没有附件。", "previous": "上一个附件", "next": "下一个附件", "manage": "双击以管理附件", "openConfirm": "要打开“{{name}}”吗？数据库中的文件可能包含有害代码：仅当你信任此数据库时才打开。", "openConfirmRunnable": "“{{name}}”是程序或脚本：打开它会在此计算机上运行。仅当你信任此数据库及其作者时才打开。"},
   "hyperlink": { "address": "地址 (https://、http:// 或 mailto:)", "text": "要显示的文字", "invalid": "地址必须以 https://、http:// 或 mailto: 开头。", "open": "打开 {{url}}？" },
   "migrate": {
     "title": "迁移到服务器向导",
@@ -2610,6 +2657,8 @@
     "noSchema": "服务器上不存在架构 {{schema}}。",
     "nameTaken": "服务器上已有这些名称的表：{{names}}。请删除它们或选择其他架构。",
     "nameTooLong": "这些名称超过了 PostgreSQL 的限制（63 字节）：{{names}}。请先重命名。",
+    "nameClash": "多个数据文件包含名为 {{names}} 的表。未移动任何内容: 请在各自的数据文件中重命名(它们在服务器上必须唯一),然后重试。",
+    "partial": "这些来自已移动数据文件的表已在服务器上,其链接已更改: {{names}}。其他文件保持原样。",
     "invalidDesign": "这些字段的设计无效：{{names}}。请在设计视图中更正，然后重试。",
     "cancelled": "迁移已取消：未做任何更改。",
     "failed": "迁移失败（{{table}}）：{{error}}。服务器和数据库均未做任何更改。",
@@ -2665,6 +2714,7 @@
       "done": "宏“{{macro}}”转换完成:已创建模块“{{module}}”。",
       "todo": "有 {{count}} 项需要您处理:请在模块中搜索 TODO。"
     },
+    "convertEvents": { "none": "没有可转换的嵌入宏。", "done": "已完成转换“{{object}}”的嵌入宏：{{count}} 个事件现在运行模块“{{module}}”的过程。" },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "要删除嵌入的宏吗？",
@@ -2930,7 +2980,6 @@
     "moveUp": "上移",
     "moveDown": "下移",
     "remove": "删除",
-    "saveBeforeRun": "运行宏之前必须先保存。是否现在保存？",
     "step": {
       "title": "宏单步执行",
       "condition": "条件",
@@ -2945,17 +2994,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "自定义显示在功能区选项卡上方的快速访问工具栏。",
+      "choose": "选择命令:",
+      "add": "添加",
+      "remove": "删除",
+      "up": "上移",
+      "down": "下移",
+      "reset": "重置",
+      "current": "工具栏上的命令"
+    },
+    "trust": {
+      "header": "信任中心: 此计算机信任数据库活动内容的位置。",
+      "locations": "受信任位置",
+      "locationsNote": "由管理员在系统文件中设置; BaseCraft 仅读取。",
+      "none": "没有受信任位置。",
+      "subfolders": "包含子文件夹",
+      "approvalsTitle": "批准",
+      "approvals": "此用户已给出的批准数: {{count}}",
+      "clear": "删除所有批准",
+    "admin": "管理员",
+    "add": "添加新位置...",
+    "remove": "删除",
+    "subfoldersAlso": "此位置的子文件夹也受信任",
+    "description": "说明",
+    "network": "允许我网络上的受信任位置(不推荐)",
+    "networkRefused": "在不允许网络位置时,无法信任网络位置。"
+    },
     "cat": {
       "general": "常规",
       "currentDb": "当前数据库",
       "client": "客户端设置",
       "datasheet": "数据表",
-      "designers": "对象设计器"
+      "designers": "对象设计器",
+      "quickAccess": "快速访问工具栏",
+      "ribbon": "自定义功能区",
+      "trust": "信任中心"
     },
     "general": {
+      "screenTipStyle": "屏幕提示样式:",
+      "screenTipsOn": "显示屏幕提示",
+      "screenTipsOff": "不显示屏幕提示",
+      "interfaceZoom": "界面缩放 (%)",
+      "interfaceZoomReset": "重置缩放",
+      "previewZoom": "打印预览缩放",
+      "previewFit": "适应窗口",
+      "previewActual": "100%",
+      "screenTipShortcuts": "在屏幕提示中显示快捷键",
       "header": "使用 {{product}} 的常规选项。",
       "ui": "用户界面选项",
       "creation": "创建数据库",
+      "sortOrderNew": "新数据库的排序次序：",
+      "sortOrderLegacy": "常规 – 旧版",
+      "sortOrderGeneral": "常规",
+      "sortOrderSpanishTraditional": "西班牙语 – 传统",
       "defaultFolder": "默认数据库文件夹：",
       "browse": "浏览…"
     },
@@ -3016,9 +3108,13 @@
       "docWindow": "文档窗口选项",
       "statusBar": "显示状态栏",
       "documentTabs": "显示文档选项卡",
+      "docOverlapping": "重叠窗口",
+      "docTabbed": "选项卡式文档",
       "specialKeys": "使用访问特殊键",
       "specialKeysHelp": "F11：显示或隐藏导航窗格。",
       "compactOnClose": "关闭时压缩",
+      "sortOrder": "此数据库的排序次序：",
+      "sortOrderPending": "将在下次压缩和修复时应用：{{order}}",
       "frontEnd": "前端应用程序(其本地表仅作参考)",
       "dataFile": "共享数据文件(由多个工作站以共享模式打开)",
       "datasheetDesign": "启用数据表视图中表的设计更改",
@@ -3078,6 +3174,7 @@
     "datasheet": {
       "header": "自定义 {{product}} 中数据表的外观。",
       "gridSection": "网格线和单元格效果",
+      "defaultCellEffect": "默认单元格效果",
       "gridlines": "默认显示的网格线",
       "horizontal": "水平",
       "vertical": "垂直",
@@ -3113,6 +3210,7 @@
 
       "skipped": "未导入的列（{{table}}）：{{names}}。"
     },
+    "odbc": { "title": "从 ODBC 数据库导入", "dsn": "数据源 (DSN)", "connection": "或连接字符串", "modeImport": "将源数据导入当前数据库的新表中", "modeLink": "通过创建链接表来链接到数据源" },
     "access": {
       "title": "从 Access 导入",
       "fileOnly": "将导入表及其数据。自动编号以外的键、索引和字段规则不会被读取；查询、窗体、报表、宏和模块不会被导入。",
@@ -3232,7 +3330,7 @@
       "sqlite": "SQLite 文件",
       "access": "Access 数据库",
       "postgresql": "PostgreSQL 服务器",
-      "sqlserver": "SQL Server 服务器"
+      "sqlserver": "SQL Server 服务器", "odbc": "ODBC 数据库"
     },
     "tables": "表",
     "selectAll": "全选",
@@ -3248,6 +3346,7 @@
     "designTitle": "链接表",
     "designWarning": "“{{name}}”是链接表：其结构属于源文件，无法在此处修改。仍要以只读方式打开吗？",
     "designBanner": "链接表，只读：其结构属于 {{path}}。",
+    "designBannerServer": "链接到服务器的表：其结构属于 {{path}}。所做的 BaseCraft 属性更改将保存在此数据库中。",
     "skipped": "未链接的列（BaseCraft 不读取的类型：附件、OLE 对象、多值字段、二进制、扩展的日期/时间）：{{names}}",
     "unsupported": "不支持的表：{{reason}}",
     "password": {
@@ -3570,6 +3669,7 @@
     "default": "设为此数据库的默认主题",
     "save": "保存当前主题…",
     "browse": "搜索主题…",
+    "thmxFilter": "Office 主题",
     "delete": "删除此自定义主题",
     "saveTitle": "保存当前主题",
     "nameLabel": "主题名称:",
@@ -3631,7 +3731,7 @@
       "legendNone": "(无)",
       "legendHint": "使用图例时，只绘制第一个值。",
       "legendIgnored": "此图表类型忽略图例字段。",
-      "typeHint": {"doughnut": "扇区大小取决于第一个值；图例字段将被忽略。", "arc": "半环形图：扇区大小取决于第一个值；图例字段将被忽略。", "funnel": "阶段按第一个值排序；图例字段将被忽略。", "scatter": "第一个轴字段为 X，必须是数字；第一个值为 Y。图例字段会将点拆分为多个系列。", "bubble": "第一个轴字段为 X（数字），第一个值为 Y，第二个值为气泡大小。", "boxWhisker": "每个类别对应一个箱体；轴字段给出类别，第一个值为观测值（忽略图例字段）。", "pareto": "柱按第一个值从大到小排序；折线显示右轴上的累计百分比（忽略图例字段）。", "waterfall": "每个类别是第一个值(空 = 0)在累计值上的一步,最后一根柱显示合计(图例字段被忽略)。"},
+      "typeHint": {"doughnut": "扇区大小取决于第一个值；图例字段将被忽略。", "arc": "半环形图：扇区大小取决于第一个值；图例字段将被忽略。", "funnel": "阶段按第一个值排序；图例字段将被忽略。", "scatter": "第一个轴字段为 X，必须是数字；第一个值为 Y。图例字段会将点拆分为多个系列。", "bubble": "第一个轴字段为 X（数字），第一个值为 Y，第二个值为气泡大小。", "boxWhisker": "每个类别对应一个箱体；轴字段给出类别，第一个值为观测值（忽略图例字段）。", "pareto": "柱按第一个值从大到小排序；折线显示右轴上的累计百分比（忽略图例字段）。", "waterfall": "每个类别是第一个值(空 = 0)在累计值上的一步,最后一根柱显示合计(图例字段被忽略)。", "wordCloud": "词来自轴字段,大小取决于第一个值(同一词的行会相加;图例字段被忽略)。"},
       "rowsHint": "此图表类型按原值绘制，不使用聚合函数。",
       "axisXHint": "第一个字段为 X。",
       "values": "值 (Y 轴)",
@@ -3641,6 +3741,44 @@
       "expand": "展开部分",
       "close": "关闭",
       "format": {"series": "数据系列", "heading": "设置数据系列格式: {{name}}", "fullName": "全名", "seriesType": "系列类型", "seriesTypes": {"column": "柱形", "line": "折线", "area": "面积"}, "plotOn": "将系列绘制在", "primary": "主坐标轴", "secondary": "次坐标轴", "fill": "系列填充颜色", "border": "系列边框颜色", "labels": "显示数据标签", "trend": "趋势线选项", "trendName": "趋势线名称", "noValues": "请先在“数据”选项卡中选择一个值。", "legendHint": "设置了图例字段时,格式对所有系列统一生效:已禁用。", "roundHint": "对此图表类型(饼图、雷达图)无效。", "axisHint": "条形图或堆积图没有次坐标轴。", "trendHint": "条形图或堆积图没有趋势线。", "noEffect": "此图表类型不适用。", "noTrend": "此图表类型没有趋势线。", "noAxis": "此图表类型没有次坐标轴。", "waterfallColors": "瀑布图颜色", "lineOptions": "线条选项", "lineWidth": "线条粗细", "dash": "线条样式", "marker": "显示标记", "gap": "缺失值", "trendKinds": {"none": "无", "linear": "线性", "exponential": "指数", "logarithmic": "对数", "polynomial": "多项式", "power": "乘幂", "movingAverage": "移动平均"}, "dashes": {"solid": "实线", "dashed": "虚线", "dotted": "点线"}, "gaps": {"gap": "留空", "zero": "按零绘制", "connect": "连接数据点"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "添加到快速访问工具栏",
+    "qatRemove": "从快速访问工具栏删除",
+    "newTab": "新建选项卡",
+    "newGroup": "新建组",
+    "rename": "重命名",
+    "show": "显示选项卡 {{name}}",
+    "ribbonHeader": "自定义功能区：显示或隐藏选项卡、更改其顺序、创建自定义选项卡和组。",
+    "ribbonNote": "自定义组可以放入任意选项卡(包括工具选项卡)上提供的任何命令。选择内置组即可重命名。工具选项卡只在其对象打开时显示。",
+    "ribbonTabs": "功能区选项卡",
+    "toolTabs": "工具选项卡",
+    "formTemplate": "窗体模板：",
+    "reportTemplate": "报表模板：",
+    "templateNote": "当前数据库中某个窗体或报表的名称：新建的窗体和报表会复制其属性和节设置（默认为 Normal）。若不存在，则使用原始值。",
+    "errorSection": "错误检查",
+    "errorEnable": "启用错误检查",
+    "errorUnassociated": "检查未关联的标签和控件",
+    "errorNewLabels": "检查新的未关联标签",
+    "errorProperties": "检查无效的控件属性",
+    "errorReport": "检查常见报表错误",
+    "errorShortcut": "检查快捷键错误",
+    "errorColor": "错误指示器颜色:",
+    "errorIndicator": "此项存在错误",
+    "errAssociate": "将标签与控件关联",
+    "errIgnore": "忽略错误",
+    "err": {
+      "unassociated": "标签 {{name}} 未与相邻控件关联。",
+      "newLabel": "新标签 {{name}} 未与任何控件关联。",
+      "unknownField": "源中不存在字段“{{field}}”。",
+      "invalidExpression": "表达式“{{field}}”无效。",
+      "aggregateNotAllowed": "此处不允许使用聚合函数。",
+      "widthExceedsPage": "报表比页面的可打印区域更宽。",
+      "groupingInvalid": "报表的排序或分组无效：“{{field}}”。",
+      "groupingMalformed": "报表的某个排序或分组级别为空。",
+      "shortcutInvalid": "“{{name}}”中的快捷键不是字母或数字。",
+      "shortcutDuplicate": "快捷键“{{field}}”已被其他控件使用。"
     }
   }
 }

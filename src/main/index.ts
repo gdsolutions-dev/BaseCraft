@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { HEARTBEAT_MS } from './db/lock';
 import { CH } from '../shared/api';
 import { PRODUCT_NAME } from '../shared/product';
-import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openFromSystem, openLastBase, registerIpc, whenIdle } from './ipc';
+import { abandonBase, closeBase, closeVeto, hasBase, heartbeat, openFromSystem, openLastBase, registerIpc, whenIdle, endSpell } from './ipc';
 import { fileArg, handleOpenFile, openAll } from './open-file';
 import { appRoots, registerAppProtocol } from './app-protocol';
 import { APP_ORIGIN, APP_SCHEME } from '../shared/python/paths';
@@ -121,6 +121,7 @@ app.on('will-quit', (e) => {
   if (baseClosed) return;
   e.preventDefault();
   baseClosed = true;
+  endSpell();
   void whenIdle().then(closeBase).finally(() => app.exit()); // after an opening or a Stop restart in progress
 });
 app.on('before-quit', () => { if (process.env.BASECRAFT_E2E === '1' && !app.isPackaged) e2eQuitting = true; });

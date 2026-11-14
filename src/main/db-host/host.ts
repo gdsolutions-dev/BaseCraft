@@ -12,6 +12,8 @@ import type { ImportPlan, ImportProgress } from '../../shared/import-text';
 import type { ServerKind } from '../../shared/api';
 import type { AccessStructureSource } from '../../shared/access-import';
 import type { MigrateRequest } from '../../shared/migrate';
+import type { OdbcRequest } from '../../shared/odbc';
+import type { OdbcRunner } from '../import/odbc';
 import type { ImportTexts } from '../import/text-import';
 import { Session } from '../session';
 import { testConnector } from '../connectors/test-connector';
@@ -39,6 +41,16 @@ const E2E_TABLES: RemoteTable[] = [
 /** The fake as a SQL Server (C5 Task 7: the dialog's kind): the same tables in dbo, SQL Server's params, key and label. */
 const e2eSqlServer = (): Connector => Object.assign(testConnector({ rows: E2E_ROWS, tables: E2E_TABLES.map((t) => ({ ...t, schema: 'dbo' })) }),
   { kind: 'sqlserver', params: msParams, key: msKey, label: msLabel }) as unknown as Connector;
+
+/** The e2e fake ODBC source (odbc-link.spec.ts, BASECRAFT_E2E_FAKE_ODBC=1): a table Pays; it refuses a connection without PWD=secret. */
+const e2eOdbcRunner = (): OdbcRunner => {
+  const check = (c: string) => { if (!/(^|;)PWD=secret(;|$)/.test(c)) throw new Error('bc:odbc|failed|login refused'); };
+  return {
+    dsns: async () => [],
+    tables: async (c) => { check(c); return [{ name: 'Pays', schema: '' }]; },
+    read: async (c) => { check(c); return { columns: [{ name: 'Code', kind: 'int', size: 10 }, { name: 'Nom', kind: 'text', size: 20 }], rows: [['1', 'France'], ['2', 'Italie']] }; },
+  };
+};
 
 const isCorrupt = (e: unknown) => ((e as { errcode?: number }).errcode ?? 0) % 256 === 11; // SQLITE_CORRUPT
 
@@ -92,7 +104,7 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
   let s: Session;
   setBusyRetry(o.shared.updateRetries, o.shared.updateRetryMs);
   try {
-    if (o.create) createBaseFile(o.path, o.appVersion);
+    if (o.create) createBaseFile(o.path, o.appVersion, o.sortOrder);
     else checkBaseFile(o.path);
     const probe = systemProbe();
     const path = o.frontEndCache && !o.create
@@ -101,6 +113,7 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
       appVersion: o.appVersion, region: o.region, probe, sessionId: o.sessionId, migrate: !RUNTIME, openMode: o.shared.openMode, runtime: RUNTIME,
       ...(path !== o.path ? { origin: o.path } : {}),
       ...(o.fakeServer ? { connectors: { postgresql: testConnector({ rows: E2E_ROWS, tables: E2E_TABLES, native: E2E_NATIVE }), sqlserver: e2eSqlServer() } } : {}),
+      ...(o.odbcScript ? { odbcScript: o.odbcScript } : {}), ...(o.fakeOdbc ? { odbcRunner: e2eOdbcRunner() } : {}),
       ...(o.shared.settleMs !== undefined ? { presence: { settleMs: o.shared.settleMs } } : {}),
       onStateChanged: (state) => emit({ event: 'stateChanged', state }),
     });
@@ -123,6 +136,8 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
     // Same positions as the session's method: the third one (the tick) is the host's own.
     importAccessTables: (path: string, remotes: string[], _tick: undefined, structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean) =>
       s.importAccessTables(path, remotes, progress, structure, keepDir, script, queries, designs),
+    // Same positions as the session's method: the tick (5th) is the host's own.
+    importOdbcTables: (req: OdbcRequest, names: string[], texts: ImportTexts, script: string) => s.importOdbcTables(req, names, texts, script, progress),
     takeOverLock: () => { try { return s.takeOverLock(); } catch (e) { throw bcError(e); } }, // reopening in write mode
   };
   return new Proxy(s, { get: (t, k) => (typeof k === 'string' && k in own ? own[k] : Reflect.get(t, k)) });

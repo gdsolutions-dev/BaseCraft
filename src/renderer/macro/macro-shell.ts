@@ -10,7 +10,7 @@ import { bool, fail, num, str } from '../../shared/expr/library';
 import { parseCanonical } from '../../shared/expr/parser';
 import { foldName, sameName } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
-import { parseMacroDef, submacroNames } from '../../shared/macro/model';
+import { parseMacroDef, submacroNames, type MacroDef } from '../../shared/macro/model';
 import { isSelectBody, type Query } from '../../shared/query/ast';
 import { isActionDefinition } from '../../shared/query/definition';
 import { parseSql } from '../../shared/query/sql-parser';
@@ -33,7 +33,7 @@ import { showPythonError, type PythonErrorOptions } from '../python/PythonErrorD
 import { showMessageBox, type MessageBoxType } from './MessageBoxDialog';
 import { askStep } from './SingleStepDialog';
 import { callUserFunction } from '../python/expr-call';
-import { runPythonFunction } from '../python/run-function';
+import { runProcedure, runPythonFunction } from '../python/run-function';
 import { tempVars } from './temp-vars';
 
 export interface MacroShellDeps {
@@ -303,14 +303,19 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
 let running = false;
 /** Runs `M` or `M.Sub` in the open base; an unhandled failure is shown (Action Failed), a blocked action brings the security bar back.
  *  One run at a time (they share the TempVars): a run asked during another is ignored with a beep (null). */
-export async function runMacroByName(name: string, opts: { singleStep?: boolean } = {}): Promise<RunOutcome | null> {
+export async function runMacroByName(name: string, opts: { singleStep?: boolean; unsaved?: MacroDef } = {}): Promise<RunOutcome | null> {
   const d = shell;
   if (!d) throw new Error('bc:noBase');
   if (running) { api.app.beep().catch(() => {}); return null; }
   running = true;
   const epoch = haltEpoch;
   try {
-    const outcome = await runMacro(name, shellHost(d, { singleStep: !!opts.singleStep }), opts);
+    const host = shellHost(d, { singleStep: !!opts.singleStep });
+    // the designer's definition, unsaved: it answers for its own name (a RunMacro or M.Sub on it too), the saved ones for the others
+    const unsaved = opts.unsaved, base = name.split('.')[0]!;
+    const load = host.load;
+    if (unsaved) host.load = (n) => sameName(n, base) ? Promise.resolve(unsaved) : load(n);
+    const outcome = await runMacro(name, host, opts);
     if (!outcome.ok && epoch === haltEpoch) {   // stopped meanwhile (the base gone): no failure shown
       if (outcome.failure.code === 'blocked') contentBlocked();
       await showFailed(d.modal, outcome.failure, pyDebug(d));
@@ -331,7 +336,7 @@ const embeddedLabel = (c: EventContext): string =>
 export async function runEvent(binding: EventBinding, ctx: EventContext): Promise<boolean> {
   const d = shell;
   if (!d || binding.kind === 'none' || binding.kind === 'other') return false;
-  if (binding.kind === 'python' && !d.contentEnabled()) { contentBlocked(); return false; }   // R3: disabled code does not run, the event is not cancelled
+  if ((binding.kind === 'python' || binding.kind === 'procedure') && !d.contentEnabled()) { contentBlocked(); return false; }   // R3: disabled code does not run, the event is not cancelled
   const label = binding.kind === 'macro' ? binding.name : embeddedLabel(ctx);
   let pyFailed = false;
   eventDepth++;   // events bypass `running` (R6): they nest instead
@@ -340,7 +345,7 @@ export async function runEvent(binding: EventBinding, ctx: EventContext): Promis
     let outcome: RunOutcome;
     if (eventDepth > MAX_EVENT_DEPTH) {
       outcome = { ok: false, failure: { macro: label, action: '', raw: {}, code: 'tooDeep', number: FAILURE_NUMBERS.tooDeep, detail: 'events' } };
-    } else if (binding.kind === 'python') {
+    } else if (binding.kind === 'python' || binding.kind === 'procedure') {
       outcome = { ok: true };
       pyFailed = await runPythonEvent(d, binding, ctx);
     } else {
@@ -356,19 +361,20 @@ export async function runEvent(binding: EventBinding, ctx: EventContext): Promis
 }
 
 /** R3: evaluates the arguments in the event's environment, runs the function; true when it failed (the failure is shown here). */
-async function runPythonEvent(d: MacroShellDeps, b: Extract<EventBinding, { kind: 'python' }>, ctx: EventContext): Promise<boolean> {
+async function runPythonEvent(d: MacroShellDeps, b: Extract<EventBinding, { kind: 'python' | 'procedure' }>, ctx: EventContext): Promise<boolean> {
   const host = shellHost(d, { singleStep: false });
   const epoch = haltEpoch;
+  const call = b.kind === 'procedure' ? async (_values: Value[]) => { await runProcedure(ctx); } : (values: Value[]) => runPythonFunction(b.name, values, ctx);   // B6: [Event Procedure]
   const env: EvalEnv = { field: (n, table) => (table !== undefined ? fail('unknownField') : ctx.field(n)), now: host.now, locale: host.locale, lang: host.lang, member: memberValue };
   const values: Value[] = [];
   try {
-    for (const a of b.args) values.push(await evaluate(a, env));
+    for (const a of b.kind === 'python' ? b.args : []) values.push(await evaluate(a, env));
   } catch (e) {
-    await showFailed(d.modal, { macro: b.text, action: '', raw: {}, code: 'expression', number: FAILURE_NUMBERS.expression, detail: e instanceof Error ? e.message : String(e) });
+    await showFailed(d.modal, { macro: b.kind === 'python' ? b.text : embeddedLabel(ctx), action: '', raw: {}, code: 'expression', number: FAILURE_NUMBERS.expression, detail: e instanceof Error ? e.message : String(e) });
     return true;
   }
   try {
-    await runPythonFunction(b.name, values, ctx);
+    await call(values);
     return false;
   } catch (e) {
     if ((e as Error)?.message === 'bc:pythonRestarted' || epoch !== haltEpoch) return true;   // D1 already told the user / the base is gone: no dialog

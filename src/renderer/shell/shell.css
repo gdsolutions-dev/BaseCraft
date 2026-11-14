@@ -386,3 +386,18 @@ fieldset.modal-field > legend { padding: 0; margin-bottom: 6px; }
 .rbtn-lg:has(.rcaret) { position: relative; }
 .rbtn-lg .rcaret { position: absolute; right: 3px; bottom: 3px; }
 .rbtn-xs .rcaret { display: none; } /* an icon-only button has no room for it; its menu still opens */
+
+/* Fenêtres superposées (C6) */
+.owin-area { position: relative; }
+.owin-bar { position: absolute; left: 0; right: 0; top: 0; height: 30px; z-index: 2000; display: flex; align-items: center; gap: var(--bc-space-2); padding: 0 6px; border-bottom: 1px solid var(--bc-border); background: var(--bc-surface); }
+.owin { position: absolute; display: flex; flex-direction: column; min-width: 190px; overflow: hidden; background: var(--bc-surface); border: 1px solid var(--bc-border); border-radius: var(--bc-radius); box-shadow: var(--shadow-pop); }
+.owin.is-front { border-color: var(--bc-accent); }
+.owin.is-min { height: auto; min-width: 0; }
+.owin-modal { inset: 38px 8px 8px; }
+.owin-title { flex: none; display: flex; align-items: center; gap: var(--bc-space-2); height: 28px; padding: 0 4px 0 8px; border-bottom: 1px solid var(--bc-border); cursor: default; touch-action: none; user-select: none; color: var(--bc-text-muted); }
+.owin.is-front .owin-title { color: var(--bc-text); font-weight: 500; }
+.owin-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owin-btn { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--bc-text-muted); }
+.owin-btn:hover { background: var(--hover); }
+.owin-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.owin-grip { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; }

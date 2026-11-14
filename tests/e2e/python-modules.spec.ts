@@ -119,3 +119,53 @@ test('Module: typing forms[" lists the forms, then the controls of the chosen on
     await app.close()
   }
 })
+
+test('Module: Jedi completes BaseCraft\'s API (db.), highlighting is present, Enter accepts an item', async () => {
+  test.setTimeout(180_000)
+  const { app, page } = await launchApp({ args: [seedBase('jedi')], env: FR })
+  try {
+    await createModule(page)
+    await editor(page).locator('.cm-content').click()
+    await page.keyboard.type('def f():')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('rs = db.open_r')
+    const list = page.locator('.cm-tooltip-autocomplete:visible')
+    await expect(list).toContainText('open_recordset', { timeout: 90_000 }) // the first call starts Python and loads Jedi
+    await expect(editor(page).locator('.cm-content span[class*="ͼ"]').first()).toBeVisible() // lang-python highlighting spans
+    await page.waitForTimeout(200)
+    await page.keyboard.press('Enter')
+    await expect(editor(page).locator('.cm-content')).toContainText('db.open_recordset')
+  } finally {
+    await app.close()
+  }
+})
+
+test('Module: the list opens while typing; Enter keeps its new line until an arrow key, Tab accepts', async () => {
+  test.setTimeout(180_000)
+  const { app, page } = await launchApp({ args: [seedBase('jedi-typing')], env: FR })
+  try {
+    await createModule(page)
+    const content = editor(page).locator('.cm-content')
+    await content.click()
+    const list = page.locator('.cm-tooltip-autocomplete:visible')
+    await page.keyboard.type('pri')
+    await expect(list).toContainText('print')
+    await page.waitForTimeout(200)
+    await page.keyboard.press('Enter')   // fresh typed list: a new line, not the item
+    await expect(list).toBeHidden()
+    await expect(content.locator('.cm-line')).toHaveCount(2)
+    await page.keyboard.type('pri')
+    await expect(list).toContainText('print')
+    await page.waitForTimeout(200)
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')   // moved into the list: accepts
+    await expect(content.locator('.cm-line')).toHaveCount(2)
+    await expect(content.locator('.cm-line').nth(1)).not.toHaveText('pri')
+    await page.keyboard.type('\nlen')   // Tab accepts the selected item
+    await expect(list).toContainText('len')
+    await page.keyboard.press('Tab')
+    await expect(content.locator('.cm-line').last()).toHaveText(/^len\w*$/)
+  } finally {
+    await app.close()
+  }
+})

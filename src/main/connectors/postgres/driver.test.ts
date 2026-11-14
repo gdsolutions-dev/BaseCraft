@@ -4,12 +4,22 @@ import { sameName } from '../../../shared/field-types';
 import { bindQuery, type QueryCatalog } from '../../../shared/query/bind';
 import { parseSql } from '../../../shared/query/sql-parser';
 import type { Connection, ReadRequest, RemoteTable } from '../connector';
-import { findCondition, openPg, serverError } from './driver';
+import { findCondition, openPg, pgSyncSequence, serverError } from './driver';
 import { f, t } from '../../../shared/test-fixtures';
 import { loadSnapshot, snapshotDesign } from '../../query/pass-through';
 import { liveParams, liveUrl, withSchema } from './live';
 
 const sqlError = (code: string, message = 'x') => Object.assign(new Error(message), { code });
+
+describe('Append AutoNumber values (no server)', () => {
+  it('moves the identity sequence of the table forward, never back', () => {
+    const fd = f('N°', 'autoNumber');
+    const { sql, params } = pgSyncSequence({ name: 'J', remote: 'Jou"rnal', schema: 'public', key: [], skipped: [], design: t('J', [fd]) } as unknown as RemoteTable, fd, 7);
+    expect(params).toEqual(['"public"."Jou""rnal"', 'N°', 7]);
+    expect(sql).toContain('pg_get_serial_sequence($1');
+    expect(sql).toContain('GREATEST($3');
+  });
+});
 
 describe('server errors (no server)', () => {
   it('a lost connection is marked lost, with its message (R11)', () => {

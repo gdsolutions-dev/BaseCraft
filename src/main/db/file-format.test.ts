@@ -61,7 +61,7 @@ describe('file-format', () => {
   it('creates and opens a BaseCraft file', () => {
     createBaseFile(p, '0.1.0');
     const b = openBaseFile(p, 'write', '0.1.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4, appVersion: '0.1.0', options: {} });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5, appVersion: '0.1.0', options: {} });
     expect(b.meta.dbUuid).toMatch(/^[0-9a-f-]{36}$/);
     expect(b.db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID });
     expect(b.db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'delete' });

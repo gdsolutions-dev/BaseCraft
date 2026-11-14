@@ -22,6 +22,8 @@ import { pasteAllowed } from '../datasheet/datasheet-cells';
 import { currentBaseOptions } from '../shell/startup';
 import { sameName } from '../../shared/field-types';
 import { useModal } from '../shell/Modal';
+import { createPortal } from 'react-dom';
+import { AttachmentsDialog, type AttachmentTarget } from '../datasheet/AttachmentsDialog';
 import { lookupEditor } from '../datasheet/LookupEditor';
 import { NavigationBar } from '../datasheet/NavigationBar';
 import '../datasheet/datasheet.css';
@@ -48,12 +50,14 @@ export interface FormDatasheetProps extends Omit<SingleFormProps, 'doc'> {
   ro: boolean; locale: string; lang: 'fr' | 'en';
   onRow(i: number): Promise<boolean>;                           // another row selected: its record made current (saved first)
   onFocusControl(name: string): void;                           // a column selected on the current record
+  onHeaderMenu?(control: string, at: { x: number; y: number }): void;   // a column header's drop-down: sort and filter on its field
   onEdited(c: ControlDef): void;                                // a cell edited: the control's checks (Limit To List, rule)
   onEscape(c: ControlDef): void;
   onDeleteRecord(): void;                                        // the current record's row selected, then Delete
   error: string | null;                                         // the first error (a field no control shows included)
   name: string;
   onWidths?(control: string, px: number): void;                 // a column dragged (a tab's form: kept for Access's layout question)
+  onAttachments?(): void;                                       // an Attachments box closed after a change: the records are read again
   onTabOut?(dir: 1 | -1): boolean;                              // a subform: Tab, Enter or an arrow past the last cell (or before the first) leaves it at its end
 }
 
@@ -63,7 +67,8 @@ export function FormDatasheet(p: FormDatasheetProps) {
   const palette = usePalette();
   const modal = useModal();
   const [widths, resize] = useColumnWidths();
-  const onColumnResize = (c: GridColumn, w: number) => { resize(c, w); if (c.id !== undefined) p.onWidths?.(c.id, w); };
+  const resizing = useRef(false);   // a press that resized a column opens no menu (the mouse-up lands on the column's new menu button)
+  const onColumnResize = (c: GridColumn, w: number) => { resizing.current = true; resize(c, w); if (c.id !== undefined) p.onWidths?.(c.id, w); };
   const checkTruncated = useMemo(() => currentBaseOptions().checkTruncatedNumbers, []); // read when the view opens (R13)
   const measure = useMemo(() => measureIn(`${palette.theme.baseFontStyle} ${palette.theme.fontFamily}`), [palette]);
   const [, scrolled] = useState(0);
@@ -72,6 +77,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
   const { snap } = x;
   const current = snap.index;
   const count = snap.status === 'ready' && !snap.info ? 1 : snap.total + (snap.canAdd ? 1 : 0);   // an unbound form: one row
+  const [attDlg, setAttDlg] = useState<AttachmentTarget | null>(null);   // C5: the Attachments box of the current record's cell
   const [sel, setSelState] = useState<GridSelection>(() => cellSelection(0, current));
 
   // Combo and list boxes: the datasheet's list editor, on the rows the form read (Task 9's loadRowSource)
@@ -83,8 +89,8 @@ export function FormDatasheet(p: FormDatasheetProps) {
     return [[sc.control, lookupEditor(list.data, { label: sc.title, edit: (v) => (f ? editText(f, v, locale) : v === null ? '' : String(v)) })]];
   })), [columns, byName, x.lists, x.info, locale]);
 
-  const live = useRef({ sel, current, editors, onFocusControl: p.onFocusControl });
-  live.current = { ...live.current, current, editors, onFocusControl: p.onFocusControl };
+  const live = useRef({ sel, current, editors, onFocusControl: p.onFocusControl, busy: snap.busy });
+  live.current = { ...live.current, current, editors, onFocusControl: p.onFocusControl, busy: snap.busy };
   const setSel = (s: GridSelection | ((cur: GridSelection) => GridSelection)) => {
     const next = typeof s === 'function' ? s(live.current.sel) : s;
     live.current.sel = next;
@@ -157,6 +163,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
       return { kind: GridCellKind.Boolean, data: on, allowOverlay: false, readonly };
     }
     if (isUnbound(c)) return text(unboundText(c, rx));
+    if (b?.f.type === 'attachment') return toCell(b.f, b.stored, { locale, lang, readOnly: true });   // a paperclip and the number of files
     if (b) {
       if (rx.snap.isNew && b.f.type === 'autoNumber') return text(t('datasheet.newRecord'), '', true);
       const tx = controlTexts(c, b.f, b.stored, b.pending, rx.display);
@@ -213,9 +220,10 @@ export function FormDatasheet(p: FormDatasheetProps) {
   const keysEnv = useRef<EditKeysEnv>(null!);
   keysEnv.current = {
     cellAt: (item) => cellAt.current(item), selected: () => live.current.sel.current,
-    cols: () => columns.length, rows: () => count, moveTo: ([col, row]) => select(cellSelection(col, row)), pastEnd: p.onTabOut,
+    cols: () => columns.length, rows: () => count, moveTo: ([col, row]) => select(cellSelection(col, row)), pastEnd: p.onTabOut, busy: () => live.current.busy,
   };
-  useEditKeys(wrap, keysEnv);
+  const releaseKeys = useEditKeys(wrap, keysEnv);
+  useEffect(() => { if (!snap.busy) releaseKeys(); }, [snap.busy]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const provideEditor = useCallback<ProvideEditorCallback<GridCell>>((cell) => {
     const col = live.current.sel.current?.cell[0];
@@ -234,7 +242,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
     const f = c.field === null ? undefined : x.info?.fields.find((k) => k.name === c.field);
     const dir = f ? sort.find((k) => sameName(k.field, f.name))?.dir ?? null : null;
     const filtered = !!f && filter.some((k) => sameName(k.field, f.name));
-    return { id: c.control, title: c.title, width: widths[c.control] ?? c.width, ...headerDecor(f?.type ?? null, dir, filtered, palette.theme.accentColor!) };
+    return { id: c.control, title: c.title, width: widths[c.control] ?? c.width, hasMenu: f !== undefined, ...headerDecor(f?.type ?? null, dir, filtered, palette.theme.accentColor!) };
   }), [columns, widths, sort, filter, x.info, palette]);
   const pencil = useRowPencil(editor, wrap, snap.dirty ? current : null);   // the modified record's selector
 
@@ -249,6 +257,13 @@ export function FormDatasheet(p: FormDatasheetProps) {
     const r = s.current?.range;
     return !!r && r.height === 1 && r.y === live.current.current;
   };
+  /** Double-click (or Enter) on an Attachment cell of the current record: its box, as the table's datasheet. */
+  const openAttachments = ([col, row]: Item) => {
+    const c = columns[col] && byName.get(columns[col].control);
+    const b = c && row === current ? fieldOf(c, x) : undefined;
+    const table = b?.f.origin?.table ?? x.info?.keyTable, rowid = snap.rowid;
+    if (b?.f.type === 'attachment' && table !== undefined && typeof rowid === 'number' && Number.isFinite(rowid) && !snap.isNew && x.info?.updatable !== false) setAttDlg({ table, field: b.f.origin?.field ?? b.f.name, rowid });
+  };
   /** A paste fills one row at most, the current record's (as the table's datasheet, A1). */
   const onPaste = (target: Item, values: readonly (readonly string[])[]): boolean => {
     if (ro || snap.busy || target[1] !== live.current.current) return false;
@@ -259,15 +274,18 @@ export function FormDatasheet(p: FormDatasheetProps) {
 
   return (
     <div className="frun frun-sheet" ref={root} data-testid="form-run">
-      <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: p.name })} aria-busy={snap.busy} data-testid="form-datasheet">
+      <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: p.name })} aria-busy={snap.busy} data-testid="form-datasheet"
+        onPointerDownCapture={() => { resizing.current = false; }}>
         <DataEditor ref={editor} theme={palette.theme} columns={gridColumns} rows={count} headerIcons={HEADER_ICONS}
           getCellContent={getCellContent} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection
           gridSelection={sel} onGridSelectionChange={select} onCellEdited={onCellEdited} onKeyDown={onKeyDown}
-          onDelete={onDelete} onPaste={onPaste} keybindings={{ search: false, activateCell: ' |shift+Enter' }} onColumnResize={onColumnResize}
+          onDelete={onDelete} onPaste={onPaste} onCellActivated={openAttachments} keybindings={{ search: false, activateCell: ' |shift+Enter' }} onColumnResize={onColumnResize}
+          onHeaderMenuClick={(col, b) => { const c = columns[col]; if (c && !resizing.current) p.onHeaderMenu?.(c.control, { x: b.x, y: b.y + b.height }); }}
           onVisibleRegionChanged={() => { if (snap.dirty) scrolled((n) => n + 1); }}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={ROW_HEIGHT} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
           width="100%" height="100%" />
         {pencil && <RowPencil at={pencil} background={palette.pending} title={t('datasheet.pending')} />}
+        {attDlg && createPortal(<AttachmentsDialog target={attDlg} readOnly={ro} onClose={(changed) => { setAttDlg(null); if (changed) p.onAttachments?.(); }} />, document.body)}
       </div>
       {error && (
         <div className="ds-error" role="alert" data-testid="form-datasheet-error">

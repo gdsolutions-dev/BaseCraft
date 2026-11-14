@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { listResources } from '../main/db/resources';
 import { registerFunctions } from '../main/db/file-format';
 import { listCharts } from './ops-design';
+import { attachmentsRead } from './ops-data';
 import { CANON } from '../shared/coerce';
 
 export interface CliIo { out(s: string): void; err(s: string): void }
@@ -61,6 +62,20 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
 `); } finally { db.close(); }
       return 0;
     }
+    if (argv[0] === 'attachments') {
+      const usage = 'usage: basecraft-cli attachments FILE.basecraft TABLE FIELD [ROWID [--extract DIR]]';
+      const rest = argv.slice(1), at = rest.indexOf('--extract');
+      const extractTo = at < 0 ? undefined : rest[at + 1];
+      const pos = at < 0 ? rest : rest.slice(0, at);
+      if (pos.length < 3 || pos.length > 4 || (at >= 0 && (extractTo === undefined || rest.length !== at + 2)) || (pos[3] !== undefined && !/^\d+$/.test(pos[3]))) throw new CliUsageError(usage);
+      assertBaseExtension(pos[0]);
+      if (!fs.statSync(pos[0], { throwIfNoEntry: false })?.isFile()) throw new CliUsageError(`file not found: ${pos[0]}`);
+      checkTarget(pos[0]);
+      const db = new DatabaseSync(pos[0], { readOnly: true });
+      try { registerFunctions(db); io.out(`${JSON.stringify(attachmentsRead(db, { table: pos[1], field: pos[2], ...(pos[3] !== undefined ? { rowid: Number(pos[3]) } : {}), ...(extractTo !== undefined ? { extractTo } : {}) }), null, 2)}
+`); } finally { db.close(); }
+      return 0;
+    }
     if (argv[0] === 'commands' && argv.length === 1) { io.out(`${JSON.stringify(COMMANDS, null, 2)}
 `); return 0; }
     if (argv[0] === 'describe' && argv.length === 2) {
@@ -70,7 +85,7 @@ export async function run(argv: string[], io: CliIo): Promise<number> {
 `);
       return 0;
     }
-    throw new CliUsageError('usage: basecraft-cli --version | new FILE | script SPEC.json FILE | resources FILE | charts FILE | commands | describe ID');
+    throw new CliUsageError('usage: basecraft-cli --version | new FILE | script SPEC.json FILE | resources FILE | charts FILE | attachments FILE TABLE FIELD [ROWID [--extract DIR]] | commands | describe ID');
   } catch (e) {
     if (e instanceof CliUsageError) { io.err(`${e.message}\n`); return e.code; }
     if (e instanceof BaseFileError) { io.err(e.code === 'exists' ? `${argv[1]} already exists

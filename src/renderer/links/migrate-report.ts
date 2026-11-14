@@ -44,12 +44,13 @@ export function reportText(r: MigrationReport, t: TFunction): string {
 
 /** A refusal or a failure as its paragraphs (R9): what changed — nothing, or tables that stayed on the server — and the backup. */
 export function resultLines(r: Exclude<MigrateResult, { ok: true }>, t: TFunction): string[] {
-  const backup = 'backupPath' in r && r.backupPath ? [t('migrate.backup', { backup: r.backupPath })] : [];
+  const backup = [...'migrated' in r && r.migrated?.length ? [t('migrate.partial', { names: r.migrated.join(', ') })] : [],
+    ...'backupPath' in r && r.backupPath ? [t('migrate.backup', { backup: r.backupPath })] : []];
   switch (r.reason) {
     case 'readOnly': return [t('dialog.op.readOnly')];
     case 'noTables': case 'dataFile': return [t(`migrate.${r.reason}`)];
     case 'noSchema': return [t('migrate.noSchema', { schema: r.schema })];
-    case 'nameTaken': case 'nameTooLong': case 'invalidDesign': return [t(`migrate.${r.reason}`, { names: r.names.join(', ') })];
+    case 'nameTaken': case 'nameTooLong': case 'invalidDesign': case 'nameClash': return [t(`migrate.${r.reason}`, { names: r.names.join(', ') })];
     case 'cancelled': return [t('migrate.cancelled'), ...backup];
     case 'failed': {
       const error = errorText(r.error, t).replace(/[.。]\s*$/, '');

@@ -172,6 +172,9 @@ test('navigate, edit and save; a refused save: message box, error under the cont
     const trace = () => page.evaluate(() => (window as unknown as { __trace: string[] }).__trace.join('\n'));
     await page.getByTestId('modal-btn-ok').click();
     await expect(ctl('Note')).toBeFocused();
+    // the box's close gives the focus back to Note a frame later (focusBack): wait for it, or it lands on Nom's fill below
+    // (CI trace: focusin Nom, focusin Note, input Note "Dupont")
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await page.keyboard.press('Escape');
     await expect(ctl('Note')).toHaveValue('');
     await expect(page.getByTestId('form-error-Note')).toHaveCount(0);

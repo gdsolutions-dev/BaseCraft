@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
   strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir, exportQueries, exportDesigns,
 } from './ipc-validate';
@@ -239,7 +239,7 @@ describe('ipc argument checks', () => {
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
     const full = {
       appTitle: 'Gestion des ventes', appIcon: png, startupForm: 'FMenu', showNavPane: false, ribbon: 'simplified', runMode: true,
-      statusBar: false, documentTabs: false, specialKeys: false, compactOnClose: true, datasheetDesign: false, fullMenus: false, shortcutMenus: false, iconForForms: true, frontEnd: true, dataFile: true,
+      statusBar: false, documentTabs: false, overlappingWindows: true, specialKeys: false, compactOnClose: true, datasheetDesign: false, fullMenus: false, shortcutMenus: false, iconForForms: true, frontEnd: true, dataFile: true,
       fourDigitYear: true, checkTruncatedNumbers: false, filterListIndexed: false, filterListNonIndexed: false, filterListMax: 0,
       trackNameAutoCorrect: false, performNameAutoCorrect: false, logNameAutoCorrect: true,
     };
@@ -413,6 +413,14 @@ describe('import arguments', () => {
     for (const v of [null, [], 'x', { kind: 'oracle', params, schema: 'p' }, { kind: 'postgresql', params: {}, schema: 'p' }, { kind: 'postgresql', params, schema: '' },
       { kind: 'postgresql', params, schema: 'x'.repeat(129) }, { kind: 'postgresql', params, schema: 1 }, { kind: 'postgresql', params, schema: 'p', extra: 1 }])
       expect(() => migrateRequest(v)).toThrow(INVALID);
+  });
+  it('odbcRequest: exactly one of a DSN and a connection string, bounded, no NUL, no other key (C4)', () => {
+    const ok = { dsn: 'Sales', connection: '', user: 'u', password: 'p' };
+    expect(odbcRequest(ok)).toEqual(ok);
+    expect(odbcRequest({ ...ok, dsn: '', connection: 'Driver={X};Database=d' }).connection).toBe('Driver={X};Database=d');
+    for (const v of [null, [], 'x', { ...ok, dsn: '' }, { ...ok, connection: 'x' }, { ...ok, dsn: '', connection: '  ' }, { ...ok, user: 1 }, { ...ok, extra: 1 },
+      { ...ok, dsn: 'a b' }, { ...ok, password: 'x'.repeat(1025) }, { dsn: 'Sales', connection: '', user: 'u' }])
+      expect(() => odbcRequest(v)).toThrow(INVALID);
   });
   it('serverKind: a kind with a connector; serverParams: the connector reads them, a password dropped (C4 Task 12)', () => {
     expect(serverKind('postgresql')).toBe('postgresql');

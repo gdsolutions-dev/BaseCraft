@@ -1,9 +1,12 @@
 // Gestionnaires ipcMain de l'API window.basecraft : émetteur vérifié, arguments vérifiés, une session à la fois.
 import { app, clipboard, ipcMain, nativeTheme, safeStorage, session, shell, type BrowserWindow } from 'electron';
+import { isSortOrder } from '../shared/sort-orders';
 import { randomUUID } from 'node:crypto';
-import { readFileSync, realpathSync, rmSync } from 'node:fs';
-import { stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import { ATTACHMENT_MAX_BYTES, isRunnable } from '../shared/attachments';
 import { CH, type AppInfo, type ContentState, type LicenseEntry, type LinkResult, type OpResult, type RelationResult, type SaveTableResult, type SessionState, type SettingsView } from '../shared/api';
 import { logLabels } from '../shared/autocorrect/labels';
 import { MAX_EXCEL_ROWS } from '../shared/exchange';
@@ -16,25 +19,28 @@ import { RUNTIME } from '../shared/product';
 import { FILE_EXTENSION } from './db/file-format';
 import { HEARTBEAT_MS, keepAlive, releaseIfOurs } from './db/lock';
 import { isDesignChannel } from './design-channels';
-import { pickSpellLanguage } from './spellcheck';
+import { pickSpellLanguage, startWinSpell, winSpellTags, type WinSpell } from './spellcheck';
+import { powershellPath } from './import/access-export';
 import { DbHost, type AsyncSession } from './db-host/client';
 import type { HostEvent, HostOpen } from './db-host/protocol';
-import { accessExportScript } from './app-protocol';
-import { pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickSavePath, pickTextPath, showNotice } from './dialogs';
+import { accessExportScript, odbcScript, spellcheckScript } from './app-protocol';
+import { e2e, pickAttachmentPaths, pickAttachmentSavePath, pickExcelPath, pickExportPath, pickFolder, pickImportPath, pickLinkPath, pickOpenPath, pickPdfPath, pickPicturePath, pickSavePath, pickThemePath, pickTextPath, showNotice } from './dialogs';
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
-  relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg,
+  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, savedImport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, spellWords, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg, uint,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { viaTemp } from './exchange/atomic-file';
 import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
+import { inBaseFolder, readLinkedPictures } from './linked-picture';
+import { readThmx } from './thmx';
 import { readUserThemes, removeUserTheme, saveUserTheme } from './user-themes';
 import { CredentialStore, refusedKey } from './credentials';
-import { ApprovalStore, contentState, enabledAfterOwnWrite, readTrustConfig, systemTrustPath, trustsFile, type TrustConfig } from './trust';
+import { ApprovalStore, contentState, effectiveTrust, enabledAfterOwnWrite, isNetworkPath, readTrustConfig, systemTrustPath, trustsFile, type TrustConfig } from './trust';
 
 let mainWindow: () => BrowserWindow | null = () => null;
 let dir = '';
@@ -54,6 +60,8 @@ export const closeVeto = new CloseVeto();
 /** This user's approvals and the administrator's trusted folders (trust.ts), set up once in registerIpc. */
 let approvals: ApprovalStore;
 let trustConfig: TrustConfig = { trustedFolders: [] };
+/** The administrator's folders and this user's own (network ones only while allowed). */
+const trustCfg = (): TrustConfig => effectiveTrust(trustConfig, settings.trustedLocations, settings.trustNetwork, process.platform);
 /** Server credentials (C4 R10, G2), set up once in registerIpc. */
 let credentials: CredentialStore;
 
@@ -96,7 +104,7 @@ const settingsView = (): SettingsView => ({ ...settings, uiLanguage: uiLanguage(
 /** Every settings write reaches the window: it never asks again (the one refresh per write). */
 function broadcastSettings(): void {
   const w = mainWindow();
-  if (w && !w.isDestroyed()) w.webContents.send(CH.settingsChanged, settingsView());
+  if (w && !w.isDestroyed()) { w.webContents.setZoomFactor(settings.interfaceZoom / 100); w.webContents.send(CH.settingsChanged, settingsView()); }   // C6: the interface zoom
 }
 
 /** One opening, start or restart of a base at a time (two quick opens of the same file must not race for its lock). Every
@@ -208,6 +216,10 @@ function frontEndCopies(): Pick<HostOpen, 'frontEndCache' | 'frontEndNetworkDirs
 const fakeServer = (): Pick<HostOpen, 'fakeServer'> =>
   (process.env.BASECRAFT_E2E === '1' && process.env.BASECRAFT_E2E_FAKE_SERVER === '1' && !app.isPackaged ? { fakeServer: true } : {});
 
+const ODBC_KEY = /^odbc:\/\//;
+const fakeOdbc = (): Pick<HostOpen, 'fakeOdbc'> =>
+  (process.env.BASECRAFT_E2E === '1' && process.env.BASECRAFT_E2E_FAKE_ODBC === '1' && !app.isPackaged ? { fakeOdbc: true } : {});
+
 /** M6: the keys whose credential the current data process received from main. */
 const pushed = new Set<string>();
 /** R10: the credentials this process knows for the front-end's servers go to its data process (kept in its memory). A failure
@@ -239,8 +251,8 @@ async function startHost(path: string, create: boolean, sessionId: string): Prom
     else if (w && !w.isDestroyed()) { const { event: _event, ...p } = e; w.webContents.send(CH.importProgress, p); }
   };
   try {
-    const { host: h } = await DbHost.start({ path, create, appVersion: app.getVersion(), region: region(), sessionId, shared: sharedOptions(),
-      ...frontEndCopies(), ...fakeServer() }, onEvent, () => { if (me) hostCrashed(me); });
+    const { host: h } = await DbHost.start({ path, create, ...(create ? { sortOrder: settings.newSortOrder } : {}), appVersion: app.getVersion(), region: region(), sessionId, shared: sharedOptions(),
+      ...frontEndCopies(), ...fakeServer(), ...fakeOdbc(), odbcScript: odbcScript() }, onEvent, () => { if (me) hostCrashed(me); });
     me = h;
     await pushCredentials(h);
     return h;
@@ -256,7 +268,7 @@ const enabledFor = new WeakMap<DbHost, string | null>();
 /** Tells the data process which content runs (null: none, action queries refused) and whether its pass-throughs may use a
  *  stored password (C6 Task 8), and sets the state; broadcast if it changed. */
 async function setContent(h: DbHost, fingerprint: string | null, content: ContentState, announce = true): Promise<void> {
-  try { await h.session.setContentEnabled(fingerprint, trustsFile(content, h.opened.path, trustConfig, process.platform)); } catch (e) { if (fingerprint !== null) throw e; } // null: a process gone runs nothing
+  try { await h.session.setContentEnabled(fingerprint, trustsFile(content, h.opened.path, trustCfg(), process.platform)); } catch (e) { if (fingerprint !== null) throw e; } // null: a process gone runs nothing
   enabledFor.set(h, fingerprint);
   const changed = h.state.content !== content;
   h.state = { ...h.state, content };
@@ -270,7 +282,7 @@ async function setContent(h: DbHost, fingerprint: string | null, content: Conten
 async function decideContent(h: DbHost, announce = false): Promise<void> {
   try {
     const a = await h.session.activeContent();
-    const content = contentState(a, await h.session.dbUuid(), h.opened.path, { store: approvals, cfg: trustConfig, platform: process.platform });
+    const content = contentState(a, await h.session.dbUuid(), h.opened.path, { store: approvals, cfg: trustCfg(), platform: process.platform });
     await setContent(h, content === 'disabled' ? null : a.fingerprint, content, announce);
   } catch {
     await setContent(h, null, 'disabled', announce);
@@ -447,6 +459,14 @@ async function cancelCall(): Promise<void> {
   });
 }
 
+/** Temp copies of opened attachments, removed when the app quits. */
+const tempDirs = new Set<string>();
+/** `name` in `dir`, or "name (2).ext"... when the file exists (Save All never overwrites). */
+function freeName(dir: string, name: string): string {
+  const ext = extname(name), stem = name.slice(0, name.length - ext.length);
+  for (let i = 2, p = join(dir, name); ; p = join(dir, `${stem} (${i++})${ext}`)) if (!existsSync(p)) return p;
+}
+
 function need(): AsyncSession {
   if (!host) throw new Error('bc:noBase');
   return host.session;
@@ -493,7 +513,12 @@ async function runExport(src: ReturnType<typeof exportSource>, spec: ReturnType<
   }
 }
 
+let stopSpell = (): void => {};
+/** Quit: ends the Windows spell checker child. */
+export const endSpell = (): void => stopSpell();
+
 export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
+  app.on('quit', () => { for (const d of tempDirs) rmSync(d, { recursive: true, force: true }); });
   mainWindow = getMainWindow;
   dir = app.getPath('userData');
   settings = loadSettings(dir);
@@ -517,7 +542,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   // kept in memory only once written: a failed save leaves getSettings as the file is
   const update = (patch: Partial<AppSettings>) => { const next = { ...settings, ...patch }; saveSettings(dir, next); settings = next; broadcastSettings(); };
 
-  handle(CH.getSettings, settingsView);
+  handle(CH.getSettings, () => { mainWindow()?.webContents.setZoomFactor(settings.interfaceZoom / 100); return settingsView(); });   // read at each start: the zoom applies
   handle(CH.setLocale, (l) => {
     if (l !== 'system' && !isUiLanguage(l)) throw new Error('Invalid locale');
     update({ locale: l as AppSettings['locale'] });
@@ -529,10 +554,13 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   });
   handle(CH.setSetting, (k, v) => {
     const [key, val] = settingValue(k, v);
+    if (key === 'trustedLocations' && !settings.trustNetwork && (val as AppSettings['trustedLocations']).some((l) => isNetworkPath(l.path, process.platform))) throw new TypeError('bc:invalidArgument');
     update({ [key]: val });
     if (key === 'refreshInterval') restartRefresh();
   });
   restartRefresh();
+  handle(CH.appTrust, () => ({ folders: trustConfig.trustedFolders, approvals: approvals.count() }));
+  handle(CH.appClearApprovals, () => { approvals.clear(); return { folders: trustConfig.trustedFolders, approvals: approvals.count() }; });
   handle(CH.pickFolder, () => startDir().then(pickFolder));
   handle(CH.appInfo, (): AppInfo => appInfo());
   // Packaged: resources/licenses.json (extraResources); unpackaged: out/licenses.json (npm run licenses).
@@ -549,14 +577,27 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.beep, () => { shell.beep(); });
   handle(CH.appReadClipboard, () => clipboard.readText());
   // Spelling: Chromium's Hunspell dictionary of the interface language, downloaded on first use (Google's CDN) and kept in the user data folder
+  // On Windows Chromium uses the OS checker in the browser process, which the renderer cannot query: one PowerShell child asks it.
+  let winSpell: WinSpell | null = null, winTags = '';
+  stopSpell = () => winSpell?.stop();
+  const winPrepare = async () => {
+    const tags = winSpellTags(pickSpellLanguage(session.defaultSession.availableSpellCheckerLanguages, uiLanguage(), region()), uiLanguage(), region());
+    if (winSpell && winSpell.alive() && winTags === tags.join() && await winSpell.ready) return true;   // one child for the session, restarted when the language changes or the child died
+    winSpell?.stop();
+    winTags = tags.join();
+    winSpell = startWinSpell(powershellPath(), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', spellcheckScript(), ...tags]);
+    return winSpell.ready;
+  };
   const spellPrepare = () => {
+    if (process.platform === 'win32') return winPrepare();
     const ses = session.defaultSession;
     const lang = pickSpellLanguage(ses.availableSpellCheckerLanguages, uiLanguage(), region());
     if (lang && !ses.getSpellCheckerLanguages().includes(lang)) ses.setSpellCheckerLanguages([lang]);
     return lang !== null;
   };
   handle(CH.spellPrepare, spellPrepare);
-  try { spellPrepare(); } catch (e) { console.error(e); }   // the download starts at launch, not at the first click
+  handle(CH.spellCheck, (words) => (winSpell ? winSpell.check(spellWords(words)) : {}));
+  try { if (process.platform !== 'win32') void spellPrepare(); } catch (e) { console.error(e); }   // the download starts at launch, not at the first click
   handle(CH.appWriteClipboard, (text) => { clipboard.writeText(clipboardText(text)); });
   handle(CH.appSetIcon, (png) => {
     const bytes = iconBytes(png);
@@ -659,9 +700,62 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.rowsDelete, (t, ids) => rowWrite(() => need().delete(lookupName(t), rowRefs(ids))));
   handle(CH.rowsLookup, (t, fd) => need().lookup(lookupName(t), lookupName(fd)));
 
+  // Attachment fields (C5): the main process alone touches the files (dialogs, reading, writing, opening).
+  const att = (t: unknown, f: unknown, r: unknown) => [lookupName(t), lookupName(f), rowRef(r)] as const;
+  handle(CH.attList, (t, f, r) => need().attachmentList(...att(t, f, r)));
+  handle(CH.attAdd, async (t, f, r) => {
+    const a = att(t, f, r);
+    const paths = await pickAttachmentPaths();
+    const files: { name: string; data: Uint8Array }[] = [];
+    for (const p of paths) {
+      if ((await stat(p)).size > ATTACHMENT_MAX_BYTES) throw new Error('bc:attachmentTooLarge'); // before reading it
+      files.push({ name: basename(p), data: await readFile(p) });
+    }
+    return files.length ? rowWrite(() => need().attachmentAdd(...a, files)) : [];
+  });
+  handle(CH.attRemove, (t, f, r, id) => rowWrite(() => need().attachmentRemove(...att(t, f, r), uint(id))));
+  handle(CH.attPreview, (t, f, r, id) => need().attachmentPreview(...att(t, f, r), uint(id)));
+  handle(CH.attRead, (t, f, r, id) => need().attachmentGet(...att(t, f, r), uint(id)));
+  handle(CH.attSaveTo, async (t, f, r, id, p) => {
+    // a script's path (Python): absolute, not a program or script file, never over a file that exists
+    if (typeof p !== 'string' || p.length > 1024 || p.includes('\0') || !isAbsolute(p) || isRunnable(p)) throw new TypeError('bc:invalidArgument');
+    const file = await need().attachmentGet(...att(t, f, r), uint(id));
+    await writeFile(p, file.data, { flag: 'wx' });
+  });
+  handle(CH.attFaces, (t, f, ids) => need().attachmentFaces(lookupName(t), lookupName(f), rowRefs(ids)));
+  handle(CH.attSave, async (t, f, r, id) => {
+    const file = await need().attachmentGet(...att(t, f, r), uint(id));
+    const to = await pickAttachmentSavePath(file.name);
+    if (to === null) return false;
+    await writeFile(to, file.data);
+    return true;
+  });
+  handle(CH.attSaveAll, async (t, f, r) => {
+    const a = att(t, f, r);
+    const dir = await pickFolder(app.getPath('documents'), 'BASECRAFT_E2E_ATTACH_FOLDER');
+    if (dir === null) return false;
+    for (const info of await need().attachmentList(...a)) {
+      const file = await need().attachmentGet(...a, info.id);
+      await writeFile(freeName(dir, file.name), file.data, { flag: 'wx' });
+    }
+    return true;
+  });
+  handle(CH.attOpen, async (t, f, r, id, confirmed) => {
+    if (confirmed !== true) throw new TypeError('bc:invalidArgument'); // the renderer asked the user (never opened silently)
+    const file = await need().attachmentGet(...att(t, f, r), uint(id));
+    const dir = mkdtempSync(join(tmpdir(), 'basecraft-attachment-'));
+    tempDirs.add(dir);
+    const to = join(dir, file.name);
+    await writeFile(to, file.data);
+    if (!e2e()) { const err = await shell.openPath(to); if (err) throw new Error('bc:attachmentOpen'); }
+    else process.env.BASECRAFT_E2E_ATTACH_OPENED = to; // e2e seam: nothing is launched, the test reads the temp copy's path
+  });
+
   // Startup options (B3): a read-only base reads them; saving rejects (ReadOnlyError) like any write.
   handle(CH.baseStartup, () => need().startup());
   handle(CH.baseSaveStartup, (o) => rowWrite(() => need().saveStartup(startupOptions(o))));
+  handle(CH.baseSortOrder, () => need().sortOrder());
+  handle(CH.baseSetSortOrder, (id) => { if (!isSortOrder(id)) throw new Error('bc:invalidArgument'); return rowWrite(() => need().setSortOrder(id)); });
   handle(CH.baseNavOptions, () => need().navOptions());
   handle(CH.baseSaveNavOptions, (o) => rowWrite(() => need().saveNavOptions(readNavOptions(navOptionsArg(o)))));
 
@@ -671,6 +765,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.themesList, () => readUserThemes(dir));
   handle(CH.themesSave, (t, replace) => saveUserTheme(dir, themeArg(t), replace === true));
   handle(CH.themesRemove, (name) => removeUserTheme(dir, lookupName(name)));
+  handle(CH.themesImport, async () => {
+    const p = await pickThemePath(catalog().themeGallery.thmxFilter);
+    return p === null ? null : readThmx(p);
+  });
   handle(CH.baseSaveTheme, async (t) => {
     await rowWrite(() => need().saveBaseTheme(themeArg(t)));
     const w = mainWindow();
@@ -678,7 +776,17 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   });
   // Shared image gallery (F3): reads allowed read-only; writes are design channels (the Runtime has no handler) and broadcast.
   handle(CH.resourcesList, () => need().listResources());
-  handle(CH.resourcesGet, (names) => need().getResources(resourceNamesArg(names)));
+  handle(CH.resourcesPickFile, async () => {   // kept relative to the base's folder, where a linked picture must be
+    const p = await pickPicturePath(catalog().dialog.pictureFilter);
+    if (p === null) return null;
+    const rel = inBaseFolder(p, host?.opened.path);
+    if (rel === undefined) throw new TypeError('bc:pictureOutsideBase');
+    return rel;
+  });
+  handle(CH.resourcesGet, async (names) => {
+    const wanted = resourceNamesArg(names), found = await need().getResources(wanted);
+    return { ...readLinkedPictures(wanted.filter((n) => !Object.hasOwn(found, n)), host?.opened.path), ...found };
+  });
   const resourcesChanged = () => { const w = mainWindow(); if (w && !w.isDestroyed()) w.webContents.send(CH.resourcesChanged); };
   handle(CH.resourcesAdd, async (name, url) => { const n = await rowWrite(() => need().addResource(resourceNameArg(name), pictureDataUrlArg(url))); resourcesChanged(); return n; });
   handle(CH.resourcesReplace, async (name, url) => { await rowWrite(() => need().replaceResource(resourceNameArg(name), pictureDataUrlArg(url))); resourcesChanged(); });
@@ -741,13 +849,14 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.linksLogin, async (k, u, pw, r) => {
     const key = serverKey(k); const user = loginUser(u); const password = accessPassword(pw); const remember = bool(r);
     const ok = await need().login(key, user, password);
-    if (ok) { credentials.set(key, { user, password }, remember); pushed.add(key); } else { credentials.forget(key); pushed.delete(key); } // M6
+    // an ODBC login (D1) lives in the session: never remembered
+    if (ok) { credentials.set(key, { user, password }, remember && !ODBC_KEY.test(key)); pushed.add(key); } else { credentials.forget(key); pushed.delete(key); } // M6
     return ok;
   });
   handle(CH.linksLoginInfo, async (k) => {
     const key = serverKey(k);
     const d = await need().loginDefaults(key);
-    return { user: credentials.user(key) ?? d.user, label: d.label, canRemember: credentials.canStore() };
+    return { user: credentials.user(key) ?? d.user, label: d.label, canRemember: credentials.canStore() && !ODBC_KEY.test(key) };
   });
   // C4 Task 12, design: the server link dialog. Its login, accepted, is kept as `linksLogin` keeps one (R10, G2).
   handle(CH.linksInspectServer, async (k, p, pw, r) => {
@@ -778,6 +887,15 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     await whenIdle();
     return runImport(() => need().importServerTables(kind, params, names));
   });
+  // C4: External Data › Import › ODBC Database. The script's path is the main process's own.
+  handle(CH.odbcDsns, () => need().odbcDsns(odbcScript()));
+  handle(CH.odbcInspect, (r) => need().inspectOdbc(odbcRequest(r), odbcScript()));
+  handle(CH.odbcRun, async (r, n) => {
+    const req = odbcRequest(r); const names = nameList(n);
+    await whenIdle();
+    return runImport(() => need().importOdbcTables(req, names, importTexts(), odbcScript()));
+  });
+  handle(CH.odbcLink, (r, n) => { const req = odbcRequest(r); const names = nameList(n); return tableOp(() => need().linkOdbcTables(req, names, odbcScript())); }); // D1
   // E1: the path is one links.pick returned; the file is only read. Progress and Stop as the other imports.
   handle(CH.accessImportInspect, (p) => need().inspectAccessImport(linkPath(p, chosenLinks)));
   handle(CH.accessImportRun, async (p, n, st, keep, q, dz) => {
@@ -845,4 +963,7 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.exchangeSavedList, () => need().savedExports());
   handle(CH.exchangeSavedSave, (n, e) => rowWrite(() => need().saveSavedExport(nameArg(n), savedExport(e))));
   handle(CH.exchangeSavedDelete, (n) => rowWrite(() => need().deleteSavedExport(lookupName(n))));
+  handle(CH.exchangeSavedImportList, () => need().savedImports());
+  handle(CH.exchangeSavedImportSave, (n, i) => rowWrite(() => need().saveSavedImport(nameArg(n), savedImport(i))));
+  handle(CH.exchangeSavedImportDelete, (n) => rowWrite(() => need().deleteSavedImport(lookupName(n))));
 }

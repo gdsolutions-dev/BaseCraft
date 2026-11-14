@@ -14,10 +14,8 @@ import { DocumentView } from './document-views';
 import { useErrorDialog, trapFocus } from './Modal';
 import { inertRef } from './modal-tab';
 import type { AppDispatch } from './nav-menu';
+import { chrome, DEFAULT_WIN, SELECTOR_PX } from './form-window';
 import { modeGuard } from './ribbon-model';
-
-/** The record selector's width beside the Detail section (SingleFormView). */
-const SELECTOR_PX = 18;
 
 export function DialogHost(p: { tabs: readonly DocTab[]; activeId: string | null; dispatch: AppDispatch; readOnly: boolean }): JSX.Element | null {
   const dialogs = p.tabs.filter((x) => x.dialog);
@@ -59,17 +57,20 @@ function FormDialog({ tab, active, top, dispatch, readOnly }: { tab: DocTab; act
   const selectors = !!doc?.recordSource && effectiveProp(doc.props, 'RecordSelectors', 'form') !== false;
   // the form's width; its height is its sections' (and its navigation bar's), up to the window's
   const width = doc ? twipsToPx(Number(effectiveProp(doc.props, 'Width', 'form')) || 0) + (selectors ? SELECTOR_PX : 0) : undefined;
+  const ch = chrome(tab.win ?? DEFAULT_WIN);   // Border Style none: no title bar; Control Box / Close Button off: no way to close it by hand
   const titleId = `form-dialog-title-${tab.id}`;
   return (
     <div className="form-dialog-backdrop" ref={inertRef(!top)}>
       <div ref={box} className="form-dialog card" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         data-testid={`form-dialog-${tab.name}`} onKeyDown={(e: KeyboardEvent) => { if (!e.defaultPrevented) trapFocus(e, box.current); }}>
-        <div className="form-dialog-bar">
-          <h2 id={titleId} className="form-dialog-title" data-testid="form-dialog-title">{caption || tab.name}</h2>
-          <button className="form-dialog-x" data-testid="form-dialog-close" title={t('backstage.close')} aria-label={t('backstage.close')} onClick={() => void close()}>
-            <X className="ic ic-sm" aria-hidden />
-          </button>
-        </div>
+        {ch.bar ? (
+          <div className="form-dialog-bar">
+            <h2 id={titleId} className="form-dialog-title" data-testid="form-dialog-title">{caption || tab.name}</h2>
+            {ch.box && <button className="form-dialog-x" data-testid="form-dialog-close" title={t('backstage.close')} aria-label={t('backstage.close')} disabled={!ch.close} onClick={() => void close()}>
+              <X className="ic ic-sm" aria-hidden />
+            </button>}
+          </div>
+        ) : <h2 id={titleId} className="sr-only">{caption || tab.name}</h2>}
         <div className="form-dialog-body" style={{ width }}>
           <DocumentView tab={tab} active={active} readOnly={readOnly} dispatch={dispatch} />
         </div>

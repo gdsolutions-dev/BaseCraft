@@ -5,7 +5,7 @@ import { DesignImage } from '../../form/controls/ImageCtl';
 import type { TFunction } from 'i18next';
 import {
   AppWindow, ChevronDown, ChevronsUpDown, CircleDot, Group, Image as ImageIcon, LetterText, List, Minus, PanelTop, RectangleHorizontal, SeparatorHorizontal,
-  Square, SquareCheck, TextCursorInput, ToggleLeft,
+  Paperclip, Square, SquareCheck, TextCursorInput, ToggleLeft,
 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { colorCss, type ColorValue } from '../../../shared/design/colors';
@@ -20,6 +20,7 @@ import { gridlineStyle, linkAddress, LINK_LOOK, marginInset, themedFamily, type 
 import { useDocTheme } from '../../design/doc-theme';
 import { i18n } from '../../i18n';
 import { newReportControls, sectionLabel, togglePageHeaderFooter, toggleReportHeaderFooter } from './report-sections';
+import { Caption } from '../../form/Caption';
 import './report-design.css';
 
 /** Les contrôles que le moteur imprime (Global Constraints) ; libellés : l'entrée de la galerie Contrôles du ruban. */
@@ -36,6 +37,7 @@ export const REPORT_TOOLBOX: ToolDef[] = [
   { kind: 'optionButton', icon: CircleDot, labelKey: 'ribbon.cmd.optionButton' },
   { kind: 'subform', icon: AppWindow, labelKey: 'ribbon.cmd.subform' },
   { kind: 'image', icon: ImageIcon, labelKey: 'ribbon.cmd.image' },
+  { kind: 'attachment', icon: Paperclip, labelKey: 'ribbon.cmd.attachment' },
   { kind: 'rectangle', icon: Square, labelKey: 'ribbon.cmd.rectangle' },
   { kind: 'line', icon: Minus, labelKey: 'ribbon.cmd.line' },
   { kind: 'pageBreak', icon: SeparatorHorizontal, labelKey: 'ribbon.cmd.insertPageBreak' },
@@ -84,11 +86,11 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
     const st = boxStyle(c, tc);
     const source = () => controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound;
     switch (c.kind) {
-      case 'label': return <div className="rz rz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
+      case 'label': return <div className="rz rz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}><span className="rz-clip"><Caption text={String(prop(c, 'Caption') ?? '')} /></span></div>;
       case 'textBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span></div>;
       case 'comboBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
       case 'listBox': return <div className="rz rz-text" style={st}><span className="rz-clip">{source()}</span></div>;
-      case 'commandButton': case 'toggleButton': return <div className="rz rz-text rz-button" style={st}><span className="rz-clip">{String(prop(c, 'Caption') ?? '')}</span></div>;
+      case 'commandButton': case 'toggleButton': return <div className="rz rz-text rz-button" style={st}><span className="rz-clip"><Caption text={String(prop(c, 'Caption') ?? '')} /></span></div>;
       case 'optionGroup': return <div className="rz rz-group" style={st}><span className="rz-legend">{String(prop(c, 'Caption') ?? '')}</span></div>;
       case 'tabControl': {
         const v = prop(c, 'Pages');
@@ -97,6 +99,7 @@ export function reportRenderControl(display: DisplayContext): DesignerHost['rend
       case 'checkBox': return <div className="rz rz-check" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'optionButton': return <div className="rz rz-check rz-radio" style={{ borderColor: color(c, 'BorderColor', tc) }} />;
       case 'image': return <DesignImage c={c} className="rz rz-image" style={st} />;
+      case 'attachment': return <div className="rz rz-image" style={st}><Paperclip size={18} aria-hidden /></div>;
       case 'chart': return <DesignChart c={c} className="rz rz-chart" style={st} />;
       case 'rectangle': return <div className="rz" style={st} />;
       case 'subform': return <div className="rz rz-text" style={st}><span className="rz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;

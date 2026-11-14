@@ -84,7 +84,7 @@ export function msNumber(f: MsFrag, start = 0): { sql: string; params: MsParam[]
 // ---- Types ----
 type Cls = 'text' | 'num' | 'date' | 'null';
 const CLASS: Record<FieldType, Cls> = {
-  shortText: 'text', longText: 'text', hyperlink: 'text', number: 'num', currency: 'num', autoNumber: 'num', yesNo: 'num', dateTime: 'date',
+  shortText: 'text', longText: 'text', hyperlink: 'text', number: 'num', currency: 'num', autoNumber: 'num', yesNo: 'num', dateTime: 'date', attachment: 'num',
 };
 const TEXT: ReadonlySet<FieldType> = new Set(['shortText', 'longText', 'hyperlink']);
 const COMPARE = new Set(['=', '<>', '<', '<=', '>', '>=']);

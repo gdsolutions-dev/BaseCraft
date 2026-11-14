@@ -6,6 +6,7 @@ export type HostRequest =
   | { op: 'immediate'; line: string }
   | { op: 'exports'; source: string }
   | { op: 'call'; module: string; fn: string; args: unknown[] }
+  | { op: 'complete'; source: string; line: number; column: number }
   | { op: 'reset' }
 
 export type PyError = { type: string; message: string; module: string | null; line: number | null; traceback: string }

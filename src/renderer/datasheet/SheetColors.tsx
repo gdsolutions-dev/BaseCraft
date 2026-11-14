@@ -24,7 +24,7 @@ export function Swatches({ value, onPick, testId }: { value: string | undefined;
   );
 }
 
-export interface SheetFormat { horizontal: boolean; vertical: boolean; underline: boolean; back?: string; grid?: string }
+export interface SheetFormat { horizontal: boolean; vertical: boolean; underline: boolean; back?: string; grid?: string; effect?: 'raised' | 'sunken' }
 
 /** Mise en forme de la feuille de données: gridlines shown, background and gridline colours, underline. OK gives the choices. */
 export function FormatBox({ initial, close }: { initial: SheetFormat; close(f: SheetFormat | null): void }) {
@@ -43,6 +43,14 @@ export function FormatBox({ initial, close }: { initial: SheetFormat; close(f: S
         {box('vertical', t('options.datasheet.vertical'))}
       </fieldset>
       {box('underline', t('options.datasheet.underline'))}
+      <fieldset><legend>{t('datasheet.format.cellEffect')}</legend>
+        {([undefined, 'raised', 'sunken'] as const).map((e) => (
+          <label key={e ?? 'flat'} className="size-box-row">
+            <input type="radio" name="cell-effect" data-testid={`format-effect-${e ?? 'flat'}`} checked={f.effect === e} onChange={() => setF({ ...f, effect: e })} />
+            <span>{t(`datasheet.format.${e ?? 'flat'}`)}</span>
+          </label>
+        ))}
+      </fieldset>
       <span>{t('ribbon.cmd.textBackColor')}</span>
       <Swatches value={f.back} onPick={(back) => setF({ ...f, back })} testId="format-back" />
       <span>{t('datasheet.format.gridColor')}</span>

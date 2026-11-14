@@ -6,17 +6,19 @@ import { CH } from '../shared/api';
  *  call from the page rejects. Data entry is not design: rows, action queries, source saves, exports, printing, Enable Content,
  *  open and close, and every read stay. */
 export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
-  CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme,
-  CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove, // F3: the shared image gallery
+  CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSplitPick, CH.baseSplit, CH.baseSaveStartup, CH.baseSetSortOrder, CH.baseSaveTheme, CH.baseApplyTheme,
+  CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove, CH.resourcesPickFile, // F3: the shared image gallery; B7: a linked picture chosen in the Property Sheet
   CH.tablesSave, CH.tablesRename, CH.tablesDrop, CH.tablesCopy, CH.tablesAppend, CH.tablesSaveColumnWidths, CH.tablesSaveSheetLayout, CH.tablesDataMacros, CH.tablesSaveDataMacros,
   CH.relationsSave, CH.relationsDelete, CH.relationsSaveLayout,
   CH.importPick, CH.importPreview, CH.importRun, CH.importExcelPick, CH.importExcelPreview, CH.importExcelRun, CH.importSaveSpec, CH.importDeleteSpec,
+  CH.exchangeSavedImportList, CH.exchangeSavedImportSave, CH.exchangeSavedImportDelete, // Saved Imports: the Runtime has no import
   CH.objectsSave, CH.objectsRename, CH.objectsDelete, CH.objectsCopy, CH.objectsSetDescription,
   CH.autoCorrectDependents, // O4 R10: asked before a rename only
   CH.autoCorrectApplyProperties, // O4 R12: writes forms and reports
   CH.linksPick, CH.linksInspect, CH.linksCreate, CH.linksList, CH.linksRelink, CH.linksConvert,
   CH.linksInspectServer, CH.linksCreateServer, CH.linksRelinkServer, CH.linksCanRemember, // C4: the server link dialog
   CH.migrateRun, CH.migrateImport, // C7 R1, R17
+  CH.odbcDsns, CH.odbcInspect, CH.odbcRun, CH.odbcLink, // C4: External Data › Import › ODBC Database
   CH.accessImportInspect, CH.accessImportRun, CH.accessImportSaveReport, CH.accessImportPickExport, // E1: External Data › Import › Access
 ]);
 

@@ -59,6 +59,12 @@ export function ThemeGallery(p: { kind: 'form' | 'report'; dispatch: (a: Designe
     if (name === null) return;
     if (await saveUserTheme(modal, showError, { ...current, name: name.trim() })) void reload();
   };
+  // « Parcourir les thèmes… » : un fichier .thmx lu par le processus principal, enregistré comme thème de l'utilisateur.
+  const browse = async () => {
+    let th: Theme | null;
+    try { th = await api.themes.importFile(); } catch (e) { void showError(e); return; }
+    if (th && await saveUserTheme(modal, showError, th)) void reload();
+  };
   const remove = async (th: Theme) => {
     if (await modal.confirm({ titleKey: 'themeGallery.deleteTitle', messageKey: 'themeGallery.deleteConfirm', params: { name: th.name }, buttons: ['yes', 'no'], defaultButton: 'no' }) !== 'yes') return;
     try { await api.themes.remove(th.name); } catch (e) { void showError(e); return; }
@@ -104,7 +110,7 @@ export function ThemeGallery(p: { kind: 'form' | 'report'; dispatch: (a: Designe
       </div>
       <div className="tg-footer">
         <button type="button" role="menuitem" data-testid="theme-save" onClick={() => { onClose(); void saveCurrent(); }}>{t('themeGallery.save')}</button>
-        <button type="button" role="menuitem" data-testid="theme-browse" disabled title={t('themes.browseLater')}>{t('themeGallery.browse')}</button>
+        <button type="button" role="menuitem" data-testid="theme-browse" onClick={() => { onClose(); void browse(); }}>{t('themeGallery.browse')}</button>
       </div>
       {menu && (
         <PopupMenu x={menu.x} y={menu.y} testId="theme-menu" labelKey="ribbon.cmd.themes" onClose={() => setMenu(null)}>

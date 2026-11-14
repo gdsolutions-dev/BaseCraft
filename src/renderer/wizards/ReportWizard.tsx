@@ -7,6 +7,7 @@ import type { RecordSourceRef } from '../../shared/record-source';
 import { uniqueReportName } from '../../shared/report/instant';
 import type { PageSetup } from '../../shared/report/model';
 import { api } from '../bridge';
+import { withTemplate } from '../design/templates';
 import { i18n } from '../i18n';
 import type { TotalFn } from '../report/design/grouping-model';
 import { printMargins } from '../settings-store';
@@ -53,8 +54,8 @@ function ReportWizard({ onClose }: { onClose(v: WizardResult | null): void }) {
     if (!a || !info) return;
     setBusy(true);
     try {
-      const doc = wizardReport({ ...a, name: refName(a) }, info, { title: shown, fields: chosen, groups, sorts, totals, summaryOnly: summaryOnly && wanted, orientation },
-        { lang: formulaLang(i18n.language), margins: printMargins() });
+      const doc = await withTemplate('report', wizardReport({ ...a, name: refName(a) }, info, { title: shown, fields: chosen, groups, sorts, totals, summaryOnly: summaryOnly && wanted, orientation },
+        { lang: formulaLang(i18n.language), margins: printMargins() }));
       const res = await api.objects.save('report', shown, doc, null);
       if (res.ok) return onClose({ name: shown, open });
       setError(t(`dialog.op.${res.reason}`));

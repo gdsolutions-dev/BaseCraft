@@ -10,7 +10,7 @@ const bytes = (s: string) => new TextEncoder().encode(s);
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const pkg = (n: string, depends: string[] = [], body = n) => ({ name: n, version: '1', file_name: `${n}.whl`, sha256: sha(bytes(body)), depends });
 const lockOf = (...ps: ReturnType<typeof pkg>[]) => ({ info: { python: '3.14.2' }, packages: Object.fromEntries(ps.map((p) => [p.name, p])) });
-const real = () => lockOf(pkg('numpy'), pkg('pandas', ['numpy', 'python-dateutil', 'pytz']), pkg('python-dateutil', ['six']), pkg('six'), pkg('pytz'), pkg('scipy', ['numpy']));
+const real = () => lockOf(pkg('numpy'), pkg('pandas', ['numpy', 'python-dateutil', 'pytz']), pkg('python-dateutil', ['six']), pkg('six'), pkg('pytz'), pkg('jedi', ['parso']), pkg('parso'), pkg('scipy', ['numpy']));
 const tmp = () => mkdtempSync(join(tmpdir(), 'bc-py-'));
 
 describe('python assets', () => {
@@ -23,7 +23,7 @@ describe('python assets', () => {
     expect(Object.keys(t.packages).sort()).toEqual(['pytz', 'six']);
   });
   it('a package without licence throws', async () => {
-    const lock = lockOf(pkg('numpy'), pkg('pandas', ['mystery']), pkg('mystery'));
+    const lock = lockOf(pkg('numpy'), pkg('jedi'), pkg('pandas', ['mystery']), pkg('mystery'));
     await expect(preparePythonAssets({ out: tmp(), cache: tmp(), lock, fetchImpl: async () => new Response(bytes('x')) })).rejects.toThrow('no licence for mystery');
     expect(PYTHON_LICENSES.numpy).toBe('BSD-3-Clause');
   });
@@ -35,12 +35,12 @@ describe('python assets', () => {
     let calls = 0;
     const fetchImpl = async (u: string) => { calls++; return new Response(bytes(u.split('/').pop()!.replace('.whl', ''))); };
     const r = await preparePythonAssets({ out, cache, lock: real(), fetchImpl });
-    expect(calls).toBe(5);
+    expect(calls).toBe(7);
     await preparePythonAssets({ out, cache, lock: real(), fetchImpl });
-    expect(calls).toBe(5);
+    expect(calls).toBe(7);
     const sizes = JSON.parse(readFileSync(join(out, 'sizes.json'), 'utf8'));
-    expect(Object.keys(sizes.packages).length).toBe(5);
+    expect(Object.keys(sizes.packages).length).toBe(7);
     expect(existsSync(join(out, 'pyodide-lock.json'))).toBe(true);
-    expect(r.files).toBeGreaterThan(5);
+    expect(r.files).toBeGreaterThan(7);
   });
 });

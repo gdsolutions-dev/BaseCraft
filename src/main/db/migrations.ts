@@ -30,9 +30,23 @@ export const BC_RESOURCES_DDL = `CREATE TABLE bc_resources (
   created TEXT NOT NULL, modified TEXT NOT NULL
 )`;
 
+// Format 1.5: the files of the Attachment fields (C5). An Attachment cell holds `set_id`, the id of its set of files (NULL: none);
+// the set, not the row's rowid, is the key (VACUUM may renumber rowids). `type` is the file's lowercase extension without the dot.
+// UNIQUE (set_id, id) is the index that serves the lookup by set (a single statement: the TEMP catalog of a plain file copies it).
+export const BC_ATTACHMENTS_DDL = `CREATE TABLE bc_attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  set_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  data BLOB NOT NULL,
+  created TEXT NOT NULL,
+  UNIQUE (set_id, id)
+)`;
+
 export const MIGRATIONS: Migration[] = [
   { toMajor: 1, toMinor: 1, up: (db) => db.exec(BC_RELATIONS_DDL) },
   { toMajor: 1, toMinor: 2, up: (db) => db.exec(BC_OBJECTS_DDL) },
   { toMajor: 1, toMinor: 3, up: (db) => { db.exec(BC_SOURCES_DDL); db.exec(BC_LINKS_DDL); } },
   { toMajor: 1, toMinor: 4, up: (db) => db.exec(BC_RESOURCES_DDL) },
+  { toMajor: 1, toMinor: 5, up: (db) => db.exec(BC_ATTACHMENTS_DDL) },
 ];

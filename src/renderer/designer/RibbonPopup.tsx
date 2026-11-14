@@ -3,7 +3,7 @@
 // Le focus va au premier élément actif (à défaut au premier champ ou bouton), puis revient où il était.
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { openPopupOf, setOpenPopup, type CommandId } from '../shell/ribbon-model';
+import { commandAnchor, openPopupOf, setOpenPopup, type CommandId } from '../shell/ribbon-model';
 
 const ITEMS = '[role^="menuitem"]:not([disabled])';
 
@@ -19,7 +19,7 @@ export function PopupMenu(p: { x: number; y: number; testId: string; labelKey: s
     // sans élément de menu : l'arrêt de tabulation d'un groupe (la couleur actuelle), sinon le premier champ ou bouton
     const q = (sel: string) => ref.current?.querySelector<HTMLElement>(sel);
     (q(ITEMS) ?? q('[tabindex="0"]') ?? q('input, button:not([disabled])'))?.focus();
-    const onAnchor = (e: Event) => !!anchor && !!document.querySelector(`[data-testid="cmd-${anchor}"]`)?.contains(e.target as Node);
+    const onAnchor = (e: Event) => !!anchor && !!commandAnchor(anchor)?.contains(e.target as Node);
     // la liste d'un ComboBox du menu est posée dans <body> : un clic dedans n'est pas un clic dehors
     const ownList = (n: Node) => { const list = n instanceof Element ? n.closest('[role="listbox"]') : null;
       return !!list?.id && !!ref.current?.querySelector(`[aria-controls="${CSS.escape(list.id)}"]`); };
@@ -54,6 +54,6 @@ export function PopupMenu(p: { x: number; y: number; testId: string; labelKey: s
 export function RibbonPopup(p: { anchor: CommandId; testId: string; labelKey: string; onClose(): void; children: ReactNode; role?: 'menu' | 'dialog' }) {
   const { anchor } = p;
   useEffect(() => { setOpenPopup(anchor); return () => { if (openPopupOf() === anchor) setOpenPopup(null); }; }, [anchor]);   // aria-expanded du bouton
-  const r = document.querySelector(`[data-testid="cmd-${p.anchor}"]`)?.getBoundingClientRect();
+  const r = commandAnchor(p.anchor)?.getBoundingClientRect();
   return <PopupMenu x={r?.left ?? 0} y={r?.bottom ?? 0} testId={p.testId} labelKey={p.labelKey} onClose={p.onClose} anchor={p.anchor} role={p.role}>{p.children}</PopupMenu>;
 }

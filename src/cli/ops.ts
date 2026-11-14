@@ -20,7 +20,7 @@ import { rowsInsert } from './ops-data';
 export type OpOutcome = { ok: true } | { ok: false; message: string };
 export type OpHandler = (db: DatabaseSync, args: Record<string, unknown>, info: LocaleInfo) => OpOutcome | Promise<OpOutcome>;
 
-const FIELD_TYPE_SET: Record<FieldType, true> = { autoNumber: true, shortText: true, longText: true, number: true, currency: true, dateTime: true, yesNo: true, hyperlink: true }; // a new FieldType fails to compile here
+const FIELD_TYPE_SET: Record<FieldType, true> = { autoNumber: true, shortText: true, longText: true, number: true, currency: true, dateTime: true, yesNo: true, hyperlink: true, attachment: true }; // a new FieldType fails to compile here
 const FIELD_TYPES: readonly string[] = Object.keys(FIELD_TYPE_SET);
 const refuse = (message: string): OpOutcome => ({ ok: false, message });
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

@@ -47,6 +47,23 @@ export function inTrustedFolder(file: string, cfg: TrustConfig, platform: NodeJS
   });
 }
 
+/** The user's own trusted locations (workstation settings), refused unless they are absolute local paths: no relative path, no
+ *  device path (\\?\, \\.\, /dev, /proc, /sys). */
+export function isLocalAbsolute(p: string, platform: NodeJS.Platform): boolean {
+  if (p === '' || p.includes('\0') || !isAbsolute(p)) return false;
+  return platform === 'win32' ? !/^[\\/]{2}[?.][\\/]/.test(p) : !/^\/(dev|proc|sys)(\/|$)/.test(p);
+}
+
+/** A network share: a UNC path (a mapped drive resolves to its UNC path). ponytail: other mounts (NFS on POSIX) are not detected. */
+export function isNetworkPath(p: string, platform: NodeJS.Platform): boolean {
+  return platform === 'win32' && /^[\\/]{2}[^\\/?.]/.test(real(p) ?? p);
+}
+
+/** The administrator's folders plus this user's own (their network ones only when allowed). */
+export function effectiveTrust(admin: TrustConfig, own: { path: string; subfolders: boolean }[], network: boolean, platform: NodeJS.Platform): TrustConfig {
+  return { trustedFolders: [...admin.trustedFolders, ...own.filter((f) => isLocalAbsolute(f.path, platform) && (network || !isNetworkPath(f.path, platform)))] };
+}
+
 type Approval = { dbUuid: string; fingerprint: string; at: string };
 
 /** This user's approvals: one per base (its latest approved fingerprint), the 500 most recent. ponytail: two copies of a base
@@ -65,6 +82,10 @@ export class ApprovalStore {
     } catch { /* absent or unreadable: nothing approved */ }
   }
 
+  count(): number { return this.list.length; }
+
+  clear(): void { this.list = []; this.write(); }
+
   isApproved(dbUuid: string, fingerprint: string): boolean {
     return dbUuid !== '' && fingerprint !== '' && this.list.some((a) => a.dbUuid === dbUuid && a.fingerprint === fingerprint);
   }
@@ -73,6 +94,10 @@ export class ApprovalStore {
   approve(dbUuid: string, fingerprint: string, now = new Date()): void {
     this.list = [...this.list.filter((a) => a.dbUuid !== dbUuid), { dbUuid, fingerprint, at: now.toISOString() }]
       .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_APPROVALS);
+    this.write();
+  }
+
+  private write(): void {
     try {
       const tmp = `${this.file}.tmp`;
       writeFileSync(tmp, JSON.stringify({ approvals: this.list }), 'utf8');
@@ -100,3 +125,4 @@ export function trustsFile(content: ContentState, file: string, cfg: TrustConfig
 export function enabledAfterOwnWrite(enabled: string | null, before: string | null, after: string): string | null {
   return enabled !== null && before === enabled ? after : null;
 }
+

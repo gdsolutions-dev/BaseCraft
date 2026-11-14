@@ -17,7 +17,9 @@ import { createTable, removeTable } from '../db/schema';
 import { saveStartupOptions, startupOptions } from '../db/startup';
 import { seedSales, seedSalesRelation } from '../query/test-db';
 import { Session, type SessionDeps } from '../session';
-import { runMigration, switchLocal } from './run';
+import { runMigration, runMigrationFiles, switchLocal } from './run';
+import { saveRelation } from '../db/relations';
+import { localeInfo } from '../../shared/locale-format';
 
 const P = { host: 'db.example', port: 5432, database: 'ventes', user: 'ana', tls: 'verify-full', timeout: 60 };
 const KEY = 'postgresql://db.example:5432/ventes?tls=verify-full';
@@ -117,6 +119,19 @@ describe('migrateToServer', () => {
     const order = fake.log.filter((x) => ['createTable', 'insertRows', 'countRows', 'finishTable', 'addForeignKeys', 'table'].includes(x));
     expect(order).toEqual(['createTable', 'insertRows', 'countRows', 'finishTable', 'createTable', 'insertRows', 'countRows', 'finishTable',
       'createTable', 'countRows', 'finishTable', 'addForeignKeys', 'table', 'table', 'table']);
+  });
+
+  it('a split front-end: its data file is migrated directly, relations kept, the links follow', async () => {
+    const data = join(dir, 'data.basecraft');
+    expect(s.splitDatabase(data)).toMatchObject({ ok: true });
+    const r = await s.migrateToServer(REQ);
+    expect(r).toMatchObject({ ok: true, report: { tables: [{ name: 'Clients', rows: 4 }, { name: 'Commandes', rows: 5 }, { name: 'Journal', rows: 0 }],
+      relations: [{ name: 'ClientsCommandes', result: 'created' }] } });
+    expect((r as { report: MigrationReport }).report.backupPath).toContain('data.backup-'); // the data file's
+    expect(s.listTables().map((x) => [x.name, x.link?.kind])).toEqual([['Clients', 'postgresql'], ['Commandes', 'postgresql'], ['Journal', 'postgresql']]);
+    expect(s.tableDesign('Commandes').fields.find((x) => x.name === 'Montant')!.props).toMatchObject({ type: 'currency', validationRule: '>0' });
+    expect((await s.page('Commandes', { offset: 0, limit: 10 })).rows).toHaveLength(5);
+    expect(existsSync(data)).toBe(true); // left as it is
   });
 
   it('R13: a saved query or a SQL Record Source the server refuses is listed with its message, nothing sent', async () => {
@@ -435,5 +450,71 @@ describe('runMigration: the local switch', () => {
     expect(await failingSwitch()).toMatchObject({ ok: false, reason: 'failed', error: 'bc:busy', left: ['Journal'] });
     expect(snapshot()).toEqual(before);
     expect(await c.schema!.names('public')).toEqual(['Journal']);
+  });
+});
+
+describe('C8: a front-end linked to several data files', () => {
+  /** A second BaseCraft data file: Produits and Lignes with their own relation. */
+  function stockFile(): string {
+    const p = join(dir, 'stock.basecraft');
+    createBaseFile(p, '0.0.0');
+    const db = openBaseFile(p, 'write', '0.0.0').db;
+    createTable(db, t('Produits', [f('N°', 'autoNumber'), f('Nom', 'shortText')]));
+    createTable(db, t('Lignes', [f('N°', 'autoNumber'), f('Produit', 'number', { numberSize: 'longInteger' }), f('Qte', 'number', { numberSize: 'longInteger' })]));
+    db.exec(`INSERT INTO "Produits" ("Nom") VALUES ('A'), ('B')`);
+    db.exec(`INSERT INTO "Lignes" ("Produit", "Qte") VALUES (1, 5), (2, 7), (2, 1)`);
+    const r = saveRelation(db, { name: '', parentTable: 'Produits', parentFields: ['N°'], childTable: 'Lignes', childFields: ['Produit'],
+      enforce: true, cascadeUpdate: false, cascadeDelete: false, joinType: 1 }, null, localeInfo('fr-FR'));
+    if (!r.ok) throw new Error(r.reason);
+    db.close();
+    return p;
+  }
+  const twoFiles = () => {
+    expect(s.splitDatabase(join(dir, 'data.basecraft'))).toMatchObject({ ok: true });
+    expect(s.createLinks(stockFile(), ['Produits', 'Lignes'])).toEqual({ ok: true });
+  };
+
+  it('every data file is migrated in its own transaction, relations kept per file, every file backed up, every link relinked', async () => {
+    twoFiles();
+    const r = await s.migrateToServer(REQ);
+    expect(r).toMatchObject({ ok: true, report: { tables: [{ name: 'Clients', rows: 4 }, { name: 'Commandes', rows: 5 }, { name: 'Journal', rows: 0 },
+      { name: 'Lignes', rows: 3 }, { name: 'Produits', rows: 2 }], relations: [{ name: 'ClientsCommandes', result: 'created' }, { name: 'ProduitsLignes', result: 'created' }] } });
+    const { backupPath } = (r as { report: MigrationReport }).report;
+    expect(backupPath).toContain('data.backup-');
+    expect(backupPath).toContain('stock.backup-');
+    expect(backups().filter((n) => n.startsWith('data.') || n.startsWith('stock.'))).toHaveLength(2);
+    expect(txLog()).toEqual(['begin', 'commit', 'begin', 'commit']);
+    expect(s.listTables().map((x) => x.link?.kind)).toEqual(Array(5).fill('postgresql'));
+    expect((await s.page('Lignes', { offset: 0, limit: 10 })).rows.map((x) => x.values[2])).toEqual([5, 7, 1]);
+    expect(await serverNames()).toEqual(expect.arrayContaining(['Clients', 'Lignes', 'Produits']));
+  });
+
+  it('a later file failing leaves the earlier one migrated and linked, and says so', async () => {
+    twoFiles();
+    const open = fake.open;
+    fake.open = async (p, login) => {
+      const c = await open(p, login);
+      const w = c.schema! as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>, fn = w.createTable!;
+      w.createTable = async (...a) => { if ((a[0] as { name: string }).name === 'Lignes') throw new Error('bc:busy'); return fn(...a); };
+      return c;
+    };
+    const r = await s.migrateToServer(REQ);
+    expect(r).toMatchObject({ ok: false, reason: 'failed', error: 'bc:busy', table: 'Lignes', migrated: ['Clients', 'Commandes', 'Journal'] });
+    expect((r as { backupPath: string }).backupPath).toContain('stock.backup-');
+    expect(s.listTables().map((x) => [x.name, x.link?.kind])).toEqual([['Clients', 'postgresql'], ['Commandes', 'postgresql'], ['Journal', 'postgresql'],
+      ['Lignes', 'basecraft'], ['Produits', 'basecraft']]);
+    expect(await serverNames()).toEqual(['Clients', 'Commandes', 'Journal', 'ClientsCommandes']); // not Produits, not Lignes
+  });
+
+  it('a table name used by two data files is refused before anything is written', async () => {
+    const mk = (n: string) => { const p = join(dir, n); createBaseFile(p, '0.0.0'); const db = openBaseFile(p, 'write', '0.0.0').db; seedSales(db); return db; };
+    const a = mk('a.basecraft'), b = mk('b.basecraft'), c = await fake.open(P as never, LOGIN);
+    const r = await runMigrationFiles({ c, caps: fake.capabilities, kind: 'postgresql', params: P, label: 'srv', schema: 'public', tick: async () => {}, queries: async () => [] },
+      [{ id: 'a', db: a, backup: () => 'x' }, { id: 'b', db: b, backup: () => 'y' }], () => { throw new Error('no relink'); });
+    expect(r).toEqual({ ok: false, reason: 'nameClash', names: ['Clients', 'Commandes'] });
+    expect(fake.log).not.toContain('createTable');
+    expect(fake.log).not.toContain('begin');
+    expect(backups().filter((n) => n.startsWith('a.') || n.startsWith('b.'))).toEqual([]);
+    a.close(); b.close();
   });
 });

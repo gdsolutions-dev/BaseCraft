@@ -4,6 +4,7 @@ import { ExprRuntimeError, type ExprRuntimeErrorCode, type Value } from './ast';
 import { KEYWORDS } from './catalog';
 import { formatValue } from './format';
 import type { EvalEnv } from './evaluate';
+import { sortKey, type SortOrderId } from '../sort-orders';
 import { numberToText, toDecimal } from '../coerce';
 import { formatDateTime, localeInfo, parseDateTime, parseDecimal, roundDecimalString, type LocaleInfo } from '../locale-format';
 
@@ -108,7 +109,26 @@ const count = (n: number): number => (n > MAX_TEXT ? fail('overflow') : nonNeg(n
 
 const collator = new Intl.Collator('und', { sensitivity: 'accent' });
 /** Comparaison de texte d'Access : insensible à la casse, sensible aux accents. Renvoie -1, 0 ou 1. */
-export const compareText = (a: string, b: string): number => Math.sign(collator.compare(a, b));
+/** The base's text order (C7b): the sort key of its order, or null (legacy order, and no base): the collator alone. A module state
+ *  because every comparison funnels through compareText; the SQL functions of a connection set it around each call (withTextOrder),
+ *  the renderer sets it when a base opens. */
+let textKey: ((s: string) => string) | null = null;
+export const setTextOrder = (order: SortOrderId): void => { textKey = order === 'legacy' ? null : sortKey(order); };
+/** Runs `fn` with `order`'s key as the text order (a SQLite function: a connection's own order, whatever ran before). */
+export function withTextOrder<A extends unknown[], R>(order: SortOrderId, fn: (...a: A) => R): (...a: A) => R {
+  const key = order === 'legacy' ? null : sortKey(order);
+  return (...a) => { const prev = textKey; textKey = key; try { return fn(...a); } finally { textKey = prev; } };
+}
+/** Grouping key of a text, as compareText equates: equal keys exactly when compareText gives 0 (the order's key, then the text with
+ *  case folded and accents kept). */
+/** The key function in force (a cache of answers by text must not outlive the order). */
+export const currentTextKey = (): unknown => textKey;
+export const textGroupKey = (s: string): string => (textKey ? `${textKey(s)}${s.normalize('NFC').toLowerCase()}` : s.normalize('NFC').toLowerCase());
+/** Comparison of texts: the order's key first (letters of the language, case and accents ignored), then the collator (accents significant). */
+export const compareText = (a: string, b: string): number => {
+  if (textKey) { const [x, y] = [textKey(a), textKey(b)]; if (x !== y) return x < y ? -1 : 1; }
+  return Math.sign(collator.compare(a, b));
+};
 
 const escapeRe = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 // Même pliage que compareText : casse ignorée (drapeau i), accents conservés.

@@ -160,6 +160,15 @@ function written(t: RemoteTable, values: Record<string, SqlValue>): { cols: Fiel
   const refused = given.filter((fd) => fd.props.pgGenerated && values[fd.name] !== null);
   return refused.length ? { errors: refused.map((fd) => ({ field: fd.name, code: 'readOnly' as const })) } : { cols: given.filter((fd) => !fd.props.pgGenerated) };
 }
+/** An Append's explicit AutoNumber value: the identity's sequence moved forward to it (never back), so the server's next number
+ *  does not collide. No sequence (pg_get_serial_sequence NULL): no row, nothing done. */
+export function pgSyncSequence(t: RemoteTable, fd: FieldDef, value: number): { sql: string; params: unknown[] } {
+  return {
+    sql: 'SELECT pg_catalog.setval(s::pg_catalog.regclass, GREATEST($3::pg_catalog.int8, coalesce(pg_catalog.pg_sequence_last_value(s::pg_catalog.regclass), 1))) '
+      + 'FROM (SELECT pg_catalog.pg_get_serial_sequence($1::pg_catalog.text, $2::pg_catalog.text) AS s) x WHERE s IS NOT NULL',
+    params: [tableSql(t), fd.name, value],
+  };
+}
 /** R16: find()'s condition from `$start`, compared as pgPlan compares (text without case: `lower`, a date as a timestamp). */
 export function findCondition(t: RemoteTable, where: Record<string, SqlValue>, collation: string | null, start: number): { sql: string; params: PgParam[] } {
   const { cond, leaf } = equalities(t, where);
@@ -304,6 +313,7 @@ export async function openPg(p: PgParams, c: Credentials): Promise<Connection> {
       return write(t, w.cols, async () => {
         const [row] = await exec(`INSERT INTO ${tableSql(t)}${into} RETURNING ${outputs(t)}`, w.cols.map((fd) => sent(values[fd.name]!, fd.props.type === 'yesNo')));
         if (!row) throw notWritten(t);
+        for (const fd of w.cols) if (fd.props.type === 'autoNumber' && values[fd.name] !== null) { const s = pgSyncSequence(t, fd, Number(values[fd.name])); await exec(s.sql, s.params); }
         return { ok: true as const, ...decoded(t, row) };
       });
     },

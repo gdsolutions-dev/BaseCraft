@@ -5,12 +5,14 @@ import { DESIGN_CHANNELS, isDesignChannel } from './design-channels';
 // Every other channel: data entry, reads, the window's own and the main → renderer events. A new CH key fails the test below
 // until it is listed here or in DESIGN_CHANNELS (does it write the base's design or structure?).
 const DATA_CHANNELS: string[] = [
-  CH.getSettings, CH.setLocale, CH.setTheme, CH.setSetting, CH.pickFolder, CH.settingsChanged, CH.appInfo, CH.appLicenses, CH.appSetIcon, CH.openExternal, CH.openHyperlink, CH.edit, CH.beep, CH.appWriteClipboard, CH.appReadClipboard, CH.spellPrepare,
+  CH.getSettings, CH.setLocale, CH.setTheme, CH.setSetting, CH.pickFolder, CH.settingsChanged, CH.appInfo, CH.appLicenses, CH.appSetIcon, CH.openExternal, CH.openHyperlink, CH.edit, CH.beep, CH.appWriteClipboard, CH.appReadClipboard, CH.spellPrepare, CH.spellCheck,
+  CH.appTrust, CH.appClearApprovals,
   CH.closeRequested, CH.closeAllowed, CH.closeAck,
   CH.baseOpen, CH.baseClose, CH.baseState, CH.baseTakeOverLock, CH.baseStateChanged, CH.baseHostCrashed, CH.baseDataChanged, CH.baseOpenFailure,
-  CH.baseEnableContent, CH.baseStartup, CH.baseNavOptions, CH.baseSaveNavOptions, CH.baseTheme, CH.baseThemeChanged, CH.resourcesList, CH.resourcesGet, CH.resourcesChanged, CH.themesList, CH.themesSave, CH.themesRemove,
+  CH.baseEnableContent, CH.baseStartup, CH.baseSortOrder, CH.baseNavOptions, CH.baseSaveNavOptions, CH.baseTheme, CH.baseThemeChanged, CH.resourcesList, CH.resourcesGet, CH.resourcesChanged, CH.themesList, CH.themesSave, CH.themesRemove, CH.themesImport,
   CH.tablesList, CH.tablesDesign, CH.tablesTestRules,
   CH.rowsCount, CH.rowsPage, CH.rowsInsert, CH.rowsUpdate, CH.rowsDelete, CH.rowsLookup,
+  CH.attList, CH.attAdd, CH.attRemove, CH.attPreview, CH.attFaces, CH.attRead, CH.attSaveTo, CH.attSave, CH.attSaveAll, CH.attOpen,
   CH.relationsList, CH.relationsLayout, CH.relationsCascadeChildren,
   CH.importProgress, CH.importSpecs,
   CH.objectsList, CH.objectsGet,
@@ -27,11 +29,11 @@ describe('design channels', () => {
     for (const ch of DATA_CHANNELS) expect(isDesignChannel(ch)).toBe(false);
   });
   it('what writes the base design is a design channel', () => {
-    for (const ch of [CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSaveStartup, CH.baseSaveTheme, CH.baseApplyTheme, CH.tablesSave, CH.relationsSave, CH.importRun, CH.objectsSave, CH.objectsSetDescription])
+    for (const ch of [CH.baseCreate, CH.baseSaveAs, CH.baseCompact, CH.baseSaveStartup, CH.baseSetSortOrder, CH.baseSaveTheme, CH.baseApplyTheme, CH.tablesSave, CH.relationsSave, CH.importRun, CH.objectsSave, CH.objectsSetDescription])
       expect(isDesignChannel(ch)).toBe(true);
   });
   it('writing the gallery is design, reading it is data', () => {
-  for (const ch of [CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove]) expect(isDesignChannel(ch)).toBe(true);
+  for (const ch of [CH.resourcesAdd, CH.resourcesReplace, CH.resourcesRemove, CH.resourcesPickFile]) expect(isDesignChannel(ch)).toBe(true);
   for (const ch of [CH.resourcesList, CH.resourcesGet, CH.resourcesChanged]) expect(isDesignChannel(ch)).toBe(false);
 });
   it('charts.data only reads: a data channel (Runtime keeps it)', () => { expect(isDesignChannel(CH.chartsData)).toBe(false); });

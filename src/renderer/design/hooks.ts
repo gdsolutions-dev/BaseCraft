@@ -19,6 +19,8 @@ export interface DesignHooks {
    *  viewSql, createReport, createReportDesign, createBlankReport, createMacro. */
   shellCommands(env: DesignShellEnv): Partial<Record<CommandId, () => void | Promise<void>>>;
   requestFieldList(kind: 'form' | 'report', name: string): void;
+  /** Options > Object Designers, form and report templates: the new tab `name` starts from the template (before it opens). */
+  seedTemplate(kind: 'form' | 'report', name: string): Promise<void>;
   ImportWizard: typeof ImportTextWizard;
   CurrentDatabaseOptions: typeof CurrentDatabaseOptions;
   tableFieldsCommands: typeof tableFieldsCommands;
@@ -44,7 +46,7 @@ export interface DesignShellEnv {
   t(key: string, opts?: Record<string, unknown>): string;
   live: { readonly current: { state: AppState; tables: TableSummary[]; objects: ObjectSummary[]; navSelection?: { kind: string; name: string } | null } };
   sourceToCreate(titleKey: string): Promise<{ ref: RecordSourceRef; name: string } | null>;
-  newForm(fieldList: boolean): void;
+  newForm(fieldList: boolean): Promise<void>;
   newQueryName(): string;
   newReportName(): string;
   newMacroName(): string;

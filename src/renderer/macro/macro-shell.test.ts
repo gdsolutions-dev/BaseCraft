@@ -183,6 +183,15 @@ describe('macro shell actions', () => {
     vi.mocked(modal.custom).mockImplementation(async (_r, o) => { shown.push(o.titleKey); return true as never; });
   });
 
+  it('an unsaved definition runs instead of the stored one (and answers for its own submacros); other macros stay the stored ones', async () => {
+    macros = { M: m([act('Beep')]), N: m([act('Beep')]) };
+    expect(await runMacroByName('M', { unsaved: m([act('Beep'), act('Beep')]) })).toEqual({ ok: true });
+    expect(beep).toHaveBeenCalledTimes(2);
+    beep.mockClear();
+    expect(await runMacroByName('Nouvelle', { unsaved: m([act('Beep'), act('Beep'), act('Beep')]) })).toEqual({ ok: true });   // never saved: no notFound
+    expect(beep).toHaveBeenCalledTimes(3);
+  });
+
   it('a blocked action shows Action Failed and brings the security bar back; temporary variables live until cleared', async () => {
     enabled = false;
     macros = { M: m([act('SetTempVar', { Name: 'v', Expression: '1' }), act('RunSQL', { SQLStatement: 'DELETE FROM Clients;' })]), N: m([act('MessageBox', { Message: '=[TempVars]![v]' })]) };

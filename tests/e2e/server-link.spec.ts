@@ -9,7 +9,7 @@ import { mssqlLive, noLiveMssql, withDatabase } from '../../src/main/connectors/
 import { msLabel } from '../../src/main/connectors/sqlserver/params';
 import { createTable } from '../../src/main/db/schema';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase, seedCrashed } from './helpers';
+import { inFile, launchApp, seedBase, seedCrashed } from './helpers';
 
 // C4 server links on the fake connector (BASECRAFT_E2E_FAKE_SERVER=1, host.ts: Clients = Dupont/Lyon, Martin/Brest; password 'secret').
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
@@ -367,6 +367,32 @@ test('C5 Task 7, live SQL Server: link a table with a rowversion and a keyless v
       await rt.app.close();
     }
   });
+});
+
+test('B5: the Design view of a server link edits the BaseCraft properties (saved in the front-end), its structure stays the server structure', async () => {
+  test.setTimeout(120_000);
+  const front = seedBase('Front', (db) => addServerLinks(db, 'postgresql', P, [clients]));
+  const { app, page } = await launchApp({ args: [front], env: ENV });
+  try {
+    await page.getByTestId('nav-item-Clients').click({ button: 'right' });
+    await page.getByTestId('nav-menu-design').click();
+    await page.getByTestId('modal-btn-yes').click(); // Access's warning on a linked table's Design view
+    await expect(page.getByTestId('design-link-banner')).toHaveText(fr.link.designBannerServer.replace('{{path}}', 'db.example:5432/ventes'));
+    await page.getByTestId('design-row-1-key').click();
+    for (const id of ['design-row-1-name', 'design-row-1-type']) await expect(page.getByTestId(id), id).toBeDisabled();
+    await expect(page.getByTestId('design-row-3-name')).toHaveCount(0); // no empty row to add a field
+    await expect(page.getByTestId('prop-required')).toBeDisabled();
+    await expect(page.getByTestId('prop-caption')).toBeEnabled();
+    await page.getByTestId('prop-caption').fill('Nom du client');
+    await page.getByTestId('design-row-1-desc').fill('Raison sociale');
+    await page.getByTestId('ribbon-tab-home').click();
+    await expect(page.getByTestId('cmd-save')).toBeEnabled();
+    await page.getByTestId('cmd-save').click();
+    await expect(page.getByTestId('doc-tab-Clients')).not.toContainText('•');
+    await expect.poll(() => JSON.stringify(JSON.parse(inFile<{ props: string }>(front, `SELECT props FROM bc_links WHERE name = 'Clients'`)[0]!.props).meta?.fields?.Nom?.props)).toBe('{"caption":"Nom du client","description":"Raison sociale"}');
+  } finally {
+    await app.close();
+  }
 });
 
 test('C4 Task 12 review: Refresh Link without a login says it is required; a server link whose params are damaged changes source on a server', async () => {

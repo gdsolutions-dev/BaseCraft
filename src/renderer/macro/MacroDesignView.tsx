@@ -149,18 +149,12 @@ function MacroEditor({ tab, readOnly, dispatch, def }: DocViewProps & { def: Mac
     return r === 'no' || (r === 'yes' && (await save()) !== null);
   };
 
-  /** Run: a new or modified macro is saved first (No: nothing runs); the run is stepped while Single Step is on. */
+  /** Run: the definition as it stands in the designer, unsaved (nothing is saved, the macro stays modified); stepped while Single Step is on. */
   const run = async () => {
     if (busy.current) return;
     await flush();
     const { state: s, tab: doc } = live.current;
-    let name: string | null = doc.name;
-    if (s.dirty || doc.isNew) {
-      const r = await modal.confirm({ titleKey: 'macro.saveFirstTitle', messageKey: 'macro.saveBeforeRun', buttons: ['yes', 'no'] });
-      name = r === 'yes' ? await save() : null;
-    }
-    if (name === null) return;
-    try { await runMacroByName(name, { singleStep: live.current.singleStep }); } catch (e) { await showError(e); }
+    try { await runMacroByName(doc.name, { singleStep: live.current.singleStep, ...(s.dirty || doc.isNew ? { unsaved: s.def } : {}) }); } catch (e) { await showError(e); }
   };
 
   /** Convert Macros to Python (D4): the saved macro becomes the module "Converted_Macro_<name>"; the macro is not touched, nothing is opened. */

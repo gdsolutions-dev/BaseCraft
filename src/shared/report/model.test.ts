@@ -208,11 +208,13 @@ describe('readReport (images partagées, F3)', () => {
     expect(r.issues).toEqual([{ code: 'pictureMissing', control: 'I', detail: 'logo' }]);
     expect(read(shared).issues).toEqual([{ code: 'pictureMissing', control: 'I', detail: 'logo' }]);
   });
-  it('incorporée ou « linked » : lue comme avant, sans avertissement', () => {
+  it('incorporée : lue comme avant, sans avertissement', () => {
     expect(read(ctl('image', 'I', { Picture: png })).detail!.controls[0]!.picture).toBe(png);
-    const l = read(ctl('image', 'I', { PictureType: 'linked', Picture: png }));
-    expect(l.detail!.controls[0]!.picture).toBe(png);
-    expect(l.issues).toEqual([]);
+  });
+  it('liée : dessinée si son fichier est lu (clé link:), sinon pictureMissing', () => {
+    const l = ctl('image', 'I', { PictureType: 'linked', Picture: 'C:\p.png' });
+    expect(read(l, { 'link:C:\p.png': png }).detail!.controls[0]!.picture).toBe(png);
+    expect(read(l, {}).issues).toEqual([{ code: 'pictureMissing', control: 'I', detail: 'C:\p.png' }]);
   });
 });
 

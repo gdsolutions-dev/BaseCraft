@@ -94,6 +94,7 @@ export function newReportControls(kind: ControlKind, rect: Rect, section: number
   const r = { ...rect };
   if (click && (kind === 'checkBox' || kind === 'optionButton')) { r.width = BOX; r.height = BOX; }
   if (click && kind === 'line') r.height = 0;   // un clic donne un trait horizontal
+  if (click && kind === 'attachment') { r.width = 1701; r.height = 1701; }   // 3 cm square, as the form's
   if (click && kind === 'chart') { r.width = 4800; r.height = 2800; }   // un clic pose un graphique de taille utile (une étiquette de 2,5 cm ne montre rien)
   const label = (g: Rect, caption: string): ControlDef => ({ kind: 'label', name: nextName(doc, prefix('label'), [name]), ...g, props: { Caption: caption } });
   if (kind === 'textBox' || kind === 'comboBox') {

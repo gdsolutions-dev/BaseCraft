@@ -49,6 +49,16 @@ export function accessExportScript(): string {
   return app.isPackaged ? join(process.resourcesPath, 'access-export.ps1') : join(__dirname, '../../resources/access-export.ps1');
 }
 
+/** The ODBC reader script (External Data › Import › ODBC Database, Windows): same places as the export script. */
+export function odbcScript(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'odbc.ps1') : join(__dirname, '../../resources/odbc.ps1');
+}
+
+/** The Windows spell checker script (Home › Spelling): same places as the export script. */
+export function spellcheckScript(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'spellcheck.ps1') : join(__dirname, '../../resources/spellcheck.ps1');
+}
+
 /** Serves bc-app on the default session (the main window's). After ready. */
 export function registerAppProtocol(roots: { renderer: string; python: string }): void {
   protocol.handle(APP_SCHEME, async (req) => {

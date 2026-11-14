@@ -1,4 +1,5 @@
 // Bouton bascule : un <button aria-pressed> lié à un Oui/Non (ou indépendant), enfoncé quand la valeur est vraie ; un clic l'inverse, comme une case à cocher.
+import { Caption } from '../Caption';
 import { bool, truthy } from '../../../shared/expr/library';
 import { isUnbound } from '../control-values';
 import { controlEnabled, prop } from '../run-model';
@@ -19,6 +20,6 @@ export function ToggleButtonCtl({ c, x, style }: CtlProps) {
       onClick={(e) => {
         if (!readOnly) x.update(c, () => { if (unbound) x.editUnbound(c, bool(!on)); else if (b) x.edit(b.f, !on); });   // a read-only toggle does not toggle
         attrs.onClick?.(e);
-      }}>{caption}</button>
+      }}><Caption text={caption} /></button>
   );
 }

@@ -5,6 +5,7 @@
 // replis : un lot l'emporte quel que soit l'ordre d'import).
 import { ClipboardPaste, Copy, Eye, EyeOff, FolderPlus, FileText, FolderInput, FileSpreadsheet, FolderOutput, PencilRuler, Pencil, Scissors, Settings, Sheet, Trash2 } from 'lucide-react';
 import type { AutoCorrectReport, ObjectKind, OpResult, RenameResult } from '../../shared/api';
+import { codeBehindModule } from '../../shared/python/code-behind';
 import { api } from '../bridge';
 import { i18n } from '../i18n';
 import type { DocKind } from '../state/app-state';
@@ -48,7 +49,11 @@ async function rename(c: NavMenuContext) {
   if (c.kind === 'table') await op(c, async () => keep(await api.tables.rename(c.name, to)), () => { c.dispatch({ type: 'tableRenamed', from: c.name, to }); c.reselect(to); }, params);
   else {
     const kind = c.kind as ObjectKind;
-    await op(c, async () => keep(await api.objects.rename(kind, c.name, to)), () => { c.dispatch({ type: 'objectRenamed', kind, from: c.name, to }); c.reselect(to); }, params);
+    await op(c, async () => keep(await api.objects.rename(kind, c.name, to)), () => {
+      c.dispatch({ type: 'objectRenamed', kind, from: c.name, to });
+      if (kind === 'form' || kind === 'report') c.dispatch({ type: 'objectRenamed', kind: 'module', from: codeBehindModule(kind, c.name), to: codeBehindModule(kind, to) }); // its code-behind module follows (B6b)
+      c.reselect(to);
+    }, params);
   }
   await afterRename(c.modal, c.dispatch, report);
 }
@@ -68,7 +73,11 @@ async function remove(c: NavMenuContext) {
   if (table) await op(c, () => api.tables.drop(c.name), () => { c.dispatch({ type: 'tableDropped', name: c.name }); c.reselect(null); }, { name: c.name });
   else {
     const kind = c.kind as ObjectKind;
-    await op(c, () => api.objects.delete(kind, c.name), () => { c.dispatch({ type: 'objectDeleted', kind, name: c.name }); c.reselect(null); }, { name: c.name });
+    await op(c, () => api.objects.delete(kind, c.name), () => {
+      c.dispatch({ type: 'objectDeleted', kind, name: c.name });
+      if (kind === 'form' || kind === 'report') c.dispatch({ type: 'objectDeleted', kind: 'module', name: codeBehindModule(kind, c.name) });
+      c.reselect(null);
+    }, { name: c.name });
   }
 }
 

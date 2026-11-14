@@ -97,8 +97,8 @@ async function inputs(fields: FieldDef[], cells: (() => Value | Promise<Value>)[
  * since it was read counts as a lock. A refusal by the server (duplicate, missing parent) rolls the whole run back whatever
  * `skipFailures` (PostgreSQL aborts a transaction after an error; ponytail: a savepoint per row to skip it). Delete sends every
  * token at once: `related` refuses the whole run. A target without a key, or a read-only front-end: readOnly. Without
- * capabilities.transactions: bc:serverNotSupported|actionQuery|<kind>. An Append supplying an AutoNumber field's values (PostgreSQL would
- * not move the identity, SQL Server refuses): bc:serverNotSupported|appendAutoNumber|<kind>, before anything is sent. A lost connection inside the transaction or its COMMIT:
+ * capabilities.transactions: bc:serverNotSupported|actionQuery|<kind>. An Append may supply an AutoNumber field's values (PostgreSQL: the
+ * sequence moved past them; SQL Server: IDENTITY_INSERT, in the connector). A lost connection inside the transaction or its COMMIT:
  * bc:serverError|connection|… (outcome unknown, never sent again); Stop: bc:cancelled, rolled back.
  */
 export async function remoteRunAction(ctx: RemoteCtx, b: BoundQuery, params: Record<string, CellInput>, opts: RunActionOptions): Promise<ActionResult> {
@@ -135,7 +135,6 @@ export async function remoteRunAction(ctx: RemoteCtx, b: BoundQuery, params: Rec
       // a field list, else (Append from a SELECT) each output column's field of the same name, else every field in order
       const names = body.columns.length ? body.columns : 'values' in body.source ? null : read!.query.columns.map((x) => x.name);
       insertFields = names ? names.map((n) => t.design.fields.find((x) => sameName(x.name, n))!) : t.design.fields;
-      if (insertFields.some((x) => x.props.type === 'autoNumber')) throw new Error(`bc:serverNotSupported|appendAutoNumber|${kind}`);
     }
     try {
       return await c.transaction(async (): Promise<ActionResult> => {

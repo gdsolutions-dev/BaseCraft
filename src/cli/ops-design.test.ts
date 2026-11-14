@@ -211,12 +211,12 @@ describe('chart controls and the charts command', () => {
       { object: { kind: 'form', name: 'F' }, control: 'inTab', type: 'pie', source: { kind: 'table', name: 'Commandes' } },
       { object: { kind: 'report', name: 'R' }, control: 'g2', type: 'columnClustered', source: null }]);
   });
-  it('F5a : un nuage de points se crée et se liste ; WordCloud et les tailles hors bornes sont refusés en nommant le contrôle', async () => {
+  it('F5a : un nuage de points se crée et se liste ; un type inconnu et les tailles hors bornes sont refusés en nommant le contrôle', async () => {
     const f = async (props: Record<string, unknown>) => message((await run([commandes, { op: 'form.create', name: 'F', layout: 'doc', doc: docOf([chart(props)], null) }])).r);
     const { r, p } = await run([commandes, { op: 'form.create', name: 'F', layout: 'doc', doc: docOf([chart({ ChartType: 'scatter', ChartAxis: ['client'], ChartValues: [{ field: 'Montant', agg: 'none' }] }, 'nuage')], null) }]);
     expect(message(r)).toBe('');
     expect((await list(p)).json).toEqual([{ object: { kind: 'form', name: 'F' }, control: 'nuage', type: 'scatter', source: { kind: 'table', name: 'Commandes' } }]);
-    expect(await f({ ChartType: 'wordCloud' })).toMatch(/^control g1: ChartType "wordCloud"/);
+    expect(await f({ ChartType: 'treemap' })).toMatch(/^control g1: ChartType "treemap"/);
     expect(await f({ DoughnutHoleSize: 5 })).toMatch(/^control g1: .*DoughnutHoleSize/);
     expect(await f({ BubbleMaxSize: 500 })).toMatch(/^control g1: .*BubbleMaxSize/);
     expect(await f({ ChartType: 'doughnut', DoughnutHoleSize: 60 })).toBe('');
@@ -227,7 +227,7 @@ describe('chart controls and the charts command', () => {
     expect(await f({ ChartAxis: ['Nope'] })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartLegend: 'Nope' })).toMatch(/^control g1: .*Nope/);
     expect(await f({ ChartType: 'weird' })).toMatch(/^control g1: .*weird/);
-    expect(await f({ ChartType: 'wordCloud' }), 'wordCloud').toMatch(/^control g1: ChartType "wordCloud" is not one of .*doughnut/);   // Nuage de mots : prévu plus tard
+    expect(await f({ ChartType: 'wordCloud' }), 'wordCloud').toBe('');
     expect(await f({ ChartType: 'waterfall', WaterfallShowTotal: false, WaterfallIncreaseColor: '#112233' })).toBe('');
     expect(await f({ ChartType: 'waterfall', WaterfallDecreaseColor: 'red' })).toMatch(/^control g1: .*WaterfallDecreaseColor/);
     expect(await f({ ChartType: 'waterfall', WaterfallShowTotal: 'yes' })).toMatch(/^control g1: .*WaterfallShowTotal/);

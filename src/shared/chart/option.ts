@@ -5,6 +5,7 @@ import type { EChartsCoreOption } from 'echarts/core';
 import type { SqlValue } from '../coerce';
 import { isColorValue, type ColorValue } from '../design/colors';
 import { boxStats } from './box';
+import { cloudLayout } from './cloud';
 import type { ChartPalette } from './palette';
 import type { ChartColumn, ChartData } from './query';
 import { chartFamily, chartStack, singleSeries, usesAxes, type ChartSpec, type ChartType } from './spec';
@@ -147,6 +148,7 @@ const SAMPLES: Partial<Record<ChartType, ChartData>> = {
   doughnut: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [40, 25, 15, 12, 8][i]!]), truncated: false },
   // entonnoir : donné en désordre pour montrer le tri
   funnel: { columns: [sc('category', 'Category'), sc('value', 'Value')], rows: CATS.map((c, i) => [c, [15, 40, 8, 25, 12][i]!]), truncated: false },
+  wordCloud: { columns: [sc('category', 'Word'), sc('value', 'Weight')], rows: ['Data', 'Table', 'Query', 'Form', 'Report', 'Chart', 'Field', 'Index'].map((c, i) => [c, [40, 28, 22, 18, 15, 11, 8, 5][i]!]), truncated: false },
   scatter: { columns: [sc('category', 'X'), sc('legend', 'Series'), sc('value', 'Y')],
     rows: [[1, 'Series 1', 3], [2, 'Series 1', 5], [3, 'Series 1', 4], [4, 'Series 1', 7], [5, 'Series 1', 6], [6, 'Series 1', 9],
       [1.5, 'Series 2', 8], [2.5, 'Series 2', 6], [3.5, 'Series 2', 7], [4.5, 'Series 2', 3], [5.5, 'Series 2', 4], [6.5, 'Series 2', 2]], truncated: false },
@@ -312,6 +314,23 @@ export function chartOption(spec: ChartSpec, data: ChartData | null, fmt: ChartF
     return { ...base, ...title, ...legend, tooltip: { trigger: 'item' },
       series: [{ type: 'funnel', name: valueCols[0]!.c.name, sort: 'none', gap: 2, minSize: '8%', ...box, label: { position: 'inside', formatter: '{b}: {c}', fontSize: TEXT },
         data: stages.map((d, i) => { const fill = pal.series[i % pal.series.length]!; return { ...d, itemStyle: { color: fill }, label: { color: onFill(fill, pal.text) } }; }) }] };
+  }
+
+  if (family === 'wordCloud') {
+    // Mots = catégories, taille = première Valeur (lignes d'un même mot additionnées) ; la légende est ignorée. La disposition se calcule
+    // au rendu, dans la taille réelle du graphique (la vue vivante est redimensionnée) ; sans mot de poids positif, l'aide du type s'affiche.
+    const words = cats.flatMap((name, c) => { const v = cells.get(key(0, c)); return v == null || v <= 0 ? [] : [{ name, value: v }]; });
+    if (words.length === 0) return { ...base, xAxis: { show: false }, yAxis: { show: false }, series: [] };
+    let cache: { w: number; h: number; placed: ReturnType<typeof cloudLayout> } | null = null;
+    return { ...base, ...title, tooltip: { trigger: 'item' },
+      series: [{ type: 'custom', name: valueCols[0]!.c.name, coordinateSystem: 'none', data: words.map((d) => ({ name: d.name, value: d.value })),
+        renderItem: (params: { dataIndex: number }, api: { getWidth(): number; getHeight(): number }) => {
+          const w = api.getWidth() - box.left - box.right, h = api.getHeight() - box.top - box.bottom;
+          if (!cache || cache.w !== w || cache.h !== h) cache = { w, h, placed: cloudLayout(words, w, h) };
+          const p = cache.placed.find((q) => q.name === words[params.dataIndex]!.name);
+          return p ? { type: 'text', x: box.left + p.x, y: box.top + p.y,
+            style: { text: p.name, fontSize: p.size, fontWeight: 'bold', fontFamily: pal.fontFamily, fill: pal.series[params.dataIndex % pal.series.length]!, align: 'center', verticalAlign: 'middle' } } : null;
+        } }] };
   }
 
   if (family === 'radar') {

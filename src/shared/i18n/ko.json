@@ -49,6 +49,7 @@
       "macroDesign": "매크로 디자인"
     },
     "group": {
+      "window": "창",
       "builderClose": "닫기",
       "view": "보기",
       "records": "레코드",
@@ -105,6 +106,8 @@
       "expandCollapse": "확장/축소"
     },
     "cmd": {
+      "sizeToFit": "폼 크기에 맞추기",
+      "switchWindows": "창 전환",
       "builderSaveAs": "다른 이름으로 저장",
       "builderClose": "닫기",
       "viewDatasheet": "데이터시트 보기",
@@ -555,6 +558,16 @@
     "copyLabel": "복사본 이름",
     "copyDefault": "{{name}}의 복사본"
   },
+  "owin": {
+    "minimize": "최소화",
+    "maximize": "최대화",
+    "restore": "복원",
+    "switch": "창 전환",
+    "sizeToFit": "폼 크기에 맞춤",
+    "cascade": "계단식 배열",
+    "tile": "바둑판 배열",
+    "none": "열려 있는 창 없음"
+  },
   "tabs": {
     "close": "“{{name}}”({{kind}}) 닫기",
     "unsaved": "(저장되지 않은 변경 내용)",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "데이터베이스1",
+    "pictureFilter": "그림",
     "copyName": "{{name}} 복사본",
     "compactOnClose": "BaseCraft가 닫기 전에 데이터베이스를 압축하고 있습니다. 시간이 걸릴 수 있으며 닫기는 자동으로 완료됩니다.",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "테마 이름은 1~60자이며 제어 문자를 포함할 수 없습니다.",
       "themeReserved": "이 이름은 BaseCraft 기본 테마의 이름입니다. 다른 이름을 선택하십시오.",
       "themeExists": "이 이름의 사용자 지정 테마가 이미 있습니다.",
+      "invalidThemeFile": "이 파일은 읽을 수 있는 Office 테마(.thmx)가 아닙니다.",
+      "pictureOutsideBase": "연결된 그림은 데이터베이스 폴더 또는 그 하위 폴더에 있어야 합니다.",
       "invalidPicture": "이 파일은 PNG, JPEG, GIF 또는 WebP 이미지가 아닙니다.",
       "pictureTooLarge": "이미지가 너무 큽니다(최대 1MB).",
+      "attachmentTooLarge": "25MB를 초과하는 파일이 있습니다. 아무것도 추가되지 않았습니다.",
+      "attachmentOpen": "파일을 열 수 없습니다.",
       "unknown": "예기치 않은 오류가 발생했습니다: {{detail}}",
       "fileTooLarge": "파일이 2GB보다 커서 가져올 수 없습니다.",
       "importInterrupted": "가져오기가 중단되었습니다(데이터베이스가 닫혔거나 읽기 전용이 되었습니다). 가져온 항목이 없습니다.",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "이 Access 데이터베이스는 암호로 보호되어 있습니다: {{detail}}",
       "linkUnavailable_needsLogin": "로그인이 취소됨: {{detail}}의 연결된 테이블을 사용할 수 없습니다.",
       "linkUnavailable_cannotConnect": "서버 {{detail}}에 연결할 수 없습니다. 서버 이름, 포트 및 네트워크를 확인하십시오.",
+      "odbc_failed": "ODBC 원본에서 오류가 보고되었습니다: {{detail}}",
+      "odbc_unavailable": "이 컴퓨터에서는 ODBC 가져오기를 사용할 수 없습니다: {{detail}}을(를) 찾을 수 없습니다. Linux와 macOS에서는 unixODBC를 설치하세요.",
       "linkUnavailable_certificate": "이 컴퓨터는 서버 {{detail}}의 인증서를 신뢰하지 않습니다. 해당 인증 기관의 인증서를 설치하거나, 이 네트워크를 신뢰하는 경우 연결된 테이블 관리자에서 인증서를 확인하지 않는 암호화 옵션(예: “암호화, 서버 인증서 신뢰”)을 선택하십시오.",
       "linkUnavailable_serverVersion": "서버 {{detail}}은(는) BaseCraft에서 지원하지 않는 버전을 사용합니다(최소 PostgreSQL 14 또는 SQL Server 2016).",
       "linkUnavailable_passwordExpired": "서버 {{detail}}에서 이 로그인의 암호가 만료되었습니다. 서버 관리 도구로 암호를 변경한 다음 다시 연결하세요.",
@@ -752,6 +772,7 @@
       "nameExists": "같은 이름의 개체가 이미 있습니다.",
       "nameInvalid": "이 이름은 올바르지 않습니다.",
       "readOnly": "데이터베이스가 읽기 전용으로 열려 있습니다.",
+      "moduleNameClash": "이 이름은 다른 폼, 보고서 또는 기존 모듈과 같은 코드 모듈 이름이 됩니다. 다른 이름을 선택하세요.",
       "notFound": "이 개체가 더 이상 없습니다.",
       "hasRelations": "이 테이블은 관계에 포함되어 있습니다. 먼저 관계를 삭제하십시오.",
       "external": "테이블 “{{table}}”이(가) BaseCraft 외부에서 변경되었습니다. 여기서는 디자인을 변경할 수 없습니다.",
@@ -855,6 +876,7 @@
     },
     "fieldList": "필드 목록",
     "ctlPrefix": {
+      "attachment": "첨부 파일",
       "label": "레이블",
       "textBox": "텍스트",
       "checkBox": "확인란",
@@ -908,9 +930,13 @@
     "currency": "통화",
     "dateTime": "날짜/시간",
     "yesNo": "예/아니요",
-    "hyperlink": "하이퍼링크"
+    "hyperlink": "하이퍼링크",
+    "attachment": "첨부 파일",
+    "calculated": "계산"
   },
   "fieldProp": {
+    "calculated": "식",
+    "resultType": "결과 형식",
     "size": "필드 크기",
     "numberSize": "필드 크기",
     "precision": "전체 자릿수",
@@ -1038,7 +1064,7 @@
   "datasheet": {
     "more": { "rowHeight": "행 높이…", "columnWidth": "필드 너비…", "rowHeightLabel": "행 높이(포인트):", "columnWidthLabel": "열 너비:", "standardHeight": "표준 높이", "standardWidth": "표준 너비", "bestFit": "자동 맞춤", "hide": "필드 숨기기", "unhide": "필드 숨기기 취소…", "freeze": "필드 고정", "unfreeze": "모든 필드 고정 취소", "unhideTitle": "열 숨기기 취소" },
     "totals": { "label": "요약", "none": "없음" },
-    "format": { "gridlines": "표시할 눈금선", "gridColor": "눈금선 색", "auto": "자동" },
+    "format": { "gridlines": "표시할 눈금선", "gridColor": "눈금선 색", "auto": "자동", "cellEffect": "셀 효과", "flat": "평면", "raised": "볼록", "sunken": "오목" },
     "goTo": {
       "first": "처음",
       "previous": "이전",
@@ -1681,6 +1707,13 @@
     "GridX": "눈금 X",
     "GridY": "눈금 Y",
     "RecordSelectors": "레코드 선택기",
+    "AutoResize": "자동 크기 조정",
+    "AutoCenter": "자동 가운데 맞춤",
+    "ControlBox": "컨트롤 상자",
+    "MinMaxButtons": "최소화/최대화 단추",
+    "CloseButton": "닫기 단추",
+    "PopUp": "팝업",
+    "Modal": "모달",
     "Left": "왼쪽",
     "Top": "위쪽",
     "Height": "높이",
@@ -1774,8 +1807,9 @@
     "ColumnWidth": "열 너비"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "없음", "min": "최소화 단추", "max": "최대화 단추", "both": "둘 다"},
     "LegendPosition": {"top": "위쪽", "bottom": "아래쪽", "left": "왼쪽", "right": "오른쪽"},
-    "ChartType": {"columnClustered": "묶은 세로 막대형", "columnStacked": "누적 세로 막대형", "columnStacked100": "100% 누적 세로 막대형", "barClustered": "묶은 가로 막대형", "barStacked": "누적 가로 막대형", "barStacked100": "100% 누적 가로 막대형", "line": "꺾은선형", "lineStacked": "누적 꺾은선형", "lineStacked100": "100% 누적 꺾은선형", "area": "묶은 영역형", "areaStacked": "누적 영역형", "areaStacked100": "100% 누적 영역형", "pie": "원형", "radar": "방사형", "radarFilled": "채워진 방사형", "combo": "콤보", "doughnut": "도넛", "arc": "호", "scatter": "분산형", "bubble": "거품형", "boxWhisker": "상자 수염", "funnel": "깔때기", "pareto": "파레토", "waterfall": "폭포"},
+    "ChartType": {"columnClustered": "묶은 세로 막대형", "columnStacked": "누적 세로 막대형", "columnStacked100": "100% 누적 세로 막대형", "barClustered": "묶은 가로 막대형", "barStacked": "누적 가로 막대형", "barStacked100": "100% 누적 가로 막대형", "line": "꺾은선형", "lineStacked": "누적 꺾은선형", "lineStacked100": "100% 누적 꺾은선형", "area": "묶은 영역형", "areaStacked": "누적 영역형", "areaStacked100": "100% 누적 영역형", "pie": "원형", "radar": "방사형", "radarFilled": "채워진 방사형", "combo": "콤보", "doughnut": "도넛", "arc": "호", "scatter": "분산형", "bubble": "거품형", "boxWhisker": "상자 수염", "funnel": "깔때기", "pareto": "파레토", "waterfall": "폭포", "wordCloud": "단어 구름"},
     "ChartDateGroup": {"none": "없음", "year": "년", "quarter": "분기", "month": "월", "day": "일"},
     "ChartBackStyle": {"normal": "표준", "transparent": "투명"},
     "ChartBorderStyle": {"transparent": "투명", "solid": "실선", "dashed": "파선", "dotted": "점선"},
@@ -1802,6 +1836,10 @@
       "transparent": "투명"
     },
     "BorderStyle": {
+      "none": "없음",
+      "thin": "가늘게",
+      "sizable": "크기 조정 가능",
+      "dialog": "대화 상자",
       "transparent": "투명",
       "solid": "실선",
       "dashed": "파선",
@@ -1829,7 +1867,8 @@
     },
     "PictureType": {
       "embedded": "포함",
-      "shared": "공유"
+      "shared": "공유",
+      "linked": "연결됨"
     },
     "SizeMode": {
       "clip": "자르기",
@@ -2159,7 +2198,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "작성기 선택", "macro": "매크로 작성기", "function": "함수 작성기" },
+    "choose": { "title": "작성기 선택", "macro": "매크로 작성기", "function": "함수 작성기", "code": "코드 작성기" },
     "function": { "title": "함수 작성기", "empty": "공개 함수가 있는 모듈이 없습니다." },
     "title": "식 작성기",
     "expression": "식을 입력하십시오:",
@@ -2373,8 +2412,9 @@
     "showTable": {
       "title": "테이블 추가",
       "tables": "테이블",
+      "links": "연결",
       "queries": "쿼리",
-      "both": "모두",
+      "all": "전체",
       "add": "선택한 테이블 추가",
       "close": "닫기",
       "none": "개체가 없습니다.",
@@ -2397,6 +2437,7 @@
       "label": "테이블 이름"
     },
     "sqlOnly": "이 쿼리는 SQL 보기에서만 표시할 수 있습니다.",
+    "sqlFormat": "SQL 서식",
     "passThrough": {
       "notice": "패스스루 쿼리: 이 텍스트는 BaseCraft가 읽지 않고 그대로 서버 {{label}}(으)로 전송됩니다. 서버는 자체 권한을 적용하며, 서버가 변경하는 내용에는 BaseCraft의 유효성 검사 규칙과 관계가 적용되지 않습니다.",
       "noticeNoServer": "패스스루 쿼리: 속성 시트에서 서버를 선택하십시오.",
@@ -2457,6 +2498,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "가져오기 단계 저장",
+    "savedImportDefault": "가져오기 - {{name}}",
+    "savedImportEmpty": "저장된 가져오기가 없습니다.",
     "yes": "참",
     "no": "거짓",
     "excelFilter": "Excel 통합 문서",
@@ -2522,6 +2567,7 @@
     "twoPrimary": "기본 키로 사용할 수 있는 인덱스는 하나뿐입니다."
   },
   "tableFields": {
+    "calculatedLabel": "\"{{field}}\"의 식 (계산 필드, 비어 있으면 저장 필드)",
     "newField": "필드",
     "newTable": "테이블",
     "designOpen": "테이블 \"{{name}}\"이(가) 디자인 보기에서 열려 있습니다. 여기서 필드를 변경하기 전에 닫거나 저장하십시오.",
@@ -2568,6 +2614,7 @@
     "self": "데이터 파일은 열려 있는 데이터베이스일 수 없습니다. 다른 이름이나 폴더를 선택하세요."
   },
   "clipboard": { "empty": "시스템 클립보드에 텍스트가 없습니다.", "content": "{{text}}" },
+  "attachments": {"title": "첨부 파일", "add": "추가…", "remove": "제거", "open": "열기", "saveAs": "다른 이름으로 저장…", "saveAll": "모두 저장…", "none": "첨부 파일이 없습니다.", "previous": "이전 첨부 파일", "next": "다음 첨부 파일", "manage": "두 번 클릭하여 첨부 파일 관리", "openConfirm": "“{{name}}”을(를) 여시겠습니까? 데이터베이스의 파일에는 유해한 코드가 포함될 수 있습니다. 이 데이터베이스를 신뢰하는 경우에만 여십시오.", "openConfirmRunnable": "“{{name}}”은(는) 프로그램 또는 스크립트입니다. 열면 이 컴퓨터에서 실행됩니다. 이 데이터베이스와 작성자를 신뢰하는 경우에만 여십시오."},
   "hyperlink": { "address": "주소 (https://, http:// 또는 mailto:)", "text": "표시할 텍스트", "invalid": "주소는 https://, http:// 또는 mailto:로 시작해야 합니다.", "open": "{{url}}을(를) 여시겠습니까?" },
   "migrate": {
     "title": "서버로 이동 마법사",
@@ -2610,6 +2657,8 @@
     "noSchema": "스키마 {{schema}}이(가) 서버에 없습니다.",
     "nameTaken": "서버에 이미 이 이름의 테이블이 있습니다: {{names}}. 삭제하거나 다른 스키마를 선택하세요.",
     "nameTooLong": "이 이름은 PostgreSQL의 제한(63바이트)을 넘습니다: {{names}}. 먼저 이름을 바꾸세요.",
+    "nameClash": "여러 데이터 파일에 {{names}} 이름의 테이블이 있습니다. 아무것도 이동하지 않았습니다. 데이터 파일에서 이름을 바꾼 후(서버에서 고유해야 함) 다시 시도하십시오.",
+    "partial": "이미 이동한 데이터 파일의 이 테이블은 서버에 있으며 연결이 변경되었습니다: {{names}}. 다른 파일은 변경되지 않았습니다.",
     "invalidDesign": "이 필드의 디자인이 올바르지 않습니다: {{names}}. 디자인 보기에서 수정한 후 다시 시도하세요.",
     "cancelled": "이동이 취소되었습니다. 변경된 내용이 없습니다.",
     "failed": "이동하지 못했습니다({{table}}): {{error}}. 서버와 데이터베이스 모두 변경된 내용이 없습니다.",
@@ -2665,6 +2714,7 @@
       "done": "매크로 '{{macro}}' 변환을 마쳤습니다. 모듈 '{{module}}'을(를) 만들었습니다.",
       "todo": "{{count}}개 항목은 직접 마무리해야 합니다. 모듈에서 TODO를 검색하세요."
     },
+    "convertEvents": { "none": "변환할 포함된 매크로가 없습니다.", "done": "'{{object}}'의 포함된 매크로 변환을 완료했습니다. 이벤트 {{count}}개가 이제 모듈 '{{module}}'의 프로시저를 실행합니다." },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "포함된 매크로를 삭제하시겠습니까?",
@@ -2930,7 +2980,6 @@
     "moveUp": "위로 이동",
     "moveDown": "아래로 이동",
     "remove": "삭제",
-    "saveBeforeRun": "매크로를 실행하기 전에 저장해야 합니다. 지금 저장하시겠습니까?",
     "step": {
       "title": "매크로 한 단계씩 실행",
       "condition": "조건",
@@ -2945,17 +2994,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "리본 탭 위에 표시되는 빠른 실행 도구 모음을 사용자 지정합니다.",
+      "choose": "명령 선택:",
+      "add": "추가",
+      "remove": "제거",
+      "up": "위로 이동",
+      "down": "아래로 이동",
+      "reset": "다시 설정",
+      "current": "도구 모음의 명령"
+    },
+    "trust": {
+      "header": "보안 센터: 이 컴퓨터가 데이터베이스의 활성 콘텐츠를 신뢰하는 위치입니다.",
+      "locations": "신뢰할 수 있는 위치",
+      "locationsNote": "관리자가 시스템 파일에서 설정하며 BaseCraft는 읽기만 합니다.",
+      "none": "신뢰할 수 있는 위치가 없습니다.",
+      "subfolders": "하위 폴더 포함",
+      "approvalsTitle": "승인",
+      "approvals": "이 사용자가 승인한 수: {{count}}",
+      "clear": "모든 승인 제거",
+    "admin": "관리자",
+    "add": "새 위치 추가...",
+    "remove": "제거",
+    "subfoldersAlso": "이 위치의 하위 폴더도 신뢰함",
+    "description": "설명",
+    "network": "내 네트워크의 신뢰할 수 있는 위치 허용(권장하지 않음)",
+    "networkRefused": "네트워크 위치를 허용하지 않으면 네트워크 위치를 신뢰할 수 없습니다."
+    },
     "cat": {
       "general": "일반",
       "currentDb": "현재 데이터베이스",
       "client": "클라이언트 설정",
       "datasheet": "데이터시트",
-      "designers": "개체 디자이너"
+      "designers": "개체 디자이너",
+      "quickAccess": "빠른 실행 도구 모음",
+      "ribbon": "리본 사용자 지정",
+      "trust": "보안 센터"
     },
     "general": {
+      "screenTipStyle": "화면 설명 스타일:",
+      "screenTipsOn": "화면 설명 표시",
+      "screenTipsOff": "화면 설명 표시 안 함",
+      "interfaceZoom": "인터페이스 확대/축소 (%)",
+      "interfaceZoomReset": "확대/축소 재설정",
+      "previewZoom": "인쇄 미리 보기 확대/축소",
+      "previewFit": "창에 맞춤",
+      "previewActual": "100%",
+      "screenTipShortcuts": "화면 설명에 바로 가기 키 표시",
       "header": "{{product}} 사용에 대한 일반 옵션입니다.",
       "ui": "사용자 인터페이스 옵션",
       "creation": "데이터베이스 만들기",
+      "sortOrderNew": "새 데이터베이스의 정렬 순서:",
+      "sortOrderLegacy": "일반 – 레거시",
+      "sortOrderGeneral": "일반",
+      "sortOrderSpanishTraditional": "스페인어 – 전통",
       "defaultFolder": "기본 데이터베이스 폴더:",
       "browse": "찾아보기…"
     },
@@ -3016,9 +3108,13 @@
       "docWindow": "문서 창 옵션",
       "statusBar": "상태 표시줄 표시",
       "documentTabs": "문서 탭 표시",
+      "docOverlapping": "창 겹치기",
+      "docTabbed": "탭 문서",
       "specialKeys": "특수 키 사용",
       "specialKeysHelp": "F11: 탐색 창을 표시하거나 숨깁니다.",
       "compactOnClose": "닫을 때 압축",
+      "sortOrder": "이 데이터베이스의 정렬 순서:",
+      "sortOrderPending": "다음 압축 및 복구 때 적용됩니다: {{order}}",
       "frontEnd": "프런트엔드 응용 프로그램(로컬 테이블은 참조용으로만 사용)",
       "dataFile": "공유 데이터 파일(여러 워크스테이션이 공유 모드로 열기)",
       "datasheetDesign": "데이터시트 보기에서 테이블 디자인 변경 사용",
@@ -3078,6 +3174,7 @@
     "datasheet": {
       "header": "{{product}}에서 데이터시트의 모양을 사용자 지정합니다.",
       "gridSection": "눈금선 및 셀 효과",
+      "defaultCellEffect": "기본 셀 효과",
       "gridlines": "기본으로 표시할 눈금선",
       "horizontal": "가로",
       "vertical": "세로",
@@ -3113,6 +3210,7 @@
 
       "skipped": "가져오지 않은 열({{table}}): {{names}}."
     },
+    "odbc": { "title": "ODBC 데이터베이스에서 가져오기", "dsn": "데이터 원본(DSN)", "connection": "또는 연결 문자열", "modeImport": "원본 데이터를 현재 데이터베이스의 새 테이블로 가져오기", "modeLink": "연결된 테이블을 만들어 데이터 원본에 연결" },
     "access": {
       "title": "Access에서 가져오기",
       "fileOnly": "테이블과 해당 데이터를 가져옵니다. 일련 번호 외의 키, 인덱스, 필드 규칙은 읽지 않으며, 쿼리, 폼, 보고서, 매크로, 모듈은 가져오지 않습니다.",
@@ -3232,7 +3330,7 @@
       "sqlite": "SQLite 파일",
       "access": "Access 데이터베이스",
       "postgresql": "PostgreSQL 서버",
-      "sqlserver": "SQL Server 서버"
+      "sqlserver": "SQL Server 서버", "odbc": "ODBC 데이터베이스"
     },
     "tables": "테이블",
     "selectAll": "모두 선택",
@@ -3248,6 +3346,7 @@
     "designTitle": "연결된 테이블",
     "designWarning": "“{{name}}”은(는) 연결된 테이블입니다. 구조는 원본 파일에 속하므로 여기에서 수정할 수 없습니다. 읽기 전용으로 그래도 여시겠습니까?",
     "designBanner": "연결된 테이블, 읽기 전용: 구조는 {{path}}에 속합니다.",
+    "designBannerServer": "서버에 연결된 테이블: 구조는 {{path}}에 속합니다. 변경한 BaseCraft 속성은 이 데이터베이스에 저장됩니다.",
     "skipped": "BaseCraft에서 읽지 않는 형식(첨부 파일, OLE 개체, 다중값 필드, 이진, 확장 날짜/시간)이어서 연결되지 않은 열: {{names}}",
     "unsupported": "지원되지 않는 테이블: {{reason}}",
     "password": {
@@ -3570,6 +3669,7 @@
     "default": "이 데이터베이스의 기본 테마로 설정",
     "save": "현재 테마 저장…",
     "browse": "테마 찾기…",
+    "thmxFilter": "Office 테마",
     "delete": "이 사용자 지정 테마 삭제",
     "saveTitle": "현재 테마 저장",
     "nameLabel": "테마 이름:",
@@ -3631,7 +3731,7 @@
       "legendNone": "(없음)",
       "legendHint": "범례를 사용하면 첫 번째 값만 그려집니다.",
       "legendIgnored": "이 차트 종류에서는 범례 필드가 무시됩니다.",
-      "typeHint": {"doughnut": "조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "arc": "반원 도넛: 조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "funnel": "단계는 첫 번째 값으로 정렬됩니다. 범례 필드는 무시됩니다.", "scatter": "첫 번째 축 필드가 X(숫자여야 함)이고 첫 번째 값이 Y입니다. 범례 필드를 지정하면 점이 계열로 나뉩니다.", "bubble": "첫 번째 축 필드가 X(숫자), 첫 번째 값이 Y, 두 번째 값이 거품 크기입니다.", "boxWhisker": "각 범주가 하나의 상자입니다. 축 필드가 범주, 첫 번째 값이 관측값입니다 (범례 필드는 무시됩니다).", "pareto": "막대는 첫 번째 값의 내림차순으로 정렬되고, 꺾은선은 오른쪽 축에 누적 백분율을 표시합니다 (범례 필드는 무시됩니다).", "waterfall": "각 범주는 누적값에 대한 첫 번째 값(비어 있으면 0)의 증감이며, 마지막 막대가 합계를 보여 줍니다(범례 필드는 무시됨)."},
+      "typeHint": {"doughnut": "조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "arc": "반원 도넛: 조각 크기는 첫 번째 값으로 정해집니다. 범례 필드는 무시됩니다.", "funnel": "단계는 첫 번째 값으로 정렬됩니다. 범례 필드는 무시됩니다.", "scatter": "첫 번째 축 필드가 X(숫자여야 함)이고 첫 번째 값이 Y입니다. 범례 필드를 지정하면 점이 계열로 나뉩니다.", "bubble": "첫 번째 축 필드가 X(숫자), 첫 번째 값이 Y, 두 번째 값이 거품 크기입니다.", "boxWhisker": "각 범주가 하나의 상자입니다. 축 필드가 범주, 첫 번째 값이 관측값입니다 (범례 필드는 무시됩니다).", "pareto": "막대는 첫 번째 값의 내림차순으로 정렬되고, 꺾은선은 오른쪽 축에 누적 백분율을 표시합니다 (범례 필드는 무시됩니다).", "waterfall": "각 범주는 누적값에 대한 첫 번째 값(비어 있으면 0)의 증감이며, 마지막 막대가 합계를 보여 줍니다(범례 필드는 무시됨).", "wordCloud": "단어는 축 필드에서, 크기는 첫 번째 값에서 가져옵니다(같은 단어의 행은 합산되며 범례 필드는 무시됨)."},
       "rowsHint": "이 차트 형식에서는 집계 함수 없이 값이 그대로 그려집니다.",
       "axisXHint": "첫 번째 필드가 X입니다.",
       "values": "값 (Y축)",
@@ -3641,6 +3741,44 @@
       "expand": "섹션 펼치기",
       "close": "닫기",
       "format": {"series": "데이터 계열", "heading": "데이터 계열 서식: {{name}}", "fullName": "전체 이름", "seriesType": "계열 종류", "seriesTypes": {"column": "세로 막대", "line": "꺾은선", "area": "영역"}, "plotOn": "계열 표시 축", "primary": "주 축", "secondary": "보조 축", "fill": "계열 채우기 색", "border": "계열 테두리 색", "labels": "데이터 레이블 표시", "trend": "추세선 옵션", "trendName": "추세선 이름", "noValues": "먼저 데이터 탭에서 값을 선택하십시오.", "legendHint": "범례 필드가 있으면 서식이 모든 계열에 함께 적용됩니다. 사용할 수 없습니다.", "roundHint": "이 차트 종류(원형, 방사형)에는 적용되지 않습니다.", "axisHint": "가로 막대형 또는 누적형 차트에는 보조 축이 없습니다.", "trendHint": "가로 막대형 또는 누적형 차트에는 추세선이 없습니다.", "noEffect": "이 차트 종류에서는 적용되지 않습니다.", "noTrend": "이 차트 종류에서는 추세선을 사용할 수 없습니다.", "noAxis": "이 차트 종류에서는 보조 축을 사용할 수 없습니다.", "waterfallColors": "폭포 색", "lineOptions": "선 옵션", "lineWidth": "선 두께", "dash": "선 스타일", "marker": "표식 표시", "gap": "빈 값", "trendKinds": {"none": "없음", "linear": "선형", "exponential": "지수", "logarithmic": "로그", "polynomial": "다항식", "power": "거듭제곱", "movingAverage": "이동 평균"}, "dashes": {"solid": "실선", "dashed": "파선", "dotted": "점선"}, "gaps": {"gap": "간격으로 두기", "zero": "0으로 표시", "connect": "데이터 요소 연결"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "빠른 실행 도구 모음에 추가",
+    "qatRemove": "빠른 실행 도구 모음에서 제거",
+    "newTab": "새 탭",
+    "newGroup": "새 그룹",
+    "rename": "이름 바꾸기",
+    "show": "{{name}} 탭 표시",
+    "ribbonHeader": "리본 사용자 지정: 탭 표시/숨기기, 순서 변경, 사용자 지정 탭과 그룹 만들기.",
+    "ribbonNote": "사용자 지정 그룹에는 도구 탭을 포함한 모든 탭에 제공되는 명령을 넣을 수 있습니다. 기본 제공 그룹을 선택하면 이름을 바꿀 수 있습니다. 도구 탭은 해당 개체와 함께 있을 때만 나타납니다.",
+    "ribbonTabs": "리본 탭",
+    "toolTabs": "도구 탭",
+    "formTemplate": "폼 서식 파일:",
+    "reportTemplate": "보고서 서식 파일:",
+    "templateNote": "현재 데이터베이스의 폼 또는 보고서 이름입니다. 새 폼과 보고서는 해당 속성과 구역 설정을 복사합니다(기본값 Normal). 없으면 원래 값이 적용됩니다.",
+    "errorSection": "오류 검사",
+    "errorEnable": "오류 검사 사용",
+    "errorUnassociated": "연결되지 않은 레이블과 컨트롤 검사",
+    "errorNewLabels": "연결되지 않은 새 레이블 검사",
+    "errorProperties": "잘못된 컨트롤 속성 검사",
+    "errorReport": "일반적인 보고서 오류 검사",
+    "errorShortcut": "바로 가기 키 오류 검사",
+    "errorColor": "오류 표시기 색:",
+    "errorIndicator": "이 항목의 오류",
+    "errAssociate": "레이블을 컨트롤에 연결",
+    "errIgnore": "오류 무시",
+    "err": {
+      "unassociated": "레이블 {{name}}이(가) 옆의 컨트롤에 연결되어 있지 않습니다.",
+      "newLabel": "새 레이블 {{name}}이(가) 어떤 컨트롤에도 연결되어 있지 않습니다.",
+      "unknownField": "원본에 \"{{field}}\" 필드가 없습니다.",
+      "invalidExpression": "식 \"{{field}}\"이(가) 잘못되었습니다.",
+      "aggregateNotAllowed": "여기에서는 집계 함수를 사용할 수 없습니다.",
+      "widthExceedsPage": "보고서가 페이지의 인쇄 가능 영역보다 넓습니다.",
+      "groupingInvalid": "보고서의 정렬 또는 그룹화가 잘못되었습니다: \"{{field}}\".",
+      "groupingMalformed": "보고서의 정렬 또는 그룹화 수준이 비어 있습니다.",
+      "shortcutInvalid": "\"{{name}}\"의 바로 가기 키가 문자나 숫자가 아닙니다.",
+      "shortcutDuplicate": "바로 가기 키 \"{{field}}\"을(를) 다른 컨트롤이 이미 사용하고 있습니다."
     }
   }
 }

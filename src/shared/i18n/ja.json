@@ -49,6 +49,7 @@
       "macroDesign": "マクロ デザイン"
     },
     "group": {
+      "window": "ウィンドウ",
       "builderClose": "閉じる",
       "view": "表示",
       "records": "レコード",
@@ -105,6 +106,8 @@
       "expandCollapse": "展開/折りたたみ"
     },
     "cmd": {
+      "sizeToFit": "フォームのサイズに合わせる",
+      "switchWindows": "ウィンドウの切り替え",
       "builderSaveAs": "名前を付けて保存",
       "builderClose": "閉じる",
       "viewDatasheet": "データシート ビュー",
@@ -555,6 +558,16 @@
     "copyLabel": "コピーの名前",
     "copyDefault": "{{name}} のコピー"
   },
+  "owin": {
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "元に戻す",
+    "switch": "ウィンドウの切り替え",
+    "sizeToFit": "フォームのサイズに合わせる",
+    "cascade": "重ねて表示",
+    "tile": "並べて表示",
+    "none": "開いているウィンドウはありません"
+  },
   "tabs": {
     "close": "「{{name}}」({{kind}}) を閉じる",
     "unsaved": "(未保存の変更あり)",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "データベース1",
+    "pictureFilter": "画像",
     "copyName": "{{name}} のコピー",
     "compactOnClose": "BaseCraft は閉じる前にデータベースを最適化しています。しばらくかかる場合があります。完了すると自動的に閉じます。",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "テーマ名は 1 〜 60 文字で、制御文字を含められません。",
       "themeReserved": "この名前は BaseCraft 標準のテーマの名前です。別の名前を指定してください。",
       "themeExists": "この名前のユーザー設定テーマは既にあります。",
+      "invalidThemeFile": "このファイルは読み取り可能な Office テーマ (.thmx) ではありません。",
+      "pictureOutsideBase": "リンクされた画像は、データベースのフォルダーまたはそのサブフォルダーに置く必要があります。",
       "invalidPicture": "このファイルは PNG、JPEG、GIF、WebP のいずれの画像でもありません。",
       "pictureTooLarge": "画像が大きすぎます (最大 1 MB)。",
+      "attachmentTooLarge": "25 MB を超えるファイルがあります。何も追加されませんでした。",
+      "attachmentOpen": "ファイルを開けませんでした。",
       "unknown": "予期しないエラーが発生しました: {{detail}}",
       "fileTooLarge": "ファイルが 2 GB を超えているため、インポートできません。",
       "importInterrupted": "インポートが中断されました (データベースが閉じられたか、読み取り専用になりました)。何もインポートされていません。",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "この Access データベースはパスワードで保護されています: {{detail}}",
       "linkUnavailable_needsLogin": "ログインがキャンセルされました: {{detail}} のリンク テーブルは使用できません。",
       "linkUnavailable_cannotConnect": "サーバー {{detail}} に接続できません。サーバー名、ポート、ネットワークを確認してください。",
+      "odbc_failed": "ODBC ソースがエラーを報告しました: {{detail}}",
+      "odbc_unavailable": "このコンピューターでは ODBC のインポートを利用できません: {{detail}} が見つかりません。Linux と macOS では unixODBC をインストールしてください。",
       "linkUnavailable_certificate": "このコンピューターはサーバー {{detail}} の証明書を信頼していません。その証明機関の証明書をインストールしてもらうか、このネットワークを信頼する場合は、リンク テーブル マネージャーで、証明書を検証しない暗号化のオプション (例: 「暗号化 (サーバー証明書を信頼する)」) を選択してください。",
       "linkUnavailable_serverVersion": "サーバー {{detail}} は BaseCraft がサポートしていないバージョンを使用しています (PostgreSQL 14 以降または SQL Server 2016 以降が必要です)。",
       "linkUnavailable_passwordExpired": "サーバー {{detail}} でこのログインのパスワードの有効期限が切れています。サーバーの管理ツールでパスワードを変更してから、もう一度接続してください。",
@@ -752,6 +772,7 @@
       "nameExists": "この名前のオブジェクトは既に存在します。",
       "nameInvalid": "この名前は正しくありません。",
       "readOnly": "データベースは読み取り専用で開かれています。",
+      "moduleNameClash": "この名前では、別のフォーム、レポート、または既存のモジュールと同じコード モジュール名になります。別の名前を指定してください。",
       "notFound": "このオブジェクトは存在しなくなりました。",
       "hasRelations": "このテーブルはリレーションシップに含まれています。先にそのリレーションシップを削除してください。",
       "external": "テーブル「{{table}}」は BaseCraft の外部で変更されたため、ここではデザインを変更できません。",
@@ -852,6 +873,7 @@
     },
     "fieldList": "フィールド リスト",
     "ctlPrefix": {
+      "attachment": "添付ファイル",
       "label": "ラベル",
       "textBox": "テキスト",
       "checkBox": "チェック",
@@ -908,9 +930,13 @@
     "currency": "通貨型",
     "dateTime": "日付/時刻型",
     "yesNo": "Yes/No 型",
-    "hyperlink": "ハイパーリンク型"
+    "hyperlink": "ハイパーリンク型",
+    "attachment": "添付ファイル",
+    "calculated": "集計"
   },
   "fieldProp": {
+    "calculated": "演算式",
+    "resultType": "結果の型",
     "size": "フィールド サイズ",
     "numberSize": "フィールド サイズ",
     "precision": "有効桁数",
@@ -1038,7 +1064,7 @@
   "datasheet": {
     "more": { "rowHeight": "行の高さ…", "columnWidth": "フィールド幅…", "rowHeightLabel": "行の高さ (ポイント):", "columnWidthLabel": "列の幅:", "standardHeight": "標準の高さ", "standardWidth": "標準の幅", "bestFit": "自動調整", "hide": "フィールドの非表示", "unhide": "フィールドの再表示…", "freeze": "フィールドの固定", "unfreeze": "すべてのフィールドの固定解除", "unhideTitle": "列の再表示" },
     "totals": { "label": "集計", "none": "なし" },
-    "format": { "gridlines": "表示する枠線", "gridColor": "枠線の色", "auto": "自動" },
+    "format": { "gridlines": "表示する枠線", "gridColor": "枠線の色", "auto": "自動", "cellEffect": "セルの効果", "flat": "フラット", "raised": "浮き出し", "sunken": "くぼみ" },
     "goTo": {
       "first": "最初",
       "previous": "前へ",
@@ -1681,6 +1707,13 @@
     "GridX": "グリッドの X",
     "GridY": "グリッドの Y",
     "RecordSelectors": "レコード セレクター",
+    "AutoResize": "自動サイズ調整",
+    "AutoCenter": "自動中央揃え",
+    "ControlBox": "コントロールボックス",
+    "MinMaxButtons": "最小化/最大化ボタン",
+    "CloseButton": "閉じるボタン",
+    "PopUp": "ポップアップ",
+    "Modal": "作業ウィンドウ固定",
     "Left": "左",
     "Top": "上",
     "Height": "高さ",
@@ -1774,8 +1807,9 @@
     "ColumnWidth": "列幅"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "なし", "min": "最小化ボタン", "max": "最大化ボタン", "both": "両方"},
     "LegendPosition": {"top": "上", "bottom": "下", "left": "左", "right": "右"},
-    "ChartType": {"columnClustered": "集合縦棒", "columnStacked": "積み上げ縦棒", "columnStacked100": "100% 積み上げ縦棒", "barClustered": "集合横棒", "barStacked": "積み上げ横棒", "barStacked100": "100% 積み上げ横棒", "line": "折れ線", "lineStacked": "積み上げ折れ線", "lineStacked100": "100% 積み上げ折れ線", "area": "集合面", "areaStacked": "積み上げ面", "areaStacked100": "100% 積み上げ面", "pie": "円", "radar": "レーダー", "radarFilled": "塗りつぶしレーダー", "combo": "複合グラフ", "doughnut": "ドーナツ", "arc": "円弧", "scatter": "散布図", "bubble": "バブル", "boxWhisker": "箱ひげ図", "funnel": "じょうご", "pareto": "パレート図", "waterfall": "ウォーターフォール"},
+    "ChartType": {"columnClustered": "集合縦棒", "columnStacked": "積み上げ縦棒", "columnStacked100": "100% 積み上げ縦棒", "barClustered": "集合横棒", "barStacked": "積み上げ横棒", "barStacked100": "100% 積み上げ横棒", "line": "折れ線", "lineStacked": "積み上げ折れ線", "lineStacked100": "100% 積み上げ折れ線", "area": "集合面", "areaStacked": "積み上げ面", "areaStacked100": "100% 積み上げ面", "pie": "円", "radar": "レーダー", "radarFilled": "塗りつぶしレーダー", "combo": "複合グラフ", "doughnut": "ドーナツ", "arc": "円弧", "scatter": "散布図", "bubble": "バブル", "boxWhisker": "箱ひげ図", "funnel": "じょうご", "pareto": "パレート図", "waterfall": "ウォーターフォール", "wordCloud": "ワードクラウド"},
     "ChartDateGroup": {"none": "なし", "year": "年", "quarter": "四半期", "month": "月", "day": "日"},
     "ChartBackStyle": {"normal": "標準", "transparent": "透明"},
     "ChartBorderStyle": {"transparent": "透明", "solid": "実線", "dashed": "破線", "dotted": "点線"},
@@ -1802,6 +1836,10 @@
       "transparent": "透明"
     },
     "BorderStyle": {
+      "none": "なし",
+      "thin": "細線",
+      "sizable": "サイズ変更可",
+      "dialog": "ダイアログ",
       "transparent": "透明",
       "solid": "実線",
       "dashed": "破線",
@@ -1829,7 +1867,8 @@
     },
     "PictureType": {
       "embedded": "埋め込み",
-      "shared": "共有"
+      "shared": "共有",
+      "linked": "リンク"
     },
     "SizeMode": {
       "clip": "切り抜き",
@@ -2159,7 +2198,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "ビルダーの選択", "macro": "マクロ ビルダー", "function": "関数ビルダー" },
+    "choose": { "title": "ビルダーの選択", "macro": "マクロ ビルダー", "function": "関数ビルダー", "code": "コード ビルダー" },
     "function": { "title": "関数ビルダー", "empty": "公開関数を含むモジュールはありません。" },
     "title": "式ビルダー",
     "expression": "式を入力してください:",
@@ -2373,8 +2412,9 @@
     "showTable": {
       "title": "テーブルの追加",
       "tables": "テーブル",
+      "links": "リンク",
       "queries": "クエリ",
-      "both": "両方",
+      "all": "すべて",
       "add": "選択したテーブルを追加",
       "close": "閉じる",
       "none": "オブジェクトはありません。",
@@ -2397,6 +2437,7 @@
       "label": "テーブル名"
     },
     "sqlOnly": "このクエリは SQL ビューでのみ表示できます。",
+    "sqlFormat": "SQL を整形",
     "passThrough": {
       "notice": "パススルー クエリ：このテキストは BaseCraft が読み取ることなく、そのままサーバー {{label}} に送信されます。サーバーは独自のアクセス許可を適用します。サーバーが変更する内容には、BaseCraft の入力規則とリレーションシップは適用されません。",
       "noticeNoServer": "パススルー クエリ：プロパティ シートでサーバーを選択してください。",
@@ -2457,6 +2498,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "インポート操作の保存",
+    "savedImportDefault": "インポート - {{name}}",
+    "savedImportEmpty": "保存されたインポートはありません。",
     "yes": "真",
     "no": "偽",
     "excelFilter": "Excel ブック",
@@ -2522,6 +2567,7 @@
     "twoPrimary": "主キーにできるインデックスは 1 つだけです。"
   },
   "tableFields": {
+    "calculatedLabel": "「{{field}}」の演算式 (集計フィールド。空: 通常のフィールド)",
     "newField": "フィールド",
     "newTable": "テーブル",
     "designOpen": "テーブル「{{name}}」はデザイン ビューで開かれています。ここでフィールドを変更する前に、閉じるか保存してください。",
@@ -2568,6 +2614,7 @@
     "self": "データ ファイルを開いているデータベースにすることはできません。別の名前またはフォルダーを選んでください。"
   },
   "clipboard": { "empty": "システムのクリップボードにテキストはありません。", "content": "{{text}}" },
+  "attachments": {"title": "添付ファイル", "add": "追加…", "remove": "削除", "open": "開く", "saveAs": "名前を付けて保存…", "saveAll": "すべて保存…", "none": "添付ファイルはありません。", "previous": "前の添付ファイル", "next": "次の添付ファイル", "manage": "ダブルクリックして添付ファイルを管理", "openConfirm": "「{{name}}」を開きますか？データベース内のファイルには有害なコードが含まれている可能性があります。このデータベースを信頼できる場合のみ開いてください。", "openConfirmRunnable": "「{{name}}」はプログラムまたはスクリプトです。開くとこのコンピューターで実行されます。このデータベースとその作成者を信頼できる場合のみ開いてください。"},
   "hyperlink": { "address": "アドレス (https://、http:// または mailto:)", "text": "表示するテキスト", "invalid": "アドレスは https://、http:// または mailto: で始まる必要があります。", "open": "{{url}} を開きますか?" },
   "migrate": {
     "title": "サーバーへの移動ウィザード",
@@ -2610,6 +2657,8 @@
     "noSchema": "スキーマ {{schema}} はサーバーに存在しません。",
     "nameTaken": "サーバーには既にこれらの名前のテーブルがあります: {{names}}。削除するか、別のスキーマを選んでください。",
     "nameTooLong": "これらの名前は PostgreSQL の制限 (63 バイト) を超えています: {{names}}。先に名前を変更してください。",
+    "nameClash": "複数のデータ ファイルに {{names}} という名前のテーブルがあります。何も移動していません。データ ファイルで名前を変更して (サーバー上で重複しないようにして)、もう一度お試しください。",
+    "partial": "移動済みのデータ ファイルのこれらのテーブルはサーバー上にあり、リンクは変更されました: {{names}}。それ以外のファイルは変更されていません。",
     "invalidDesign": "これらのフィールドのデザインが無効です: {{names}}。デザイン ビューで修正してから、やり直してください。",
     "cancelled": "移動を取り消しました: 何も変更されていません。",
     "failed": "移動に失敗しました ({{table}}): {{error}}。サーバーでもデータベースでも何も変更されていません。",
@@ -2665,6 +2714,7 @@
       "done": "マクロ '{{macro}}' の変換が完了しました。モジュール '{{module}}' を作成しました。",
       "todo": "{{count}} 件の項目は手動での対応が必要です。モジュール内で TODO を検索してください。"
     },
+    "convertEvents": { "none": "変換する埋め込みマクロはありません。", "done": "「{{object}}」の埋め込みマクロの変換が完了しました。{{count}} 個のイベントがモジュール「{{module}}」のプロシージャを実行します。" },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "埋め込みマクロを削除しますか?",
@@ -2930,7 +2980,6 @@
     "moveUp": "上へ移動",
     "moveDown": "下へ移動",
     "remove": "削除",
-    "saveBeforeRun": "マクロを実行する前に保存する必要があります。今すぐ保存しますか?",
     "step": {
       "title": "マクロのシングル ステップ",
       "condition": "条件",
@@ -2945,17 +2994,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "リボンのタブの上に表示されるクイック アクセス ツール バーをカスタマイズします。",
+      "choose": "コマンドを選択:",
+      "add": "追加",
+      "remove": "削除",
+      "up": "上へ",
+      "down": "下へ",
+      "reset": "リセット",
+      "current": "ツール バーのコマンド"
+    },
+    "trust": {
+      "header": "トラスト センター: このコンピューターがデータベースのアクティブ コンテンツを信頼する場所。",
+      "locations": "信頼できる場所",
+      "locationsNote": "管理者がシステム ファイルで設定します。BaseCraft は読み取るだけです。",
+      "none": "信頼できる場所はありません。",
+      "subfolders": "サブフォルダーを含む",
+      "approvalsTitle": "承認",
+      "approvals": "このユーザーが承認した数: {{count}}",
+      "clear": "すべての承認を削除",
+    "admin": "管理者",
+    "add": "新しい場所を追加...",
+    "remove": "削除",
+    "subfoldersAlso": "この場所のサブフォルダーも信頼する",
+    "description": "説明",
+    "network": "ネットワーク上の信頼できる場所を許可する (非推奨)",
+    "networkRefused": "ネットワーク上の場所を許可していない間は、ネットワークの場所を信頼できません。"
+    },
     "cat": {
       "general": "全般",
       "currentDb": "現在のデータベース",
       "client": "クライアントの設定",
       "datasheet": "データシート",
-      "designers": "オブジェクト デザイナー"
+      "designers": "オブジェクト デザイナー",
+      "quickAccess": "クイック アクセス ツール バー",
+      "ribbon": "リボンのユーザー設定",
+      "trust": "トラスト センター"
     },
     "general": {
+      "screenTipStyle": "ヒントのスタイル:",
+      "screenTipsOn": "ヒントを表示する",
+      "screenTipsOff": "ヒントを表示しない",
+      "interfaceZoom": "インターフェイスのズーム (%)",
+      "interfaceZoomReset": "ズームをリセット",
+      "previewZoom": "印刷プレビューのズーム",
+      "previewFit": "ウィンドウに合わせる",
+      "previewActual": "100%",
+      "screenTipShortcuts": "ヒントにショートカット キーを表示する",
       "header": "{{product}} の操作に関する全般的なオプションです。",
       "ui": "ユーザー インターフェイスのオプション",
       "creation": "データベースの作成",
+      "sortOrderNew": "新しいデータベースの並べ替え順序:",
+      "sortOrderLegacy": "一般 – レガシ",
+      "sortOrderGeneral": "一般",
+      "sortOrderSpanishTraditional": "スペイン語 – 伝統的",
       "defaultFolder": "既定のデータベース フォルダー:",
       "browse": "参照…"
     },
@@ -3016,9 +3108,13 @@
       "docWindow": "ドキュメント ウィンドウのオプション",
       "statusBar": "ステータス バーを表示する",
       "documentTabs": "ドキュメント タブを表示する",
+      "docOverlapping": "ウィンドウを重ねて表示する",
+      "docTabbed": "タブ付きドキュメント",
       "specialKeys": "特殊キーを使用する",
       "specialKeysHelp": "F11: ナビゲーション ウィンドウの表示/非表示を切り替えます。",
       "compactOnClose": "閉じるときに最適化する",
+      "sortOrder": "このデータベースの並べ替え順序:",
+      "sortOrderPending": "次回の最適化/修復で適用されます: {{order}}",
       "frontEnd": "フロントエンド アプリケーション (ローカル テーブルは参照用のみ)",
       "dataFile": "共有データ ファイル (複数のワークステーションが共有モードで開く)",
       "datasheetDesign": "データシート ビューでテーブルのデザインを変更できるようにする",
@@ -3078,6 +3174,7 @@
     "datasheet": {
       "header": "{{product}} のデータシートの外観をカスタマイズします。",
       "gridSection": "枠線とセルの効果",
+      "defaultCellEffect": "既定のセルの効果",
       "gridlines": "既定で表示する枠線",
       "horizontal": "横",
       "vertical": "縦",
@@ -3113,6 +3210,7 @@
 
       "skipped": "インポートされなかった列（{{table}}）：{{names}}。"
     },
+    "odbc": { "title": "ODBC データベースからインポート", "dsn": "データ ソース (DSN)", "connection": "または接続文字列", "modeImport": "ソース データを現在のデータベースの新しいテーブルにインポートする", "modeLink": "リンク テーブルを作成してデータ ソースにリンクする" },
     "access": {
       "title": "Access からインポート",
       "fileOnly": "テーブルとそのデータをインポートします。オートナンバー型以外のキー、インデックス、フィールドの規則は読み込まれません。クエリ、フォーム、レポート、マクロ、モジュールはインポートされません。",
@@ -3232,7 +3330,7 @@
       "sqlite": "SQLite ファイル",
       "access": "Access データベース",
       "postgresql": "PostgreSQL サーバー",
-      "sqlserver": "SQL Server サーバー"
+      "sqlserver": "SQL Server サーバー", "odbc": "ODBC データベース"
     },
     "tables": "テーブル",
     "selectAll": "すべて選択",
@@ -3248,6 +3346,7 @@
     "designTitle": "リンク テーブル",
     "designWarning": "「{{name}}」はリンク テーブルです。構造はソース ファイルに属しており、ここでは変更できません。読み取り専用で開きますか?",
     "designBanner": "リンク テーブル (読み取り専用): 構造は {{path}} に属しています。",
+    "designBannerServer": "サーバーにリンクされたテーブル: 構造は {{path}} に属しています。変更した BaseCraft のプロパティはこのデータベースに保存されます。",
     "skipped": "リンクされていない列 (BaseCraft が読み取れない型: 添付ファイル、OLE オブジェクト、複数値フィールド、バイナリ、拡張日付/時刻): {{names}}",
     "unsupported": "サポートされていないテーブル: {{reason}}",
     "password": {
@@ -3570,6 +3669,7 @@
     "default": "このデータベースの既定のテーマに設定",
     "save": "現在のテーマを保存…",
     "browse": "テーマを検索…",
+    "thmxFilter": "Office テーマ",
     "delete": "このユーザー設定テーマを削除",
     "saveTitle": "現在のテーマを保存",
     "nameLabel": "テーマ名:",
@@ -3631,7 +3731,7 @@
       "legendNone": "(なし)",
       "legendHint": "凡例を使用すると、最初の値のみが描画されます。",
       "legendIgnored": "このグラフの種類では凡例フィールドは無視されます。",
-      "typeHint": {"doughnut": "扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "arc": "半円ドーナツ：扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "funnel": "段階は最初の値で並べ替えられます。凡例フィールドは無視されます。", "scatter": "最初の軸フィールドが X（数値である必要があります）、最初の値が Y です。凡例フィールドを指定すると、点が系列に分けられます。", "bubble": "最初の軸フィールドが X（数値）、最初の値が Y、2 番目の値がバブルの大きさです。", "boxWhisker": "各カテゴリが 1 つの箱になります。軸フィールドがカテゴリ、最初の値が観測値です (凡例フィールドは無視されます)。", "pareto": "棒は最初の値の降順に並べ替えられ、折れ線は右軸の累積パーセントを示します (凡例フィールドは無視されます)。", "waterfall": "各カテゴリは累計に対する最初の値(空 = 0)の増減で、最後の棒が合計を示します(凡例フィールドは無視されます)。"},
+      "typeHint": {"doughnut": "扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "arc": "半円ドーナツ：扇形の大きさは最初の値で決まります。凡例フィールドは無視されます。", "funnel": "段階は最初の値で並べ替えられます。凡例フィールドは無視されます。", "scatter": "最初の軸フィールドが X（数値である必要があります）、最初の値が Y です。凡例フィールドを指定すると、点が系列に分けられます。", "bubble": "最初の軸フィールドが X（数値）、最初の値が Y、2 番目の値がバブルの大きさです。", "boxWhisker": "各カテゴリが 1 つの箱になります。軸フィールドがカテゴリ、最初の値が観測値です (凡例フィールドは無視されます)。", "pareto": "棒は最初の値の降順に並べ替えられ、折れ線は右軸の累積パーセントを示します (凡例フィールドは無視されます)。", "waterfall": "各カテゴリは累計に対する最初の値(空 = 0)の増減で、最後の棒が合計を示します(凡例フィールドは無視されます)。", "wordCloud": "単語は軸フィールド、サイズは最初の値から決まります(同じ単語の行は合算され、凡例フィールドは無視されます)。"},
       "rowsHint": "このグラフの種類では、値は集計せずそのまま描画されます。",
       "axisXHint": "最初のフィールドが X です。",
       "values": "値 (Y 軸)",
@@ -3641,6 +3741,44 @@
       "expand": "セクションを展開",
       "close": "閉じる",
       "format": {"series": "データ系列", "heading": "データ系列の書式: {{name}}", "fullName": "フルネーム", "seriesType": "系列の種類", "seriesTypes": {"column": "縦棒", "line": "折れ線", "area": "面"}, "plotOn": "系列のプロット先", "primary": "第 1 軸", "secondary": "第 2 軸", "fill": "系列の塗りつぶしの色", "border": "系列の枠線の色", "labels": "データ ラベルを表示", "trend": "近似曲線のオプション", "trendName": "近似曲線の名前", "noValues": "最初に [データ] タブで値を選択してください。", "legendHint": "凡例フィールドがある場合、書式はすべての系列に共通で適用されます。無効です。", "roundHint": "このグラフの種類(円、レーダー)では無効です。", "axisHint": "横棒グラフまたは積み上げグラフでは第2軸は使用できません。", "trendHint": "横棒グラフまたは積み上げグラフでは近似曲線は使用できません。", "noEffect": "このグラフの種類では無効です。", "noTrend": "このグラフの種類では近似曲線は使えません。", "noAxis": "このグラフの種類では第 2 軸は使えません。", "waterfallColors": "ウォーターフォールの色", "lineOptions": "線のオプション", "lineWidth": "線の太さ", "dash": "線の種類", "marker": "マーカーを表示", "gap": "欠損値", "trendKinds": {"none": "なし", "linear": "線形", "exponential": "指数", "logarithmic": "対数", "polynomial": "多項式", "power": "累乗", "movingAverage": "移動平均"}, "dashes": {"solid": "実線", "dashed": "破線", "dotted": "点線"}, "gaps": {"gap": "途切れさせる", "zero": "ゼロとして表示", "connect": "データ ポイントを結ぶ"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "クイック アクセス ツール バーに追加",
+    "qatRemove": "クイック アクセス ツール バーから削除",
+    "newTab": "新しいタブ",
+    "newGroup": "新しいグループ",
+    "rename": "名前の変更",
+    "show": "タブ {{name}} を表示",
+    "ribbonHeader": "リボンのカスタマイズ: タブの表示と非表示、順序の変更、ユーザー設定のタブとグループの作成ができます。",
+    "ribbonNote": "ユーザー設定のグループには、どのタブにも (ツール タブも含めて) 提供されているコマンドを追加できます。組み込みのグループを選ぶと名前を変更できます。ツール タブは対象のオブジェクトを開いているときだけ表示されます。",
+    "ribbonTabs": "リボンのタブ",
+    "toolTabs": "ツール タブ",
+    "formTemplate": "フォーム テンプレート:",
+    "reportTemplate": "レポート テンプレート:",
+    "templateNote": "現在のデータベースのフォームまたはレポートの名前です。新しいフォームとレポートは、そのプロパティとセクションの設定をコピーします (既定は Normal)。存在しない場合は元の値が使われます。",
+    "errorSection": "エラー チェック",
+    "errorEnable": "エラー チェックを有効にする",
+    "errorUnassociated": "関連付けられていないラベルとコントロールをチェックする",
+    "errorNewLabels": "関連付けられていない新しいラベルをチェックする",
+    "errorProperties": "無効なコントロール プロパティをチェックする",
+    "errorReport": "レポートの一般的なエラーをチェックする",
+    "errorShortcut": "ショートカット キーのエラーをチェックする",
+    "errorColor": "エラー インジケーターの色:",
+    "errorIndicator": "この項目のエラー",
+    "errAssociate": "ラベルをコントロールに関連付ける",
+    "errIgnore": "エラーを無視",
+    "err": {
+      "unassociated": "ラベル {{name}} が隣のコントロールに関連付けられていません。",
+      "newLabel": "新しいラベル {{name}} はどのコントロールにも関連付けられていません。",
+      "unknownField": "フィールド \"{{field}}\" はソースに存在しません。",
+      "invalidExpression": "式 \"{{field}}\" は無効です。",
+      "aggregateNotAllowed": "ここでは集計関数は使用できません。",
+      "widthExceedsPage": "レポートの幅がページの印刷可能領域を超えています。",
+      "groupingInvalid": "レポートの並べ替えまたはグループ化が無効です: \"{{field}}\"。",
+      "groupingMalformed": "レポートの並べ替えまたはグループ化のレベルが空です。",
+      "shortcutInvalid": "「{{name}}」のショートカット キーは英数字ではありません。",
+      "shortcutDuplicate": "ショートカット キー「{{field}}」は別のコントロールで既に使われています。"
     }
   }
 }

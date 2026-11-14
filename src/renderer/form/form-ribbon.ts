@@ -12,7 +12,7 @@ import { nextName } from './form-host';
 export const GALLERY_TOOLS: Partial<Record<CommandId, ControlKind | null>> = {
   select: null, textBox: 'textBox', label: 'label', button: 'commandButton', tabControl: 'tabControl', optionGroup: 'optionGroup',
   insertPageBreak: 'pageBreak', comboBox: 'comboBox', line: 'line', listBox: 'listBox', rectangle: 'rectangle', checkBox: 'checkBox',
-  optionButton: 'optionButton', subform: 'subform', image: 'image', toggleButton: 'toggleButton', navigationControl: 'navigationControl',
+  optionButton: 'optionButton', subform: 'subform', image: 'image', toggleButton: 'toggleButton', navigationControl: 'navigationControl', attachment: 'attachment',
 };
 
 const GAP = 113;                                // 0,2 cm entre le logo et le titre

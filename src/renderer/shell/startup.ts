@@ -9,11 +9,13 @@ export interface StartupUi {
   runMode: boolean;
   statusBar: boolean;
   documentTabs: boolean;
+  /** Overlapping windows (C6): the open objects are windows in the client area, not document tabs. */
+  overlapping: boolean;
   specialKeys: boolean;
   shortcutMenus: boolean;
   datasheetDesign: boolean;
 }
-export const FULL_UI: StartupUi = Object.freeze({ ribbon: 'full', runMode: false, statusBar: true, documentTabs: true, specialKeys: true, shortcutMenus: true, datasheetDesign: true });
+export const FULL_UI: StartupUi = Object.freeze({ ribbon: 'full', runMode: false, statusBar: true, documentTabs: true, overlapping: false, specialKeys: true, shortcutMenus: true, datasheetDesign: true });
 
 /** BaseCraft Runtime's UI, whatever the base asks (B5): run mode, the simplified ribbon. The switches are the base's (startupUi). */
 export const RUNTIME_UI: StartupUi = Object.freeze({ ...FULL_UI, ribbon: 'simplified', runMode: true });
@@ -29,7 +31,7 @@ export function startupUi(o: StartupOptions, runtime = RUNTIME): StartupUi {
   const runMode = runtime || o.runMode || !o.fullMenus;
   return {
     ribbon: runMode ? 'simplified' : o.ribbon, runMode,
-    statusBar: o.statusBar, documentTabs: o.documentTabs, specialKeys: o.specialKeys, shortcutMenus: o.shortcutMenus, datasheetDesign: o.datasheetDesign,
+    statusBar: o.statusBar, documentTabs: o.documentTabs, overlapping: o.overlappingWindows, specialKeys: o.specialKeys, shortcutMenus: o.shortcutMenus, datasheetDesign: o.datasheetDesign,
   };
 }
 

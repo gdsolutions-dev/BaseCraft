@@ -2,7 +2,7 @@
 // écran 2), création d'un contrôle posé, menu de la barre de section (En-tête/pied de formulaire).
 import {
   AppWindow, ChevronDown, ChevronsUpDown, CircleDot, Group, Image as ImageIcon, LetterText, List, Minus, PanelTop, RectangleHorizontal,
-  Navigation, SeparatorHorizontal, Square, SquareCheck, TextCursorInput, ToggleLeft,
+  Navigation, Paperclip, SeparatorHorizontal, Square, SquareCheck, TextCursorInput, ToggleLeft,
 } from 'lucide-react';
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import { nextTabIndex, TAB_KINDS } from '../designer/field-controls';
 import { formLabels, headerFooterShown, toggleHeaderFooter, type FormLabels } from './form-def';
 import { parseTargets } from './nav-targets';
 import { DesignChart } from './controls/ChartCtl';
+import { Caption } from './Caption';
 import { DesignButton, DesignImage } from './controls/ImageCtl';
 import { applies, color, controlLook, gridlineStyle, linkAddress, LINK_LOOK, prop, type ThemeCtx } from './run-model';
 import { useDocTheme } from '../design/doc-theme';
@@ -37,6 +38,7 @@ export const FORM_TOOLS: ToolDef[] = [
   { kind: 'subform', icon: AppWindow, labelKey: 'ribbon.cmd.subform' },
   { kind: 'navigationControl', icon: Navigation, labelKey: 'ribbon.cmd.navigationControl' },
   { kind: 'image', icon: ImageIcon, labelKey: 'ribbon.cmd.image' },
+  { kind: 'attachment', icon: Paperclip, labelKey: 'ribbon.cmd.attachment' },
   { kind: 'rectangle', icon: Square, labelKey: 'ribbon.cmd.rectangle' },
   { kind: 'line', icon: Minus, labelKey: 'ribbon.cmd.line' },
   { kind: 'pageBreak', icon: SeparatorHorizontal, labelKey: 'ribbon.cmd.insertPageBreak' },
@@ -61,6 +63,7 @@ export function newFormControls(kind: ControlKind, rect: Rect, section: number, 
   if (click && (kind === 'checkBox' || kind === 'optionButton')) { r.width = BOX; r.height = BOX; }
   if (click && kind === 'navigationControl') { r.width = 6804; r.height = 3402; }   // 12 × 6 cm: tabs over the form shown below
   if (click && kind === 'line') r.height = 0;   // un clic pose un trait horizontal
+  if (click && kind === 'attachment') { r.width = 1701; r.height = 1701; }   // 3 cm square: a picture or an icon of the file
   if (click && kind === 'chart') { r.width = 4800; r.height = 2800; }   // un clic pose un graphique de taille utile (une étiquette de 2,5 cm ne montre rien)
   const props: Record<string, unknown> = {};
   if (TAB_KINDS.includes(kind)) props.TabIndex = nextTabIndex(s);
@@ -118,7 +121,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
   const source = () => live?.text ?? (controlSourceToDisplay(typeof prop(c, 'ControlSource') === 'string' ? String(prop(c, 'ControlSource')) : undefined, display) || unbound);
   const on = live?.checked ? ' is-on' : '';
   switch (c.kind) {
-    case 'label': return <div className="fz fz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}>{String(prop(c, 'Caption') ?? '')}</div>;
+    case 'label': return <div className="fz fz-text" style={linkAddress(c) ? { ...st, ...LINK_LOOK } : st}><Caption text={String(prop(c, 'Caption') ?? '')} /></div>;
     case 'textBox': return <div className="fz fz-text" style={st}><span className="fz-clip">{source()}</span></div>;
     case 'comboBox': return <div className="fz fz-text fz-combo" style={st}><span className="fz-clip">{source()}</span><ChevronDown size={14} aria-hidden /></div>;
     case 'listBox': return <div className="fz fz-list" style={st}><span className="fz-clip">{source()}</span></div>;
@@ -128,6 +131,7 @@ function previewBody(c: ControlDef, display: PropertySheetContext['display'], un
     case 'commandButton': case 'toggleButton': return <DesignButton c={c} style={st} />;
     case 'subform': return <div className="fz fz-subform" style={st}><span className="fz-clip">{String(prop(c, 'SourceObject') ?? '')}</span></div>;
     case 'image': return <DesignImage c={c} className="fz fz-image" style={st} />;
+    case 'attachment': return <div className="fz fz-image" style={st}><Paperclip size={18} aria-hidden /></div>;
     case 'chart': return <DesignChart c={c} className="fz fz-chart" style={st} />;
     case 'rectangle': return <div className="fz" style={st} />;
     case 'line': {

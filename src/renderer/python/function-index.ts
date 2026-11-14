@@ -2,6 +2,7 @@
 import { FUNCTION_TABLE } from '../../shared/expr/catalog'
 import { foldName, sameName } from '../../shared/field-types'
 import type { ModuleExport } from '../../shared/python/bridge'
+import { isCodeBehind } from '../../shared/python/code-behind'
 
 export type FunctionRef = { module: string; fn: string; params: string[] }
 const cache = new Map<string, { modified: string; exports: ModuleExport[] }>()
@@ -21,8 +22,18 @@ async function refresh(): Promise<void> {
 
 export async function listFunctions(): Promise<FunctionRef[]> {
   await refresh()
-  return [...cache].flatMap(([module, c]) => c.exports.map((x) => ({ module, fn: x.name, params: x.params })))
+  return [...cache].filter(([module]) => !isCodeBehind(module)).flatMap(([module, c]) => c.exports.map((x) => ({ module, fn: x.name, params: x.params })))
     .sort((a, b) => a.module.localeCompare(b.module) || a.fn.localeCompare(b.fn))
+}
+
+/** B6: the event procedure `fn` of the code-behind module `module` (exported spelling), null when it is not there. */
+export async function findProcedure(module: string, fn: string): Promise<FunctionRef | null> {
+  await refresh()
+  for (const [m, c] of cache) {
+    const x = sameName(m, module) ? c.exports.find((e) => sameName(e.name, fn)) : undefined
+    if (x) return { module: m, fn: x.name, params: x.params }
+  }
+  return null
 }
 
 // Errors follow errorMessage's `bc:code|sub|detail` convention (one pipe): sub -> {{name}}, the rest -> {{detail}}.
@@ -35,6 +46,7 @@ export async function resolveFunction(name: string): Promise<FunctionRef> {
 
 /** R12: for each export of `module`, the other module exporting the same name, or null for a built-in expression function. */
 export async function functionClashes(module: string, exports: ModuleExport[]): Promise<{ fn: string; other: string | null }[]> {
+  if (isCodeBehind(module)) return []   // event procedures: the same names in every form's module
   const others = (await listFunctions()).filter((f) => !sameName(f.module, module))
   const builtins = new Set(Object.keys(FUNCTION_TABLE).map(foldName))
   const out: { fn: string; other: string | null }[] = []

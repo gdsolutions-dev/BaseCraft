@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
 import { saveObject } from '../../src/main/db/objects';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
-import { launchApp, seedBase, seedSalesE2E, pickView , checkView } from './helpers';
+import { launchApp, seedBase, seedSalesE2E, pickView , checkView, expectSql, editorText } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -34,15 +34,17 @@ test('Query Design: Show Table, relation join, fields, sort, criteria, save, tot
     await page.getByTestId('cmd-createQueryDesign').click();
     await expect(page.getByTestId('doc-tab-query-Requête1')).toBeVisible();
     await selected(page, 'queryDesign');
-    // Show Table opens by itself on a new query (Access): tabs Tables / Queries / Both, multiple selection
+    // Show Table opens by itself on a new query (Access): tabs Tables / Links / Queries / All, multiple selection
     await expect(page.getByTestId('show-table')).toContainText(fr.query.showTable.title);
     await page.getByTestId('show-table-tab-tables').focus();
     await page.keyboard.press('ArrowRight'); // ARIA tabs: arrows move and select
+    await expect(page.getByTestId('show-table-tab-links')).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowRight');
     await expect(page.getByTestId('show-table-tab-queries')).toBeFocused();
     await expect(page.getByTestId('show-table-tab-queries')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('tabpanel', { name: fr.query.showTable.queries })).toContainText('QVentes');
     await expect(page.getByTestId('show-table-QVentes')).toBeVisible();
-    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Home');
     await expect(page.getByTestId('show-table-tab-tables')).toHaveAttribute('aria-selected', 'true');
     await page.getByTestId('show-table-Clients').check();
     await page.getByTestId('show-table-Commandes').check();
@@ -297,7 +299,7 @@ test('a stored SQL that no longer parses opens in SQL view with its error, never
   try {
     await page.getByTestId('nav-item-query-Cassée').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
-    await expect(doc(page).getByTestId('query-sql')).toHaveValue('SELECT FROM WHERE');
+    await expectSql(doc(page).getByTestId('query-sql'), 'SELECT FROM WHERE');
     await expect(doc(page).getByTestId('query-sql-error')).toHaveText(fr.query.error.unexpectedToken);
   } finally {
     await app.close();
@@ -359,7 +361,7 @@ test('SQL view: a Query Type button goes back to the grid and sets the kind', as
     await page.getByTestId('nav-item-query-Grosses commandes').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
     await pickView(page, 'viewSql');
-    await expect(sqlBox(page)).toHaveValue(GROSSES);
+    await expectSql(sqlBox(page), GROSSES);
     await expect(page.getByTestId('cmd-updateQuery')).toBeEnabled();
     await page.getByTestId('cmd-updateQuery').click();
     await expect(doc(page).getByTestId('qbe-cell-updateTo-0')).toBeVisible();
@@ -377,8 +379,8 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('Nom');
     // grid -> SQL: the canonical text, never translated (0.5, not 0,5)
     await pickView(page, 'viewSql');
-    await expect(sqlBox(page)).toHaveValue(GROSSES);
-    await expect(sqlBox(page)).toHaveValue(/WHERE \[Commandes\]\.\[Montant\] > 0\.5/);
+    await expectSql(sqlBox(page), GROSSES);
+    await expectSql(sqlBox(page), /WHERE \[Commandes\]\.\[Montant\] > 0\.5/);
     await checkView(page, 'viewSql', (v) => expect(v).toHaveAttribute('aria-pressed', 'true'));
     await expect(page.getByTestId('status-view-sql')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('status-view-design')).toHaveAttribute('aria-pressed', 'false');
@@ -418,7 +420,7 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(page.getByTestId('doc-tab-query-Grosses commandes')).toBeVisible();
     const withLe = 'SELECT [Clients].[Nom], [Commandes].[Montant]\nFROM [Clients] INNER JOIN [Commandes] ON [Clients].[N°] = [Commandes].[Client]\n'
       + 'WHERE [Commandes].[Montant] > 0.5 And [Commandes].[Le] >= [Date début :]\nORDER BY [Commandes].[Montant] DESC;';
-    await expect(sqlBox(page)).toHaveValue(withLe);
+    await expectSql(sqlBox(page), withLe);
     expect(await sqlOf(page, 'Grosses commandes')).toBe(withLe);
     await expect(page.getByTestId('doc-tab-query-Grosses commandes')).not.toContainText('•');
 
@@ -431,17 +433,17 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(page.getByTestId('doc-tab-query-Grosses commandes')).not.toContainText('•');
     const union = 'SELECT [Nom]\nFROM [Clients]\nUNION\nSELECT [Nom]\nFROM [Clients];';
     expect(await sqlOf(page, 'Grosses commandes')).toBe(union);
-    await expect(sqlBox(page)).toHaveValue(union); // the normalised text
+    await expectSql(sqlBox(page), union); // the normalised text
     await page.getByTestId('status-view-datasheet').click();
     await expect(doc(page).getByTestId('nav-record-count')).toBeVisible();
     await page.getByTestId('status-view-design').click(); // a SQL-only query opens in SQL view
-    await expect(sqlBox(page)).toHaveValue(union);
+    await expectSql(sqlBox(page), union);
 
     // a reserved name: its error under the editor, its range selected, nothing saved
     await sqlBox(page).fill('SELECT * FROM bc_meta');
     await page.keyboard.press('Control+s');
     await expect(doc(page).getByTestId('query-sql-error')).toHaveText(fr.expr.error.reservedName); // query.error.reservedName falls back on it
-    expect(await sqlBox(page).evaluate((el: HTMLTextAreaElement) => el.value.slice(el.selectionStart, el.selectionEnd))).toBe('bc_meta');
+    expect(await page.evaluate(() => String(getSelection()))).toBe('bc_meta');
     expect(await sqlOf(page, 'Grosses commandes')).toBe(union);
     await page.getByTestId('status-view-design').click(); // a text that does not read stays in SQL view
     await expect(doc(page).getByTestId('query-sql-error')).toBeVisible();
@@ -460,7 +462,7 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(page.getByTestId('query-params-error')).toHaveText(fr.query.params.emptyName);
     await page.getByTestId('query-params-type-1').selectOption('shortText');
     await page.getByTestId('query-params-ok').click();
-    await expect(sqlBox(page)).toHaveValue(/^PARAMETERS \[Mini\] Currency;\nSELECT \*\nFROM \[Clients\];$/);
+    await expectSql(sqlBox(page), /^PARAMETERS \[Mini\] Currency;\nSELECT \*\nFROM \[Clients\];$/);
     // the grid keeps the declaration (Parameters there shows it), and writes it back
     await page.getByTestId('status-view-design').click();
     await page.getByTestId('cmd-parameters').click();
@@ -468,7 +470,7 @@ test('SQL view: grid to SQL and back, a SQL-only UNION, a refused name, Query Pa
     await expect(page.getByTestId('query-params-type-0')).toHaveValue('currency');
     await page.getByTestId('query-params-cancel').click();
     await pickView(page, 'viewSql');
-    await expect(sqlBox(page)).toHaveValue(/^PARAMETERS \[Mini\] Currency;/);
+    await expectSql(sqlBox(page), /^PARAMETERS \[Mini\] Currency;/);
   } finally {
     await app.close();
   }
@@ -481,14 +483,14 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await page.getByTestId('ribbon-tab-create').click();
     await page.getByTestId('cmd-createSqlQuery').click();
     await expect(page.getByTestId('doc-tab-query-Requête1')).toBeVisible();
-    await expect(sqlBox(page)).toHaveValue('');
+    await expectSql(sqlBox(page), '');
     await expect(page.getByTestId('show-table')).toHaveCount(0);
     await sqlBox(page).fill('SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon" OR Ville = "Paris"');
     // its datasheet, unsaved, then SQL view again: the same tab, its text kept (not a second tab reading a query never saved)
     await page.getByTestId('status-view-datasheet').click();
     await expect(doc(page).getByTestId('nav-record-count')).toBeVisible();
     await page.getByTestId('status-view-sql').click();
-    await expect(sqlBox(page)).toHaveValue('SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon" OR Ville = "Paris"');
+    await expectSql(sqlBox(page), 'SELECT Nom, Ville FROM Clients WHERE Ville = "Lyon" OR Ville = "Paris"');
     await expect(page.getByTestId('doc-tab-query-Requête1')).toHaveCount(1);
     await page.getByTestId('status-view-design').click();
     await expect(doc(page).getByTestId('qbe-cell-field-1')).toHaveValue('Ville');
@@ -531,7 +533,7 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await page.getByTestId('query-props-distinct').check();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('*');
     await pickView(page, 'viewSql');
-    await expect(sqlBox(page)).toHaveValue('SELECT DISTINCT TOP 25 PERCENT *, [Clients].[Nom], [Clients].[Ville]\nFROM [Clients]\nWHERE [Clients].[Ville] = "Paris" Or [Clients].[Ville] = "Lyon";');
+    await expectSql(sqlBox(page), 'SELECT DISTINCT TOP 25 PERCENT *, [Clients].[Nom], [Clients].[Ville]\nFROM [Clients]\nWHERE [Clients].[Ville] = "Paris" Or [Clients].[Ville] = "Lyon";');
     await page.keyboard.press('Control+s');
     await page.getByTestId('modal-input').fill('QParisLyon');
     await page.getByTestId('modal-btn-ok').click();
@@ -546,13 +548,13 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
     await page.getByTestId('status-view-design').click();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('*');
     await page.getByTestId('cmd-unionQuery').click();
-    await expect(sqlBox(page)).toHaveValue(/^SELECT DISTINCT TOP 25 PERCENT \*/);
+    await expectSql(sqlBox(page), /^SELECT DISTINCT TOP 25 PERCENT \*/);
 
     // SQL View from the datasheet (status bar)
     await page.getByTestId('status-view-datasheet').click();
     await expect(doc(page).getByTestId('nav-record-count')).toBeVisible();
     await page.getByTestId('status-view-sql').click();
-    await expect(sqlBox(page)).toHaveValue(/^SELECT DISTINCT TOP 25 PERCENT \*/);
+    await expectSql(sqlBox(page), /^SELECT DISTINCT TOP 25 PERCENT \*/);
     await expect(page.getByTestId('status-view-sql')).toHaveAttribute('aria-pressed', 'true');
 
     // a description that cannot be written: its message, and the query stays to be saved
@@ -570,4 +572,23 @@ test('Create > SQL Query, Table Names, Insert/Delete Rows, Top Values, Property 
   } finally {
     await app.close();
   }
+});
+
+test('SQL view: syntax highlighting, autocompletion and Format', async () => {
+  const { app, page } = await launchApp({ args: [seedSalesE2E('sql-edit')], env: FR });
+  try {
+    await page.getByTestId('ribbon-tab-create').click();
+    await page.getByTestId('cmd-createSqlQuery').click();
+    const sql = doc(page).getByTestId('query-sql');
+    await sql.pressSequentially('select * from Cl');
+    // the catalog is read at opening: type the last letter once the names are known
+    await expect(async () => { await sql.press('Backspace'); await sql.pressSequentially('l'); await expect(doc(page).locator('.cm-tooltip-autocomplete')).toBeVisible({ timeout: 500 }); }).toPass();
+    await expect(doc(page).locator('.cm-content .sql-kw').first()).toHaveText('select');
+    await expect(doc(page).locator('.cm-tooltip-autocomplete')).toContainText('Clients');
+    await page.waitForTimeout(200); // CodeMirror ignores Enter for 75 ms after the list opens
+    await page.keyboard.press('Enter');
+    await expectSql(sql, 'select * from Clients');
+    await doc(page).getByTestId('query-sql-format').click();
+    await expectSql(sql, /^SELECT \*\nFROM \[?Clients\]?;$/);
+  } finally { await app.close(); }
 });

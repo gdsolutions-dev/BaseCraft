@@ -24,7 +24,8 @@ export type ServerImportResult = { ok: true; tables: { name: string; remote: str
  *  whose outcome is unknown (`unknown`), lost or Stopped, or tables a failed local switch could not drop); `backupPath` once the copy is made. */
 export type MigrateResult = { ok: true; report: MigrationReport }
   | { ok: false; reason: 'readOnly' | 'noTables' | 'dataFile' }
-  | { ok: false; reason: 'cancelled'; backupPath?: string }
+  | { ok: false; reason: 'cancelled'; backupPath?: string; migrated?: string[] }
   | { ok: false; reason: 'noSchema'; schema: string }
-  | { ok: false; reason: 'nameTaken' | 'nameTooLong' | 'invalidDesign'; names: string[] }
-  | { ok: false; reason: 'failed'; error: string /* a bc: message */; table?: string; field?: string; left?: string[]; unknown?: true /* the COMMIT's outcome */; closed?: true; backupPath?: string };
+  | { ok: false; reason: 'nameTaken' | 'nameTooLong' | 'invalidDesign' | 'nameClash'; names: string[] /* nameClash: used by two data files */ }
+  | { ok: false; reason: 'failed'; error: string /* a bc: message */; table?: string; field?: string; left?: string[]; unknown?: true /* the COMMIT's outcome */; closed?: true; backupPath?: string;
+    /** several data files (C8): the tables of the files before the failed one, migrated and linked */ migrated?: string[] };

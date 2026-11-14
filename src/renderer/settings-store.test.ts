@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults';
 import { DEFAULT_STARTUP } from '../shared/startup';
-import { autoIndexList, currentSettings, fieldDefaults, fourDigitYear, printMargins, publishSettings } from './settings-store';
+import { autoIndexList, currentSettings, fieldDefaults, fourDigitYear, nextZoom, printMargins, publishSettings } from './settings-store';
 import { currentBaseOptions, publishBaseOptions } from './shell/startup';
 
 describe('settings store', () => {
@@ -25,5 +25,12 @@ describe('settings store (O3)', () => {
     expect(fieldDefaults()).toEqual({ type: 'number', textSize: 50, numberSize: 'integer' });
     expect(printMargins()).toEqual({ top: 360, right: 360, bottom: 360, left: 1134 });
     publishSettings(DEFAULT_SETTINGS);
+  });
+});
+
+describe('interface zoom (C6)', () => {
+  it('steps up and down by the browser levels, 0 resets', () => {
+    expect(nextZoom(100, 1)).toBe(110); expect(nextZoom(100, -1)).toBe(90); expect(nextZoom(130, 1)).toBe(150); expect(nextZoom(130, -1)).toBe(125);
+    expect(nextZoom(300, 1)).toBe(300); expect(nextZoom(25, -1)).toBe(25); expect(nextZoom(175, 0)).toBe(100);
   });
 });

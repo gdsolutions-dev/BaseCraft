@@ -7,6 +7,7 @@ import { api } from '../bridge';
 import { autoForm, firstFreeName, formLabels, formNames, uniqueFormName } from '../form/form-def';
 import { requestNewForm } from '../form/FormDesignView';
 import { i18n } from '../i18n';
+import { runSavedImport } from '../exchange/saved-import';
 import { importAccessTables } from '../links/AccessImportDialog';
 import { linkTables } from '../links/LinkDialog';
 import { analyzePerformanceDialog } from '../database-tools/PerformanceDialog';
@@ -15,6 +16,7 @@ import { pickDependency } from '../database-tools/DependenciesDialog';
 import { openLinkedTableManager } from '../links/LinkedTableManager';
 import { moveToServer } from '../links/MigrateWizard';
 import { dataMacroCommands } from '../data-macros/data-macros';
+import { importOdbcTables } from '../links/OdbcImportDialog';
 import { importServerTables, linkServerTables } from '../links/ServerLinkDialog';
 import { splitDatabase } from '../links/SplitDialog';
 import { openSqlView } from '../query/QueryDesignView';
@@ -24,6 +26,7 @@ import type { CommandHandlers } from '../shell/ribbon-model';
 import { emptyDesign, toSaveRequest, withDefaultPrimaryKey } from '../table-design/design-model';
 import { saveTableInteractive } from '../table-design/save-table';
 import type { DesignShellEnv } from './hooks';
+import { seedTemplate, withTemplate } from './templates';
 import { choose } from '../wizards/ChoiceMenu';
 import { formWizard } from '../wizards/FormWizard';
 import { labelWizard } from '../wizards/LabelWizard';
@@ -81,6 +84,8 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     importText: () => setImporting({}),
     importExcel: () => setImporting({ source: 'excel' }),
     importXml: () => setImporting({ source: 'xml' }),
+    // External Data › Saved Imports: a saved import run again (the file is asked); the pane lists a new table
+    savedImports: async () => { if (await runSavedImport(modal)) { dispatch({ type: 'listsChanged' }); rawDispatch({ type: 'tablesChanged' }); } },
     // C1: External Data › BaseCraft or SQLite Database; the pane lists the new links
     linkBaseCraft: async () => { if (await linkTables(modal)) dispatch({ type: 'listsChanged' }); },
     // C2: External Data › Link Access Database (the same dialog, the Access filter first)
@@ -94,6 +99,8 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     // E1: External Data › Import › Access: the tables and data of an Access file, then the import report
     importAccess: async () => { if (await importAccessTables(modal)) dispatch({ type: 'listsChanged' }); },
     importSqlServer: async () => { if (await importServerTables(modal, 'sqlserver')) dispatch({ type: 'listsChanged' }); },
+    // C4: External Data › Import › ODBC Database
+    importOdbc: async () => { if (await importOdbcTables(modal)) dispatch({ type: 'listsChanged' }); },
     linkedTableManager: () => openLinkedTableManager(modal, dispatch),
     // C3: Database Tools › Move Data › Split Database; the pane then lists the links
     splitDatabase: () => splitDatabase(modal, closeDocuments, dispatch),
@@ -111,7 +118,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
       const info = await api.sources.describe(src.ref);   // a rejection (a query that cannot be read) is shown; no form
       const { state: s, objects: objs } = live.current;
       const name = uniqueFormName(formNames(objs, s.tabs), src.name);
-      requestNewForm(name, autoForm(src.ref, src.name, info, formLabels(t)));
+      requestNewForm(name, await withTemplate('form', autoForm(src.ref, src.name, info, formLabels(t))));
       rawDispatch({ type: 'open', kind: 'form', name, mode: 'run', isNew: true });
     },
     // Create › More Forms: Multiple Items and Datasheet are Create › Form over the same source (Tabular layout; Datasheet default view),
@@ -126,14 +133,14 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
       const taken = formNames(objs, s.tabs);
       if (kind === 'modal') {
         const name = firstFreeName(taken, (n) => t('form.newName', { n }));
-        requestNewForm(name, modalDialogForm(formLabels(t), { ok: t('dialog.button.ok'), cancel: t('dialog.button.cancel') }));
+        requestNewForm(name, await withTemplate('form', modalDialogForm(formLabels(t), { ok: t('dialog.button.ok'), cancel: t('dialog.button.cancel') })));
         return rawDispatch({ type: 'open', kind: 'form', name, mode: 'design', isNew: true });
       }
       const src = await sourceToCreate('form.autoFormSource');
       if (!src) return;
       const info = await api.sources.describe(src.ref);
       const name = uniqueFormName(taken, src.name);
-      requestNewForm(name, itemsForm(src.ref, src.name, info, formLabels(t), kind));
+      requestNewForm(name, await withTemplate('form', itemsForm(src.ref, src.name, info, formLabels(t), kind)));
       rawDispatch({ type: 'open', kind: 'form', name, mode: kind === 'datasheet' ? 'datasheet' : 'run', isNew: true });
     },
     // Create › Navigation: Horizontal Tabs = a navigation control filling a new form, a tab per form of the base (8 at most), in Design view
@@ -147,7 +154,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
       if (layout !== 'horizontal') return;
       const { state: s, objects: objs } = live.current;
       const name = uniqueFormName(formNames(objs, s.tabs), t('wizard.navigation.name'));
-      requestNewForm(name, navigationForm(objs.filter((x) => x.kind === 'form').map((x) => x.name), formLabels(t)));
+      requestNewForm(name, await withTemplate('form', navigationForm(objs.filter((x) => x.kind === 'form').map((x) => x.name), formLabels(t))));
       rawDispatch({ type: 'open', kind: 'form', name, mode: 'design', isNew: true });
     },
     // A3: a new query in Design view, named like a new table (Requête1…), free among tables, queries and open tabs
@@ -163,7 +170,7 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     createReport: async () => {
       const src = await sourceToCreate('report.pickSourceTitle');
       if (!src) return;
-      const doc = instantReport({ ...src.ref, name: src.name }, await api.sources.describe(src.ref), { lang: formulaLang(i18n.language), margins: printMargins() });
+      const doc = await withTemplate('report', instantReport({ ...src.ref, name: src.name }, await api.sources.describe(src.ref), { lang: formulaLang(i18n.language), margins: printMargins() }));
       const { state: s, objects: objs } = live.current;
       const name = uniqueReportName([...objs, ...s.tabs].filter((x) => x.kind === 'report').map((x) => x.name), src.name);   // free among reports, saved or open
       requestNewReport(name, doc);
@@ -171,10 +178,15 @@ export function shellDesignCommands(env: DesignShellEnv): CommandHandlers {
     },
     // Report Design and Blank Report (A5): a new report in Design view, État1…; Access opens a blank report in Layout view
     // (later) with the Field List: here, Design view with the Field List.
-    createReportDesign: () => rawDispatch({ type: 'open', kind: 'report', name: newReportName(), mode: 'design', isNew: true }),
-    createBlankReport: () => {
+    createReportDesign: async () => {
+      const name = newReportName();
+      await seedTemplate('report', name);
+      rawDispatch({ type: 'open', kind: 'report', name, mode: 'design', isNew: true });
+    },
+    createBlankReport: async () => {
       const name = newReportName();
       requestReportFieldList(name);
+      await seedTemplate('report', name);
       rawDispatch({ type: 'open', kind: 'report', name, mode: 'design', isNew: true });
     },
     // Create › Macro (B1): a new macro in Design view, Macro1…, not saved until the user saves it

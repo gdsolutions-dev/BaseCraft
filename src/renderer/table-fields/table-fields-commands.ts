@@ -29,7 +29,7 @@ export interface TableFieldsEnv {
 /** More Fields: what its menu offers. */
 export type MoreField = { type: FieldType; numberSize?: NumberSize };
 const MORE_FIELDS: MoreField[] = [
-  { type: 'longText' }, { type: 'hyperlink' },
+  { type: 'longText' }, { type: 'hyperlink' }, { type: 'attachment' },
   ...(['byte', 'integer', 'single', 'double', 'decimal'] as const).map((numberSize) => ({ type: 'number' as const, numberSize })),
   { type: 'autoNumber' },
 ];
@@ -142,6 +142,23 @@ export function tableFieldsCommands(env: TableFieldsEnv): CommandHandlers {
         ctx: { ...ctx, fields: [], criteria: false }, initial: shown, close, validate, label: t('tableFields.defaultValueLabel', { field: f.name }),
       }), { titleKey: 'builder.title' });
       return v === null ? null : patchField(d, f.name, { defaultValue: v || undefined });
+    }),
+    // Modify Expression: the field becomes a Calculated field (its type is the result type), or a stored one again when emptied
+    modifyExpression: () => run(env, true, async (d, field) => {
+      const ctx = env.displayContext();
+      const f = d.fields.find((x) => x.name === field)!;
+      if (!ctx || f.props.type === 'autoNumber' || f.props.primaryKey) return null;
+      const others = d.fields.filter((x) => x !== f).map((x) => x.name);
+      let shown = f.props.calculated ?? '';
+      try { if (shown) shown = toDisplay(shown, ctx); } catch { /* shown as stored */ }
+      const validate = async (canonical: string) => {
+        const e = validateDesign(patchField(d, f.name, { calculated: canonical || undefined }).design).find((x) => x.prop === 'calculated' && x.field === f.name);
+        return e ? t(`designError.${e.code}`, { prop: t('fieldProp.calculated') }) : null;
+      };
+      const v = await env.modal.custom<string>((close) => createElement(ExpressionBuilder, {
+        ctx: { ...ctx, fields: others, criteria: false }, initial: shown, close, validate, label: t('tableFields.calculatedLabel', { field: f.name }),
+      }), { titleKey: 'builder.title' });
+      return v === null ? null : patchField(d, f.name, { calculated: v || undefined });
     }),
     // Modify Lookups: the Lookup tab's essentials in one dialog (a field of a type without lookup is not offered it)
     modifyLookups: () => run(env, true, async (d, field) => {

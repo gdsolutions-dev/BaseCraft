@@ -185,3 +185,7 @@
 .cs-field { display: flex; flex-direction: column; gap: 2px; padding: 3px 0; font-size: 12px; }
 .cs-field input[type="text"], .cs-field input[type="number"] { width: 100%; }
 .cs-radios { display: flex; gap: var(--bc-space-3); }
+
+/* Contrôle à erreur (vérification des erreurs) : le triangle vert d'Access au coin haut gauche, qui ouvre le menu de l'erreur */
+.dz-err { position: absolute; z-index: 3; width: 9px; height: 9px; padding: 0; border: 0; cursor: pointer; background: var(--dz-err, #2e9d3f); clip-path: polygon(0 0, 100% 0, 0 100%); }
+.dz-err:focus-visible { outline: 2px solid var(--dz-err, #2e9d3f); outline-offset: 1px; }

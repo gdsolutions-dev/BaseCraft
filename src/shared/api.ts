@@ -1,15 +1,18 @@
 // Contrat de window.basecraft. Les types de données sont définis ici (et réexportés par src/main/db) :
 // le rendu n'a pas les types Node et ne doit rien importer du processus principal.
+import type { SortOrderId } from './sort-orders';
 import type { CellInput, FieldErrorCode, SqlValue } from './coerce';
 import type { DesignError, TableDesign } from './field-types';
-import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec, SavedExport } from './exchange';
+import type { ExcelPreview, ExportResult, ExportSource, ExportTextSpec, SavedExport, SavedImport } from './exchange';
 import type { ImportPlan, ImportProgress, ImportResult, ImportSpec, TextPreview } from './import-text';
+import type { OdbcRequest } from './odbc';
 import type { AccessImportInfo, AccessImportResult, AccessStructureSource } from './access-import';
 import type { MigrateRequest, MigrateResult, ServerImportResult } from './migrate';
 import type { UiLanguage } from './i18n';
 import type { FieldType, NumberSize } from './field-types';
 import type { RecordSourceRef, SourceInfo, SourcePage, SourcePageRequest, SourceSaveRequest, SourceSaveResult } from './record-source';
 import type { ChartData, ChartDataRequest } from './chart/query';
+import type { RibbonCustom } from './ribbon-custom';
 import type { StartupOptions } from './startup';
 import type { NavOptions } from './nav-view';
 import type { DataMacros } from './macro/data-macro';
@@ -18,6 +21,8 @@ import type { Theme } from './design/theme';
 import type { PictureKind } from './pictures';
 
 /** An image of the base's shared gallery. */
+import type { AttachmentFace, AttachmentInfo } from './attachments';
+export type { AttachmentInfo };
 export interface ResourceInfo { name: string; type: PictureKind; bytes: number }
 
 export type { CellInput, TableDesign };
@@ -105,6 +110,8 @@ export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
   recentFiles: string[];
   defaultFolder: string; // '' : the Documents folder; else absolute
+  /** Sort order of the bases this workstation creates (Options › General). */
+  newSortOrder: SortOrderId;
   recentCount: number; // how many recent files the Backstage lists, an integer 0..50
   openLast: boolean; // open the last base at startup
   confirmRecordChanges: boolean; confirmDocumentDeletions: boolean; confirmActionQueries: boolean;
@@ -130,6 +137,8 @@ export interface AppSettings {
   gridlinesHorizontal: boolean; gridlinesVertical: boolean;
   columnWidth: number;
   datasheetFontSize: number; datasheetFontWeight: number; datasheetFontUnderline: boolean; datasheetFontItalic: boolean;
+  /** Default cell effect of a datasheet whose table's SheetLayout has none. */
+  datasheetCellEffect: 'flat' | 'raised' | 'sunken';
   /** O3 Object Designers: property sheet font (points), new-field defaults (text size 1..255), AutoIndex list (null: the UI language's default, '' none). */
   propertySheetFontSize: 8 | 9 | 10 | 11 | 12 | 14;
   defaultFieldType: Exclude<FieldType, 'autoNumber'>; defaultTextSize: number; defaultNumberSize: NumberSize;
@@ -142,13 +151,32 @@ export interface AppSettings {
   /** Form/report marquee, and the default print margins of a new report (twips 0..5670). */
   selectionBehavior: 'partial' | 'full';
   printMarginLeft: number; printMarginRight: number; printMarginTop: number; printMarginBottom: number;
+  /** ScreenTips of the ribbon: shown, or not; with the shortcut key of the command when it has one. */
+  screenTips: boolean; screenTipShortcuts: boolean;
+  /** Commands on the Quick Access Toolbar, in order (command ids; unknown ones are ignored where they are read). */
+  quickAccess: string[];
+  /** Customize Ribbon: hidden and reordered tabs, custom tabs and groups (see shared/ribbon-custom.ts). */
+  ribbonCustom: RibbonCustom;
+  /** Object Designers: the form and report whose properties and section settings a new form or report copies (names in the open base; '' none). */
+  formTemplate: string; reportTemplate: string;
+  /** Error checking in form and report Design view: all, and each check that BaseCraft's model has. */
+  errorChecking: boolean; errorUnassociated: boolean; errorNewLabels: boolean; errorProperties: boolean; errorReport: boolean; errorShortcut: boolean;
+  /** The error indicator's colour, #rrggbb (Access: green). */
+  errorColor: string;
+  /** C6: the interface zoom in percent (25..300; Electron's zoom factor x 100) and Print Preview's zoom when a report opens. */
+  interfaceZoom: number; previewZoom: 'fitPage' | 'actual';
+  /** Trust Center: this user's trusted locations (the administrator's stay in the system file) and whether network ones count. */
+  trustedLocations: TrustedLocation[]; trustNetwork: boolean;
 }
+export interface TrustedLocation { path: string; subfolders: boolean; description: string }
+export interface TrustInfo { folders: { path: string; subfolders: boolean }[]; approvals: number }
 /** The workstation settings the renderer may write through app.setSetting (language and theme have their own channels, the recent list is the app's). */
-export const SETTING_KEYS = ['defaultFolder', 'recentCount', 'openLast', 'confirmRecordChanges', 'confirmDocumentDeletions', 'confirmActionQueries', 'openMode', 'recordLocking', 'refreshInterval', 'updateRetries', 'updateRetryMs',
+export const SETTING_KEYS = ['defaultFolder', 'newSortOrder', 'recentCount', 'openLast', 'confirmRecordChanges', 'confirmDocumentDeletions', 'confirmActionQueries', 'openMode', 'recordLocking', 'refreshInterval', 'updateRetries', 'updateRetryMs',
   'moveAfterEnter', 'enterFieldBehavior', 'arrowKeyBehavior', 'continuousArrowKeys', 'cursorStopsAtEnds', 'findReplaceDefault', 'fourDigitYearAll',
-  'gridlinesHorizontal', 'gridlinesVertical', 'columnWidth', 'datasheetFontSize', 'datasheetFontWeight', 'datasheetFontUnderline', 'datasheetFontItalic',
+  'gridlinesHorizontal', 'gridlinesVertical', 'columnWidth', 'datasheetFontSize', 'datasheetFontWeight', 'datasheetFontUnderline', 'datasheetFontItalic', 'datasheetCellEffect',
   'propertySheetFontSize', 'defaultFieldType', 'defaultTextSize', 'defaultNumberSize', 'autoIndex', 'propertyUpdateOptions', 'showTableNames', 'outputAllFields', 'autoJoin', 'queryFontName', 'queryFontSize',
-  'selectionBehavior', 'printMarginLeft', 'printMarginRight', 'printMarginTop', 'printMarginBottom'] as const;
+  'selectionBehavior', 'printMarginLeft', 'printMarginRight', 'printMarginTop', 'printMarginBottom', 'screenTips', 'screenTipShortcuts', 'quickAccess',
+  'ribbonCustom', 'formTemplate', 'reportTemplate', 'errorChecking', 'errorUnassociated', 'errorNewLabels', 'errorProperties', 'errorReport', 'errorShortcut', 'errorColor', 'interfaceZoom', 'previewZoom', 'trustedLocations', 'trustNetwork'] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 /** What getSettings returns and settingsChanged carries: the settings and the language and region they resolve to. */
 export type SettingsView = AppSettings & { uiLanguage: UiLanguage; region: string };
@@ -196,7 +224,7 @@ export interface PropertyTarget { kind: 'form' | 'report'; name: string; control
 export interface PropertyUpdate { table: string; field: string; prop: 'Format' | 'DecimalPlaces'; value: string; targets: PropertyTarget[] }
 export type PropertyItem = { kind: 'form' | 'report'; name: string; control: string; prop: PropertyUpdate['prop']; value: string };
 export type SaveTableResult = { ok: true; autoCorrect?: AutoCorrectReport; propertyUpdates?: PropertyUpdate[] } | Exclude<AlterResult, { ok: true }> | { ok: false; reason: 'nameExists' | 'readOnly' };
-export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' | 'badModuleName' }
+export type OpResult = { ok: true } | { ok: false; reason: 'nameExists' | 'nameInvalid' | 'readOnly' | 'notFound' | 'hasRelations' | 'badModuleName' | 'moduleNameClash' }
   | { ok: false; reason: 'external'; table: string } // a table changed outside BaseCraft: it is never rebuilt
   | { ok: false; reason: 'referenced'; table: string } // `table` has a FOREIGN KEY (not a relation) to this table
   | { ok: false; reason: 'danglingKey'; table: string } // `table` has a FOREIGN KEY to a dropped table of the new name
@@ -263,6 +291,8 @@ export const CH = {
   setLocale: 'bc:app:setLocale',
   setTheme: 'bc:app:setTheme',
   setSetting: 'bc:app:setSetting', // one of SETTING_KEYS, validated key by key (bc:invalidArgument)
+  appTrust: 'bc:app:trust', // the Trust Center page: the administrator's trusted folders, how many approvals this user has
+  appClearApprovals: 'bc:app:clearApprovals',
   pickFolder: 'bc:app:pickFolder', // a folder chosen in the system dialog (null: cancelled)
   settingsChanged: 'bc:app:settingsChanged', // main → renderer: every settings write, with the SettingsView
   appInfo: 'bc:app:info',
@@ -274,6 +304,7 @@ export const CH = {
   beep: 'bc:app:beep', // the system's beep (macros: Beep, MessageBox)
   appWriteClipboard: 'bc:app:writeClipboard', // C3 R9: Write Conflict › Copy to Clipboard (a string of at most 10 MB)
   appReadClipboard: 'bc:app:readClipboard', // Home › Clipboard dialog launcher: the system clipboard's text
+  spellCheck: 'bc:app:spellCheck', // Home › Spelling on Windows: the OS spell checker (main process) answers for a list of words
   spellPrepare: 'bc:app:spellPrepare', // Home › Spelling: the spell checker takes the interface language's dictionary (false: none exists)
   closeRequested: 'bc:app:closeRequested', // main → renderer: the window is asked to close
   closeAllowed: 'bc:app:closeAllowed', // renderer → main: every document agreed, close for real
@@ -303,6 +334,16 @@ export const CH = {
   rowsUpdate: 'bc:rows:update',
   rowsDelete: 'bc:rows:delete',
   rowsLookup: 'bc:rows:lookup',
+  attList: 'bc:attachments:list', // C5: the files of an Attachment cell (table, field, row)
+  attAdd: 'bc:attachments:add', // main asks for the files (system dialog), reads them (25 MB each) and stores them
+  attRemove: 'bc:attachments:remove',
+  attPreview: 'bc:attachments:preview', // a data URL for an image file (else null)
+  attSave: 'bc:attachments:save', // Save As: one file to a path chosen in the system dialog
+  attSaveAll: 'bc:attachments:saveAll', // Save All: every file to a folder chosen in the system dialog
+  attRead: 'bc:attachments:read', // C5b: one file's bytes (the Python API)
+  attSaveTo: 'bc:attachments:saveTo', // C5b: one file to an absolute path given by a script (validated in main)
+  attFaces: 'bc:attachments:faces', // C5b: the first file of each row's cell (a report's Attachment control)
+  attOpen: 'bc:attachments:open', // writes a temp copy and opens it with the system, after the renderer's confirmation
   relationsList: 'bc:relations:list',
   relationsSave: 'bc:relations:save',
   relationsDelete: 'bc:relations:delete',
@@ -346,6 +387,9 @@ export const CH = {
   exchangeSavedList: 'bc:exchange:savedList',
   exchangeSavedSave: 'bc:exchange:savedSave',
   exchangeSavedDelete: 'bc:exchange:savedDelete',
+  exchangeSavedImportList: 'bc:exchange:savedImportList',
+  exchangeSavedImportSave: 'bc:exchange:savedImportSave',
+  exchangeSavedImportDelete: 'bc:exchange:savedImportDelete',
   baseSaveAs: 'bc:base:saveAs',
   baseCompact: 'bc:base:compact',
   baseSplitPick: 'bc:base:splitPick',
@@ -353,6 +397,8 @@ export const CH = {
   baseEnableContent: 'bc:base:enableContent',
   baseStartup: 'bc:base:startup',
   baseSaveStartup: 'bc:base:saveStartup',
+  baseSortOrder: 'bc:base:sortOrder',
+  baseSetSortOrder: 'bc:base:setSortOrder',
   baseNavOptions: 'bc:base:navOptions',
   baseSaveNavOptions: 'bc:base:saveNavOptions',
   baseTheme: 'bc:base:theme',
@@ -361,12 +407,14 @@ export const CH = {
   themesList: 'bc:themes:list',
   themesSave: 'bc:themes:save',
   themesRemove: 'bc:themes:remove',
+  themesImport: 'bc:themes:import',
   baseThemeChanged: 'bc:base:themeChanged', // main → renderer: the base's default theme was saved (open views refetch)
   resourcesList: 'bc:resources:list',
   resourcesGet: 'bc:resources:get',
   resourcesAdd: 'bc:resources:add',
   resourcesReplace: 'bc:resources:replace',
   resourcesRemove: 'bc:resources:remove',
+  resourcesPickFile: 'bc:resources:pickFile',
   resourcesChanged: 'bc:resources:changed', // main → renderer: the gallery changed (open views refetch)
   linksPick: 'bc:links:pick',
   linksInspect: 'bc:links:inspect',
@@ -388,6 +436,10 @@ export const CH = {
   accessImportRun: 'bc:accessImport:run', // progress: importProgress
   accessImportSaveReport: 'bc:accessImport:saveReport',
   accessImportPickExport: 'bc:accessImport:pickExport', // E2: the folder of an export
+  odbcDsns: 'bc:odbc:dsns', // C4: External Data › Import › ODBC Database
+  odbcInspect: 'bc:odbc:inspect',
+  odbcRun: 'bc:odbc:run', // progress: importProgress
+  odbcLink: 'bc:odbc:link', // D1
 } as const;
 
 /** A report document to print or export (renderDocumentHtml); `name` names the PDF file proposed. */
@@ -417,6 +469,10 @@ export interface BasecraftApi {
     setSetting<K extends SettingKey>(k: K, v: AppSettings[K]): Promise<void>;
     /** A folder chosen in the system dialog, or null when cancelled. */
     pickFolder(): Promise<string | null>;
+    /** Trust Center: the trusted folders of the administrator's file (read only) and the number of approvals this user gave. */
+    trust(): Promise<TrustInfo>;
+    /** Trust Center: forgets this user's approvals (the open base's content stays enabled until it closes). */
+    clearApprovals(): Promise<TrustInfo>;
     /** Every settings write (language, theme, options, recent files) reaches the window with the new SettingsView. */
     onSettingsChanged(cb: (s: SettingsView) => void): () => void;
     info(): Promise<AppInfo>;
@@ -440,6 +496,9 @@ export interface BasecraftApi {
      *  Chromium downloads the first time. false: no dictionary (none for the language, or it could not be downloaded). */
     spellPrepare(): Promise<boolean>;
     /** Chromium's spell checker (webFrame, in the preload): false for every word until a dictionary is loaded. */
+    /** Windows: asks the OS spell checker (main process) about these words; isMisspelled and spellSuggestions then answer from it.
+     *  Nothing to do elsewhere (the renderer's checker answers directly). */
+    spellWarm(words: string[]): Promise<void>;
     isMisspelled(word: string): boolean;
     spellSuggestions(word: string): string[];
     /** The window's close button (or the system) asks to close: the documents get their say, then confirmClose().
@@ -479,6 +538,10 @@ export interface BasecraftApi {
     startup(): Promise<StartupOptions>;
     /** Saves the six options (the other keys of the stored section are kept). Rejects bc:readOnly. */
     saveStartup(o: StartupOptions): Promise<void>;
+    /** The base's sort order: the one applied, and the one chosen that the next Compact and Repair applies (C7). Allowed read-only. */
+    sortOrder(): Promise<{ applied: SortOrderId; pending: SortOrderId | null }>;
+    /** Chooses the sort order Compact and Repair will apply. Rejects bc:readOnly, bc:invalidArgument. */
+    setSortOrder(id: SortOrderId): Promise<void>;
     /** The base's Navigation Pane options, read tolerantly (a wrong value reads as the default). Allowed read-only. */
     navOptions(): Promise<NavOptions>;
     /** Saves the pane options (unknown stored keys are kept). Rejects bc:readOnly. */
@@ -502,7 +565,10 @@ export interface BasecraftApi {
   /** The base's shared image gallery (F3, bc_resources). list and get work read-only; add, replace and remove are design operations. */
   resources: {
     list(): Promise<ResourceInfo[]>;
-    /** Data URLs of the names that exist (unknown names omitted). */
+    /** Asks for an image file (main process dialog) to link: its path, or null if cancelled. */
+    pickFile(): Promise<string | null>;
+    /** Data URLs of the names that exist (unknown names omitted). A `link:<path>` name is read from that file by the main process
+     *  (local path only, a picture of at most 1 MB). */
     get(names: string[]): Promise<Record<string, string>>;
     /** Returns the final name (a taken name gets " (2)", ...). Rejects bc:invalidPicture, bc:pictureTooLarge, bc:invalidName, bc:readOnly. */
     add(name: string, dataUrl: string): Promise<string>;
@@ -520,6 +586,8 @@ export interface BasecraftApi {
      *  case-insensitive) and bc:themeExists (same name, case-insensitive, unless `replace`). */
     save(t: Theme, replace?: boolean): Promise<void>;
     remove(name: string): Promise<void>;
+    /** Asks for an Office .thmx file (main process dialog) and returns its theme, not saved; null if cancelled. Rejects bc:invalidThemeFile. */
+    importFile(): Promise<Theme | null>;
   };
   tables: {
     list(): Promise<TableSummary[]>;
@@ -536,7 +604,7 @@ export interface BasecraftApi {
     testRules(name: string): Promise<{ field: string; rows: number }[]>;
     /** Datasheet column widths (twips by field name) saved in the table's fields; bc:readOnly in read-only, bc:linkedTable for a link. */
     saveColumnWidths(name: string, widths: Record<string, number>): Promise<void>;
-    /** The rest of the datasheet's layout (row height, frozen fields, totals, font, colours, alignment), replacing the stored one, in the table's metadata (read back as `design.extra.sheetLayout`); same errors. */
+    /** The rest of the datasheet's layout (row height, frozen fields, totals, font, colours, alignment), replacing the stored one, in the table's metadata (read back as `design.extra.sheetLayout`); bc:readOnly in read-only; a link keeps none (ignored). */
     saveSheetLayout(name: string, layout: SheetLayout): Promise<void>;
     /** The table's data macros (T2), kept with its metadata, not in its design; none for a link (bc:linkedTable). */
     dataMacros(name: string): Promise<DataMacros>;
@@ -555,6 +623,27 @@ export interface BasecraftApi {
      *  query Row Source (A3), in the query's order; a value list in its order. No rows when the field has no lookup, its source
      *  is gone, or its query does not run (missing table, parameters…). */
     lookup(table: string, field: string): Promise<LookupData>;
+  };
+  /** Attachment fields (C5): `rowid` is the row's reference as the datasheet read it. Reads work read-only; add and remove reject
+   *  bc:readOnly. Other rejections: bc:invalidArgument (not an Attachment field), bc:notFound, bc:attachmentTooLarge (a file over
+   *  25 MB, nothing added), bc:serverNotSupported (a server link). */
+  attachments: {
+    list(table: string, field: string, rowid: RowRef): Promise<AttachmentInfo[]>;
+    /** The names stored; [] when the dialog is cancelled. */
+    add(table: string, field: string, rowid: RowRef): Promise<string[]>;
+    remove(table: string, field: string, rowid: RowRef, id: number): Promise<void>;
+    preview(table: string, field: string, rowid: RowRef, id: number): Promise<string | null>;
+    /** One file's name and bytes (no dialog). */
+    read(table: string, field: string, rowid: RowRef, id: number): Promise<{ name: string; data: Uint8Array }>;
+    /** One file written to `path` (a script's: absolute, no program or script file, never over an existing file), else bc:invalidArgument. */
+    saveTo(table: string, field: string, rowid: RowRef, id: number, path: string): Promise<void>;
+    /** The first file of each row's cell (a picture as a data URL, else its type): null for a row without files. */
+    faces(table: string, field: string, rowids: RowRef[]): Promise<(AttachmentFace | null)[]>;
+    /** false when the dialog is cancelled. */
+    save(table: string, field: string, rowid: RowRef, id: number): Promise<boolean>;
+    saveAll(table: string, field: string, rowid: RowRef): Promise<boolean>;
+    /** The caller asked the user first (`confirmed` is literally true, else bc:invalidArgument): a temp copy is opened by the system. */
+    open(table: string, field: string, rowid: RowRef, id: number, confirmed: true): Promise<void>;
   };
   /** Relations (bc_relations); saves and deletes refused in read-only with reason readOnly, saveLayout with bc:readOnly. */
   relations: {
@@ -647,6 +736,10 @@ export interface BasecraftApi {
     savedList(): Promise<Record<string, SavedExport>>;
     saveSaved(name: string, e: SavedExport): Promise<void>;
     deleteSaved(name: string): Promise<void>;
+    /** Saved Imports (text, Excel, XML): by name, as the saved exports (design channels: the Runtime has no import). */
+    savedImportList(): Promise<Record<string, SavedImport>>;
+    saveSavedImport(name: string, i: SavedImport): Promise<void>;
+    deleteSavedImport(name: string): Promise<void>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
   };
   /** Linked tables (C1). pick: the link dialog's file (null: cancelled), the only path inspect, create and relink accept.
@@ -688,6 +781,18 @@ export interface BasecraftApi {
     /** R17: External Data › Import › PostgreSQL / SQL Server: the tables `names` (inspectServer's) copied into local tables in one
      *  transaction; Stop is queries.cancel (cancelled). Same progress event. */
     importTables(kind: ServerKind, params: unknown, names: string[]): Promise<ServerImportResult>;
+    onProgress(cb: (p: ImportProgress) => void): () => void;
+  };
+  /** C4: External Data › Import › ODBC Database: the tables of an ODBC source copied into local tables. The login is sent with each call, never kept. */
+  odbc: {
+    /** The data source names of this computer. */
+    dsns(): Promise<string[]>;
+    /** Connects; rejects `bc:odbc|failed|…` or `bc:odbc|unavailable|…`. `tables` as the server import's dialog lists them. */
+    inspect(req: OdbcRequest): Promise<{ label: string; tables: ServerLinkInfo['tables'] }>;
+    /** `names`: inspect's names. Same progress event as the other imports (no Stop: a table is read whole first). */
+    run(req: OdbcRequest, names: string[]): Promise<ServerImportResult>;
+    /** D1: links `names` read-only instead of copying them (the rows are read now, and again by Refresh Link); the login stays in memory. */
+    link(req: OdbcRequest, names: string[]): Promise<LinkResult>;
     onProgress(cb: (p: ImportProgress) => void): () => void;
   };
   /** E1: External Data › Import › Access: the tables and data of an Access file into local tables. */

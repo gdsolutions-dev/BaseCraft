@@ -4,7 +4,7 @@ import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DatasheetView } from '../datasheet/DatasheetView';
 import { FormRunView } from '../form/FormRunView';
-import type { DocTab } from '../state/app-state';
+import { isPopup, type DocTab } from '../state/app-state';
 import { QueryRunView } from '../query/QueryRunView';
 import { unsavedRunDoc, unsavedRunSql } from '../query/unsaved-run';
 import type { DocViewProps } from './DocumentTabs';
@@ -42,7 +42,7 @@ export function DocumentView(p: DocViewProps) {
     const id = p.tab.id;
     const keep = !!p.tab.isNew || unsavedRunSql.has(id) || unsavedRunDoc.has(id); // the run view clears the tab's dirty flag: the stash tells
     const back: AppDispatch = (a) => (a.type === 'close' && a.id === id ? p.dispatch({ type: 'setMode', id, mode: 'design' }) : p.dispatch(a));
-    const shown = p.active || !!p.tab.dialog; // a dialog form is shown by DialogHost even when another tab is active (a Python error opens its module)
+    const shown = p.active || !!p.tab.dialog || isPopup(p.tab); // a dialog form is shown by DialogHost even when another tab is active (a Python error opens its module)
     // inner sections hidden with their tab too: a background tab's design or run view is never a shown `.doc`
     return (
       <>

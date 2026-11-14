@@ -1,7 +1,7 @@
 // Python's `db` (D2 R8): recordsets and action queries through the existing data API.
 import type { QueryRef, RowWriteResult } from '../../shared/api'
 import type { CellInput } from '../../shared/coerce'
-import type { FieldDef } from '../../shared/field-types'
+import { sameName, type FieldDef } from '../../shared/field-types'
 import { localeInfo } from '../../shared/locale-format'
 import { toSourceRef, type RecordSourceRef, type SourceInfo } from '../../shared/record-source'
 import { isSelectBody } from '../../shared/query/ast'
@@ -35,6 +35,13 @@ export function dbHandlers(): Record<string, BridgeHandler> {
   const sources = new Map<number, Source>()   // insertion order: the oldest goes first
   let next = 1
   const source = (h: unknown): Source => sources.get(h as number) ?? bad('handle')
+  /** The Attachment column `name` of a source and where its files live: the table's own field, or an updatable query's key-table column. */
+  const attachmentOf = (h: unknown, name: unknown): { table: string; field: string } => {
+    const { ref, info } = source(h)
+    const f = info.fields.find((x) => x.type === 'attachment' && sameName(x.name, String(name))) ?? bad('field')
+    if (ref.kind === 'table') return { table: ref.name, field: f.name }
+    return info.updatable && f.origin && info.keyTable !== undefined && sameName(f.origin.table, info.keyTable) ? f.origin : bad('attachment')
+  }
   const writable = (s: Source): Source => (s.info.updatable ? s : (() => { throw new Error('bc:notUpdatable') })())
 
   const handlers: Record<string, BridgeHandler> = {
@@ -54,6 +61,19 @@ export function dbHandlers(): Record<string, BridgeHandler> {
       const s = source(h)
       const page = await api.sources.page(s.ref, { offset: Number(offset), limit: Number(limit), ...(s.params && { params: s.params }) })
       return { rows: page.rows.map((r) => r.map((v, i) => sqlToWire(v, s.info.fields[i]?.type))), rowids: page.rowids, total: page.total }
+    },
+    'db.attachments': async ([h, rowid, field]) => { const a = attachmentOf(h, field); return api.attachments.list(a.table, a.field, rowid as never) },
+    'db.attachmentData': async ([h, rowid, field, id]) => {
+      const a = attachmentOf(h, field)
+      const { data } = await api.attachments.read(a.table, a.field, rowid as never, Number(id))
+      let bin = ''
+      for (let i = 0; i < data.length; i += 0x8000) bin += String.fromCharCode(...data.subarray(i, i + 0x8000))
+      return btoa(bin)
+    },
+    'db.attachmentSave': async ([h, rowid, field, id, path]) => {
+      const a = attachmentOf(h, field)
+      await api.attachments.saveTo(a.table, a.field, rowid as never, Number(id), String(path))
+      return null
     },
     'db.save': async ([h, rowid, values]) => {
       const s = writable(source(h)), v = cells(values)

@@ -3,11 +3,12 @@
 // résultat du réducteur sur les actions que donnerait le relâchement (même aimantation, mêmes bornes), sans rien enregistrer.
 // Règles en cm autour de la surface, comme Access : la règle horizontale part du bord gauche de la feuille, la verticale repart de 0
 // à chaque section ; elles suivent le défilement (décalées par transform, sans redessin).
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flattenControls, TWIPS_PER_CM, type ControlDef, type SectionDef } from '../../shared/design/model';
 import { cellControl, readLayouts, type CellRef } from '../../shared/design/layout';
 import { selectionOf } from '../../shared/design/layout-edit';
+import { associateLabel, checkDesign, ignoreError, type DesignIssue } from '../../shared/design/error-check';
 import { sameName } from '../../shared/field-types';
 import type { DesignerHost, ToolState } from './Designer';
 import { clipboardAction, clipContext } from './designer-clipboard';
@@ -100,6 +101,22 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const typingRef = useRef(typing);
   typingRef.current = typing;
   const typingInput = useRef<HTMLInputElement>(null);
+  // Error checking (Options > Object Designers): an indicator on the control of each issue; « ignore » is kept in the design.
+  const [errMenu, setErrMenu] = useState<{ x: number; y: number; issue: DesignIssue } | null>(null);
+  const opts = currentSettings();
+  const issues = useMemo(() => (!opts.errorChecking || readOnly ? [] : checkDesign(state.doc, host.target, host.sheet.fields,
+    { unassociated: opts.errorUnassociated, newLabel: opts.errorNewLabels, property: opts.errorProperties, report: opts.errorReport, shortcut: opts.errorShortcut })),
+    [state.doc, host.target, host.sheet.fields, readOnly, opts.errorChecking, opts.errorUnassociated, opts.errorNewLabels, opts.errorProperties, opts.errorReport, opts.errorShortcut]);
+  const issueOf = new Map(issues.flatMap((i) => (i.control ? [[i.control, i] as const] : [])));
+  const docIssue = issues.find((i) => !i.control);
+  const showIssue = (issue: DesignIssue) => (e: MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setErrMenu({ x: r.left, y: r.bottom, issue });
+  };
+  const errButton = (issue: DesignIssue, style: CSSProperties) => (
+    <button type="button" className="dz-err" data-err data-testid={`err-${issue.control ?? 'doc'}`} aria-label={t('customize.errorIndicator')} title={t(`customize.err.${issue.code}`, { name: issue.control ?? '', field: issue.detail ?? '' })}
+      style={{ ...style, '--dz-err': opts.errorColor } as CSSProperties} onClick={showIssue(issue)} />
+  );
   const pointing = useRef(false);   // un clic donne le focus : il ne doit pas réduire une multi-sélection
 
   // Aperçu du geste en cours : le relâchement, appliqué sans être enregistré.
@@ -165,7 +182,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0 || drag) return;
     const el = e.target as HTMLElement;
-    if (el.closest('[data-layout-handle], [data-layout-cell], [role="menu"]')) return;   // la poignée d'une disposition et une cellule vide sélectionnent au clic : ni glisser ni rectangle
+    if (el.closest('[data-layout-handle], [data-layout-cell], [data-err], [role="menu"]')) return;   // la poignée d'une disposition et une cellule vide sélectionnent au clic : ni glisser ni rectangle
     const c = root.current!, cr = c.getBoundingClientRect();
     if (e.clientX - cr.left - c.clientLeft >= c.clientWidth || e.clientY - cr.top - c.clientTop >= c.clientHeight) return;   // les barres de défilement
     const at = pt(e);
@@ -368,6 +385,7 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancel} onLostPointerCapture={() => drag && cancel()}>
       <div ref={sheet} className={`dz-sheet${placing ? ' is-placing' : ''}`} style={{ width: px(width) }}
         onContextMenu={openPageMenu} onDragStart={(e) => e.preventDefault()} onDragOver={onDragOver} onDrop={onDrop}>   {/* une image d'un aperçu ne part pas en glisser-déposer natif */}
+        {docIssue && errButton(docIssue, { right: 4, top: 2 })}
         {host.pageGuide && <div className="dz-page-guide" aria-hidden data-testid="page-guide" style={{ width: px(host.pageGuide.width), height: px(host.pageGuide.height) }} />}
         {doc.sections.map((s: SectionDef, i) => (
           <div key={i} ref={(el) => { blocks.current[i] = el; }} className="dz-block">
@@ -410,7 +428,10 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
                   }} />
               ))}
               {flattenControls(s.controls).map((c) => (   // un parent sous ses enfants
-                <CanvasControl key={c.name} c={c} s={s} sel={isSel(c.name)} label={typeLabel(c.kind)} render={host.renderControl} onFocusCtl={onFocusCtl} />
+                <Fragment key={c.name}>
+                  <CanvasControl c={c} s={s} sel={isSel(c.name)} label={typeLabel(c.kind)} render={host.renderControl} onFocusCtl={onFocusCtl} />
+                  {issueOf.has(c.name) && errButton(issueOf.get(c.name)!, { left: px(c.left), top: px(c.top) })}
+                </Fragment>
               ))}
               {rubber && rubber.section === i && (
                 <div className="dz-rubber" aria-hidden style={{ left: Math.min(rubber.o.x, rubber.at.x), top: Math.min(rubber.o.y, rubber.at.y),
@@ -432,6 +453,17 @@ export function DesignCanvas(p: { state: DesignerState; dispatch(a: DesignerActi
         {band && <div className="dz-rubber" aria-hidden style={{ left: Math.min(band.o.x, band.at.x), top: Math.min(band.o.y, band.at.y),
           width: Math.abs(band.at.x - band.o.x), height: Math.abs(band.at.y - band.o.y) }} />}
       </div>
+      {errMenu && (
+        <PopupMenu x={errMenu.x} y={errMenu.y} testId="err-menu" labelKey="customize.errorIndicator" onClose={() => setErrMenu(null)}>
+          <button type="button" role="menuitem" disabled data-testid="err-message">{t(`customize.err.${errMenu.issue.code}`, { name: errMenu.issue.control ?? '', field: errMenu.issue.detail ?? '' })}</button>
+          {errMenu.issue.check === 'unassociated' && (
+            <button type="button" role="menuitem" data-testid="err-associate"
+              onClick={() => { const name = errMenu.issue.control!; setErrMenu(null); dispatch({ type: 'edit', apply: (d) => associateLabel(d, name) }); }}>{t('customize.errAssociate')}</button>
+          )}
+          <button type="button" role="menuitem" data-testid="err-ignore"
+            onClick={() => { const issue = errMenu.issue; setErrMenu(null); dispatch({ type: 'edit', apply: (d) => ignoreError(d, issue) }); }}>{t('customize.errIgnore')}</button>
+        </PopupMenu>
+      )}
       {pageMenu && (
         <PopupMenu x={pageMenu.x} y={pageMenu.y} testId="page-menu" labelKey="form.tabOrder.pageMenu" onClose={() => setPageMenu(null)}>
           {pageMenu.items.map((m) => (

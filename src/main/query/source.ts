@@ -288,6 +288,13 @@ export function pageQuerySource(x: QueryDb, ref: QueryRef, req: SourcePageReques
     ? `SELECT ${out} FROM (SELECT *, row_number() OVER () AS "bcx_pos" FROM (${c.sql})) AS "bcx_q" ORDER BY ${keys.join(', ')}, "bcx_pos" LIMIT ? OFFSET ?`
     : `SELECT ${out} FROM (${c.sql}) AS "bcx_q" LIMIT ? OFFSET ?`;
   const rows = run(db, sql, [...c.params, req.limit, req.offset], compiled.temp);
+  // an Attachment column holds a set id: the page shows the number of files (as the table's datasheet), Null without any
+  const att = b.columns.flatMap((col, k) => (col.type === 'attachment' ? [k] : []));
+  if (att.length) {
+    const n = db.prepare('SELECT count(*) AS n FROM bc_attachments WHERE set_id = ?');
+    const first = c.hasRowid ? 1 : 0;
+    for (const r of rows) for (const k of att) { const v = r[first + k]; if (v !== null) r[first + k] = Number(n.get(v as number)!.n); }
+  }
   return c.hasRowid
     ? { rows: rows.map((r) => r.slice(1)), rowids: rows.map((r) => (r[0] === null ? null : Number(r[0]))) /* an outer join's row without its key record (R5) */, total, ...(aggregates ? { aggregates } : {}) }
     : { rows, rowids: rows.map(() => null), total, ...columns, ...(aggregates ? { aggregates } : {}) };
@@ -337,7 +344,7 @@ export function sourceHasValue(x: QueryDb, ref: QueryRef, column: number, value:
   const b = lookupSource(x, ref);
   if (!Number.isSafeInteger(column) || column < 0 || column >= b.columns.length) throw new Error('bc:invalidArgument');
   const c = compile(b, paramValues(b, {}, info), info);
-  return run(queryConn(x).dbOf(b.source, false), `SELECT 1 FROM (${c.sql}) WHERE "c${column}" = ? LIMIT 1`, [...c.params, value]).length > 0;
+  return run(queryConn(x).dbOf(b.source, false), `SELECT 1 FROM (${c.sql}) WHERE "c${column}" = ? COLLATE NOCASE LIMIT 1`, [...c.params, value]).length > 0;
 }
 
 /** A lookup list through a query or SQL Row Source (A2-R18): its columns and its first `limit` rows, in the query's order.

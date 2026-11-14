@@ -11,7 +11,7 @@ import type { BuiltList, FilterMenuState } from './FilterMenu';
 import { filterValues, valueKey, type ListRule } from './filter-model';
 
 /** Link kinds of a file (R14: local); any other (a server's) is not. */
-const LOCAL_LINKS = ['basecraft', 'sqlite', 'access'];
+const LOCAL_LINKS = ['basecraft', 'sqlite', 'access', 'odbc']; // 'odbc': an in-memory copy (D1)
 /** R14 for `field` of `ref` (`info`: a query's or SQL source's columns), read when the menu opens: local unless its table (a
  *  query column's origin table) is a server link or the source a pass-through; a computed column is not indexed, and local
  *  unless the source reads a server link. */

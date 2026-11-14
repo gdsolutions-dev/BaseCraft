@@ -5,7 +5,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ExcelJS from 'exceljs';
+import { sheetOf } from './fixtures/xlsx-fixture';
 import { launchApp } from './helpers';
 
 const DATA = join(tmpdir(), 'basecraft-scenarios-data');
@@ -129,10 +129,9 @@ test('scenario 2: large CSV import, analytical queries, export to Excel', async 
       await expect(page.getByTestId('modal-btn-ok')).toBeVisible({ timeout: 120_000 }); // "n records exported"
       await page.getByTestId('modal-btn-ok').click();
       timings[`export ${name}`] = Date.now() - x0;
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(xlsx);
-      expect(wb.worksheets[0]!.rowCount).toBe(rows + 1);
-      expect(String(wb.worksheets[0]!.getCell('A2').value)).toBe(results[name]![0]![0]);
+      const ws = await sheetOf(xlsx);
+      expect(ws.rowCount).toBe(rows + 1);
+      expect(String(ws.cell('A2'))).toBe(results[name]![0]![0]);
     }
     lap('queries');
     // every line is in exactly one region

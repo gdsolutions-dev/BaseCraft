@@ -99,11 +99,11 @@ describe('O2 settings', () => {
     expect(DEFAULT_SETTINGS).toMatchObject({
       moveAfterEnter: 'nextField', enterFieldBehavior: 'selectAll', arrowKeyBehavior: 'nextField', continuousArrowKeys: 'none', cursorStopsAtEnds: false,
       findReplaceDefault: 'fast', fourDigitYearAll: false, gridlinesHorizontal: true, gridlinesVertical: true, columnWidth: 1417,
-      datasheetFontSize: 11, datasheetFontWeight: 400, datasheetFontUnderline: false, datasheetFontItalic: false,
+      datasheetFontSize: 11, datasheetFontWeight: 400, datasheetFontUnderline: false, datasheetFontItalic: false, datasheetCellEffect: 'flat',
     });
   });
   it('every enum and boolean key refuses a wrong value', () => {
-    for (const k of ['enterFieldBehavior', 'continuousArrowKeys', 'findReplaceDefault'] as const)
+    for (const k of ['enterFieldBehavior', 'continuousArrowKeys', 'findReplaceDefault', 'datasheetCellEffect'] as const)
       expect(readSettings({ [k]: 'bogus' })[k]).toBe(DEFAULT_SETTINGS[k]);
     for (const k of ['cursorStopsAtEnds', 'fourDigitYearAll', 'gridlinesHorizontal', 'datasheetFontUnderline', 'datasheetFontItalic'] as const)
       expect(readSettings({ [k]: 'yes' })[k]).toBe(DEFAULT_SETTINGS[k]);
@@ -129,5 +129,47 @@ describe('O4 settings', () => {
     expect(readSettings({}).propertyUpdateOptions).toBe(true);
     expect(readSettings({ propertyUpdateOptions: 'off' }).propertyUpdateOptions).toBe(true);
     expect(readSettings({ propertyUpdateOptions: false }).propertyUpdateOptions).toBe(false);
+  });
+});
+
+describe('ScreenTips and Quick Access Toolbar settings', () => {
+  it('default: tips with shortcut keys; Save, Undo, Redo', () => {
+    const s = readSettings({});
+    expect([s.screenTips, s.screenTipShortcuts, s.quickAccess]).toEqual([true, true, ['save', 'undo', 'redo']]);
+    expect(readSettings({ screenTips: false }).screenTips).toBe(false);
+  });
+  it('quickAccess: command ids without duplicate, else the default', () => {
+    expect(readSettings({ quickAccess: ['find', 'save'] }).quickAccess).toEqual(['find', 'save']);
+    expect(readSettings({ quickAccess: [] }).quickAccess).toEqual([]);
+    for (const bad of [['save', 'save'], ['a b'], [1], 'save', ['../x']]) expect(readSettings({ quickAccess: bad }).quickAccess).toEqual(['save', 'undo', 'redo']);
+  });
+});
+
+describe('trusted locations settings', () => {
+  const home = process.platform === 'win32' ? 'C:/Users/u' : '/home/u';
+  it('default: none, network off; a bad list is the default', () => {
+    expect(readSettings({}).trustedLocations).toEqual([]);
+    expect(readSettings({}).trustNetwork).toBe(false);
+    const ok = [{ path: home, subfolders: true, description: 'mine' }];
+    expect(readSettings({ trustedLocations: ok }).trustedLocations).toEqual(ok);
+    for (const bad of [[{ path: 'rel', subfolders: true, description: '' }], [{ path: home, subfolders: 1, description: '' }], [{ path: home, subfolders: true, description: 'a\nb' }], 'x']) {
+      expect(readSettings({ trustedLocations: bad }).trustedLocations).toEqual([]);
+    }
+  });
+});
+
+describe('customization, templates and error checking settings', () => {
+  it('defaults', () => {
+    const s = readSettings({});
+    expect([s.formTemplate, s.reportTemplate, s.errorChecking, s.errorUnassociated, s.errorNewLabels, s.errorProperties, s.errorReport, s.errorShortcut, s.errorColor]).toEqual(['Normal', 'Normal', true, true, true, true, true, true, '#2e9d3f']);
+    expect(readSettings({ errorColor: '#ff0000' }).errorColor).toBe('#ff0000');
+    expect(readSettings({ errorColor: 'red' }).errorColor).toBe('#2e9d3f');
+    expect(s.ribbonCustom).toEqual({ hidden: [], order: [], names: {}, tabs: [] });
+  });
+  it('a template is a short printable name or empty; a bad ribbon customization is the default', () => {
+    expect(readSettings({ formTemplate: '' }).formTemplate).toBe('');
+    expect(readSettings({ reportTemplate: 'x'.repeat(65) }).reportTemplate).toBe('Normal');
+    expect(readSettings({ ribbonCustom: { hidden: ['help'], order: [], names: {}, tabs: [] } }).ribbonCustom.hidden).toEqual(['help']);
+    expect(readSettings({ ribbonCustom: { hidden: 'help' } }).ribbonCustom.hidden).toEqual([]);
   });
 });

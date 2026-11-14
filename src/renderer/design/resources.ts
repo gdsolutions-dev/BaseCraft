@@ -1,7 +1,7 @@
 // Cache des images partagées de la base (lot F3) : une promesse par nom, vidée quand la galerie change.
 import { useEffect, useMemo, useState } from 'react';
 import { readPictureSpec, type PictureSpec } from '../../shared/design/picture-css';
-import { readPictureType, type ResourceMap } from '../../shared/pictures';
+import { pictureKey, type ResourceMap } from '../../shared/pictures';
 import { api } from '../bridge';
 
 let cache = new Map<string, Promise<string | undefined>>();
@@ -71,7 +71,7 @@ export function useResource(name: string | undefined): string | undefined {
 
 /** L'image de fond d'un document (ses propriétés `Picture*`) prête à dessiner : la partagée est lue dans la galerie ; undefined sans image. */
 export function useDocPicture(props: Record<string, unknown>): PictureSpec | undefined {
-  const name = readPictureType(props.PictureType) === 'shared' && typeof props.Picture === 'string' ? props.Picture : undefined;
+  const name = pictureKey(props);
   const url = useResource(name);
   return useMemo(() => readPictureSpec(props, name !== undefined && url !== undefined ? { [name]: url } : {}), [props, name, url]);
 }

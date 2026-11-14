@@ -21,12 +21,13 @@ import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { bcErrorCode, useErrorDialog, useModal } from '../shell/Modal';
 import { chooseMoreExport, exportSource } from '../exchange/export';
 import type { ExportFormat } from '../../shared/exchange';
-import { registerCommands, registerCommandStates, registerModeGuard, type CommandId } from '../shell/ribbon-model';
+import { commandAnchor, registerCommands, registerCommandStates, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { RibbonPopup } from '../designer/RibbonPopup';
 import { design } from '../design/entry';
 import { DATA_EVENTS } from '../../shared/macro/data-macro';
 import { currentBaseOptions, currentUi } from '../shell/startup';
 import type { TableFieldsEnv, ValidationItem } from '../table-fields/table-fields-commands';
+import { AttachmentsDialog, type AttachmentTarget } from './AttachmentsDialog';
 import { defaultValues, editText, fromEdit, inputCell, lookupList, measureIn, pasteAllowed, texts, toCell, truncateNumber, type LookupList } from './datasheet-cells';
 import { activeFilter, NO_FILTER, selectionCriteria, withCriteria, type FilterState, type SelectionFilter } from './filter-model';
 import { installEditorCommitFix } from './glide-keyboard';
@@ -125,6 +126,8 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   const [fontOver, setFontOver] = useState<Partial<Pick<typeof settings0, 'datasheetFontSize' | 'datasheetFontWeight' | 'datasheetFontItalic' | 'datasheetFontUnderline'>>>({});
   // Font, font colour, background and gridline colours of this view (undefined: the theme's own)
   const [skin, setSkin] = useState<{ font?: string; text?: string; back?: string; grid?: string }>({});
+  const [effect, setEffect] = useState<SheetLayout['cellEffect']>();   // Cell Effect of the table's layout (undefined: the Options' default)
+  const shownEffect = effect ?? settings0.datasheetCellEffect, edge = shownEffect === 'flat' ? undefined : shownEffect;   // raised, sunken or flat (undefined)
   const [aligns, setAligns] = useState<Record<string, 'left' | 'center' | 'right'>>({});
   const look = useMemo(() => datasheetLook({ ...settings0, ...fontOver }), [settings0, fontOver]);
   const [gridlines, setGridlines] = useState({ horizontal: look.horizontal, vertical: look.vertical }); // Quadrillage (ribbon): this view's lines
@@ -141,6 +144,12 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   // Underline (O2 R12): Glide draws the cell, then a 1 px line under the text of a Text cell. ponytail: one line, no wrapping of long text
   const drawUnderline = useCallback<DrawCellCallback>(({ ctx, cell, theme: th, rect }, draw) => {
     draw();
+    if (edge) { // 3-D edges: light on top and left, dark below and right (Sunken: the other way round)
+      const [tl, br] = edge === 'raised' ? ['#ffffff', '#6b6b6b'] : ['#6b6b6b', '#ffffff'];
+      ctx.fillStyle = tl; ctx.fillRect(rect.x, rect.y, rect.width, 1); ctx.fillRect(rect.x, rect.y, 1, rect.height);
+      ctx.fillStyle = br; ctx.fillRect(rect.x, rect.y + rect.height - 1, rect.width, 1); ctx.fillRect(rect.x + rect.width - 1, rect.y, 1, rect.height);
+    }
+    if (!look.underline) return;
     if (cell.kind !== GridCellKind.Text || !cell.displayData) return;
     ctx.font = `${th.baseFontStyle} ${th.fontFamily}`;
     const w = Math.min(ctx.measureText(cell.displayData).width, rect.width - 2 * th.cellHorizontalPadding);
@@ -148,7 +157,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       : cell.contentAlign === 'center' ? rect.x + (rect.width - w) / 2 : rect.x + th.cellHorizontalPadding;
     ctx.fillStyle = th.textDark;
     ctx.fillRect(Math.round(x), Math.round(rect.y + rect.height / 2 + look.fontPx / 2), Math.round(w), 1);
-  }, [look]);
+  }, [look, edge]);
   const editor = useRef<DataEditorRef>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [shape, setShape] = useState<Shape | null>(null);
@@ -163,6 +172,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   findOpen.current = finding;
   // Table Fields commands waiting for the structure to be read again, and the column to select then.
   const reloading = useRef<{ select: string | null; waiters: (() => void)[] }>({ select: null, waiters: [] });
+  const [attDlg, setAttDlg] = useState<AttachmentTarget | null>(null); // C5: the Attachments box of a cell
   const [listEdit, setListEdit] = useState<string | null>(null); // the field whose « Edit List Items » box is open
   // no Edit List Items without the designers (B5 R7) nor with table design off in Datasheet view (O1 R9)
   const editList = design && currentUi().datasheetDesign ? { open: setListEdit, disabled: () => live.current.ro } : null;
@@ -211,7 +221,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
       ...(fontOver.datasheetFontUnderline !== undefined ? { underline: fontOver.datasheetFontUnderline } : {}),
       ...(skin.font ? { font: skin.font } : {}), ...(skin.text ? { textColor: skin.text } : {}), ...(skin.back ? { backColor: skin.back } : {}), ...(skin.grid ? { gridColor: skin.grid } : {}),
       ...(gridlines.horizontal !== d.horizontal || gridlines.vertical !== d.vertical ? { gridlines } : {}),
-      ...(Object.keys(aligns).length ? { aligns } : {}),
+      ...(Object.keys(aligns).length ? { aligns } : {}), ...(effect ? { cellEffect: effect } : {}),
     };
   };
   const layoutChanged = () => layoutKept.current !== null && JSON.stringify(sheetLayout()) !== layoutKept.current;
@@ -229,6 +239,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     setTotalsOn(!!l.totals);
     setTotalFns(l.totalFns ?? {});
     setAligns(l.aligns ?? {});
+    setEffect(l.cellEffect);
   };
   // the layout read, applied and rendered: it is the one the question compares with
   useEffect(() => { if (shape && layoutKept.current === null) layoutKept.current = JSON.stringify(sheetLayout()); }, [shape]);
@@ -404,10 +415,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         return true;
       } catch (e) {
         // The row stays to be saved, selected (Access): back on it when it was left for another row (its save failed there).
-        const p = buffer.pending;
-        const col = live.current.selection.current?.cell[0] ?? 0;
-        if (p && rowOf(live.current.selection) !== p.rowIndex) setSelection(cellSelection(col, p.rowIndex));
+        const back = () => { const q = buffer.pending, c = live.current.selection.current?.cell[0] ?? 0; if (q && rowOf(live.current.selection) !== q.rowIndex) setSelection(cellSelection(c, q.rowIndex)); };
+        back();
         await writeError(e);
+        back(); // a move of the Enter that left the row may land while the box is open: the refused row stays selected
         const at = live.current.selection.current?.cell;
         if (at) focusCell(at[0], at[1]);
         return false;
@@ -799,6 +810,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
         if (cell.kind !== GridCellKind.Text) continue;
         let text = cell.data, at = 0;
         for (;;) {
+          await api.app.spellWarm(wordsOf(text).map((x) => x.word));
           const w = wordsOf(text).find((x) => x.start >= at && !ignored.has(x.word.toLowerCase()) && api.app.isMisspelled(x.word));
           if (!w) break;
           const key = w.word.toLowerCase();
@@ -953,6 +965,17 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return false;
   };
 
+  /** Double-click on an Attachment cell of a saved row: its box. A query's column: when the query is updatable and the column is
+   *  the key table's own (the row's rowid is that table's); a new row: none. */
+  const openAttachments = (col: number, row: number) => {
+    const s = live.current.shape;
+    const fd = s?.design.fields[col];
+    if (fd?.props.type !== 'attachment') return;
+    const origin = s!.src ? s!.src.info.fields[col]?.origin : { table: tab.name, field: fd.name };
+    if (s!.src && !(s!.src.info.updatable && origin && s!.src.info.keyTable !== undefined && sameName(origin.table, s!.src.info.keyTable))) return;
+    const rowid = row < rows.current.count ? s!.cache.get(row)?.rowid : undefined;
+    if (origin && rowid !== undefined && rowid !== null && !Number.isNaN(rowid)) setAttDlg({ table: origin.table, field: origin.field, rowid });
+  };
   const onKeyDown = (e: GridKeyEventArgs) => {
     idle();
     // Escape outside a cell editor (which handles its own) cancels the pending row, as in Access.
@@ -1006,7 +1029,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
   /** Under the ribbon button that opened it (the grid's corner without one). */
   const menuAt = (id: CommandId) => {
-    const r = document.querySelector(`[data-testid="cmd-${id}"]`)?.getBoundingClientRect() ?? wrap.current?.getBoundingClientRect();
+    const r = commandAnchor(id)?.getBoundingClientRect() ?? wrap.current?.getBoundingClientRect();
     return { x: r?.left ?? 0, y: r?.bottom ?? 0 };
   };
 
@@ -1226,7 +1249,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     return ok;
   };
 
-  // ponytail: un lien (fichier ou serveur) garde ses largeurs pour la session, sans question (Access les garde dans le front-end) ; à ajouter avec `bc_links.props.meta`.
+  // Un lien serveur garde ses largeurs dans `bc_links.props.meta` (Session.saveColumnWidths) ; le reste de sa mise en forme, la session.
   const layoutOk = () => layoutSavable({ kind: live.current.source ? 'query' : 'table', ...(live.current.source ? { source: live.current.source } : {}), link: !!link, passThrough: passThrough.current, readOnly: live.current.readOnly, runtime: !design });
   /** Enregistre les largeurs tirées et le reste de la mise en forme : les champs et les métadonnées de la table (twips), ou la définition de la requête ; un échec est montré, l'onglet reste. */
   const saveLayout = async (w: Record<string, number>): Promise<boolean> => {
@@ -1299,10 +1322,11 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   };
   /** Mise en forme de la feuille de données: the view's gridlines, background and gridline colours, underline. */
   const formatBox = async () => {
-    const f = await modal.custom<SheetFormat>((close) => <FormatBox initial={{ ...gridlines, underline: look.underline, back: skin.back, grid: skin.grid }} close={close} />, { titleKey: 'ribbon.cmd.datasheetFormatting' });
+    const f = await modal.custom<SheetFormat>((close) => <FormatBox initial={{ ...gridlines, underline: look.underline, back: skin.back, grid: skin.grid, effect: edge }} close={close} />, { titleKey: 'ribbon.cmd.datasheetFormatting' });
     if (!f) return;
     setGridlines({ horizontal: f.horizontal, vertical: f.vertical });
     setSkin((k) => ({ ...k, back: f.back, grid: f.grid }));
+    setEffect(f.effect === edge ? effect : f.effect ?? 'flat');   // changed: kept in the layout (flat too, the default may not be)
     setFontOver((o) => ({ ...o, datasheetFontUnderline: f.underline }));
   };
   const cmds = useRef({ newRecord, deleteRecords, sortBy, leave, save, reloadRows, refreshIfMissed, filterMenu, filterSelection, toggleFilter, menuAt, exportData, findInSheet, replaceOne, replaceAll, spelling, discardRow, zoomBox, alignFields, formatBox });
@@ -1362,7 +1386,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     const numeric = picked?.type === 'number' || picked?.type === 'currency';
     const keyed = has && picked.type !== 'autoNumber';
     return registerCommandStates(tab.id, {
-      deleteField: { enabled: has }, nameCaption: { enabled: has }, defaultValue: { enabled: keyed }, fieldSize: { enabled: picked?.type === 'shortText' }, modifyLookups: { enabled: !!picked && LOOKUP_TYPES.includes(picked.type) },
+      deleteField: { enabled: has }, nameCaption: { enabled: has }, defaultValue: { enabled: keyed }, modifyExpression: { enabled: keyed && !picked?.primaryKey }, fieldSize: { enabled: picked?.type === 'shortText' }, modifyLookups: { enabled: !!picked && LOOKUP_TYPES.includes(picked.type) },
       dataType: { enabled: has }, format: { enabled: has && FORMATS_BY_TYPE[picked.type].length > 0 },
       currencyFormat: { enabled: numeric }, percentFormat: { enabled: numeric }, commaFormat: { enabled: numeric },
       increaseDecimals: { enabled: numeric }, decreaseDecimals: { enabled: numeric },
@@ -1475,9 +1499,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     // the keys move through the grid's columns (hidden fields skipped, frozen ones first)
     cellAt: ([c, r]) => cellAt.current([fieldOf(c), r]), selected: () => mapSelection(live.current.selection, gridOf).current,
     cols: () => orderRef.current.length, rows: () => rows.current.count + (rows.current.adding ? 1 : 0) + (live.current.ro ? 0 : 1), // past a new record: another one
-    moveTo: ([col, row]) => select(cellSelection(fieldOf(col), row)),
+    moveTo: ([col, row]) => select(cellSelection(fieldOf(col), row)), busy: () => busyRef.current,
   };
-  useEditKeys(wrap, keysEnv);
+  const releaseKeys = useEditKeys(wrap, keysEnv);
+  useEffect(() => { if (!busy) releaseKeys(); }, [busy]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // A Lookup field gets its drop-down list, a field with an input mask the masked editor. Glide gives only the cell: the
   // edited one is the selected one.
@@ -1527,10 +1552,10 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
     <div className="datasheet">
       <div className="ds-grid" ref={wrap} role="region" aria-label={t('datasheet.grid', { name: tab.name })} aria-busy={busy} data-testid="datasheet"
         onPointerDownCapture={() => { appendClick.current = false; resizing.current = false; }}>
-        <DataEditor ref={editor} theme={theme} verticalBorder={gridlines.vertical} drawCell={look.underline ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={gridColumns} freezeColumns={view.frozen} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
+        <DataEditor ref={editor} theme={theme} verticalBorder={gridlines.vertical} drawCell={look.underline || edge ? drawUnderline : undefined} minColumnWidth={20} maxColumnWidth={2112} columns={gridColumns} freezeColumns={view.frozen} rows={count + (more || adding ? 1 : 0)} headerIcons={HEADER_ICONS}
           getCellContent={gridCell} provideEditor={provideEditor} getRowThemeOverride={getRowThemeOverride} getCellsForSelection={cellsFor}
           gridSelection={gridSelection} onGridSelectionChange={(s) => select(mapSelection(s, fieldOf))} onCellEdited={([c, r], v) => onCellEdited([fieldOf(c), r], v)} onFinishedEditing={() => refreshIfMissed(false)}
-          onRowAppended={ro || more ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} trailingRowOptions={ro || more ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
+          onRowAppended={ro || more ? undefined : onRowAppended} onCellClicked={(_, e) => { if (appendClick.current) e.preventDefault(); }} onCellActivated={([c, r]) => openAttachments(fieldOf(c), r)} trailingRowOptions={ro || more ? undefined : { hint: t('datasheet.nav.new'), tint: true }}
           onDelete={(s) => onDelete(mapSelection(s, fieldOf))} onPaste={onPaste} onKeyDown={onKeyDown} keybindings={{ search: false, activateCell: ' |shift+Enter' }}
           rowMarkers={{ kind: 'clickable-number', width: 44 }} rowHeight={rowHeight} headerHeight={HEADER_HEIGHT} smoothScrollX smoothScrollY
           onColumnResize={onColumnResize} onHeaderMenuClick={(col, b) => { if (!resizing.current) void cmds.current.filterMenu(fieldOf(col), { x: b.x, y: b.y + b.height }); }}
@@ -1614,6 +1639,9 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
           </RibbonPopup>
         )}
         {pencil && <RowPencil at={pencil} background={palette.pending} title={t('datasheet.pending')} />}
+        {attDlg && (
+          <AttachmentsDialog target={attDlg} readOnly={ro || notUpdatable} onClose={(changed) => { setAttDlg(null); if (changed) reloadRows(true); }} />
+        )}
         {listEdit !== null && shape && design && (
           // Saved: the structure changed, so the datasheet reads design, rows and lists again (tableSaved).
           <design.EditListDialog {...listTarget(listEdit)} locale={shape.locale} readOnly={ro}

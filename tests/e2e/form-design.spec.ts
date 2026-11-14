@@ -8,7 +8,7 @@ import { createTable } from '../../src/main/db/schema';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { DesignDoc } from '../../src/shared/design/model';
 import { clients, f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase, seedForm, pickView, checkView } from './helpers';
+import { launchApp, seedBase, seedForm, pickView, checkView, expectSql, editorText } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const table = t('Clients', [...clients.fields, f('Ville', 'shortText')]);
@@ -68,7 +68,7 @@ test('Form Design view: create, ribbon, sheet, Field List, gestures, toolbox, he
     await expect(page.getByTestId('view-item-viewForm')).toBeEnabled();   // pas encore enregistré : il s'affiche tel quel (de6f3a8)
     await page.keyboard.press('Escape');
     expect(await testIds(page.getByTestId('ribbon-group-tools').locator('[data-testid^="cmd-"]')))
-      .toEqual(['cmd-addExistingFields', 'cmd-propertySheet', 'cmd-tabOrder', 'cmd-chartSettings', 'cmd-subformInNewWindow', 'cmd-viewCode']);
+      .toEqual(['cmd-addExistingFields', 'cmd-propertySheet', 'cmd-tabOrder', 'cmd-chartSettings', 'cmd-subformInNewWindow', 'cmd-viewCode', 'cmd-convertMacros']);
     await expect(page.getByTestId('ruler-h')).toContainText('15');   // 16 cm de large, en cm
     await expect(page.getByTestId('ruler-v-detail')).toContainText('3');   // 4 cm de haut
     // le sélecteur au coin des règles : une section sélectionnée l'éteint, un clic sélectionne le formulaire
@@ -347,7 +347,7 @@ test('the « … » of Record Source asks, then opens the Query Builder in a mod
     await builder.getByTestId('qbe-cell-sort-0').selectOption('asc');
     // SQL View and back; Run shows the datasheet in the tab, Design View comes back to the grid
     await pickView(page, 'viewSql');
-    await expect(builder.getByTestId('query-sql')).toHaveValue(/^SELECT \[Clients\]\.\[Nom\], \[Clients\]\.\[Ville\]/);
+    await expectSql(builder.getByTestId('query-sql'), /^SELECT \[Clients\]\.\[Nom\], \[Clients\]\.\[Ville\]/);
     await page.getByTestId('status-view-design').click();
     await page.getByTestId('cmd-runQuery').click();
     await expect(builder.getByTestId('datasheet')).toBeVisible();

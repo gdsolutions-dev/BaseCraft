@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME } from '../design/theme';
 import { chartFormatIssue, chartFrame, chartOption, cumulativeShares, chartTooltip, readChartFormat, sampleFor, SAMPLE_ROWS, waterfallSteps, type ChartFormat } from './option';
+import { cloudLayout } from './cloud';
 import { chartPalette } from './palette';
 import type { ChartColumn, ChartData } from './query';
 import { typeHintKey, type ChartSpec } from './spec';
@@ -571,7 +572,7 @@ describe('sampleFor (F5)', () => {
     expect(sampleFor('columnClustered')).toBe(SAMPLE_ROWS);
     expect(sampleFor('funnel')).toEqual(sampleFor('funnel'));
   });
-  it.each(['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'] as const)('%s : l exemple dessine au moins une série avec un point', (t) => {
+  it.each(['doughnut', 'arc', 'funnel', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall', 'wordCloud'] as const)('%s : l exemple dessine au moins une série avec un point', (t) => {
     const o = opt(spec(t, { axis: ['x'], values: [{ field: 'v', agg: 'sum' }, { field: 'w', agg: 'sum' }] }), sampleFor(t));
     expect(o.series.length).toBeGreaterThan(0);
     expect(o.series[0].data.length).toBeGreaterThan(0);
@@ -806,5 +807,41 @@ describe('cascade', () => {
       if (process.env.UPDATE_GOLDEN) writeFileSync(golden(name), svg);
       expect(svg).toBe(readFileSync(golden(name), 'utf8'));
     }
+  });
+});
+
+describe('nuage de mots', () => {
+  const wc = spec('wordCloud');
+  const rows: ChartData['rows'] = [['Alpha', 40], ['Beta', 25], ['Gamma', 12], ['Delta', 5], ['Zéro', 0], ['Vide', null], ['Neg', -3], ['Alpha', 10]];
+  it('mots = catégories (lignes additionnées), valeurs <= 0 ou NULL écartées, série custom sans fonction hors renderItem', () => {
+    const o = opt(wc, plain(rows));
+    expect(o.series).toHaveLength(1);
+    expect(o.series[0].type).toBe('custom');
+    expect(o.series[0].data).toEqual([{ name: 'Alpha', value: 50 }, { name: 'Beta', value: 25 }, { name: 'Gamma', value: 12 }, { name: 'Delta', value: 5 }]);
+  });
+  it('rien de positif ou zéro ligne : option vide (l aide du type s affiche)', () => {
+    expect(opt(wc, plain([['A', 0], ['B', null]])).series).toEqual([]);
+    expect(opt(wc, plain([])).series).toEqual([]);
+    expect(typeHintKey(wc)).toBe('chart.settings.typeHint.wordCloud');
+  });
+  it('disposition : dans le cadre, sans chevauchement, la plus lourde au centre et la plus grande, déterministe', () => {
+    const words = [...'ABCDEFGHIJKLMNOP'].map((c, i) => ({ name: `Mot${c}${c}`, value: 100 - i * 5 }));
+    const a = cloudLayout(words, 380, 200);
+    expect(a.length).toBeGreaterThan(5);
+    expect(cloudLayout(words, 380, 200)).toEqual(a);
+    expect(a[0]).toMatchObject({ name: 'MotAA', x: 190, y: 100 });
+    expect(Math.max(...a.map((p) => p.size))).toBe(a[0]!.size);
+    for (const p of a) { expect(p.x).toBeGreaterThan(0); expect(p.x).toBeLessThan(380); expect(p.y).toBeGreaterThan(0); expect(p.y).toBeLessThan(200); }
+    expect(cloudLayout(words, 0, 0)).toEqual([]);
+  });
+  it('golden déterministe (écran et impression ont la même disposition)', () => {
+    const full = fmt({ hasTitle: true, title: 'Mots' });
+    const make = (): string => chartSvg(chartOption(wc, plain(rows.map((r) => [...r])), full, pal, size), size);
+    const svg = make();
+    expect(svg).not.toMatch(/NaN|undefined/);
+    expect(svg).toContain('>Alpha</text>');
+    expect(make()).toBe(svg);
+    if (process.env.UPDATE_GOLDEN) writeFileSync(golden('word-cloud'), svg);
+    expect(svg).toBe(readFileSync(golden('word-cloud'), 'utf8'));
   });
 });

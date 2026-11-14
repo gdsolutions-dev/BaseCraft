@@ -166,7 +166,18 @@ for row in db.open_recordset("Commandes"):
 | `row.update({"Name": value})`, `row.delete()` | Changes or deletes the row in the database. |
 | `rs.add({"Name": value})` | Adds a record. |
 | `rs.to_pandas()` | All rows as a `pandas.DataFrame`. pandas is loaded for you. |
+| `rs.move_first()`, `move_last()`, `move_next()`, `move_previous()`, `rs.eof`, `rs.bof`, `rs.record_count`, `rs["Name"]` | A cursor as in Access DAO: the recordset starts on its first row; `eof` is true after the last one. Independent of the `for` loop. |
+| `rs.edit()`, `rs.add_new()`, then `rs["Name"] = v` and `rs.update()` or `rs.cancel_update()`; `rs.delete()` | Changes the current row, or adds one, in the DAO way. Setting a field outside `edit()` / `add_new()` or moving with an edit open raises an error. After `delete()` there is no current row until you `move_next()` (which goes to the row that followed). A new row is added at the end and the cursor stays where it was. |
 | `db.execute(sql, params=None)` | Runs an action query (INSERT, UPDATE, DELETE...) without confirmation and returns the number of records. A SELECT raises an error. |
+
+```python
+rs = db.open_recordset("Commandes")
+while not rs.eof:
+    rs.edit()
+    rs["Montant"] = rs["Montant"] * 2
+    rs.update()
+    rs.move_next()
+```
 
 Writes follow the rules of the interface: a required field, a validation rule or a read-only query refuses the change with the same message, as a Python error (`BaseCraftError`), and nothing is half-written.
 
@@ -201,7 +212,7 @@ Name AutoCorrect does not rewrite field names inside Python calls (`=remise([Pri
 
 ## Converting macros to Python
 
-In **Macro Design**, the **Convert Macros to Python** button (Tools group) turns the open macro into Python. It is available for a saved or new macro in a database you can change; it is disabled for the macro embedded in a form or report event (converting form and report macros waits for code-behind modules). A macro that is new or modified is saved first (BaseCraft asks).
+In **Macro Design**, the **Convert Macros to Python** button (Tools group) turns the open macro into Python. It is available for a saved or new macro in a database you can change; it is disabled for the macro embedded in a form or report event (use the form or report variant below). A macro that is new or modified is saved first (BaseCraft asks).
 
 A dialog offers two options, both ticked: **Add error handling to generated functions** (the body of each function runs in a `try` and a failure shows a message box) and **Include macro comments** (comments and group names become `#` lines). The result is a new module named `Converted_Macro_<macro>` (a number is added if the name is taken; an existing module is never overwritten). The macro itself is not changed, and the module is not opened.
 
@@ -214,13 +225,23 @@ A dialog offers two options, both ticked: **Add error handling to generated func
 - **To finish by hand**: what cannot be converted (an unknown action, a `[MacroError]` reference, an expression or filter that reads a local variable or `[MacroError]`, a `SetValue` on something other than a control) is written as `# TODO(convert): ...` followed by `raise NotImplementedError(...)`, so a run fails visibly instead of skipping the step. `StopAllMacros` becomes `return` (it does not stop the macros that called it) and a `RunCode` whose function is in no module is written as a plain call; both are marked. BaseCraft ends with a message that counts these items: search the module for `TODO`.
 
 
+### Forms and reports: embedded macros to code-behind
+
+In **Form Design** or **Report Design**, **Tools** › **Convert Macros to Python** converts every embedded event macro of the object. The same two options apply. Each macro becomes a function of the object's code-behind module (see *Code-behind*, below), named like its procedure (`cmdValider_Click`, `Form_Open`), and the event becomes `[Event Procedure]`. The change to the design can be undone and is saved with the form or report; the module is saved at once. An event whose procedure already exists in the module is left as it is. Events that name a saved macro are not converted.
+
+## Code-behind
+
+Instead of `=function()`, an event can be set to `[Event Procedure]`: it runs a function of the object's own module, as Access runs VBA in a form's class module. The module is named `Form_<name>` or `Report_<name>` (characters Python does not accept become `_`) and the function `<Control>_<Event>`: `cmdValider_Click`, `Montant_BeforeUpdate`; `Form_Open`, `Form_Current` for the form itself, `Report_Open`, and `Detail_Format` for a report section. `me` is the object, as in any event. A missing module or function does nothing.
+
+In the Property Sheet's Event tab, choose **...** and **Code Builder**: BaseCraft sets `[Event Procedure]`, creates the module and the function if needed, and opens it. **...** on an `[Event Procedure]` opens it again. **View Code** does the same for the selected control's event, and opens the object's module when nothing is bound. Code-behind modules appear under *Modules*; their functions are not offered to `=function()` events. The module belongs to its form or report: renaming the object renames the module, copying it (Copy and Paste, or a copy under a new name) copies the module, and deleting it deletes the module, as one operation. Two names that would give the same module name (`A B` and `A_B`) are refused with a message, as is a name whose module already exists for another object.
+
 ## Autocomplete
 
 In the module editor, typing `forms.`, `forms["`, `reports.`, `reports["` offers your forms and reports; after `forms.Name.` it offers the form's controls and methods. `docmd.` offers the macro actions, and the quoted name in `db.open_recordset("` and `docmd.run_macro("` offers your tables, queries and macros. `app.` and `tempvars.` offer their members. This is not general Python completion (no Jedi): names from your own code and the standard library are not suggested.
 
 ## View Code
 
-On a form or report in Design or Layout view, the **View Code** button of the ribbon opens the module of the function used by the selected control's event (or by the form's event, when nothing is selected), with the cursor on its `def`. When the event is empty, the button first opens the « … » chooser so you can pick or create a function. It does not exist in the Runtime.
+On a form or report in Design or Layout view, the **View Code** button of the ribbon opens the module of the function used by the selected control's event (or by the form's event, when nothing is selected), with the cursor on its `def`. With no function bound, it opens the object's code-behind module, creating it. It does not exist in the Runtime.
 
 ## What Python cannot do
 

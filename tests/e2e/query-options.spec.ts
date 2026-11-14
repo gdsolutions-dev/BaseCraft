@@ -5,7 +5,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { createTable } from '../../src/main/db/schema';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import { f, t } from '../../src/shared/test-fixtures';
-import { launchApp, seedBase } from './helpers';
+import { launchApp, seedBase, expectSql, editorText } from './helpers';
 
 const FR = { BASECRAFT_REGION: 'fr-FR' };
 /** The shown document (every tab stays mounted, hidden). */
@@ -80,7 +80,7 @@ test('table names, all fields, AutoJoin off keeps the relationship join', async 
     await expect(page.getByTestId('query-props-outputAll')).toBeChecked();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('*');
     await page.getByTestId('status-view-sql').click();
-    await expect(doc(page).getByTestId('query-sql')).toHaveValue(/^SELECT \*\s+FROM \[Clients\];$/);
+    await expectSql(doc(page).getByTestId('query-sql'), /^SELECT \*\s+FROM \[Clients\];$/);
     await closeQuery(page, 'query-Requête1');
     await page.getByTestId('nav-item-query-QNoms').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -113,7 +113,7 @@ test('AutoJoin: same-name fields, one a key; off: no join', async () => {
     await expect(doc(page).getByTestId('qbe-join-1')).toHaveCount(0);
     await doc(page).getByTestId('qbe-field-Clients-Nom').dblclick();
     await page.getByTestId('status-view-sql').click();
-    await expect(doc(page).getByTestId('query-sql')).toHaveValue(/ON \[Villes\]\.\[Ville\] = \[Clients\]\.\[Ville\];$/);
+    await expectSql(doc(page).getByTestId('query-sql'), /ON \[Villes\]\.\[Ville\] = \[Clients\]\.\[Ville\];$/);
     await closeQuery(page, 'query-Requête1');
 
     await option(page, 'opt-autojoin', false);

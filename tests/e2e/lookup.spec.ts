@@ -233,7 +233,7 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
     // Edit List Items: one item per line and the Default Value, saved as the field's design
     await click(2);
     await page.keyboard.press('F2');
-    await expect(page.getByRole('option')).toHaveText(['Ouverte', 'Fermée']);
+    await expect(page.getByTestId('lookup-list').getByRole('option')).toHaveText(['Ouverte', 'Fermée']);
     await page.getByTestId('lookup-edit-list').click();
     await expect(editor(page)).toHaveCount(0);
     await expect(page.getByTestId('edit-list-items')).toHaveValue('Ouverte\nFermée');
@@ -245,7 +245,7 @@ test('the Lookup tab as in Access: its rows in order, hidden column, column head
       .toMatchObject({ defaultValue: '"En attente"', lookup: { kind: 'values', values: ['Ouverte', 'Fermée', 'En attente'], allowValueListEdits: true } });
     await click(2);
     await page.keyboard.press('F2');
-    await expect(page.getByRole('option')).toHaveText(['Ouverte', 'Fermée', 'En attente']);
+    await expect(page.getByTestId('lookup-list').getByRole('option')).toHaveText(['Ouverte', 'Fermée', 'En attente']);
     await page.keyboard.press('Escape');
   } finally {
     await app.close();

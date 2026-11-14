@@ -5,17 +5,22 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { sameName, type FieldDef } from '../../shared/field-types';
+import { sameName, type FieldDef, type FieldProps } from '../../shared/field-types';
 import { isServerKind, type RemoteTable, type ServerKind } from '../connectors/connector';
 import { inTransaction } from '../db/tx';
 import type { LinkMeta } from './meta';
 
 export type SourceKind = 'basecraft' | 'sqlite' | 'access';
+/** D1: the source kind of ODBC links. params: `{ connection, user, label }`, the connection string without its password. */
+export const ODBC = 'odbc';
 /** params: a server source's props (C4 R6: the connector's params, never a password). */
 export interface SourceRow { id: string; kind: string; path: string; relative?: string; params?: unknown }
 /** server: a server link's design as cached at link or Refresh time (C4 R6); `meta`: BaseCraft's metadata the migration wizard
  *  kept (C7 R11). */
-export interface LinkRow { name: string; sourceId: string; remote: string; description?: string; server?: { schema?: string; key: string[]; fields: FieldDef[]; skipped: string[]; version?: string; meta?: LinkMeta } }
+export interface LinkRow { name: string; sourceId: string; remote: string; description?: string;
+  /** D1: an ODBC link's table at the source (`remote` is its name in the cache, the link's own); read-only, cached in memory. */
+  odbc?: { table: string; schema: string };
+  server?: { schema?: string; key: string[]; fields: FieldDef[]; skipped: string[]; version?: string; meta?: LinkMeta } }
 
 function parseObject(s: unknown): Record<string, unknown> {
   try {
@@ -31,7 +36,7 @@ export function sourceRows(db: DatabaseSync): SourceRow[] {
   return rows.map((r) => {
     const p = parseObject(r.props);
     return { id: r.id, kind: r.kind, path: typeof p.path === 'string' ? p.path : '', ...(typeof p.relative === 'string' ? { relative: p.relative } : {}),
-      ...(isServerKind(r.kind) ? { params: p } : {}) };
+      ...(isServerKind(r.kind) || r.kind === ODBC ? { params: p } : {}) };
   });
 }
 
@@ -67,6 +72,7 @@ export function linkRows(db: DatabaseSync): LinkRow[] {
     const p = parseObject(r.props);
     const server = r.kind !== null && isServerKind(r.kind) ? serverOf(p) : undefined;
     return { name: r.name, sourceId: r.source_id, remote: r.remote_name, ...(typeof p.description === 'string' ? { description: p.description } : {}),
+      ...(r.kind === ODBC && typeof p.table === 'string' ? { odbc: { table: p.table, schema: typeof p.schema === 'string' ? p.schema : '' } } : {}),
       ...(server ? { server } : {}) };
   });
 }
@@ -147,6 +153,26 @@ export function serverSourceFor(db: DatabaseSync, kind: ServerKind, params: unkn
   return id;
 }
 
+/** D1: the ODBC source of `params`, reused when one holds equal params, else created (never a password: the caller stripped it). */
+export function odbcSourceFor(db: DatabaseSync, params: { connection: string; user: string; label: string }): string {
+  const text = JSON.stringify(params);
+  const found = sourceRows(db).find((s) => s.kind === ODBC && JSON.stringify(s.params) === text);
+  if (found) return found.id;
+  const id = crypto.randomUUID();
+  db.prepare('INSERT INTO bc_sources (id, kind, props) VALUES (?, ?, ?)').run(id, ODBC, text);
+  return id;
+}
+
+/** D1: links `tables` (name = the link and cache name) of the ODBC source `params`; returns the source's id. The caller checked the names are free. */
+export function addOdbcLinks(db: DatabaseSync, params: { connection: string; user: string; label: string }, tables: { name: string; table: string; schema: string }[]): string {
+  return inTransaction(db, () => {
+    const id = odbcSourceFor(db, params);
+    const ins = db.prepare('INSERT INTO bc_links (name, source_id, remote_name, props) VALUES (?, ?, ?, ?)');
+    for (const t of tables) ins.run(t.name.normalize('NFC'), id, t.name, JSON.stringify({ table: t.table, ...(t.schema ? { schema: t.schema } : {}) }));
+    return id;
+  });
+}
+
 /** A link's props with `t`'s design cached (R6); its other props (description, C7's meta, a newer minor's keys) kept. */
 function withServer(props: Record<string, unknown>, t: RemoteTable): string {
   const { schema: _schema, version: _version, ...rest } = props;
@@ -164,18 +190,20 @@ export function addServerLinks(db: DatabaseSync, kind: ServerKind, params: unkno
   });
 }
 
-/** `names` move to the server `params`, each with its table of `tables` (matched by link name) and that design; a source left with
- *  no link is deleted. One transaction; an unknown name, or one without its table, is bc:notFound. */
-export function relinkServerRows(db: DatabaseSync, names: string[], kind: ServerKind, params: unknown, tables: RemoteTable[]): void {
+/** `names` move to the server `params`, each with its table of `tables` (matched by link name) and that design (and `metas[i]` on
+ *  tables[i], C7 R11); a source left with no link is deleted. One transaction; an unknown name, or one without its table, is bc:notFound. */
+export function relinkServerRows(db: DatabaseSync, names: string[], kind: ServerKind, params: unknown, tables: RemoteTable[], metas?: (LinkMeta | undefined)[]): void {
   inTransaction(db, () => {
     const id = serverSourceFor(db, kind, params);
     const left = new Set<string>();
     for (const n of names) {
       const l = mustFind(db, n);
-      const t = tables.find((x) => sameName(x.name, l.name));
+      const i = tables.findIndex((x) => sameName(x.name, l.name));
+      const t = tables[i];
       if (!t) throw new Error('bc:notFound');
       left.add(l.sourceId);
-      db.prepare('UPDATE bc_links SET source_id = ?, remote_name = ?, props = ? WHERE name = ?').run(id, t.remote, withServer(linkProps(db, l.name), t), l.name);
+      const meta = metas?.[i];
+      db.prepare('UPDATE bc_links SET source_id = ?, remote_name = ?, props = ? WHERE name = ?').run(id, t.remote, withServer({ ...linkProps(db, l.name), ...(meta ? { meta } : {}) }, t), l.name);
     }
     for (const s of left) dropIfUnused(db, s);
   });
@@ -194,6 +222,25 @@ export function removeLink(db: DatabaseSync, name: string): void {
     db.prepare('DELETE FROM bc_links WHERE name = ?').run(l.name);
     dropIfUnused(db, l.sourceId);
   });
+}
+
+/** C7 R11, edited: a server link's BaseCraft metadata (bc_links.props.meta) patched. `fields`: per field name (matched as the cached
+ *  design names it), the props to set (undefined removes one); a field new to the meta takes its `from` (type keys) from the
+ *  cached design. `table`: replaces the table's texts (empty: none). Other props of the link are kept. */
+export function patchLinkMeta(db: DatabaseSync, name: string, fields: Record<string, Partial<FieldProps>>, table?: NonNullable<LinkMeta['table']>): void {
+  const l = mustFind(db, name);
+  if (!l.server) throw new Error('bc:notFound');
+  const meta: LinkMeta = { ...(l.server.meta ?? { fields: {} }), fields: { ...l.server.meta?.fields } };
+  for (const [n, patch] of Object.entries(fields)) {
+    const cached = l.server.fields.find((x) => sameName(x.name, n));
+    if (!cached) continue;
+    const old = meta.fields[cached.name];
+    const props: Record<string, unknown> = { ...old?.props };
+    for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete props[k]; else props[k] = v; }
+    meta.fields[cached.name] = { props, from: old?.from ?? Object.fromEntries(['type', 'numberSize', 'size', 'precision', 'scale'].filter((k) => (cached.props as Record<string, unknown>)[k] !== undefined).map((k) => [k, (cached.props as Record<string, unknown>)[k]])) as LinkMeta['fields'][string]['from'] };
+  }
+  if (table) { if (Object.keys(table).length) meta.table = table; else delete meta.table; }
+  db.prepare('UPDATE bc_links SET props = ? WHERE name = ?').run(JSON.stringify({ ...linkProps(db, l.name), meta }), l.name);
 }
 
 /** '' or null removes the description; the link's other props are kept. */

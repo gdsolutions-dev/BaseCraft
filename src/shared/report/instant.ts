@@ -12,7 +12,7 @@ const MIN_WIDTH = 567;
 const MIN_TOTAL = 4535 + GAP + STAMP;   // the title, the date and the page number need some room even over one column
 /** Values the band formatter right-aligns under `general`: their column label is right-aligned too, as in Access. */
 const RIGHT: FieldType[] = ['autoNumber', 'number', 'currency', 'dateTime'];
-const WIDTHS: Record<FieldType, number> = { autoNumber: 851, yesNo: 851, shortText: 2268, longText: 3402, number: 1418, currency: 1701, dateTime: 1701, hyperlink: 2835 };
+const WIDTHS: Record<FieldType, number> = { autoNumber: 851, yesNo: 851, shortText: 2268, longText: 3402, number: 1418, currency: 1701, dateTime: 1701, hyperlink: 2835, attachment: 851 };
 const widthOf = (f: SourceField) => (f.type === 'shortText' && (f.props.size ?? 255) <= 10 ? 1134 : WIDTHS[f.type] ?? 2268);
 
 /** `base`, else `base1`, `base2`… (sameName), cut so that it stays a valid name (64 characters). */

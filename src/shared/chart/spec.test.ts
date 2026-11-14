@@ -92,15 +92,15 @@ describe('readChartSeries', () => {
 });
 
 describe('types F5', () => {
-  const NEW = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'] as const;
+  const NEW = ['doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall', 'wordCloud'] as const;
   it('aide du type de chaque type', () => {
     expect(typeHintKey(readChartSpec({ ChartType: 'boxWhisker' }))).toBe('chart.settings.typeHint.boxWhisker');
     expect(typeHintKey(readChartSpec({ ChartType: 'pareto' }))).toBe('chart.settings.typeHint.pareto');
     expect(typeHintKey(readChartSpec({ ChartType: 'waterfall' }))).toBe('chart.settings.typeHint.waterfall');
     expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');   // la valeur stockée est lue telle quelle
   });
-  it('CHART_TYPES : 24 types, les nouveaux après combo', () => {
-    expect(CHART_TYPES).toHaveLength(24);
+  it('CHART_TYPES : 25 types, les nouveaux après combo', () => {
+    expect(CHART_TYPES).toHaveLength(25);
     expect(CHART_TYPES.slice(16)).toEqual([...NEW]);
   });
   it('chaque type a une famille explicite (jamais line par défaut)', () => {
@@ -111,12 +111,12 @@ describe('types F5', () => {
   });
   it('chartDataMode et usesAxes', () => {
     for (const t of CHART_TYPES) expect(chartDataMode(t), t).toBe(['scatter', 'bubble', 'boxWhisker'].includes(t) ? 'rows' : 'grouped');
-    for (const f of ['pie', 'radar', 'doughnut', 'arc', 'funnel'] as const) expect(usesAxes(f), f).toBe(false);
+    for (const f of ['pie', 'radar', 'doughnut', 'arc', 'funnel', 'wordCloud'] as const) expect(usesAxes(f), f).toBe(false);
     for (const f of ['column', 'bar', 'line', 'area', 'combo', 'scatter', 'bubble', 'boxWhisker', 'pareto', 'waterfall'] as const) expect(usesAxes(f), f).toBe(true);
   });
-  it('lit les nouveaux types ; Word Cloud reste inconnu', () => {
+  it('lit les nouveaux types', () => {
     expect(readChartSpec({ ChartType: 'waterfall' }).type).toBe('waterfall');
-    expect(readChartSpec({ ChartType: 'wordCloud' }).type).toBe('columnClustered');
+    expect(readChartSpec({ ChartType: 'wordCloud' }).type).toBe('wordCloud');
   });
 });
 
@@ -125,15 +125,15 @@ describe('formatApplies (F5b)', () => {
   const base = 'frame,legend,subtitle,title';
   const axes = 'axisTitles,xAxis,yAxis';
   const want = (...x: string[]) => x.join(',').split(',').sort().join(',');
-  it('matrice des familles pour les 24 types', () => {
+  it('matrice des familles pour les 25 types', () => {
     const table: Record<string, string> = {
-      pie: want(base), radar: want(base), radarFilled: want(base), doughnut: want(base, 'hole'), arc: want(base, 'hole'), funnel: want(base),
+      pie: want(base), radar: want(base), radarFilled: want(base), wordCloud: want(base), doughnut: want(base, 'hole'), arc: want(base, 'hole'), funnel: want(base),
       scatter: want(base, axes), bubble: want(base, axes, 'bubble'), boxWhisker: want('frame,title,subtitle', axes),
       pareto: want(base, axes, 'paretoSec'), waterfall: want(base, axes, 'waterfall'),
     };
     for (const t of CHART_TYPES) expect(g(t), t).toBe(table[t] ?? want(base, axes, 'secAxis'));
   });
   it('ignoresLegend : anneau, arc, entonnoir, boîte, Pareto, cascade', () => {
-    expect(CHART_TYPES.filter(ignoresLegend)).toEqual(['doughnut', 'arc', 'boxWhisker', 'funnel', 'pareto', 'waterfall']);
+    expect(CHART_TYPES.filter(ignoresLegend)).toEqual(['doughnut', 'arc', 'boxWhisker', 'funnel', 'pareto', 'waterfall', 'wordCloud']);
   });
 });

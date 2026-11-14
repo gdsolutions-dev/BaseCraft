@@ -8,7 +8,7 @@ describe('startup options', () => {
   it('defaults show everything', () => {
     expect(readStartup(undefined)).toEqual({
       appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
-      statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false,
+      statusBar: true, documentTabs: true, overlappingWindows: false, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false, frontEnd: false, dataFile: false,
       fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000,
       trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false,
     });

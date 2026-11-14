@@ -30,7 +30,7 @@ const BOUND: ControlKind[] = ['textBox', 'checkBox', 'optionGroup', 'comboBox', 
 const LISTS: ControlKind[] = ['comboBox', 'listBox'];
 const TEXT: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'commandButton', 'toggleButton'];
 const BOXED: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'optionGroup', 'commandButton', 'toggleButton', 'rectangle', 'image', 'subform', 'navigationControl'];   // le graphique a ses propres lignes (ChartBack*, ChartBorder*)
-const BORDERED: ControlKind[] = ['label', 'textBox', 'checkBox', 'comboBox', 'listBox', 'optionGroup', 'rectangle', 'line', 'image', 'subform'];
+const BORDERED: ControlKind[] = ['label', 'textBox', 'checkBox', 'comboBox', 'listBox', 'optionGroup', 'rectangle', 'line', 'image', 'subform', 'attachment'];
 /** Controls that take the keyboard focus in the tab order (Tab Stop, Tab Index, Status Bar Text). */
 const INPUTS: ControlKind[] = [...BOUND, 'commandButton'];
 const CLICKABLE: ControlKind[] = ['label', 'textBox', 'comboBox', 'listBox', 'checkBox', 'optionGroup', 'optionButton', 'commandButton', 'toggleButton', 'image', 'tabControl', 'chart'];
@@ -115,7 +115,7 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('AllowAdditions', 'data', 'bool', ['form'], true),
   p('AllowEdits', 'data', 'bool', ['form'], true),
   p('AllowDeletions', 'data', 'bool', ['form'], true),
-  p('ControlSource', 'data', 'controlSource', BOUND, ''), // a field name, or `=` + canonical expression
+  p('ControlSource', 'data', 'controlSource', [...BOUND, 'attachment'], ''), // a field name, or `=` + canonical expression
   p('RowSourceType', 'data', 'enum', LISTS, 'tableQuery', { options: ['tableQuery', 'valueList'] }),
   p('RowSource', 'data', 'rowSource', LISTS, ''),
   p('BoundColumn', 'data', 'number', LISTS, 1, { min: 1, max: 20, integer: true }),
@@ -123,8 +123,8 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   p('DefaultValue', 'data', 'expression', BOUND, ''),
   p('ValidationRule', 'data', 'criteria', BOUND, ''),
   p('ValidationText', 'data', 'text', BOUND, ''),
-  p('Enabled', 'data', 'bool', [...BOUND, 'optionButton', 'commandButton', 'subform'], true),
-  p('Locked', 'data', 'bool', [...BOUND, 'subform'], false),
+  p('Enabled', 'data', 'bool', [...BOUND, 'optionButton', 'commandButton', 'subform', 'attachment'], true),
+  p('Locked', 'data', 'bool', [...BOUND, 'subform', 'attachment'], false),
   p('OptionValue', 'data', 'number', ['optionButton', 'checkBox', 'toggleButton'], undefined, { integer: true }), // inside an option group
   p('HyperlinkAddress', 'data', 'text', ['label'], ''), // D3: an http:, https: or mailto: address; the label is a link (Form view opens it after asking, a report prints it underlined)
   p('NavigationTargets', 'data', 'textList', ['navigationControl']), // D4: one tab per line, Caption|form:Name (or Caption|report:Name, not shown yet)
@@ -134,10 +134,20 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
   // A4 additions (only the names the foundation lacked). Left/Top/Height mirror ControlDef/SectionDef fields; Pages has no default (readers use ?? []);
   // PageIndex is deliberately not a descriptor (an internal key of a control placed on a tab page).
   p('RecordSelectors', 'format', 'bool', ['form'], true),
+  // Form window (backlog C6b): how the form's window looks and behaves in overlapping windows, as a pop-up and as a dialog. A form's border style is
+  // BorderStyle, as in Access: the form's own descriptor (none, thin, sizable, dialog), beside the controls' one; a lookup by name passes the target.
+  p('AutoResize', 'format', 'bool', ['form'], true),
+  p('AutoCenter', 'format', 'bool', ['form'], false),
+  p('BorderStyle', 'format', 'enum', ['form'], 'sizable', { options: ['none', 'thin', 'sizable', 'dialog'] }),
+  p('ControlBox', 'format', 'bool', ['form'], true),
+  p('MinMaxButtons', 'format', 'enum', ['form'], 'both', { options: ['none', 'min', 'max', 'both'] }),
+  p('CloseButton', 'format', 'bool', ['form'], true),
+  p('PopUp', 'other', 'bool', ['form'], false),
+  p('Modal', 'other', 'bool', ['form'], false),
   p('Left', 'format', 'twips', [...CONTROL_KINDS]),
   p('Top', 'format', 'twips', [...CONTROL_KINDS]),
   p('Height', 'format', 'twips', [...SECTION_KINDS, ...CONTROL_KINDS]),
-  p('PictureType', 'format', 'enum', PICTURED, 'embedded', { options: ['embedded', 'shared'] }),
+  p('PictureType', 'format', 'enum', PICTURED, 'embedded', { options: ['embedded', 'shared', 'linked'] }),
   p('Picture', 'format', 'picture', PICTURED),
   p('PictureTiling', 'format', 'bool', ['form', 'report', 'image'], false),
   p('SizeMode', 'format', 'enum', ['image'], 'zoom', { options: ['clip', 'stretch', 'zoom'] }),
@@ -231,11 +241,15 @@ export const PROPERTY_CATALOG: PropertyDescriptor[] = [
 const CELL_NAMES = /^(Width|Height|Top|Left|Name|Tag|BackStyle|BackColor|Gridline(Style|Width)(Top|Bottom|Left|Right)|GridlineColor|(Top|Bottom|Left|Right)Padding)$/;
 for (const d of PROPERTY_CATALOG) if (CELL_NAMES.test(d.name)) d.appliesTo = [...d.appliesTo, 'emptyCell'];   // a new array: LAID_OUT and co. are shared
 
+/** The descriptor of `name` for a target: BorderStyle has one for forms and one for controls. */
+export const descriptorFor = (name: string, target: PropertyTarget): PropertyDescriptor | undefined =>
+  PROPERTY_CATALOG.find((x) => x.name === name && x.appliesTo.includes(target)) ?? PROPERTY_CATALOG.find((x) => x.name === name);
+
 export const propertiesFor = (target: PropertyTarget): PropertyDescriptor[] => PROPERTY_CATALOG.filter((x) => x.appliesTo.includes(target));
 
 /** The effective value of a property: the stored one, else the most specific default (undefined for a name outside the catalog). */
 export function effectiveProp(props: Record<string, unknown>, name: string, target: PropertyTarget, objectKind?: 'form' | 'report'): unknown {
-  const d = PROPERTY_CATALOG.find((x) => x.name === name);
+  const d = descriptorFor(name, target);
   if (!d) return undefined;
   return (Object.hasOwn(props, name) ? props[name] : undefined) ?? defaultFor(d, target, objectKind);
 }

@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BasecraftApi } from '../../src/shared/api';
-import { launchApp, pickView, colLeft } from './helpers';
+import { launchApp, pickView, colLeft, expectSql, editorText } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const en = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/en.json'), 'utf8'));
@@ -228,16 +228,16 @@ test('recette A3', async () => {
     await expect(doc(page).getByTestId('qbe-cell-sort-2')).toHaveValue('asc');
     await page.getByTestId('status-view-sql').click();
     const sqlBox = doc(page).getByTestId('query-sql');
-    await expect(sqlBox).toHaveValue(DEPUIS);
-    expect(await sqlBox.inputValue()).toContain('WHERE [Commandes].[Le] >= [Date début :]');
-    expect(await sqlBox.inputValue()).toContain('ORDER BY [Commandes].[Le];');
+    await expectSql(sqlBox, DEPUIS);
+    expect(await editorText(sqlBox)).toContain('WHERE [Commandes].[Le] >= [Date début :]');
+    expect(await editorText(sqlBox)).toContain('ORDER BY [Commandes].[Le];');
     await sqlBox.fill(DEPUIS_DESC);
     await page.getByTestId('status-view-design').click();
     await expect(doc(page).getByTestId('qbe-cell-sort-1')).toHaveValue('desc');
     await expect(doc(page).getByTestId('qbe-cell-sort-2')).toHaveValue('');
     await expect(doc(page).getByTestId('qbe-cell-criteria0-2')).toHaveValue('>= [Date début :]');
     await pickView(page, 'viewSql');
-    await expect(sqlBox).toHaveValue(DEPUIS_DESC);
+    await expectSql(sqlBox, DEPUIS_DESC);
     await page.keyboard.press('Control+s');
     await expect(page.getByTestId('doc-tab-query-Commandes depuis')).not.toContainText('•');
     expect(await sqlOf(page, 'Commandes depuis')).toBe(DEPUIS_DESC);
@@ -346,7 +346,7 @@ test('recette A3', async () => {
     await expect(doc(page).getByTestId('qbe-cell-criteria0-2')).toHaveValue('>= [Date début :]');
     await expect(doc(page).getByTestId('qbe-cell-sort-1')).toHaveValue('desc');
     await pickView(page, 'viewSql');
-    await expect(doc(page).getByTestId('query-sql')).toHaveValue(DEPUIS_DESC);
+    await expectSql(doc(page).getByTestId('query-sql'), DEPUIS_DESC);
     await page.getByTestId('status-view-datasheet').click();
     await expect(page.getByTestId('modal')).toContainText(en.query.param.title);
     await page.getByTestId('modal-input').fill('10/05/2026');

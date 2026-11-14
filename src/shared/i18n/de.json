@@ -49,6 +49,7 @@
       "macroDesign": "Makroentwurf"
     },
     "group": {
+      "window": "Fenster",
       "builderClose": "Schließen",
       "view": "Ansichten",
       "records": "Datensätze",
@@ -105,6 +106,8 @@
       "expandCollapse": "Erweitern/Reduzieren"
     },
     "cmd": {
+      "sizeToFit": "Größe an Formular anpassen",
+      "switchWindows": "Fenster wechseln",
       "builderSaveAs": "Speichern unter",
       "builderClose": "Schließen",
       "viewDatasheet": "Datenblattansicht",
@@ -555,6 +558,16 @@
     "copyLabel": "Name der Kopie",
     "copyDefault": "Kopie von {{name}}"
   },
+  "owin": {
+    "minimize": "Minimieren",
+    "maximize": "Maximieren",
+    "restore": "Wiederherstellen",
+    "switch": "Fenster wechseln",
+    "sizeToFit": "Größe an Formular anpassen",
+    "cascade": "Überlappend",
+    "tile": "Nebeneinander",
+    "none": "Kein offenes Fenster"
+  },
   "tabs": {
     "close": "„{{name}}“ ({{kind}}) schließen",
     "unsaved": "(nicht gespeicherte Änderungen)",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "Datenbank1",
+    "pictureFilter": "Bilder",
     "copyName": "{{name}} Kopie",
     "compactOnClose": "BaseCraft komprimiert die Datenbank vor dem Schließen. Das kann einen Moment dauern: Das Schließen wird automatisch abgeschlossen.",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "Ein Designname hat 1 bis 60 Zeichen und kein Steuerzeichen.",
       "themeReserved": "Dieser Name gehört zu einem mit BaseCraft gelieferten Design: Wählen Sie einen anderen.",
       "themeExists": "Ein benutzerdefiniertes Design trägt bereits diesen Namen.",
+      "invalidThemeFile": "Diese Datei ist kein lesbares Office-Design (.thmx).",
+      "pictureOutsideBase": "Ein verknüpftes Bild muss sich im Ordner der Datenbank oder in einem seiner Unterordner befinden.",
       "invalidPicture": "Die Datei ist kein PNG-, JPEG-, GIF- oder WebP-Bild.",
       "pictureTooLarge": "Bild zu groß (höchstens 1 MB).",
+      "attachmentTooLarge": "Eine Datei ist größer als 25 MB: Es wurde nichts hinzugefügt.",
+      "attachmentOpen": "Die Datei konnte nicht geöffnet werden.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten: {{detail}}",
       "fileTooLarge": "Die Datei ist größer als 2 GB und kann nicht importiert werden.",
       "importInterrupted": "Der Import wurde unterbrochen (die Datenbank wurde geschlossen oder ist schreibgeschützt geworden). Es wurde nichts importiert.",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "Diese Access-Datenbank ist kennwortgeschützt: {{detail}}",
       "linkUnavailable_needsLogin": "Anmeldung abgebrochen: Die verknüpften Tabellen von {{detail}} sind nicht verfügbar.",
       "linkUnavailable_cannotConnect": "Der Server {{detail}} ist nicht erreichbar. Überprüfen Sie den Servernamen, den Port und das Netzwerk.",
+      "odbc_failed": "Die ODBC-Quelle meldete einen Fehler: {{detail}}",
+      "odbc_unavailable": "Der ODBC-Import ist auf diesem Computer nicht verfügbar: {{detail}} wurde nicht gefunden. Installieren Sie unter Linux und macOS unixODBC.",
       "linkUnavailable_certificate": "Dieser Arbeitsplatz vertraut dem Zertifikat des Servers {{detail}} nicht. Lassen Sie das Zertifikat seiner Zertifizierungsstelle installieren oder wählen Sie, wenn Sie diesem Netzwerk vertrauen, im Verknüpfte-Tabellen-Manager die Verschlüsselungsoption ohne Zertifikatsprüfung (z. B. „Verschlüsselt, dem Serverzertifikat vertrauen“).",
       "linkUnavailable_serverVersion": "Der Server {{detail}} verwendet eine Version, die BaseCraft nicht unterstützt (mindestens PostgreSQL 14 oder SQL Server 2016).",
       "linkUnavailable_passwordExpired": "Das Kennwort dieser Anmeldung ist auf dem Server {{detail}} abgelaufen. Ändern Sie es mit dem Verwaltungstool des Servers, und stellen Sie dann erneut eine Verbindung her.",
@@ -752,6 +772,7 @@
       "nameExists": "Ein Objekt mit diesem Namen ist bereits vorhanden.",
       "nameInvalid": "Dieser Name ist ungültig.",
       "readOnly": "Die Datenbank ist schreibgeschützt geöffnet.",
+      "moduleNameClash": "Dieser Name ergäbe dasselbe Codemodul wie ein anderes Formular, ein anderer Bericht oder ein vorhandenes Modul. Wählen Sie einen anderen Namen.",
       "notFound": "Dieses Objekt ist nicht mehr vorhanden.",
       "hasRelations": "Diese Tabelle ist Teil von Beziehungen: Löschen Sie zuerst ihre Beziehungen.",
       "external": "Die Tabelle „{{table}}“ wurde außerhalb von BaseCraft geändert; ihr Entwurf kann hier nicht geändert werden.",
@@ -860,6 +881,7 @@
     },
     "fieldList": "Feldliste",
     "ctlPrefix": {
+      "attachment": "Anlage",
       "label": "Bezeichnung",
       "textBox": "Text",
       "checkBox": "Kontroll",
@@ -913,9 +935,13 @@
     "currency": "Währung",
     "dateTime": "Datum/Uhrzeit",
     "yesNo": "Ja/Nein",
-    "hyperlink": "Link"
+    "hyperlink": "Link",
+    "attachment": "Anlage",
+    "calculated": "Berechnet"
   },
   "fieldProp": {
+    "calculated": "Ausdruck",
+    "resultType": "Ergebnistyp",
     "size": "Feldgröße",
     "numberSize": "Feldgröße",
     "precision": "Genauigkeit",
@@ -1043,7 +1069,7 @@
   "datasheet": {
     "more": { "rowHeight": "Zeilenhöhe…", "columnWidth": "Feldbreite…", "rowHeightLabel": "Zeilenhöhe (Punkt):", "columnWidthLabel": "Spaltenbreite:", "standardHeight": "Standardhöhe", "standardWidth": "Standardbreite", "bestFit": "Anpassen", "hide": "Felder ausblenden", "unhide": "Felder einblenden…", "freeze": "Felder fixieren", "unfreeze": "Fixierung aller Felder aufheben", "unhideTitle": "Spalten einblenden" },
     "totals": { "label": "Summe", "none": "Keine" },
-    "format": { "gridlines": "Gitternetzlinien anzeigen", "gridColor": "Farbe der Gitternetzlinien", "auto": "Automatisch" },
+    "format": { "gridlines": "Gitternetzlinien anzeigen", "gridColor": "Farbe der Gitternetzlinien", "auto": "Automatisch", "cellEffect": "Zelleneffekt", "flat": "Flach", "raised": "Erhöht", "sunken": "Vertieft" },
     "goTo": {
       "first": "Erster",
       "previous": "Vorheriger",
@@ -1692,6 +1718,13 @@
     "GridX": "Raster X",
     "GridY": "Raster Y",
     "RecordSelectors": "Datensatzmarkierer",
+    "AutoResize": "Automatische Größe",
+    "AutoCenter": "Automatisch zentrieren",
+    "ControlBox": "Systemmenüfeld",
+    "MinMaxButtons": "Schaltflächen Min Max",
+    "CloseButton": "Schließen-Schaltfläche",
+    "PopUp": "Popup",
+    "Modal": "Gebunden",
     "Left": "Links",
     "Top": "Oben",
     "Height": "Höhe",
@@ -1785,8 +1818,9 @@
     "ColumnWidth": "Spaltenbreite"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "Keine", "min": "Min aktiviert", "max": "Max aktiviert", "both": "Beide aktiviert"},
     "LegendPosition": {"top": "Oben", "bottom": "Unten", "left": "Links", "right": "Rechts"},
-    "ChartType": {"columnClustered": "Gruppierte Säulen", "columnStacked": "Säulen, gestapelt", "columnStacked100": "Säulen, 100 % gestapelt", "barClustered": "Gruppierte Balken", "barStacked": "Balken, gestapelt", "barStacked100": "Balken, 100 % gestapelt", "line": "Linie", "lineStacked": "Linie, gestapelt", "lineStacked100": "Linie, 100 % gestapelt", "area": "Fläche, gruppiert", "areaStacked": "Fläche, gestapelt", "areaStacked100": "Fläche, 100 % gestapelt", "pie": "Kreis", "radar": "Netz", "radarFilled": "Gefülltes Netz", "combo": "Verbund", "doughnut": "Ringdiagramm", "arc": "Bogen", "scatter": "Punkt (XY)", "bubble": "Blase", "boxWhisker": "Kastengrafik", "funnel": "Trichter", "pareto": "Pareto", "waterfall": "Wasserfall"},
+    "ChartType": {"columnClustered": "Gruppierte Säulen", "columnStacked": "Säulen, gestapelt", "columnStacked100": "Säulen, 100 % gestapelt", "barClustered": "Gruppierte Balken", "barStacked": "Balken, gestapelt", "barStacked100": "Balken, 100 % gestapelt", "line": "Linie", "lineStacked": "Linie, gestapelt", "lineStacked100": "Linie, 100 % gestapelt", "area": "Fläche, gruppiert", "areaStacked": "Fläche, gestapelt", "areaStacked100": "Fläche, 100 % gestapelt", "pie": "Kreis", "radar": "Netz", "radarFilled": "Gefülltes Netz", "combo": "Verbund", "doughnut": "Ringdiagramm", "arc": "Bogen", "scatter": "Punkt (XY)", "bubble": "Blase", "boxWhisker": "Kastengrafik", "funnel": "Trichter", "pareto": "Pareto", "waterfall": "Wasserfall", "wordCloud": "Wortwolke"},
     "ChartDateGroup": {"none": "Keine", "year": "Jahr", "quarter": "Quartal", "month": "Monat", "day": "Tag"},
     "ChartBackStyle": {"normal": "Standard", "transparent": "Transparent"},
     "ChartBorderStyle": {"transparent": "Transparent", "solid": "Durchgezogen", "dashed": "Striche", "dotted": "Punkte"},
@@ -1813,6 +1847,10 @@
       "transparent": "Transparent"
     },
     "BorderStyle": {
+      "none": "Keine",
+      "thin": "Dünn",
+      "sizable": "Größe änderbar",
+      "dialog": "Dialog",
       "transparent": "Transparent",
       "solid": "Durchgezogen",
       "dashed": "Strichlinie",
@@ -1840,7 +1878,8 @@
     },
     "PictureType": {
       "embedded": "Eingebettet",
-      "shared": "Freigegeben"
+      "shared": "Freigegeben",
+      "linked": "Verknüpft"
     },
     "SizeMode": {
       "clip": "Abschneiden",
@@ -2171,7 +2210,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "Generator auswählen", "macro": "Makrogenerator", "function": "Funktionsgenerator" },
+    "choose": { "title": "Generator auswählen", "macro": "Makrogenerator", "function": "Funktionsgenerator", "code": "Code-Generator" },
     "function": { "title": "Funktionsgenerator", "empty": "Kein Modul enthält eine öffentliche Funktion." },
     "title": "Ausdrucks-Generator",
     "expression": "Geben Sie einen Ausdruck ein:",
@@ -2386,8 +2425,9 @@
     "showTable": {
       "title": "Tabellen hinzufügen",
       "tables": "Tabellen",
+      "links": "Verknüpfungen",
       "queries": "Abfragen",
-      "both": "Beides",
+      "all": "Alle",
       "add": "Ausgewählte Tabellen hinzufügen",
       "close": "Schließen",
       "none": "Keine Objekte.",
@@ -2410,6 +2450,7 @@
       "label": "Tabellenname"
     },
     "sqlOnly": "Diese Abfrage kann nur in der SQL-Ansicht angezeigt werden.",
+    "sqlFormat": "SQL formatieren",
     "passThrough": {
       "notice": "Pass-Through-Abfrage: Dieser Text wird unverändert an den Server {{label}} gesendet, ohne dass BaseCraft ihn liest. Der Server wendet seine eigenen Berechtigungen an; die Gültigkeitsregeln und Beziehungen von BaseCraft gelten nicht für das, was er ändert.",
       "noticeNoServer": "Pass-Through-Abfrage: Wählen Sie ihren Server im Eigenschaftenblatt.",
@@ -2476,6 +2517,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "Importschritte speichern",
+    "savedImportDefault": "Import - {{name}}",
+    "savedImportEmpty": "Kein gespeicherter Import.",
     "yes": "Wahr",
     "no": "Falsch",
     "excelFilter": "Excel-Arbeitsmappen",
@@ -2545,6 +2590,7 @@
     "twoPrimary": "Nur ein Index kann der Primärschlüssel sein."
   },
   "tableFields": {
+    "calculatedLabel": "Ausdruck von „{{field}}“ (berechnetes Feld; leer: gespeichertes Feld)",
     "newField": "Feld",
     "newTable": "Tabelle",
     "designOpen": "Die Tabelle „{{name}}“ ist in der Entwurfsansicht geöffnet. Schließen oder speichern Sie sie, bevor Sie ihre Felder hier ändern.",
@@ -2591,6 +2637,7 @@
     "self": "Die Datendatei darf nicht die geöffnete Datenbank sein. Wählen Sie einen anderen Namen oder Ordner."
   },
   "clipboard": { "empty": "Die Zwischenablage des Systems enthält keinen Text.", "content": "{{text}}" },
+  "attachments": {"title": "Anlagen", "add": "Hinzufügen…", "remove": "Entfernen", "open": "Öffnen", "saveAs": "Speichern unter…", "saveAll": "Alle speichern…", "none": "Keine Anlagen.", "previous": "Vorherige Anlage", "next": "Nächste Anlage", "manage": "Doppelklicken, um die Anlagen zu verwalten", "openConfirm": "„{{name}}“ öffnen? Eine Datei aus einer Datenbank kann schädlichen Code enthalten: Öffnen Sie sie nur, wenn Sie dieser Datenbank vertrauen.", "openConfirmRunnable": "„{{name}}“ ist ein Programm oder Skript: Beim Öffnen wird es auf diesem Computer ausgeführt. Öffnen Sie es nur, wenn Sie dieser Datenbank und ihrem Autor vertrauen."},
   "hyperlink": { "address": "Adresse (https://, http:// oder mailto:)", "text": "Anzuzeigender Text", "invalid": "Die Adresse muss mit https://, http:// oder mailto: beginnen.", "open": "{{url}} öffnen?" },
   "migrate": {
     "title": "Assistent zum Verschieben auf einen Server",
@@ -2633,6 +2680,8 @@
     "noSchema": "Das Schema {{schema}} existiert auf dem Server nicht.",
     "nameTaken": "Der Server hat bereits Tabellen mit diesen Namen: {{names}}. Löschen Sie sie, oder wählen Sie ein anderes Schema.",
     "nameTooLong": "Diese Namen überschreiten die Grenze von PostgreSQL (63 Byte): {{names}}. Benennen Sie sie zuerst um.",
+    "nameClash": "Mehrere Datendateien enthalten Tabellen mit den Namen {{names}}. Es wurde nichts verschoben: Benennen Sie sie in ihren Datendateien um (sie müssen auf dem Server eindeutig sein) und versuchen Sie es erneut.",
+    "partial": "Diese Tabellen bereits verschobener Datendateien liegen auf dem Server, ihre Verknüpfungen wurden geändert: {{names}}. Die übrigen Dateien blieben unverändert.",
     "invalidDesign": "Der Entwurf dieser Felder ist ungültig: {{names}}. Korrigieren Sie ihn in der Entwurfsansicht, und versuchen Sie es erneut.",
     "cancelled": "Verschieben abgebrochen: Es wurde nichts geändert.",
     "failed": "Das Verschieben ist fehlgeschlagen ({{table}}): {{error}}. Weder auf dem Server noch in der Datenbank wurde etwas geändert.",
@@ -2688,6 +2737,7 @@
       "done": "Konvertierung des Makros „{{macro}}“ abgeschlossen: Modul „{{module}}“ erstellt.",
       "todo": "{{count}} Element(e) müssen Sie von Hand abschließen: Suchen Sie im Modul nach TODO."
     },
+    "convertEvents": { "none": "Es gibt kein eingebettetes Makro zum Konvertieren.", "done": "Die eingebetteten Makros von „{{object}}“ wurden konvertiert: {{count}} Ereignis(se) führen jetzt die Prozeduren des Moduls „{{module}}“ aus." },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "Eingebettetes Makro löschen?",
@@ -2953,7 +3003,6 @@
     "moveUp": "Nach oben",
     "moveDown": "Nach unten",
     "remove": "Löschen",
-    "saveBeforeRun": "Das Makro muss vor der Ausführung gespeichert werden. Jetzt speichern?",
     "step": {
       "title": "Makro-Einzelschritt",
       "condition": "Bedingung",
@@ -2968,17 +3017,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "Passen Sie die Symbolleiste für den Schnellzugriff über den Registerkarten des Menübands an.",
+      "choose": "Befehl auswählen:",
+      "add": "Hinzufügen",
+      "remove": "Entfernen",
+      "up": "Nach oben",
+      "down": "Nach unten",
+      "reset": "Zurücksetzen",
+      "current": "Befehle der Symbolleiste"
+    },
+    "trust": {
+      "header": "Trust Center: Wo dieser Computer dem aktiven Inhalt einer Datenbank vertraut.",
+      "locations": "Vertrauenswürdige Speicherorte",
+      "locationsNote": "Vom Administrator in einer Systemdatei festgelegt; BaseCraft liest sie nur.",
+      "none": "Kein vertrauenswürdiger Speicherort.",
+      "subfolders": "mit Unterordnern",
+      "approvalsTitle": "Genehmigungen",
+      "approvals": "Von diesem Benutzer erteilte Genehmigungen: {{count}}",
+      "clear": "Alle Genehmigungen entfernen",
+    "admin": "Administrator",
+    "add": "Neuen Speicherort hinzufügen...",
+    "remove": "Entfernen",
+    "subfoldersAlso": "Unterordner dieses Speicherorts sind ebenfalls vertrauenswürdig",
+    "description": "Beschreibung",
+    "network": "Vertrauenswürdige Speicherorte im Netzwerk zulassen (nicht empfohlen)",
+    "networkRefused": "Ein Netzwerkspeicherort kann nicht als vertrauenswürdig gelten, solange Netzwerkspeicherorte nicht zugelassen sind."
+    },
     "cat": {
       "general": "Allgemein",
       "currentDb": "Aktuelle Datenbank",
       "client": "Clienteinstellungen",
       "datasheet": "Datenblatt",
-      "designers": "Objekt-Designer"
+      "designers": "Objekt-Designer",
+      "quickAccess": "Symbolleiste für den Schnellzugriff",
+      "ribbon": "Menüband anpassen",
+      "trust": "Trust Center"
     },
     "general": {
+      "screenTipStyle": "QuickInfo-Format:",
+      "screenTipsOn": "QuickInfos anzeigen",
+      "screenTipsOff": "QuickInfos nicht anzeigen",
+      "interfaceZoom": "Zoom der Oberfläche (%)",
+      "interfaceZoomReset": "Zoom zurücksetzen",
+      "previewZoom": "Zoom der Seitenansicht",
+      "previewFit": "An Fenster anpassen",
+      "previewActual": "100 %",
+      "screenTipShortcuts": "Tastenkombinationen in QuickInfos anzeigen",
       "header": "Allgemeine Optionen für die Arbeit mit {{product}}.",
       "ui": "Optionen der Benutzeroberfläche",
       "creation": "Datenbanken erstellen",
+      "sortOrderNew": "Sortierreihenfolge für neue Datenbanken:",
+      "sortOrderLegacy": "Allgemein – Legacy",
+      "sortOrderGeneral": "Allgemein",
+      "sortOrderSpanishTraditional": "Spanisch – Traditionell",
       "defaultFolder": "Standarddatenbankordner:",
       "browse": "Durchsuchen…"
     },
@@ -3039,9 +3131,13 @@
       "docWindow": "Optionen für Dokumentfenster",
       "statusBar": "Statusleiste anzeigen",
       "documentTabs": "Dokumentregisterkarten anzeigen",
+      "docOverlapping": "Überlappende Fenster",
+      "docTabbed": "Registerkartendokumente",
       "specialKeys": "Spezialtasten verwenden",
       "specialKeysHelp": "F11: Navigationsbereich ein- oder ausblenden.",
       "compactOnClose": "Beim Schließen komprimieren",
+      "sortOrder": "Sortierreihenfolge dieser Datenbank:",
+      "sortOrderPending": "Wird bei der nächsten Komprimierung und Reparatur angewendet: {{order}}",
       "frontEnd": "Front-End-Anwendung (ihre lokalen Tabellen dienen nur als Referenz)",
       "dataFile": "Gemeinsame Datendatei (von mehreren Arbeitsplätzen im gemeinsamen Modus geöffnet)",
       "datasheetDesign": "Entwurfsänderungen für Tabellen in der Datenblattansicht aktivieren",
@@ -3101,6 +3197,7 @@
     "datasheet": {
       "header": "Passen Sie das Aussehen von Datenblättern in {{product}} an.",
       "gridSection": "Gitternetzlinien und Zelleneffekte",
+      "defaultCellEffect": "Standardzelleneffekt",
       "gridlines": "Standardmäßig angezeigte Gitternetzlinien",
       "horizontal": "Horizontal",
       "vertical": "Vertikal",
@@ -3136,6 +3233,7 @@
 
       "skipped": "Nicht importierte Spalten ({{table}}): {{names}}."
     },
+    "odbc": { "title": "Aus einer ODBC-Datenbank importieren", "dsn": "Datenquelle (DSN)", "connection": "Oder Verbindungszeichenfolge", "modeImport": "Quelldaten in eine neue Tabelle der aktuellen Datenbank importieren", "modeLink": "Mit der Datenquelle verknüpfen, indem eine verknüpfte Tabelle erstellt wird" },
     "access": {
       "title": "Aus Access importieren",
       "fileOnly": "Tabellen und ihre Daten werden importiert. Andere Schlüssel als ein AutoWert, Indizes und Feldregeln werden nicht gelesen; Abfragen, Formulare, Berichte, Makros und Module werden nicht importiert.",
@@ -3255,7 +3353,7 @@
       "sqlite": "SQLite-Datei",
       "access": "Access-Datenbank",
       "postgresql": "PostgreSQL-Server",
-      "sqlserver": "SQL-Server-Server"
+      "sqlserver": "SQL-Server-Server", "odbc": "ODBC-Datenbank"
     },
     "tables": "Tabellen",
     "selectAll": "Alle markieren",
@@ -3271,6 +3369,7 @@
     "designTitle": "Verknüpfte Tabelle",
     "designWarning": "„{{name}}“ ist eine verknüpfte Tabelle: Ihre Struktur gehört zur Quelldatei und kann hier nicht geändert werden. Möchten Sie sie trotzdem schreibgeschützt öffnen?",
     "designBanner": "Verknüpfte Tabelle, schreibgeschützt: Ihre Struktur gehört zu {{path}}.",
+    "designBannerServer": "Mit einem Server verknüpfte Tabelle: Ihre Struktur gehört zu {{path}}. Geänderte BaseCraft-Eigenschaften werden in dieser Datenbank gespeichert.",
     "skipped": "Nicht verknüpfte Spalten, deren Typ BaseCraft nicht liest (Anlage, OLE-Objekt, mehrwertiges Feld, Binärdaten, erweitertes Datum/Uhrzeit): {{names}}",
     "unsupported": "Tabelle nicht unterstützt: {{reason}}",
     "password": {
@@ -3593,6 +3692,7 @@
     "default": "Als Standarddesign dieser Datenbank festlegen",
     "save": "Aktuelles Design speichern…",
     "browse": "Nach Designs suchen…",
+    "thmxFilter": "Office-Designs",
     "delete": "Dieses benutzerdefinierte Design löschen",
     "saveTitle": "Aktuelles Design speichern",
     "nameLabel": "Designname:",
@@ -3654,7 +3754,7 @@
       "legendNone": "(Keine)",
       "legendHint": "Mit einer Legende wird nur der erste Wert dargestellt.",
       "legendIgnored": "Dieser Diagrammtyp ignoriert das Legendenfeld.",
-      "typeHint": {"doughnut": "Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "arc": "Halbring: Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "funnel": "Die Stufen werden nach dem ersten Wert sortiert; das Legendenfeld wird ignoriert.", "scatter": "Das erste Achsenfeld ist X und muss eine Zahl sein; der erste Wert ist Y. Ein Legendenfeld teilt die Punkte in Datenreihen auf.", "bubble": "Das erste Achsenfeld ist X (eine Zahl), der erste Wert ist Y und der zweite Wert ist die Blasengröße.", "boxWhisker": "Jede Kategorie ist eine Box; die Achsenfelder liefern die Kategorie, der erste Wert die Beobachtungen (das Legendenfeld wird ignoriert).", "pareto": "Die Balken sind nach dem ersten Wert absteigend sortiert; die Linie zeigt den kumulierten Prozentsatz auf der rechten Achse (das Legendenfeld wird ignoriert).", "waterfall": "Jede Kategorie ist ein Schritt des ersten Werts (leer = 0) auf einer laufenden Summe; ein letzter Balken zeigt die Summe (das Legendenfeld wird ignoriert)."},
+      "typeHint": {"doughnut": "Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "arc": "Halbring: Die Größe der Segmente richtet sich nach dem ersten Wert; das Legendenfeld wird ignoriert.", "funnel": "Die Stufen werden nach dem ersten Wert sortiert; das Legendenfeld wird ignoriert.", "scatter": "Das erste Achsenfeld ist X und muss eine Zahl sein; der erste Wert ist Y. Ein Legendenfeld teilt die Punkte in Datenreihen auf.", "bubble": "Das erste Achsenfeld ist X (eine Zahl), der erste Wert ist Y und der zweite Wert ist die Blasengröße.", "boxWhisker": "Jede Kategorie ist eine Box; die Achsenfelder liefern die Kategorie, der erste Wert die Beobachtungen (das Legendenfeld wird ignoriert).", "pareto": "Die Balken sind nach dem ersten Wert absteigend sortiert; die Linie zeigt den kumulierten Prozentsatz auf der rechten Achse (das Legendenfeld wird ignoriert).", "waterfall": "Jede Kategorie ist ein Schritt des ersten Werts (leer = 0) auf einer laufenden Summe; ein letzter Balken zeigt die Summe (das Legendenfeld wird ignoriert).", "wordCloud": "Die Wörter stammen aus dem Achsenfeld, ihre Größe vom ersten Wert (Zeilen desselben Worts werden addiert; das Legendenfeld wird ignoriert)."},
       "rowsHint": "Die Werte werden bei diesem Diagrammtyp unverändert dargestellt: keine Aggregatfunktion.",
       "axisXHint": "Das erste Feld ist X.",
       "values": "Werte (Y-Achse)",
@@ -3664,6 +3764,44 @@
       "expand": "Abschnitt erweitern",
       "close": "Schließen",
       "format": {"series": "Datenreihe", "heading": "Datenreihe formatieren: {{name}}", "fullName": "Vollständiger Name", "seriesType": "Reihentyp", "seriesTypes": {"column": "Säulen", "line": "Linie", "area": "Fläche"}, "plotOn": "Reihe zeichnen auf", "primary": "Primär", "secondary": "Sekundär", "fill": "Füllfarbe der Reihe", "border": "Rahmenfarbe der Reihe", "labels": "Datenbeschriftung anzeigen", "trend": "Trendlinienoptionen", "trendName": "Name der Trendlinie", "noValues": "Wählen Sie zuerst auf der Registerkarte „Daten“ einen Wert aus.", "legendHint": "Mit einem Legendenfeld gilt die Formatierung für alle Reihen gemeinsam: deaktiviert.", "roundHint": "Ohne Wirkung bei diesem Diagrammtyp (Kreis, Netz).", "axisHint": "Keine Sekundärachse bei Balken- oder gestapelten Diagrammen.", "trendHint": "Keine Trendlinie bei Balken- oder gestapelten Diagrammen.", "noEffect": "Ohne Wirkung bei diesem Diagrammtyp.", "noTrend": "Keine Trendlinie bei diesem Diagrammtyp.", "noAxis": "Keine Sekundärachse bei diesem Diagrammtyp.", "waterfallColors": "Wasserfallfarben", "lineOptions": "Linienoptionen", "lineWidth": "Linienstärke", "dash": "Linienart", "marker": "Marker anzeigen", "gap": "Fehlende Werte", "trendKinds": {"none": "Keine", "linear": "Linear", "exponential": "Exponentiell", "logarithmic": "Logarithmisch", "polynomial": "Polynomisch", "power": "Potenz", "movingAverage": "Gleitender Durchschnitt"}, "dashes": {"solid": "Durchgezogen", "dashed": "Gestrichelt", "dotted": "Gepunktet"}, "gaps": {"gap": "Lücke lassen", "zero": "Als Null zeichnen", "connect": "Punkte verbinden"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "Zur Symbolleiste für den Schnellzugriff hinzufügen",
+    "qatRemove": "Aus Symbolleiste für den Schnellzugriff entfernen",
+    "newTab": "Neue Registerkarte",
+    "newGroup": "Neue Gruppe",
+    "rename": "Umbenennen",
+    "show": "Registerkarte {{name}} anzeigen",
+    "ribbonHeader": "Menüband anpassen: Registerkarten ein- oder ausblenden, Reihenfolge ändern, benutzerdefinierte Registerkarten und Gruppen erstellen.",
+    "ribbonNote": "Eine benutzerdefinierte Gruppe nimmt jeden gelieferten Befehl auf, auf jeder Registerkarte, auch auf Kontextregisterkarten. Wählen Sie eine integrierte Gruppe, um sie umzubenennen. Kontextregisterkarten erscheinen nur mit ihrem Objekt.",
+    "ribbonTabs": "Registerkarten des Menübands",
+    "toolTabs": "Kontextregisterkarten",
+    "formTemplate": "Formularvorlage:",
+    "reportTemplate": "Berichtsvorlage:",
+    "templateNote": "Name eines Formulars oder Berichts der aktuellen Datenbank: Neue Formulare und Berichte übernehmen dessen Eigenschaften und Abschnittseinstellungen (standardmäßig Normal). Existiert er nicht, gelten die ursprünglichen Werte.",
+    "errorSection": "Fehlerüberprüfung",
+    "errorEnable": "Fehlerüberprüfung aktivieren",
+    "errorUnassociated": "Auf nicht zugeordnete Bezeichnungsfelder und Steuerelemente prüfen",
+    "errorNewLabels": "Auf neue nicht zugeordnete Bezeichnungsfelder prüfen",
+    "errorProperties": "Auf ungültige Steuerelementeigenschaften prüfen",
+    "errorReport": "Auf häufige Berichtsfehler prüfen",
+    "errorShortcut": "Auf Fehler bei Tastenkombinationen prüfen",
+    "errorColor": "Farbe der Fehleranzeige:",
+    "errorIndicator": "Fehler in diesem Element",
+    "errAssociate": "Bezeichnungsfeld dem Steuerelement zuordnen",
+    "errIgnore": "Fehler ignorieren",
+    "err": {
+      "unassociated": "Das Bezeichnungsfeld {{name}} ist dem benachbarten Steuerelement nicht zugeordnet.",
+      "newLabel": "Das neue Bezeichnungsfeld {{name}} ist keinem Steuerelement zugeordnet.",
+      "unknownField": "Das Feld \"{{field}}\" ist in der Quelle nicht vorhanden.",
+      "invalidExpression": "Der Ausdruck \"{{field}}\" ist ungültig.",
+      "aggregateNotAllowed": "Eine Aggregatfunktion ist hier nicht zulässig.",
+      "widthExceedsPage": "Der Bericht ist breiter als der druckbare Bereich der Seite.",
+      "groupingInvalid": "Eine Sortierung oder Gruppierung des Berichts ist ungültig: \"{{field}}\".",
+      "groupingMalformed": "Eine Sortier- oder Gruppierungsebene des Berichts ist leer.",
+      "shortcutInvalid": "Die Zugriffstaste in „{{name}}“ ist weder Buchstabe noch Ziffer.",
+      "shortcutDuplicate": "Die Zugriffstaste „{{field}}“ wird bereits von einem anderen Steuerelement verwendet."
     }
   }
 }

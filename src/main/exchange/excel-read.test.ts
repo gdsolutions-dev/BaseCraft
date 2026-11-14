@@ -45,14 +45,10 @@ describe('excel import', () => {
   it('canonical cell text', () => {
     expect(cellText(new Date(Date.UTC(2026, 9, 23)))).toBe('2026-10-23');
     expect(cellText(new Date(Date.UTC(2026, 9, 23, 9, 5)))).toBe('2026-10-23 09:05:00');
-    expect(cellText({ formula: 'A1*2', result: 4 })).toBe('4');
-    expect(cellText({ formula: 'A1*2' })).toBe('');
     expect(cellText({ error: '#DIV/0!' })).toBe('#DIV/0!');
-    expect(cellText({ richText: [{ text: 'a' }, { text: 'b' }] })).toBe('ab');
-    expect(cellText({ text: 'lien', hyperlink: 'http://x' })).toBe('lien');
     expect(cellText(true)).toBe('true');
     expect(cellText(12.5)).toBe('12.5');
-    expect(cellText(null)).toBe('');
+    expect(cellText(undefined)).toBe('');
   });
 
   it('sheets, empty rows, merged cells', async () => {

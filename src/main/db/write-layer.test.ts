@@ -185,6 +185,10 @@ describe('write layer: Limit To List (Lookup fields)', () => {
     expect((await insertRow(db, d, { Client: '', Statut: null }, fr, now, on)).ok).toBe(true);
   });
 
+  it('Limit To List compares text without case, as Access', async () => {
+    expect((await insertRow(db, d, { Statut: 'FERMÉE' }, fr, now, on)).ok).toBe(true);
+  });
+
   it('a default value is not checked against the list: only what the user enters is (Access checks the combo box)', async () => {
     const e = t('Tickets', [f('Statut', 'shortText', { defaultValue: '"Brouillon"', lookup: { kind: 'values', values: ['Ouverte'], limitToList: true } })]);
     createTable(db, e);

@@ -1,7 +1,7 @@
 import builtins
 import sys
 
-from . import data, errors, exports, immediate, modules, objects, ui  # noqa: F401
+from . import complete, data, errors, exports, immediate, modules, objects, ui  # noqa: F401
 from ._bridge import call
 from .errors import BaseCraftError  # noqa: F401
 

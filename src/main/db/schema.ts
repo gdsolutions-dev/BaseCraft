@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { purgeOrphanSets } from './attachments';
 import { inTransaction } from './tx';
 import { readOptions, updateOptions } from './file-format';
 import { navForget, navRename } from './navigation';
@@ -13,6 +14,7 @@ import {
   MAX_TWIPS,
   quoteIdent,
   sameName,
+  isCalculated,
   validateDesign,
   type DesignError,
   type FieldDef,
@@ -58,7 +60,7 @@ export function brokenObject(e: unknown): string | undefined {
   return e instanceof Error ? /^error in (?:view|trigger) (.+?): /.exec(e.message)?.[1] : undefined;
 }
 
-const FIELD_TYPES: readonly string[] = ['autoNumber', 'shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink'];
+const FIELD_TYPES: readonly string[] = ['autoNumber', 'shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink', 'attachment'];
 const NUMBER_SIZES: readonly string[] = ['byte', 'integer', 'longInteger', 'single', 'double', 'decimal'];
 const INDEXED: readonly string[] = ['no', 'yesDuplicates', 'yesNoDuplicates'];
 const INT_RANGE: Record<string, [number, number]> = {
@@ -85,7 +87,7 @@ function columnDef(fd: FieldDef): string {
   if (p.type === 'autoNumber') return `${c} INTEGER PRIMARY KEY AUTOINCREMENT`;
   const parts = [c];
   const checks: string[] = [];
-  let notNull = p.required || p.primaryKey;
+  let notNull = (p.required || p.primaryKey) && !isCalculated(p);
   switch (p.type) {
     case 'shortText':
       parts.push('TEXT');
@@ -95,6 +97,10 @@ function columnDef(fd: FieldDef): string {
     case 'hyperlink':
     case 'dateTime':
       parts.push('TEXT');
+      break;
+    case 'attachment': // the id of the cell's set of files (bc_attachments), Null without any; never required (Null is a valid state)
+      parts.push('INTEGER');
+      notNull = false;
       break;
     case 'number': {
       const size = p.numberSize ?? 'longInteger';
@@ -213,7 +219,7 @@ function inferProps(col: Column, pkCount: number): FieldProps {
   return props;
 }
 
-const STRING_KEYS = ['defaultValue', 'validationRule', 'validationText', 'format', 'inputMask'] as const;
+const STRING_KEYS = ['defaultValue', 'validationRule', 'validationText', 'format', 'inputMask', 'calculated'] as const;
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
 
 const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v !== '';
@@ -261,7 +267,7 @@ export function sanitizeStoredProps(p: Record<string, unknown>): Record<string, 
 // Every key written from FieldProps must be listed: an unlisted key is treated as "unknown" and resurrected from the stored value once cleared.
 const KNOWN_KEYS = [
   'type', 'size', 'numberSize', 'precision', 'scale', 'decimalPlaces', 'caption', 'description', 'required', 'allowZeroLength', 'indexed', 'primaryKey', 'external',
-  'defaultValue', 'validationRule', 'validationText', 'format', 'inputMask', 'lookup',
+  'defaultValue', 'validationRule', 'validationText', 'format', 'inputMask', 'lookup', 'calculated',
 ];
 
 function putField(db: DatabaseSync, table: string, name: string, position: number, props: Record<string, unknown>): void {
@@ -774,6 +780,7 @@ export function removeTable(db: DatabaseSync, name: string): void {
     if (meta.fields !== undefined) db.prepare('DELETE FROM bc_fields WHERE table_name = ?').run(meta.fields);
     if (meta.table !== undefined) db.prepare('DELETE FROM bc_tables WHERE name = ?').run(meta.table);
     moveInLayout(db, cur, undefined);
+    purgeOrphanSets(db);
   });
 }
 

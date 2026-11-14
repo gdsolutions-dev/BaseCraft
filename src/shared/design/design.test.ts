@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { CHART_TYPES } from '../chart/spec';
 import { DEFAULT_THEME, shade } from './theme';
 import { colorCss, DARK_THEME_HEX, isColorValue, LIGHT_THEME_HEX, resolveColor, THEME_COLORS } from './colors';
-import { defaultFor, effectiveProp, PROPERTY_CATALOG, propertiesFor, type PropertyDescriptor } from './properties';
+import { defaultFor, descriptorFor, effectiveProp, PROPERTY_CATALOG, propertiesFor, type PropertyDescriptor } from './properties';
 import { EMBEDDED_FONTS, FONT_ALIASES, isEmbeddedFont, resolveFont } from '../fonts';
 
 const get = (o: unknown, k: string): unknown => k.split('.').reduce<unknown>((a, p) => (a as Record<string, unknown> | undefined)?.[p], o);
@@ -26,7 +26,7 @@ describe('property catalog', () => {
     'objectName', 'fieldList', 'picture', 'textList', 'event', 'font', 'chart'];
 
   it('one descriptor per invariant name, with a known tab, editor, target and label in both languages', () => {
-    const names = PROPERTY_CATALOG.map((p) => p.name);
+    const names = PROPERTY_CATALOG.flatMap((p) => p.appliesTo.map((t) => `${p.name}/${t}`));   // BorderStyle: one for forms, one for controls
     expect(new Set(names).size).toBe(names.length);
     const targets = ['form', 'report', 'emptyCell', ...SECTION_KINDS, ...CONTROL_KINDS];
     for (const p of PROPERTY_CATALOG) {
@@ -87,6 +87,10 @@ describe('property catalog', () => {
     }
     const byName = (n: string) => PROPERTY_CATALOG.find((p) => p.name === n)!;
     expect(byName('BorderStyle').options).toEqual(['transparent', 'solid', 'dashed', 'dotted']);
+    const form = descriptorFor('BorderStyle', 'form')!, ctl = descriptorFor('BorderStyle', 'textBox')!;   // one name, a descriptor per kind of object
+    expect(form.options).toEqual(['none', 'thin', 'sizable', 'dialog']);
+    expect([defaultFor(form, 'form'), defaultFor(ctl, 'textBox')]).toEqual(['sizable', 'solid']);
+    expect([effectiveProp({}, 'BorderStyle', 'form'), effectiveProp({}, 'BorderStyle', 'label')]).toEqual(['sizable', 'transparent']);
     expect(byName('FontWeight').options).toEqual(['normal', 'bold']);
     expect(byName('BackColor').default).toBe('theme:surface');
     expect(byName('FontName').editor).toBe('font');
@@ -357,7 +361,7 @@ describe('validateDesignDoc', () => {
   it('knows every section and control kind of the contract', () => {
     expect(SECTION_KINDS).toEqual(['formHeader', 'detail', 'formFooter', 'reportHeader', 'pageHeader', 'groupHeader', 'groupFooter', 'pageFooter', 'reportFooter']);
     expect(CONTROL_KINDS).toEqual(['label', 'textBox', 'checkBox', 'optionGroup', 'optionButton', 'comboBox', 'listBox', 'commandButton', 'subform',
-      'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'toggleButton', 'navigationControl', 'chart']);
+      'image', 'line', 'rectangle', 'pageBreak', 'tabControl', 'toggleButton', 'navigationControl', 'chart', 'attachment']);
   });
 });
 
@@ -372,9 +376,9 @@ describe('chart control (F4)', () => {
     const rows = (n: string) => PROPERTY_CATALOG.find((p) => p.name === n)!;
     expect(rows('ChartType')).toMatchObject({ tab: 'format', editor: 'enum', default: 'columnClustered', appliesTo: ['chart'],
       options: ['columnClustered', 'columnStacked', 'columnStacked100', 'barClustered', 'barStacked', 'barStacked100', 'line', 'lineStacked', 'lineStacked100', 'area', 'areaStacked', 'areaStacked100', 'pie', 'radar', 'radarFilled', 'combo',
-        'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall'] });
+        'doughnut', 'arc', 'scatter', 'bubble', 'boxWhisker', 'funnel', 'pareto', 'waterfall', 'wordCloud'] });
     expect(rows('ChartType').options).toEqual(CHART_TYPES);
-    expect(rows('ChartType').options).toHaveLength(24);
+    expect(rows('ChartType').options).toHaveLength(25);
     expect(rows('DoughnutHoleSize')).toMatchObject({ tab: 'format', editor: 'number', default: 55, min: 20, max: 90, integer: true, appliesTo: ['chart'] });
     expect(rows('BubbleMaxSize')).toMatchObject({ tab: 'format', editor: 'number', default: 40, min: 10, max: 100, integer: true, appliesTo: ['chart'] });
     for (const [n, d] of [['WaterfallIncreaseColor', 'theme:accent1'], ['WaterfallDecreaseColor', 'theme:accent2'], ['WaterfallTotalColor', 'theme:accent3']] as const) expect(rows(n)).toMatchObject({ tab: 'format', editor: 'color', default: d, appliesTo: ['chart'] });
@@ -419,7 +423,7 @@ describe('F3 catalog: picture type', () => {
     const t = ['form', 'report', 'image', 'commandButton'];
     const type = PROPERTY_CATALOG.find((d) => d.name === 'PictureType')!;
     expect(type.editor).toBe('enum');
-    expect(type.options).toEqual(['embedded', 'shared']);
+    expect(type.options).toEqual(['embedded', 'shared', 'linked']);
     expect(type.default).toBe('embedded');
     expect([...type.appliesTo].sort()).toEqual([...t].sort());
     expect([...PROPERTY_CATALOG.find((d) => d.name === 'Picture')!.appliesTo].sort()).toEqual([...t].sort());

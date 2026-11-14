@@ -79,7 +79,8 @@ describe('picture type and resolution', () => {
   it('readPictureType', () => {
     expect(readPictureType('shared')).toBe('shared');
     expect(readPictureType('embedded')).toBe('embedded');
-    expect(readPictureType('linked')).toBe('embedded');
+    expect(readPictureType('linked')).toBe('linked');
+    expect(readPictureType('other')).toBe('embedded');
     expect(readPictureType(undefined)).toBe('embedded');
   });
   it('resolvePicture', () => {

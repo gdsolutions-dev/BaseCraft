@@ -1,6 +1,7 @@
 // Types du moteur d'états (pur) : police et bordure d'un contrôle, modèle de page (LaidOutReport), environnement de mise en
 // page et points d'accroche des événements (étape B).
 import type { SqlValue } from '../coerce';
+import type { AttachmentFace } from '../attachments';
 import type { SectionKind } from '../design/model';
 import type { Value } from '../expr/ast';
 import type { SourceField } from '../record-source';
@@ -37,7 +38,8 @@ export interface LaidOutBand { section: SectionKind; groupLevel?: number; top: n
   back: string | null; repeated?: true; continued?: true; items: LaidOutItem[] }
 export interface LaidOutPage { number: number; bands: LaidOutBand[] }
 export interface LaidOutReport { background?: PictureSpec; width: number; height: number; pages: LaidOutPage[]; issues: ReportIssue[] }
-export interface ReportData { fields: SourceField[]; rows: SqlValue[][] }
+/** `attachments`: the first file of each row's cell of an Attachment column, by field name, parallel to `rows` (what an Attachment control prints). */
+export interface ReportData { fields: SourceField[]; rows: SqlValue[][]; attachments?: Record<string, (AttachmentFace | null)[]> }
 /** `flow`: one unbounded page (Layout view): no page breaks, Keep Together or Force New Page; the Page Header once after the
  *  Report Header, the Page Footer once after the Report Footer; [Page] and [Pages] read 1; the height is the content's. */
 export interface LayoutOpts { flow?: boolean }

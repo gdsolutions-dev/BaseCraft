@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import ExcelJS from 'exceljs';
+import { writeXlsx } from './fixtures/xlsx-fixture';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -87,12 +87,7 @@ test('text import: AutoIndex pre-fills, renames, manual choice kept, no header, 
 
 test('Excel import: AutoIndex on the header row', async () => {
   const xlsx = join(mkdtempSync(join(tmpdir(), 'basecraft-autoindex-')), 'Clients.xlsx');
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Clients');
-  ws.addRow(['NumClient', 'Nom', 'Ville', 'CodePostal']);
-  ws.addRow([1, 'Dupont', 'Paris', '75001']);
-  ws.addRow([2, 'Martin', 'Lyon', '69001']);
-  await wb.xlsx.writeFile(xlsx);
+  await writeXlsx(xlsx, [{ name: 'Clients', rows: [['NumClient', 'Nom', 'Ville', 'CodePostal'], [1, 'Dupont', 'Paris', '75001'], [2, 'Martin', 'Lyon', '69001']] }]);
   const { app, page } = await launchApp({ args: [seedBase('import-autoindex-xl')], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_EXCEL_PATH: xlsx } });
   try {
     await toFields(page, 'importExcel', true);

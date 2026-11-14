@@ -241,6 +241,7 @@ describe('object library', () => {
   }
   const imp = `from basecraft.objects import forms, reports, me, screen, docmd, tempvars, app
 from basecraft.data import db
+from basecraft.errors import BaseCraftError
 def err(exc, f):
     try:
         f()
@@ -329,6 +330,54 @@ def err(exc, f):
     expect(run(imp + 'db.execute("DELETE FROM T", {"p": 1})')).toBe(7)
     expect(sent('db.execute')).toEqual([['DELETE FROM T', { p: 1 }]])
     expect(run("import basecraft.modules as m\n'pandas' in m.deps(code='x = rs.to_pandas()')")).toBe(true)
+  })
+
+  it('an Attachment field reads as a list of attachments with data and save_to', () => {
+    table({
+      'db.open': { handle: 3, fields: [{ name: 'Nom', type: 'shortText' }, { name: 'Pieces', type: 'attachment' }], updatable: true, total: 2 },
+      'db.page': (a: unknown[]) => { const [, off, lim] = a as number[]; return { rows: [['A', 2], ['B', null]].slice(off, off + lim), rowids: [10, 11].slice(off, off + lim), total: 2 } },
+      'db.attachments': [{ id: 5, name: 'a.txt', type: 'txt', bytes: 2 }, { id: 6, name: 'b.png', type: 'png', bytes: 1 }],
+      'db.attachmentData': 'QUI=',
+      'db.attachmentSave': null
+    })
+    run(imp + 'rs = db.open_recordset("Clients"); files = rs["pieces"]')
+    expect(run(imp + '[(f.name, f.type, f.size) for f in files]').toJs()).toEqual([['a.txt', 'txt', 2], ['b.png', 'png', 1]])
+    expect(sent('db.attachments')).toEqual([[3, 10, 'Pieces']])
+    expect(run(imp + 'files[0].data == b"AB"')).toBe(true)
+    run(imp + 'files[0].data; files[0].data')   // read once
+    expect(sent('db.attachmentData')).toEqual([[3, 10, 'Pieces', 5]])
+    run(imp + 'files[1].save_to("C:/out/b.png")')
+    expect(sent('db.attachmentSave')).toEqual([[3, 10, 'Pieces', 6, 'C:/out/b.png']])
+    expect(run(imp + 'rs.move_next(); rs["Pieces"]').toJs()).toEqual([])   // no files: no call
+    expect(sent('db.attachments')).toHaveLength(1)
+    expect(run(imp + 'next(iter(rs)).to_dict()["Pieces"]')).toBe(2)   // the plain dict keeps the count
+  })
+
+  it('DAO-style recordset cursor', () => {
+    const data = [{ id: 1, n: 'a' }, { id: 2, n: 'b' }, { id: 3, n: 'c' }]
+    table({
+      'db.open': () => ({ handle: 1, fields: [{ name: 'n', type: 'text' }], updatable: true, total: data.length }),
+      'db.page': (a: unknown[]) => { const [, off, lim] = a as number[]; const r = data.slice(off, off + lim); return { rows: r.map((x) => [x.n]), rowids: r.map((x) => x.id), total: data.length } },
+      'db.save': (a: unknown[]) => { const [, id, v] = a as [number, number | null, { n: string }]; if (id === null) data.push({ id: 9, n: v.n }); else data.find((x) => x.id === id)!.n = v.n; return null },
+      'db.delete': (a: unknown[]) => { data.splice(data.findIndex((x) => x.id === (a as number[])[1]), 1); return null }
+    })
+    expect(run(imp + `rs = db.open_recordset("T")
+out = []
+while not rs.eof:
+    out.append(rs["n"])
+    rs.move_next()
+out + [rs.record_count]`).toJs()).toEqual(['a', 'b', 'c', 3])
+    expect(run(imp + `rs.move_first(); rs.edit(); rs["N"] = "A"; mid = rs["n"]; rs.update(); [mid, rs["n"]]`).toJs()).toEqual(['A', 'A'])
+    expect(data[0]!.n).toBe('A')
+    run(imp + 'rs.add_new(); rs["n"] = "d"; rs.update()')
+    expect(data.map((x) => x.n)).toEqual(['A', 'b', 'c', 'd'])
+    expect(run(imp + 'rs.record_count')).toBe(4)
+    expect(run(imp + 'err(BaseCraftError, lambda: rs.__setitem__("n", 1))').slice(0, 6)).toBe('Update')
+    expect(run(imp + 'rs.move_first(); rs.edit(); rs["n"] = "x"; rs.cancel_update(); rs["n"]')).toBe('A')
+    expect(run(imp + `rs.move_first(); rs.delete(); rs.move_next(); [rs["n"], rs.record_count]`).toJs()).toEqual(['b', 3])
+    expect(data.map((x) => x.n)).toEqual(['b', 'c', 'd'])
+    expect(run(imp + 'rs.move_last(); rs.move_next(); [rs.eof, rs.bof]').toJs()).toEqual([true, false])
+    expect(run(imp + 'rs.move_first(); rs.move_previous(); [rs.bof, rs.eof]').toJs()).toEqual([true, false])
   })
 
   describe('recordset iteration with changes', () => {

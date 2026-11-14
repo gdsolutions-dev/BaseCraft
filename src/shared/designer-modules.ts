@@ -25,10 +25,10 @@ export const DESIGNER_MODULES: readonly string[] = [
   `${R}data-macros/data-macros.tsx`,
   `${R}datasheet/EditListDialog.tsx`,
   `${R}shell/CurrentDatabaseOptions.tsx`,
-  `${R}links/AccessImportDialog.tsx`, `${R}links/LinkDialog.tsx`, `${R}links/LinkedTableManager.tsx`, `${R}links/SplitDialog.tsx`, `${R}links/ServerLinkDialog.tsx`,
+  `${R}links/AccessImportDialog.tsx`, `${R}links/LinkDialog.tsx`, `${R}links/LinkedTableManager.tsx`, `${R}links/SplitDialog.tsx`, `${R}links/ServerLinkDialog.tsx`, `${R}links/OdbcImportDialog.tsx`,
   `${R}links/MigrateWizard.tsx`, `${R}links/migrate-report.ts`,
-  `${R}python/ImmediateWindow.tsx`, `${R}python/FunctionBuilder.tsx`, `${R}designer/ChooseBuilder.tsx`, `${R}designer/hyperlink-item.ts`, `${R}designer/ConditionsDialog.tsx`, `${R}python/ModuleEditorView.tsx`, `${R}python/module-menu.ts`,
+  `${R}python/ImmediateWindow.tsx`, `${R}python/FunctionBuilder.tsx`, `${R}designer/ChooseBuilder.tsx`, `${R}designer/code-module.ts`, `${R}designer/view-code.ts`, `${R}designer/convert-events.ts`, `${R}designer/convert-events-run.ts`, `${R}designer/hyperlink-item.ts`, `${R}designer/ConditionsDialog.tsx`, `${R}python/ModuleEditorView.tsx`, `${R}python/module-menu.ts`,
   ...['ThemeGallery', 'ColorsGallery', 'CustomizeColorsDialog', 'FontsGallery', 'CustomizeFontsDialog', 'ColorPicker'].map((m) => `${R}designer/${m}.tsx`), ...['open-designs', 'theme-gallery-model', 'scheme-gallery-model', 'color-picker-model'].map((m) => `${R}designer/${m}.ts`),
   ...['ChartSettings', 'ChartSeriesFormat', 'ColorEditor', 'ChartTypePopup', 'chart-pane'].map((m) => `${R}designer/${m}.tsx`), `${R}designer/chart-settings-model.ts`,
-  `${R}design/entry.ts`, `${R}design/shell-design-commands.ts`,
+  `${R}design/entry.ts`, `${R}design/shell-design-commands.ts`, `${R}design/templates.ts`,
 ];

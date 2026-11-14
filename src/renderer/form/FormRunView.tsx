@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState, us
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CellInput, SqlValue } from '../../shared/coerce';
+import { shortcutFor } from '../../shared/design/access-keys';
 import { flattenControls, type ControlDef, type DesignDoc } from '../../shared/design/model';
 import { effectiveProp } from '../../shared/design/properties';
 import { DocThemeProvider, useAppMode } from '../design/theme-context';
@@ -35,7 +36,7 @@ import type { DocViewProps } from '../shell/DocumentTabs';
 import type { DocMode, OpenArgs } from '../state/app-state';
 import { bcErrorCode, errorMessage, useErrorDialog, useModal, type ModalApi } from '../shell/Modal';
 import { askWriteConflict, recordText, showRecordDeleted, type ConflictChoice } from '../shell/WriteConflictDialog';
-import { registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
+import { commandAnchor, registerCommandStates, registerCommands, registerModeGuard, type CommandId } from '../shell/ribbon-model';
 import { flashStatus } from '../shell/StatusBar';
 import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
 import { fromStored, toStored } from '../../shared/expr/evaluate';
@@ -557,6 +558,20 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       : el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [role="radio"][tabindex="0"]') ?? el.querySelector<HTMLElement>('[role="radio"]'));
     target?.focus();
   };
+  // Alt + a caption's shortcut key (« &Nom »): a button is clicked, a control whose label has the key gets the focus
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.key.length !== 1) return;
+      const hit = shortcutFor(doc, e.key);
+      if (!hit) return;
+      e.preventDefault(); e.stopPropagation();
+      if (hit.button) ownOne<HTMLElement>(`[data-ctl="${CSS.escape(hit.target)}"]`)?.click(); else focusCtl(hit.target);
+    };
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  });
   /** Now, and once rendered (the box gives the focus back on closing), unless another dialog has taken it meanwhile. */
   const focusBack = (n: string) => {
     focusCtl(n);
@@ -895,7 +910,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     await applyFilter(next);
   };
   const menuAt = (id: CommandId) => {
-    const r = document.querySelector(`[data-testid="cmd-${id}"]`)?.getBoundingClientRect() ?? root.current?.getBoundingClientRect();
+    const r = commandAnchor(id)?.getBoundingClientRect() ?? root.current?.getBoundingClientRect();
     return { x: r?.left ?? 0, y: r?.bottom ?? 0 };
   };
   const fd = (f: SourceField): FieldDef => ({ name: f.name, props: f.props });
@@ -934,14 +949,15 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     if (criteria !== null) await setCriteria(at.f.name, criteria);
   };
   /** Home › Filter on the focused bound control: the column menu with its field's list (R14), under the form's other criteria. */
-  const filterMenu = async () => {
+  const filterMenu = async (header?: { control: string; x: number; y: number }) => {
+    if (header) lastFocused.current = header.control;   // a column header's drop-down (Datasheet view): that column's field, as the focused one
     const at = focusedField();
     const ref = doc.recordSource;
     if (!at || !ref || !(await attempt(() => records.save()))) return;
     const info = records.snapshot.info;
     if (!info) return;
     const read = records.valuesReader(at.f.name) ?? (() => Promise.reject(new Error('bc:noRecords'))); // no records read: no list
-    setMenu(await fieldMenu(fd(at.f), menuAt('filter'), { ref, info, col: info.fields.indexOf(at.f), read,
+    setMenu(await fieldMenu(fd(at.f), header ?? menuAt('filter'), { ref, info, col: info.fields.indexOf(at.f), read,
       shown: (v) => controlTexts(at.c, at.f, v, undefined, display).display,
       criteria: filterRef.current.items.find((x) => sameName(x.field, at.f.name))?.criteria, built: built.current.get(at.f.name) }));
   };
@@ -1059,7 +1075,7 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     // a new or modified form run as it stands: Save saves its design once the record has nothing to save (Access)
     save: () => { const design = tabId && !records.snapshot.dirty ? unsavedDesignSave.get(tabId) : undefined; return design ? design() : attempt(() => records.save(true)); },
     sortAsc: () => sortBy('asc'), sortDesc: () => sortBy('desc'), sortClear: () => sortBy(null),
-    filter: filterMenu, filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
+    filter: () => filterMenu(), filterSelection, filterAdvanced: () => setMenu({ kind: 'advanced', ...menuAt('filterAdvanced') }), filterToggle: toggleFilter,
     refresh: () => refresh(true), find: () => { setFindTab('find'); setFinding((k) => k + 1); }, replace: () => { setFindTab('replace'); setFinding((k) => k + 1); },
   };
   /** Requery: saves first; lists read again (once: a save made by the requery has already read them). `ask` (Shift+F9, on this
@@ -1502,8 +1518,8 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       {view === 'continuous' && <ContinuousFormView doc={shown} x={x} rowCtx={rowCtx} root={root} onRow={(i) => goRow(i)} {...nav} />}
       {view === 'datasheet' && (
         <FormDatasheet columns={columns} byName={byName} x={x} rowCtx={rowCtx} root={root} focusHook={focusHook} {...nav}
-          ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf}
-          onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined}
+          ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf} onHeaderMenu={(control, at) => void filterMenu({ control, ...at })}
+          onEdited={checked} onEscape={undo} onDeleteRecord={() => { if (!ro) void deleteRecord(); }} error={sheetError} name={name} onTabOut={embed ? tabOut : undefined} onAttachments={() => void records.reload()}
           onWidths={ro || !design ? undefined : (c, px) => { dragged.current = { ...dragged.current, [c]: px }; }} />
       )}
       {richPop && (

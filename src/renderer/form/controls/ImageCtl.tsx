@@ -1,9 +1,10 @@
 // Image : <img alt={Texte d'info-bulle ?? Nom}>, ajustée selon le Mode d'affichage (clip : none, stretch : fill, zoom : contain).
 import { ImageIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { resolvePicture, type ResourceMap } from '../../../shared/pictures';
+import { pictureKey, resolvePicture, type ResourceMap } from '../../../shared/pictures';
 import { objectPosition, pictureCss, readAlignment } from '../../../shared/design/picture-css';
 import { useResource } from '../../design/resources';
+import { Caption } from '../Caption';
 import { prop } from '../run-model';
 import { tipOf, type CtlProps } from './run-ctx';
 
@@ -14,7 +15,7 @@ export const imageSource = (props: Record<string, unknown>, resources: ResourceM
 
 /** Source d'un contrôle image (formulaire ou état en Création) ; s'abonne à la galerie pour une image partagée. */
 export function useImageSource(c: CtlProps['c']): string | undefined {
-  const shared = prop(c, 'PictureType') === 'shared' && typeof prop(c, 'Picture') === 'string' ? String(prop(c, 'Picture')) : undefined;
+  const shared = pictureKey({ PictureType: prop(c, 'PictureType'), Picture: prop(c, 'Picture') });
   const data = useResource(shared);
   return imageSource({ PictureType: prop(c, 'PictureType'), Picture: prop(c, 'Picture') }, data === undefined || shared === undefined ? {} : { [shared]: data });
 }
@@ -39,7 +40,7 @@ export function ImageCtl({ c, style }: CtlProps) {
 /** Le bouton de commande en Création : l'image éventuelle avant la légende. */
 export function DesignButton({ c, style }: { c: CtlProps['c']; style: CSSProperties }) {
   const src = useImageSource(c);
-  return <div className="fz fz-text fz-button" style={style}>{src && <img src={src} alt="" className="frun-button-pic" draggable={false} />}{String(prop(c, 'Caption') ?? '')}</div>;
+  return <div className="fz fz-text fz-button" style={style}>{src && <img src={src} alt="" className="frun-button-pic" draggable={false} />}<Caption text={String(prop(c, 'Caption') ?? '')} /></div>;
 }
 
 /** L'aperçu d'un contrôle image en Création (formulaires et états) : l'image, ou le repère quand elle manque. */

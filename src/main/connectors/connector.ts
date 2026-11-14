@@ -75,7 +75,8 @@ export interface Connection {
   plan(r: ReadRequest): ReadPlan;
   count(p: ReadPlan): Promise<number>;
   rows(p: ReadPlan, offset: number, limit: number): Promise<{ rows: SqlValue[][]; refs: (string | null)[] }>;
-  insert(t: RemoteTable, values: Record<string, SqlValue>): Promise<RemoteWrite>;
+  /** `autoNumber`: an Append's values for an identity column are written (SQL Server: IDENTITY_INSERT; PostgreSQL: the sequence follows). */
+  insert(t: RemoteTable, values: Record<string, SqlValue>, opts?: { autoNumber?: boolean }): Promise<RemoteWrite>;
   update(t: RemoteTable, ref: string, values: Record<string, SqlValue>, expected?: Record<string, SqlValue>): Promise<RemoteWrite | RemoteConflict>;
   delete(t: RemoteTable, refs: string[]): Promise<DeleteResult>;
   /** C5 R16: rows of `t` whose fields equal `where` (compared as the engine's generator compares: Access semantics), at most

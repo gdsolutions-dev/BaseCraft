@@ -28,7 +28,7 @@ export interface ModelIndex { name: string; fields: { key: string; desc: boolean
 export type InvalidCode = ExprErrorCode | MaskErrorCode | 'badCount' | 'badWidths' | 'badListWidth';
 export type DesignAction =
   | { type: 'addRow'; at?: number } | { type: 'deleteRows'; indices: number[] } | { type: 'moveRow'; from: number; to: number }
-  | { type: 'setName'; index: number; name: string } | { type: 'commitName'; index: number; autoIndex: string } | { type: 'setType'; index: number; fieldType: FieldType }
+  | { type: 'setName'; index: number; name: string } | { type: 'commitName'; index: number; autoIndex: string } | { type: 'setType'; index: number; fieldType: FieldType; /** a Calculated field's Result Type: the expression stays (any other change of type drops it) */ keepCalculated?: true }
   | { type: 'setDescription'; description: string } // the table's, set from the Properties dialog: not an edit of this design
   | { type: 'setTableProp'; name: 'description' | 'validationRule' | 'validationText'; value: string | undefined } // Property Sheet
   | { type: 'setIndexes'; design: TableDesign } // the Indexes dialog's answer over designOf(m): one field per row, in order
@@ -127,14 +127,15 @@ export function designReducer(m: DesignModel, a: DesignAction, d: FieldDefaults 
       const r = rows[a.index];
       if (!r) return m;
       const typed = edit(a.index, (p) => {
-        const next = changeType(p, a.fieldType);
+        const { calculated, ...plain } = p;
+        const next = changeType(a.keepCalculated && calculated ? p : plain, a.fieldType);
         // R7: an AutoNumber is the table's key (changeType itself stays literal).
         if (a.fieldType === 'autoNumber') return { ...next, primaryKey: true, indexed: 'yesNoDuplicates' };
         return a.fieldType === 'shortText' ? { ...next, size: d.textSize } : a.fieldType === 'number' ? { ...next, numberSize: d.numberSize } : next;
       });
       // An unreadable entry of a property the new type does not have is gone with its control: it must not block the save.
       const props = typed.rows[a.index]!.props;
-      const gone = (prop: string) => (prop === 'inputMask' ? !MASK_TYPES.includes(a.fieldType) : a.fieldType === 'autoNumber' || hiddenLookup(props, prop));
+      const gone = (prop: string) => (prop === 'calculated' ? !a.keepCalculated : prop === 'inputMask' ? !MASK_TYPES.includes(a.fieldType) : a.fieldType === 'autoNumber' || hiddenLookup(props, prop));
       const invalid = Object.fromEntries(Object.entries(m.invalid).filter(([k]) => !(k.startsWith(`${r.key}:`) && gone(k.slice(r.key.length + 1)))));
       return { ...typed, invalid };
     }

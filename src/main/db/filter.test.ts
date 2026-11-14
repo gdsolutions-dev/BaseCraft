@@ -28,7 +28,7 @@ let db: DatabaseSync;
 beforeEach(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bcfilter-'));
   const p = path.join(dir, 'test.basecraft');
-  createBaseFile(p, '0.0.0');
+  createBaseFile(p, '0.0.0', 'legacy'); // the list order this file pins is the legacy one
   db = openBaseFile(p, 'write', '0.0.0').db;
   createTable(db, clients);
   createTable(db, T);

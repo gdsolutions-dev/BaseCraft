@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basecraftCompletions, type CompletionCatalog } from './completions'
+import { basecraftCompletions, typedWordOk, type CompletionCatalog } from './completions'
 
 const cat: CompletionCatalog = {
   forms: ['Clients', 'Orders'], reports: ['Invoice'], tables: ['T1'], queries: ['Q1'], macros: ['M1'],
@@ -32,5 +32,15 @@ describe('basecraftCompletions', () => {
   it('nothing elsewhere', () => {
     expect(basecraftCompletions('x = 1', cat)).toBeNull()
     expect(basecraftCompletions('print("hello', cat)).toBeNull()
+  })
+})
+
+describe('typedWordOk', () => {
+  it('needs 2 identifier characters, not a declared name', () => {
+    expect(typedWordOk('pr')).toBe(true)
+    expect(typedWordOk('x = p')).toBe(false)
+    expect(typedWordOk('def fo')).toBe(false)
+    expect(typedWordOk('class Cu')).toBe(false)
+    expect(typedWordOk('  rs = db.op')).toBe(true)
   })
 })

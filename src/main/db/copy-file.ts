@@ -61,7 +61,7 @@ export function vacuumInto(db: DatabaseSync, target: string, deps: CopyDeps = {}
  * reopened): the backup would repeat it, and is removed.
  */
 export async function compactBase(
-  s: { db(): DatabaseSync; path: string; reopen(): void; close(): void }, deps: CopyDeps & { now?: Date } = {},
+  s: { db(): DatabaseSync; path: string; reopen(): void; close(): void; beforeCopy?(): void }, deps: CopyDeps & { now?: Date } = {},
 ): Promise<CompactResult> {
   const rename = deps.rename ?? fs.renameSync;
   const problems = (deps.check ?? integrityProblems)(s.db());
@@ -75,6 +75,7 @@ export async function compactBase(
   }
   const tmp = `${s.path}.compact`;
   try {
+    s.beforeCopy?.(); // after the backup, before the copy
     vacuumInto(s.db(), tmp, deps);
   } catch (e) {
     if (problems.length) return { ok: false, reason: 'corrupt', problems, backupPath };

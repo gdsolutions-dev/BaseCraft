@@ -9,7 +9,7 @@ import { saveStartupOptions } from '../../src/main/db/startup';
 import { DEFAULT_STARTUP } from '../../src/shared/startup';
 import { f, t } from '../../src/shared/test-fixtures';
 import type { DesignDoc } from '../../src/shared/design/model';
-import { inFile, launchApp, layoutFromDom, seedBase } from './helpers';
+import { inFile, launchApp, layoutFromDom, seedBase, expectSql, editorText } from './helpers';
 
 // C6 pass-through queries on the fake connector (BASECRAFT_E2E_FAKE_SERVER=1, host.ts: password 'secret'; any text answers
 // Texte, Nom, Ville). Design (Task 5) and running (Task 6).
@@ -77,7 +77,7 @@ test('C6 R10: Pass-Through turns a new query into SQL view, kept as typed; Desig
     await page.getByTestId('doc-tab-close-query-PAgg').click();
     await page.getByTestId('nav-item-query-PAgg').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
-    await expect(sqlBox(page)).toHaveValue(text);
+    await expectSql(sqlBox(page), text);
     await expect(page.getByTestId('status-view-design')).toBeDisabled();
     await page.getByTestId('cmd-propertySheet').click();
     await expect(page.getByTestId('pt-props-returnsRecords')).toHaveValue('no');

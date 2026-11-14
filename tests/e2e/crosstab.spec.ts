@@ -7,7 +7,7 @@ import { saveObject } from '../../src/main/db/objects';
 import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import type { BasecraftApi } from '../../src/shared/api';
 import type { ControlDef, DesignDoc } from '../../src/shared/design/model';
-import { launchApp, SALES_QUERIES, seedBase, seedForm, pickView } from './helpers';
+import { launchApp, SALES_QUERIES, seedBase, seedForm, pickView, expectSql, editorText } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -89,9 +89,9 @@ test('Query Design › Crosstab: the Crosstab row, a read-only datasheet, Column
     await page.getByTestId('status-view-design').click();
     await pickView(page, 'viewSql');
     const sql = doc(page).getByTestId('query-sql');
-    await expect(sql).toHaveValue(/^TRANSFORM Sum\(\[Commandes\]\.\[Montant\]\)\n/);
+    await expectSql(sql, /^TRANSFORM Sum\(\[Commandes\]\.\[Montant\]\)\n/);
     // an expression column keeps its names as typed (A3): [Le] stays unqualified
-    await expect(sql).toHaveValue(/\nPIVOT Month\(\[Le\]\) AS \[Mois\];$/);
+    await expectSql(sql, /\nPIVOT Month\(\[Le\]\) AS \[Mois\];$/);
     await page.getByTestId('status-view-design').click();
     await expect(doc(page).getByTestId('qbe-cell-field-0')).toHaveValue('Nom');
     for (const [i, field, total, role] of [[0, 'Nom', 'groupBy', 'rowHeading'], [1, /^Total: /, 'sum', 'rowHeading'],

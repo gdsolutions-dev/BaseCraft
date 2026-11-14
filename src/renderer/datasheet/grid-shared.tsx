@@ -5,8 +5,9 @@ import {
 } from '@glideapps/glide-data-grid';
 import {
   AlignLeft, ArrowDown, ArrowUp, Calendar, Coins, Funnel, Hash, Link, ListOrdered, Pencil, SquareCheck, Type, type LucideIcon,
+  Paperclip,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { FieldType } from '../../shared/field-types';
 import { currentSettings } from '../settings-store';
@@ -22,7 +23,7 @@ export const cellSelection = (col: number, row: number): GridSelection =>
 export const rowOf = (s: GridSelection): number | null => s.current?.cell[1] ?? s.rows.first() ?? null;
 
 const TYPE_ICON: Record<FieldType, LucideIcon> = {
-  autoNumber: ListOrdered, shortText: Type, longText: AlignLeft, number: Hash, currency: Coins, dateTime: Calendar, yesNo: SquareCheck, hyperlink: Link,
+  autoNumber: ListOrdered, shortText: Type, longText: AlignLeft, number: Hash, currency: Coins, dateTime: Calendar, yesNo: SquareCheck, hyperlink: Link, attachment: Paperclip,
 };
 // Glide draws header icons from SVG strings: lucide icons, in the colour Glide gives for the header's state.
 const sprite = (Icon: LucideIcon) => ({ bgColor }: { bgColor: string }) => renderToStaticMarkup(<Icon size={20} color={bgColor} strokeWidth={1.75} />);
@@ -96,6 +97,7 @@ export interface EditKeysEnv {
   cols(): number; rows(): number;            // rows: the new record's row included when it can be added
   moveTo(item: Item): void;                  // the grid's own selection path (a row change saves the row first)
   pastEnd?(dir: 1 | -1): boolean;            // FormDatasheet in a subform: onTabOut
+  busy?(): boolean;                          // a row is being saved: the cells are read-only, the keys typed meanwhile are kept (the returned `release` sends them)
 }
 let owner: HTMLElement | null = null; // the grid that had the focus or a click last: its editor's keys are its own (#portal is shared)
 
@@ -103,16 +105,50 @@ let owner: HTMLElement | null = null; // the grid that had the focus or a click 
  *  selected cell; through editKey / nextCell. Glide's selected cell is navigation mode, its open editor edit mode. Not taken:
  *  keys while an IME composes, the lookup editor's but plain Enter and Tab (F2 and its list's), Up / Down (Glide's records), Space (opens the editor). Typing
  *  with « Champ entier » is Glide's; « é » and the like open the editor through openEditorWith (Glide's types ASCII only). */
-export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKeysEnv>): void {
+export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKeysEnv>): () => void {
+  const held = useRef<KeyboardEvent[]>([]), releasing = useRef(false), replayed = useRef(new WeakSet<Event>()), moving = useRef(false);
+  /** Once the row is saved: the characters held go to the selected cell in one go (its editor opened by them), then Enter or Tab as typed. */
+  const release = () => {
+    const w = wrap.current, keys = held.current;
+    if (!w || !keys.length || releasing.current) return;
+    if (document.querySelector('[aria-modal="true"]')) { keys.length = 0; return; }
+    releasing.current = true;   // the keys typed from now on queue behind these   // the save was refused: nothing is typed on the row back
+    const inGrid = (a: Element | null): a is Element => !!a && w.contains(a) && a.closest('[data-testid="data-grid-canvas"]') !== null;
+    const rest = (opens: boolean, tries = 0) => {   // Enter, Tab: to the editor the characters opened
+      const k = keys[0];
+      if (!k) { releasing.current = false; return; }
+      const at = openEntry() ?? (opens ? null : inGrid(document.activeElement) ? document.activeElement : null);
+      if (!at && tries < 40) { setTimeout(() => rest(opens, tries + 1), 5); return; }
+      keys.shift();
+      const again = new KeyboardEvent('keydown', { key: k.key, code: k.code, shiftKey: k.shiftKey, bubbles: true, cancelable: true });
+      replayed.current.add(again);
+      (at ?? document.body).dispatchEvent(again);
+      setTimeout(() => go(), 20);   // ponytail: a fixed gap; Glide gives no event when a move is done; then wait for the cell reached
+    };
+    const go = (tries = 0) => {   // tries: up to 2 s (a row save, then Glide's focus)   // the grid renders unlocked, then Glide focuses the cell
+      const at = document.activeElement, c = env.current?.selected()?.cell;
+      if (!(inGrid(at) && !env.current?.busy?.() && (!c || at.getAttribute('data-testid') === `glide-cell-${c[0] + 1}-${c[1]}`)) && tries < 400) { setTimeout(() => go(tries + 1), 5); return; }   // the selected cell focused
+      let text = '';
+      while (keys[0]?.key.length === 1) text += keys.shift()!.key;
+      if (!text && !keys.length) { releasing.current = false; return; }
+      if (text && at) { const b = currentSettings().enterFieldBehavior; editCellFrom(at, b === 'selectAll' ? 'all' : b, text); }
+      rest(!!text);
+    };
+    go();
+  };
   useEffect(() => {
     // a click too: a click on the selected cell opens its editor, the focus going straight to it
     const onFocus = (e: Event) => { if (wrap.current?.contains(e.target as Node)) owner = wrap.current; };
     const onKey = (e: KeyboardEvent) => {
       const w = wrap.current, g = env.current, target = e.target;
       // untrusted: our own synthetic keys (openEditorWith, editCellFrom, the commit fix's)
-      if (!e.isTrusted || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !w || !g || !(target instanceof Element)) return;
+      if (!(e.isTrusted || replayed.current.has(e)) || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !w || !g || !(target instanceof Element)) return;
       // the grid took the focus back while its editor stays open (a late focus() after a click opened it): the key is the
       // editor's, never Glide's type-to-edit (which keeps the editor's first text and drops this key)
+      if (!replayed.current.has(e) && (g.busy?.() || releasing.current || moving.current) && (moving.current || target.closest('[data-testid="data-grid-canvas"]')) && (e.key.length === 1 || e.key === 'Enter' || e.key === 'Tab' || (moving.current && e.key.startsWith('Arrow'))) && e.ctrlKey === e.altKey && !e.metaKey) {
+        e.preventDefault(); e.stopImmediatePropagation(); held.current.push(e);   // a row being saved: kept, sent when it is done
+        return;
+      }
       const stray = owner === w && w.contains(target) && target.closest('[data-testid="data-grid-canvas"]') ? openEntry() : null;
       const t: Element = stray ?? target;
       if (stray) {
@@ -167,7 +203,11 @@ export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKey
       };
       // an open editor: saved first, one timeout later (after the timeouts of the keys typed just before, as the commit fix);
       // closed meanwhile (a click on another cell came first), the click has moved: not this key
-      if (editing) setTimeout(() => { if (cellEditorOpen()) { flushCellEditor(); move(); } }, 0);
+      // one queue for every pending move: the keys typed meanwhile (a scanner) are held and typed, in order, in the cell reached
+      if (editing) {
+        moving.current = true;
+        setTimeout(() => { moving.current = false; if (cellEditorOpen()) { flushCellEditor(); move(); } release(); }, 0);
+      }
       else move();
     };
     document.addEventListener('focusin', onFocus);
@@ -180,6 +220,7 @@ export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKey
       if (owner === wrap.current) owner = null;
     };
   }, []);
+  return release;
 }
 
 /** A character, Backspace or Delete applied to the focused entry as typed there (execCommand, as editCellFrom); other keys left. */

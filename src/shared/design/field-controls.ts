@@ -25,7 +25,7 @@ const lookupOf = (f: SourceField) => (LOOKUP_TYPES.includes(f.type) ? f.props.lo
 export function controlKindFor(f: SourceField): ControlKind {
   const l = lookupOf(f);
   if (l && (l.kind === 'values' || (l.kind === 'table' && l.boundField === undefined))) return l.displayControl === 'listBox' ? 'listBox' : 'comboBox';
-  return f.type === 'yesNo' ? 'checkBox' : 'textBox';
+  return f.type === 'yesNo' ? 'checkBox' : f.type === 'attachment' ? 'attachment' : 'textBox';
 }
 
 /** L'onglet Liste de choix (A2) recopié tel quel, seulement les clés que le champ a. */
@@ -51,11 +51,12 @@ export function boundControlWithLabel(doc: DesignDoc, f: SourceField, at: { sect
   const kind = controlKindFor(f);
   const name = uniqueName(doc, f.name.replace(/[.!`[\]]/g, '_')); // colonne d'une jointure (« Clients.N° ») : pas de « . » dans un nom de contrôle
   const width = kind === 'checkBox' ? 284 : 2268;
+  const height = kind === 'attachment' ? 1134 : HEIGHT;   // 2 cm: a picture or an icon of the file
   // la section s'agrandit au dépôt (fit, dans le réducteur) ; le contrôle reste dans la limite d'Access
-  const left = Math.min(Math.max(at.left, LABEL_WIDTH), MAX_TWIPS - width), top = Math.min(Math.max(0, at.top), MAX_TWIPS - HEIGHT);
+  const left = Math.min(Math.max(at.left, LABEL_WIDTH), MAX_TWIPS - width), top = Math.min(Math.max(0, at.top), MAX_TWIPS - height);
   const tabIndex = nextTabIndex(doc.sections[at.section]);
   const label: ControlDef = { kind: 'label', name: uniqueName(doc, `${name}_${opts.labelSuffix}`), left: left - LABEL_WIDTH, top, width: LABEL_WIDTH - LABEL_GAP,
     height: HEIGHT, props: { Caption: `${f.props.caption || f.name}:` } };
-  return [{ kind, name, left, top, width, height: HEIGHT,
+  return [{ kind, name, left, top, width, height,
     props: { ControlSource: f.name, ...(opts.objectKind === 'form' ? { TabIndex: tabIndex } : {}), ...lookupProps(f, kind) }, children: [label] }];
 }

@@ -98,13 +98,12 @@ export default defineConfig(({ mode }) => {
   const outDir = (part: string) => (runtime ? { outDir: `out-runtime/${part}` } : {});
   return {
     // db-host: the data process (utilityProcess.fork of out/main/db-host.js), the only one that opens SQLite
-    // exceljs and mdb-reader (C2, Access files) are bundled (the packaged app has no node_modules)
+    // jszip (xlsx, thmx) and mdb-reader (C2, Access files) are bundled (the packaged app has no node_modules)
     // pg (C4) and tedious (C5) are bundled too, each in its own chunk loaded on first use (lazyDriverGuard)
-    main: { define, plugins: [pythonAssets, lazyDriverGuard, ...(runtime ? [runtimeStage] : [])], build: { ...outDir('main'), externalizeDeps: { exclude: ['exceljs', 'mdb-reader', 'pg', 'tedious'] }, rollupOptions: {
+    main: { define, plugins: [pythonAssets, lazyDriverGuard, ...(runtime ? [runtimeStage] : [])], build: { ...outDir('main'), externalizeDeps: { exclude: ['jszip', 'mdb-reader', 'pg', 'tedious'] }, rollupOptions: {
       input: { index: 'src/main/index.ts', 'db-host': 'src/main/db-host/host.ts' },
-      // unzipper (exceljs) requires it lazily, only for Open.s3_v3, which BaseCraft never calls
       // pg requires pg-native (native bindings) only through its `native` getter, which BaseCraft never reads
-      external: ['@aws-sdk/client-s3', 'pg-native'],
+      external: ['pg-native'],
     } } },
     // sandbox: true impose un preload empaqueté en CJS
     preload: { define, build: { ...outDir('preload'), rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].js' } } } },

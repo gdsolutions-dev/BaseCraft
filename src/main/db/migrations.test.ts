@@ -19,7 +19,7 @@ afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 const tableExists = (db: DatabaseSync, name: string): boolean =>
   !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(name);
 
-const DROP_13 = 'DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources;'; // what formats 1.3 and 1.4 added
+const DROP_13 = 'DROP TABLE bc_attachments; DROP TABLE bc_resources; DROP TABLE bc_links; DROP TABLE bc_sources;'; // what formats 1.3 to 1.5 added
 /** A real 1.0 file as A1 wrote it: no bc_relations, format_minor 0, with a table in it. */
 function make10(file: string): void {
   createBaseFile(file, '0.1.0');
@@ -55,29 +55,29 @@ function make12(file: string): void {
   raw.close();
 }
 
-describe('format 1.4', () => {
-  it('current format is 1.4 and MIGRATIONS ends there', () => {
-    expect(CURRENT_FORMAT).toEqual({ major: 1, minor: 4 });
-    expect(MIGRATIONS.map((m) => [m.toMajor, m.toMinor])).toEqual([[1, 1], [1, 2], [1, 3], [1, 4]]);
+describe('format 1.5', () => {
+  it('current format is 1.5 and MIGRATIONS ends there', () => {
+    expect(CURRENT_FORMAT).toEqual({ major: 1, minor: 5 });
+    expect(MIGRATIONS.map((m) => [m.toMajor, m.toMinor])).toEqual([[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]]);
   });
 
-  it('a new base is 1.4 with bc_relations, bc_objects, bc_sources, bc_links and bc_resources', () => {
+  it('a new base is 1.5 with bc_relations, bc_objects, bc_sources, bc_links and bc_resources', () => {
     createBaseFile(p, '0.2.0');
     const b = openBaseFile(p, 'write', '0.2.0');
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5 });
     expect(b.migrated).toBe(false);
-    for (const t of ['bc_relations', 'bc_objects', 'bc_sources', 'bc_links', 'bc_resources']) expect(tableExists(b.db, t)).toBe(true);
+    for (const t of ['bc_relations', 'bc_objects', 'bc_sources', 'bc_links', 'bc_resources', 'bc_attachments']) expect(tableExists(b.db, t)).toBe(true);
     expect(b.db.prepare('SELECT count(*) AS n FROM bc_links').get()).toEqual({ n: 0 });
     expect(b.db.prepare('SELECT count(*) AS n FROM bc_sources').get()).toEqual({ n: 0 });
     b.db.close();
   });
 
-  it('migrates a 1.1 base to 1.4 with a backup, keeping its tables and rows', () => {
+  it('migrates a 1.1 base to 1.5 with a backup, keeping its tables and rows', () => {
     make11(p);
     const original = fs.readFileSync(p);
     const b = openBaseFile(p, 'write', '0.2.0');
     expect(b.migrated).toBe(true);
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5 });
     expect(tableExists(b.db, 'bc_objects')).toBe(true);
     expect(tableExists(b.db, 'bc_links')).toBe(true);
     expect(fs.readFileSync(b.backupPath!)).toEqual(original);
@@ -86,19 +86,19 @@ describe('format 1.4', () => {
     b.db.close();
   });
 
-  it('1.2 -> 1.4 adds bc_sources and bc_links, with a backup', () => {
+  it('1.2 -> 1.5 adds bc_sources and bc_links, with a backup', () => {
     make12(p);
     const original = fs.readFileSync(p);
     const b = openBaseFile(p, 'write', '0.2.0');
     expect(b.migrated).toBe(true);
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5 });
     for (const t of ['bc_sources', 'bc_links']) expect(b.db.prepare(`SELECT count(*) AS n FROM ${t}`).get()).toEqual({ n: 0 });
     expect(fs.readFileSync(b.backupPath!)).toEqual(original);
     expect(b.db.prepare('SELECT "Nom" FROM Clients').all()).toEqual([{ Nom: 'Dupont' }]);
     b.db.close();
   });
 
-  it('1.3 -> 1.4 adds bc_resources only, with a backup', () => {
+  it('1.3 -> 1.5 adds bc_resources and bc_attachments, with a backup', () => {
     make12(p);
     const raw = new DatabaseSync(p);
     raw.exec("UPDATE bc_meta SET value='3' WHERE key='format_minor'; CREATE TABLE bc_sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}'); CREATE TABLE bc_links (name TEXT PRIMARY KEY, source_id TEXT NOT NULL, remote_name TEXT NOT NULL, props TEXT NOT NULL DEFAULT '{}')");
@@ -106,7 +106,7 @@ describe('format 1.4', () => {
     const original = fs.readFileSync(p);
     const b = openBaseFile(p, 'write', '0.2.0');
     expect(b.migrated).toBe(true);
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5 });
     expect(b.db.prepare('SELECT count(*) AS n FROM bc_resources').get()).toEqual({ n: 0 });
     expect(fs.readFileSync(b.backupPath!)).toEqual(original);
     b.db.close();
@@ -119,6 +119,16 @@ describe('format 1.4', () => {
     ins('a', 'png');
     expect(() => ins('a', 'gif')).toThrow(/UNIQUE|PRIMARY/);
     expect(() => ins('b', 'svg')).toThrow(/CHECK/);
+    b.db.close();
+  });
+
+  it('bc_attachments: ids count up, set, name, type and data required', () => {
+    createBaseFile(p, '0.2.0');
+    const b = openBaseFile(p, 'write', '0.2.0');
+    const ins = (set: number | null, name: string) => b.db.prepare("INSERT INTO bc_attachments (set_id, name, type, data, created) VALUES (?, ?, 'txt', x'41', 'c')").run(set, name);
+    ins(1, 'a.txt'); ins(1, 'b.txt');
+    expect(b.db.prepare('SELECT id FROM bc_attachments ORDER BY id').all()).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(() => ins(null, 'c.txt')).toThrow(/NOT NULL/);
     b.db.close();
   });
 
@@ -140,7 +150,7 @@ describe('format 1.4', () => {
     const original = fs.readFileSync(p);
     const b = openBaseFile(p, 'write', '0.2.0');
     expect(b.migrated).toBe(true);
-    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 4 });
+    expect(b.meta).toMatchObject({ formatMajor: 1, formatMinor: 5 });
     expect(tableExists(b.db, 'bc_relations')).toBe(true);
     expect(tableExists(b.db, 'bc_objects')).toBe(true);
     expect(existsBackup(b.backupPath)).toBe(true);

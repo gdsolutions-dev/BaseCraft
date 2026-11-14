@@ -49,6 +49,7 @@
       "macroDesign": "Diseño de macro"
     },
     "group": {
+      "window": "Ventana",
       "builderClose": "Cerrar",
       "view": "Vistas",
       "records": "Registros",
@@ -105,6 +106,8 @@
       "expandCollapse": "Expandir o contraer"
     },
     "cmd": {
+      "sizeToFit": "Ajustar al tamaño del formulario",
+      "switchWindows": "Cambiar ventanas",
       "builderSaveAs": "Guardar como",
       "builderClose": "Cerrar",
       "viewDatasheet": "Vista Hoja de datos",
@@ -555,6 +558,16 @@
     "copyLabel": "Nombre de la copia",
     "copyDefault": "Copia de {{name}}"
   },
+  "owin": {
+    "minimize": "Minimizar",
+    "maximize": "Maximizar",
+    "restore": "Restaurar",
+    "switch": "Cambiar ventanas",
+    "sizeToFit": "Ajustar tamaño al formulario",
+    "cascade": "Cascada",
+    "tile": "Mosaico",
+    "none": "Ninguna ventana abierta"
+  },
   "tabs": {
     "close": "Cerrar “{{name}}” ({{kind}})",
     "unsaved": "(cambios sin guardar)",
@@ -607,6 +620,7 @@
   },
   "dialog": {
     "newBaseName": "Base de datos1",
+    "pictureFilter": "Imágenes",
     "copyName": "Copia de {{name}}",
     "compactOnClose": "BaseCraft está compactando la base de datos antes de cerrarla. Puede tardar un momento: el cierre finaliza solo.",
     "errorTitle": "BaseCraft",
@@ -637,8 +651,12 @@
       "invalidName": "El nombre de un tema tiene de 1 a 60 caracteres y ningún carácter de control.",
       "themeReserved": "Este nombre es el de un tema incluido en BaseCraft: elija otro.",
       "themeExists": "Ya existe un tema personalizado con este nombre.",
+      "invalidThemeFile": "Este archivo no es un tema de Office (.thmx) legible.",
+      "pictureOutsideBase": "Una imagen vinculada debe estar en la carpeta de la base de datos o en una de sus subcarpetas.",
       "invalidPicture": "El archivo no es una imagen PNG, JPEG, GIF o WebP.",
       "pictureTooLarge": "Imagen demasiado grande (1 MB como máximo).",
+      "attachmentTooLarge": "Un archivo supera los 25 MB: no se agregó nada.",
+      "attachmentOpen": "No se pudo abrir el archivo.",
       "unknown": "Se produjo un error inesperado: {{detail}}",
       "fileTooLarge": "El archivo supera los 2 GB: no se puede importar.",
       "importInterrupted": "La importación se interrumpió (la base de datos se cerró o pasó a solo lectura). No se importó nada.",
@@ -726,6 +744,8 @@
       "linkUnavailable_needsPassword": "Esta base de datos Access está protegida con contraseña: {{detail}}",
       "linkUnavailable_needsLogin": "Inicio de sesión cancelado: las tablas vinculadas de {{detail}} no están disponibles.",
       "linkUnavailable_cannotConnect": "No se puede acceder al servidor {{detail}}. Compruebe el nombre del servidor, el puerto y la red.",
+      "odbc_failed": "El origen ODBC notificó un error: {{detail}}",
+      "odbc_unavailable": "La importación ODBC no está disponible en este equipo: no se encontró {{detail}}. En Linux y macOS, instale unixODBC.",
       "linkUnavailable_certificate": "Este equipo no reconoce el certificado del servidor {{detail}}. Haga instalar el certificado de su autoridad o, si confía en esta red, elija, en el Administrador de tablas vinculadas, la opción de cifrado que no comprueba el certificado (por ejemplo «Cifrado, confiar en el certificado del servidor»).",
       "linkUnavailable_serverVersion": "El servidor {{detail}} utiliza una versión que BaseCraft no admite (como mínimo PostgreSQL 14 o SQL Server 2016).",
       "linkUnavailable_passwordExpired": "La contraseña de este inicio de sesión ha caducado en el servidor {{detail}}. Cámbiela con la herramienta de administración del servidor y vuelva a conectarse.",
@@ -752,6 +772,7 @@
       "nameExists": "Ya existe un objeto con este nombre.",
       "nameInvalid": "Este nombre no es válido.",
       "readOnly": "La base de datos está abierta en modo de solo lectura.",
+      "moduleNameClash": "Este nombre daría el mismo módulo de código que otro formulario, informe o módulo existente. Elija otro nombre.",
       "notFound": "Este objeto ya no existe.",
       "hasRelations": "Esta tabla forma parte de relaciones: elimine primero sus relaciones.",
       "external": "La tabla “{{table}}” se modificó fuera de BaseCraft; su diseño no se puede cambiar aquí.",
@@ -865,6 +886,7 @@
     },
     "fieldList": "Lista de campos",
     "ctlPrefix": {
+      "attachment": "Datos adjuntos",
       "label": "Etiqueta",
       "textBox": "Texto",
       "checkBox": "Casilla",
@@ -918,9 +940,13 @@
     "currency": "Moneda",
     "dateTime": "Fecha/Hora",
     "yesNo": "Sí/No",
-    "hyperlink": "Hipervínculo"
+    "hyperlink": "Hipervínculo",
+    "attachment": "Datos adjuntos",
+    "calculated": "Calculado"
   },
   "fieldProp": {
+    "calculated": "Expresión",
+    "resultType": "Tipo de resultado",
     "size": "Tamaño del campo",
     "numberSize": "Tamaño del campo",
     "precision": "Precisión",
@@ -1048,7 +1074,7 @@
   "datasheet": {
     "more": { "rowHeight": "Alto de fila…", "columnWidth": "Ancho de campo…", "rowHeightLabel": "Alto de fila (puntos):", "columnWidthLabel": "Ancho de columna:", "standardHeight": "Alto estándar", "standardWidth": "Ancho estándar", "bestFit": "Ajuste perfecto", "hide": "Ocultar campos", "unhide": "Mostrar campos…", "freeze": "Inmovilizar campos", "unfreeze": "Liberar todos los campos", "unhideTitle": "Mostrar columnas" },
     "totals": { "label": "Total", "none": "Ninguno" },
-    "format": { "gridlines": "Líneas de cuadrícula visibles", "gridColor": "Color de la cuadrícula", "auto": "Automático" },
+    "format": { "gridlines": "Líneas de cuadrícula visibles", "gridColor": "Color de la cuadrícula", "auto": "Automático", "cellEffect": "Efecto de celda", "flat": "Plano", "raised": "En relieve", "sunken": "Hundido" },
     "goTo": {
       "first": "Primero",
       "previous": "Anterior",
@@ -1703,6 +1729,13 @@
     "GridX": "Cuadrícula X",
     "GridY": "Cuadrícula Y",
     "RecordSelectors": "Selectores de registro",
+    "AutoResize": "Ajuste automático",
+    "AutoCenter": "Centrado automático",
+    "ControlBox": "Cuadro de control",
+    "MinMaxButtons": "Botones Mín Máx",
+    "CloseButton": "Botón Cerrar",
+    "PopUp": "Emergente",
+    "Modal": "Cuadro de diálogo modal",
     "Left": "Izquierda",
     "Top": "Superior",
     "Height": "Alto",
@@ -1796,8 +1829,9 @@
     "ColumnWidth": "Ancho de columna"
   },
   "propValue": {
+    "MinMaxButtons": {"none": "Ninguno", "min": "Botón Minimizar", "max": "Botón Maximizar", "both": "Ambos"},
     "LegendPosition": {"top": "Arriba", "bottom": "Abajo", "left": "Izquierda", "right": "Derecha"},
-    "ChartType": {"columnClustered": "Columna agrupada", "columnStacked": "Columna apilada", "columnStacked100": "Columna apilada al 100 %", "barClustered": "Barra agrupada", "barStacked": "Barra apilada", "barStacked100": "Barra apilada al 100 %", "line": "Línea", "lineStacked": "Línea apilada", "lineStacked100": "Línea apilada al 100 %", "area": "Área agrupada", "areaStacked": "Área apilada", "areaStacked100": "Área apilada al 100 %", "pie": "Circular", "radar": "Radial", "radarFilled": "Radial relleno", "combo": "Combinado", "doughnut": "Anillo", "arc": "Arco", "scatter": "Dispersión", "bubble": "Burbuja", "boxWhisker": "Cajas y bigotes", "funnel": "Embudo", "pareto": "Pareto", "waterfall": "Cascada"},
+    "ChartType": {"columnClustered": "Columna agrupada", "columnStacked": "Columna apilada", "columnStacked100": "Columna apilada al 100 %", "barClustered": "Barra agrupada", "barStacked": "Barra apilada", "barStacked100": "Barra apilada al 100 %", "line": "Línea", "lineStacked": "Línea apilada", "lineStacked100": "Línea apilada al 100 %", "area": "Área agrupada", "areaStacked": "Área apilada", "areaStacked100": "Área apilada al 100 %", "pie": "Circular", "radar": "Radial", "radarFilled": "Radial relleno", "combo": "Combinado", "doughnut": "Anillo", "arc": "Arco", "scatter": "Dispersión", "bubble": "Burbuja", "boxWhisker": "Cajas y bigotes", "funnel": "Embudo", "pareto": "Pareto", "waterfall": "Cascada", "wordCloud": "Nube de palabras"},
     "ChartDateGroup": {"none": "Ninguno", "year": "Año", "quarter": "Trimestre", "month": "Mes", "day": "Día"},
     "ChartBackStyle": {"normal": "Normal", "transparent": "Transparente"},
     "ChartBorderStyle": {"transparent": "Transparente", "solid": "Continuo", "dashed": "Guiones", "dotted": "Puntos"},
@@ -1824,6 +1858,10 @@
       "transparent": "Transparente"
     },
     "BorderStyle": {
+      "none": "Ninguno",
+      "thin": "Fino",
+      "sizable": "Tamaño variable",
+      "dialog": "Cuadro de diálogo",
       "transparent": "Transparente",
       "solid": "Sólido",
       "dashed": "Guiones",
@@ -1851,7 +1889,8 @@
     },
     "PictureType": {
       "embedded": "Incrustada",
-      "shared": "Compartida"
+      "shared": "Compartida",
+      "linked": "Vinculado"
     },
     "SizeMode": {
       "clip": "Recortar",
@@ -2183,7 +2222,7 @@
     }
   },
   "builder": {
-    "choose": { "title": "Elegir generador", "macro": "Generador de macros", "function": "Generador de funciones" },
+    "choose": { "title": "Elegir generador", "macro": "Generador de macros", "function": "Generador de funciones", "code": "Generador de código" },
     "function": { "title": "Generador de funciones", "empty": "Ningún módulo contiene una función pública." },
     "title": "Generador de expresiones",
     "expression": "Escriba una expresión:",
@@ -2399,8 +2438,9 @@
     "showTable": {
       "title": "Agregar tablas",
       "tables": "Tablas",
+      "links": "Vínculos",
       "queries": "Consultas",
-      "both": "Ambas",
+      "all": "Todo",
       "add": "Agregar tablas seleccionadas",
       "close": "Cerrar",
       "none": "No hay objetos.",
@@ -2423,6 +2463,7 @@
       "label": "Nombre de la tabla"
     },
     "sqlOnly": "Esta consulta solo se puede mostrar en la vista SQL.",
+    "sqlFormat": "Dar formato al SQL",
     "passThrough": {
       "notice": "Consulta de paso a través: este texto se envía tal cual al servidor {{label}}, sin que BaseCraft lo lea. El servidor aplica sus propios permisos; las reglas de validación y las relaciones de BaseCraft no se aplican a lo que modifica.",
       "noticeNoServer": "Consulta de paso a través: elija su servidor en la hoja de propiedades.",
@@ -2495,6 +2536,10 @@
     }
   },
   "exchange": {
+    "message": "{{text}}",
+    "saveImportSteps": "Guardar los pasos de importación",
+    "savedImportDefault": "Importación - {{name}}",
+    "savedImportEmpty": "Ninguna importación guardada.",
     "yes": "Verdadero",
     "no": "Falso",
     "excelFilter": "Libros de Excel",
@@ -2568,6 +2613,7 @@
     "twoPrimary": "Solo un índice puede ser la clave principal."
   },
   "tableFields": {
+    "calculatedLabel": "Expresión de «{{field}}» (campo calculado; vacío: campo almacenado)",
     "newField": "Campo",
     "newTable": "Tabla",
     "designOpen": "La tabla «{{name}}» está abierta en la vista Diseño. Ciérrela o guárdela antes de cambiar sus campos aquí.",
@@ -2614,6 +2660,7 @@
     "self": "El archivo de datos no puede ser la base abierta. Elija otro nombre u otra carpeta."
   },
   "clipboard": { "empty": "El portapapeles del sistema no contiene texto.", "content": "{{text}}" },
+  "attachments": {"title": "Datos adjuntos", "add": "Agregar…", "remove": "Quitar", "open": "Abrir", "saveAs": "Guardar como…", "saveAll": "Guardar todo…", "none": "Sin datos adjuntos.", "previous": "Dato adjunto anterior", "next": "Dato adjunto siguiente", "manage": "Haga doble clic para administrar los datos adjuntos", "openConfirm": "¿Abrir “{{name}}”? Un archivo de una base de datos puede contener código dañino: ábralo solo si confía en esta base de datos.", "openConfirmRunnable": "“{{name}}” es un programa o un script: al abrirlo se ejecuta en este equipo. Ábralo solo si confía en esta base de datos y en su autor."},
   "hyperlink": { "address": "Dirección (https://, http:// o mailto:)", "text": "Texto para mostrar", "invalid": "La dirección debe empezar por https://, http:// o mailto:.", "open": "¿Abrir {{url}}?" },
   "migrate": {
     "title": "Asistente para mover a un servidor",
@@ -2656,6 +2703,8 @@
     "noSchema": "El esquema {{schema}} no existe en el servidor.",
     "nameTaken": "El servidor ya tiene tablas con estos nombres: {{names}}. Elimínelas o elija otro esquema.",
     "nameTooLong": "Estos nombres superan el límite de PostgreSQL (63 bytes): {{names}}. Cámbieles el nombre primero.",
+    "nameClash": "Varios archivos de datos contienen tablas llamadas {{names}}. No se movió nada: cámbieles el nombre en sus archivos de datos (deben ser distintos en el servidor) y vuelva a intentarlo.",
+    "partial": "Estas tablas de archivos de datos ya movidos están en el servidor y sus vínculos se cambiaron: {{names}}. Los demás archivos quedaron como estaban.",
     "invalidDesign": "El diseño de estos campos no es válido: {{names}}. Corríjalo en la vista Diseño y vuelva a intentarlo.",
     "cancelled": "Traslado cancelado: no se ha modificado nada.",
     "failed": "El traslado ha fallado ({{table}}): {{error}}. No se ha modificado nada ni en el servidor ni en la base de datos.",
@@ -2711,6 +2760,7 @@
       "done": "Se terminó de convertir la macro '{{macro}}': módulo '{{module}}' creado.",
       "todo": "{{count}} elemento(s) requieren su atención: busque TODO en el módulo."
     },
+    "convertEvents": { "none": "No hay ninguna macro incrustada que convertir.", "done": "Se terminó de convertir las macros incrustadas de «{{object}}»: {{count}} evento(s) ejecutan ahora los procedimientos del módulo «{{module}}»." },
     "embedded": {
       "title": "{{object}} : {{control}} : {{event}}",
       "deleteAsk": "¿Desea eliminar la macro incrustada?",
@@ -2976,7 +3026,6 @@
     "moveUp": "Subir",
     "moveDown": "Bajar",
     "remove": "Eliminar",
-    "saveBeforeRun": "Hay que guardar la macro antes de ejecutarla. ¿Desea guardarla ahora?",
     "step": {
       "title": "Macro paso a paso",
       "condition": "Condición",
@@ -2991,17 +3040,60 @@
     }
   },
   "options": {
+    "qat": {
+      "header": "Personalice la barra de herramientas de acceso rápido situada sobre las fichas de la cinta.",
+      "choose": "Elegir un comando:",
+      "add": "Agregar",
+      "remove": "Quitar",
+      "up": "Subir",
+      "down": "Bajar",
+      "reset": "Restablecer",
+      "current": "Comandos de la barra de herramientas"
+    },
+    "trust": {
+      "header": "Centro de confianza: dónde confía este equipo en el contenido activo de una base de datos.",
+      "locations": "Ubicaciones de confianza",
+      "locationsNote": "Las define el administrador en un archivo del sistema; BaseCraft solo lo lee.",
+      "none": "Ninguna ubicación de confianza.",
+      "subfolders": "con subcarpetas",
+      "approvalsTitle": "Aprobaciones",
+      "approvals": "Aprobaciones dadas por este usuario: {{count}}",
+      "clear": "Quitar todas las aprobaciones",
+    "admin": "administrador",
+    "add": "Agregar nueva ubicación...",
+    "remove": "Quitar",
+    "subfoldersAlso": "Las subcarpetas de esta ubicación también son de confianza",
+    "description": "Descripción",
+    "network": "Permitir ubicaciones de confianza en mi red (no recomendado)",
+    "networkRefused": "Una ubicación de red no puede ser de confianza mientras no se permitan las ubicaciones de red."
+    },
     "cat": {
       "general": "General",
       "currentDb": "Base de datos actual",
       "client": "Configuración del cliente",
       "datasheet": "Hoja de datos",
-      "designers": "Diseñadores de objetos"
+      "designers": "Diseñadores de objetos",
+      "quickAccess": "Barra de herramientas de acceso rápido",
+      "ribbon": "Personalizar cinta de opciones",
+      "trust": "Centro de confianza"
     },
     "general": {
+      "screenTipStyle": "Estilo de la información en pantalla:",
+      "screenTipsOn": "Mostrar información en pantalla",
+      "screenTipsOff": "No mostrar información en pantalla",
+      "interfaceZoom": "Zoom de la interfaz (%)",
+      "interfaceZoomReset": "Restablecer zoom",
+      "previewZoom": "Zoom de la vista previa de impresión",
+      "previewFit": "Ajustar a la ventana",
+      "previewActual": "100 %",
+      "screenTipShortcuts": "Mostrar las teclas de método abreviado en la información en pantalla",
       "header": "Opciones generales para trabajar con {{product}}.",
       "ui": "Opciones de la interfaz de usuario",
       "creation": "Creación de bases de datos",
+      "sortOrderNew": "Criterio de ordenación de la nueva base de datos:",
+      "sortOrderLegacy": "General – Heredado",
+      "sortOrderGeneral": "General",
+      "sortOrderSpanishTraditional": "Español – Tradicional",
       "defaultFolder": "Carpeta de base de datos predeterminada:",
       "browse": "Examinar…"
     },
@@ -3062,9 +3154,13 @@
       "docWindow": "Opciones de la ventana de documento",
       "statusBar": "Mostrar la barra de estado",
       "documentTabs": "Mostrar fichas de documento",
+      "docOverlapping": "Ventanas superpuestas",
+      "docTabbed": "Documentos con fichas",
       "specialKeys": "Usar teclas especiales",
       "specialKeysHelp": "F11: mostrar u ocultar el panel de navegación.",
       "compactOnClose": "Compactar al cerrar",
+      "sortOrder": "Criterio de ordenación de esta base de datos:",
+      "sortOrderPending": "Se aplicará en la próxima compactación y reparación: {{order}}",
       "frontEnd": "Aplicación de front-end (sus tablas locales solo sirven de referencia)",
       "dataFile": "Archivo de datos compartido (abierto en modo compartido por varios equipos)",
       "datasheetDesign": "Habilitar cambios de diseño de tablas en la vista Hoja de datos",
@@ -3124,6 +3220,7 @@
     "datasheet": {
       "header": "Personalice la apariencia de las hojas de datos en {{product}}.",
       "gridSection": "Líneas de cuadrícula y efectos de celda",
+      "defaultCellEffect": "Efecto de celda predeterminado",
       "gridlines": "Líneas de cuadrícula mostradas de forma predeterminada",
       "horizontal": "Horizontal",
       "vertical": "Vertical",
@@ -3159,6 +3256,7 @@
 
       "skipped": "Columnas no importadas ({{table}}): {{names}}."
     },
+    "odbc": { "title": "Importar desde una base de datos ODBC", "dsn": "Origen de datos (DSN)", "connection": "O cadena de conexión", "modeImport": "Importar los datos de origen a una nueva tabla de la base de datos actual", "modeLink": "Vincular al origen de datos creando una tabla vinculada" },
     "access": {
       "title": "Importar desde Access",
       "fileOnly": "Se importan las tablas y sus datos. No se leen las claves distintas de un Autonumeración, los índices ni las reglas de campo; no se importan las consultas, formularios, informes, macros ni módulos.",
@@ -3278,7 +3376,7 @@
       "sqlite": "Archivo SQLite",
       "access": "Base de datos Access",
       "postgresql": "Servidor PostgreSQL",
-      "sqlserver": "Servidor SQL Server"
+      "sqlserver": "Servidor SQL Server", "odbc": "Base de datos ODBC"
     },
     "tables": "Tablas",
     "selectAll": "Seleccionar todo",
@@ -3294,6 +3392,7 @@
     "designTitle": "Tabla vinculada",
     "designWarning": "“{{name}}” es una tabla vinculada: su estructura pertenece a su archivo de origen y no se puede modificar aquí. ¿Desea abrirla de todos modos, en solo lectura?",
     "designBanner": "Tabla vinculada, de solo lectura: su estructura pertenece a {{path}}.",
+    "designBannerServer": "Tabla vinculada a un servidor: su estructura pertenece a {{path}}. Las propiedades de BaseCraft que cambie se guardan en esta base de datos.",
     "skipped": "Columnas no vinculadas, de un tipo que BaseCraft no lee (datos adjuntos, objeto OLE, campo multivalor, binario, Fecha/Hora extendida): {{names}}",
     "unsupported": "Tabla no admitida: {{reason}}",
     "password": {
@@ -3616,6 +3715,7 @@
     "default": "Establecer como tema predeterminado de esta base de datos",
     "save": "Guardar el tema actual…",
     "browse": "Buscar temas…",
+    "thmxFilter": "Temas de Office",
     "delete": "Eliminar este tema personalizado",
     "saveTitle": "Guardar el tema actual",
     "nameLabel": "Nombre del tema:",
@@ -3677,7 +3777,7 @@
       "legendNone": "(Ninguno)",
       "legendHint": "Con una leyenda, solo se traza el primer valor.",
       "legendIgnored": "Este tipo de gráfico ignora el campo de leyenda.",
-      "typeHint": {"doughnut": "El tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "arc": "Semianillo: el tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "funnel": "Las etapas se ordenan por el primer valor; el campo de leyenda se ignora.", "scatter": "El primer campo de eje es X y debe ser un número; el primer valor es Y. Un campo de leyenda reparte los puntos en series.", "bubble": "El primer campo de eje es X (un número), el primer valor es Y y el segundo valor es el tamaño de la burbuja.", "boxWhisker": "Cada categoría es una caja; los campos del eje dan la categoría y el primer valor las observaciones (el campo de leyenda se ignora).", "pareto": "Las barras se ordenan por el primer valor, de mayor a menor; la línea muestra el porcentaje acumulado en el eje derecho (el campo de leyenda se ignora).", "waterfall": "Cada categoría es un paso del primer valor (vacío = 0) sobre un acumulado; una última barra muestra el total (el campo de leyenda se ignora)."},
+      "typeHint": {"doughnut": "El tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "arc": "Semianillo: el tamaño de los sectores depende del primer valor; el campo de leyenda se ignora.", "funnel": "Las etapas se ordenan por el primer valor; el campo de leyenda se ignora.", "scatter": "El primer campo de eje es X y debe ser un número; el primer valor es Y. Un campo de leyenda reparte los puntos en series.", "bubble": "El primer campo de eje es X (un número), el primer valor es Y y el segundo valor es el tamaño de la burbuja.", "boxWhisker": "Cada categoría es una caja; los campos del eje dan la categoría y el primer valor las observaciones (el campo de leyenda se ignora).", "pareto": "Las barras se ordenan por el primer valor, de mayor a menor; la línea muestra el porcentaje acumulado en el eje derecho (el campo de leyenda se ignora).", "waterfall": "Cada categoría es un paso del primer valor (vacío = 0) sobre un acumulado; una última barra muestra el total (el campo de leyenda se ignora).", "wordCloud": "Las palabras vienen del campo de eje y su tamaño del primer valor (las filas de una misma palabra se suman; el campo de leyenda se ignora)."},
       "rowsHint": "Los valores se trazan tal cual en este tipo de gráfico: sin función de agregado.",
       "axisXHint": "El primer campo es X.",
       "values": "Valores (eje Y)",
@@ -3687,6 +3787,44 @@
       "expand": "Expandir sección",
       "close": "Cerrar",
       "format": {"series": "Serie de datos", "heading": "Formato de la serie de datos: {{name}}", "fullName": "Nombre completo", "seriesType": "Tipo de serie", "seriesTypes": {"column": "Columna", "line": "Línea", "area": "Área"}, "plotOn": "Trazar la serie en", "primary": "Principal", "secondary": "Secundario", "fill": "Color de relleno de la serie", "border": "Color de borde de la serie", "labels": "Mostrar etiqueta de datos", "trend": "Opciones de línea de tendencia", "trendName": "Nombre de la línea de tendencia", "noValues": "Primero seleccione un valor en la pestaña Datos.", "legendHint": "Con un campo de leyenda, el formato se aplica a todas las series a la vez: desactivado.", "roundHint": "Sin efecto en este tipo de gráfico (circular, radar).", "axisHint": "No hay eje secundario en gráficos de barras ni apilados.", "trendHint": "No hay línea de tendencia en gráficos de barras ni apilados.", "noEffect": "Sin efecto en este tipo de gráfico.", "noTrend": "Sin línea de tendencia en este tipo de gráfico.", "noAxis": "Sin eje secundario en este tipo de gráfico.", "waterfallColors": "Colores de la cascada", "lineOptions": "Opciones de línea", "lineWidth": "Grosor de línea", "dash": "Estilo de línea", "marker": "Mostrar marcadores", "gap": "Valores que faltan", "trendKinds": {"none": "Ninguna", "linear": "Lineal", "exponential": "Exponencial", "logarithmic": "Logarítmica", "polynomial": "Polinómica", "power": "Potencial", "movingAverage": "Media móvil"}, "dashes": {"solid": "Continua", "dashed": "Discontinua", "dotted": "Punteada"}, "gaps": {"gap": "Dejar un hueco", "zero": "Trazar como cero", "connect": "Conectar puntos"}}
+    }
+  },
+  "customize": {
+    "qatAdd": "Agregar a la barra de herramientas de acceso rápido",
+    "qatRemove": "Quitar de la barra de herramientas de acceso rápido",
+    "newTab": "Nueva pestaña",
+    "newGroup": "Nuevo grupo",
+    "rename": "Cambiar nombre",
+    "show": "Mostrar la pestaña {{name}}",
+    "ribbonHeader": "Personalice la cinta de opciones: muestre u oculte pestañas, cambie su orden y cree pestañas y grupos personalizados.",
+    "ribbonNote": "Un grupo personalizado admite cualquier comando entregado, en cualquier ficha, también las de herramientas. Seleccione un grupo integrado para cambiarle el nombre. Las fichas de herramientas solo aparecen con su objeto.",
+    "ribbonTabs": "Pestañas de la cinta de opciones",
+    "toolTabs": "Fichas de herramientas",
+    "formTemplate": "Plantilla de formulario:",
+    "reportTemplate": "Plantilla de informe:",
+    "templateNote": "Nombre de un formulario o informe de la base de datos actual: los nuevos formularios e informes copian sus propiedades y la configuración de sus secciones (Normal de forma predeterminada). Si no existe, se aplican los valores originales.",
+    "errorSection": "Comprobación de errores",
+    "errorEnable": "Habilitar la comprobación de errores",
+    "errorUnassociated": "Comprobar etiqueta y control no asociados",
+    "errorNewLabels": "Comprobar nuevas etiquetas no asociadas",
+    "errorProperties": "Comprobar propiedades de control no válidas",
+    "errorReport": "Comprobar errores comunes de informe",
+    "errorShortcut": "Comprobar errores de teclas de método abreviado",
+    "errorColor": "Color del indicador de error:",
+    "errorIndicator": "Error en este elemento",
+    "errAssociate": "Asociar etiqueta con el control",
+    "errIgnore": "Omitir error",
+    "err": {
+      "unassociated": "La etiqueta {{name}} no está asociada con el control contiguo.",
+      "newLabel": "La nueva etiqueta {{name}} no está asociada con ningún control.",
+      "unknownField": "El campo \"{{field}}\" no existe en el origen.",
+      "invalidExpression": "La expresión \"{{field}}\" no es válida.",
+      "aggregateNotAllowed": "Aquí no se permite una función de agregado.",
+      "widthExceedsPage": "El informe es más ancho que el área imprimible de la página.",
+      "groupingInvalid": "Una ordenación o agrupación del informe no es válida: \"{{field}}\".",
+      "groupingMalformed": "Un nivel de ordenación o agrupación del informe está vacío.",
+      "shortcutInvalid": "La tecla de acceso de «{{name}}» no es una letra ni un dígito.",
+      "shortcutDuplicate": "La tecla de acceso «{{field}}» ya la usa otro control."
     }
   }
 }

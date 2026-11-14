@@ -11,6 +11,9 @@ ipcRenderer.on(CH.closeRequested, () => {
 
 // E2E only (main passes the argument when unpackaged): a fake spell checker, « wrong=right,… », for machines with no dictionary
 const fakeSpell = process.argv.find((a) => a.startsWith('--bc-e2e-misspelled='))?.split('=').slice(1).join('=');
+// Windows: Chromium's renderer API is blind to the OS spell checker, so the main process asks it (spellWarm fills this cache: word -> suggestions, null when correct)
+const winSpell = process.platform === 'win32';
+const winCache = new Map<string, string[] | null>();
 const fakes = new Map((fakeSpell ?? '').split(',').filter(Boolean).map((p) => p.split('=') as [string, string]));
 
 const api: BasecraftApi = {
@@ -21,6 +24,8 @@ const api: BasecraftApi = {
     setTheme: (t) => ipcRenderer.invoke(CH.setTheme, t),
     setSetting: (k, v) => ipcRenderer.invoke(CH.setSetting, k, v),
     pickFolder: () => ipcRenderer.invoke(CH.pickFolder),
+    trust: () => ipcRenderer.invoke(CH.appTrust),
+    clearApprovals: () => ipcRenderer.invoke(CH.appClearApprovals),
     onSettingsChanged: (cb) => {
       const listener = (_e: IpcRendererEvent, s: SettingsView) => cb(s);
       ipcRenderer.on(CH.settingsChanged, listener);
@@ -37,13 +42,20 @@ const api: BasecraftApi = {
     readClipboard: () => ipcRenderer.invoke(CH.appReadClipboard),
     spellPrepare: async () => {
       if (fakeSpell !== undefined) return true;
+      if (winSpell) { winCache.clear(); return ipcRenderer.invoke(CH.spellPrepare); }   // the main process asks the OS checker
       if (!(await ipcRenderer.invoke(CH.spellPrepare))) return false;
       // a loaded dictionary finds a made-up word misspelled; none loaded finds nothing
       for (let i = 0; i < 40; i++, await new Promise((r) => setTimeout(r, 250))) if (webFrame.isWordMisspelled('qzxkvjw')) return true;
       return false;
     },
-    isMisspelled: (word) => (fakeSpell !== undefined ? fakes.has(word) : webFrame.isWordMisspelled(word)),
-    spellSuggestions: (word) => (fakeSpell !== undefined ? [fakes.get(word) ?? word] : webFrame.getWordSuggestions(word)),
+    spellWarm: async (words) => {
+      const todo = [...new Set(words)].filter((w) => !winCache.has(w));
+      if (!winSpell || fakeSpell !== undefined || !todo.length) return;
+      const bad = (await ipcRenderer.invoke(CH.spellCheck, todo)) as Record<string, string[]>;
+      for (const w of todo) winCache.set(w, bad[w] ?? null);
+    },
+    isMisspelled: (word) => (fakeSpell !== undefined ? fakes.has(word) : winSpell ? !!winCache.get(word) : webFrame.isWordMisspelled(word)),
+    spellSuggestions: (word) => (fakeSpell !== undefined ? [fakes.get(word) ?? word] : winSpell ? winCache.get(word) ?? [] : webFrame.getWordSuggestions(word)),
     onCloseRequested: (cb) => {
       onClose = cb;
       return () => { if (onClose === cb) onClose = null; };
@@ -79,6 +91,8 @@ const api: BasecraftApi = {
     enableContent: () => ipcRenderer.invoke(CH.baseEnableContent),
     startup: () => ipcRenderer.invoke(CH.baseStartup),
     saveStartup: (o) => ipcRenderer.invoke(CH.baseSaveStartup, o),
+    sortOrder: () => ipcRenderer.invoke(CH.baseSortOrder),
+    setSortOrder: (id) => ipcRenderer.invoke(CH.baseSetSortOrder, id),
     navOptions: () => ipcRenderer.invoke(CH.baseNavOptions),
     saveNavOptions: (o) => ipcRenderer.invoke(CH.baseSaveNavOptions, o),
   },
@@ -94,6 +108,7 @@ const api: BasecraftApi = {
   },
   resources: {
     list: () => ipcRenderer.invoke(CH.resourcesList),
+    pickFile: () => ipcRenderer.invoke(CH.resourcesPickFile),
     get: (names) => ipcRenderer.invoke(CH.resourcesGet, names),
     add: (name, dataUrl) => ipcRenderer.invoke(CH.resourcesAdd, name, dataUrl),
     replace: (name, dataUrl) => ipcRenderer.invoke(CH.resourcesReplace, name, dataUrl),
@@ -108,6 +123,7 @@ const api: BasecraftApi = {
     list: () => ipcRenderer.invoke(CH.themesList),
     save: (t, replace) => ipcRenderer.invoke(CH.themesSave, t, replace),
     remove: (name) => ipcRenderer.invoke(CH.themesRemove, name),
+    importFile: () => ipcRenderer.invoke(CH.themesImport),
   },
   tables: {
     list: () => ipcRenderer.invoke(CH.tablesList),
@@ -130,6 +146,18 @@ const api: BasecraftApi = {
     update: (table, rowid, changes, expected) => ipcRenderer.invoke(CH.rowsUpdate, table, rowid, changes, expected),
     delete: (table, rowids) => ipcRenderer.invoke(CH.rowsDelete, table, rowids),
     lookup: (table, field) => ipcRenderer.invoke(CH.rowsLookup, table, field),
+  },
+  attachments: {
+    list: (table, field, rowid) => ipcRenderer.invoke(CH.attList, table, field, rowid),
+    add: (table, field, rowid) => ipcRenderer.invoke(CH.attAdd, table, field, rowid),
+    remove: (table, field, rowid, id) => ipcRenderer.invoke(CH.attRemove, table, field, rowid, id),
+    preview: (table, field, rowid, id) => ipcRenderer.invoke(CH.attPreview, table, field, rowid, id),
+    read: (table, field, rowid, id) => ipcRenderer.invoke(CH.attRead, table, field, rowid, id),
+    saveTo: (table, field, rowid, id, path) => ipcRenderer.invoke(CH.attSaveTo, table, field, rowid, id, path),
+    faces: (table, field, rowids) => ipcRenderer.invoke(CH.attFaces, table, field, rowids),
+    save: (table, field, rowid, id) => ipcRenderer.invoke(CH.attSave, table, field, rowid, id),
+    saveAll: (table, field, rowid) => ipcRenderer.invoke(CH.attSaveAll, table, field, rowid),
+    open: (table, field, rowid, id, confirmed) => ipcRenderer.invoke(CH.attOpen, table, field, rowid, id, confirmed),
   },
   relations: {
     list: (opts) => ipcRenderer.invoke(CH.relationsList, opts),
@@ -190,6 +218,9 @@ const api: BasecraftApi = {
     savedList: () => ipcRenderer.invoke(CH.exchangeSavedList),
     saveSaved: (name, e) => ipcRenderer.invoke(CH.exchangeSavedSave, name, e),
     deleteSaved: (name) => ipcRenderer.invoke(CH.exchangeSavedDelete, name),
+    savedImportList: () => ipcRenderer.invoke(CH.exchangeSavedImportList),
+    saveSavedImport: (name, i) => ipcRenderer.invoke(CH.exchangeSavedImportSave, name, i),
+    deleteSavedImport: (name) => ipcRenderer.invoke(CH.exchangeSavedImportDelete, name),
     onProgress: (cb) => {
       const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
       ipcRenderer.on(CH.importProgress, listener);
@@ -215,6 +246,17 @@ const api: BasecraftApi = {
   migrate: {
     run: (req) => ipcRenderer.invoke(CH.migrateRun, req),
     importTables: (kind, params, names) => ipcRenderer.invoke(CH.migrateImport, kind, params, names),
+    onProgress: (cb) => {
+      const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
+      ipcRenderer.on(CH.importProgress, listener);
+      return () => { ipcRenderer.removeListener(CH.importProgress, listener); };
+    },
+  },
+  odbc: {
+    dsns: () => ipcRenderer.invoke(CH.odbcDsns),
+    inspect: (req) => ipcRenderer.invoke(CH.odbcInspect, req),
+    run: (req, names) => ipcRenderer.invoke(CH.odbcRun, req, names),
+    link: (req, names) => ipcRenderer.invoke(CH.odbcLink, req, names),
     onProgress: (cb) => {
       const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);
       ipcRenderer.on(CH.importProgress, listener);

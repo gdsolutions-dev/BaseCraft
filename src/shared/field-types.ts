@@ -2,7 +2,7 @@ import { ExprSyntaxError } from './expr/ast'
 import { parseMask } from './expr/input-mask'
 import { fieldRefs, hasAggregate, hasMember, parseCanonical, renameRefs, serialize } from './expr/parser'
 
-export type FieldType = 'autoNumber' | 'shortText' | 'longText' | 'number' | 'currency' | 'dateTime' | 'yesNo' | 'hyperlink'
+export type FieldType = 'autoNumber' | 'shortText' | 'longText' | 'number' | 'currency' | 'dateTime' | 'yesNo' | 'hyperlink' | 'attachment'
 export type NumberSize = 'byte' | 'integer' | 'longInteger' | 'single' | 'double' | 'decimal'
 /** What a new field takes (O3 R3): the Options' defaults; the type is never AutoNumber (a table has one). */
 export interface FieldDefaults { type: Exclude<FieldType, 'autoNumber'>; textSize: number; numberSize: NumberSize }
@@ -29,6 +29,9 @@ export interface FieldProps {
   primaryKey: boolean
   // expressions en forme canonique (voir contraintes A2) ; format et inputMask dépendent du type
   defaultValue?: string; validationRule?: string; validationText?: string
+  /** Calculated field: the expression (canonical, names the table's other stored fields) the write layer stores in the column on
+   *  every write; `type` is its result type. A plain optional key: an older version keeps it and shows an ordinary column. */
+  calculated?: string
   format?: string; inputMask?: string; lookup?: LookupProps
   columnWidth?: number // datasheet column width in twips (0: hidden), saved by the layout question (not a design property)
   [unknownKey: string]: unknown // clés inconnues conservées (compatibilité mineure)
@@ -36,7 +39,11 @@ export interface FieldProps {
 export interface FieldDef { name: string; props: FieldProps }
 /** A column its server computes (C4 M2), never written: read-only in datasheets and forms. Connector-specific props (`pg*`) are
  *  carried in field props (bc_links.props); `pgGenerated` is PostgreSQL's generated column or GENERATED ALWAYS identity, `msComputed` SQL Server's computed or identity column (C5). */
-export const serverComputed = (p: FieldProps): boolean => p.pgGenerated === true || p.msComputed === true;
+export const serverComputed = (p: FieldProps): boolean => p.pgGenerated === true || p.msComputed === true || isCalculated(p);
+/** The types a Calculated field can have as its result type (Access: Short Text, Long Text, Number, Currency, Date/Time, Yes/No). */
+export const RESULT_TYPES: readonly FieldType[] = ['shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo']
+/** A Calculated field (never an AutoNumber or a key): written by the write layer, read-only everywhere else. */
+export const isCalculated = (p: FieldProps): boolean => typeof p.calculated === 'string' && p.calculated !== '' && p.type !== 'autoNumber' && !p.primaryKey;
 /** A multi-field index (Indexes dialog); a one-field index of its own name is the field's Indexed property instead.
  *  Unknown keys (of the index and of each field) are kept, as for field props (minor-version compatibility). */
 export interface IndexDef { name: string; fields: IndexField[]; unique: boolean; [unknownKey: string]: unknown }
@@ -54,7 +61,7 @@ export interface TableDesign { name: string; description?: string; validationRul
 export type DesignErrorCode = 'nameEmpty' | 'nameInvalid' | 'reservedName' | 'nameDuplicate' | 'noFields'
   | 'autoNumberMultiple' | 'autoNumberNotPrimaryKey' | 'shortTextSize' | 'decimalPrecision' | 'reservedFieldName'
   | 'invalidExpression' | 'invalidMask' | 'validationTextSize' | 'invalidIndex'
-export interface DesignError { code: DesignErrorCode; field?: string; prop?: 'defaultValue' | 'validationRule'; /** an unknown function in the expression (R6: the renderer says whether it is a Python one) */ fn?: string }
+export interface DesignError { code: DesignErrorCode; field?: string; prop?: 'defaultValue' | 'validationRule' | 'calculated'; /** an unknown function in the expression (R6: the renderer says whether it is a Python one) */ fn?: string }
 
 /** Types that take an input mask (as in Access); on another type a stored mask is ignored. */
 export const MASK_TYPES: readonly FieldType[] = ['shortText', 'number', 'currency', 'dateTime']
@@ -223,6 +230,18 @@ function validExpression(fd: FieldDef, prop: 'defaultValue' | 'validationRule'):
   }
 }
 
+/** A Calculated field's expression is readable and names only stored fields of the table: not itself, not another calculated one
+ *  (no order to compute them in), no aggregate or member. */
+function validCalculated(design: TableDesign, fd: FieldDef): true | { fn?: string } {
+  try {
+    const tree = parseCanonical(fd.props.calculated!)
+    if (hasAggregate(tree) || hasMember(tree)) return {}
+    return fieldRefs(tree).every(n => { const o = design.fields.find(x => sameName(x.name, n)); return !!o && o !== fd && !isCalculated(o.props) }) || {}
+  } catch (e) {
+    return unknownFn(e)
+  }
+}
+
 /** The refusal of an expression that does not parse; an unknown function keeps its name. */
 const unknownFn = (e: unknown): { fn?: string } => (e instanceof ExprSyntaxError && e.code === 'unknownFunction' && e.fn ? { fn: e.fn } : {})
 
@@ -300,6 +319,7 @@ export function validateDesign(design: TableDesign): DesignError[] {
       const { precision: pr, scale: sc } = p
       if (!(Number.isInteger(pr) && pr! >= 1 && pr! <= 28 && Number.isInteger(sc) && sc! >= 0 && sc! <= pr!)) errors.push({ code: 'decimalPrecision', field: name })
     }
+    if (p.calculated) { const ok = validCalculated(design, fd); if (ok !== true) errors.push({ code: 'invalidExpression', field: name, prop: 'calculated', ...ok }) }
     for (const prop of ['defaultValue', 'validationRule'] as const) { const ok = validExpression(fd, prop); if (ok !== true) errors.push({ code: 'invalidExpression', field: name, prop, ...ok }) }
     if ([...p.validationText ?? ''].length > 255) errors.push({ code: 'validationTextSize', field: name })
     if (p.inputMask && MASK_TYPES.includes(p.type)) { try { parseMask(p.inputMask) } catch { errors.push({ code: 'invalidMask', field: name }) } }

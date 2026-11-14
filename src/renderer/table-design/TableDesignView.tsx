@@ -3,8 +3,10 @@ import { ChevronRight, KeyRound, Link } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplayContext } from '../../shared/expr/localize';
-import type { FieldType } from '../../shared/field-types';
+import { isCalculated, RESULT_TYPES, type FieldType } from '../../shared/field-types';
+import { ExpressionBuilder } from '../expr/ExpressionBuilder';
 import { localeInfo } from '../../shared/locale-format';
+import { isServerKind } from '../../shared/api';
 import { api } from '../bridge';
 import { autoIndexList, fieldDefaults } from '../settings-store';
 import type { DocViewProps } from '../shell/DocumentTabs';
@@ -21,7 +23,7 @@ import { runSave } from './save-table';
 import { editIndexes } from './IndexesDialog';
 import './table-design.css';
 
-type Expression = 'prop-defaultValue' | 'prop-validationRule' | 'table-prop-validationRule'; // the test id of an expression field
+type Expression = 'prop-defaultValue' | 'prop-validationRule' | 'prop-calculated' | 'table-prop-validationRule'; // the test id of an expression field
 type ViewAction = DesignAction | { type: 'load'; model: DesignModel };
 const viewReducer = (m: DesignModel, a: ViewAction): DesignModel => (a.type === 'load' ? a.model : designReducer(m, a, fieldDefaults()));
 const SPLIT_KEY = 'basecraft.design.splitRatio'; // grid height / available height, per user
@@ -45,6 +47,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   const [avail, setAvail] = useState(0); // height shared by the two panes, kept up to date on window resize
   const banner = useRef<HTMLDivElement>(null); // a linked table's banner (C1 R8) takes its room above the panes
   const linked = !!link;
+  const meta = !!link && isServerKind(link.kind); // a server link: its BaseCraft properties are editable (bc_links.props.meta), its structure is the server's
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -67,8 +70,8 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   useEffect(() => { void api.app.getSettings().then((s) => setRegion(s.region), () => setRegion('en-US')); }, []);
   const lang = i18n.language.startsWith('fr') ? 'fr' : 'en';
   const ctx = useMemo<DisplayContext | null>(() => (region === null ? null : { lang, region: localeInfo(region) }), [lang, region]);
-  const live = useRef({ model, readOnly, tab, picked, ready });
-  live.current = { model, readOnly, tab, picked, ready };
+  const live = useRef({ model, readOnly, tab, picked, ready, meta });
+  live.current = { model, readOnly, tab, picked, ready, meta };
 
   useEffect(() => {
     if (tab.isNew) return;
@@ -245,7 +248,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   const indexes = async () => {
     await flush();
     const { model: m, readOnly: ro, tab: doc } = live.current;
-    const next = await editIndexes(modal, designOf(m, doc.name), ro);
+    const next = await editIndexes(modal, designOf(m, doc.name), ro || live.current.meta);
     if (next && live.current.model === m) set({ type: 'setIndexes', design: next }); // edited meanwhile: the rows may no longer match
   };
 
@@ -254,7 +257,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   useEffect(() => {
     // The ribbon already refuses these in a read-only base; the handlers refuse them too, and during a save.
     const writable = (id: 'save' | 'primaryKey' | 'insertRows' | 'deleteRows' | 'builder') => async () => {
-      if (!live.current.readOnly && live.current.ready && !busy.current) await cmds.current[id]();
+      if (!live.current.readOnly && live.current.ready && !busy.current && (!live.current.meta || id === 'save' || id === 'builder')) await cmds.current[id]();
     };
     const offCommands = registerCommands(tab.id, {
       save: writable('save'), primaryKey: writable('primaryKey'), insertRows: writable('insertRows'), deleteRows: writable('deleteRows'),
@@ -271,6 +274,21 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   const edit = (i: number, a: DesignAction) => {
     if (i === live.current.model.rows.length) set({ type: 'addRow' });
     set(a);
+  };
+
+  // Data Type « Calculated »: the Expression Builder first (as Access); cancelled, the type stays. Any other type drops the expression.
+  const chooseType = async (i: number, v: string) => {
+    if (v !== 'calculated') return edit(i, { type: 'setType', index: i, fieldType: v as FieldType });
+    const { model: m } = live.current;
+    const r = m.rows[i];
+    if (!ctx || !r) return;
+    const others = m.rows.filter((x, j) => j !== i && x.name).map((x) => x.name);
+    const built = await modal.custom<string>((close) => <ExpressionBuilder ctx={{ ...ctx, fields: others, criteria: false }} initial="" close={close} />, { titleKey: 'builder.title' });
+    if (!built) return;
+    const row = live.current.model.rows[i];
+    if (row?.key !== r.key) return; // the grid changed while the builder was open
+    if (!RESULT_TYPES.includes(row.props.type)) set({ type: 'setType', index: i, fieldType: 'shortText' });
+    set({ type: 'setProp', index: i, key: 'calculated', value: built });
   };
 
   const pick = (i: number, e: MouseEvent) => {
@@ -297,7 +315,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
     const [i, col] = [Number(m[1]), m[2]];
     if (col === 'key' && e.key === 'Delete') {
       e.preventDefault();
-      if (!readOnly && !busy.current) void deleteRows();
+      if (!readOnly && !meta && !busy.current) void deleteRows();
     } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.altKey) {
       const next = root.current?.querySelector<HTMLElement>(`[data-testid="design-row-${i + (e.key === 'ArrowDown' ? 1 : -1)}-${col}"]`);
       e.preventDefault(); // also in the type list, as in Access: Alt+Down opens it
@@ -306,16 +324,17 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
   };
 
   if (!ready) return <div className="designer" ref={root} />;
-  const rows = readOnly ? model.rows : [...model.rows, null];
+  const rows = readOnly || meta ? model.rows : [...model.rows, null];
   const locked = readOnly || saving;
+  const fixed = locked || meta; // the grid's names and types
   const current = model.rows[model.selected];
   return (
     <div className="tdesign" ref={root} aria-busy={saving}
-      onFocus={(e) => { const m = /^prop-(defaultValue|validationRule)$|^table-prop-validationRule$/.exec(e.target.dataset.testid ?? ''); if (m) lastExpression.current = m[0] as Expression; }}>
+      onFocus={(e) => { const m = /^prop-(defaultValue|validationRule|calculated)$|^table-prop-validationRule$/.exec(e.target.dataset.testid ?? ''); if (m) lastExpression.current = m[0] as Expression; }}>
       <div className="designer">
       {link && ( // C1 R8: read-only (the shell passes readOnly), its structure belongs to its file
         <div ref={banner} className="banner banner-info tdesign-link" role="status" data-testid="design-link-banner">
-          <Link className="ic" aria-hidden /><span className="banner-text">{t('link.designBanner', { path: link.path })}</span>
+          <Link className="ic" aria-hidden /><span className="banner-text">{t(meta ? 'link.designBannerServer' : 'link.designBanner', { path: link.path })}</span>
         </div>
       )}
       <div className="dgrid-wrap" data-testid="design-grid-pane" style={avail > 0 ? { flex: 'none', height: gridPx } : undefined}>
@@ -343,7 +362,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
                     </button>
                   </td>
                   <td>
-                    <input data-testid={`design-row-${i}-name`} aria-label={t('designer.cellName', { n })} disabled={locked} spellCheck={false}
+                    <input data-testid={`design-row-${i}-name`} aria-label={t('designer.cellName', { n })} disabled={fixed} spellCheck={false}
                       aria-invalid={!!r && fieldNameTooLong(r)} aria-describedby={r && fieldNameTooLong(r) ? `design-row-${i}-name-error` : undefined}
                       value={r?.name ?? ''} onChange={(e) => edit(i, { type: 'setName', index: i, name: e.target.value })}
                       onBlur={() => set({ type: 'commitName', index: i, autoIndex: autoIndexList() })} />
@@ -352,10 +371,11 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
                     )}
                   </td>
                   <td>
-                    <select data-testid={`design-row-${i}-type`} aria-label={t('designer.cellType', { n })} disabled={locked}
-                      value={r?.props.type ?? ''} onChange={(e) => edit(i, { type: 'setType', index: i, fieldType: e.target.value as FieldType })}>
+                    <select data-testid={`design-row-${i}-type`} aria-label={t('designer.cellType', { n })} disabled={fixed}
+                      value={r ? (isCalculated(r.props) ? 'calculated' : r.props.type) : ''} onChange={(e) => void chooseType(i, e.target.value)}>
                       {!r && <option value="" hidden />}
                       {FIELD_TYPES.map((x) => <option key={x} value={x}>{t(`fieldType.${x}`)}</option>)}
+                      {!pk && <option value="calculated">{t('fieldType.calculated')}</option>}
                     </select>
                   </td>
                   <td>
@@ -370,7 +390,7 @@ export function TableDesignView({ tab, readOnly, dispatch, link, tabs }: DocView
       </div>
       <Splitter testId="design-splitter" label={t('designer.splitter')} total={avail} value={gridPx} min={GRID_MIN} max={avail - PROPS_MIN}
         onChange={setGridPx} onReset={() => { setRatio(SPLIT_DEFAULT); saveRatio(SPLIT_KEY, SPLIT_DEFAULT); }} />
-      <FieldPropertiesPanel props={current?.props ?? null} disabled={locked} ctx={ctx} rowKey={current?.key ?? ''} fieldName={current?.name ?? ''}
+      <FieldPropertiesPanel props={current?.props ?? null} onResultType={(fieldType) => set({ type: 'setType', index: model.selected, fieldType, keepCalculated: true })} disabled={locked} fixed={meta} ctx={ctx} rowKey={current?.key ?? ''} fieldName={current?.name ?? ''} siblings={model.rows.map((r) => r.name).filter(Boolean)}
         invalid={Object.fromEntries(Object.entries(model.invalid).filter(([k]) => k.startsWith(`${current?.key}:`)).map(([k, c]) => [k.slice(k.lastIndexOf(':') + 1), c]))}
         onProp={(key, value) => set({ type: 'setProp', index: model.selected, key, value })}
         onInvalid={(key, code) => set({ type: 'setInvalid', index: model.selected, key, code })} />

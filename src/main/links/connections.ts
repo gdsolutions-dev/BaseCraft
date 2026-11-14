@@ -12,7 +12,7 @@ import { joinPresence, presenceEntry, sharedRefusal } from '../db/presence';
 import { peekStartup } from '../db/startup';
 import type MDBReader from 'mdb-reader';
 import { inspectAccess, isJet3, loadAccessCache, openAccess } from './access';
-import { linkRows, resolveSourcePath, sourceRows, type SourceKind } from './store';
+import { linkRows, ODBC, resolveSourcePath, sourceRows, type SourceKind } from './store';
 
 /** shared: a data file written in shared mode, through this session's presence entry (C3 R3). */
 export interface SourceConn { db: DatabaseSync | null; writable: boolean; state: LinkState; path: string; holder?: LockInfo; stale?: boolean; risk: LocationRisk; shared?: true }
@@ -114,7 +114,9 @@ const realKey = (p: string) => {
 
 /** stamp (C2 R4): an Access source's file size, modification time and linked names when its copy was built. lockBase: the
  *  lock.ts base path of `lock` when it is a presence entry (C3 R2), else the file itself. */
-type Entry = SourceConn & { lock?: HeldLock; lockBase?: string; kind: SourceKind; stamp?: string };
+type Entry = SourceConn & { lock?: HeldLock; lockBase?: string; kind: SourceKind | typeof ODBC; stamp?: string };
+/** D1: the credential key (RemoteSources' `<scheme>://` form) and the "path" of an ODBC source. */
+export const odbcKey = (sourceId: string): string => `odbc://${sourceId}`;
 
 export class LinkedSources {
   private conns = new Map<string, Entry>();
@@ -130,6 +132,8 @@ export class LinkedSources {
 
   private connectSource(sourceId: string, write: boolean, takeOver: boolean): SourceConn {
     const row = sourceRows(this.front()).find((s) => s.id === sourceId);
+    // D1: an ODBC source is loaded by the session (async, with the login): until then the key asks for it (bridge.ts: needsLogin)
+    if (row?.kind === ODBC) return { db: null, writable: false, state: 'needsLogin', path: odbcKey(sourceId), risk: 'local' };
     const p = row ? resolveSourcePath(row, this.deps.frontEnd) : '';
     const risk = detectLocationRisk(p, this.deps.probe);
     const failed = (state: LinkState): SourceConn => ({ db: null, writable: false, state, path: p, risk });
@@ -239,12 +243,20 @@ export class LinkedSources {
    *  share makes it slow); the old copy is retired, not closed: this request may still be reading it. */
   open(sourceId: string, write: boolean): SourceConn {
     const c = this.conns.get(sourceId);
-    if (c && fs.existsSync(c.path) && (c.kind !== 'access' || this.fresh(sourceId, c))) return c;
+    if (c && (c.kind === ODBC || (fs.existsSync(c.path) && (c.kind !== 'access' || this.fresh(sourceId, c))))) return c;
     if (c?.kind === 'access') {
       this.conns.delete(sourceId);
       if (c.db) this.retired.push(c.db);
     } else if (c) this.drop(sourceId);
     return this.connectSource(sourceId, write, false);
+  }
+
+  /** D1: `db` (an in-memory copy of the source's tables, query_only) becomes the ODBC source's connection; the old copy is retired. */
+  setOdbc(sourceId: string, db: DatabaseSync): void {
+    const old = this.conns.get(sourceId);
+    if (old?.db) this.retired.push(old.db);
+    this.opens++;
+    this.conns.set(sourceId, { db, writable: false, state: 'ok', path: odbcKey(sourceId), risk: 'local', kind: ODBC });
   }
 
   /** C2 R7: `password` kept for the session when the Access file at `p` accepts it (true), false when it refuses it. `p` must be
@@ -299,8 +311,8 @@ export class LinkedSources {
       if (!c.lock || c.lock.heartbeat() === 'ok' || (c.lockBase && this.rejoin(c))) continue;
       lost = true;
       try { c.db?.close(); } catch { /* already unusable */ }
-      let db: DatabaseSync | null = null;
-      try { db = this.connect(c.kind, c.path, 'readOnly'); } catch (e) { console.error(e); }
+      let db: DatabaseSync | null = null; // c.kind: only a file with a lock gets here, never ODBC
+      try { db = this.connect(c.kind as SourceKind, c.path, 'readOnly'); } catch (e) { console.error(e); }
       const v = peekLock(c.path, this.deps.lockDeps);
       const next: Entry = { db, writable: false, state: db ? 'readOnly' : 'cannotOpen', path: c.path, risk: c.risk, kind: c.kind };
       if (v) Object.assign(next, { holder: v.info, stale: v.stale });

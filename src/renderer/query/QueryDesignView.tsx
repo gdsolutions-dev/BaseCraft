@@ -50,7 +50,7 @@ import './query-design.css';
 
 type Fields = PaneBox['fields'];
 /** `queries`: the saved queries but the pass-throughs (`passThroughs`: never a source, R9; describing one would run it). */
-interface Catalog { tables: string[]; queries: string[]; passThroughs: string[]; relations: Relation[]; fields: Map<string, Fields> }
+interface Catalog { tables: string[]; links: string[]; queries: string[]; passThroughs: string[]; relations: Relation[]; fields: Map<string, Fields> }
 
 /** The pass-throughs among `names` (one definition read each; an unreadable one is not). */
 async function passThroughNames(names: string[]): Promise<string[]> {
@@ -73,12 +73,12 @@ async function readFields(name: string, tables: string[], passThroughs: string[]
 
 /** Lists read again with `token`; `ensure` reads the fields of new sources (and resolves once they are known). */
 function useCatalog(token: number) {
-  const [catalog, setCatalog] = useState<Catalog>({ tables: [], queries: [], passThroughs: [], relations: [], fields: new Map() });
+  const [catalog, setCatalog] = useState<Catalog>({ tables: [], links: [], queries: [], passThroughs: [], relations: [], fields: new Map() });
   const cache = useRef({ lists: null as Promise<Omit<Catalog, 'fields'>> | null, fields: new Map<string, Fields>() });
   const lists = () => (cache.current.lists ??= Promise.all([api.tables.list(), api.objects.list('query'), api.relations.list()])
     .then(async ([t, q, r]) => {
       const passThroughs = await passThroughNames(q.map((x) => x.name));
-      return { tables: t.map((x) => x.name), queries: q.map((x) => x.name).filter((n) => !passThroughs.includes(n)), passThroughs, relations: r };
+      return { tables: t.map((x) => x.name), links: t.filter((x) => x.link).map((x) => x.name), queries: q.map((x) => x.name).filter((n) => !passThroughs.includes(n)), passThroughs, relations: r };
     }));
   // A new token (a save, a change elsewhere): the lists and the fields already shown are read again; until then the
   // previous ones stay (the boxes never go empty, the Table row and the parameter rule keep working).
@@ -233,7 +233,7 @@ function QbeEditor({ model, set, catalog, ensure, readOnly, ctx, self, showTable
       </div>
       {sheet}
       {showTable && (
-        <ShowTableDialog tables={catalog.tables} queries={catalog.queries.filter((n) => self === null || !sameName(n, self))}
+        <ShowTableDialog tables={catalog.tables.filter((n) => !catalog.links.includes(n))} links={catalog.links} queries={catalog.queries.filter((n) => self === null || !sameName(n, self))}
           onAdd={(names) => void add(names)} onClose={() => setShowTable(false)} />
       )}
       {join && (
@@ -781,11 +781,30 @@ export function QueryDesignView({ tab, active, readOnly, dispatch, builder }: Do
     // `active`: back from the unsaved run's datasheet (DocumentView keeps this view behind it), whose leaving cleared the tab's handlers
   }, [tab.id, active, runnable, action, selected, dispatch, view, gridless, tableRow, topKind, kind, isPassThrough]);
 
+  /** SQL view's Format: the text read, printed back in canonical layout (a text that does not parse shows its error). */
+  const formatSql = () => {
+    const r = readSql(live.current.sql);
+    if (!r) return;
+    if ('error' in r) { setSqlError({ ...r.error }); return; }
+    setSql(printSql(r.q));
+    setSqlError(null);
+    set({ type: 'touch' });
+  };
+  // autocompletion: the tables and queries, and the fields of those the text names (read once, cached by `ensure`)
+  useEffect(() => {
+    if (view !== 'sql') return;
+    const words = new Set(sql.toLowerCase().match(/[\p{L}_][\p{L}\p{M}\p{Nd}_]*|\[[^\]]*\]/gu)?.map((w) => w.replace(/^\[|\]$/g, '')));
+    const named = [...catalog.tables, ...catalog.queries].filter((n) => words.has(n.toLowerCase()) && !catalog.fields.has(n));
+    if (named.length) void ensure(named).catch(() => {});
+  }, [view, sql, catalog, ensure]);
+  const sqlNames = [...new Set([...catalog.tables, ...catalog.queries, ...[...catalog.fields.values()].flatMap((f) => f.map((x) => x.name))])];
+
   if (!state || !ctx) return <div className="qd" ref={root} aria-busy />;
   if (view === 'sql') {
     return (
       <div className="qd" ref={root} aria-busy={saving}>
-        <SqlView sql={sql} error={sqlError} readOnly={readOnly || saving}
+        <SqlView sql={sql} error={sqlError} readOnly={readOnly || saving} names={sqlNames}
+          onFormat={passThrough ? undefined : formatSql}
           notice={passThrough ? (passThrough.params ? t('query.passThrough.notice', { label: serverLabel(passThrough.params) }) : t('query.passThrough.noticeNoServer'))
             : gridless ? t('query.sqlOnly') : null}
           onChange={(text) => { setSql(text); setSqlError(null); set({ type: 'touch' }); }} />

@@ -2,8 +2,9 @@
 // are the workstation's settings (settings.json): each change is written at once, the settingsChanged broadcast brings the new values
 // back. « Base de données active » is the designers' (B5): Backstage passes it, or null where it is not offered (Runtime, no base).
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { SortOrderSelect } from './SortOrderSelect';
 import { useTranslation } from 'react-i18next';
-import type { AppSettings, SettingKey } from '../../shared/api';
+import type { AppSettings, SettingKey, TrustedLocation, TrustInfo } from '../../shared/api';
 import { AUTO_INDEX_DEFAULT } from '../../shared/auto-index';
 import { EMBEDDED_FONTS, FONT_ALIASES } from '../../shared/fonts';
 import { UI_LANGUAGES } from '../../shared/i18n';
@@ -15,8 +16,10 @@ import { applyTheme } from '../i18n';
 import type { Settings } from './Backstage';
 import { useErrorDialog } from './Modal';
 import { currentBaseOptions } from './startup';
+import { builtInGroups, mainTabsForOptions, quickAccessChoices, toolTabsForOptions } from './ribbon-model';
+import { NO_RIBBON_CUSTOM, type CustomGroup, type RibbonCustom } from '../../shared/ribbon-custom';
 
-export type OptionsCategory = 'general' | 'currentDb' | 'datasheet' | 'designers' | 'client';
+export type OptionsCategory = 'general' | 'currentDb' | 'datasheet' | 'designers' | 'client' | 'quickAccess' | 'ribbon' | 'trust';
 const MAX_RECENT = 50;   // settings.ts's range of recentCount (0..50)
 const MAX_MARGIN = 5670;   // twips: settings.ts's bound of the print margins
 const NEW_FIELD_TYPES = ['shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink'] as const;   // no AutoNumber (O3 R3)
@@ -87,7 +90,7 @@ function RadioGroup<K extends SettingKey>(p: { id: string; label: string; k: K; 
   );
 }
 
-function BoxRow<K extends 'propertyUpdateOptions' | 'showTableNames' | 'outputAllFields' | 'autoJoin' | 'cursorStopsAtEnds' | 'fourDigitYearAll' | 'gridlinesHorizontal' | 'gridlinesVertical' | 'datasheetFontUnderline' | 'datasheetFontItalic'>(
+function BoxRow<K extends 'propertyUpdateOptions' | 'showTableNames' | 'outputAllFields' | 'autoJoin' | 'cursorStopsAtEnds' | 'fourDigitYearAll' | 'gridlinesHorizontal' | 'gridlinesVertical' | 'datasheetFontUnderline' | 'datasheetFontItalic' | 'screenTips' | 'screenTipShortcuts' | 'errorChecking' | 'errorUnassociated' | 'errorNewLabels' | 'errorProperties' | 'errorReport' | 'errorShortcut'>(
   p: { k: K; testid: string; label: string; s: Settings; put(k: K, v: boolean): void }) {
   return (
     <label className="bs-check">
@@ -97,10 +100,12 @@ function BoxRow<K extends 'propertyUpdateOptions' | 'showTableNames' | 'outputAl
   );
 }
 
-function General({ s }: { s: Settings }) {
+function General({ s: stored }: { s: Settings }) {
   const { t } = useTranslation();
+  const { s, put } = useLocal(stored);
   const showError = useErrorDialog();
   const folder = useCommit('defaultFolder', s.defaultFolder, (v) => v.trim());
+  const zoom = useCommit('interfaceZoom', s.interfaceZoom, (v) => { const n = Number(v.trim()); return Number.isInteger(n) && n >= 25 && n <= 300 ? n : null; });
   const browse = async () => {
     const dir = await api.app.pickFolder();
     if (dir) await api.app.setSetting('defaultFolder', dir);
@@ -126,9 +131,26 @@ function General({ s }: { s: Settings }) {
           {(['system', 'light', 'dark'] as const).map((l) => <option key={l} value={l}>{t(`app.theme.${l}`)}</option>)}
         </select>
       </label>
+      <div className="bs-field">
+        <label htmlFor="opt-zoom">{t('options.general.interfaceZoom')}</label>
+        <div className="bs-icon-row">
+          <input id="opt-zoom" type="number" min={25} max={300} step={5} data-testid="opt-zoom" {...zoom} />
+          <button type="button" className="btn btn-sm" data-testid="opt-zoom-reset" disabled={s.interfaceZoom === 100}
+            onClick={() => void api.app.setSetting('interfaceZoom', 100).catch(showError)}>{t('options.general.interfaceZoomReset')}</button>
+        </div>
+      </div>
+      <RadioGroup id="opt-previewzoom" label={t('options.general.previewZoom')} k="previewZoom" value={s.previewZoom} put={put}
+        opts={[['fitPage', 'opt-previewzoom-fit', t('options.general.previewFit')], ['actual', 'opt-previewzoom-actual', t('options.general.previewActual')]]} />
+    </div>
+    <div className="bs-options">
+      <RadioGroup id="opt-screentips" label={t('options.general.screenTipStyle')} k="screenTips" value={s.screenTips} put={put}
+        opts={[[true, 'opt-screentips-on', t('options.general.screenTipsOn')], [false, 'opt-screentips-off', t('options.general.screenTipsOff')]]} />
+      <BoxRow k="screenTipShortcuts" testid="opt-screentip-keys" label={t('options.general.screenTipShortcuts')} s={s} put={put} />
     </div>
     <h2>{t('options.general.creation')}</h2>
     <div className="bs-options">
+      <SortOrderSelect label={t('options.general.sortOrderNew')} value={s.newSortOrder} testid="opt-sort-order"
+        onChange={(id) => void api.app.setSetting('newSortOrder', id).catch(showError)} />
       <div className="bs-field">
         <label htmlFor="opt-default-folder">{t('options.general.defaultFolder')}</label>
         <div className="bs-icon-row">
@@ -315,6 +337,12 @@ function Datasheet({ stored }: { stored: Settings }) {
         <span>{t('options.datasheet.columnWidth')}</span>
         <input type="text" data-testid="opt-col-width" {...width} />
       </label>
+      <label className="bs-inline">
+        <span>{t('options.datasheet.defaultCellEffect')}</span>
+        <select data-testid="opt-cell-effect" value={s.datasheetCellEffect} onChange={(e) => put('datasheetCellEffect', e.target.value as Settings['datasheetCellEffect'])}>
+          {(['flat', 'raised', 'sunken'] as const).map((e) => <option key={e} value={e}>{t(`datasheet.format.${e}`)}</option>)}
+        </select>
+      </label>
     </div>
     <h2>{t('options.datasheet.font')}</h2>
     <div className="bs-options">
@@ -353,6 +381,9 @@ function Designers({ stored }: { stored: Settings }) {
     const n = v.trim();   // it goes into a CSS font-family (settings.ts refuses the same characters)
     return n.length >= 1 && n.length <= 64 && !/["\\;{}<>]/.test(n) && !CONTROL.test(n) ? n : refuse();
   });
+  const template = (v: string) => (v.trim().length <= 64 && !CONTROL.test(v) ? v.trim() : refuse());
+  const formTemplate = useCommit('formTemplate', stored.formTemplate, template);
+  const reportTemplate = useCommit('reportTemplate', stored.reportTemplate, template);
   const fontSize = useCommit('queryFontSize', stored.queryFontSize, (v) => {
     const n = Number(v);
     return v.trim() !== '' && Number.isInteger(n) && n >= 1 && n <= 127 ? n : refuse();
@@ -417,7 +448,258 @@ function Designers({ stored }: { stored: Settings }) {
     <div className="bs-options">
       <RadioGroup id="opt-selection" label={t('options.designers.selection')} k="selectionBehavior" value={s.selectionBehavior} put={put}
         opts={[['partial', 'opt-select-partial', t('options.designers.partial')], ['full', 'opt-select-full', t('options.designers.full')]]} />
+      <label className="bs-inline">
+        <span>{t('customize.formTemplate')}</span>
+        <input type="text" data-testid="opt-form-template" {...formTemplate} />
+      </label>
+      <label className="bs-inline">
+        <span>{t('customize.reportTemplate')}</span>
+        <input type="text" data-testid="opt-report-template" {...reportTemplate} />
+      </label>
+      <p className="muted">{t('customize.templateNote')}</p>
     </div>
+    <h2>{t('customize.errorSection')}</h2>
+    <div className="bs-options">
+      <BoxRow k="errorChecking" testid="opt-err-enable" label={t('customize.errorEnable')} s={s} put={put} />
+      <div className="bs-indent">
+        <BoxRow k="errorUnassociated" testid="opt-err-unassociated" label={t('customize.errorUnassociated')} s={s} put={put} />
+        <BoxRow k="errorNewLabels" testid="opt-err-newlabels" label={t('customize.errorNewLabels')} s={s} put={put} />
+        <BoxRow k="errorProperties" testid="opt-err-properties" label={t('customize.errorProperties')} s={s} put={put} />
+        <BoxRow k="errorReport" testid="opt-err-report" label={t('customize.errorReport')} s={s} put={put} />
+        <BoxRow k="errorShortcut" testid="opt-err-shortcut" label={t('customize.errorShortcut')} s={s} put={put} />
+      </div>
+      <label className="bs-inline">
+        <span>{t('customize.errorColor')}</span>
+        <input type="color" data-testid="opt-err-color" value={s.errorColor} onChange={(e) => put('errorColor', e.target.value)} />
+      </label>
+    </div>
+  </>);
+}
+
+/** Quick Access Toolbar: the commands on it, in order; the ones that can still be added. Saved at once; the toolbar follows the broadcast. */
+function QuickAccess({ s }: { s: Settings }) {
+  const { t } = useTranslation();
+  const showError = useErrorDialog();
+  const choices = quickAccessChoices();
+  const [pick, setPick] = useState('');
+  const [sel, setSel] = useState('');
+  const list = s.quickAccess.filter((id) => choices.has(id));
+  const write = (next: string[]) => { api.app.setSetting('quickAccess', next).catch((e: unknown) => void showError(e)); };
+  const move = (d: -1 | 1) => {
+    const i = list.indexOf(sel), j = i + d;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const next = [...list];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    write(next);
+  };
+  const addable = [...choices.keys()].filter((id) => !list.includes(id)).map((id) => [id, t(choices.get(id)!.labelKey)] as const).sort((a, b) => a[1].localeCompare(b[1]));
+  return (<>
+    <p className="bs-opthead">{t('options.qat.header')}</p>
+    <div className="bs-options">
+      <label>
+        <span>{t('options.qat.choose')}</span>
+        <select data-testid="opt-qat-pick" value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="" />
+          {addable.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+      </label>
+      <div className="bs-icon-row">
+        <button type="button" className="btn btn-sm" data-testid="opt-qat-add" disabled={!pick} onClick={() => { write([...list, pick]); setPick(''); }}>{t('options.qat.add')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-qat-remove" disabled={!sel} onClick={() => { write(list.filter((id) => id !== sel)); setSel(''); }}>{t('options.qat.remove')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-qat-up" disabled={!sel || list.indexOf(sel) <= 0} onClick={() => move(-1)}>{t('options.qat.up')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-qat-down" disabled={!sel || list.indexOf(sel) === list.length - 1} onClick={() => move(1)}>{t('options.qat.down')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-qat-reset" onClick={() => { write(DEFAULT_QAT); setSel(''); }}>{t('options.qat.reset')}</button>
+      </div>
+      <div className="bs-field" role="listbox" aria-label={t('options.qat.current')} data-testid="opt-qat-list">
+        {list.map((id) => (
+          <button key={id} type="button" role="option" aria-selected={id === sel} data-testid={`opt-qat-item-${id}`} className={`bs-item${id === sel ? ' is-active' : ''}`}
+            onClick={() => setSel(id)}>{t(choices.get(id)!.labelKey)}</button>
+        ))}
+      </div>
+    </div>
+  </>);
+}
+const DEFAULT_QAT = ['save', 'undo', 'redo'];
+
+type RibSel = { k: 'tab'; tab: string } | { k: 'group'; tab: string; group: string } | { k: 'cmd'; tab: string; group: string; cmd: string };
+const swap = <T,>(a: T[], i: number, d: -1 | 1): T[] => { const j = i + d; if (i < 0 || j < 0 || j >= a.length) return a; const n = [...a]; [n[i], n[j]] = [n[j]!, n[i]!]; return n; };
+/** Customize Ribbon: show or hide the main tabs, reorder and rename them, custom tabs and groups holding delivered commands. Saved at once. */
+function CustomizeRibbon({ s }: { s: Settings }) {
+  const { t } = useTranslation();
+  const showError = useErrorDialog();
+  const choices = quickAccessChoices();
+  const c = s.ribbonCustom;
+  const tabs = mainTabsForOptions(c);
+  const [sel, setSel] = useState<RibSel | null>(null);
+  const [pick, setPick] = useState('');
+  const [name, setName] = useState('');
+  const write = (next: RibbonCustom) => { api.app.setSetting('ribbonCustom', next).catch((e: unknown) => void showError(e)); };
+  const nextId = (p: 'c' | 'g') => `${p}${1 + Math.max(0, ...[...c.tabs.flatMap((x) => [x.id, ...x.groups.map((g) => g.id)]), ...Object.values(c.groups ?? {}).flat().map((g) => g.id)].filter((id) => id.startsWith(p)).map((id) => Number(id.slice(1))))}`;
+  const labelOf = (x: { id: string; labelKey: string; label?: string }) => x.label ?? t(x.labelKey);
+  const customTab = sel ? c.tabs.find((x) => x.id === sel.tab) : undefined;
+  const mapTab = (f: (x: RibbonCustom['tabs'][number]) => RibbonCustom['tabs'][number]) => write({ ...c, tabs: c.tabs.map((x) => (x.id === sel?.tab ? f(x) : x)) });
+  // the custom groups of the selected tab: a custom tab's own, or those added to a built-in (main or tool) tab
+  const groupsOf = (tab: string) => c.tabs.find((x) => x.id === tab)?.groups ?? c.groups?.[tab] ?? [];
+  const mapGroups = (f: (g: CustomGroup[]) => CustomGroup[]) => {
+    if (!sel) return;
+    if (customTab) mapTab((x) => ({ ...x, groups: f(x.groups) }));
+    else write({ ...c, groups: { ...c.groups, [sel.tab]: f(c.groups?.[sel.tab] ?? []) } });
+  };
+  const customGroup = sel && sel.k !== 'tab' ? groupsOf(sel.tab).find((g) => g.id === sel.group) : undefined;   // none: a built-in group
+  const ids = tabs.map((x) => x.id);
+  const groupId = sel?.k === 'tab' ? groupsOf(sel.tab)[0]?.id : customGroup?.id;
+  const add = () => {
+    if (!pick || !groupId) return;
+    mapGroups((gs) => gs.map((g) => (g.id === groupId && g.commands.length < 40 && !g.commands.includes(pick) ? { ...g, commands: [...g.commands, pick] } : g)));
+    setPick('');
+  };
+  const remove = () => {
+    if (!sel) return;
+    if (sel.k === 'tab') write({ ...c, tabs: c.tabs.filter((x) => x.id !== sel.tab), order: c.order.filter((x) => x !== sel.tab), hidden: c.hidden.filter((x) => x !== sel.tab) });
+    else if (sel.k === 'group') mapGroups((gs) => gs.filter((g) => g.id !== sel.group));
+    else mapGroups((gs) => gs.map((g) => (g.id === sel.group ? { ...g, commands: g.commands.filter((m) => m !== sel.cmd) } : g)));
+    setSel(null);
+  };
+  const move = (d: -1 | 1) => {
+    if (!sel) return;
+    if (sel.k === 'tab') write({ ...c, order: swap(ids, ids.indexOf(sel.tab), d) });
+    else if (sel.k === 'group') mapGroups((gs) => swap(gs, gs.findIndex((g) => g.id === sel.group), d));
+    else mapGroups((gs) => gs.map((g) => (g.id === sel.group ? { ...g, commands: swap(g.commands, g.commands.indexOf(sel.cmd), d) } : g)));
+  };
+  const rename = () => {
+    const label = name.trim();
+    if (!sel || sel.k === 'cmd' || !label) return;
+    if (sel.k === 'group' && customGroup) mapGroups((gs) => gs.map((g) => (g.id === sel.group ? { ...g, label } : g)));
+    else if (sel.k === 'group') write({ ...c, groupNames: { ...c.groupNames, [`${sel.tab}.${sel.group}`]: label } });
+    else if (customTab) mapTab((x) => ({ ...x, label }));
+    else write({ ...c, names: { ...c.names, [sel.tab]: label } });
+    setName('');
+  };
+  const newTab = () => {
+    const tab = { id: nextId('c'), label: t('customize.newTab'), groups: [{ id: nextId('g'), label: t('customize.newGroup'), commands: [] as string[] }] };
+    write({ ...c, tabs: [...c.tabs, tab], order: [...ids, tab.id] });
+    setSel({ k: 'tab', tab: tab.id });
+  };
+  const newGroup = () => {
+    if (!sel || groupsOf(sel.tab).length >= 10) return;
+    const id = nextId('g');
+    mapGroups((gs) => [...gs, { id, label: t('customize.newGroup'), commands: [] }]);
+    setSel({ k: 'group', tab: sel.tab, group: id });
+  };
+  const movable = !!sel && (sel.k === 'tab' ? ids.includes(sel.tab) : sel.k === 'cmd' || !!customGroup);
+  const addable = [...choices.keys()].map((id) => [id, t(choices.get(id)!.labelKey)] as const).sort((a, b) => a[1].localeCompare(b[1]));
+  const row = (testid: string, on: boolean, indent: number, text: string, onClick: () => void) => (
+    <button key={testid} type="button" role="option" aria-selected={on} data-testid={testid} className={`bs-item${on ? ' is-active' : ''}`} style={{ paddingLeft: 12 + indent * 20 }} onClick={onClick}>{text}</button>
+  );
+  // a tab, its built-in groups (renamable), then its custom groups and their commands
+  const tabBlock = (x: { id: string; labelKey: string; label?: string }, check?: ReactNode) => (<div key={x.id}>
+    <div className="bs-check" style={{ display: 'flex' }}>
+      {check}
+      {row(`opt-rib-tab-${x.id}`, sel?.k === 'tab' && sel.tab === x.id, 0, labelOf(x), () => setSel({ k: 'tab', tab: x.id }))}
+    </div>
+    {builtInGroups(x.id).map((g) => row(`opt-rib-bgroup-${x.id}-${g.id}`, sel?.k === 'group' && sel.tab === x.id && sel.group === g.id, 1,
+      c.groupNames?.[`${x.id}.${g.id}`] ?? t(g.labelKey), () => setSel({ k: 'group', tab: x.id, group: g.id })))}
+    {groupsOf(x.id).map((g) => (<div key={g.id}>
+      {row(`opt-rib-group-${g.id}`, sel?.k === 'group' && sel.group === g.id, 1, g.label, () => setSel({ k: 'group', tab: x.id, group: g.id }))}
+      {g.commands.map((m) => row(`opt-rib-cmd-${g.id}-${m}`, sel?.k === 'cmd' && sel.group === g.id && sel.cmd === m, 2, choices.has(m) ? t(choices.get(m)!.labelKey) : m,
+        () => setSel({ k: 'cmd', tab: x.id, group: g.id, cmd: m })))}
+    </div>))}
+  </div>);
+  return (<>
+    <p className="bs-opthead">{t('customize.ribbonHeader')}</p>
+    <div className="bs-options">
+      <div className="bs-icon-row">
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-newtab" disabled={c.tabs.length >= 10} onClick={newTab}>{t('customize.newTab')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-newgroup" disabled={!sel} onClick={newGroup}>{t('customize.newGroup')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-remove" disabled={!sel || (sel.k === 'tab' && !customTab) || (sel.k === 'group' && !customGroup)} onClick={remove}>{t('options.qat.remove')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-up" disabled={!movable} onClick={() => move(-1)}>{t('options.qat.up')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-down" disabled={!movable} onClick={() => move(1)}>{t('options.qat.down')}</button>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-reset" onClick={() => { write(NO_RIBBON_CUSTOM); setSel(null); }}>{t('options.qat.reset')}</button>
+      </div>
+      <div className="bs-icon-row">
+        <input type="text" data-testid="opt-rib-name" aria-label={t('customize.rename')} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-rename" disabled={!sel || sel.k === 'cmd' || !name.trim()} onClick={rename}>{t('customize.rename')}</button>
+      </div>
+      <div className="bs-icon-row">
+        <select data-testid="opt-rib-pick" aria-label={t('options.qat.choose')} value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="" />
+          {addable.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <button type="button" className="btn btn-sm" data-testid="opt-rib-add" disabled={!pick || !groupId} onClick={add}>{t('options.qat.add')}</button>
+      </div>
+      <p className="muted">{t('customize.ribbonNote')}</p>
+      <div className="bs-field" role="listbox" aria-label={t('customize.ribbonTabs')} data-testid="opt-rib-list">
+        {tabs.map((x) => {
+          const shown = x.id === 'home' || !c.hidden.includes(x.id);
+          return tabBlock(x, (<input type="checkbox" data-testid={`opt-rib-show-${x.id}`} checked={shown} disabled={x.id === 'home'}
+            aria-label={t('customize.show', { name: labelOf(x) })} onChange={() => write({ ...c, hidden: shown ? [...c.hidden, x.id] : c.hidden.filter((h) => h !== x.id) })} />));
+        })}
+        <p className="bs-opthead">{t('customize.toolTabs')}</p>
+        {toolTabsForOptions(c).map((x) => tabBlock(x))}
+      </div>
+    </div>
+  </>);
+}
+
+/** Trust Center: trusted locations (the administrator's, read only, then this user's, editable: workstation settings) and the approvals. */
+function TrustCenter({ s: stored }: { s: Settings }) {
+  const { t } = useTranslation();
+  const showError = useErrorDialog();
+  const { s, put } = useLocal(stored);
+  const [info, setInfo] = useState<TrustInfo | null>(null);
+  const [sel, setSel] = useState<number | null>(null);
+  const [refused, setRefused] = useState(false);
+  useEffect(() => { api.app.trust().then(setInfo).catch((e: unknown) => void showError(e)); }, [showError]);
+  const own = s.trustedLocations;
+  const cur = sel === null ? undefined : own[sel];
+  const putOwn = (list: TrustedLocation[]) => { setRefused(false); put('trustedLocations', list); };
+  const edit = (patch: Partial<TrustedLocation>) => putOwn(own.map((l, i) => (i === sel ? { ...l, ...patch } : l)));
+  const add = async () => {
+    const dir = await api.app.pickFolder();
+    if (!dir || own.some((l) => l.path === dir)) return;
+    if (!s.trustNetwork && /^[\\/]{2}[^?.]/.test(dir)) { setRefused(true); return; }
+    putOwn([...own, { path: dir, subfolders: false, description: '' }]);
+    setSel(own.length);
+  };
+  return (<>
+    <p className="bs-opthead">{t('options.trust.header')}</p>
+    {info && (<>
+      <h2>{t('options.trust.locations')}</h2>
+      <div className="bs-options" data-testid="opt-trust-locations">
+        <ul>
+          {info.folders.map((f) => <li key={f.path} data-testid="opt-trust-folder">{f.path}{f.subfolders ? ` (${t('options.trust.subfolders')})` : ''} <span className="muted">- {t('options.trust.admin')}</span></li>)}
+        </ul>
+        {info.folders.length === 0 && own.length === 0 && <p data-testid="opt-trust-none">{t('options.trust.none')}</p>}
+        <div className="bs-field" role="listbox" aria-label={t('options.trust.locations')} data-testid="opt-trust-own">
+          {own.map((l, i) => (
+            <button key={l.path} type="button" role="option" aria-selected={i === sel} data-testid="opt-trust-own-item" className={`bs-item${i === sel ? ' is-active' : ''}`}
+              onClick={() => setSel(i)}>{l.path}{l.subfolders ? ` (${t('options.trust.subfolders')})` : ''}{l.description ? ` - ${l.description}` : ''}</button>
+          ))}
+        </div>
+        <div className="bs-icon-row">
+          <button type="button" className="btn btn-sm" data-testid="opt-trust-add" onClick={() => void add().catch((e: unknown) => void showError(e))}>{t('options.trust.add')}</button>
+          <button type="button" className="btn btn-sm" data-testid="opt-trust-remove" disabled={!cur}
+            onClick={() => { putOwn(own.filter((_, i) => i !== sel)); setSel(null); }}>{t('options.trust.remove')}</button>
+        </div>
+        {refused && <p role="alert" data-testid="opt-trust-refused">{t('options.trust.networkRefused')}</p>}
+        {cur && (<>
+          <label className="bs-check"><input type="checkbox" data-testid="opt-trust-sub" checked={cur.subfolders} onChange={(e) => edit({ subfolders: e.target.checked })} />
+            <span>{t('options.trust.subfoldersAlso')}</span></label>
+          <label><span>{t('options.trust.description')}</span>
+            <input type="text" data-testid="opt-trust-desc" maxLength={255} key={cur.path} defaultValue={cur.description} onBlur={(e) => { if (e.target.value !== cur.description) edit({ description: e.target.value }); }} /></label>
+        </>)}
+        <label className="bs-check"><input type="checkbox" data-testid="opt-trust-network" checked={s.trustNetwork} onChange={(e) => { setRefused(false); put('trustNetwork', e.target.checked); }} />
+          <span>{t('options.trust.network')}</span></label>
+      </div>
+      <h2>{t('options.trust.approvalsTitle')}</h2>
+      <div className="bs-options">
+        <p data-testid="opt-trust-approvals">{t('options.trust.approvals', { count: info.approvals })}</p>
+        <div className="bs-icon-row">
+          <button type="button" className="btn btn-sm" data-testid="opt-trust-clear" disabled={info.approvals === 0}
+            onClick={() => void api.app.clearApprovals().then(setInfo).catch((e: unknown) => void showError(e))}>{t('options.trust.clear')}</button>
+        </div>
+      </div>
+    </>)}
   </>);
 }
 
@@ -426,7 +708,7 @@ export type ThisDb = { value: boolean; onChange(v: boolean): void };
 
 export function OptionsPage(p: { settings: Settings | null; currentDb: ReactNode | null; thisDb: ThisDb | null; designers: boolean; cat: OptionsCategory; onCat(c: OptionsCategory): void }) {
   const { t } = useTranslation();
-  const cats: OptionsCategory[] = ['general', ...(p.currentDb ? ['currentDb' as const] : []), 'datasheet', ...(p.designers ? ['designers' as const] : []), 'client'];
+  const cats: OptionsCategory[] = ['general', ...(p.currentDb ? ['currentDb' as const] : []), 'datasheet', ...(p.designers ? ['designers' as const] : []), 'client', 'quickAccess', 'ribbon', 'trust'];
   const cat = cats.includes(p.cat) ? p.cat : 'general';   // the base closed while « Base de données active » was shown
   const onKey = (e: KeyboardEvent) => {
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
@@ -449,7 +731,7 @@ export function OptionsPage(p: { settings: Settings | null; currentDb: ReactNode
           ))}
         </div>
         <div className="bs-optpanel" role="tabpanel" id="opt-panel" data-testid="opt-panel" aria-labelledby={`opt-cat-${cat}`}>
-          {cat === 'currentDb' ? p.currentDb : p.settings && (cat === 'general' ? <General s={p.settings} /> : cat === 'datasheet' ? <Datasheet stored={p.settings} /> : cat === 'designers' ? <Designers stored={p.settings} /> : <Client s={p.settings} thisDb={p.thisDb} designers={p.designers} />)}
+          {cat === 'currentDb' ? p.currentDb : cat === 'trust' ? p.settings ? <TrustCenter s={p.settings} /> : null : cat === 'ribbon' && p.settings ? <CustomizeRibbon s={p.settings} /> : p.settings && (cat === 'quickAccess' ? <QuickAccess s={p.settings} /> : cat === 'general' ? <General s={p.settings} /> : cat === 'datasheet' ? <Datasheet stored={p.settings} /> : cat === 'designers' ? <Designers stored={p.settings} /> : <Client s={p.settings} thisDb={p.thisDb} designers={p.designers} />)}
         </div>
       </div>
     </section>

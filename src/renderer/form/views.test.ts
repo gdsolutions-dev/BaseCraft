@@ -162,3 +162,10 @@ describe('withColumnWidths', () => {
     expect(withColumnWidths(d, { A: twipsToPx(900) })).toBe(d);
   });
 });
+
+describe('C5b: the Attachment control is a column of the Datasheet view', () => {
+  it('is listed with its field', () => {
+    const d = docWith({}, [ctl('textBox', 'Nom', { ControlSource: 'Nom' }), ctl('attachment', 'Fichiers', { ControlSource: 'Pieces' })]);
+    expect(datasheetColumns(d, info).map((c) => c.control)).toEqual(['Nom', 'Fichiers']);
+  });
+});

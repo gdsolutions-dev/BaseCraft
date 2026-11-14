@@ -5,13 +5,15 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, wr
 import { join } from 'node:path';
 
 export const PYODIDE_VERSION = '314.0.7';
-export const ROOT_PACKAGES = ['numpy', 'pandas'];
+export const ROOT_PACKAGES = ['numpy', 'pandas', 'jedi'];
 export const PYTHON_LICENSES = {
   numpy: 'BSD-3-Clause',
   pandas: 'BSD-3-Clause',
   'python-dateutil': 'Apache-2.0 OR BSD-3-Clause',
   six: 'MIT',
   pytz: 'MIT',
+  jedi: 'MIT',
+  parso: 'MIT',
 };
 const CORE = ['pyodide.mjs', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip'];
 const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;

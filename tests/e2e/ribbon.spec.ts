@@ -27,16 +27,16 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
   const { app, page } = await launchApp({ args: [base], env: { BASECRAFT_REGION: 'fr-FR' } });
   try {
     await page.getByTestId('ribbon-tab-externalData').click();
-    const query = page.getByTestId('cmd-savedImports'); // a placeholder (later)
-    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.savedImports);
-    await expect(page.getByTestId('cmd-savedImports')).toHaveAccessibleName(fr.ribbon.cmd.savedImports); // the French labels are laid out (the hover lands on the right button)
+    const query = page.getByTestId('cmd-exportAccess'); // a placeholder (later)
+    await expect(query).toHaveAccessibleName(fr.ribbon.cmd.exportAccess);
+    await expect(page.getByTestId('cmd-exportAccess')).toHaveAccessibleName(fr.ribbon.cmd.exportAccess); // the French labels are laid out (the hover lands on the right button)
     await expect(query).toHaveAttribute('aria-disabled', 'true');
     await expect(query).toHaveAttribute('data-planned', 'later');
     await expect(query).not.toHaveAttribute('disabled');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
     await query.hover();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.savedImports + fr.ribbon.planned.later);   // a small button's tooltip also names it
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.exportAccess + fr.ribbon.planned.later);   // a small button's tooltip also names it
     await expect(query).toHaveAccessibleDescription(fr.ribbon.planned.later); // aria-describedby
     await query.click({ force: true }); // Playwright would wait for an aria-disabled button to become enabled
     await expect(docTabs(page)).toHaveCount(0);
@@ -44,13 +44,11 @@ test('a planned command: disabled but focusable, its tooltip names the batch on 
     await page.mouse.move(600, 600);
     await expect(page.getByRole('tooltip')).toHaveCount(0);
 
-    // keyboard: Tab reaches it from the previous command (ODBC Database), and the tooltip shows on focus
-    await page.getByTestId('cmd-importOdbc').focus();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.importOdbc + fr.ribbon.planned.later);
-    await page.getByTestId('cmd-importOdbc').focus();
+    // keyboard: Tab reaches it from the previous command (export to text; the PDF export between them is disabled with no document), and the tooltip shows on focus
+    await page.getByTestId('cmd-exportText').focus();
     await page.keyboard.press('Tab');
     await expect(query).toBeFocused();
-    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.savedImports + fr.ribbon.planned.later);   // a small button's tooltip also names it
+    await expect(page.getByRole('tooltip')).toHaveText(fr.ribbon.cmd.exportAccess + fr.ribbon.planned.later);   // a small button's tooltip also names it
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
     await expect(docTabs(page)).toHaveCount(0);

@@ -105,7 +105,7 @@ function Manager({ initial, ticked, changed, onClose, retitle }: {
       <div className="modal-buttons">
         <button type="button" className="btn" data-testid="ltm-select-all" disabled={busy || rows.length === 0} onClick={() => setPicked(rows.map((l) => l.name))}>{t('link.selectAll')}</button>
         <button type="button" className="btn" data-testid="ltm-refresh" disabled={busy || picked.length === 0} onClick={() => void refresh()}>{t('ltm.refresh')}</button>
-        <button type="button" className="btn" data-testid="ltm-relink" disabled={busy || picked.length === 0 || mixed} onClick={() => void relink()}>{t('ltm.relink')}</button>
+        <button type="button" className="btn" data-testid="ltm-relink" disabled={busy || picked.length === 0 || mixed || pickedRows.some((l) => l.kind === 'odbc')} onClick={() => void relink()}>{t('ltm.relink')}</button>
         <button type="button" className="btn btn-primary" data-testid="ltm-close" disabled={busy} onClick={() => onClose(true)}>{t('ltm.close')}</button>
       </div>
     </div>

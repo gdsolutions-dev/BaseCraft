@@ -1,7 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
+import { getAttachment, listAttachments, type AttachmentInfo } from '../main/db/attachments';
+import { sameName } from '../shared/field-types';
 import type { CellInput } from '../shared/coerce';
 import type { LocaleInfo } from '../shared/locale-format';
-import { dataDesign, listTables, pickName } from '../main/db/schema';
+import { dataDesign, listTables, pickName, quoteIdent, tableDesign } from '../main/db/schema';
 import { isLinkName } from '../main/links/store';
 import { insertRow } from '../main/db/write-layer';
 import type { OpOutcome } from './ops';
@@ -39,4 +43,21 @@ export async function rowsInsert(db: DatabaseSync, args: Record<string, unknown>
     }
   }
   return { ok: true };
+}
+
+/** The files of an Attachment field: every row that has some (`rowid` omitted), or the one row. `extractTo`: a folder (created) where
+ *  each file of the rows listed is written under its stored name (an existing file is never overwritten). Read-only: db may be. */
+export function attachmentsRead(db: DatabaseSync, args: { table: string; field: string; rowid?: number; extractTo?: string }): { rowid: number; files: AttachmentInfo[] }[] {
+  const table = pickName(listTables(db).map((t) => t.name), args.table);
+  if (table === undefined || isLinkName(db, table)) throw new Error(`table not found: ${args.table}`);
+  const fd = tableDesign(db, table).fields.find((f) => sameName(f.name, args.field));
+  if (!fd || fd.props.type !== 'attachment') throw new Error(`not an Attachment field: ${args.field}`);
+  const ids = args.rowid !== undefined ? [args.rowid]
+    : (db.prepare(`SELECT rowid AS r FROM ${quoteIdent(table)} WHERE ${quoteIdent(fd.name)} IS NOT NULL ORDER BY rowid`).all() as { r: number | bigint }[]).map((x) => Number(x.r));
+  const out = ids.map((rowid) => ({ rowid, files: listAttachments(db, table, fd.name, rowid) })).filter((r) => r.files.length);
+  if (args.extractTo !== undefined) {
+    fs.mkdirSync(args.extractTo, { recursive: true });
+    for (const r of out) for (const f of r.files) fs.writeFileSync(path.join(args.extractTo, f.name), getAttachment(db, table, fd.name, r.rowid, f.id).data, { flag: 'wx' });
+  }
+  return out;
 }

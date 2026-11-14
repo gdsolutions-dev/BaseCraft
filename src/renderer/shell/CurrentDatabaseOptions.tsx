@@ -7,6 +7,8 @@ import { cleanTitle, isValidIcon, type StartupOptions } from '../../shared/start
 import { api } from '../bridge';
 import { bytesToBase64, iconPng } from './app-icon';
 import { bcErrorCode, useErrorDialog, useModal } from './Modal';
+import { SortOrderSelect, useSortOrderName } from './SortOrderSelect';
+import type { SortOrderId } from '../../shared/sort-orders';
 
 /** The file the owner picks; what is stored is the 256 px PNG made from it. */
 const MAX_ICON_FILE = 5 * 1024 * 1024;
@@ -21,6 +23,10 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
   const last = useRef<StartupOptions | null>(null);   // the options as last read or saved: a save sends the whole object
   const queue = useRef<Promise<void>>(Promise.resolve());   // one save at a time: a quick second change builds on the first
   const file = useRef<HTMLInputElement>(null);
+  const orderName = useSortOrderName();
+  const [order, setOrder] = useState<{ applied: SortOrderId; pending: SortOrderId | null } | null>(null);
+  const loadOrder = useCallback(() => api.base.sortOrder().then(setOrder).catch(showError), [showError]);
+  useEffect(() => { void loadOrder(); }, [loadOrder]);
 
   const load = useCallback(() => api.base.startup().then((s) => { last.current = s; setO(s); setTitle(s.appTitle); setListMax(String(s.filterListMax)); }).catch(showError), [showError]);
   useEffect(() => { void load(); }, [load]);
@@ -120,12 +126,29 @@ export function CurrentDatabaseOptions(p: { readOnly: boolean; forms: readonly s
           {box('opt-db-statusbar', 'statusBar', t('options.db.statusBar'))}
           <div className="bs-field" role="group" aria-labelledby="opt-db-docwindow">
             <span id="opt-db-docwindow">{t('options.db.docWindow')}</span>
-            <div className="bs-indent">{box('opt-db-doctabs', 'documentTabs', t('options.db.documentTabs'))}</div>
+            <div className="bs-indent">
+              <label className="bs-check">
+                <input type="radio" name="opt-db-docmode" data-testid="opt-db-overlapping" checked={o.overlappingWindows} disabled={off} onChange={() => save({ overlappingWindows: true })} />
+                <span>{t('options.db.docOverlapping')}</span>
+              </label>
+              <label className="bs-check">
+                <input type="radio" name="opt-db-docmode" data-testid="opt-db-tabbed" checked={!o.overlappingWindows} disabled={off} onChange={() => save({ overlappingWindows: false })} />
+                <span>{t('options.db.docTabbed')}</span>
+              </label>
+              <div className="bs-indent">{box('opt-db-doctabs', 'documentTabs', t('options.db.documentTabs'), { disabled: o.overlappingWindows })}</div>
+            </div>
           </div>
           <div className="bs-field">
             {box('opt-db-specialkeys', 'specialKeys', t('options.db.specialKeys'), { help: 'opt-db-specialkeys-help' })}
             <span id="opt-db-specialkeys-help" className="muted">{t('options.db.specialKeysHelp')}</span>
           </div>
+          {order && (
+            <div className="bs-field">
+              <SortOrderSelect label={t('options.db.sortOrder')} testid="opt-db-sort-order" value={order.pending ?? order.applied} disabled={off}
+                onChange={(id) => void api.base.setSortOrder(id).then(loadOrder).catch(showError)} />
+              {order.pending && <span className="muted" data-testid="opt-db-sort-order-pending">{t('options.db.sortOrderPending', { order: orderName(order.pending) })}</span>}
+            </div>
+          )}
           {box('opt-db-compact', 'compactOnClose', t('options.db.compactOnClose'))}
           {box('opt-db-frontend', 'frontEnd', t('options.db.frontEnd'))}
           {box('opt-db-datafile', 'dataFile', t('options.db.dataFile'))}

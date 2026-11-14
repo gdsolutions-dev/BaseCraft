@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MAX_PRINT_HTML_CHARS, type RecordSourceRef, type SourceInfo, type SourcePage, type SourcePageRequest } from '../../shared/api';
 import type { LayoutEnv } from '../../shared/report/types';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../shared/report/fixtures/factures';
@@ -40,6 +40,23 @@ describe('loadReportData', () => {
     const api = fakeSources(DATA_PAGE + 5);
     await loadReportData(api, { kind: 'table', name: 'T' });
     expect(api.calls.map((c) => c.fresh)).toEqual([true, undefined]);
+  });
+
+  it('reads the first file of each row of an Attachment column (a table, or an updatable query column of the key table)', async () => {
+    const att = [{ name: 'P', type: 'attachment', props: { type: 'attachment' }, origin: { table: 'T', field: 'Pieces' } }] as unknown as SourceInfo['fields'];
+    const faces = vi.fn(async () => [{ name: 'a.txt', type: 'txt', src: null }, null]);
+    const sources = (updatable: boolean) => ({
+      describe: async (): Promise<SourceInfo> => ({ fields: att, updatable, ...(updatable ? { keyTable: 'T' } : {}), parameters: [] }),
+      page: async (): Promise<SourcePage> => ({ rows: [[1], [null]], rowids: [4, null], total: 2 }),
+    });
+    const d = await loadReportData({ sources: sources(true), attachments: { faces } }, { kind: 'query', name: 'Q' });
+    expect(faces).toHaveBeenLastCalledWith('T', 'Pieces', [4, 0]);
+    expect(d.attachments).toEqual({ P: [{ name: 'a.txt', type: 'txt', src: null }, null] });
+    faces.mockClear();
+    expect((await loadReportData({ sources: sources(false), attachments: { faces } }, { kind: 'query', name: 'Q' })).attachments).toBeUndefined();
+    expect(faces).not.toHaveBeenCalled();
+    await loadReportData({ sources: sources(false), attachments: { faces } }, { kind: 'table', name: 'T' });
+    expect(faces).toHaveBeenLastCalledWith('T', 'P', [4, 0]);
   });
 
   it('passes the parameters and stops on an empty source', async () => {

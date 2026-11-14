@@ -378,3 +378,46 @@ test('More › Column Width › Best Fit: the column takes the width of its long
     await app.close();
   }
 });
+
+test('Datasheet Formatting: Cell Effect and the font are saved with the table and back on reopening', async () => {
+  const { app, page } = await launchApp({ args: [seedSalesE2E('fx-effet-cellule')], env: FR });
+  try {
+    await open(page, 'Clients');
+    await page.getByTestId('cmd-textFont').click();
+    await page.getByTestId('font-Liberation-Serif').click();
+    await page.getByTestId('cmd-datasheetFormatting').click();
+    await page.getByTestId('format-effect-sunken').check();
+    await page.getByTestId('format-ok').click();
+    await close(page, 'Clients');
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('doc-tab-close-Clients')).toHaveCount(0);
+    await open(page, 'Clients');
+    await page.getByTestId('cmd-datasheetFormatting').click();
+    await expect(page.getByTestId('format-effect-sunken')).toBeChecked();
+    await page.getByTestId('format-cancel').click();
+    await page.getByTestId('cmd-textFont').click();
+    await expect(page.getByTestId('font-Liberation-Serif')).toHaveAttribute('aria-checked', 'true');
+  } finally {
+    await app.close();
+  }
+});
+
+test("Options' default cell effect is the datasheet's when its layout has none; Flat chosen over it is kept", async () => {
+  const { app, page } = await launchApp({ args: [seedSalesE2E('fx-effet-defaut')], env: FR });
+  try {
+    await page.evaluate(() => (window as unknown as { basecraft: { app: { setSetting(k: string, v: unknown): Promise<unknown> } } }).basecraft.app.setSetting('datasheetCellEffect', 'raised'));
+    await open(page, 'Clients');
+    await page.getByTestId('cmd-datasheetFormatting').click();
+    await expect(page.getByTestId('format-effect-raised')).toBeChecked();
+    await page.getByTestId('format-effect-flat').check();
+    await page.getByTestId('format-ok').click();
+    await close(page, 'Clients');
+    await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('doc-tab-close-Clients')).toHaveCount(0);
+    await open(page, 'Clients');
+    await page.getByTestId('cmd-datasheetFormatting').click();
+    await expect(page.getByTestId('format-effect-flat')).toBeChecked();
+  } finally {
+    await app.close();
+  }
+});

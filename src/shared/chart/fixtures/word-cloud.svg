@@ -1,0 +1,17 @@
+<svg width="400" height="240" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" baseProfile="full" viewBox="0 0 400 240">
+<rect width="400" height="240" x="0" y="0" fill="none"></rect>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:44px;font-family:BC Inter;font-weight:bold;" transform="translate(198 131)" fill="#3e63dd">Alpha</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:34px;font-family:BC Inter;font-weight:bold;" transform="translate(195.41 81.56)" fill="#e5842c">Beta</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:27px;font-family:BC Inter;font-weight:bold;" transform="translate(201.18 177.59)" fill="#2f9e6e">Gamma</text>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:21px;font-family:BC Inter;font-weight:bold;" transform="translate(99.08 141.13)" fill="#8e5bd1">Delta</text>
+<path d="M-20.2 -5l40.4 0l0 24l-40.4 0Z" transform="translate(200 9)" fill="rgb(0,0,0)" fill-opacity="0" stroke="#3c3c41" stroke-width="0" class="zr0-cls-0"></path>
+<text dominant-baseline="central" text-anchor="middle" style="font-size:14px;font-family:BC Inter;font-weight:bold;" y="7" transform="translate(200 9)" fill="#1b1f27">Mots</text>
+<style ><![CDATA[
+.zr0-cls-0:hover {
+pointer-events:none;
+}
+
+]]>
+
+</style>
+</svg>

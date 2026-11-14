@@ -8,6 +8,7 @@ import {
   accessColumns, DEFAULT_COLUMN_WIDTH, lookupOf, sameName, shownColumns, valueListRows, type FieldDef, type FieldProps, type LookupProps, type TableDesign, type TableLookup,
 } from '../../shared/field-types';
 import type { LocaleInfo } from '../../shared/locale-format';
+import { attachmentCountSql } from './attachments';
 import { aggregateRun, type AggregateSpec } from './aggregate';
 import { compileFilter } from './filter';
 import { listTables, pickName, quoteIdent, tableDesign } from './schema';
@@ -52,7 +53,7 @@ function orderBy(design: TableDesign, sorts: readonly SortSpec[], tie = 'rowid')
     const c = quoteIdent(fd.name);
     const p = fd.props;
     return p.type === 'shortText' || p.type === 'longText' || p.type === 'hyperlink'
-      ? `bc_fold(${c}) ${dir} ${nulls}, bc_gkey(${c}) ${dir}` // ties as Access compares: "zoe" before "Zoé"
+      ? `bc_okey(${c}) ${dir} ${nulls}, bc_gkey(${c}) ${dir}` // ties as Access compares: "zoe" before "Zoé"
       // ponytail: CAST AS REAL perd la précision au-delà de ~15-17 chiffres significatifs ; ces valeurs sont à égalité et retombent sur l'ordre rowid.
       : p.type === 'number' && p.numberSize === 'decimal' ? `CAST(${c} AS REAL) ${dir} ${nulls}`
       : p.type === 'yesNo' ? `-abs(${c}) ${dir} ${nulls}` // stored 1/0 (another tool: -1), sorted as Access's -1/0: Yes first ascending
@@ -79,7 +80,7 @@ const SNAPSHOTS = 4;
 export function readRows(
   db: DatabaseSync, design: TableDesign, req: PageRequest & { where?: string }, locale = 'en-US', sorts: readonly SortSpec[] = req.sort ? [req.sort] : [], seq?: number,
 ): RowPage {
-  const names = design.fields.map((fd) => quoteIdent(fd.name));
+  const names = design.fields.map((fd) => (fd.props.type === 'attachment' ? attachmentCountSql(db, fd) : quoteIdent(fd.name))); // an Attachment cell shows its file count
   const w = where(design, req.filter, locale, req.where);
   const from = `FROM ${quoteIdent(design.name)}`;
   if (seq === undefined || !isText(design, sorts)) {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
-import { ApprovalStore, contentState, enabledAfterOwnWrite, inTrustedFolder, readTrustConfig, systemTrustPath, trustsFile } from './trust';
+import { ApprovalStore, contentState, effectiveTrust, enabledAfterOwnWrite, inTrustedFolder, isLocalAbsolute, isNetworkPath, readTrustConfig, systemTrustPath, trustsFile } from './trust';
 
 let root: string;
 beforeEach(() => {
@@ -89,4 +89,32 @@ it('R5: an own write keeps the content enabled only if nothing changed it elsewh
   expect(enabledAfterOwnWrite('', 'X', 'G')).toBeNull();
   expect(enabledAfterOwnWrite('F', null, 'G')).toBeNull(); // could not be read before
   expect(enabledAfterOwnWrite(null, 'F', 'G')).toBeNull(); // opened disabled: stays disabled
+});
+
+it('clear forgets every approval, on disk too', () => {
+  const f = join(root, 'trust.json');
+  const s = new ApprovalStore(f);
+  s.approve('u1', 'f1');
+  expect(s.count()).toBe(1);
+  s.clear();
+  expect(s.count()).toBe(0);
+  expect(new ApprovalStore(f).isApproved('u1', 'f1')).toBe(false);
+});
+
+it('own locations: absolute local paths only; network ones only when allowed', () => {
+  expect(isLocalAbsolute(root, process.platform)).toBe(true);
+  for (const bad of ['', 'rel/dir', '.', 'a\0b']) expect(isLocalAbsolute(bad, process.platform)).toBe(false);
+  expect(isLocalAbsolute('//?/C:/x', 'win32')).toBe(false);
+  expect(isLocalAbsolute('//./PhysicalDrive0', 'win32')).toBe(false);
+  expect(isLocalAbsolute('/dev/shm', 'linux')).toBe(false);
+  expect(isNetworkPath('//srv/share/d', 'win32')).toBe(true);
+  expect(isNetworkPath('//?/C:/x', 'win32')).toBe(false);
+  expect(isNetworkPath('//srv/share', 'linux')).toBe(false);
+  const admin = { trustedFolders: [{ path: '/adm', subfolders: false }] };
+  const own = [{ path: root, subfolders: true }, { path: '//srv/share', subfolders: true }, { path: 'rel', subfolders: true }];
+  const off = effectiveTrust(admin, own, false, 'win32').trustedFolders.map((f) => f.path);
+  expect(off).toEqual(['/adm', root]); // network refused, relative dropped, the administrator's kept
+  expect(effectiveTrust(admin, own, true, 'win32').trustedFolders.map((f) => f.path)).toEqual(['/adm', root, '//srv/share']);
+  // a base in an own location is trusted exactly as in the administrator's
+  expect(inTrustedFolder(join(root, 'sub', 'a.basecraft'), effectiveTrust({ trustedFolders: [] }, own, false, process.platform), process.platform)).toBe(true);
 });

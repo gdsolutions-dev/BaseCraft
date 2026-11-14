@@ -15,6 +15,7 @@ def _bc_run(op, payload):
         elif op == 'exec': exec(compile(p['code'], '<exec>', 'exec'), basecraft.immediate._ns); v = None
         elif op == 'exports': v = basecraft.exports.of(p['source'])
         elif op == 'deps': v = basecraft.modules.deps(p.get('code'), p.get('module'))
+        elif op == 'complete': v = basecraft.complete.of(p['source'], p['line'], p['column'])
         elif op == 'call': v = basecraft.modules.call(p['module'], p['fn'], p['args'])
         else: basecraft.modules.reset(); v = None
         try: out = json.dumps({'ok': True, 'value': v}, default=str, allow_nan=False)
@@ -78,6 +79,7 @@ async function request(id: number, req: HostRequest): Promise<void> {
         if (d.ok && d.value.length) await py.loadPackagesFromImports('import ' + (d.value as string[]).join(', '))
       } finally { py.setInterruptBuffer(interrupt) }
     }
+    if (req.op === 'complete') await py.loadPackage('jedi') // parso comes with it
     if (Atomics.load(interrupt, 0) === 2) throw { type: 'KeyboardInterrupt' } // pressed during the pre-pass: report it, do not run
   } catch (e) {
     // An interrupt landing while packages load is consumed there: report it instead of running the code unstoppable.

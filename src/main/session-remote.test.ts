@@ -486,6 +486,22 @@ describe('BaseCraft metadata on server links: rules, lists and defaults (C7 R11,
     expect(await m.update('Commandes', CMD1, { Client: '9' })).toEqual({ ok: false, errors: [{ field: 'Client', code: 'notInList' }] });
   });
 
+  it('Design view of a server link: BaseCraft properties saved in the front-end, the structure left to the server', async () => {
+    const d = m.tableDesign('Commandes');
+    const edited = { ...d, description: 'Orders', fields: d.fields.map((x) => (x.name === 'Client' ? { ...x, props: { ...x.props, caption: 'Customer', size: 99 } } : x)) };
+    expect(await m.saveTable({ originalName: 'Commandes', design: edited, mapping: [], allowDataLoss: false })).toEqual({ ok: true });
+    const after = m.tableDesign('Commandes');
+    expect(after).toMatchObject({ description: 'Orders', fields: [{}, { props: { caption: 'Customer' } }, { props: { validationRule: '>0' } }, {}] });
+    expect(after.fields[1]!.props.size).toBeUndefined(); // a server-owned property is not kept
+    expect(mf.log).not.toContain('createTable');
+  });
+
+  it('a server link keeps its datasheet column widths in the front-end', () => {
+    m.saveColumnWidths('Commandes', { Montant: 2400 });
+    expect(m.tableDesign('Commandes').fields.find((x) => x.name === 'Montant')!.props.columnWidth).toBe(2400);
+    m.saveSheetLayout('Commandes', { rowHeight: 400 }); // ignored, no error
+  });
+
   it('the datasheet list of a server link\'s lookup field', async () => {
     expect((await m.lookup('Commandes', 'Client')).rows).toEqual([{ value: 1, display: ['Dupont'] }, { value: 2, display: ['Martin'] }]);
     expect(mf.lastRequest?.sort).toEqual([{ column: 1, dir: 'asc' }]); // sorted on its first visible column, as a local table's list
@@ -630,13 +646,10 @@ describe('BaseCraft metadata on server links: rules, lists and defaults (C7 R11,
       expect(mf.connections).toBe(0);
     });
 
-    it('an Append supplying AutoNumber values is refused before anything is sent', async () => {
-      await m.count('Commandes'); // connected
-      const sent = mf.log.length;
-      await expect(m.runAction(sql('INSERT INTO Commandes (n, Client, Montant) VALUES (9, 1, 5)'), {}, opts)).rejects.toThrow('bc:serverNotSupported|appendAutoNumber|postgresql');
-      await expect(m.runAction(sql('INSERT INTO Commandes SELECT n, Client FROM Commandes'), {}, opts)).rejects.toThrow('bc:serverNotSupported|appendAutoNumber|postgresql');
-      expect(mf.log.slice(sent)).not.toContain('begin');
-      expect(await rows()).toEqual([[1, 2, 10]]);
+    it('an Append supplying AutoNumber values is sent to the connector, which writes them', async () => {
+      expect(await m.runAction(sql('INSERT INTO Commandes (n, Client, Montant) VALUES (9, 1, 5)'), {}, opts)).toEqual({ ok: true, count: 1 });
+      expect(lastTransaction()).toEqual(['begin', 'insert', 'commit']);
+      expect((await rows()).map((r) => r[0])).toEqual([1, 9]);
     });
 
     it('a connector without transactions refuses an action query', async () => {

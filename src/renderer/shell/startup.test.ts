@@ -27,7 +27,7 @@ it('the UI the options ask for: run mode implies the simplified ribbon', () => {
 });
 
 it('the two base UIs show every switch', () => {
-  const on = { statusBar: true, documentTabs: true, specialKeys: true, shortcutMenus: true, datasheetDesign: true };
+  const on = { statusBar: true, documentTabs: true, overlapping: false, specialKeys: true, shortcutMenus: true, datasheetDesign: true };
   expect(FULL_UI).toEqual({ ribbon: 'full', runMode: false, ...on });
   expect(RUNTIME_UI).toEqual({ ribbon: 'simplified', runMode: true, ...on });
 });

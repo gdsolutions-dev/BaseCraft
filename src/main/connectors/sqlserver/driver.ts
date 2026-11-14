@@ -222,10 +222,11 @@ const decoded = (t: RemoteTable, row: unknown[]) => {
   return { values: t.design.fields.map((fd, i) => msDecode(fd, row[i])), ref: tokenOf(t.key, row.slice(n, n + t.key.length), t.version !== undefined ? row[n + t.key.length] : '') };
 };
 /** The fields written: a computed or identity column (msComputed) is never sent; a value for it is readOnly. */
-function written(t: RemoteTable, values: Record<string, SqlValue>): { cols: FieldDef[] } | { errors: FieldError[] } {
+function written(t: RemoteTable, values: Record<string, SqlValue>, identity = false): { cols: FieldDef[] } | { errors: FieldError[] } {
   const given = t.design.fields.filter((fd) => Object.hasOwn(values, fd.name));
-  const refused = given.filter((fd) => fd.props.msComputed && values[fd.name] !== null);
-  return refused.length ? { errors: refused.map((fd) => ({ field: fd.name, code: 'readOnly' as const })) } : { cols: given.filter((fd) => !fd.props.msComputed) };
+  const open = (fd: FieldDef) => !fd.props.msComputed || (identity && fd.props.type === 'autoNumber' && values[fd.name] !== null); // an Append's identity value
+  const refused = given.filter((fd) => !open(fd) && values[fd.name] !== null);
+  return refused.length ? { errors: refused.map((fd) => ({ field: fd.name, code: 'readOnly' as const })) } : { cols: given.filter(open) };
 }
 /** R11 without a rowversion: field `fd` still as read, its stored form compared with parameter @p<i> (none for Null). A date
  *  compares its text to the second, as read (a datetime2(7) fraction is no change), a Decimal at its linked scale (a
@@ -446,15 +447,17 @@ export async function openMs(p: MsParams, c: Credentials): Promise<Connection> {
         refs: rs.map((r) => (k ? tokenOf(ms.keys, r.slice(n, n + k), ms.version ? r[n + k] : '') : null)),
       };
     },
-    async insert(t, values): Promise<RemoteWrite> {
-      const w = written(t, values);
+    async insert(t, values, opts): Promise<RemoteWrite> {
+      const w = written(t, values, opts?.autoNumber);
       if ('errors' in w) return { ok: false, errors: w.errors };
       const k = kept(t);
       const into = w.cols.length ? ` (${w.cols.map((fd) => msIdent(fd.name)).join(', ')}) ${k.output} VALUES (${w.cols.map((_, i) => `@p${i}`).join(', ')})` : ` ${k.output} DEFAULT VALUES`;
       // R7: OUTPUT … INTO, then the row read back (a plain OUTPUT fails on a table with a trigger, 334); none: an INSTEAD OF
       // trigger wrote nothing
       return write(t, w.cols, async () => {
-        const [row] = await exec(`${k.declare}; INSERT INTO ${tableSql(t)}${into}; SELECT TOP (1) ${outputs(t)} FROM ${tableSql(t)} AS a ${k.join}`,
+        const ins = `INSERT INTO ${tableSql(t)}${into}`;
+        const identity = w.cols.some((fd) => fd.props.msComputed); // only an identity column gets here (written)
+        const [row] = await exec(`${k.declare}; ${identity ? `SET IDENTITY_INSERT ${tableSql(t)} ON; ${ins}; SET IDENTITY_INSERT ${tableSql(t)} OFF` : ins}; SELECT TOP (1) ${outputs(t)} FROM ${tableSql(t)} AS a ${k.join}`,
           w.cols.map((fd) => sent(values[fd.name]!, fd)), true);
         if (!row) throw notWritten(t);
         return { ok: true as const, ...decoded(t, row) };

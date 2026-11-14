@@ -73,3 +73,13 @@
 .sheet-swatches { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 4px; }
 .dz-colors > .sheet-swatches > .sheet-swatch { width: 18px; height: 18px; padding: 0; border: 1px solid var(--bc-border); border-radius: 3px; }
 .sheet-swatch[aria-pressed="true"] { outline: 2px solid var(--bc-accent); }
+
+/* C5: the Attachments box */
+.attachments { min-width: 420px; }
+.att-list { min-height: 140px; max-height: 280px; overflow: auto; border: 1px solid var(--bc-border); border-radius: 4px; margin-bottom: var(--bc-space-3); }
+.att-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; cursor: default; }
+.att-item.selected { background: var(--bc-accent); color: var(--bc-accent-contrast); }
+.att-item.selected .muted { color: inherit; }
+.att-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-none { padding: var(--bc-space-3); }
+.att-buttons { flex-wrap: wrap; justify-content: flex-start; }

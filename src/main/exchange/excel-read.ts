@@ -1,6 +1,5 @@
 // Lecture d'un classeur Excel (.xlsx / .xlsm) pour l'import : chaque ligne d'une feuille devient un enregistrement de textes
 // canoniques (EXCEL_SPEC : point décimal, dates ISO), que le moteur d'import du texte sait lire, typer et consigner.
-import ExcelJS from 'exceljs';
 import { statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { EXCEL_SPEC, MAX_EXCEL_BYTES, type ExcelPreview } from '../../shared/exchange';
@@ -10,38 +9,35 @@ import { detectHeader, inferFields, SAMPLE } from '../import/infer';
 import type { ImportSource } from '../import/text-import';
 import { tag, type Rec } from '../import/text-parse';
 import { readFlatXml } from './xml-read';
+import { openXlsx, type XSheet, type XValue } from './xlsx-read';
 
 const PREVIEW_ROWS = 50;
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** Texte canonique d'une cellule. */
-export function cellText(v: ExcelJS.CellValue): string {
-  if (v === null || v === undefined) return '';
-  if (v instanceof Date) { // exceljs gives UTC: read it as UTC, no time-zone shift
+export function cellText(v: XValue | undefined): string {
+  if (v === undefined) return '';
+  if (v instanceof Date) { // the reader gives the UTC clock: read it as UTC, no time-zone shift
     const d = `${v.getUTCFullYear()}-${pad(v.getUTCMonth() + 1)}-${pad(v.getUTCDate())}`;
     return v.getTime() % 86_400_000 === 0 ? d : `${d} ${pad(v.getUTCHours())}:${pad(v.getUTCMinutes())}:${pad(v.getUTCSeconds())}`;
   }
   if (typeof v === 'boolean') return v ? 'true' : 'false';
-  if (typeof v !== 'object') return String(v);
-  if ('richText' in v) return v.richText.map((r) => r.text).join('');
-  if ('error' in v) return v.error;
-  if ('formula' in v || 'sharedFormula' in v) return cellText((v as { result?: ExcelJS.CellValue }).result ?? null);
-  if ('hyperlink' in v) return cellText(v.text as ExcelJS.CellValue);
-  return '';
+  if (typeof v === 'object') return v.error;
+  return String(v);
 }
 
 // ponytail: whole-workbook read (100 MiB cap), one workbook kept; a streaming reader if larger files become common.
-let loaded: { key: string; wb: ExcelJS.Workbook } | null = null;
-async function load(path: string): Promise<ExcelJS.Workbook> {
+let loaded: { key: string; sheets: XSheet[] } | null = null;
+async function load(path: string): Promise<XSheet[]> {
   if (!['.xlsx', '.xlsm'].includes(extname(path).toLowerCase())) throw new Error('bc:excelUnsupported');
   const st = statSync(path);
   if (st.size > MAX_EXCEL_BYTES) throw new Error('bc:fileTooLarge');
   const key = `${path}|${st.size}|${st.mtimeMs}`;
-  if (loaded?.key === key) return loaded.wb;
-  const wb = new ExcelJS.Workbook();
-  try { await wb.xlsx.readFile(path); } catch { throw new Error('bc:excelUnsupported'); } // not a zip, damaged
-  loaded = { key, wb };
-  return wb;
+  if (loaded?.key === key) return loaded.sheets;
+  let sheets: XSheet[];
+  try { sheets = await openXlsx(path); } catch { throw new Error('bc:excelUnsupported'); } // not a zip, damaged
+  loaded = { key, sheets };
+  return sheets;
 }
 
 /** Enregistrements d'une feuille (la première si `sheet` est null), de la colonne 1 à la dernière utilisée ; `line` = numéro de ligne Excel. */
@@ -50,22 +46,19 @@ export async function readSheet(path: string, sheet: string | null): Promise<{ s
     const x = readFlatXml(path);
     return { sheets: [x.row], sheet: x.row, records: [tag(x.columns, 1), ...x.rows.map((r, i) => tag(r, i + 2))], header: true };
   }
-  const wb = await load(path);
-  const sheets = wb.worksheets.map((w) => w.name);
-  const ws = sheet === null ? wb.worksheets[0] : wb.worksheets.find((w) => w.name === sheet);
+  const all = await load(path);
+  const sheets = all.map((w) => w.name);
+  const ws = sheet === null ? all[0] : all.find((w) => w.name === sheet);
   if (!ws) throw new Error(sheet === null ? 'bc:excelUnsupported' : 'bc:invalidArgument');
   const rows: { line: number; cells: string[] }[] = [];
   let width = 0;
-  ws.eachRow({ includeEmpty: false }, (row, line) => {
+  for (const { line, cells: raw } of await ws.rows().catch(() => { throw new Error('bc:excelUnsupported'); })) {
     const cells: string[] = [];
-    row.eachCell({ includeEmpty: false }, (cell, col) => {
-      cells[col - 1] = cell.type === ExcelJS.ValueType.Merge ? '' : cellText(cell.value); // a merged range gives its value once, top-left
-    });
-    for (let i = 0; i < cells.length; i++) cells[i] ??= '';
-    if (cells.every((x) => x === '')) return; // fully empty row
+    for (let i = 0; i < raw.length; i++) cells[i] = cellText(raw[i]);
+    if (cells.every((x) => x === '')) continue; // fully empty row
     width = Math.max(width, cells.length);
     rows.push({ line, cells });
-  });
+  }
   const records = rows.map((r) => { while (r.cells.length < width) r.cells.push(''); return tag(r.cells, r.line); });
   return { sheets, sheet: ws.name, records };
 }

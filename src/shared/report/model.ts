@@ -216,7 +216,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
     if (!resolveFont(font.name).portable) add('fontNotPortable', undefined, font.name);
     const format = r('Format') as string, places = r('DecimalPlaces') as string, picture = r('Picture'), sizeMode = r('SizeMode', 'zoom');
     const src = kind === 'image' ? resolvePicture({ PictureType: p.PictureType, Picture: picture }, opts.resources ?? {}) : undefined;
-    if (kind === 'image' && !src && readPictureType(p.PictureType) === 'shared' && typeof picture === 'string' && picture) add('pictureMissing', name, picture);
+    if (kind === 'image' && !src && readPictureType(p.PictureType) !== 'embedded' && typeof picture === 'string' && picture) add('pictureMissing', name, picture);
     const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
     const four = <T,>(f: (s: (typeof sides)[number]) => T) => ({ top: f('Top'), right: f('Right'), bottom: f('Bottom'), left: f('Left') });
     const margin = four((s) => (kind === 'pageBreak' ? 0 : r(`${s}Margin`) as number));
@@ -308,7 +308,7 @@ export function readReport(doc: DesignDoc, fields: SourceField[], opts: { allCel
 
   const background = readPictureSpec(props, opts.resources ?? {});
   if (background) spec.background = background;
-  else if (readPictureType(props.PictureType) === 'shared' && typeof props.Picture === 'string' && props.Picture) add('pictureMissing', undefined, props.Picture);
+  else if (readPictureType(props.PictureType) !== 'embedded' && typeof props.Picture === 'string' && props.Picture) add('pictureMissing', undefined, props.Picture);
   if (Number.isSafeInteger(props.Width)) twips(props.Width, undefined, 'Width');   // reported when clamped
   spec.width = reportWidth(doc);
   if (spec.width > pageGeometry(page).printableWidth) add('widthExceedsPage');

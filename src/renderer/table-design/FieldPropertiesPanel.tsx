@@ -7,7 +7,7 @@ import { MaskSyntaxError, parseMask, type MaskErrorCode } from '../../shared/exp
 import type { DisplayContext } from '../../shared/expr/localize';
 import type { LocaleInfo } from '../../shared/locale-format';
 import {
-  accessColumns, cmToTwips, columnWidthsText, LIST_ROWS, LOOKUP_TYPES, MASK_TYPES, parseColumnWidths, sameName, splitValueList, twipsToCm, wizardColumns, withRowSourceType,
+  accessColumns, cmToTwips, isCalculated, RESULT_TYPES, columnWidthsText, LIST_ROWS, LOOKUP_TYPES, MASK_TYPES, parseColumnWidths, sameName, splitValueList, twipsToCm, wizardColumns, withRowSourceType,
   type FieldProps, type FieldType, type LookupProps, type NumberSize,
 } from '../../shared/field-types';
 import { api } from '../bridge';
@@ -19,7 +19,7 @@ import type { InvalidCode } from './design-model';
 
 // Objects typed as Record<…>: the compiler checks that every type is listed.
 export const FIELD_TYPES = Object.keys({
-  autoNumber: 0, shortText: 0, longText: 0, number: 0, currency: 0, dateTime: 0, yesNo: 0, hyperlink: 0,
+  autoNumber: 0, shortText: 0, longText: 0, number: 0, currency: 0, dateTime: 0, yesNo: 0, hyperlink: 0, attachment: 0,
 } satisfies Record<FieldType, 0>) as FieldType[];
 const NUMBER_SIZES = Object.keys({ byte: 0, integer: 0, longInteger: 0, single: 0, double: 0, decimal: 0 } satisfies Record<NumberSize, 0>) as NumberSize[];
 const INDEXED: FieldProps['indexed'][] = ['no', 'yesDuplicates', 'yesNoDuplicates'];
@@ -28,8 +28,12 @@ const DECIMALS = ['auto', ...Array.from({ length: 16 }, (_, i) => String(i))];
 
 interface Props {
   props: FieldProps | null; disabled: boolean; onProp(key: string, value: unknown): void
+  /** A Calculated field's Result Type: the field type, expression kept. */
+  onResultType(type: FieldType): void
+  /** Properties of the structure a server link leaves to its server: shown, never edited (the rest stays editable). */
+  fixed?: boolean
   /** Expressions: display context (null until the region is known), the row's key and field name, its unreadable entries. */
-  ctx: DisplayContext | null; rowKey: string; fieldName: string; invalid: Partial<Record<string, InvalidCode>>
+  ctx: DisplayContext | null; rowKey: string; fieldName: string; /** the table's field names (a Calculated expression names the others) */ siblings: string[]; invalid: Partial<Record<string, InvalidCode>>
   onInvalid(key: string, code: InvalidCode | null): void
 }
 
@@ -128,11 +132,12 @@ function useLookupSource(open: boolean, table: string | undefined) {
   return { tables: tables ?? [], loaded: tables !== null, fields: fields && fields.table === table ? fields.names : [], showError };
 }
 
-export function FieldPropertiesPanel({ props: p, disabled, onProp, ctx, rowKey, fieldName, invalid, onInvalid }: Props) {
+const SERVER_OWNED = ['size', 'numberSize', 'precision', 'scale', 'required', 'textFormat'];
+export function FieldPropertiesPanel({ props: p, disabled, fixed, onProp, onResultType, ctx, rowKey, fieldName, siblings, invalid, onInvalid }: Props) {
   const { t } = useTranslation();
   const uid = useId(); // several design tabs stay mounted at once
   const [tab, setTab] = useState<'general' | 'lookup'>('general');
-  const hasLookup = !!p && LOOKUP_TYPES.includes(p.type);
+  const hasLookup = !!p && LOOKUP_TYPES.includes(p.type) && !isCalculated(p);
   const shownTab = hasLookup ? tab : 'general';
   const lookup = p?.lookup;
   // The source's fields: only to show a lookup saved before the Access properties as Access columns.
@@ -145,14 +150,27 @@ export function FieldPropertiesPanel({ props: p, disabled, onProp, ctx, rowKey, 
   const num = (v: string) => (v === '' ? undefined : Number(v));
   const items: [string, ReactNode, string?][] = [];
   const control = (key: string, el: ReactNode) => items.push([key, el]);
-  const common = (key: string) => ({ id: uid + key, 'data-testid': `prop-${key}`, disabled });
+  const common = (key: string) => ({ id: uid + key, 'data-testid': `prop-${key}`, disabled: disabled || (!!fixed && SERVER_OWNED.includes(key)) });
   const number = (key: 'size' | 'precision' | 'scale', min: number, max: number) => control(key,
     <input type="number" {...common(key)} min={min} max={max} value={p?.[key] ?? ''} onChange={(e) => onProp(key, num(e.target.value))} />);
   const check = (key: 'required' | 'allowZeroLength') => control(key,
     <input type="checkbox" {...common(key)} checked={!!p?.[key]} onChange={(e) => onProp(key, e.target.checked)} />);
 
+  const calc = !!p && isCalculated(p); // Access shows a Calculated field: Expression, Result Type, Format, Decimal Places, Caption
   if (p) {
-    if (p.type === 'shortText') number('size', 1, 255);
+    if (calc && ctx) {
+      control('calculated', (
+        <ExpressionField key={rowKey + 'calculated'} id={uid + 'calculated'} testId="prop-calculated" value={p.calculated} ctx={ctx}
+          fields={siblings.filter((n) => !sameName(n, fieldName))} disabled={disabled} error={invalid.calculated}
+          onCommit={(v) => onProp('calculated', v)} onInvalid={(code) => onInvalid('calculated', code)} />
+      ));
+      control('resultType', (
+        <select {...common('resultType')} value={p.type} onChange={(e) => onResultType(e.target.value as FieldType)}>
+          {RESULT_TYPES.map((x) => <option key={x} value={x}>{t(`fieldType.${x}`)}</option>)}
+        </select>
+      ));
+    }
+    if (p.type === 'shortText' && !calc) number('size', 1, 255);
     if (p.type === 'number') {
       control('numberSize', (
         <select {...common('numberSize')} value={p.numberSize ?? 'longInteger'} onChange={(e) => onProp('numberSize', e.target.value)}>
@@ -177,12 +195,12 @@ export function FieldPropertiesPanel({ props: p, disabled, onProp, ctx, rowKey, 
         value={named.some((n) => n === p.format) ? label(p.format!) : p.format ?? ''}
         onChange={(text) => onProp('format', named.find((n) => label(n) === text || n === namedFormatId(text)) ?? text)} />
     ));
-    if (MASK_TYPES.includes(p.type)) {
+    if (MASK_TYPES.includes(p.type) && !calc) {
       control('inputMask', <MaskField key={rowKey + 'inputMask'} id={uid + 'inputMask'} value={p.inputMask} disabled={disabled} error={invalid.inputMask}
         onCommit={(v) => onProp('inputMask', v)} onInvalid={(code) => onInvalid('inputMask', code)} />);
     }
     control('caption', <input {...common('caption')} value={p.caption ?? ''} onChange={(e) => onProp('caption', e.target.value)} />);
-    if (p.type !== 'autoNumber' && ctx) {
+    if (p.type !== 'autoNumber' && ctx && !calc) {
       // Keyed by row: a draft left unreadable in another field's panel never shows here. A rule may name its own field only, a
       // default value none (validateDesign).
       const expression = (key: 'defaultValue' | 'validationRule') => control(key, (
@@ -194,16 +212,16 @@ export function FieldPropertiesPanel({ props: p, disabled, onProp, ctx, rowKey, 
       expression('validationRule');
       control('validationText', <input {...common('validationText')} maxLength={255} value={p.validationText ?? ''} onChange={(e) => onProp('validationText', e.target.value)} />);
     }
-    if (p.type !== 'autoNumber') check('required');
-    if (TEXT_TYPES.includes(p.type)) check('allowZeroLength');
-    if (p.type === 'longText') {
+    if (p.type !== 'autoNumber' && !calc) check('required');
+    if (TEXT_TYPES.includes(p.type) && !calc) check('allowZeroLength');
+    if (p.type === 'longText' && !calc) {
       control('textFormat', (
         <select {...common('textFormat')} value={p.textFormat ?? 'plain'} onChange={(e) => onProp('textFormat', e.target.value === 'rich' ? 'rich' : undefined)}>
           {(['plain', 'rich'] as const).map((v) => <option key={v} value={v}>{t('fieldProp.textFormats.' + v)}</option>)}
         </select>
       ));
     }
-    control('indexed', (
+    if (!calc) control('indexed', (
       // An AutoNumber is the table's key: its index is fixed.
       <select {...common('indexed')} disabled={disabled || p.type === 'autoNumber'} value={p.indexed} onChange={(e) => onProp('indexed', e.target.value)}>
         {INDEXED.map((v) => <option key={v} value={v}>{t(`fieldProp.indexedValues.${v}`)}</option>)}

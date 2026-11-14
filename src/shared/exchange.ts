@@ -2,7 +2,7 @@
 import type { FieldFilter } from './api';
 import type { CellInput } from './coerce';
 import type { LocaleInfo } from './locale-format';
-import type { ImportField, ImportSpec } from './import-text';
+import { validSpec, type ImportField, type ImportPlan, type ImportSpec } from './import-text';
 import type { RecordSourceRef, SortSpec } from './record-source';
 
 export const EXPORT_DELIMITERS = [',', ';', '\t', '|'] as const;
@@ -52,6 +52,33 @@ export function validSavedExport(v: unknown): SavedExport | null {
   const spec = s.format === 'text' ? validExportSpec(s.spec) : null;
   if (s.format === 'text' && !spec) return null;
   return { format: s.format as ExportFormat, kind: s.kind, name: s.name, ...(spec ? { spec } : {}) };
+}
+
+/** A saved import (Access's Saved Imports): a text, Excel or XML file's plan (specification and target); the file is asked again at
+ *  each run (the main process only reads a path chosen in its own dialog). `sheet`: the Excel sheet. Stored in the base's options. */
+export interface SavedImport { source: 'text' | 'excel' | 'xml'; plan: ImportPlan; sheet?: string }
+export function validSavedImport(v: unknown): SavedImport | null {
+  if (v === null || typeof v !== 'object') return null;
+  const s = v as Record<string, unknown>;
+  const p = s.plan as Record<string, unknown> | null;
+  const t = p?.target as Record<string, unknown> | null | undefined;
+  const spec = validSpec(p?.spec);
+  const name = (x: unknown): x is string => typeof x === 'string' && x !== '' && [...x].length <= 64;
+  if (!['text', 'excel', 'xml'].includes(s.source as string) || !spec || !t || typeof t !== 'object' || !name(t.table)) return null;
+  const sheet = s.source === 'text' ? {} : name(s.sheet) ? { sheet: s.sheet } : null;
+  if (!sheet) return null;
+  let target: ImportPlan['target'];
+  if (t.kind === 'append') {
+    if (!Array.isArray(t.mapping) || t.mapping.length > 255 || !t.mapping.every((m) => m === null || name(m))) return null;
+    target = { kind: 'append', table: t.table, mapping: t.mapping as (string | null)[] };
+  } else if (t.kind === 'new') {
+    const k = t.primaryKey as Record<string, unknown> | null;
+    if (!k || typeof k !== 'object') return null;
+    if (k.kind === 'auto' || k.kind === 'none') target = { kind: 'new', table: t.table, primaryKey: { kind: k.kind } };
+    else if (k.kind === 'field' && name(k.field)) target = { kind: 'new', table: t.table, primaryKey: { kind: 'field', field: k.field } };
+    else return null;
+  } else return null;
+  return { source: s.source as SavedImport['source'], plan: { spec, target }, ...sheet };
 }
 
 /** ';' quand la région écrit la virgule décimale (le fichier s'ouvre alors correctement dans Excel), sinon ','. */

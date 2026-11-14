@@ -6,7 +6,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ExcelJS from 'exceljs';
+import { sheetOf, writeXlsx } from './fixtures/xlsx-fixture';
 import type { BasecraftApi } from '../../src/shared/api';
 import { formatValue } from '../../src/shared/expr/format';
 import { num } from '../../src/shared/expr/library';
@@ -90,12 +90,7 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
   const xlsxIn = join(dir, 'produits.xlsx'), csvOut = join(dir, 'export.csv'), xlsxOut = join(dir, 'export.xlsx'), pdf = join(dir, 'Factures.pdf');
   const userDataDir = mkdtempSync(join(tmpdir(), 'basecraft-recette-a-ud-'));
   writeFileSync(join(userDataDir, 'settings.json'), JSON.stringify({ locale: 'fr' }));
-  const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet('Produits');
-  sheet.addRow(['Nom', 'Prix']);
-  sheet.addRow(['Stylo', 1.5]);
-  sheet.addRow(['Cahier', 4]);
-  await wb.xlsx.writeFile(xlsxIn);
+  await writeXlsx(xlsxIn, [{ name: 'Produits', rows: [['Nom', 'Prix'], ['Stylo', 1.5], ['Cahier', 4]] }]);
   const env = { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_SAVE_PATH: base, BASECRAFT_E2E_EXCEL_PATH: xlsxIn, BASECRAFT_E2E_PDF_PATH: pdf,
     BASECRAFT_E2E_EXPORT_PATH: csvOut, BASECRAFT_E2E_IMPORT_PATH: csvOut };
   const produits = [[1, 'Stylo', 1.5], [2, 'Cahier', 4]];
@@ -302,10 +297,8 @@ test('recette A: from a new base to a compacted, reopened one, through the inter
     expect(readFileSync(csvOut, 'utf8').replace(/^﻿/, '').split('\r\n')).toEqual(['"Nom";"Quantité";"Ville"', '"Dupont";3;"Lyon"', '"Dupont";2;"Lyon"', '']);
     await app.evaluate((_e, p) => { process.env.BASECRAFT_E2E_EXPORT_PATH = p; }, xlsxOut);
     await exportQuery('excel');
-    const out = new ExcelJS.Workbook();
-    await out.xlsx.readFile(xlsxOut);
-    const ws = out.worksheets[0]!;
-    expect([1, 2, 3].map((r) => (ws.getRow(r).values as unknown[]).slice(1))).toEqual([['Nom', 'Quantité', 'Ville'], ...lyon]);
+    const ws = await sheetOf(xlsxOut);
+    expect([1, 2, 3].map((r) => ws.row(r))).toEqual([['Nom', 'Quantité', 'Ville'], ...lyon]);
 
     await page.getByTestId('ribbon-tab-externalData').click();
     await page.getByTestId('cmd-importText').click();

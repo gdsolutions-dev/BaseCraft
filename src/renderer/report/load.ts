@@ -1,10 +1,11 @@
 // Chargement d'un état enregistré (définition, données, mise en page), pour l'aperçu, l'impression et l'export PDF ; zoom.
-import { MAX_PRINT_HTML_CHARS, type BasecraftApi, type CellInput, type PrintRequest, type RecordSourceRef } from '../../shared/api';
+import { sameName } from '../../shared/field-types';
+import { MAX_PRINT_HTML_CHARS, type RowRef, type BasecraftApi, type CellInput, type PrintRequest, type RecordSourceRef } from '../../shared/api';
 import { validateDesignDoc, type DesignDoc } from '../../shared/design/model';
 import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import type { SourceInfo } from '../../shared/record-source';
 import { layoutReport } from '../../shared/report/layout';
-import { usedResourceNames, type ResourceMap } from '../../shared/pictures';
+import { usedPictureKeys, type ResourceMap } from '../../shared/pictures';
 import { chartRequest, type ChartData, type ChartDataMap } from '../../shared/chart/query';
 import { readChartSpec } from '../../shared/chart/spec';
 import { readReport } from '../../shared/report/model';
@@ -21,17 +22,30 @@ export const reportCancelled = () => Object.assign(new Error('bc:actionCancelled
 
 /** Every row of the source, read DATA_PAGE at a time up to `total`; rejects with name 'AbortError' once `signal` is aborted.
  *  `where`: the opening's Where Condition (OpenReport, R8): only the rows it keeps. `max`: at most that many rows (Layout view). */
-export async function loadReportData(api: Pick<BasecraftApi, 'sources'>, ref: RecordSourceRef, params?: Record<string, CellInput>,
+export async function loadReportData(api: Pick<BasecraftApi, 'sources'> & { attachments?: Pick<BasecraftApi['attachments'], 'faces'> }, ref: RecordSourceRef, params?: Record<string, CellInput>,
   signal?: AbortSignal, where?: string, max = Infinity): Promise<ReportData> {
-  const { fields } = await api.sources.describe(ref);
-  const rows: ReportData['rows'] = [];
+  const info = await api.sources.describe(ref);
+  const { fields } = info;
+  const rows: ReportData['rows'] = [], rowids: (RowRef | null)[] = [];
+  /** The first file of each row of every Attachment column of the key table (a table, or an updatable query's own column). */
+  const done = async (): Promise<ReportData> => {
+    const attachments: NonNullable<ReportData['attachments']> = {};
+    for (const f of fields) {
+      const at = f.type !== 'attachment' ? undefined : ref.kind === 'table' ? { table: ref.name, field: f.name }
+        : info.updatable && f.origin && info.keyTable !== undefined && sameName(f.origin.table, info.keyTable) ? f.origin : undefined;
+      if (!at || !api.attachments || !rowids.length) continue;
+      const faces = await api.attachments.faces(at.table, at.field, rowids.map((r) => (typeof r === 'number' ? r : 0))).catch(() => null);   // a refused call: no files printed
+      if (faces?.some(Boolean)) attachments[f.name] = faces;
+    }
+    return Object.keys(attachments).length ? { fields, rows, attachments } : { fields, rows };
+  };
   for (let offset = 0; ; offset += DATA_PAGE) {
     if (signal?.aborted) throw aborted();
     const p = await api.sources.page(ref, { offset, limit: Math.min(DATA_PAGE, max - offset), ...(params ? { params } : {}), ...(where !== undefined ? { where } : {}), ...(offset === 0 ? { fresh: true } : {}) });
     if (signal?.aborted) throw aborted();
-    rows.push(...p.rows);
-    if (rows.length > max) rows.length = max;
-    if (!p.rows.length || offset + DATA_PAGE >= p.total || rows.length >= max) return { fields, rows };
+    rows.push(...p.rows); rowids.push(...p.rowids);
+    if (rows.length > max) { rows.length = max; rowids.length = max; }
+    if (!p.rows.length || offset + DATA_PAGE >= p.total || rows.length >= max) return done();
   }
 }
 
@@ -47,7 +61,7 @@ export async function loadReportDoc(api: Pick<BasecraftApi, 'objects'>, name: st
 
 /** Les images partagées que le document utilise ({} s'il n'en utilise aucune ; un appel refusé se lit {}). */
 export async function loadDocResources(api: Pick<BasecraftApi, 'resources'>, doc: DesignDoc): Promise<ResourceMap> {
-  const names = usedResourceNames(doc);
+  const names = usedPictureKeys(doc);
   if (!names.length) return {};
   try { return await api.resources.get(names); } catch { return {}; }
 }
@@ -94,7 +108,7 @@ export async function docParameters(api: Pick<BasecraftApi, 'sources'>, doc: Des
 
 /** Step 3: every row of the record source (none without one), with the parameter values (docParameters) and the Where
  *  Condition on every page read; `max`: at most that many rows. */
-export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: DesignDoc, params?: Record<string, CellInput>, signal?: AbortSignal,
+export async function loadDocData(api: Pick<BasecraftApi, 'sources'> & { attachments?: Pick<BasecraftApi['attachments'], 'faces'> }, doc: DesignDoc, params?: Record<string, CellInput>, signal?: AbortSignal,
   where?: string, max?: number): Promise<ReportData> {
   if (!doc.recordSource) return { fields: [], rows: [] };
   return loadReportData(api, doc.recordSource, params, signal, where, max);
@@ -102,7 +116,7 @@ export async function loadDocData(api: Pick<BasecraftApi, 'sources'>, doc: Desig
 
 /** LayoutEnv.subreport: a saved report and every row of its source, read once per loader (one per layout); null when it
  *  cannot be read (not found, corrupt, a source that asks for parameters). */
-export function subreportLoader(api: Pick<BasecraftApi, 'objects' | 'sources'>): NonNullable<LayoutEnv['subreport']> {
+export function subreportLoader(api: Pick<BasecraftApi, 'objects' | 'sources'> & { attachments?: Pick<BasecraftApi['attachments'], 'faces'> }): NonNullable<LayoutEnv['subreport']> {
   const read = new Map<string, Promise<SubreportSource | null>>();
   return (name, signal) => {
     const key = name.toLowerCase();
@@ -123,7 +137,7 @@ export function subreportLoader(api: Pick<BasecraftApi, 'objects' | 'sources'>):
 /** Steps 1 to 5 for a report that is not open (the Navigation Pane's Print and Export items); rejects with the step's bc: code.
  *  `ready`: the parameters are asked, the long part begins (the progress box). `events`: the report's events (On Open before
  *  the parameters, On No Data, On Format / On Print); one cancelling rejects with reportCancelled(). */
-export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { charts?: Pick<BasecraftApi['charts'], 'data'>; resources?: Pick<BasecraftApi['resources'], 'get'>; theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
+export async function layoutSavedReport(api: Pick<BasecraftApi, 'objects' | 'sources'> & { attachments?: Pick<BasecraftApi['attachments'], 'faces'>; charts?: Pick<BasecraftApi['charts'], 'data'>; resources?: Pick<BasecraftApi['resources'], 'get'>; theme?: Pick<BasecraftApi['theme'], 'get'> }, name: string, env: LayoutEnv, ask: AskParameters, signal?: AbortSignal,
   ready?: () => void, where?: string, events?: (doc: DesignDoc) => ReportEvents): Promise<LaidOutReport> {
   const doc = await loadReportDoc(api, name);
   const ev = events?.(doc), release = ev?.register();

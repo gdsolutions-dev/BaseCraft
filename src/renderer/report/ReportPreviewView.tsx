@@ -9,7 +9,7 @@ import { DEFAULT_THEME, effectiveTheme } from '../../shared/design/theme';
 import { TYPE_HINT_KEYS } from '../../shared/chart/spec';
 import { trendLabels } from '../../shared/chart/trend';
 import { layoutReport } from '../../shared/report/layout';
-import { fourDigitYear } from '../settings-store';
+import { currentSettings, fourDigitYear } from '../settings-store';
 import { pageGeometry, readReport, type ColumnSetup, type PageSetup, type ReportIssue } from '../../shared/report/model';
 import { dataOnlyReport, renderPageHtml, reportCss } from '../../shared/report/render';
 import type { LaidOutPage, LaidOutReport, LayoutEnv, ReportData } from '../../shared/report/types';
@@ -186,7 +186,7 @@ export function ReportPreviewView({ tab, active, dispatch }: DocViewProps) {
   const [first, setFirst] = useState(0);
   const [perView, setPerView] = useState<PerView>(1);
   const [menu, setMenu] = useState<'margins' | 'pageSize' | 'morePages' | null>(null);
-  const [zoom, setZoom] = useState<'fitPage' | 'actual'>('fitPage');
+  const [zoom, setZoom] = useState<'fitPage' | 'actual'>(() => currentSettings().previewZoom);   // C6: the workstation's default
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [draft, setDraft] = useState<string | null>(null); // the page number being typed; null: the current page's
   const [layoutAllowed, setLayoutAllowed] = useState<boolean | null>(null); // L3: AllowLayoutView of the definition read; null: none read

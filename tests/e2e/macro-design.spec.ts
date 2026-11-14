@@ -188,7 +188,7 @@ test('Ctrl+Down moves the selected block, not from a field being typed in (its t
 
 const pressed = (page: Page, id: string, on: boolean) => expect(page.getByTestId(`cmd-${id}`)).toHaveAttribute('aria-pressed', String(on));
 
-test('Macro Design tab: selected on opening, in Access order; Run saves a new macro first (No runs nothing); the catalogue adds after the selection', async () => {
+test('Macro Design tab: selected on opening, in Access order; Run runs a new macro unsaved, without asking; the catalogue adds after the selection', async () => {
   const { app, page } = await launchApp({ args: [base()], env: FR });
   try {
     await page.getByTestId('ribbon-tab-create').click();
@@ -217,21 +217,14 @@ test('Macro Design tab: selected on opening, in Access order; Run saves a new ma
     await page.getByTestId('macro-arg-1-Message-input').fill('Deux');
     await expect(page.getByTestId('macro-item-2')).toContainText(fr.macro.action.Beep);
 
-    // Run on an unsaved macro: No runs nothing; Yes asks the name, saves, then runs
+    // Run on an unsaved macro: no question, it runs as it stands in the designer and nothing is saved
     await page.getByTestId('cmd-macroRun').click();
-    await expect(page.getByTestId('modal')).toContainText(fr.macro.saveBeforeRun);
-    await page.getByTestId('modal-btn-no').click();
-    await expect(page.getByTestId('macro-msgbox')).toHaveCount(0);
-    await page.getByTestId('cmd-macroRun').click();
-    await page.getByTestId('modal-btn-yes').click();
-    await page.getByTestId('modal-input').fill('MExec');
-    await page.getByTestId('modal-btn-ok').click();
     await expect(page.getByTestId('macro-msgbox-text')).toHaveText('Un');
     await page.getByTestId('macro-msgbox-ok').click();
     await expect(page.getByTestId('macro-msgbox-text')).toHaveText('Deux');
     await page.getByTestId('macro-msgbox-ok').click();
-    await expect(page.getByTestId('doc-tab-macro-MExec')).toBeVisible();
-    expect((await getMacro(page, 'MExec')).items.map((i) => (i.k === 'action' ? i.action : i.k))).toEqual(['MessageBox', 'MessageBox', 'Beep']);
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    await expect(page.getByTestId('macro-item-2')).toContainText(fr.macro.action.Beep);   // still in the designer, still new
   } finally {
     await app.close();
   }

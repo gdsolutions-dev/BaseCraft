@@ -3,7 +3,7 @@ import { AccessTextError, blockBytes, parseAccessText, type AccessBlock } from '
 import { accessPage } from './access-page';
 import { resolveAccess } from './access-design-defaults';
 import { EVENTS, readEvent } from './design/events';
-import { PROPERTY_CATALOG, defaultFor, type PropertyDescriptor, type PropertyEditorKind, type PropertyTarget } from './design/properties';
+import { PROPERTY_CATALOG, defaultFor, descriptorFor, type PropertyDescriptor, type PropertyEditorKind, type PropertyTarget } from './design/properties';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef, SectionKind } from './design/model';
 import { parseCanonical, serialize, serializeCriteria } from './expr/parser';
 import { MAX_TWIPS, foldName, isValidObjectName } from './field-types';
@@ -134,7 +134,8 @@ function convertObject(b: AccessBlock, target: PropertyTarget, who: Who, c: Ctx)
   const done = new Set<string>();
   const x: X = { get: (n) => resolveAccess(b, n, c.defaults), count: (n) => bump(c.ignored, n), kept: () => c.notes.push({ code: 'expressionKept', part: who.name }) };
   for (const [from, m] of MAP) {
-    const d = DESC.get(m.to)!;
+    const d = descriptorFor(m.to, target)!;   // BorderStyle has a form descriptor and a control one
+    if (m.to === 'BorderStyle' && target === 'form') continue;   // the form's BorderStyle (window) is not the controls' line style
     if (!d.appliesTo.includes(target) || (d.objects && !d.objects.includes(kind)) || (from === 'Width' && target !== 'form' && target !== 'report')) continue;
     const own = b.props.has(from);
     if (d.default === undefined && !own) continue;   // no default to compare with: only what the object says

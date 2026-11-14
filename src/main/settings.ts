@@ -3,8 +3,11 @@ import { isAbsolute, join } from 'node:path';
 
 import type { AppSettings } from '../shared/api';
 import { isUiLanguage } from '../shared/i18n';
+import { isSortOrder } from '../shared/sort-orders';
+import { isRibbonCustom } from '../shared/ribbon-custom';
 import { DEFAULT_SETTINGS } from '../shared/settings-defaults';
 import { basePath } from './ipc-validate';
+import { isLocalAbsolute } from './trust';
 export type { AppSettings };
 
 const file = (dir: string) => join(dir, 'settings.json');
@@ -17,6 +20,8 @@ const oneOf = <T extends string>(...ok: T[]) => (v: unknown): v is T => ok.inclu
 const intIn = (lo: number, hi: number) => (v: unknown): v is number => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
+/** A template's name: '' (none) or a name of an object (at most 64 characters, printable). */
+const objectName = (v: unknown): v is string => typeof v === 'string' && v.length <= 64 && !CONTROL.test(v);
 /** One check per key: a value that fails it is read as the key's default. */
 export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is AppSettings[K] } = {
   locale: (v): v is AppSettings['locale'] => v === 'system' || isUiLanguage(v),
@@ -25,6 +30,7 @@ export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is Ap
   defaultFolder: (v): v is string => typeof v === 'string' && (v === '' || (v.length <= 4096 && !v.includes('\0') && isAbsolute(v))),
   recentCount: (v): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_RECENT,
   openLast: bool, confirmRecordChanges: bool, confirmDocumentDeletions: bool, confirmActionQueries: bool,
+  newSortOrder: isSortOrder,
   openMode: (v): v is AppSettings['openMode'] => v === 'shared' || v === 'exclusive',
   recordLocking: (v): v is 'none' => v === 'none',
   refreshInterval: intIn(1, 32766), updateRetries: intIn(0, 10), updateRetryMs: intIn(0, 1000),
@@ -32,7 +38,7 @@ export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is Ap
   arrowKeyBehavior: oneOf('nextField', 'nextCharacter'), continuousArrowKeys: oneOf('none', 'upDown', 'leftRight'),
   findReplaceDefault: oneOf('fast', 'general', 'startOfField'),
   cursorStopsAtEnds: bool, fourDigitYearAll: bool, gridlinesHorizontal: bool, gridlinesVertical: bool, datasheetFontUnderline: bool, datasheetFontItalic: bool,
-  columnWidth: intIn(300, 31680), datasheetFontSize: intIn(1, 127),
+  columnWidth: intIn(300, 31680), datasheetFontSize: intIn(1, 127), datasheetCellEffect: oneOf('flat', 'raised', 'sunken'),
   propertySheetFontSize: (v): v is AppSettings['propertySheetFontSize'] => [8, 9, 10, 11, 12, 14].includes(v as number),
   defaultFieldType: oneOf('shortText', 'longText', 'number', 'currency', 'dateTime', 'yesNo', 'hyperlink'),
   defaultTextSize: intIn(1, 255), defaultNumberSize: oneOf('byte', 'integer', 'longInteger', 'single', 'double', 'decimal'),
@@ -44,6 +50,17 @@ export const SETTING_CHECKS: { [K in keyof AppSettings]: (v: unknown) => v is Ap
   queryFontName: (v): v is string => typeof v === 'string' && v.length >= 1 && v.length <= 64 && !/["\\;{}<>]/.test(v) && !CONTROL.test(v),
   queryFontSize: intIn(1, 127), selectionBehavior: oneOf('partial', 'full'),
   printMarginLeft: intIn(0, 5670), printMarginRight: intIn(0, 5670), printMarginTop: intIn(0, 5670), printMarginBottom: intIn(0, 5670),
+  screenTips: bool, screenTipShortcuts: bool,
+  quickAccess: (v): v is string[] => Array.isArray(v) && v.length <= 30 && v.every((c) => typeof c === 'string' && /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(c)) && new Set(v).size === v.length,
+  ribbonCustom: isRibbonCustom,
+  trustedLocations: (v): v is AppSettings['trustedLocations'] => Array.isArray(v) && v.length <= 100 && v.every((l) => l !== null && typeof l === 'object'
+    && typeof l.path === 'string' && l.path.length <= 4096 && isLocalAbsolute(l.path, process.platform) && typeof l.subfolders === 'boolean'
+    && typeof l.description === 'string' && l.description.length <= 255 && !CONTROL.test(l.description)),
+  trustNetwork: bool,
+  formTemplate: objectName, reportTemplate: objectName,
+  errorChecking: bool, errorUnassociated: bool, errorNewLabels: bool, errorProperties: bool, errorReport: bool, errorShortcut: bool,
+  errorColor: (v): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/.test(v),
+  interfaceZoom: intIn(25, 300), previewZoom: oneOf('fitPage', 'actual'),
   datasheetFontWeight: (v): v is number => intIn(100, 900)(v) && (v as number) % 100 === 0,
 };
 

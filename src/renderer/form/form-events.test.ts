@@ -9,7 +9,7 @@ vi.mock('../macro/macro-shell', () => ({
 }));
 const { FormEvents } = await import('./form-events');
 
-const ctl = { kind: 'textBox' as const, name: 'Nom', left: 0, top: 0, width: 1, height: 1, props: { OnExit: 'MSortie', OnClick: '[Event Procedure]' } };
+const ctl = { kind: 'textBox' as const, name: 'Nom', left: 0, top: 0, width: 1, height: 1, props: { OnExit: 'MSortie', OnClick: '=Fonction(' } };
 const doc = (props: Record<string, unknown>): DesignDoc => ({ formatVersion: '1.0', recordSource: null, props, sections: [{ kind: 'detail', height: 1, props: {}, controls: [ctl] }] });
 const base = { locale: 'fr-FR', lang: 'fr' as const, now: () => new Date() };
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -17,7 +17,7 @@ beforeEach(() => { runs.length = 0; });
 
 it('raises only events bound to a macro, with the form or the control as its object', async () => {
   const h = new FormEvents(doc({ BeforeUpdate: 'MAvant' }), 'F', base);
-  expect(await h.raise('OnClick', ctl)).toBe(false);   // [Event Procedure]: kept, does nothing (R1)
+  expect(await h.raise('OnClick', ctl)).toBe(false);   // text kept as imported: does nothing (R1)
   expect(await h.raise('OnLoad')).toBe(false);
   expect(runs).toHaveLength(0);
   const exit = h.raise('OnExit', ctl);
@@ -121,4 +121,11 @@ it('a Python call (=f()) counts as bound: has() is true and raise() runs it', as
   expect(h.has('OnClick', c)).toBe(true);
   void h.raise('OnClick', c);
   expect(runs[0]!.binding).toMatchObject({ kind: 'python', name: 'marquer' });
+});
+
+it('an [Event Procedure] is raised like a macro (B6)', () => {
+  const h = new FormEvents(doc({ OnLoad: '[Event Procedure]' }), 'F', base);
+  expect(h.has('OnLoad')).toBe(true);
+  void h.raise('OnLoad');
+  expect(runs[0]!.binding).toEqual({ kind: 'procedure' });
 });

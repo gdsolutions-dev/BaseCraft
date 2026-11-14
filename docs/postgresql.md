@@ -51,7 +51,7 @@ BaseCraft translates a query on linked PostgreSQL tables into one PostgreSQL sta
 
 **Query shapes:** SELECT with inner and outer joins, WHERE, GROUP BY / HAVING, ORDER BY, DISTINCT, UNION [ALL], subqueries, parameters, and `TOP n` (ties kept, as Access). These are refused: `TOP n PERCENT`, Make-Table queries (create the table on the server, then fill it with an Append query).
 
-**Action queries:** Append (`INSERT … VALUES`, `INSERT … SELECT`), Update and Delete run on the server in one transaction, every row through the table's rules as on a local table. A row a rule refuses is counted by cause and skipped only when you choose to run the query anyway; a row the server itself refuses (a duplicate key, a missing parent record) cancels the whole query, nothing written, even when you run it anyway. A Delete that related records refuse deletes nothing. An Append that gives the values of an AutoNumber field is refused before anything is sent: remove that field from the query, the server numbers the new records. If the connection is lost while the query runs, whether it completed is unknown: check the table before running it again.
+**Action queries:** Append (`INSERT … VALUES`, `INSERT … SELECT`), Update and Delete run on the server in one transaction, every row through the table's rules as on a local table. A row a rule refuses is counted by cause and skipped only when you choose to run the query anyway; a row the server itself refuses (a duplicate key, a missing parent record) cancels the whole query, nothing written, even when you run it anyway. A Delete that related records refuse deletes nothing. An Append may give the values of an AutoNumber field: the table's sequence then moves past the highest value given (never back), so the server's next number does not collide. If the connection is lost while the query runs, whether it completed is unknown: check the table before running it again.
 
 **Crosstab queries** run on the server: the column headings are read there first, then merged as Access compares text (« Lyon » and « LYON » make one column, accents count). Their order follows the server's collation, which may differ from Access's. A column heading with more than 254 values on the server (counted before they are merged) is refused.
 
@@ -120,3 +120,11 @@ The approval covers the pass-throughs too: every pass-through definition is part
 - **A form's field list in Design view.** The result taken to list the fields of a form built on a pass-through serves the next opening of that form as it is.
 - **A pass-through as a source.** Refused as the source of another query or lookup (Access allows it).
 - **The Linked Table Manager does not relink pass-throughs.** After a server moves, open each pass-through's property sheet and choose its connection again.
+
+## Design view and layout of a linked table
+
+A linked table's Design view keeps the server's structure (names, types, sizes, required) locked; BaseCraft's own properties (caption, description, format, input mask, default value, validation rule and text, Lookup, Indexed, the table's description and rule) can be edited and are saved in the front-end, never on the server. The datasheet column widths of a linked table are saved there too. The same holds for SQL Server.
+
+## Split applications
+
+Run Move Data › To a Server on a front-end that holds no table of its own and it migrates the data file its links share (its tables, rows and relationships), then points the links at the server. The data file is left as it is, after a backup copy. A front-end linked to several data files is migrated file by file into the one schema: every file is checked first (a table name used by two files, or already on the server, is refused before anything is written, because the server name is the data file's own and a renamed table would no longer match its link or the queries naming it), then each file is backed up and moved in its own transaction, with its relationships. If a later file fails, the earlier ones stay moved and linked (the message names their tables) and the others are left as they were.

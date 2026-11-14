@@ -37,7 +37,8 @@ import type { DocViewProps } from '../../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal, type ModalApi } from '../../shell/Modal';
 import { nameErrorKey } from '../../shell/nav-menu-items';
 import { useFormatPainter } from '../../designer/format-painter';
-import { firstPythonCall, viewCode } from '../../designer/view-code';
+import { convertObjectMacros } from '../../designer/convert-events-run';
+import { firstCode, viewCode } from '../../designer/view-code';
 import { registerCommandStates, registerCommands, registerModeGuard, runCommand, type CommandHandlers, type CommandId } from '../../shell/ribbon-model';
 import { editsDesign, sameView, type DocMode } from '../../state/app-state';
 import { allowsLayout } from '../../form/views';
@@ -59,7 +60,7 @@ import { printMargins } from '../../settings-store';
 import { blankReport, detailHidden, removesControls, reportDesignStates } from './report-sections';
 import { layoutNoticeKey, reportView } from './report-view';
 import { useDocPicture, useResources } from '../../design/resources';
-import { PICTURE_ACCEPT, usedResourceNames } from '../../../shared/pictures';
+import { PICTURE_ACCEPT, usedPictureKeys } from '../../../shared/pictures';
 
 const FIELD_LEFT = 1418;   // 2,5 cm : un champ ajouté sans point de dépôt, son étiquette à gauche
 const FIELD_GAP = 113;     // 0,2 cm sous le contrôle le plus bas
@@ -68,7 +69,7 @@ const NO_LISTS: Lists = { tables: [], queries: [], forms: [], reports: [] };
 /** La galerie Contrôles du ruban choisit l'outil de la boîte à outils. */
 const TOOL_COMMANDS: Partial<Record<CommandId, ControlKind | null>> = {
   select: null, textBox: 'textBox', label: 'label', insertPageBreak: 'pageBreak', comboBox: 'comboBox', line: 'line', rectangle: 'rectangle',
-  checkBox: 'checkBox', optionButton: 'optionButton', image: 'image', subform: 'subform', button: 'commandButton', tabControl: 'tabControl', optionGroup: 'optionGroup', listBox: 'listBox', toggleButton: 'toggleButton',
+  checkBox: 'checkBox', optionButton: 'optionButton', image: 'image', subform: 'subform', button: 'commandButton', tabControl: 'tabControl', optionGroup: 'optionGroup', listBox: 'listBox', toggleButton: 'toggleButton', attachment: 'attachment',
 };
 
 // État vierge (Créer › État vide) : la Liste des champs s'ouvre avec l'onglet de ce nom, une seule fois.
@@ -158,7 +159,7 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
   }, [state.doc, sheet, t, renderControl, showMargins]);
   // les avertissements du moteur, une fois les champs de la source connus
   // (une source illisible : ses champs inconnus ne sont pas répétés champ par champ, le bandeau le dit)
-  const { map: resources, ready: resourcesReady } = useResources(usedResourceNames(state.doc));
+  const { map: resources, ready: resourcesReady } = useResources(usedPictureKeys(state.doc));
   const issues = useMemo(() => (described.key === sourceKey ? readReport(state.doc, described.fields, { theme, resources }).issues : [])
     .filter((i) => resourcesReady || i.code !== 'pictureMissing')   // pas d'avertissement tant que la galerie n'est pas lue
     .filter((i) => !sourceError || i.code !== 'unknownField'), [state.doc, described, sourceKey, sourceError, theme, resources, resourcesReady]);
@@ -409,7 +410,8 @@ export function ReportDesignView({ tab, active, readOnly, dispatch }: DocViewPro
       propertySheet: () => setSheetVisible((v) => !v),
       formatPainter: () => painter.toggle(),
       subreportInNewWindow: () => { const n = subObjectOf(live.current.state); if (n) void dispatch({ type: 'open', kind: 'report', name: n, mode: 'design' }); },
-      viewCode: () => { const { state: s } = live.current; viewCode(firstPythonCall(s.doc, s.selection), (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }, () => { runCommand('createModule'); }).catch(showError); },
+      convertMacros: () => { const { state: s } = live.current; convertObjectMacros({ kind: 'report', name: tab.name, doc: s.doc, readOnly: live.current.readOnly, modal, edit: (apply) => send({ type: 'edit', apply }) }).catch(showError); },
+      viewCode: () => { const { state: s } = live.current; viewCode(firstCode(s.doc, s.selection, 'report'), 'report', tab.name, (name, line) => { void dispatch({ type: 'open', kind: 'module', name, mode: 'design', args: { line } }); }).catch(showError); },
       pageSetupDialog: () => cmds.current.pageSetupDialog(),
       columns: () => cmds.current.columnsDialog(),
       portrait: () => setup({ orientation: 'portrait' }),

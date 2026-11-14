@@ -15,6 +15,7 @@ export interface SheetLayout {
   fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; font?: string;
   textColor?: string; backColor?: string; gridColor?: string; gridlines?: { horizontal: boolean; vertical: boolean };
   aligns?: Record<string, SheetAlign>;
+  /** Datasheet Formatting's Cell Effect (absent: the Options' default; 'flat' kept when that default is not flat) */ cellEffect?: 'flat' | 'raised' | 'sunken';
 }
 
 const MAX_NAMES = 1024, MAX_NAME = 255;
@@ -41,6 +42,7 @@ export function parseSheetLayout(v: unknown): SheetLayout {
   if (typeof v.font === 'string' && v.font.length > 0 && v.font.length <= 100) out.font = v.font;
   for (const k of ['textColor', 'backColor', 'gridColor'] as const) if (color(v[k])) out[k] = v[k].toLowerCase();
   if (isObject(v.gridlines) && typeof v.gridlines.horizontal === 'boolean' && typeof v.gridlines.vertical === 'boolean') out.gridlines = { horizontal: v.gridlines.horizontal, vertical: v.gridlines.vertical };
+  if (v.cellEffect === 'flat' || v.cellEffect === 'raised' || v.cellEffect === 'sunken') out.cellEffect = v.cellEffect;
   const aligns = entries(v.aligns, (x): x is SheetAlign => x === 'left' || x === 'center' || x === 'right');
   if (aligns && Object.keys(aligns).length) out.aligns = aligns;
   return out;

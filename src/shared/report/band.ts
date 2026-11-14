@@ -1,6 +1,7 @@
 // Mise en forme d'une bande d'état (pur) : valeur et texte de chaque contrôle, lignes coupées et alignées, Peut augmenter /
 // Peut réduire sur les positions de conception (règle d'Access), points de coupe et sauts de page. Le placement sur la page
 // est la tâche 6, qui appelle aussi onPrint.
+import { attachmentIconSrc } from '../attachments';
 import { aggregateArgType } from '../expr/aggregate';
 import { ExprRuntimeError, ExprSyntaxError, type Value } from '../expr/ast';
 import { evaluate } from '../expr/evaluate';
@@ -202,6 +203,12 @@ export async function formatBand(s: SectionSpec, data: ReportData, ctx: BandCont
         break;
       }
       case 'image': if (c.picture) box.item = { kind: 'image', ...at, src: c.picture, sizeMode: c.sizeMode ?? 'zoom', ...(c.pictureAlign ? { pictureAlign: c.pictureAlign } : {}), ...(c.tiling ? { tiling: true } : {}), ...grid(c) }; break;
+      case 'attachment': {   // the first file of the row's cell: its picture, else the file-type icon (as the form control)
+        const field = c.source.kind === 'field' ? data.fields.find((f) => sameName(f.name, (c.source as { name: string }).name)) : undefined;
+        const face = field && ctx.row !== null ? data.attachments?.[field.name]?.[ctx.row] : null;
+        if (face) box.item = { kind: 'image', ...at, src: face.src ?? attachmentIconSrc(face.name, face.type), sizeMode: 'zoom', ...grid(c) };
+        break;
+      }
       case 'chart': if (c.chart) box.item = { kind: 'chart', ...at, ...c.chart }; break;
       case 'pageBreak': pageBreaks.push(c.top); continue;
       default: continue;   // readReport keeps no other kind

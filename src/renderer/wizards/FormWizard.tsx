@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { api } from '../bridge';
+import { withTemplate } from '../design/templates';
 import { formLabels, uniqueFormName } from '../form/form-def';
 import { errorMessage, type ModalApi } from '../shell/Modal';
 import { wizardForm, type FormLayoutChoice } from './form-wizard-model';
@@ -37,7 +38,7 @@ function FormWizard({ onClose }: { onClose(v: WizardResult | null): void }) {
     setBusy(true);
     try {
       const fields = chosen.flatMap((n) => info.fields.filter((f) => f.name === n));
-      const doc = wizardForm(a, shown, { ...info, fields }, formLabels(t), layout);
+      const doc = await withTemplate('form', wizardForm(a, shown, { ...info, fields }, formLabels(t), layout));
       const res = await api.objects.save('form', shown, doc, null);
       if (res.ok) return onClose({ name: shown, open });
       setError(t(`dialog.op.${res.reason}`));

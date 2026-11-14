@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import type { AppInfo, ObjectSummary, SessionState, TableSummary } from '../shared/api';
+import { isServerKind, type AppInfo, type ObjectSummary, type SessionState, type TableSummary } from '../shared/api';
 import { sameName } from '../shared/field-types';
 import { formulaLang } from '../shared/i18n';
 import { DEFAULT_STARTUP, hasStartup, type StartupOptions } from '../shared/startup';
@@ -18,11 +18,16 @@ import { uiHandlers } from './python/ui-handlers';
 import { hasPendingRow } from './import-text/wizard-model';
 import { firstFreeName, formNames } from './form/form-def';
 import { Backstage, type BackstageView, type Settings } from './shell/Backstage';
+import { setTextOrder } from '../shared/expr/library';
 import { compactMessage } from './shell/compact-message';
 import { emitDataRefresh } from './shell/data-refresh';
 import { Banners } from './shell/Banners';
 import { DialogHost } from './shell/DialogHost';
 import { DocumentTabs } from './shell/DocumentTabs';
+import { OverlappingWindows, windowOps } from './shell/OverlappingWindows';
+import { parseFormDoc } from './form/form-def';
+import { PopupHost } from './shell/PopupHost';
+import { formWinOf, DEFAULT_WIN } from './shell/form-window';
 import { askLogin } from './shell/LoginDialog';
 import { ModalProvider, useErrorDialog, useModal } from './shell/Modal';
 import { NavPane } from './shell/NavPane';
@@ -39,7 +44,7 @@ import { closeEmbeddedOf } from './macro/embedded';
 import { formCancelled, whenFormOpened } from './form/form-instances';
 import { base64ToBytes, bytesToBase64, storedIconPng } from './shell/app-icon';
 import { SHIFT_GRACE_MS, shiftHeld } from './shell/shift-key';
-import { publishSettings } from './settings-store';
+import { publishSettings, zoomBy } from './settings-store';
 import { baseUi, publishBaseOptions, publishUi, runStartup, type StartupUi } from './shell/startup';
 import { reportShown } from './report/report-events';
 import { askMacroToRun } from './macro/RunMacroDialog';
@@ -237,6 +242,7 @@ function Shell() {
     blockedAutoExec.current = null;
     publishUi(baseUi());
     publishBaseOptions(DEFAULT_STARTUP);
+    setTextOrder('legacy');
     setUi(baseUi());
     rawDispatch({ type: 'setNav', visible: true, strip: true });
     setAppTitle('');
@@ -253,7 +259,7 @@ function Shell() {
     openShift.current = false;
     const stillCurrent = () => startedFor.current === run && live.current.session?.path === run.path;
     void (async () => {
-      const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro'), refreshUserFunctions().catch(() => {})]); // R5: names known before AutoExec and the startup form
+      const [o, macros] = await Promise.all([api.base.startup(), api.objects.list('macro'), refreshUserFunctions().catch(() => {}), loadTextOrder()]); // R5: names known before AutoExec and the startup form
       if (!stillCurrent()) return;
       publishBaseOptions(o);
       const autoExec = macros.find((m) => sameName(m.name, 'AutoExec'))?.name ?? null;
@@ -306,13 +312,13 @@ function Shell() {
     ? tables.find((x) => x.link && sameName(x.name, tab.name))?.link : undefined);
   useEffect(() => { setSourceHint(sourceHint(active, navSelection)); }); // pickSource's default preselection
   // what the base's startup options ask of the ribbon (B3 R10), the Query Builder's too: it does not depend on how the builder was reached
-  const startupCtx = { ...(ui.ribbon === 'simplified' || ui.runMode ? { ribbon: 'simplified' as const } : {}), ...(ui.runMode ? { runMode: true as const } : {}),
+  const startupCtx = { ...(ui.ribbon === 'simplified' || ui.runMode ? { ribbon: 'simplified' as const } : {}), ...(ui.runMode ? { runMode: true as const } : {}), ...(ui.overlapping ? { overlapping: true as const } : {}),
     ...(ui.datasheetDesign ? {} : { datasheetDesign: false as const }) };
   // a Query Builder's tab in front: the ribbon serves its query (its own commands only)
   const ctx: RibbonContext = modalTab
     ? { hasBase: !!session, readOnly: !!session?.readOnly, mode: modalTab.mode, isNew: false, kind: modalTab.kind, builder: true, ...startupCtx }
     : { hasBase: !!session, readOnly: !!session?.readOnly, mode: active?.mode ?? null, isNew: !!active?.isNew, kind: active?.kind ?? null, embedded: !!active?.embedded, ...startupCtx,
-      ...(active && linkedDesign(active) ? { linked: true as const } : {}) };
+      ...(active && linkedDesign(active) ? { linked: isServerKind(linkedDesign(active)!.kind) ? 'meta' as const : true as const } : {}) };
   const commandTab = modalTab?.scope ?? state.activeId;
   useEffect(() => { setActiveCommandTab(commandTab); }, [commandTab]);
   useEffect(() => { setCommandContext(ctx); }); // cheap: ignored when unchanged
@@ -331,12 +337,25 @@ function Shell() {
   useEffect(() => { if (design) setNavImportExcel((table) => setImporting({ appendTo: table, source: 'excel' })); }, []);
   useEffect(() => setOpenTabs(() => live.current.state.tabs), []);
   useEffect(() => setShellDispatch(dispatch), [dispatch]);
+  // a form's window properties (Pop Up, Modal…) are read when it opens (in any view: a design switched to Form view would otherwise unmount while they load, losing its unsaved edits) and after each save of its design; its Form view is not shown before
+  const winRead = useRef(new Set<string>());
+  useEffect(() => {
+    for (const x of state.tabs) {
+      if (x.kind !== 'form' || x.isNew || x.win?.token === x.reloadToken || winRead.current.has(`${x.id}:${x.reloadToken}`)) continue;
+      const key = `${x.id}:${x.reloadToken}`, token = x.reloadToken;
+      winRead.current.add(key);
+      api.objects.get('form', x.name).then((r) => parseFormDoc(r.definition).doc).catch(() => null)   // unreadable: the form view says so
+        .then((doc) => rawDispatch({ type: 'formWin', id: x.id, win: doc ? formWinOf(doc, token) : { ...DEFAULT_WIN, token } }))
+        .finally(() => winRead.current.delete(key));
+    }
+  }, [state.tabs]);
 
   /** Create › Form Design / Blank Form: a new form named Formulaire<n> (the first free n among forms and open tabs). */
-  const newForm = (fieldList: boolean) => {
+  const newForm = async (fieldList: boolean) => {
     const { state: s, objects: objs } = live.current;
     const name = firstFreeName(formNames(objs, s.tabs), (n) => t('form.newName', { n }));
     if (fieldList) design?.requestFieldList('form', name);
+    await design?.seedTemplate('form', name);
     rawDispatch({ type: 'open', kind: 'form', name, mode: 'design', isNew: true });
   };
   /** The first « État<n> » free among the reports and the open tabs. */
@@ -398,6 +417,8 @@ function Shell() {
     // Help tab: the main process only opens the links About shows
     help: () => openLink('site'), showTraining: () => openLink('site'), whatsNew: () => openLink('releases'),
     contactSupport: () => openLink('issues'), feedback: () => openLink('issues'),
+    // Home › Window (overlapping windows only): the front form sized to its own, the list of windows with Cascade and Tile
+    sizeToFit: () => windowOps.sizeToFit?.(), switchWindows: () => windowOps.switchWindows?.(),
     // Home › Clipboard launcher: a read-only view of the text on the system clipboard (not Access's Office Clipboard pane)
     showClipboard: async () => {
       const text = await api.app.readClipboard();
@@ -502,6 +523,7 @@ function Shell() {
       // Ctrl+Break interrupts Python, even with a dialog in front
       if (e.ctrlKey && (e.key === 'Cancel' || e.code === 'Pause') && pythonHost().state() === 'running') { e.preventDefault(); pythonHost().interrupt(); return; }
       if (pythonHost().busy()) return; // the veil makes the window inert: no shortcut runs under a Python call
+      if (e.ctrlKey && !e.altKey && !e.metaKey && ['+', '=', '-', '0'].includes(e.key)) { e.preventDefault(); zoomBy(e.key === '0' ? 0 : e.key === '-' ? -1 : 1); return; }   // C6: interface zoom
       if (dialogInFront()) return; // a dialog or the backstage is in front (a Query Builder's tab is served)
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -521,8 +543,10 @@ function Shell() {
         if (runCommand('propertySheet')) e.preventDefault(); // Property Sheet, where a view delivers it (form designer)
       }
     };
+    const onWheel = (e: WheelEvent) => { if (e.ctrlKey && e.deltaY !== 0) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1 : -1); } };   // C6: Ctrl + wheel
     window.addEventListener('keydown', onKey, true); // capture: works even when an editor stops propagation
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('wheel', onWheel); };
   }, []);
 
   // Each document has its say before it goes (the same guard as for a change of mode): a datasheet saves its pending row
@@ -586,6 +610,8 @@ function Shell() {
     setBackstage(null);
     return true;
   };
+  /** C7b: the evaluator compares texts as the base's sort order says (the data process does it for queries). */
+  const loadTextOrder = () => api.base.sortOrder().then((o) => setTextOrder(o.applied)).catch(() => {});
   const compact = async () => {
     if (!(await closeDocuments())) return;
     try {
@@ -594,6 +620,7 @@ function Shell() {
     } catch (e) {
       await showError(e);
     } finally {
+      void loadTextOrder(); // Compact applies a pending sort order
       void refreshTables();
       void refreshObjects();
     }
@@ -705,7 +732,9 @@ function Shell() {
               tabs={state.tabs} openTabOf={(k, n) => state.tabs.find((x) => !x.embedded && isDoc(x, k, n))?.id} />
           </div>
         )}
-        <DocumentTabs state={state} readOnly={readOnly} linkOf={linkedDesign} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} showTabs={ui.documentTabs} formIcon={formIcon} />
+        {ui.overlapping
+          ? <OverlappingWindows state={state} readOnly={readOnly} linkOf={linkedDesign} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} formIcon={formIcon} />
+          : <DocumentTabs state={state} readOnly={readOnly} linkOf={linkedDesign} dispatch={dispatch} onClose={(tab) => void closeTab(tab)} showTabs={ui.documentTabs} formIcon={formIcon} />}
       </div>
       {design && immediate.seen && session && <design.ImmediateWindow visible={immediate.open} focusKey={immediate.focus} />}
       {ui.statusBar && <StatusBar ctx={ctx} />}
@@ -722,6 +751,7 @@ function Shell() {
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />
       )}
     </div>
+    <PopupHost tabs={state.tabs} activeId={state.activeId} dispatch={dispatch} readOnly={readOnly} onClose={(tab) => void closeTab(tab)} inert={dialogOpen || pythonRunning} formIcon={formIcon} />
     <DialogHost tabs={state.tabs} activeId={state.activeId} dispatch={dispatch} readOnly={readOnly} />
     <RunningNotice />
     <PythonVeil />

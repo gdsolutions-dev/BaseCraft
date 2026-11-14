@@ -14,7 +14,7 @@
     "files": ["out/**/*", "!**/node_modules/**"],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "directories": { "buildResources": "build" },
-    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }, { "from": "build/python", "to": "python" }, { "from": "resources/access-export.ps1", "to": "access-export.ps1" }],
+    "extraResources": [{ "from": "out/licenses.json", "to": "licenses.json" }, { "from": "build/icon.png", "to": "icon.png" }, { "from": "build/python", "to": "python" }, { "from": "resources/access-export.ps1", "to": "access-export.ps1" }, { "from": "resources/spellcheck.ps1", "to": "spellcheck.ps1" }, { "from": "resources/odbc.ps1", "to": "odbc.ps1" }],
     "fileAssociations": [{ "ext": "basecraft", "name": "BaseCraft database", "role": "Editor", "rank": "Owner", "mimeType": "application/x-basecraft" }],
     "win": { "target": ["nsis", "zip"] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
@@ -70,8 +70,8 @@
     "@glideapps/glide-data-grid": "6.0.3",
     "codemirror": "6.0.2",
     "echarts": "6.1.0",
-    "exceljs": "4.4.0",
     "i18next": "26.5.4",
+    "jszip": "3.10.2",
     "lodash": "4.18.1",
     "lucide-react": "1.61.0",
     "marked": "4.3.0",
@@ -83,7 +83,6 @@
     "react-responsive-carousel": "3.2.23",
     "tedious": "20.3.8"
   },
-  "overrides": { "unzipper": "0.12.5", "uuid": "^11.1.1" },
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",

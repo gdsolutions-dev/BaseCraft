@@ -29,7 +29,7 @@ test('defaults, every change written at once and kept after a relaunch', async (
   let again: Awaited<ReturnType<typeof launchApp>> | undefined;
   try {
     await page.getByTestId('bs-options').click();
-    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client']);
+    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client', 'opt-cat-quickAccess', 'opt-cat-ribbon', 'opt-cat-trust']);
     await expect(page.getByTestId('opt-cat-designers')).toHaveText("Concepteurs d'objets");
     await page.getByTestId('opt-cat-designers').click();
     await expect(page.getByTestId('opt-panel')).toContainText('Modifiez les paramètres par défaut de création des objets de base de données.');
@@ -158,7 +158,7 @@ test('Runtime: no « Concepteurs d\'objets », no « Impression »', async () =>
   const { app, page } = await launchApp({ env: FR, runtime: true });
   try {
     await page.getByTestId('bs-options').click();
-    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-client']);
+    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-client', 'opt-cat-quickAccess', 'opt-cat-ribbon', 'opt-cat-trust']);
     await page.getByTestId('opt-cat-client').click();
     await expect(page.getByTestId('opt-recent-count')).toBeVisible();
     await expect(page.getByTestId('opt-margin-left')).toHaveCount(0);

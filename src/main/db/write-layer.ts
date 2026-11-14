@@ -1,10 +1,12 @@
 // Couche d'écriture unique : toute écriture de données passe ici (conversion, validation, transaction).
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, listItemValue, type CellInput, type FieldErrorCode, type SqlValue } from '../../shared/coerce';
-import { lookupOf, MASK_TYPES, sameName, valueListRows, type FieldDef, type LookupProps, type TableDesign } from '../../shared/field-types';
+import { isCalculated, lookupOf, MASK_TYPES, sameName, valueListRows, type FieldDef, type LookupProps, type TableDesign } from '../../shared/field-types';
 import { checkMasked, parseMask } from '../../shared/expr/input-mask';
 import type { LocaleInfo } from '../../shared/locale-format';
 import { foreignKeys, listTables, parentOf, pickName, quoteIdent, refColumns, sqliteSameName, tableDesign } from './schema';
+import { copySets, purgeOrphanSets, attachmentCountSql } from './attachments';
+import { calculatedFields, calculatedValues } from './calculated';
 import { applyDefaults, checkRecordRule, checkRules, DefaultValueError } from './rules';
 import { degraded, lookupSource, queryRowSource } from './rows';
 import { sourceHasValue } from '../query/source';
@@ -36,6 +38,7 @@ function convert(design: TableDesign, values: Record<string, CellInput>, info: L
   const nulled: { field: string; code: FieldErrorCode }[] = [];
   const cols: { fd: FieldDef; value: SqlValue }[] = [];
   for (const fd of design.fields) {
+    if (isCalculated(fd.props)) continue; // stored by the write layer from its expression, never typed
     if (keys.includes(fd.name)) {
       const auto = opts.allowAutoNumber && fd.props.type === 'autoNumber';
       if (auto && (values[fd.name] === null || values[fd.name] === '')) continue;
@@ -53,7 +56,7 @@ function convert(design: TableDesign, values: Record<string, CellInput>, info: L
 }
 
 function readRow(db: DatabaseSync, design: TableDesign, rowid: number): SqlValue[] | undefined {
-  const stmt = db.prepare(`SELECT ${design.fields.map((fd) => quoteIdent(fd.name)).join(', ')} FROM ${quoteIdent(design.name)} WHERE rowid = ?`);
+  const stmt = db.prepare(`SELECT ${design.fields.map((fd) => (fd.props.type === 'attachment' ? attachmentCountSql(db, fd) : quoteIdent(fd.name))).join(', ')} FROM ${quoteIdent(design.name)} WHERE rowid = ?`);
   stmt.setReturnArrays(true);
   return stmt.get(rowid) as unknown as SqlValue[] | undefined;
 }
@@ -68,7 +71,7 @@ function readBack(db: DatabaseSync, design: TableDesign, rowid: number): SqlValu
 function unchanged(db: DatabaseSync, design: TableDesign, rowid: number, expected: Record<string, SqlValue>): boolean | undefined {
   const pairs = Object.entries(expected).flatMap(([k, v]) => {
     const fd = design.fields.find((x) => sameName(x.name, k));
-    return fd ? [{ fd, v }] : [];
+    return fd && fd.props.type !== 'attachment' ? [{ fd, v }] : []; // an Attachment cell is changed by its own operations, and read as a count
   });
   if (pairs.length === 0) return true;
   const row = db.prepare(`SELECT ${pairs.map((p) => `(${quoteIdent(p.fd.name)} IS ?)`).join(' AND ')} AS same FROM ${quoteIdent(design.name)} WHERE rowid = ?`)
@@ -212,17 +215,20 @@ async function beforeChange(db: DatabaseSync, dm: DataMacros, design: TableDesig
   return { cols: [...cols.filter((x) => !c.cols.some((y) => y.fd.name === x.fd.name)), ...c.cols] };
 }
 
+/** Text compares without case (Access's Limit To List); anything else as stored. */
+const sameText = (a: SqlValue, b: SqlValue): boolean => typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b;
+
 /** Limit To List of a value list (its bound items converted as the field stores them) or a Field List (`names`: the names of
  *  its table's fields, undefined when it is gone: checks nothing); undefined for a table, SQL or query Row Source, which the
  *  caller reads (C7 R12: the server write path too). */
 export function inList(fd: FieldDef, l: LookupProps, value: SqlValue, names: (table: string) => string[] | undefined): boolean | undefined {
   if (l.kind === 'values') {
     const b = (l.boundColumn ?? 1) - 1;
-    return valueListRows(l).rows.some((r) => r[b] !== undefined && listItemValue(fd, r[b]!) === value);
+    return valueListRows(l).rows.some((r) => r[b] !== undefined && sameText(listItemValue(fd, r[b]!), value));
   }
   if (l.kind !== 'fieldList') return undefined;
   const n = names(l.table);
-  return n === undefined || n.includes(value as string);
+  return n === undefined || n.some((x) => sameText(x, value));
 }
 
 /**
@@ -244,7 +250,7 @@ function notInList(db: DatabaseSync, cols: { fd: FieldDef; value: SqlValue }[], 
       const query = queryRowSource(db, l);
       const src = query ? undefined : lookupSource(db, l);
       found = query ? degraded(() => sourceHasValue(db, query, (l.boundColumn ?? 1) - 1, value, info), true)
-        : !src || !!db.prepare(`SELECT 1 FROM ${quoteIdent(src.design.name)} WHERE ${quoteIdent(src.bound.name)} = ? LIMIT 1`).get(value);
+        : !src || !!db.prepare(`SELECT 1 FROM ${quoteIdent(src.design.name)} WHERE ${quoteIdent(src.bound.name)} = ? COLLATE NOCASE LIMIT 1`).get(value);
     }
     if (!found) errors.push({ field: fd.name, code: 'notInList' });
   }
@@ -288,6 +294,8 @@ export async function insertRow(db: DatabaseSync, design: TableDesign, values: R
   const macro = await beforeChange(db, dm, design, cols, { ...Object.fromEntries(design.fields.map((fd) => [fd.name, null])), ...stored }, undefined, info, now, opts.macroDepth ?? 1);
   if ('errors' in macro) return macro;
   cols = macro.cols; stored = { ...stored, ...storedOf(cols) };
+  const calc = await calculatedValues(design, stored, info, now);
+  cols = [...cols, ...calc]; stored = { ...stored, ...storedOf(calc) };
   const broken = await checkRules(design, stored, design.fields.map((fd) => fd.name), now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
   const record = await checkRecordRule(design, stored, now, info);
@@ -353,6 +361,10 @@ export async function updateRow(db: DatabaseSync, design: TableDesign, rowid: nu
     const macro = await beforeChange(db, dm, design, cols, { ...old, ...storedOf(cols) }, old, info, now, opts.macroDepth ?? 1);
     if ('errors' in macro) return macro;
     cols = macro.cols;
+  }
+  if (cols.length > 0 && calculatedFields(design).length > 0) { // the row as it will be stored, its calculated fields again
+    const cur = readRow(db, design, rowid);
+    if (cur) cols = [...cols, ...await calculatedValues(design, { ...Object.fromEntries(design.fields.map((fd, i) => [fd.name, cur[i] ?? null])), ...storedOf(cols) }, info, now)];
   }
   const broken = await checkRules(design, storedOf(cols), [...Object.keys(changes), ...cols.map((c) => c.fd.name)], now, info);
   if (broken.length > 0) return { ok: false, errors: broken };
@@ -423,6 +435,7 @@ export function deleteRows(db: DatabaseSync, table: string, rowids: number[]): D
         const ids = rowids.slice(i, i + CHUNK);
         n += Number(db.prepare(`DELETE FROM ${quoteIdent(table)} WHERE rowid IN (${ids.map(() => '?').join(', ')})`).run(...ids).changes);
       }
+      purgeOrphanSets(db); // the files of the rows, and of the rows a CASCADE removed
       return n;
     });
     return { ok: true, count };
@@ -467,5 +480,7 @@ export function copyRows(db: DatabaseSync, from: TableDesign, to: string): numbe
   const cols = from.fields.map((x) => quoteIdent(x.name)).join(', ');
   const noRowid = db.prepare(`SELECT 1 FROM pragma_table_list WHERE schema = 'main' AND name = ? AND wr = 1`).get(from.name);
   const order = noRowid ? '' : ' ORDER BY rowid';
-  return Number(db.prepare(`INSERT INTO ${quoteIdent(to)} (${cols}) SELECT ${cols} FROM ${quoteIdent(from.name)}${order}`).run().changes);
+  const n = Number(db.prepare(`INSERT INTO ${quoteIdent(to)} (${cols}) SELECT ${cols} FROM ${quoteIdent(from.name)}${order}`).run().changes);
+  copySets(db, from, to);
+  return n;
 }

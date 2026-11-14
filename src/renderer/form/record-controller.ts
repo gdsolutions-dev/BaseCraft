@@ -55,6 +55,8 @@ export interface RecordSnapshot {
   info: SourceInfo | null; total: number;
   index: number;                 // 0..total-1 ; total = nouvel enregistrement
   isNew: boolean; values: SqlValue[]; pending: Record<string, CellInput>; dirty: boolean;
+  rowid: RowRef;                 // the current record's key-table row (NaN: new, or none): the Attachment control's
+
   errors: RecordError[]; editable: boolean; canAdd: boolean; canDelete: boolean;
   busy: boolean;                 // un déplacement ou une suppression en cours : rien n'est modifiable entre-temps
   writeError?: unknown;          // dernier rejet de insert/update/delete (la vue l'affiche avec useErrorDialog)
@@ -163,7 +165,7 @@ export class FormRecords {
   get snapshot(): RecordSnapshot {
     return (this.snap ??= {
       status: this.status, error: this.error, info: this.info, total: this.total, index: this.index, isNew: this.isNew,
-      values: this.shown ?? this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
+      rowid: this.isNew ? NaN : this.rowid, values: this.shown ?? this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
       editable: this.editable, busy: this.moving > 0, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
       sort: this.sort, filter: this.filter, refusedByEvent: this.refusedByEvent, appliedFilter: this.applied,
     });

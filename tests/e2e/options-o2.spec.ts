@@ -17,7 +17,7 @@ test('no base: defaults, every change written at once and kept after a relaunch'
   let again: Awaited<ReturnType<typeof launchApp>> | undefined;
   try {
     await page.getByTestId('bs-options').click();
-    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client']);
+    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client', 'opt-cat-quickAccess', 'opt-cat-ribbon', 'opt-cat-trust']);
     await expect(page.getByTestId('opt-cat-datasheet')).toHaveText('Feuille de données');
 
     // the datasheet defaults
@@ -29,6 +29,7 @@ test('no base: defaults, every change written at once and kept after a relaunch'
     await expect(page.getByTestId('opt-font-size')).toHaveValue('11');
     await expect(page.getByTestId('opt-font-weight').locator('option:checked')).toHaveText('Standard');
     await expect(page.getByTestId('opt-font-underline')).not.toBeChecked();
+    await expect(page.getByTestId('opt-cell-effect')).toHaveValue('flat');
     await expect(page.getByTestId('opt-font-italic')).not.toBeChecked();
 
     // the client defaults
@@ -70,10 +71,11 @@ test('no base: defaults, every change written at once and kept after a relaunch'
     await expect(page.getByTestId('modal')).toHaveCount(0);
     await page.getByTestId('opt-font-weight').selectOption({ label: 'Gras' });
     await page.getByTestId('opt-font-italic').check();
+    await page.getByTestId('opt-cell-effect').selectOption('raised');
     const expected = {
       moveAfterEnter: 'nextRecord', enterFieldBehavior: 'end', arrowKeyBehavior: 'nextCharacter', continuousArrowKeys: 'upDown', cursorStopsAtEnds: true,
       findReplaceDefault: 'general', fourDigitYearAll: true, gridlinesHorizontal: true, gridlinesVertical: false, columnWidth: 1985,
-      datasheetFontSize: 14, datasheetFontWeight: 700, datasheetFontItalic: true, datasheetFontUnderline: false,
+      datasheetFontSize: 14, datasheetFontWeight: 700, datasheetFontItalic: true, datasheetFontUnderline: false, datasheetCellEffect: 'raised',
     };
     await expect.poll(() => settingsFile(userDataDir)).toMatchObject(expected);
 
@@ -92,6 +94,7 @@ test('no base: defaults, every change written at once and kept after a relaunch'
     await expect(p2.getByTestId('opt-font-size')).toHaveValue('14');
     await expect(p2.getByTestId('opt-font-weight').locator('option:checked')).toHaveText('Gras');
     await expect(p2.getByTestId('opt-font-italic')).toBeChecked();
+    await expect(p2.getByTestId('opt-cell-effect')).toHaveValue('raised');
   } finally {
     await again?.app.close();
     await app.close().catch(() => undefined);
@@ -104,7 +107,7 @@ test('a base open: truncated numbers, filter lists and « Cette base de données
   try {
     await page.getByTestId('ribbon-tab-file').click();
     await openDbOptions(page);
-    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-currentDb', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client']);
+    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-currentDb', 'opt-cat-datasheet', 'opt-cat-designers', 'opt-cat-client', 'opt-cat-quickAccess', 'opt-cat-ribbon', 'opt-cat-trust']);
     await expect(page.getByTestId('opt-db-truncated')).toBeChecked();
     await expect(page.getByTestId('opt-db-list-indexed')).toBeChecked();
     await expect(page.getByTestId('opt-db-list-nonindexed')).toBeChecked();
@@ -139,7 +142,7 @@ test('Runtime with a base: « Feuille de données » and the client settings, «
   try {
     await page.getByTestId('ribbon-tab-file').click();
     await page.getByTestId('bs-options').click();
-    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-client']);
+    expect(await cats(page)).toEqual(['opt-cat-general', 'opt-cat-datasheet', 'opt-cat-client', 'opt-cat-quickAccess', 'opt-cat-ribbon', 'opt-cat-trust']);
     await page.getByTestId('opt-cat-client').click();
     await expect(page.getByTestId('opt-year4-db')).toBeDisabled();
     await expect(page.getByTestId('opt-year4-db')).toBeChecked();

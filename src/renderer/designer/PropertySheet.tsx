@@ -11,7 +11,9 @@ import { useTranslation } from 'react-i18next';
 import { useDocTheme } from '../design/theme-context';
 import { ColorEditor } from './ColorEditor';
 export { ColorEditor };
-import { readEvent } from '../../shared/design/events';
+import { readEvent, sectionName, type EventName } from '../../shared/design/events';
+import { EVENT_PROCEDURE, procedureName } from '../../shared/python/code-behind';
+import { ensureCodeBehind } from './code-module';
 import { flattenControls, type ControlDef, type SectionDef } from '../../shared/design/model';
 import type { CellRef } from '../../shared/design/layout';
 import { PROPERTY_CATALOG, type PropertyDescriptor } from '../../shared/design/properties';
@@ -37,7 +39,7 @@ import { checkPropValue, columnWidthsToDisplay, columnWidthsToStored, controlSou
   MIXED, cellName, chartSummary, pictureLabel, setPictureType, readProp, sheetRows, targetExists, targetKind, targetsOf, type SheetRow } from './property-sheet-model';
 import type { PropertySheetContext, SheetTab } from './sheet-types';
 import { formatCm, parseCm } from './units';
-import { PICTURE_ACCEPT } from '../../shared/pictures';
+import { PICTURE_ACCEPT, readPictureType, type PictureType } from '../../shared/pictures';
 import { readPictureFile } from './image-gallery-model';
 import { ImageGallery } from './ImageGallery';
 import { api } from '../bridge';
@@ -51,6 +53,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
   onClose?(): void; sectionLabel?(s: SectionDef, index: number): string; restrict?: DesignerRestrict }) {
   const { state, dispatch, docKind, ctx, readOnly } = p;
   const { t } = useTranslation();
+  const showError = useErrorDialog();
   const uid = useId();
   const shownTabs = restrictedTabs(p.restrict);
   const tabs: SheetTab[] = [...shownTabs, 'all'];
@@ -74,8 +77,17 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 
   /** « … » d'un événement (R16) : la macro nommée en mode Création ; sinon sa macro incorporée, ou une nouvelle, dans son onglet. */
   const owner = ctx.owner;
+  /** B6: the event procedure of the selected object, in its code-behind module (created with its function). */
+  const openProcedure = (event: EventName) => {
+    const tg = targets[0]!;
+    const who = tg.kind === 'control' ? tg.name : tg.kind === 'section' ? sectionName(doc.sections[tg.index]!.kind, doc.sections[tg.index]!.groupLevel) : undefined;
+    ensureCodeBehind(docKind, owner!.name, procedureName(docKind, event, who))
+      .then((r) => { void shellDispatch({ type: 'open', kind: 'module', name: r.module, mode: 'design', args: { line: r.line } }); })
+      .catch((e) => { void showError(e); });
+  };
   const buildEvent = owner && targets.length === 1 ? (d: PropertyDescriptor, value: unknown) => {
     const b = readEvent(value);
+    if (b.kind === 'procedure') { openProcedure(d.name as EventName); return; }
     if (b.kind === 'macro') { void shellDispatch({ type: 'open', kind: 'macro', name: b.name.split('.')[0]!, mode: 'design' }); return; }
     const target = targets[0]!;
     const where = target.kind === 'doc' ? t(`tabs.kind.${docKind}`) : target.kind === 'section' ? sectionText(doc.sections[target.index]!, target.index) : target.kind === 'cell' ? cellLabel(target) : target.name;
@@ -88,7 +100,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
     if (d.name === 'PictureType') {
       // changer le type ne convertit jamais l'image : il change seulement la lecture de `Picture`. Vers Partagé, `Picture` est effacée
       // sauf si elle nomme déjà une image de la galerie ; vers Incorporé, un nom est effacé (une URL de données reste).
-      const edit = (names: Set<string> | null) => dispatch({ type: 'edit', apply: (cur) => setPictureType(cur, docKind, targets, v === 'shared' ? 'shared' : 'embedded', names) });
+      const edit = (names: Set<string> | null) => dispatch({ type: 'edit', apply: (cur) => setPictureType(cur, docKind, targets, readPictureType(v), names) });
       if (v !== 'shared') edit(null);
       else void api.resources.list().then((l) => edit(new Set(l.map((r) => r.name))), () => edit(new Set()));
       setLost(null);
@@ -155,7 +167,7 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
           <PropRow key={`${selKey}:${tab}:${row.d.name}`} row={row} id={`${uid}-${row.d.name}`} ctx={ctx} docKind={docKind} rowSourceTable={rowSourceTable}
             commit={(v) => commit(row.d, v)} onLost={(msg) => setLost({ label: t(row.d.labelKey), msg })} macros={macros}
             buildEvent={buildEvent && ((v) => buildEvent(row.d, v))}
-            shared={rows.find((r) => r.d.name === 'PictureType')?.value === 'shared'}
+            pictureType={readPictureType(rows.find((r) => r.d.name === 'PictureType')?.value)}
             transparent={row.d.name === 'BackColor' && targets.every((x) => x.kind === 'control') ? () => dispatch({ type: 'setProp', targets, name: 'BackStyle', value: 'transparent' }) : undefined} />
         ))}
       </div>
@@ -164,9 +176,9 @@ export function PropertySheet(p: { state: DesignerState; dispatch(a: DesignerAct
 }
 
 interface RowProps { row: SheetRow; id: string; ctx: PropertySheetContext; docKind: 'form' | 'report'; rowSourceTable: boolean;
-  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void; transparent?(): void; shared?: boolean }
+  commit(v: unknown): string | null; onLost(msg: string): void; macros: string[]; buildEvent?(value: unknown): void; transparent?(): void; pictureType?: PictureType }
 
-function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent, transparent, shared }: RowProps) {
+function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros, buildEvent, transparent, pictureType }: RowProps) {
   const { t, i18n } = useTranslation();
   const modal = useModal();
   const { d } = row;
@@ -190,9 +202,10 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
     const b = mixed ? null : readEvent(v);
     // « … » (R11): empty -> choose; a `=call` -> the function builder (its text read back like a typed one); anything else -> the macro builder
     const build = buildEvent && { buildTitle: t('sheet.eventBuild'), build: async (s: string) => {
-      let kind: 'macro' | 'function' | null = s.trim() === '' ? null : s.trim().startsWith('=') ? 'function' : 'macro';
-      if (kind === null && (kind = await modal.custom<'macro' | 'function'>((close) => <ChooseBuilder close={close} />, { titleKey: 'builder.choose.title' })) === null) return null;
+      let kind: 'macro' | 'function' | 'code' | null = s.trim() === '' ? null : s.trim().startsWith('=') ? 'function' : s.trim() === EVENT_PROCEDURE ? 'code' : 'macro';
+      if (kind === null && (kind = await modal.custom<'macro' | 'function' | 'code'>((close) => <ChooseBuilder close={close} />, { titleKey: 'builder.choose.title' })) === null) return null;
       if (kind === 'macro') { buildEvent(s.trim()); return null; }
+      if (kind === 'code') { buildEvent(EVENT_PROCEDURE); return s.trim() === EVENT_PROCEDURE ? null : { value: EVENT_PROCEDURE }; }
       const text = await modal.custom<string>((close) => <FunctionBuilder sep={listSeparator(region)} close={close} />, { titleKey: 'builder.function.title' });
       const r = text === null ? null : eventToCanonical(text, ctx.display);
       return r?.ok ? { value: r.value } : null;
@@ -200,7 +213,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
     editor = b?.kind === 'embedded'
       ? <EmbeddedEditor id={id} testId={testId} disabled={row.readOnly} build={buildEvent && (() => buildEvent(v))} commit={commit} />
       // a name, or a text kept as imported (R1); typed or picked, it is checked by checkEventValue
-      : field({ shown: b?.kind === 'macro' ? b.name : b?.kind === 'python' ? eventToDisplay(b.text, ctx.display) : b?.kind === 'other' ? b.text : '', options: macros,
+      : field({ shown: b?.kind === 'procedure' ? EVENT_PROCEDURE : b?.kind === 'macro' ? b.name : b?.kind === 'python' ? eventToDisplay(b.text, ctx.display) : b?.kind === 'other' ? b.text : '', options: macros,
         parse: (s) => { if (!s.trim().startsWith('=')) return text(s); const r = eventToCanonical(s, ctx.display); return r.ok ? { value: r.value } : { error: r.error }; }, ...build });
   } else if (d.name === 'ColumnWidths') {   // descripteur texte, montré en cm et stocké en twips (contrat 1.4)
     editor = field({ shown: columnWidthsToDisplay(typeof v === 'string' ? v : '', region), parse: (s) => {
@@ -275,7 +288,7 @@ function PropRow({ row, id, ctx, docKind, rowSourceTable, commit, onLost, macros
         );
         break;
       case 'color': editor = <ColorEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} fill={!!transparent} commit={commit} transparent={transparent} />; break;
-      case 'picture': editor = <PictureEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} shared={!!shared} />; break;
+      case 'picture': editor = <PictureEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} pictureType={pictureType ?? 'embedded'} />; break;
       case 'textList': editor = <TextListEditor id={id} testId={testId} value={v} mixed={mixed} disabled={row.readOnly} commit={commit} />; break;
       case 'expression': case 'criteria':
         editor = <ExprEditor id={id} testId={testId} value={v} mixed={mixed} criteria={d.editor === 'criteria'} disabled={row.readOnly} ctx={ctx}
@@ -404,9 +417,10 @@ function TextListEditor({ id, testId, value, mixed, disabled, commit }: { id: st
     onChange={(e) => setDraft(e.target.value)} onBlur={run} />;
 }
 
-function PictureEditor({ id, testId, value, mixed, disabled, commit, shared }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean;
-  commit(v: unknown): string | null; shared: boolean }) {
+function PictureEditor({ id, testId, value, mixed, disabled, commit, pictureType }: { id: string; testId: string; value: unknown; mixed: boolean; disabled: boolean;
+  commit(v: unknown): string | null; pictureType: PictureType }) {
   const { t } = useTranslation();
+  const shared = pictureType === 'shared', linked = pictureType === 'linked';
   const [gallery, setGallery] = useState<{ x: number; y: number } | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const showError = useErrorDialog();
@@ -421,13 +435,17 @@ function PictureEditor({ id, testId, value, mixed, disabled, commit, shared }: {
   return (
     <div className="dz-pfield">
       {set && value.startsWith('data:image/') && <img className="dz-pthumb" src={value} alt="" />}
-      {set && !shared && <span className="dz-pmixed">{pictureLabel({ Picture: value }, t('sheet.pictureType.embedded'))}</span>}
+      {set && linked && <span className="dz-pmixed" data-testid={`${testId}-path`} title={value}>{value}</span>}
+      {set && !shared && !linked && <span className="dz-pmixed">{pictureLabel({ Picture: value }, t('sheet.pictureType.embedded'))}</span>}
       {mixed && <span className="dz-pmixed">{t('sheet.mixed')}</span>}
       {shared ? (
         <button type="button" id={id} data-testid={`${testId}-shared`} className="dz-pbutton" disabled={disabled} aria-haspopup="dialog"
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setGallery({ x: Math.max(0, r.left - 240), y: r.bottom }); }}>
           {set && !value.startsWith('data:') ? pictureLabel({ PictureType: 'shared', Picture: value }) : t('sheet.pickShared')}
         </button>
+      ) : linked ? (
+        <button type="button" id={id} data-testid={`${testId}-linked`} className="dz-pbutton" disabled={disabled}
+          onClick={() => { void api.resources.pickFile().then((p) => { if (p) setError(commit(p)); }, (e: unknown) => void showError(e)); }}>{t('sheet.pickPicture')}</button>
       ) : (
         <button type="button" id={id} data-testid={testId} className="dz-pbutton" disabled={disabled} aria-describedby={error ? `${id}-msg` : undefined}
           onClick={() => file.current?.click()}>{t('sheet.pickPicture')}</button>

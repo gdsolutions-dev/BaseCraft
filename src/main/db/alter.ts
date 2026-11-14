@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { coerce, numberToText, toDecimal, type CellInput, type SqlValue } from '../../shared/coerce';
-import { renamedIndexes, renamedRule, sameName, validateDesign, type FieldDef, type TableDesign } from '../../shared/field-types';
+import { isCalculated, renamedIndexes, renamedRule, sameName, validateDesign, type FieldDef, type TableDesign } from '../../shared/field-types';
 import { parseDecimal, type LocaleInfo } from '../../shared/locale-format';
 import {
   brokenObject, createTableStatements, DanglingKeyError, foreignKeyClauses, foreignKeys, isExternal, isQueryName, listTables, metadataNames, NameExistsError,
@@ -9,6 +9,8 @@ import {
 } from './schema';
 import type { AlterResult, FieldMapping, Relation } from '../../shared/api';
 import { countViolations } from './rules';
+import { recomputeCalculated } from './calculated';
+import { purgeOrphanSets } from './attachments';
 import { isLinkName } from '../links/store';
 export type { AlterResult, FieldMapping };
 export { isExternal, sqlTokens } from './schema';
@@ -172,6 +174,7 @@ export async function alterTable(db: DatabaseSync, oldName: string, design: Tabl
       from = { ...old, name: design.name };
     }
     let r = rebuild(db, from, design, sources, opts);
+    if (r.ok) await recomputeCalculated(db, design, opts.info); // a calculated field's expression, source field or type may have changed
     // ponytail: awaited inside the open transaction; the evaluator only awaits settled promises (microtasks), so no other
     // IPC call can run on this connection meanwhile. A truly asynchronous function in a rule would need a lock here.
     if (r.ok && !opts.acceptExistingViolations) r = await existingViolations(db, old, design, sources, opts.info);
@@ -246,9 +249,12 @@ function copyConverted(db: DatabaseSync, old: TableDesign, design: TableDesign, 
         }
         return;
       }
-      const c = convert(fd, src, decimals[i]!, opts.info, canon);
+      const was = old.fields.find((x) => x.name === sources[i])?.props.type === 'attachment';
+      // An Attachment cell is its set's id: kept as it is by an Attachment column, lost (a number means nothing) by any other.
+      const c = fd.props.type === 'attachment' ? { value: was ? (src as SqlValue) : null, lossy: false }
+        : was ? { value: null, lossy: src !== null } : convert(fd, src, decimals[i]!, opts.info, canon);
       lossy ||= c.lossy;
-      if (c.value === null && (fd.props.required || fd.props.primaryKey)) {
+      if (c.value === null && (fd.props.required || fd.props.primaryKey) && !isCalculated(fd.props)) {
         missing[i]!++;
         skip = true;
       }
@@ -299,6 +305,7 @@ function replaceTable(db: DatabaseSync, old: TableDesign, design: TableDesign, s
     if (m) put.run(design.name, fd.name, i, m.props);
   });
   writeTableMetadata(db, design);
+  purgeOrphanSets(db); // an Attachment field dropped or converted
   return { ok: true };
 }
 

@@ -24,6 +24,7 @@ for (const [name, cmd] of [['table', 'cmd-createTableDesign'], ['form', 'cmd-cre
     try {
       await page.getByTestId('ribbon-tab-create').click();
       await page.getByTestId(cmd).click();
+      await expect(page.locator('[data-testid^="doc-tab-"]').first()).toBeVisible();   // the new object opens after its template is seeded (B4c)
       await closeWindow(app);
       await expect(page.getByTestId('modal')).toBeVisible({ timeout: 5000 });
       await page.getByTestId('modal-btn-cancel').click();

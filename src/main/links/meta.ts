@@ -4,7 +4,7 @@ import { sameName, type FieldProps, type TableDesign } from '../../shared/field-
 import type { RemoteTable } from '../connectors/connector';
 import { sanitizeStoredProps, usableProps } from '../db/schema';
 
-export const META_KEYS = ['caption', 'description', 'format', 'decimalPlaces', 'inputMask', 'defaultValue', 'validationRule', 'validationText', 'allowZeroLength', 'lookup', 'indexed'] as const;
+export const META_KEYS = ['caption', 'description', 'format', 'decimalPlaces', 'inputMask', 'defaultValue', 'validationRule', 'validationText', 'allowZeroLength', 'lookup', 'indexed', 'columnWidth'] as const;
 export const TYPE_KEYS = ['type', 'numberSize', 'size', 'precision', 'scale'] as const;
 export type TypeKey = Pick<FieldProps, (typeof TYPE_KEYS)[number]>;
 export interface LinkMeta { table?: Pick<TableDesign, 'description' | 'validationRule' | 'validationText'>;

@@ -1,10 +1,10 @@
 // Module editor (D1): CodeMirror over the Python source. Save asks the engine for the module's exports (parsing only), stores
 // { source, exports }, then resets the user modules. A syntax error still saves (no exports); a bar and a red line show it.
-import { closeCompletion, completionStatus, type CompletionContext } from '@codemirror/autocomplete';
+import { acceptCompletion, closeCompletion, completionStatus, type CompletionContext } from '@codemirror/autocomplete';
 import { python } from '@codemirror/lang-python';
-import { indentUnit } from '@codemirror/language';
-import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet } from '@codemirror/view';
+import { indentUnit, syntaxTree } from '@codemirror/language';
+import { Prec, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet, keymap } from '@codemirror/view';
 import { basicSetup, EditorView } from 'codemirror';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import { parseFormDoc } from '../form/form-def';
 import type { DocViewProps } from '../shell/DocumentTabs';
 import { errorMessage, useErrorDialog, useModal } from '../shell/Modal';
 import { registerCommands, registerModeGuard } from '../shell/ribbon-model';
-import { basecraftCompletions, type CompletionCatalog } from './completions';
+import { basecraftCompletions, typedWordOk, type CompletionCatalog } from './completions';
 import { functionClashes } from './function-index';
 import { pythonHost } from './python-host';
 import './module-editor.css';
@@ -38,6 +38,30 @@ const errorLine = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+const listMode = { explicit: false, moved: false }   // D2: how the open list was started / used (reset when it closes)
+const JEDI_TIMEOUT_MS = 5000   // the first call starts Python and loads Jedi
+const JEDI_TYPES: Record<string, string> = { function: 'function', class: 'class', module: 'namespace', keyword: 'keyword', property: 'property', instance: 'variable', statement: 'variable', param: 'variable' };
+/** Jedi in the Python worker: asynchronous, dropped when the user types on (CodeMirror aborts the context) or after the timeout. */
+async function jediCompletions(ctx: CompletionContext) {
+  const word = ctx.matchBefore(/\w*/);
+  if (!word) return null;
+  const dotted = ctx.state.doc.sliceString(Math.max(0, word.from - 1), word.from) === '.';
+  if (!ctx.explicit && !dotted) {
+    const l = ctx.state.doc.lineAt(ctx.pos);
+    // typing alone never starts Python (Jedi's load would queue ahead of a save); once it runs, the list follows the typing
+    if (pythonHost().state() !== 'idle' || !typedWordOk(l.text.slice(0, ctx.pos - l.from)) || /String|Comment/.test(syntaxTree(ctx.state).resolveInner(ctx.pos, -1).name)) return null;
+    await new Promise((res) => setTimeout(res, 150));   // debounce: a fast typist gets no list
+    if (ctx.aborted) return null;
+  }
+  const line = ctx.state.doc.lineAt(ctx.pos);
+  const never = new Promise<null>((res) => { ctx.addEventListener('abort', () => res(null)); setTimeout(() => res(null), JEDI_TIMEOUT_MS); });
+  try {
+    const r = await Promise.race([pythonHost().complete(ctx.state.doc.toString(), line.number, ctx.pos - line.from), never]);
+    if (!r || ctx.aborted) return null;
+    return { from: ctx.pos - r.prefix, validFor: /^\w*$/, options: r.items.map((i) => ({ label: i.label, type: JEDI_TYPES[i.type] ?? 'text', detail: i.detail === i.label ? undefined : i.detail })) };
+  } catch { return null; }   // engine off, restarted or Jedi failed: no list
+}
+
 /** R7: object names read once at mount; a form's control names the first time the form is dotted into (cached). */
 function completionSource() {
   const cat: CompletionCatalog = { forms: [], reports: [], tables: [], queries: [], macros: [], controls: () => [], fields: () => [] };
@@ -56,7 +80,8 @@ function completionSource() {
       try { controls.set(form.toLowerCase(), flattenControls(parseFormDoc((await api.objects.get('form', form)).definition).doc.sections.flatMap((x) => x.controls)).map((c) => c.name)); } catch { controls.set(form.toLowerCase(), []); }
     }
     const r = basecraftCompletions(before, cat);
-    return r && { from: line.from + r.from, options: r.options, validFor: /^\w*$/ };
+    if (r) { return { from: line.from + r.from, options: r.options, validFor: /^\w*$/ }; }
+    return jediCompletions(ctx);
   };
 }
 
@@ -97,8 +122,19 @@ function ModuleEditor({ tab, readOnly, dispatch, initial }: DocViewProps & { ini
     const py = python();
     const ev = new EditorView({
       doc: initial, parent: host.current!,
-      extensions: [basicSetup, py, py.language.data.of({ autocomplete: completionSource() }), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
-        EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); }),
+      extensions: [// before basicSetup: same precedence, the first binding wins (Enter must see the list before it accepts)
+      Prec.highest(keymap.of([
+        { key: 'Tab', run: acceptCompletion },
+        { key: 'Ctrl-Space', run: () => { listMode.explicit = true; return false; } },
+        { key: 'ArrowDown', run: () => { listMode.moved = true; return false; } }, { key: 'ArrowUp', run: () => { listMode.moved = true; return false; } },
+        // D2: a list opened by typing a word (not after a dot or a quote, not Ctrl+Space) leaves Enter to the new line until an arrow key moves into it
+        { key: 'Enter', run: (v) => {
+          const pos = v.state.selection.main.head, from = v.state.wordAt(pos)?.from ?? pos;
+          if (completionStatus(v.state) !== null && !listMode.explicit && !listMode.moved && !/[.["']/.test(v.state.doc.sliceString(Math.max(0, from - 1), from))) closeCompletion(v);
+          return false;
+        } }])),
+      basicSetup, py, py.language.data.of({ autocomplete: completionSource() }), indentUnit.of('    '), errorLine, EditorView.editable.of(!readOnly),
+        EditorView.updateListener.of((u) => { if (u.docChanged) markDirty(true); if (completionStatus(u.state) === null) listMode.explicit = listMode.moved = false; }),
         // CodeMirror closes the list on blur only once it is shown: a list still being computed (the catalog is read from the base)
         // opened afterwards, over a dialog (the save's name), and took its clicks. Out of focus, no list.
         EditorView.updateListener.of((u) => { if (!u.view.hasFocus && completionStatus(u.state) !== null) setTimeout(() => closeCompletion(u.view)); })],

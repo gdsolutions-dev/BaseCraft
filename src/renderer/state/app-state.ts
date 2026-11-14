@@ -28,7 +28,12 @@ export interface OpenArgs { where?: string; dataMode?: 'add' | 'edit' | 'readOnl
 /** dialog: a form opened in Dialog mode (R12), shown by DialogHost, not in the tab bar; openerId: the tab active when it opened.
  *  embedded: an embedded macro's session (R16, embedded.ts), named by its title; openerId is then its design's tab, which takes it
  *  along when it closes or changes mode. */
+/** win: a form's window properties (Pop Up, Modal, Auto Resize, Auto Center, Border Style, Min Max Buttons, Close Button, Control Box),
+ *  read from its definition when it opens in Form view (before that the form is not shown); width: its own width in px. */
+export interface FormWin { popup: boolean; modal: boolean; autoResize: boolean; autoCenter: boolean; border: 'none' | 'thin' | 'sizable' | 'dialog';
+  minMax: 'none' | 'min' | 'max' | 'both'; closeButton: boolean; controlBox: boolean; width: number; token: number }
 export interface DocTab {
+  win?: FormWin;
   id: string; kind: DocKind; name: string; mode: DocMode; dirty: boolean; reloadToken: number; dataToken?: number; isNew?: boolean; description?: string;
   dirtySources?: RecordSourceRef[]; openArgs?: OpenArgs; dialog?: true; openerId?: string; embedded?: string;
 }
@@ -37,7 +42,7 @@ export interface DocTab {
 export interface AppState { tabs: DocTab[]; activeId: string | null; navVisible: boolean; navStrip: boolean }
 export type AppAction =
   | { type: 'open'; kind: DocKind; name: string; mode: DocMode; isNew?: boolean; args?: OpenArgs; embedded?: { id: string; owner: string } } | { type: 'close'; id: string } | { type: 'activate'; id: string }
-  | { type: 'setMode'; id: string; mode: DocMode } | { type: 'setDirty'; id: string; dirty: boolean; sources?: RecordSourceRef[] }
+  | { type: 'setMode'; id: string; mode: DocMode } | { type: 'formWin'; id: string; win: FormWin } | { type: 'setDirty'; id: string; dirty: boolean; sources?: RecordSourceRef[] }
   | { type: 'tableRenamed'; from: string; to: string } | { type: 'tableDropped'; name: string }
   | { type: 'tableSaved'; name: string; tabId?: string } // tabId: the new-table tab that was just saved under `name`
   | { type: 'tableDataChanged'; name: string } // rows added elsewhere (import): never reloads a design
@@ -67,6 +72,10 @@ export const sameView = (a: DocMode, b: DocMode | undefined): boolean => a === b
 export const isRunningForm = (t: DocTab): boolean => t.kind === 'form' && !editsDesign(t.mode);
 /** OpenForm in Dialog mode of a form already open only activates it (R12), unless it is in Design or Layout view: no form runs there. */
 export const dialogActivates = (t: DocTab, args: OpenArgs | undefined): boolean => args?.windowMode === 'dialog' && !editsDesign(t.mode);
+/** A form in Form view with Pop Up: a floating window of its own (PopupHost), in tabbed and overlapping hosts alike. */
+export const isPopup = (t: DocTab): boolean => !!t.win?.popup && !t.dialog && !editsDesign(t.mode);
+/** The tabs a host (tabs or overlapping windows) shows: not a dialog, not a pop-up, not a form whose window properties are not read yet. */
+export const hosted = (t: DocTab): boolean => !t.dialog && !isPopup(t) && !(t.kind === 'form' && !t.isNew && !editsDesign(t.mode) && !t.win);
 /** The Relations window shows every table: any change of structure reloads it. */
 const relationsReload = (s: AppState): AppState =>
   ({ ...s, tabs: s.tabs.map((t) => (t.kind === 'relations' ? { ...t, reloadToken: t.reloadToken + 1 } : t)) });
@@ -112,14 +121,19 @@ export function appReducer(s: AppState, a: AppAction): AppState {
         return { ...patch(withoutEmbeddedOf(s, existing, mode), existing.id, { mode, ...args }), activeId: existing.id };
       }
       const tab: DocTab = { id: `doc${++seq}`, kind: a.kind, name: a.name, mode: a.mode, dirty: false, reloadToken: 0, ...(a.isNew ? { isNew: true } : {}),
-        ...(a.args ? { openArgs: a.args } : {}), ...(a.args?.windowMode === 'dialog' ? { dialog: true, ...(s.activeId ? { openerId: s.activeId } : {}) } : {}) };
+        ...(a.args ? { openArgs: a.args } : {}), ...(a.args?.windowMode === 'dialog' || a.kind === 'form' ? { ...(a.args?.windowMode === 'dialog' ? { dialog: true as const } : {}), ...(s.activeId ? { openerId: s.activeId } : {}) } : {}) };
       return { ...s, tabs: [...s.tabs, tab], activeId: tab.id };
     }
     case 'close': {
       // a dialog closed while in front: the tab that opened it is active again (R12)
       const gone = s.tabs.find((t) => t.id === a.id);
       const next = remove(s, (t) => t.id === a.id);
-      return gone?.dialog && s.activeId === a.id && next.tabs.some((t) => t.id === gone.openerId) ? { ...next, activeId: gone.openerId! } : next;
+      return gone && (gone.dialog || isPopup(gone)) && s.activeId === a.id && next.tabs.some((t) => t.id === gone.openerId) ? { ...next, activeId: gone.openerId! } : next;
+    }
+    case 'formWin': {   // read again after a save (reloadToken); a Modal form becomes a dialog the first time only (its view is not mounted before)
+      const tab = s.tabs.find((t) => t.id === a.id);
+      if (!tab) return s;
+      return patch(s, a.id, { win: a.win, ...(!tab.win && a.win.modal && !editsDesign(tab.mode) ? { dialog: true as const } : {}) });
     }
     case 'activate': return s.tabs.some((t) => t.id === a.id) ? { ...s, activeId: a.id } : s;
     case 'setMode': {   // another view of a design closes its embedded macros (R16)

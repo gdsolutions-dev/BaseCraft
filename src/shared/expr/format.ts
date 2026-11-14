@@ -14,7 +14,7 @@ const NUMBERS: NamedFormat[] = ['generalNumber', 'currency', 'euro', 'fixed', 's
 const DATES: NamedFormat[] = ['generalDate', 'longDate', 'mediumDate', 'shortDate', 'longTime', 'mediumTime', 'shortTime'];
 const BOOLS: NamedFormat[] = ['yesNo', 'trueFalse', 'onOff'];
 export const FORMATS_BY_TYPE: Record<FieldType, NamedFormat[]> = {
-  autoNumber: NUMBERS, number: NUMBERS, currency: NUMBERS, dateTime: DATES, yesNo: BOOLS, shortText: [], longText: [], hyperlink: [],
+  autoNumber: NUMBERS, number: NUMBERS, currency: NUMBERS, dateTime: DATES, yesNo: BOOLS, shortText: [], longText: [], hyperlink: [], attachment: [],
 };
 
 // Valeurs affichées (comme les mots-clés du catalogue), pas des libellés d'interface.

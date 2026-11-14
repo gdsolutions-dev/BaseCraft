@@ -30,7 +30,7 @@ export function splitDatabase(front: DatabaseSync, frontPath: string, target: st
       });
     } finally { d.close(); }
     inTransaction(front, () => {
-      front.exec('PRAGMA defer_foreign_keys=ON; DELETE FROM bc_relations');
+      front.exec('PRAGMA defer_foreign_keys=ON; DELETE FROM bc_relations; DELETE FROM bc_attachments'); // the files went with their tables, into the data file
       for (const t of tables) remove(front, t);
       addLinks(front, frontPath, 'basecraft', target, tables);
       saveStartupOptions(front, { ...startupOptions(front), frontEnd: true, dataFile: false }); // a data file split again

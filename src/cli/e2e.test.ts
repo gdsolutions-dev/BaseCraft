@@ -29,13 +29,13 @@ describe('end to end', () => {
 });
 
 describe('format', () => {
-  it('a fresh new base passes checkTarget at the current format (1.4)', async () => {
+  it('a fresh new base passes checkTarget at the current format (1.5)', async () => {
     const { checkTarget } = await import('./script');
     const p = tmp();
     expect(await run(['new', p], { out: () => {}, err: () => {} })).toBe(0);
     expect(() => checkTarget(p)).not.toThrow();
     const db = new DatabaseSync(p);
-    expect((db.prepare("SELECT value FROM bc_meta WHERE key='format_minor'").get() as { value: string }).value).toBe('4');
+    expect((db.prepare("SELECT value FROM bc_meta WHERE key='format_minor'").get() as { value: string }).value).toBe('5');
     db.close();
   });
 
@@ -52,13 +52,13 @@ describe('format', () => {
     expect(JSON.parse(out.join(''))).toEqual([{ object: { kind: 'form', name: 'F' }, control: 'Chart1', type: 'columnClustered', source: null }]);
   });
 
-  it('F5a : le script crée un nuage de points, refuse un Nuage de mots ; la commande charts affiche le type', async () => {
+  it('F5a : le script crée un nuage de points, refuse un type inconnu ; la commande charts affiche le type', async () => {
     const p = tmp(), spec = p.replace('x.basecraft', 'chart5.json'), bad = p.replace('x.basecraft', 'chart5bad.json');
     const doc = (ChartType: string) => ({ formatVersion: '1.0', recordSource: { kind: 'table', name: 'Clients' }, props: {}, sections: [{ kind: 'detail', height: 4000, props: {}, controls: [
       { kind: 'chart', name: 'Nuage', left: 0, top: 0, width: 4000, height: 3000, props: { ChartType, ChartAxis: ['ID'], ChartValues: [{ field: 'ID', agg: 'none' }] } }] }] });
     const tbl = { op: 'table.create', name: 'Clients', fields: [{ name: 'ID', type: 'autoNumber' }] };
     fs.writeFileSync(spec, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('scatter') }]));
-    fs.writeFileSync(bad, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('wordCloud') }]));
+    fs.writeFileSync(bad, JSON.stringify([tbl, { op: 'form.create', name: 'F', layout: 'doc', doc: doc('treemap') }]));
     const io = { out: () => {}, err: () => {} };
     expect(await run(['new', p], io)).toBe(0);
     expect(await run(['script', bad, p], io)).toBe(1);

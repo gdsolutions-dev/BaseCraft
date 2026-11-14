@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DesignDoc } from '../../shared/design/model'
-import { firstPythonCall } from './view-code'
+import { firstCode, firstPythonCall } from './view-code'
 
 const ctl = (name: string, props: Record<string, unknown>) => ({ kind: 'commandButton' as const, name, left: 0, top: 0, width: 1, height: 1, props })
 const doc = (props: Record<string, unknown>, ...controls: ReturnType<typeof ctl>[]): DesignDoc =>
@@ -13,5 +13,12 @@ describe('firstPythonCall', () => {
     expect(firstPythonCall(d, { kind: 'doc' })).toBe('un')
     expect(firstPythonCall(doc({ OnOpen: '=fo()' }, ctl('A', { OnClick: '=un()' })), { kind: 'doc' })).toBe('fo')
     expect(firstPythonCall(doc({}, ctl('A', { OnClick: 'Macro1' })), { kind: 'doc' })).toBeNull()
+  })
+
+  it('an [Event Procedure] gives the procedure name', () => {
+    const d = doc({}, ctl('Nom', { OnClick: '[Event Procedure]' }))
+    expect(firstCode(d, { kind: 'controls', names: ['nom'] })).toEqual({ proc: 'Nom_Click' })
+    expect(firstCode(doc({ OnOpen: '[Event Procedure]' }), { kind: 'doc' }, 'report')).toEqual({ proc: 'Report_Open' })
+    expect(firstPythonCall(d, { kind: 'doc' })).toBeNull()
   })
 })

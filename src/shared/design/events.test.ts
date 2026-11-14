@@ -10,7 +10,7 @@ describe('events', () => {
     expect(readEvent('')).toEqual({ kind: 'none' });
     expect(readEvent('MLyon.Fermer')).toEqual({ kind: 'macro', name: 'MLyon.Fermer' });
     expect(readEvent({ embedded: { formatVersion: '1.0', items: [] } })).toEqual({ kind: 'embedded', def: { formatVersion: '1.0', items: [] } });
-    expect(readEvent('[Event Procedure]')).toEqual({ kind: 'other', text: '[Event Procedure]' });
+    expect(readEvent('[Event Procedure]')).toEqual({ kind: 'procedure' });
     expect(readEvent('=Fonction(')).toEqual({ kind: 'other', text: '=Fonction(' });
     expect(readEvent('a.b.c')).toEqual({ kind: 'other', text: 'a.b.c' });          // not a macro name: kept, does nothing
   });

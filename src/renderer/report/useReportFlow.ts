@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DesignDoc } from '../../shared/design/model';
 import type { Theme } from '../../shared/design/theme';
 import type { LaidOutReport } from '../../shared/report/types';
-import { usedResourceNames } from '../../shared/pictures';
+import { usedPictureKeys } from '../../shared/pictures';
 import { useResources } from '../design/resources';
 import { useModal } from '../shell/Modal';
 import { api } from '../bridge';
@@ -23,7 +23,7 @@ export function useReportFlow(doc: DesignDoc, active: boolean, theme?: Theme): {
   const modal = useModal();
   const [runs] = useState(() => latestRun(RELAYOUT_DELAY));
   const key = flowKey(doc);
-  const { map: resources } = useResources(usedResourceNames(doc));   // la galerie change : mise en page refaite
+  const { map: resources } = useResources(usedPictureKeys(doc));   // la galerie change : mise en page refaite
   const [src, setSrc] = useState<{ key: string; source: FlowSource } | null>(null);
   const [fnTick, setFnTick] = useState(0);
   useEffect(() => onUserFunctionsChanged(() => setFnTick((n) => n + 1)), []);   // D3 R5: laid out again

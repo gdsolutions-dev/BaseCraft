@@ -45,15 +45,22 @@ export const resourceNameFromFile = (fileName: string): string => fileName.repla
 export const isResourceName = (v: unknown): v is string =>
   typeof v === 'string' && v.length >= 1 && v.length <= 255 && v === v.trim() && !new RegExp(CONTROL.source).test(v);
 
-export type PictureType = 'embedded' | 'shared';
-/** Toute valeur autre que 'shared' (absente, inconnue, « linked » pas encore géré) se lit incorporée. */
-export const readPictureType = (v: unknown): PictureType => (v === 'shared' ? 'shared' : 'embedded');
+export type PictureType = 'embedded' | 'shared' | 'linked';
+/** Toute valeur autre que 'shared' ou 'linked' (absente, inconnue) se lit incorporée. */
+export const readPictureType = (v: unknown): PictureType => (v === 'shared' || v === 'linked' ? v : 'embedded');
+/** Linked pictures (a file path) travel in the same maps as gallery images, under `link:<path>`. */
+export const LINK_PREFIX = 'link:';
+/** The key an image is read under in a ResourceMap: its gallery name (shared) or `link:<path>` (linked); undefined if embedded or unset. */
+export function pictureKey(props: Record<string, unknown>): string | undefined {
+  const t = readPictureType(props.PictureType), pic = props.Picture;
+  return t === 'embedded' || typeof pic !== 'string' || pic === '' ? undefined : t === 'linked' ? LINK_PREFIX + pic : pic;
+}
 export type ResourceMap = Readonly<Record<string, string>>;
 
 /** L'URL de données à dessiner pour `Picture` : incorporée (elle-même, si valide) ou partagée (dans la galerie), sinon undefined. */
 export function resolvePicture(props: Record<string, unknown>, resources: ResourceMap): string | undefined {
   const pic = props.Picture;
-  if (readPictureType(props.PictureType) === 'shared') return typeof pic === 'string' && Object.hasOwn(resources, pic) ? resources[pic] : undefined;
+  if (readPictureType(props.PictureType) !== 'embedded') { const k = pictureKey(props); return k !== undefined && Object.hasOwn(resources, k) ? resources[k] : undefined; }
   // incorporée : la règle d'avant F3 (tout `data:image/`), pour qu'une image déjà enregistrée se dessine comme avant
   // (un PNG nommé .jpg était stocké en `data:image/jpeg`) ; les nouvelles écritures de la galerie sont, elles, vérifiées.
   return typeof pic === 'string' && pic.startsWith('data:image/') ? pic : undefined;
@@ -66,4 +73,13 @@ export function usedResourceNames(doc: DesignDoc): string[] {
   add(doc.props);
   for (const s of doc.sections) for (const c of flattenControls(s.controls)) add(c.props);
   return [...names];
+}
+
+/** The keys of every image the document reads from the gallery or from a file (see pictureKey), without duplicates. */
+export function usedPictureKeys(doc: DesignDoc): string[] {
+  const keys = new Set<string>();
+  const add = (p: Record<string, unknown>): void => { const k = pictureKey(p); if (k !== undefined) keys.add(k); };
+  add(doc.props);
+  for (const s of doc.sections) for (const c of flattenControls(s.controls)) add(c.props);
+  return [...keys];
 }

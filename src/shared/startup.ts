@@ -17,6 +17,8 @@ export interface StartupOptions {
   statusBar: boolean;
   /** Display the document tabs. */
   documentTabs: boolean;
+  /** Document Window Options: overlapping windows instead of document tabs (C6; read when the base opens). */
+  overlappingWindows: boolean;
   /** Use the special keys (F11 shows or hides the Navigation Pane). */
   specialKeys: boolean;
   /** Compact the base when it closes (read by the main process at close). */
@@ -45,7 +47,7 @@ export interface StartupOptions {
 
 export const DEFAULT_STARTUP: StartupOptions = Object.freeze({
   appTitle: '', appIcon: '', startupForm: '', showNavPane: true, ribbon: 'full', runMode: false,
-  statusBar: true, documentTabs: true, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false,
+  statusBar: true, documentTabs: true, overlappingWindows: false, specialKeys: true, compactOnClose: false, datasheetDesign: true, fullMenus: true, shortcutMenus: true, iconForForms: false,
   frontEnd: false, dataFile: false,
   fourDigitYear: false, checkTruncatedNumbers: true, filterListIndexed: true, filterListNonIndexed: true, filterListMax: 1000,
   trackNameAutoCorrect: true, performNameAutoCorrect: true, logNameAutoCorrect: false,
@@ -93,6 +95,7 @@ export function readStartup(raw: unknown): StartupOptions {
     runMode: typeof o.runMode === 'boolean' ? o.runMode : DEFAULT_STARTUP.runMode,
     statusBar: typeof o.statusBar === 'boolean' ? o.statusBar : DEFAULT_STARTUP.statusBar,
     documentTabs: typeof o.documentTabs === 'boolean' ? o.documentTabs : DEFAULT_STARTUP.documentTabs,
+    overlappingWindows: typeof o.overlappingWindows === 'boolean' ? o.overlappingWindows : DEFAULT_STARTUP.overlappingWindows,
     specialKeys: typeof o.specialKeys === 'boolean' ? o.specialKeys : DEFAULT_STARTUP.specialKeys,
     compactOnClose: typeof o.compactOnClose === 'boolean' ? o.compactOnClose : DEFAULT_STARTUP.compactOnClose,
     datasheetDesign: typeof o.datasheetDesign === 'boolean' ? o.datasheetDesign : DEFAULT_STARTUP.datasheetDesign,

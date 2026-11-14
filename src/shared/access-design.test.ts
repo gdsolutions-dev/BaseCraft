@@ -1,11 +1,14 @@
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { convertAccessDesign } from './access-design';
+import { convertAccessMacro } from './access-macro';
+import { readEvent } from './design/events';
 import { flattenControls, validateDesignDoc, type DesignDoc } from './design/model';
 import { parseCanonical, serialize, serializeCriteria } from './expr/parser';
 import { readReport, type GroupLevel } from './report/model';
 
+vi.mock('./access-macro', async (orig) => { const m = await orig<typeof import('./access-macro')>(); return { ...m, convertAccessMacro: vi.fn(m.convertAccessMacro) }; });
 const fixture = (f: string) => fs.readFileSync(join(__dirname, '../../tests/fixtures/access/Ventes-complet.export', f), 'utf8');
 const form = () => convertAccessDesign(fixture('forms/1.txt'), 'form');
 const flat = (d: DesignDoc) => d.sections.flatMap((s) => flattenControls(s.controls));
@@ -100,6 +103,24 @@ describe('convertAccessDesign, forms', () => {
     expect(ctl(r.doc, 'B').props.OnClick).toBeUndefined();
     expect(r.notes).toEqual(expect.arrayContaining([{ code: 'eventDropped', part: '=Go()', reason: 'expression' }, { code: 'eventDropped', part: 'B.OnDblClick', reason: 'embeddedMacro' }]));
     expect(r.ignored.get('ForeColor')).toBe(1);
+  });
+  it('an embedded macro is converted onto its event; one that is not a macro text is dropped', () => {
+    const r = convertAccessDesign(wrap('Begin CommandButton\n Name ="B"\n OnClickEmMacro = Begin\n  Version =196611\n  Begin\n   Action ="Beep"\n  End\n  Begin\n   Action ="NoSuchThing"\n  End\n End\n OnDblClickEmMacro = Begin\n  Version =1\n End\nEnd'), 'form');
+    const click = ctl(r.doc, 'B').props.OnClick;
+    expect(readEvent(click).kind).toBe('embedded');
+    expect(validateDesignDoc(r.doc)).toEqual([]);
+    expect(r.notes).toEqual(expect.arrayContaining([{ code: 'macroNote', part: 'B.OnClick: NoSuchThing', reason: 'actionComment' }, { code: 'eventDropped', part: 'B.OnDblClick', reason: 'embeddedMacro' }]));
+  });
+  it('an embedded macro on an event the owner does not take is dropped and noted', () => {
+    const r = convertAccessDesign(wrap('Begin CommandButton\n Name ="B"\n OnOpenEmMacro = Begin\n  Version =196611\n  Begin\n   Action ="Beep"\n  End\n End\nEnd'), 'form');
+    expect(ctl(r.doc, 'B').props.OnOpen).toBeUndefined();
+    expect(r.notes).toContainEqual({ code: 'eventDropped', part: 'B.OnOpen', reason: 'embeddedMacro' });
+  });
+  it('a macro whose conversion throws never loses the form', () => {
+    vi.mocked(convertAccessMacro).mockImplementationOnce(() => { throw new Error('boom'); });
+    const r = convertAccessDesign(wrap('Begin CommandButton\n Name ="B"\n OnClickEmMacro = Begin\n  Version =196611\n  Begin\n   Action ="Beep"\n  End\n End\nEnd'), 'form');
+    expect(ctl(r.doc, 'B').props.OnClick).toBeUndefined();
+    expect(r.notes).toContainEqual({ code: 'eventDropped', part: 'B.OnClick', reason: 'embeddedMacro' });
   });
   it('an expression BaseCraft does not read is kept as written', () => {
     const r = convertAccessDesign(wrap('Begin TextBox\n Name ="A"\n ControlSource ="=1 +"\nEnd\nBegin TextBox\n Name ="B"\n ControlSource ="=[x]+1"\nEnd'), 'form');

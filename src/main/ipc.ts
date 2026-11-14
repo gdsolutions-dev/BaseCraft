@@ -21,6 +21,7 @@ import { HEARTBEAT_MS, keepAlive, releaseIfOurs } from './db/lock';
 import { isDesignChannel } from './design-channels';
 import { pickSpellLanguage, startWinSpell, winSpellTags, type WinSpell } from './spellcheck';
 import { powershellPath } from './import/access-export';
+import { hasAccessSignature } from './links/access';
 import { DbHost, type AsyncSession } from './db-host/client';
 import type { HostEvent, HostOpen } from './db-host/protocol';
 import { accessExportScript, odbcScript, spellcheckScript } from './app-protocol';
@@ -28,7 +29,7 @@ import { e2e, pickAttachmentPaths, pickAttachmentSavePath, pickExcelPath, pickEx
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, savedImport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, savedImport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, exportRelink, exportMacros, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
   relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, spellWords, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg, uint,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
@@ -368,6 +369,18 @@ export function openBase(path: string, create = false): Promise<SessionState> {
   }).finally(() => { opening--; });
 }
 
+/** File › Open on an Access file: a new base beside it, under its name (numbered when taken, never overwriting), is created and
+ *  opened; the window then offers the Access import on the file (`accessSource`, a path the import may now read). */
+async function openAccessAsBase(access: string): Promise<SessionState & { accessSource: string }> {
+  if (!hasAccessSignature(access)) throw new Error(`bc:linkUnavailable|cannotOpen|${access}`); // before anything is created
+  const stem = basename(access, extname(access));
+  let target = join(dirname(access), stem + FILE_EXTENSION);
+  for (let n = 1; existsSync(target); n++) target = join(dirname(access), `${stem}${n}${FILE_EXTENSION}`);
+  const state = await openBase(target, true);
+  chosenLinks.add(access);
+  return { ...state, accessSource: access };
+}
+
 /**
  * Heartbeat (every HEARTBEAT_MS, and when the machine wakes up). The main process beats the lock itself, so a long query
  * that keeps the data process busy does not let another workstation take the base over; the session's own check (a lost
@@ -623,8 +636,9 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     return p === null ? null : openBase(p, true);
   });
   handle(CH.baseOpen, async (p) => {
-    const path = p === undefined ? await pickOpenPath(await startDir()) : basePath(p);
-    return path === null ? null : openBase(path);
+    const path = p === undefined ? await pickOpenPath(await startDir(), RUNTIME ? null : catalog().link.filterAccess) : basePath(p);
+    if (path === null) return null;
+    return !RUNTIME && /\.(accdb|mdb)$/i.test(path) ? openAccessAsBase(path) : openBase(path);
   });
   handle(CH.baseClose, () => closeBase());
   handle(CH.baseState, () => host?.state ?? null);
@@ -898,12 +912,12 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   handle(CH.odbcLink, (r, n) => { const req = odbcRequest(r); const names = nameList(n); return tableOp(() => need().linkOdbcTables(req, names, odbcScript())); }); // D1
   // E1: the path is one links.pick returned; the file is only read. Progress and Stop as the other imports.
   handle(CH.accessImportInspect, (p) => need().inspectAccessImport(linkPath(p, chosenLinks)));
-  handle(CH.accessImportRun, async (p, n, st, keep, q, dz) => {
-    const path = linkPath(p, chosenLinks); const names = nameList(n);
-    const structure = accessStructure(st, chosenExports); const keepDir = exportKeepDir(keep, chosenExports); const queries = exportQueries(q); const designs = exportDesigns(dz);
+  handle(CH.accessImportRun, async (p, n, st, keep, q, dz, rl, mc) => {
+    const path = linkPath(p, chosenLinks); const names = nameList(n, 0); // none: the front-end's links, queries or macros alone
+    const structure = accessStructure(st, chosenExports); const keepDir = exportKeepDir(keep, chosenExports); const queries = exportQueries(q); const designs = exportDesigns(dz); const relink = exportRelink(rl); const macros = exportMacros(mc);
     await whenIdle();
     // The script's path is the main process's own, never the renderer's.
-    return runImport(() => need().importAccessTables(path, names, undefined, structure, keepDir, accessExportScript(), queries, designs));
+    return runImport(() => need().importAccessTables(path, names, undefined, structure, keepDir, accessExportScript(), queries, designs, relink, macros));
   });
   handle(CH.accessImportPickExport, async () => {
     const p = await startDir().then((d) => pickFolder(d, 'BASECRAFT_E2E_EXPORT_DIR'));

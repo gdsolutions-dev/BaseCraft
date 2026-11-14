@@ -4,7 +4,7 @@ import { BaseFileError } from './db/file-format';
 import {
   basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
-  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir, exportQueries, exportDesigns,
+  strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir, exportQueries, exportDesigns, exportMacros, exportRelink,
 } from './ipc-validate';
 import { defaultSpec } from '../shared/import-text';
 import { BUILTIN_THEMES } from '../shared/design/theme';
@@ -384,6 +384,7 @@ describe('import arguments', () => {
   it('nameList: 1 to 1000 names', () => {
     expect(nameList(['Clients', 'x'.repeat(1024)])).toEqual(['Clients', 'x'.repeat(1024)]);
     for (const v of [[], 'Clients', [1], ['x'.repeat(1025)], Array(1001).fill('a'), [, 'a']]) expect(() => nameList(v)).toThrow(INVALID);
+    expect(nameList([], 0)).toEqual([]); // the Access import may name no table
   });
   it('unlockPath: an absolute path of at most 32 767 UTF-16 units (C2 R7)', () => {
     expect(unlockPath(__filename)).toBe(__filename);
@@ -658,6 +659,10 @@ describe('Access import report (E1)', () => {
     for (const v of ['yes', 1, null, {}]) expect(() => exportQueries(v)).toThrow(INVALID);
     for (const v of [undefined, true, false]) expect(exportDesigns(v)).toBe(v);
     for (const v of ['yes', 1, null, {}]) expect(() => exportDesigns(v)).toThrow(INVALID);
+    for (const v of [undefined, true]) expect(exportMacros(v)).toBe(v);
+    for (const v of ['x', 1, null, {}]) expect(() => exportMacros(v)).toThrow(INVALID);
+    for (const v of [undefined, true, false]) expect(exportRelink(v)).toBe(v);
+    for (const v of ['yes', 1, null, {}]) expect(() => exportRelink(v)).toThrow(INVALID);
   });
   it('reportBody: a string of at most 5,000,000 characters', () => {
     expect(reportBody('x'.repeat(5_000_000))).toHaveLength(5_000_000);

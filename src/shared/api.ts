@@ -508,7 +508,8 @@ export interface BasecraftApi {
   };
   base: {
     create(): Promise<SessionState | null>;
-    open(path?: string): Promise<SessionState | null>;
+    /** `accessSource`: an Access file was picked; a new base was made beside it and the window opens the Access import on it. */
+    open(path?: string): Promise<(SessionState & { accessSource?: string }) | null>;
     close(): Promise<void>;
     state(): Promise<SessionState | null>;
     takeOverLock(): Promise<SessionState | null>;
@@ -800,8 +801,8 @@ export interface BasecraftApi {
     /** `path`: a path links.pick gave. A protected file asks its password as the link dialog does (bridge.ts). */
     inspect(path: string): Promise<AccessImportInfo>;
     /** `remotes`: Access names inspect listed. `structure`: absent = the file alone. `keepDir`: with kind 'access', where the export folder is
-     *  kept (a folder pickExport gave). `queries`: with an export (access or folder), also import its saved queries. `designs`: likewise its forms and reports. Stop is queries.cancel (cancelled), also during the export. */
-    run(path: string, remotes: string[], structure?: AccessStructureSource, keepDir?: string, queries?: boolean, designs?: boolean): Promise<AccessImportResult>;
+     *  kept (a folder pickExport gave). `queries`: with an export (access or folder), also import its saved queries. `designs`: likewise its forms and reports. `relink`: the file's linked tables to other Access files become links to them. `macros`: with an export, also import its macros (and modules). Stop is queries.cancel (cancelled), also during the export. */
+    run(path: string, remotes: string[], structure?: AccessStructureSource, keepDir?: string, queries?: boolean, designs?: boolean, relink?: boolean, macros?: boolean): Promise<AccessImportResult>;
     /** Asks for a folder; null when cancelled. Only a folder this gave is accepted by run, as `structure.dir` or as `keepDir`. */
     pickExport(): Promise<string | null>;
     onProgress(cb: (p: ImportProgress) => void): () => void;

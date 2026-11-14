@@ -30,7 +30,7 @@ const design = async (page: Page, name: string) => { await page.getByTestId(`nav
 
 test('[Event Procedure] runs the procedures of Form_<Name> (On Load and a button)', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base()] })
   try {
     await page.getByTestId('nav-item-form-FCode').dblclick()
     const ctl = (n: string) => page.getByTestId(`form-ctl-${n}`)
@@ -42,7 +42,7 @@ test('[Event Procedure] runs the procedures of Form_<Name> (On Load and a button
 
 test('View Code opens the procedure; on an object without code it creates its module', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base()] })
   try {
     await design(page, 'FCode')
     await page.getByTestId('cmd-viewCode').click()
@@ -57,7 +57,7 @@ test('View Code opens the procedure; on an object without code it creates its mo
 
 test('Convert Macros to Python on a form: the embedded macro becomes a procedure and [Event Procedure]', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base()] })
   try {
     await design(page, 'FMacro')
     await expect(page.getByTestId('cmd-convertMacros')).toBeEnabled()
@@ -83,7 +83,7 @@ const nav = async (page: Page, item: string, cmd: string, name?: string) => {
 
 test('the module follows its form: rename, copy, delete; a name giving the same module is refused', async () => {
   test.setTimeout(240_000)
-  const { app, page } = await launchApp({ args: [base()] })
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base()] })
   try {
     await nav(page, 'nav-item-form-FCode', 'rename', 'FRen')
     await expect.poll(() => modules(page)).toEqual(['Form_FRen'])

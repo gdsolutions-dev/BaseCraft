@@ -158,6 +158,7 @@ test('the queries box unticked imports no query', async () => {
     await expect(page.getByTestId('import-export-dir')).toHaveText(EXPORT_DIR);
     await page.getByTestId('import-queries').uncheck();
     await page.getByTestId('import-designs').uncheck();
+    await page.getByTestId('import-macros').uncheck();
     await page.getByTestId('link-table-Clients').check();
     await page.getByTestId('link-ok').click();
     await expect(page.getByTestId('report-line-tablesOnly')).toBeVisible();

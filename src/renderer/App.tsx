@@ -597,6 +597,13 @@ function Shell() {
       await showError(e);
     }
   };
+  /** File › Open: an Access file made a new base beside it; the Access import then opens on it, everything ticked (cancelled: the empty base stays). */
+  const openFromBackstage = async (p: string | undefined, shift?: boolean) => {
+    let access: string | undefined;
+    await switchBase(async () => { const s = await api.base.open(p); if (!s) return s; const { accessSource, ...state } = s; access = accessSource; return state; }, shift === true);
+    if (access === undefined) return;
+    try { if (await design?.importAccessFrom(modal, access)) dispatch({ type: 'listsChanged' }); } catch (e) { await showError(e); }
+  };
   /** false: a document stayed open, or the close failed (a macro's CloseDatabase then fails). */
   const closeBase = async (): Promise<boolean> => {
     if (!(await leaveDocuments(live.current.state.tabs))) return false;
@@ -745,7 +752,7 @@ function Shell() {
       {session !== undefined && showBackstage && (
         <Backstage view={backstage ?? 'home'} onView={setBackstage} onBack={session ? () => setBackstage(null) : null}
           hasBase={!!session} settings={settings}
-          onNew={() => void switchBase(api.base.create)} onOpen={(p, shift) => void switchBase(() => api.base.open(p), shift)}
+          onNew={() => void switchBase(api.base.create)} onOpen={(p, shift) => void openFromBackstage(p, shift)}
           onCloseBase={() => void closeBase()} readOnly={readOnly} needsRecovery={!!session?.needsRecovery} basePath={session?.path ?? null}
           forms={objects.filter((x) => x.kind === 'form').map((x) => x.name)} onStartupApplied={onStartupApplied} onNavigationOptions={design ? () => void openNavigationOptions() : undefined}
           onSaveAs={() => void switchBase(api.base.saveAs)} onCompact={() => void compact()} />

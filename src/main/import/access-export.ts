@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import { dirname, join, resolve, sep, win32 } from 'node:path'
-import type { AccessExport, ExportDesign, ExportFailure, ExportManifest, ExportObject, ExportQuery, ExportTable } from '../../shared/access-export'
+import type { AccessExport, ExportDesign, ExportFailure, ExportMacro, ExportManifest, ExportModule, ExportObject, ExportQuery, ExportTable } from '../../shared/access-export'
 import { MAX_ACCESS_TEXT } from '../../shared/access-text'
 import { sameName } from '../../shared/field-types'
 
@@ -194,3 +194,16 @@ export function readExportDesigns(dir: string, ex: AccessExport, cap = MAX_ACCES
     return [{ kind: o.type, name: o.name, text }];
   });
 }
+
+/** The macro (or module) entries of the manifest, as readExportDesigns reads its own. */
+const readOfType = (type: 'macro' | 'module') => (dir: string, ex: AccessExport, cap = MAX_ACCESS_TEXTS): { name: string; text: string | null }[] => {
+  let kept = 0;
+  return ex.manifest.objects.flatMap((o) => {
+    if (o.type !== type) return [];
+    const text = kept >= cap ? null : readText(dir, o.file, MAX_ACCESS_TEXT);
+    kept += text?.length ?? 0;
+    return [{ name: o.name, text }];
+  });
+};
+export const readExportMacros: (dir: string, ex: AccessExport, cap?: number) => ExportMacro[] = readOfType('macro');
+export const readExportModules: (dir: string, ex: AccessExport, cap?: number) => ExportModule[] = readOfType('module');

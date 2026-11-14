@@ -188,6 +188,12 @@ describe('Access import in the session (E1 Task 3)', () => {
     expect(r.ok && r.tables).toEqual([{ name: 'Clients1', remote: 'Clients', rows: 4 }]);
     expect(count('clients')).toBe(0); expect(count('Clients1')).toBe(4);
   });
+  it('importAccessTables: an empty list is an import (File > Open: only the other objects come with it)', async () => {
+    const before = tableNames();
+    const r = await s.importAccessTables(access, []);
+    expect(r.ok && r.tables).toEqual([]);
+    expect(tableNames()).toEqual(before);
+  });
   it('importAccessTables: a table the file does not hold creates nothing', async () => {
     expect(await s.importAccessTables(access, ['Clients', 'Absente'])).toEqual({ ok: false, reason: 'missingTables', names: ['Absente'] });
     expect(tableNames()).not.toContain('Clients');

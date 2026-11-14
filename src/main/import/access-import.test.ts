@@ -7,13 +7,14 @@ import type MDBReader from 'mdb-reader';
 import { localeInfo } from '../../shared/locale-format';
 import { listRelations } from '../db/relations';
 import { registerFunctions, SYSTEM_DDL } from '../db/file-format';
-import { listObjects } from '../db/objects';
-import { tableDesign } from '../db/schema';
-import type { AccessExport, ExportDesign, ExportQuery } from '../../shared/access-export';
+import { getObject, listObjects, saveObject } from '../db/objects';
+import { isTableName, tableDesign } from '../db/schema';
+import { findLink } from '../links/store';
+import type { AccessExport, ExportDesign, ExportMacro, ExportModule, ExportQuery } from '../../shared/access-export';
 import { loadAccessCache, openAccess } from '../links/access';
-import { readAccessExport, readExportDesigns, readExportQueries } from './access-export';
+import { readAccessExport, readExportDesigns, readExportMacros, readExportModules, readExportQueries } from './access-export';
 import { importQueries } from './access-queries';
-import { accessRelations, importAccess, PAGE, pageSize, type MSysRelRow } from './access-import';
+import { accessRelations, finalCodes, importAccess, PAGE, pageSize, type MSysRelRow } from './access-import';
 
 vi.mock('./access-queries', async (orig) => { const m = await orig<typeof import('./access-queries')>(); return { ...m, importQueries: vi.fn(m.importQueries) }; });
 
@@ -27,9 +28,9 @@ const all = (db: DatabaseSync, t: string) => db.prepare(`SELECT * FROM "${t}" OR
 const userTables = (db: DatabaseSync) => (db.prepare(`SELECT name FROM pragma_table_list WHERE schema = 'main' AND name NOT LIKE 'bc\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'`).all() as { name: string }[]).map((r) => r.name);
 
 type Tables = { remote: string; name: string }[];
-const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean; structure?: AccessExport; queries?: ExportQuery[]; designs?: ExportDesign[] } = {}) =>
+const run = (front: DatabaseSync, r: MDBReader, tables: Tables, o: { linked?: string[]; stopped?: () => boolean; jet3?: boolean; structure?: AccessExport; queries?: ExportQuery[]; designs?: ExportDesign[]; macros?: ExportMacro[]; modules?: ExportModule[] } = {}) =>
   importAccess({ front, r, jet3: o.jet3 ?? false, source: 'Ventes.accdb', tables, linked: o.linked ?? [], info: localeInfo('fr-FR'),
-    tick: async () => {}, stopped: o.stopped ?? (() => false), structure: o.structure, queries: o.queries, designs: o.designs });
+    tick: async () => {}, stopped: o.stopped ?? (() => false), structure: o.structure, queries: o.queries, designs: o.designs, macros: o.macros, modules: o.modules });
 
 const row = (o: Partial<MSysRelRow>): MSysRelRow => ({ szRelationship: 'ClientsCommandes', grbit: 0, ccolumn: 1, icolumn: 0,
   szObject: 'Commandes', szColumn: 'Client', szReferencedObject: 'Clients', szReferencedColumn: 'N°', ...o });
@@ -53,6 +54,15 @@ describe('accessRelations', () => {
     const r = accessRelations([row({ szRelationship: 'S', szObject: 'MSysNavPaneGroups', szReferencedObject: 'MSysNavPaneGroupCategories' }),
       row({ szRelationship: 'X', szReferencedObject: 'Produits' })], LOCAL);
     expect(r.relations).toEqual([]); expect(r.skipped).toEqual([{ access: 'X', reason: 'tableNotImported' }]);
+  });
+});
+
+describe('finalCodes', () => {
+  it.each([
+    [true, true, true, []], [true, true, false, ['noQueries']], [true, false, true, ['noDesigns']], [true, false, false, ['noQueriesDesigns']],
+    [false, true, true, ['macrosOnly']], [false, true, false, ['designsOnly']], [false, false, true, ['formsOnly']], [false, false, false, ['tablesOnly']],
+  ])('macros %s, designs %s, queries %s', (macrosRead, designsRead, queriesRead, codes) => {
+    expect(finalCodes({ macrosRead, designsRead, queriesRead })).toEqual(codes);
   });
 });
 
@@ -214,6 +224,43 @@ describe('importAccess', () => {
       expect(listObjects(front, 'form').map((o) => o.name)).toEqual(['FClients']);
     });
 
+    it.skipIf(!present)('with the macros: saved and reported, the form event follows, no "not imported" line', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex, queries: readExportQueries(FIXTURE, ex), designs: readExportDesigns(FIXTURE, ex), macros: readExportMacros(FIXTURE, ex) });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'macroImported', object: 'MOuvrirEtat' });
+      expect(lines.some((l) => ['macrosOnly', 'designsOnly', 'formsOnly', 'tablesOnly', 'noQueries', 'noDesigns', 'noQueriesDesigns'].includes(l.code))).toBe(false);
+      expect(res.ok && res.macros).toEqual([{ name: 'MOuvrirEtat', remote: 'MOuvrirEtat' }]);
+      expect(listObjects(front, 'macro').map((o) => o.name)).toEqual(['MOuvrirEtat']);
+    });
+
+    it.skipIf(!present)('with the modules: saved as comments, the form code-behind too, no "not imported" line', async () => {
+      const front = memoryBase(); const ex = readExport();
+      const res = await run(front, open('Ventes-complet.accdb'), pair, { structure: ex, queries: readExportQueries(FIXTURE, ex), designs: readExportDesigns(FIXTURE, ex), macros: readExportMacros(FIXTURE, ex), modules: readExportModules(FIXTURE, ex) });
+      const lines = res.ok ? res.report.lines : [];
+      expect(lines).toContainEqual({ code: 'moduleImported', object: 'ModOutils', n: 5 });
+      expect(lines).toContainEqual(expect.objectContaining({ code: 'codeBehindImported', object: 'FClients', part: 'Form_FClients' }));
+      expect(lines.some((l) => ['macrosOnly', 'designsOnly', 'formsOnly', 'tablesOnly', 'noQueries', 'noDesigns', 'noQueriesDesigns'].includes(l.code))).toBe(false);
+      expect(res.ok && res.modules).toEqual([{ name: 'ModOutils', remote: 'ModOutils' }]);
+      expect(listObjects(front, 'module').map((o) => o.name).sort()).toEqual(['Form_FClients', 'ModOutils']);
+    });
+
+    it.skipIf(!present)('a failing module savepoint gives the "not imported" final line, and so does a failing macro one', async () => {
+      const ex = readExport();
+      const bad = { get name(): string { throw new Error('boom'); }, text: 'x' };
+      const base = { structure: ex, queries: readExportQueries(FIXTURE, ex), designs: readExportDesigns(FIXTURE, ex) };
+      const noModules = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { ...base, macros: readExportMacros(FIXTURE, ex), modules: [bad] as ExportModule[] });
+      expect(noModules.ok && noModules.report.lines.at(-1)).toEqual({ code: 'macrosOnly' });
+      const noMacros = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { ...base, macros: [bad] as ExportMacro[], modules: readExportModules(FIXTURE, ex) });
+      expect(noMacros.ok && noMacros.report.lines.at(-1)).toEqual({ code: 'macrosOnly' });
+    });
+
+    it.skipIf(!present)('with the macros but without the queries and the forms and reports: noQueriesDesigns', async () => {
+      const ex = readExport();
+      const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { structure: ex, macros: readExportMacros(FIXTURE, ex) });
+      expect(res.ok && res.report.lines.at(-1)).toEqual({ code: 'noQueriesDesigns' });
+    });
+
     it.skipIf(!present)('with the forms and reports but without the queries: the report ends with designsOnly', async () => {
       const ex = readExport();
       const res = await run(memoryBase(), open('Ventes-complet.accdb'), pair, { structure: ex, designs: readExportDesigns(FIXTURE, ex) });
@@ -285,6 +332,19 @@ describe('importAccess', () => {
     expect(listObjects(front, 'form')).toEqual([]);
   });
 
+  it('embedded macros follow the numbered names of this import even without the macros box', async () => {
+    const front = memoryBase();
+    saveObject(front, 'form', 'F', { sections: [] }, null);
+    const f = (name: string, body: string): ExportDesign => ({ kind: 'form', name, text: `Begin Form\n Begin\n  Begin Section\n   Begin\n${body}\n   End\n  End\n End\nEnd\n` });
+    const btn = '    Begin CommandButton\n     Name ="B"\n     OnClickEmMacro = Begin\n      Version =196611\n      Begin\n       Action ="OpenForm"\n       Argument ="F"\n      End\n     End\n    End';
+    const res = await run(front, double({ T: { columns: [text('A')], rows: [{ A: 'x' }] } }), [{ remote: 'T', name: 'T' }], { designs: [f('F', ''), f('G', btn)] });
+    expect(res.ok && res.forms).toEqual([{ name: 'F1', remote: 'F' }, { name: 'G', remote: 'G' }]);
+    expect(JSON.stringify(getObject(front, 'form', 'G')!.definition)).toContain('"F1"');
+    const lines = res.ok ? res.report.lines : [];
+    expect(lines.some((l) => l.code.startsWith('macro') && l.code !== 'macrosOnly')).toBe(false);
+    expect(lines.at(-1)).toEqual({ code: 'designsOnly' });
+  });
+
   it('the savepoint removes the queries the real import saved before it threw', async () => {
     const front = memoryBase();
     const real = await vi.importActual<typeof import('./access-queries')>('./access-queries');
@@ -347,5 +407,82 @@ describe('importAccess', () => {
     const front = memoryBase();
     const res = await run(front, double(parentChild([{ 'N°': 1, Client: 1 }]), [row({ szRelationship: 'X' })]), [{ remote: 'Commandes', name: 'Commandes' }]);
     expect(res.ok && res.report.lines).toContainEqual({ code: 'relationIgnored', object: 'X', reason: 'tableNotImported' });
+  });
+});
+
+describe('relink (linked tables of the front-end)', () => {
+  const backPath = join(tmp, 'Ventes.accdb');
+  const importedFile = join(tmp, 'Front-end.accdb');
+  const frontEndPath = join(tmp, 'mine.basecraft');
+  // a front-end reader holding one table linked, under another name, to Clients of the real back-end
+  const frontReader = (): MDBReader => ({ getTable: (n: string) => {
+    if (n !== 'MSysObjects') throw new Error('no table');
+    return { getData: () => [{ Name: 'ClientsLies', Type: 6, Database: backPath, ForeignName: 'Clients' }, { Name: 'Odbc', Type: 4, Database: '', ForeignName: '' }] };
+  } }) as unknown as MDBReader;
+  const setup = () => {
+    fs.copyFileSync(join(FIX, 'Ventes.accdb'), backPath); fs.writeFileSync(importedFile, '');
+    const front = memoryBase();
+    const back = openAccess(backPath);
+    const cache = loadAccessCache(back, ['Clients']).db;
+    // the session's catalogue: a local table, else a link read from its file
+    const catalog = { table: (n: string) => { if (isTableName(front, n)) return tableDesign(front, n); const l = findLink(front, n); return l ? tableDesign(cache, l.remote) : null; },
+      query: () => null };
+    const o = { linked: ['ClientsLies', 'Odbc'], relink: { frontEndPath, importedFile, open: (p: string) => openAccess(p), catalog } };
+    return { front, o };
+  };
+
+  it('creates the links, reports them, and the queries and designs reading one find their source', async () => {
+    const { front, o } = setup();
+    const query: ExportQuery = { name: 'QClients', sql: 'SELECT * FROM ClientsLies', queryType: 0, connect: '' };
+    const text = ['Begin Form', ' RecordSource ="ClientsLies"', ' Begin', '  Begin Section', '   Begin', '   End', '  End', ' End', 'End', ''].join(String.fromCharCode(10));
+    const form: ExportDesign = { kind: 'form', name: 'F', text };
+    const res = await importAccess({ front, r: frontReader(), jet3: false, source: 'Front-end.accdb', tables: [], info: localeInfo('fr-FR'), tick: async () => {},
+      stopped: () => false, queries: [query], designs: [form], ...o });
+    expect(res.ok && res.links).toEqual([{ name: 'ClientsLies', remote: 'ClientsLies' }]);
+    const lines = res.ok ? res.report.lines : [];
+    expect(lines).toContainEqual({ code: 'tableRelinked', object: 'ClientsLies', part: 'Ventes.accdb' });
+    expect(lines).toContainEqual({ code: 'tableLinked', object: 'Odbc', reason: 'otherSource' });
+    expect(lines).toContainEqual({ code: 'queryImported', object: 'QClients' });
+    expect(lines).toContainEqual({ code: 'formImported', object: 'F' });
+    expect(lines.some((l) => l.code === 'querySourceMissing' || l.code === 'designSourceMissing')).toBe(false);
+    expect(findLink(front, 'ClientsLies')?.remote).toBe('Clients');
+  });
+
+  it('a failing links savepoint gives one line per linked table, and the imported tables stay', async () => {
+    const { front, o } = setup();
+    const real = openAccess(backPath); // its tables, with the front-end's linked rows
+    const mixed = Object.assign(Object.create(real), { getTable: (n: string) => (n === 'MSysObjects' ? frontReader().getTable(n) : real.getTable(n)) }) as MDBReader;
+    const res = await importAccess({ front, r: mixed, jet3: false, source: 'Front-end.accdb', tables: [{ remote: 'Clients', name: 'Clients' }],
+      info: localeInfo('fr-FR'), tick: async () => {}, stopped: () => false, linked: o.linked,
+      relink: { ...o.relink, open: () => { throw new Error('boom'); } } });
+    expect(res.ok).toBe(true);
+    const lines = res.ok ? res.report.lines : [];
+    expect(lines.filter((l) => l.code === 'tableLinked' || l.code === 'tableRelinked')).toEqual([
+      { code: 'tableLinked', object: 'Odbc', reason: 'otherSource' }, { code: 'tableLinked', object: 'ClientsLies', reason: 'cannotOpen' }]);
+    expect(res.ok && res.links).toEqual([]);
+    expect(userTables(front)).toEqual(['Clients']);
+  });
+
+  it('a link under a numbered name is the source of the queries and designs reading its Access name', async () => {
+    const { front, o } = setup();
+    front.exec('CREATE TABLE "ClientsLies" (a)'); // the name is taken: the link becomes ClientsLies1
+    const query: ExportQuery = { name: 'QClients', sql: 'SELECT * FROM ClientsLies', queryType: 0, connect: '' };
+    const text = ['Begin Form', ' RecordSource ="ClientsLies"', ' Begin', '  Begin Section', '   Begin', '   End', '  End', ' End', 'End', ''].join(String.fromCharCode(10));
+    const res = await importAccess({ front, r: frontReader(), jet3: false, source: 'Front-end.accdb', tables: [], info: localeInfo('fr-FR'), tick: async () => {},
+      stopped: () => false, queries: [query], designs: [{ kind: 'form', name: 'F', text }], ...o });
+    const lines = res.ok ? res.report.lines : [];
+    expect(res.ok && res.links).toEqual([{ name: 'ClientsLies1', remote: 'ClientsLies' }]);
+    expect(lines).toContainEqual({ code: 'queryImported', object: 'QClients' });
+    expect(lines.some((l) => l.code === 'designSourceMissing' || l.code === 'querySourceMissing')).toBe(false);
+    expect(listObjects(front, 'query').map((q) => q.name)).toEqual(['QClients']);
+    for (const n of ['F', 'QClients']) expect(JSON.stringify(front.prepare('SELECT definition FROM bc_objects WHERE name = ?').get(n))).toContain('ClientsLies1');
+  });
+
+  it('without relink the linked tables are only reported, as before', async () => {
+    const { front, o } = setup();
+    const res = await run(front, frontReader(), [], { linked: o.linked });
+    expect(res.ok && res.links).toEqual([]);
+    expect(res.ok && res.report.lines.filter((l) => l.code === 'tableLinked')).toEqual([{ code: 'tableLinked', object: 'ClientsLies' }, { code: 'tableLinked', object: 'Odbc' }]);
+    expect(findLink(front, 'ClientsLies')).toBeUndefined();
   });
 });

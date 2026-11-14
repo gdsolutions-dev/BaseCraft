@@ -173,12 +173,12 @@ describe('with a real session', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('importAccessTables forwards structure, keepDir, script, queries and designs in their positions (the tick is replaced by the host)', async () => {
+  it('importAccessTables forwards structure, keepDir, script, queries, designs, relink and macros in their positions (the tick is replaced by the host)', async () => {
     const spy = vi.spyOn(Session.prototype, 'importAccessTables').mockResolvedValue({ ok: false, reason: 'cancelled' });
     const structure = { kind: 'folder' as const, dir: 'D' };
-    await d(req(1, 'importAccessTables', 'a.accdb', ['T'], undefined, structure, 'K', 'S.ps1', true, false));
+    await d(req(1, 'importAccessTables', 'a.accdb', ['T'], undefined, structure, 'K', 'S.ps1', true, false, true, false));
     expect(value(1)).toEqual({ ok: false, reason: 'cancelled' });
-    expect(spy.mock.calls[0]).toEqual(['a.accdb', ['T'], expect.any(Function), structure, 'K', 'S.ps1', true, false]);
+    expect(spy.mock.calls[0]).toEqual(['a.accdb', ['T'], expect.any(Function), structure, 'K', 'S.ps1', true, false, true, false]);
     spy.mockRestore();
   });
   it('a read issued during an import sees the committed result; progress arrives as events', async () => {

@@ -12,23 +12,29 @@ import { bindQuery, QueryBindError } from '../../shared/query/bind';
 import { parseSql } from '../../shared/query/sql-parser';
 import type { RecordSourceRef } from '../../shared/record-source';
 import { deleteObject, getObject, listObjects, saveObject } from '../db/objects';
+import { codeBehindRefusal } from '../db/code-behind';
 import { isTableName } from '../db/schema';
+import { codeBehindModule } from '../../shared/python/code-behind';
+import type { QueryCatalog } from '../../shared/query/bind';
+import { macroLines } from './access-macros';
 import { renameContext } from './access-queries';
+import { saveCommentedModule, vbaAsPython, vbaLines } from './access-modules';
 
 type Kind = 'form' | 'report';
 type Named = { remote: string; name: string };
 const IMPORTED = { form: 'formImported', report: 'reportImported' } as const;
 const NOTE_CODE = { controlReplaced: 'designControlReplaced', eventDropped: 'designEventDropped', expressionKept: 'designExpressionKept',
-  sectionDropped: 'designSectionDropped', controlRenamed: 'designControlRenamed', pageDefault: 'designPageDefault' } as const;
+  sectionDropped: 'designSectionDropped', controlRenamed: 'designControlRenamed', pageDefault: 'designPageDefault', eventProcedure: 'designEventProcedure' } as const;   // macroNote: macroLines
 
 /** Saves the forms and reports of an Access export in `db` and says what became of each. Never throws for an object; never runs one.
- *  `tables`, `queries`: what this import brought ({ remote: name in Access, name: name in BaseCraft }). */
-export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: { tables: Named[]; queries: Named[] }):
+ *  `tables`, `queries`: what this import brought ({ remote: name in Access, name: name in BaseCraft }).
+ *  `code`: the code of a form or report is saved as the commented Python module `Form_<Name>` / `Report_<Name>`, and its `[Event Procedure]` events stay. */
+export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: { tables: Named[]; queries: Named[] }, catalog?: QueryCatalog, opts?: { code?: boolean }):
   { forms: Named[]; reports: Named[]; lines: ReportLine[] } {
   const taken: Record<Kind, string[]> = { form: listObjects(db, 'form').map((o) => o.name), report: listObjects(db, 'report').map((o) => o.name) };
   const seen: Record<Kind, string[]> = { form: [], report: [] };
   const lines: ReportLine[][] = designs.map(() => []);
-  const saved: { i: number; kind: Kind; remote: string; name: string; conv: ConvertedDesign }[] = [];
+  const saved: { i: number; kind: Kind; remote: string; name: string; conv: ConvertedDesign; module?: string; refused?: boolean; tooLong?: boolean }[] = [];
   // 1 and 2: names, then every object saved before any source is resolved (a subform may point at a later form)
   designs.forEach((d, i) => {
     const skip = (reason: string): void => { lines[i] = [{ code: 'designSkipped', object: d.name, reason }]; };
@@ -38,13 +44,22 @@ export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: 
     if (d.text === null) return skip('unreadable');
     let name: string | null = null;
     try {
-      const conv = convertAccessDesign(d.text, d.kind);
+      let conv = convertAccessDesign(d.text, d.kind);
       if (validateDesignDoc(conv.doc).length) return skip('notRead');
-      name = uniqueName(d.name, taken[d.kind]);
+      name = uniqueName(d.name, taken[d.kind]).normalize('NFC');
+      let module: string | undefined;
+      let refused = false;
+      let tooLong = false;
+      if (opts?.code && conv.code !== null) { // the module of the code: refused when another form or report, or another module, has that name
+        const m = codeBehindModule(d.kind, name);
+        tooLong = [...m].length > 64;
+        refused = tooLong || codeBehindRefusal(db, d.kind, name) !== null || listObjects(db, 'module').some((x) => sameName(x.name, m));
+        if (!refused) { module = m; conv = convertAccessDesign(d.text, d.kind, { keepProcedures: true }); }
+      }
       if (!saveObject(db, d.kind, name, conv.doc, null).ok) { name = null; return skip('nameInvalid'); }
       if (!getObject(db, d.kind, name)) throw new Error('unreadable'); // saved but not readable back (over the size limit)
       taken[d.kind].push(name);
-      saved.push({ i, kind: d.kind, remote: d.name, name, conv });
+      saved.push({ i, kind: d.kind, remote: d.name, name, conv, ...(module !== undefined ? { module } : {}), ...(refused ? { refused } : {}), ...(tooLong ? { tooLong } : {}) });
     } catch {
       if (name !== null) try { deleteObject(db, d.kind, name); } catch { /* nothing more to undo */ }
       skip('notRead');
@@ -52,7 +67,7 @@ export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: 
   });
 
   // 3 to 5: what the sources of each object mean here
-  const { changes, renames, old, lenient } = renameContext(db, known.tables, known.queries);
+  const { changes, renames, old, lenient } = renameContext(db, known.tables, known.queries, catalog);
   const access: typeof lenient = { // the objects of this import, by their Access names
     table: (n) => (known.tables.some((t) => sameName(t.remote, n)) ? old.table(n) : null),
     query: (n) => (known.queries.some((q) => sameName(q.remote, n)) ? old.query(n) : null),
@@ -86,11 +101,12 @@ export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: 
   const failed = new Set<number>(); // objects skipped in the second pass
   const nameHere = (kind: Kind, remote: string) => saved.find((s) => !failed.has(s.i) && s.kind === kind && sameName(s.remote, remote))?.name;
 
-  for (const { i, kind, remote, name, conv } of saved) try {
+  for (const { i, kind, remote, name, conv, module, refused, tooLong } of saved) try {
     const { doc } = conv;
     const object = name;
-    const out: ReportLine[] = [{ code: IMPORTED[kind], object, ...(name !== remote ? { part: remote } : {}) }];
-    for (const n of conv.notes) out.push({ code: NOTE_CODE[n.code], object, ...(n.part !== undefined ? { part: n.part } : {}), ...(n.reason !== undefined ? { reason: n.reason } : {}) });
+    const out: ReportLine[] = [{ code: IMPORTED[kind], object, ...(name.normalize('NFC') !== remote.normalize('NFC') ? { part: remote } : {}) }];
+    for (const n of conv.notes) if (n.code !== 'macroNote') out.push({ code: NOTE_CODE[n.code], object, ...(n.part !== undefined ? { part: n.part } : {}), ...(n.reason !== undefined ? { reason: n.reason } : {}) });
+    out.push(...macroLines(object, conv.notes.flatMap((n) => (n.code === 'macroNote' ? [{ code: n.reason!, part: n.part }] : [])), true));
     const reported = new Set<string>();
     const missing = (part: string) => { if (!reported.has(foldName(part))) { reported.add(foldName(part)); out.push(missingLine(object, part)); } };
     const rs = resolve(conv.recordSource);
@@ -118,6 +134,11 @@ export function importDesigns(db: DatabaseSync, designs: ExportDesign[], known: 
       out.push({ code: 'designPropertiesIgnored', object, n: sorted.reduce((s, e) => s + e[1], 0), part: sorted.map(([k, n]) => `${k} (${n})`).join(', ') });
     }
     if (!saveObject(db, kind, name, doc, name).ok || !getObject(db, kind, name)) throw new Error('not saved');
+    if (refused) out.push({ code: 'codeBehindSkipped', object, reason: tooLong ? 'nameTooLong' : 'nameTaken' });
+    if (module !== undefined) {
+      out.push(saveCommentedModule(db, module, vbaAsPython(module, conv.code!)) ? { code: 'codeBehindImported', object, part: module, n: vbaLines(conv.code!).length }
+        : { code: 'codeBehindSkipped', object, reason: 'notSaved' });
+    }
     lines[i] = out;
   } catch {
     failed.add(i);

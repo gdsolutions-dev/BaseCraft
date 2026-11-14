@@ -7,6 +7,7 @@ import { ImportTextWizard } from '../import-text/ImportTextWizard';
 import { api } from '../bridge';
 import { relatedGroups } from '../database-tools/dependencies';
 import { loadDepWorld } from '../database-tools/load-world';
+import { importAccessTables } from '../links/AccessImportDialog';
 import { linkedTableManagerItem } from '../links/LinkedTableManager';
 import { MacroDesignView } from '../macro/MacroDesignView';
 import { ImmediateWindow } from '../python/ImmediateWindow';
@@ -47,6 +48,7 @@ export const design: DesignHooks | null = {
   shellCommands: shellDesignCommands,
   requestFieldList: (kind, name) => (kind === 'form' ? requestFormFieldList : requestReportFieldList)(name),
   seedTemplate,
+  importAccessFrom: importAccessTables,
   ImportWizard: ImportTextWizard,
   CurrentDatabaseOptions,
   tableFieldsCommands, FIELD_TYPES, moreFieldsFor, addMoreField, setDataType, setFormat, editValidation,

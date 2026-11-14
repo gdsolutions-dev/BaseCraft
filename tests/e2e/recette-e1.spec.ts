@@ -9,49 +9,16 @@ import { join } from 'node:path';
 import { ACCESS_EXPECTED, ACCESS_PASSWORD } from '../fixtures/access/expected';
 import type { BasecraftApi } from '../../src/shared/api';
 import { launchApp, seedBase } from './helpers';
+import { openSheet, select, shown } from './recette-e2-common';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FIXTURES = join(__dirname, '../fixtures/access');
 const MARKER = 44, HEADER = 34, ROW = 30; // DatasheetView: row selector width, header and row heights
 const doc = (page: Page) => page.locator('section[role=tabpanel]:not([hidden])');
 const cell = (page: Page, col: number, row: number) => doc(page).getByTestId(`glide-cell-${col + 1}-${row}`);
-const plain = (s: string) => s.replace(/[  ]/g, ' ');
 const asText = (rows: (string | boolean)[][]) => rows.map((r) => r.map(String));
 const CLIENTS = ACCESS_EXPECTED.clients, ORDERS = ACCESS_EXPECTED.commandes;
 
-async function select(page: Page, col: number, row: number) {
-  const b = (await doc(page).getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
-  await page.mouse.click(b.x + MARKER + 20, b.y + HEADER + ROW / 2);
-  await expect(cell(page, 0, 0)).toBeFocused();
-  for (let i = 0; i < row; i++) await page.keyboard.press('ArrowDown');
-  for (let i = 0; i < col; i++) await page.keyboard.press('ArrowRight');
-  await expect(cell(page, col, row)).toBeFocused();
-}
-/** The text a cell paints in its field's format (Currency), as Home › Selection quotes it (recette-c2). */
-async function painted(page: Page, col: number, row: number): Promise<string> {
-  await page.getByTestId('ribbon-tab-home').click();
-  await select(page, col, row);
-  await page.getByTestId('cmd-filterSelection').click();
-  const text = (await page.getByTestId('filter-menu-equals').textContent()) ?? '';
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('filter-menu')).toHaveCount(0);
-  return plain(/"(.*)"/s.exec(text)?.[1] ?? text);
-}
-async function shown(page: Page, rows: number, cols: number, money: number[] = []): Promise<string[][]> {
-  await expect(doc(page).getByTestId('nav-record-count')).toHaveText(String(rows));
-  const out: string[][] = [];
-  for (let r = 0; r < rows; r++) {
-    const row: string[] = [];
-    for (let c = 0; c < cols; c++) row.push(money.includes(c) ? await painted(page, c, r) : plain((await cell(page, c, r).textContent()) ?? ''));
-    out.push(row);
-  }
-  return out;
-}
-async function openSheet(page: Page, name: string) {
-  await page.getByTestId(`nav-item-${name}`).dblclick();
-  await expect(doc(page).getByTestId('datasheet').getByTestId('data-grid-canvas')).toBeVisible();
-  await expect(page.getByTestId(`doc-tab-${name}`)).toHaveAttribute('aria-selected', 'true');
-}
 const closeTab = (page: Page, name: string) => page.getByTestId(`doc-tab-close-${name}`).click();
 const openImport = async (page: Page) => {
   await page.getByTestId('ribbon-tab-externalData').click();

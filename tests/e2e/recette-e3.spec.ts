@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkParVille, checkTotaux, checkTotauxDesign, copyComplet, copyExport, hasComplet, importTables, launch, removeTemp } from './recette-e2-common';
+import { expectSql } from './helpers';
 
 test.skip(!hasComplet, "Ventes-complet.accdb is not committed: copy it from the owner's originals");
 
@@ -39,7 +40,7 @@ test('recette E3: the queries of Ventes-complet are imported, run and open in De
     await page.getByTestId('nav-item-query-QInconnue').click({ button: 'right' });
     await page.getByTestId('nav-menu-sqlView').click();
     await expect(page.getByTestId('doc-tab-query-QInconnue')).toBeVisible();
-    await expect(page.getByTestId('query-sql')).toHaveValue(/DLookup/);
+    await expectSql(page.getByTestId('query-sql'), /DLookup/);
     await expect(page.getByTestId('query-sql-error')).toBeVisible();
     await page.getByTestId('status-view-design').click(); // a text that does not read stays in SQL view (query-design.spec.ts)
     await expect(page.getByTestId('status-view-sql')).toHaveAttribute('aria-pressed', 'true');

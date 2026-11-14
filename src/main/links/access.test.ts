@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Table } from 'mdb-reader';
 import type MDBReader from 'mdb-reader';
 import { ACCESS_EXPECTED, ACCESS_PASSWORD } from '../../../tests/fixtures/access/expected';
-import { accessDesign, inspectAccess, loadAccessCache, openAccess } from './access';
+import { accessDesign, hasAccessSignature, inspectAccess, loadAccessCache, openAccess } from './access';
 
 const fixture = (name: string) => join(__dirname, '../../../tests/fixtures/access', name);
 const tmp = fs.mkdtempSync(join(os.tmpdir(), 'bcaccess-'));
@@ -118,5 +118,17 @@ describe('Access file to design and rows', () => {
     loadAccessCache(openAccess(copy), ['Clients']);
     expect(fs.readdirSync(tmp).filter((f) => f.startsWith('copy'))).toEqual(['copy.accdb']);
     expect(fs.statSync(copy).mtimeMs).toBe(before);
+  });
+});
+describe('hasAccessSignature', () => {
+  it('the tracked Access fixtures, protected ones included, carry the Jet / ACE signature', () => {
+    for (const n of ['Ventes.accdb', 'Ventes.mdb', 'Ventes-mdp.accdb', 'Ventes-mdp.mdb']) expect(hasAccessSignature(fixture(n)), n).toBe(true);
+  });
+  it('a text file renamed .accdb, an empty file and a missing file do not', () => {
+    const fake = join(tmp, 'fake.accdb');
+    fs.writeFileSync(fake, 'just some notes, not a database');
+    const empty = join(tmp, 'empty.accdb');
+    fs.writeFileSync(empty, '');
+    for (const p of [fake, empty, join(tmp, 'absent.accdb')]) expect(hasAccessSignature(p), p).toBe(false);
   });
 });

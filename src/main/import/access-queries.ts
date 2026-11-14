@@ -13,6 +13,7 @@ import { bindQuery, QueryBindError } from '../../shared/query/bind';
 import { parseSql } from '../../shared/query/sql-parser';
 import { linkRows } from '../links/store';
 import { checkQueryDefinition, queryCatalog } from '../query/source';
+import type { QueryCatalog } from '../../shared/query/bind';
 
 const PASS_THROUGH = [112, 144];
 const definition = (sql: string) => ({ formatVersion: '1.0', sql });
@@ -28,15 +29,21 @@ function errorLine(e: unknown, name: string, queryType: number): ReportLine {
   return { code: 'queryKeptAsText', object: name, reason: 'notBound' };
 }
 
+/** The catalog an import binds against: the session's `catalog` (it resolves linked tables; one it cannot read is unknown), else the local one. */
+export function importCatalog(db: DatabaseSync, catalog?: QueryCatalog): QueryCatalog {
+  if (!catalog) return queryCatalog(db);
+  return { ...catalog, table: (n) => { try { return catalog.table(n); } catch { return null; } } };
+}
+
 /** What a rewrite of Access SQL needs once this import renamed some tables and queries (`remote`: name in Access, `name`: here).
  *  `old`: the catalog as Access saw it; `lenient`: the same, a source nobody knows binds as a table without fields, so the renamed sources of its text are still rewritten. */
-export function renameContext(db: DatabaseSync, tables: { remote: string; name: string }[], queries: { remote: string; name: string }[]) {
+export function renameContext(db: DatabaseSync, tables: { remote: string; name: string }[], queries: { remote: string; name: string }[], catalog?: QueryCatalog) {
   const changes: NameChange[] = [
     ...tables.filter((t) => t.name !== t.remote).map((t) => ({ k: 'object' as const, kind: 'table' as const, from: t.remote, to: t.name })),
     ...queries.filter((q) => q.name !== q.remote).map((q) => ({ k: 'object' as const, kind: 'query' as const, from: q.remote, to: q.name })),
   ];
   const renames = toRenames(changes);
-  const base = queryCatalog(db);
+  const base = importCatalog(db, catalog);
   // (a design keeps the Access name it was asked for, as the rewrite expects of the catalog before the rename)
   const old = { ...base, table: (n: string) => { const d = base.table(renames.objects.table.get(foldName(n)) ?? n); return d && { ...d, name: n }; }, query: (n: string) => base.query(renames.objects.query.get(foldName(n)) ?? n) };
   const lenient: typeof base = { ...old, table: (n) => old.table(n) ?? (old.query(n) === null ? { name: n, fields: [] } : null) };
@@ -45,7 +52,7 @@ export function renameContext(db: DatabaseSync, tables: { remote: string; name: 
 
 /** Saves the queries of an Access export in `db` and says what became of each. Never throws for a query; never runs one.
  *  `tables`: the tables of this import ({ remote: name in Access, name: name in BaseCraft }). */
-export function importQueries(db: DatabaseSync, queries: ExportQuery[], tables: { remote: string; name: string }[]):
+export function importQueries(db: DatabaseSync, queries: ExportQuery[], tables: { remote: string; name: string }[], catalog?: QueryCatalog):
   { queries: { name: string; remote: string }[]; lines: ReportLine[] } {
   const taken = [...listTables(db).map((t) => t.name), ...listObjects(db, 'query').map((o) => o.name), ...linkRows(db).map((l) => l.name), ...danglingNames(db)];
   const seen: string[] = [];
@@ -65,7 +72,7 @@ export function importQueries(db: DatabaseSync, queries: ExportQuery[], tables: 
     saved.push({ i, q, name });
   });
   // 4: the Access names of the renamed tables and queries resolve to the objects as imported
-  const { changes, renames, old, lenient } = renameContext(db, tables, saved.map((s) => ({ remote: s.q.name, name: s.name })));
+  const { changes, renames, old, lenient } = renameContext(db, tables, saved.map((s) => ({ remote: s.q.name, name: s.name })), catalog);
   // the objects of this import, by their Access names: whatever else a query reads (absent from the target or not) was not imported with it
   const access: typeof lenient = {
     table: (n) => (tables.some((t) => sameName(t.remote, n)) ? old.table(n) : null),
@@ -90,7 +97,7 @@ export function importQueries(db: DatabaseSync, queries: ExportQuery[], tables: 
       if (failure) throw failure;
       const target = appendOutside(q);
       if (target !== undefined) { lines[i] = { code: 'querySourceMissing', object: name, part: target }; continue; }
-      checkQueryDefinition(db, name, definition(sql));
+      checkQueryDefinition(catalog ? { front: db, catalog: importCatalog(db, catalog), dbOf: () => db } : db, name, definition(sql));
       const part = outside(q);
       lines[i] = part !== undefined ? { code: 'querySourceMissing', object: name, part } : { code: 'queryImported', object: name, ...(name !== q.name ? { part: q.name } : {}) };
     } catch (e) { lines[i] = errorLine(e, name, q.queryType); }

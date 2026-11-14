@@ -1,8 +1,10 @@
 // Converter of the text Access's SaveAsText writes for a form or a report into a BaseCraft design document, batch E4. Pure module.
+import { convertAccessMacro, parseAccessMacro } from './access-macro';
 import { AccessTextError, blockBytes, parseAccessText, type AccessBlock } from './access-text';
 import { accessPage } from './access-page';
 import { resolveAccess } from './access-design-defaults';
 import { EVENTS, readEvent } from './design/events';
+import { EVENT_PROCEDURE, procedureName } from './python/code-behind';
 import { PROPERTY_CATALOG, defaultFor, descriptorFor, type PropertyDescriptor, type PropertyEditorKind, type PropertyTarget } from './design/properties';
 import type { ControlDef, ControlKind, DesignDoc, SectionDef, SectionKind } from './design/model';
 import { parseCanonical, serialize, serializeCriteria } from './expr/parser';
@@ -12,18 +14,18 @@ import { DEFAULT_COLUMNS, type GroupLevel } from './report/model';
 export interface DesignNote {
   code: 'controlReplaced' /* part: control, reason: Access block type */ | 'eventDropped' /* part, reason: 'procedure' | 'expression' | 'embeddedMacro' */
     | 'expressionKept' /* part: control, or 'grouping' */ | 'sectionDropped' /* part: Access block type */ | 'controlRenamed' /* part: old name, reason: new name */
-    | 'pageDefault';
+    | 'eventProcedure' /* part: the procedure, kept as [Event Procedure] (keepProcedures) */ | 'pageDefault' | 'macroNote' /* part: `Owner.Event` and `: <Access action>` when the note has one, reason: the MacroNote code */;
   part?: string; reason?: string }
 export interface ConvertedDesign {
   doc: DesignDoc;                 // recordSource is always null here: the engine resolves it
   recordSource: string;           // as Access wrote it ('' when none)
   ignored: Map<string, number>;   // SaveAsText property name → times it was present and not carried
   notes: DesignNote[];
-  code: string;                   // the code-behind, for E5
+  code: string | null;            // the code-behind (the VBA after CodeBehindForm / CodeBehindReport), null when there is none
 }
 
 type Raw = number | string;
-interface Ctx { kind: 'form' | 'report'; defaults: ReadonlyMap<string, AccessBlock>; ignored: Map<string, number>; notes: DesignNote[]; names: Set<string>; nextSuffix: Map<string, number>; made: number }   // made: controls so far; names: folded; nextSuffix: folded base → the next number to try
+interface Ctx { kind: 'form' | 'report'; defaults: ReadonlyMap<string, AccessBlock>; ignored: Map<string, number>; notes: DesignNote[]; keep: boolean; names: Set<string>; nextSuffix: Map<string, number>; made: number }   // made: controls so far; names: folded; nextSuffix: folded base → the next number to try
 /** What a converter can reach: the resolved value of another name of the same block, a count of its own name, the "kept as written" note. */
 interface X { get(name: string): Raw | undefined; count(name: string): void; kept(): void }
 type Conv = (v: Raw, x: X, d: PropertyDescriptor) => unknown;   // undefined: not carried; null: read, nothing to write
@@ -154,14 +156,25 @@ function convertObject(b: AccessBlock, target: PropertyTarget, who: Who, c: Ctx)
     const v = b.props.get(ev);
     if (typeof v !== 'string' || !d.appliesTo.includes(target) || (d.objects && !d.objects.includes(kind))) continue;
     done.add(ev);
-    if (v === '[Event Procedure]') c.notes.push({ code: 'eventDropped', part: `${owner}_${ev.replace(/^On/, '')}`, reason: 'procedure' });
+    if (v === EVENT_PROCEDURE && c.keep) { props[ev] = v; c.notes.push({ code: 'eventProcedure', part: procedureName(kind, ev, owner) }); }
+    else if (v === EVENT_PROCEDURE) c.notes.push({ code: 'eventDropped', part: `${owner}_${ev.replace(/^On/, '')}`, reason: 'procedure' });
     else if (v === '' || v === '[Embedded Macro]') continue;   // the EmMacro block says the rest
     else if (readEvent(v).kind === 'macro') props[ev] = v;
     else c.notes.push({ code: 'eventDropped', part: v.slice(0, 80), reason: 'expression' });
   }
   for (const n of b.props.keys()) {
     const m = /^(.+)EmMacro$/.exec(n);
-    if (m && (EVENTS as readonly string[]).includes(m[1]!)) { done.add(n); c.notes.push({ code: 'eventDropped', part: `${owner}.${m[1]}`, reason: 'embeddedMacro' }); }
+    if (!m || !(EVENTS as readonly string[]).includes(m[1]!)) continue;
+    done.add(n);
+    const v = b.props.get(n);
+    const d = DESC.get(m[1]!)!;
+    try {   // a defect in a macro never loses the form: the block is dropped as any other
+      const rows = d.appliesTo.includes(target) && !(d.objects && !d.objects.includes(kind)) && typeof v === 'object' && 'lines' in v ? parseAccessMacro(v.lines.join('\n')) : null;
+      if (!rows?.length) throw new Error('dropped');
+      const { def, notes } = convertAccessMacro(rows);
+      props[m[1]!] = { embedded: def };
+      for (const note of notes) c.notes.push({ code: 'macroNote', part: `${owner}.${m[1]}${'part' in note ? `: ${note.part}` : ''}`, reason: note.code });
+    } catch { c.notes.push({ code: 'eventDropped', part: `${owner}.${m[1]}`, reason: 'embeddedMacro' }); }
   }
   for (const n of b.props.keys()) if (!done.has(n) && !CARRIED_ELSEWHERE.has(n) && !silent(n) && !restates(b, n, c.defaults)) bump(c.ignored, n);
   return props;
@@ -235,8 +248,9 @@ function levelsOf(blocks: AccessBlock[], c: Ctx): GroupLevel[] {
   });
 }
 
-/** Throws AccessTextError (from the reader) and nothing else. The document it returns passes validateDesignDoc. */
-export function convertAccessDesign(text: string, kind: 'form' | 'report'): ConvertedDesign {
+/** Throws AccessTextError (from the reader) and nothing else. The document it returns passes validateDesignDoc.
+ *  `keepProcedures`: an event holding `[Event Procedure]` keeps it (the caller imports the code-behind) and gives the note `eventProcedure`. */
+export function convertAccessDesign(text: string, kind: 'form' | 'report', opts?: { keepProcedures?: boolean }): ConvertedDesign {
   const t = parseAccessText(text);
   if (t.root.type !== (kind === 'form' ? 'Form' : 'Report')) throw new AccessTextError('noRoot');
   const items = t.root.blocks.find((b) => b.type === '')?.blocks ?? [];
@@ -245,7 +259,7 @@ export function convertAccessDesign(text: string, kind: 'form' | 'report'): Conv
   const preamble = first < 0 ? items : items.slice(0, first);
   const defaults = new Map<string, AccessBlock>();
   for (const b of preamble) if (!defaults.has(b.type) && !(kind === 'report' && b.type === 'BreakLevel')) defaults.set(b.type, b);
-  const c: Ctx = { kind, defaults, ignored: new Map(), notes: [], names: new Set(), nextSuffix: new Map(), made: 0 };
+  const c: Ctx = { kind, defaults, ignored: new Map(), notes: [], keep: opts?.keepProcedures === true, names: new Set(), nextSuffix: new Map(), made: 0 };
   const props = convertObject(t.root, kind, { access: kind === 'form' ? 'Form' : 'Report', name: kind === 'form' ? 'Form' : 'Report' }, c);
   const levels = kind === 'report' ? levelsOf(preamble.filter((b) => b.type === 'BreakLevel'), c) : [];
   // Access writes the headers outermost first and the footers innermost first
@@ -296,5 +310,5 @@ export function convertAccessDesign(text: string, kind: 'form' | 'report'): Conv
     }
   }
   const rs = t.root.props.get('RecordSource');
-  return { doc: { formatVersion: '1.0', recordSource: null, props, sections }, recordSource: typeof rs === 'string' ? rs : '', ignored: c.ignored, notes: c.notes, code: t.code };
+  return { doc: { formatVersion: '1.0', recordSource: null, props, sections }, recordSource: typeof rs === 'string' ? rs : '', ignored: c.ignored, notes: c.notes, code: t.code.trim() === '' ? null : t.code };
 }

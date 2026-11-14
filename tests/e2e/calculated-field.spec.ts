@@ -16,7 +16,7 @@ test('Table Fields: Modify Expression makes a calculated field the write layer k
     createTable(db, lines);
     await insertRow(db, lines, { Qty: '2', Price: '5' }, localeInfo('en-US'));
   });
-  const { app, page } = await launchApp({ args: [base] });
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base] });
   try {
     await page.getByTestId('nav-item-Lines').dblclick();
     await expect(page.getByTestId('datasheet')).toBeVisible();
@@ -47,7 +47,7 @@ test('Table Design: Calculated in the Data Type list, Result Type, dropped by an
     createTable(db, lines);
     await insertRow(db, lines, { Qty: '2', Price: '5' }, localeInfo('en-US'));
   });
-  const { app, page } = await launchApp({ args: [base] });
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [base] });
   try {
     await page.getByTestId('nav-item-Lines').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();

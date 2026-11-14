@@ -38,7 +38,7 @@ async function base(name: string): Promise<string> {
 }
 
 test('a linked picture shows from its file in the base folder; a missing, non-image, network or outside path shows nothing', async () => {
-  const { app, page } = await launchApp({ args: [await base('images-linked')] });
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [await base('images-linked')] });
   try {
     await page.getByTestId('nav-item-form-Fiche').dblclick();
     await expect(page.getByTestId('form-run')).toBeVisible();
@@ -49,7 +49,7 @@ test('a linked picture shows from its file in the base folder; a missing, non-im
 
 test('the property sheet shows the linked path; Choose… keeps a file of the base folder relative and refuses one outside', async () => {
   const file = await base('images-linked-sheet');
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_PICTURE_PATH: join(dirname(file), 'ok.png') } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_PICTURE_PATH: join(dirname(file), 'ok.png') } });
   try {
     await page.getByTestId('nav-item-form-Fiche').click({ button: 'right' });
     await page.getByTestId('nav-menu-design').click();
@@ -59,7 +59,7 @@ test('the property sheet shows the linked path; Choose… keeps a file of the ba
     await page.locator('[data-testid="prop-Picture-linked"]:visible').click();
     await expect(page.locator('[data-testid="prop-Picture-path"]:visible')).toHaveText('ok.png');
   } finally { await app.close(); }
-  const second = await launchApp({ args: [file], env: { BASECRAFT_E2E_PICTURE_PATH: outside } });
+  const second = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_PICTURE_PATH: outside } });
   try {
     const page = second.page;
     await page.getByTestId('nav-item-form-Fiche').click({ button: 'right' });

@@ -265,7 +265,7 @@ const api: BasecraftApi = {
   },
   accessImport: {
     inspect: (path) => ipcRenderer.invoke(CH.accessImportInspect, path),
-    run: (path, remotes, structure, keepDir, queries, designs) => ipcRenderer.invoke(CH.accessImportRun, path, remotes, structure, keepDir, queries, designs),
+    run: (path, remotes, structure, keepDir, queries, designs, relink, macros) => ipcRenderer.invoke(CH.accessImportRun, path, remotes, structure, keepDir, queries, designs, relink, macros),
     pickExport: () => ipcRenderer.invoke(CH.accessImportPickExport),
     onProgress: (cb) => {
       const listener = (_e: IpcRendererEvent, p: ImportProgress) => cb(p);

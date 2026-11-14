@@ -47,7 +47,7 @@ async function dblclickPieces(page: Page, row = 0) {
 test('Attachments box: add, count in the cell, Save As, Save All, Open asks first, Remove', async () => {
   const out = join(dir, 'saved.txt'), folder = mkdtempSync(join(tmpdir(), 'att-all-'));
   const file = base('att-sheet');
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_ATTACH_PATHS: `${note}|${prog}`, BASECRAFT_E2E_ATTACH_SAVE_PATH: out, BASECRAFT_E2E_ATTACH_FOLDER: folder } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_ATTACH_PATHS: `${note}|${prog}`, BASECRAFT_E2E_ATTACH_SAVE_PATH: out, BASECRAFT_E2E_ATTACH_FOLDER: folder } });
   try {
     await dblclickPieces(page);
     const box = page.getByTestId('attachments-dialog');
@@ -85,7 +85,7 @@ test('Attachments box: add, count in the cell, Save As, Save All, Open asks firs
 test('a file over 25 MB is refused, nothing is added', async () => {
   const big = join(dir, 'big.bin');
   writeFileSync(big, Buffer.alloc(25 * 1024 * 1024 + 1));
-  const { app, page } = await launchApp({ args: [base('att-big')], env: { BASECRAFT_E2E_ATTACH_PATHS: big } });
+  const { app, page } = await launchApp({ args: [base('att-big')], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_ATTACH_PATHS: big } });
   try {
     await dblclickPieces(page);
     await page.getByTestId('att-add').click();
@@ -106,7 +106,7 @@ test('the Attachment control shows the first picture, goes through the files, op
     addAttachments(db, 'Clients', 'Pieces', 1, [{ name: 'photo.png', data: png() }, { name: 'a.txt', data: Buffer.from('x') }]);
     seedForm(db, 'Fiche', doc);
   });
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_ATTACH_PATHS: note } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_ATTACH_PATHS: note } });
   try {
     await page.getByTestId('nav-item-form-Fiche').dblclick();
     const c = page.getByTestId('form-ctl-Fichiers').filter({ visible: true });

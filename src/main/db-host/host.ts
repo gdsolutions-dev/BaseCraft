@@ -134,8 +134,8 @@ export function openSession(o: HostOpen, emit: (e: HostEvent) => void): object {
     migrateToServer: (req: MigrateRequest) => s.migrateToServer(req, progress),
     importServerTables: (kind: ServerKind, params: unknown, names: string[]) => s.importServerTables(kind, params, names, progress),
     // Same positions as the session's method: the third one (the tick) is the host's own.
-    importAccessTables: (path: string, remotes: string[], _tick: undefined, structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean) =>
-      s.importAccessTables(path, remotes, progress, structure, keepDir, script, queries, designs),
+    importAccessTables: (path: string, remotes: string[], _tick: undefined, structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean, relink?: boolean, macros?: boolean) =>
+      s.importAccessTables(path, remotes, progress, structure, keepDir, script, queries, designs, relink, macros),
     // Same positions as the session's method: the tick (5th) is the host's own.
     importOdbcTables: (req: OdbcRequest, names: string[], texts: ImportTexts, script: string) => s.importOdbcTables(req, names, texts, script, progress),
     takeOverLock: () => { try { return s.takeOverLock(); } catch (e) { throw bcError(e); } }, // reopening in write mode

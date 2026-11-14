@@ -15,20 +15,21 @@ const LEVELS: ReportLevel[] = ['ignored', 'approximated', 'carried'];
 
 /** External Data › Import › Access: picks the file, reads its tables, asks which to import, then shows the report. True when
  *  tables were imported. */
-export async function importAccessTables(modal: ModalApi): Promise<boolean> {
-  const path = await api.links.pick('access');
+export async function importAccessTables(modal: ModalApi, opened?: string): Promise<boolean> {
+  // `opened`: the Access file File › Open made a base from (main side: already allowed). Every table starts picked.
+  const path = opened ?? await api.links.pick('access');
   if (path === null) return false;
   const info = await api.accessImport.inspect(path);
   // Escape or the modal's close button resolve null once the report is shown, but the tables are imported: the list refreshes anyway.
   let imported = false;
-  const closed = await modal.custom<true>((close) => <AccessImportDialog path={path} info={info} onClose={close} onImported={() => { imported = true; }} />, { titleKey: 'import.access.title' });
+  const closed = await modal.custom<true>((close) => <AccessImportDialog path={path} info={info} allPicked={opened !== undefined} onClose={close} onImported={() => { imported = true; }} />, { titleKey: 'import.access.title' });
   return imported || closed === true;
 }
 
 // The reason of these lines is shown as it is: a control's Access type, a control's new name (the event kind only picks the sentence)
 const RAW_REASONS = ['designControlReplaced', 'designControlRenamed', 'designEventDropped'];
 
-function AccessImportDialog({ path, info, onClose, onImported }: { path: string; info: AccessImportInfo; onClose(v: true | null): void; onImported(): void }) {
+function AccessImportDialog({ path, info, allPicked, onClose, onImported }: { path: string; info: AccessImportInfo; allPicked: boolean; onClose(v: true | null): void; onImported(): void }) {
   const { t } = useTranslation();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -40,11 +41,13 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
   const [keep, setKeep] = useState(false);
   const [queries, setQueries] = useState(true); // E3: the saved queries come with an export
   const [designs, setDesigns] = useState(true); // E4: so do the forms and reports
+  const [macros, setMacros] = useState(true); // E5: so do the macros and modules
+  const [relink, setRelink] = useState(true); // the front-end's linked tables become links to their Access file
   const [failure, setFailure] = useState<string | null>(null);
   // A reason is a code: shown as the text the Relationships window or the table designer already has, or as this report's own
   const OWN_REASONS = ['tableNotImported', 'violations', 'defaultValue', 'validationRule', 'inputMask', 'lookup',
-    'unknownFunction', 'dataDefinition', 'notRead', 'notBound', 'nameInvalid', 'duplicate', 'unreadable'];
-  const reasonKey = (code: string, reason: string) => code === 'designSkipped' && (reason === 'notRead' || reason === 'duplicate') ? `import.report.reason.design_${reason}` : OWN_REASONS.includes(reason) ? `import.report.reason.${reason}`
+    'unknownFunction', 'dataDefinition', 'notRead', 'notBound', 'nameInvalid', 'duplicate', 'unreadable', 'nameTaken', 'nameTooLong', 'notSaved'];
+  const reasonKey = (code: string, reason: string) => (code === 'designSkipped' || code === 'macroSkipped' || code === 'moduleSkipped') && (reason === 'notRead' || reason === 'duplicate') ? `import.report.reason.design_${reason}` : OWN_REASONS.includes(reason) ? `import.report.reason.${reason}`
     : code === 'tableUnsupported' || code.startsWith('propertyDropped') ? `designError.${reason}` : `relations.error.${reason}`;
   // The line's own sentence is trimmed: a line without a reason ends on a space
   const rt = (key: string, params?: Record<string, unknown>) =>
@@ -54,7 +57,7 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
     const { report } = done;
     return (
       <div data-testid="import-report" className="link-dialog">
-        <p className="modal-message">{t('import.server.done', { names: done.tables.map((x) => x.name).join(', ') })}</p>
+        <p className="modal-message">{done.tables.length > 0 ? t('import.server.done', { names: done.tables.map((x) => x.name).join(', ') }) : t('import.access.doneNoTable')}</p>
         <div className="link-list">{/* capped and scrolling: the window opens at its top, the buttons stay in view */}
         {LEVELS.map((level) => {
           const lines = report.lines.filter((l) => REPORT_LEVEL[l.code] === level);
@@ -102,7 +105,7 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
     const off = api.accessImport.onProgress(setProgress);
     try {
       const structure: AccessStructureSource = kind === 'folder' && dir !== null ? { kind, dir } : { kind: kind === 'access' ? 'access' : 'file' };
-      const r = await api.accessImport.run(path, names.map((n) => info.tables.find((x) => x.name === n)!.remote), structure, kind === 'access' && keep && keepDir !== null ? keepDir : undefined, kind !== 'file' ? queries : undefined, kind !== 'file' ? designs : undefined);
+      const r = await api.accessImport.run(path, names.map((n) => info.tables.find((x) => x.name === n)!.remote), structure, kind === 'access' && keep && keepDir !== null ? keepDir : undefined, kind !== 'file' ? queries : undefined, kind !== 'file' ? designs : undefined, info.relinkable > 0 ? relink : undefined, kind !== 'file' ? macros : undefined);
       if (r.ok) { onImported(); setDone(r); }
       if (!r.ok && r.reason === 'export') { setFailure(r.failure); return { ok: false as const, reason: 'cancelled' as const }; } // stays on the list: another choice can be picked
       return r;
@@ -111,6 +114,12 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
   const header = (
     <>
       <SourceHeader path={path} kind="access" />
+      {info.relinkable > 0 && ( // read with mdb-reader: needs no Access export, whatever the structure source
+        <div>
+          <label><input type="checkbox" data-testid="import-relink" checked={relink} onChange={(e) => setRelink(e.target.checked)} /> {t('import.access.relink', { n: info.relinkable })}</label>
+          <p className="muted" data-testid="import-relink-note">{t('import.access.relinkNote')}</p>
+        </div>
+      )}
       <fieldset className="modal-field" data-testid="import-structure">
         <legend>{t('import.access.structure')}</legend>
         {info.canExport && (
@@ -134,6 +143,7 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
             <p className="muted" data-testid="import-queries-note">{t('import.access.queriesNote')}</p>
             <label><input type="checkbox" data-testid="import-designs" checked={designs} onChange={(e) => setDesigns(e.target.checked)} /> {t('import.access.designs')}</label>
             <p className="muted" data-testid="import-designs-note">{t('import.access.designsNote')}</p>
+            <label><input type="checkbox" data-testid="import-macros" checked={macros} onChange={(e) => setMacros(e.target.checked)} /> {t('import.access.macros')}</label>
           </div>
         )}
         <label><input type="radio" name="import-structure" data-testid="import-structure-file" checked={kind === 'file'} onChange={() => { setKind('file'); setFailure(null); }} /> {t('import.access.structureFile')}</label>
@@ -144,6 +154,8 @@ function AccessImportDialog({ path, info, onClose, onImported }: { path: string;
       {info.warnSize && <p className="muted" data-testid="import-warn-size">{t('import.access.warnSize')}</p>}
     </>
   );
-  return <LinkForm server header={header} tables={info.tables} create={create} okKey="import.server.ok" skippedKey="import.server.skippedInline" missingKey="import.access.missingTables"
+  // Nothing picked is an import when something else comes with it: the front-end's links, or the export's queries, forms, macros
+  const extras = (info.relinkable > 0 && relink) || (kind !== 'file' && (queries || designs || macros));
+  return <LinkForm server header={header} allPicked={allPicked} canSubmitEmpty={extras} tables={info.tables} create={create} okKey="import.server.ok" skippedKey="import.server.skippedInline" missingKey="import.access.missingTables"
     busyNote={<ImportBusy progress={progress} />} onClose={(v) => { if (v === null) onClose(null); }} />;
 }

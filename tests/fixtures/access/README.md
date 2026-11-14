@@ -49,6 +49,9 @@ validation, and every `// TO CONFIRM` there is replaced by what Access shows.
 - `Ventes-complet.export/`: the output of `resources/access-export.ps1` for `Ventes-complet.accdb` (`manifest.json`, `structure.json`,
   `queries/`, `forms/`, `reports/`, `macros/`, `modules/`). Committed so that tests and the "Use an export folder…" choice need no Access;
   regenerate it with the script whenever `Ventes-complet.accdb` changes (the manifest's `source` must stay `Ventes-complet.accdb`).
+- Stage E acceptance (`tests/e2e/recette-e.access.spec.ts`, `recette-e-folder.spec.ts`): File > Open on a temp copy of `Ventes-complet.accdb`
+  makes `Ventes-complet.basecraft` beside it (numbered when taken) and imports everything with one confirmation; the front-end case builds
+  an Access file with `tests/helpers/make-access-front-end.ps1 -NoLocal` (linked tables only) at run time.
 
 ## What to record from Access into `expected.ts`
 

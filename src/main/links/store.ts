@@ -100,9 +100,12 @@ export function resolveSourcePath(s: SourceRow, frontEnd: string, exists: (p: st
 /** The source of `file`, reused when one holds that real path or resolves to it (R5: a pair moved together; Windows paths ignore
  *  case), else created: absolute path, plus the path relative to the front-end's folder when both are on one volume (stored with `/`,
  *  so it reads on either system). */
+/** A path as compared: case-folded on Windows only. */
+export const pathKey = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+
 function sourceFor(db: DatabaseSync, frontEnd: string, kind: SourceKind, file: string): string {
   const real = fs.realpathSync.native(file);
-  const key = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const key = pathKey;
   const realOf = (p: string) => { try { return fs.realpathSync.native(p); } catch { return p; } };
   const found = sourceRows(db).find((s) => s.kind === kind && (key(s.path) === key(real) || key(realOf(resolveSourcePath(s, frontEnd))) === key(real)));
   if (found) return found.id;
@@ -118,12 +121,13 @@ const dropIfUnused = (db: DatabaseSync, id: string): void => {
   db.prepare('DELETE FROM bc_sources WHERE id = ? AND NOT EXISTS (SELECT 1 FROM bc_links WHERE source_id = ?)').run(id, id);
 };
 
-/** Links `names` (each is the remote table's own name, R2) to `file`. The caller has checked that no name is taken (R2). */
-export function addLinks(db: DatabaseSync, frontEnd: string, kind: SourceKind, file: string, names: string[]): void {
+/** Links `names` (each is the remote table's own name, R2; or `{ name, remote }`: a link named otherwise than its table) to `file`.
+ *  The caller has checked that no name is taken (R2). */
+export function addLinks(db: DatabaseSync, frontEnd: string, kind: SourceKind, file: string, names: (string | { name: string; remote: string })[]): void {
   inTransaction(db, () => {
     const id = sourceFor(db, frontEnd, kind, file);
     const ins = db.prepare('INSERT INTO bc_links (name, source_id, remote_name) VALUES (?, ?, ?)');
-    for (const n of names) ins.run(n.normalize('NFC'), id, n);
+    for (const n of names) { const { name, remote } = typeof n === 'string' ? { name: n, remote: n } : n; ins.run(name.normalize('NFC'), id, remote); }
   });
 }
 

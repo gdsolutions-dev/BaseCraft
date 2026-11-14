@@ -50,7 +50,7 @@ const dblclickCell = async (page: Page, grid: Locator, left: number, row: number
 test('Compact removes a set no cell references, and keeps the others', async () => {
   const file = seed('att5b-compact', (db) => db.exec(`INSERT INTO bc_attachments (set_id, name, type, data, created) VALUES (99, 'orphan.txt', 'txt', x'41', '')`));
   expect(inFile<{ n: number }>(file, 'SELECT count(*) AS n FROM bc_attachments')[0]!.n).toBe(4);
-  const { app, page } = await launchApp({ args: [file] });
+  const { app, page } = await launchApp({ env: { BASECRAFT_REGION: 'fr-FR' }, args: [file] });
   try {
     await page.getByTestId('ribbon-tab-databaseTools').click();
     await page.getByTestId('cmd-compactRepair').click();
@@ -65,7 +65,7 @@ test("a query's attachment column shows the number of files; a double-click open
     saveObject(db, 'query', 'QClients', { formatVersion: '1.0', sql: 'SELECT Nom, Pieces FROM Clients ORDER BY Nom;' }, null);
     saveObject(db, 'query', 'QJoint', { formatVersion: '1.0', sql: 'SELECT a.Nom, a.Pieces FROM Clients AS a INNER JOIN Clients AS b ON a.Nom = b.Nom;' }, null);
   });
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_ATTACH_PATHS: note } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_ATTACH_PATHS: note } });
   try {
     await page.getByTestId('nav-item-query-QClients').dblclick();
     const sheet = page.getByTestId('datasheet').filter({ visible: true });
@@ -94,7 +94,7 @@ const formDoc: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'table'
 
 test("the Attachments box opens from a form's Datasheet view", async () => {
   const file = seed('att5b-sheet', (db) => seedForm(db, 'Fiche', formDoc));
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_ATTACH_PATHS: note } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_ATTACH_PATHS: note } });
   try {
     await page.getByTestId('nav-item-form-Fiche').dblclick();
     const sheet = page.locator('[data-testid="form-datasheet"]:visible');
@@ -117,7 +117,7 @@ const reportDoc: DesignDoc = { formatVersion: '1.0', recordSource: { kind: 'tabl
 test('a report draws the first picture or the file-type icon of each row, and prints it to PDF', async () => {
   const pdf = join(mkdtempSync(join(tmpdir(), 'att5b-pdf-')), 'clients.pdf');
   const file = seed('att5b-report', (db) => { const r = saveObject(db, 'report', 'Etat', reportDoc, null); if (!r.ok) throw new Error(r.reason); });
-  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_E2E_PDF_PATH: pdf } });
+  const { app, page } = await launchApp({ args: [file], env: { BASECRAFT_REGION: 'fr-FR', BASECRAFT_E2E_PDF_PATH: pdf } });
   try {
     await page.getByTestId('nav-group-report').getByTestId('nav-item-report-Etat').dblclick();
     await expect(page.locator('.doc:not([hidden])').getByTestId('preview-page-of')).toHaveText(/^Page 1 sur \d+$/);

@@ -113,6 +113,13 @@ describe('importDesigns', () => {
     expect(def(db, 'form', 'F').sections[0]!.controls[0]!.props.RowSource).toBe('"Clients";"Autres"');
     expect(r.lines.map((l) => l.code)).toEqual(['formImported']);
   });
+  it('a name that differs only by Unicode normalisation is not "imported as"; a numbered one is', () => {
+    const nfd = 'Élève';
+    const r = importDesigns(db, [withControls(nfd, '', ''), withControls('G', '', '')], none);
+    expect(r.lines).toContainEqual({ code: 'formImported', object: nfd.normalize('NFC') });
+    const again = importDesigns(db, [withControls('G', '', '')], none);
+    expect(again.lines).toContainEqual({ code: 'formImported', object: 'G1', part: 'G' });
+  });
   it('a record source that is not a name nor readable SQL is left empty with one line; a bracketed name is a name', () => {
     createTable(db, { name: 'Mes clients', fields: [text('Nom')] });
     const r = importDesigns(db, [withControls('A', 'DELETE FROM x', ''), withControls('B', 'a b WHERE c', ''), withControls('C', '[Mes clients]', '')], none);

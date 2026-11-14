@@ -17,6 +17,17 @@ const JET3 = new WeakSet<MDBReader>();
 
 export const isJet3 = (r: MDBReader): boolean => JET3.has(r);
 
+/** The file starts like a Jet / ACE database (the signature at offset 4, in clear even when the file is password-protected). */
+export function hasAccessSignature(path: string): boolean {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(path, 'r');
+    const b = Buffer.alloc(19);
+    fs.readSync(fd, b, 0, 19, 0);
+    return /^Standard (Jet|ACE) DB$/.test(b.toString('latin1', 4, 19));
+  } catch { return false; } finally { if (fd !== undefined) fs.closeSync(fd); }
+}
+
 const unavailable = (state: 'needsPassword' | 'cannotOpen', path: string) => new Error(`bc:linkUnavailable|${state}|${path}`);
 
 /** Reads the file once. bc:linkUnavailable|needsPassword|<path> (no or wrong password), |cannotOpen|<path> (anything else). */

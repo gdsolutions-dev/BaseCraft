@@ -38,8 +38,8 @@ import {
 import { splitDatabase } from './db/split';
 import { importTables } from './migrate/import';
 import { importAccess } from './import/access-import';
-import { hasAccess, readAccessExport, readExportDesigns, readExportQueries, runAccessExport } from './import/access-export';
-import type { AccessExport, ExportDesign, ExportQuery } from '../shared/access-export';
+import { hasAccess, readAccessExport, readExportDesigns, readExportMacros, readExportModules, readExportQueries, runAccessExport } from './import/access-export';
+import type { AccessExport, ExportDesign, ExportMacro, ExportModule, ExportQuery } from '../shared/access-export';
 import type { AccessImportInfo, AccessImportResult, AccessStructureSource } from '../shared/access-import';
 import { copyRows, deleteRowsWithMacros, insertRow, updateRow, type RowWriteResult } from './db/write-layer';
 import { inTransaction, inTransactionAsync } from './db/tx';
@@ -88,6 +88,7 @@ import {
 } from './connectors/remote-data';
 import { remoteActionCount, remoteRunAction } from './connectors/remote-action';
 import { inspectAccess } from './links/access';
+import { accessLinkedTables, isAttachmentTable } from './import/access-links';
 import { META_KEYS, withMetadata } from './links/meta';
 import { refusedQueries, relinkData, runMigration, runMigrationFiles, switchLocal, type DataFile } from './migrate/run';
 import { fold } from '../shared/expr/sql';
@@ -1793,7 +1794,8 @@ export class Session {
     return {
       tables: found.map((t, i) => ({ name: names[i]!, remote: t.name, taken: false as const,
         ...(t.skipped.length ? { skipped: t.skipped } : {}), ...(t.unsupported ? { unsupported: t.unsupported } : {}) })),
-      linked: r.getTableNames({ normalTables: false, linkedTables: true }),
+      linked: r.getTableNames({ normalTables: false, linkedTables: true }).filter((n) => !isAttachmentTable(n)),
+      relinkable: accessLinkedTables(r).filter((l) => l.kind === 'access').length,
       warnSize: statSync(path).size > ACCESS_WARN_BYTES,
       canExport: hasAccess(),
     };
@@ -1805,7 +1807,7 @@ export class Session {
    *  by the main process; the export runs in a temporary folder, deleted on every path, and is copied to `keepDir` first when given) or
    *  from an export folder; a refusal is `export` and nothing is created. */
   async importAccessTables(path: string, remotes: string[], tick: (p: ImportProgress) => Promise<void> = async () => {},
-    structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean): Promise<AccessImportResult> {
+    structure?: AccessStructureSource, keepDir?: string, script?: string, queries?: boolean, designs?: boolean, relink?: boolean, macros?: boolean): Promise<AccessImportResult> {
     const front = this.structureDb();
     const { r, jet3 } = this.links.accessReader(path);
     const found = inspectAccess(r);
@@ -1821,12 +1823,15 @@ export class Session {
       let exported: AccessExport | undefined;
       let queryTexts: ExportQuery[] | undefined;
       let designTexts: ExportDesign[] | undefined;
+      let macroTexts: ExportMacro[] | undefined;
+      let moduleTexts: ExportModule[] | undefined;
       if (structure?.kind === 'folder') {
         const read = readAccessExport(structure.dir, basename(path));
         if (!read.ok) return { ok: false, reason: 'export', failure: read.reason };
         exported = read.export;
         if (queries) queryTexts = readExportQueries(structure.dir, exported);
         if (designs) designTexts = readExportDesigns(structure.dir, exported);
+        if (macros) { macroTexts = readExportMacros(structure.dir, exported); moduleTexts = readExportModules(structure.dir, exported); }
       } else if (structure?.kind === 'access') {
         if (!script || !hasAccess()) return { ok: false, reason: 'export', failure: 'noAccess' };
         const kept = keepDir === undefined ? undefined : join(keepDir, `${basename(path)}.export`);
@@ -1846,6 +1851,7 @@ export class Session {
         exported = read.export;
         if (queries) queryTexts = readExportQueries(out, exported); // before the temporary folder goes
         if (designs) designTexts = readExportDesigns(out, exported);
+        if (macros) { macroTexts = readExportMacros(out, exported); moduleTexts = readExportModules(out, exported); }
         if (kept !== undefined) {
           try { cpSync(out, kept, { recursive: true, errorOnExist: true, force: false }); } catch {
             rmSync(kept, { recursive: true, force: true });
@@ -1854,8 +1860,9 @@ export class Session {
         }
       }
       return await importAccess({ front, r, jet3, source: basename(path), tables: wanted.map((remote, i) => ({ remote, name: names[i]! })),
-        linked: r.getTableNames({ normalTables: false, linkedTables: true }), info: this.info, tick, stopped: () => this.stopAccessImport,
-        ...(exported ? { structure: exported } : {}), ...(queryTexts ? { queries: queryTexts } : {}), ...(designTexts ? { designs: designTexts } : {}) });
+        linked: r.getTableNames({ normalTables: false, linkedTables: true }).filter((n) => !isAttachmentTable(n)), info: this.info, tick, stopped: () => this.stopAccessImport,
+        ...(exported ? { structure: exported } : {}), ...(queryTexts ? { queries: queryTexts } : {}), ...(designTexts ? { designs: designTexts } : {}), ...(macroTexts ? { macros: macroTexts } : {}), ...(moduleTexts ? { modules: moduleTexts } : {}),
+        ...(relink ? { relink: { frontEndPath: this.frontEndPath, importedFile: path, open: (p: string) => this.links.accessReader(p).r, catalog: this.qc().catalog } } : {}) });
     } finally {
       this.exportAbort = null;
       // Access may still hold its copy for a moment after being ended: the async rm retries (rmSync does not). Best effort.

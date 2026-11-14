@@ -35,7 +35,7 @@ export const launch = (path: string, exportDir?: string) => launchApp({
 });
 
 /** Imports the given `tables`; `how` picks where the structure comes from; returns the report's text. */
-export async function importTables(page: Page, tables: string[], how: 'folder' | 'access', opts: { keep?: boolean; designs?: boolean } = {}): Promise<string> {
+export async function importTables(page: Page, tables: string[], how: 'folder' | 'access', opts: { keep?: boolean; designs?: boolean; macros?: boolean } = {}): Promise<string> {
   await page.getByTestId('ribbon-tab-externalData').click();
   await page.getByTestId('cmd-importAccess').click();
   if (how === 'folder') {
@@ -51,6 +51,7 @@ export async function importTables(page: Page, tables: string[], how: 'folder' |
   await expect(page.getByTestId('import-designs')).toBeChecked(); // E4: ticked by default, with its note
   await expect(page.getByTestId('import-designs-note')).toBeVisible();
   if (opts.designs === false) await page.getByTestId('import-designs').uncheck();
+  if (!opts.macros) await page.getByTestId('import-macros').uncheck(); // E5: ticked by default; the E2-E4 recettes leave the macros out (recette-e*.spec.ts for E5 ticks it)
   for (const n of tables) await page.getByTestId(`link-table-${n}`).check();
   await page.getByTestId('link-ok').click();
   const report = page.getByTestId('import-report');
@@ -126,7 +127,7 @@ export async function checkTableDesign(page: Page) {
   await page.getByTestId('doc-tab-close-Clients').click();
 }
 
-async function select(page: Page, col: number, row: number) {
+export async function select(page: Page, col: number, row: number) {
   const b = (await doc(page).getByTestId('datasheet').getByTestId('data-grid-canvas').boundingBox())!;
   await page.mouse.click(b.x + MARKER + 20, b.y + HEADER + ROW / 2);
   await expect(cell(page, 0, 0)).toBeFocused();
@@ -134,10 +135,31 @@ async function select(page: Page, col: number, row: number) {
   for (let i = 0; i < col; i++) await page.keyboard.press('ArrowRight');
   await expect(cell(page, col, row)).toBeFocused();
 }
-async function openSheet(page: Page, name: string) {
+export async function openSheet(page: Page, name: string) {
   await page.getByTestId(`nav-item-${name}`).dblclick();
   await expect(doc(page).getByTestId('datasheet').getByTestId('data-grid-canvas')).toBeVisible();
   await expect(page.getByTestId(`doc-tab-${name}`)).toHaveAttribute('aria-selected', 'true');
+}
+export const plain = (s: string) => s.replace(/[  ]/g, ' ');
+/** The text a cell paints in its field's format (Currency), as Home › Selection quotes it (recette-c2). */
+export async function painted(page: Page, col: number, row: number): Promise<string> {
+  await page.getByTestId('ribbon-tab-home').click();
+  await select(page, col, row);
+  await page.getByTestId('cmd-filterSelection').click();
+  const text = (await page.getByTestId('filter-menu-equals').textContent()) ?? '';
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('filter-menu')).toHaveCount(0);
+  return plain(/"(.*)"/s.exec(text)?.[1] ?? text);
+}
+export async function shown(page: Page, rows: number, cols: number, money: number[] = []): Promise<string[][]> {
+  await expect(doc(page).getByTestId('nav-record-count')).toHaveText(String(rows));
+  const out: string[][] = [];
+  for (let r = 0; r < rows; r++) {
+    const row: string[] = [];
+    for (let c = 0; c < cols; c++) row.push(money.includes(c) ? await painted(page, c, r) : plain((await cell(page, c, r).textContent()) ?? ''));
+    out.push(row);
+  }
+  return out;
 }
 
 /** The datasheets: the lookup's list on Client, a Quantité the rule refuses, the cascade delete of customer Dupont. */

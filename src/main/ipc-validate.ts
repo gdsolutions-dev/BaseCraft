@@ -450,6 +450,10 @@ export const exportKeepDir = (v: unknown, chosen: ReadonlySet<string>): string |
 export const exportQueries = (v: unknown): boolean | undefined => (v === undefined || typeof v === 'boolean' ? v : bad());
 /** Whether the forms and reports come along (E4): the same rule. */
 export const exportDesigns = exportQueries;
+/** Whether the linked tables are relinked to their Access files: the same rule. */
+export const exportRelink = exportQueries;
+/** Whether the macros and modules come along (E5): the same rule. */
+export const exportMacros = exportQueries;
 /** A default file name for a save dialog: a bare name (no folder), 1 to 255 characters. */
 export const bareFileName = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 255 && !/[\\/]/.test(v) ? v : bad());
 /** The split's data file (C3 R13): as linkPath, a path its save dialog returned, absolute; it need not exist yet. */
@@ -490,8 +494,8 @@ export function migrateRequest(v: unknown): MigrateRequest {
 }
 /** A server login's user name (C4 R10): 1 to 256 UTF-16 units. */
 export const loginUser = (v: unknown): string => (typeof v === 'string' && v.length >= 1 && v.length <= 256 ? v : bad());
-/** Link names (C1): 1 to 1000 names that look up something that exists. */
-export const nameList = (v: unknown): string[] => (Array.isArray(v) && v.length >= 1 && v.length <= 1000 ? Array.from(v, lookupName) : bad());
+/** Link names (C1): `min` (1; 0 for the Access import, E5) to 1000 names that look up something that exists. */
+export const nameList = (v: unknown, min = 1): string[] => (Array.isArray(v) && v.length >= min && v.length <= 1000 ? Array.from(v, lookupName) : bad());
 export const importSpec = (v: unknown): ImportSpec => validSpec(v) ?? bad();
 export const importSpecOrNull = (v: unknown): ImportSpec | null => (v === null ? null : importSpec(v));
 

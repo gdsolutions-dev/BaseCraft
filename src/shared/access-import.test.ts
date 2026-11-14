@@ -42,7 +42,16 @@ describe('access-import report', () => {
       'queryPassThrough{"object":"Q","part":"ODBC"}', 'queryPassThroughPlain{"object":"Q"}', 'querySkipped{"object":"Q","reason":"duplicate"}', 'formsOnly{}']) {
       expect(text).toContain(`import.report.line.${k}\n`);
     }
+    expect(['otherSource', 'sameFile'].map((reason) => lineKey({ code: 'tableLinked', object: 'T', reason }))).toEqual(['tableLinked_otherSource', 'tableLinked_sameFile']);
+    expect(lineKey({ code: 'tableLinked', object: 'T' })).toBe('tableLinked');
     expect(lines.map(lineKey)).toEqual(['queryImported', 'queryImportedAs', 'queryKeptAsText', 'querySourceMissing', 'queryPassThrough', 'queryPassThroughPlain', 'querySkipped', 'formsOnly']);
+  });
+  it('the lines of an embedded macro have their own sentences', () => {
+    const e = (code: string) => lineKey({ code, object: 'F', part: 'B.OnClick', reason: 'embedded' } as ReportLine);
+    expect(['macroElseLost', 'macroNotConverted', 'macroActionComment', 'macroConditionKept', 'macroArgumentDropped'].map(e))
+      .toEqual(['macroElseLostIn', 'macroNotConvertedIn', 'macroActionCommentIn', 'macroConditionKeptIn', 'macroArgumentDroppedIn']);
+    expect(['macroElseLost', 'macroNotConverted', 'macroActionComment', 'macroConditionKept', 'macroArgumentDropped'].map((code) => lineKey({ code, object: 'M', part: code === 'macroElseLost' || code === 'macroNotConverted' ? undefined : 'X' } as ReportLine)))
+      .toEqual(['macroElseLost', 'macroNotConverted', 'macroActionComment', 'macroConditionKept', 'macroArgumentDropped']);
   });
   it('the design codes have their levels and their keys', () => {
     expect([REPORT_LEVEL.formImported, REPORT_LEVEL.reportImported, REPORT_LEVEL.designSkipped, REPORT_LEVEL.designPropertiesIgnored, REPORT_LEVEL.designControlReplaced, REPORT_LEVEL.designEventDropped,

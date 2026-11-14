@@ -177,7 +177,7 @@ test('C8: a front-end linked to two data files moves both to the server, each ba
       await page.getByTestId('migrate-close').click();
       await page.getByTestId('nav-item-Produits').dblclick();
       await expect(page.getByTestId('datasheet').getByTestId('data-grid-canvas')).toBeVisible();
-      await expect(page.getByTestId('glide-cell-1-1')).toHaveText('B');
+      await expect(page.getByTestId('glide-cell-2-1')).toHaveText('B');
     } finally {
       await app.close();
     }

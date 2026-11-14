@@ -36,13 +36,13 @@ export type LinkTable = LinkFileInfo['tables'][number] & { readOnly?: boolean };
 /** The tables to tick, linked by `create` (true: links created). `server`: a server's texts (C4: skipped columns, no table, missing).
  *  C7 R17: `okKey` the OK button's label (« Importer »), `create` may answer `cancelled` (Stop: back to the list, no message), `busyNote`
  *  what shows while it runs (the import's progress and « Arrêter »). */
-export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote, missingKey = 'link.server.missingTables', skippedKey }: {
+export function LinkForm({ header, tables, create, onClose, server = false, okKey = 'link.ok', busyNote, missingKey = 'link.server.missingTables', skippedKey, allPicked = false, canSubmitEmpty = false }: {
   header: ReactNode; tables: LinkTable[]; create(names: string[]): Promise<LinkResult | { ok: false; reason: 'cancelled' }>; onClose(v: true | null): void;
-  server?: boolean; okKey?: string; busyNote?: ReactNode; missingKey?: string; skippedKey?: string;
+  server?: boolean; okKey?: string; busyNote?: ReactNode; missingKey?: string; skippedKey?: string; allPicked?: boolean; canSubmitEmpty?: boolean;
 }) {
   const { t } = useTranslation();
   const free = tables.filter((x) => !x.taken && !x.unsupported).map((x) => x.name);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(allPicked ? free : []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ref = useFocusFirst<HTMLFormElement>(); // shown after the server form (C4): the focus comes here
@@ -85,7 +85,7 @@ export function LinkForm({ header, tables, create, onClose, server = false, okKe
       {busy && busyNote}
       <div className="modal-buttons">
         <button type="button" className="btn" data-testid="link-select-all" disabled={busy || free.length === 0} onClick={() => { setPicked(free); setError(null); }}>{t('link.selectAll')}</button>
-        <button type="submit" className="btn btn-primary" data-testid="link-ok" disabled={busy || picked.length === 0}>{t(okKey)}</button>
+        <button type="submit" className="btn btn-primary" data-testid="link-ok" disabled={busy || (picked.length === 0 && !canSubmitEmpty)}>{t(okKey)}</button>
         <button type="button" className="btn" data-testid="link-cancel" disabled={busy} onClick={() => onClose(null)}>{t('dialog.button.cancel')}</button>
       </div>
     </form>

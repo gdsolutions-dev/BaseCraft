@@ -18,9 +18,10 @@ export async function pickSavePath(defaultName: string, dir: string): Promise<st
   return r.filePath.toLowerCase().endsWith(FILE_EXTENSION) ? r.filePath : r.filePath + FILE_EXTENSION;
 }
 
-export async function pickOpenPath(dir: string): Promise<string | null> {
+/** `accessName`: the label of the Access filter, null in the Runtime (File › Open also takes an Access file: ipc.ts openAccessAsBase). */
+export async function pickOpenPath(dir: string, accessName: string | null): Promise<string | null> {
   if (e2e()) return process.env.BASECRAFT_E2E_OPEN_PATH ?? null;
-  const opts = { defaultPath: dir, filters, properties: ['openFile' as const] };
+  const opts = { defaultPath: dir, filters: accessName === null ? filters : [...filters, { name: accessName, extensions: ['accdb', 'mdb'] }], properties: ['openFile' as const] };
   const win = BrowserWindow.getFocusedWindow();
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return r.canceled ? null : (r.filePaths[0] ?? null);

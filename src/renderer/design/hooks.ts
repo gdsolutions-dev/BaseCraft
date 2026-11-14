@@ -21,6 +21,8 @@ export interface DesignHooks {
   requestFieldList(kind: 'form' | 'report', name: string): void;
   /** Options > Object Designers, form and report templates: the new tab `name` starts from the template (before it opens). */
   seedTemplate(kind: 'form' | 'report', name: string): Promise<void>;
+  /** File › Open on an Access file: the Access import on the file the new base was made from (E5). True when something was imported. */
+  importAccessFrom(modal: ModalApi, path: string): Promise<boolean>;
   ImportWizard: typeof ImportTextWizard;
   CurrentDatabaseOptions: typeof CurrentDatabaseOptions;
   tableFieldsCommands: typeof tableFieldsCommands;

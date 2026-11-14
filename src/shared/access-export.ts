@@ -49,4 +49,7 @@ export interface AccessExport {
 export interface ExportQuery { name: string; sql: string | null; queryType: number; connect: string }
 /** A form or report of an export folder. `text` null: the file is missing, empty, over MAX_ACCESS_TEXT or not readable. */
 export interface ExportDesign { kind: 'form' | 'report'; name: string; text: string | null }
+/** A macro or a module of an export folder. `text` null: the file is missing, empty, over MAX_ACCESS_TEXT or not readable. */
+export interface ExportMacro { name: string; text: string | null }
+export interface ExportModule { name: string; text: string | null }
 export type ExportFailure = 'noAccess' | 'cannotOpen' | 'timeout' | 'failed' | 'badFolder' | 'otherSource'

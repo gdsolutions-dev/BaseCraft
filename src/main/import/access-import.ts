@@ -2,7 +2,7 @@
 // is one transaction (all or nothing); relationships are applied after it, one by one, and what cannot be carried goes to the report.
 import type { DatabaseSync } from 'node:sqlite';
 import type MDBReader from 'mdb-reader';
-import type { AccessExport, ExportDesign, ExportQuery } from '../../shared/access-export';
+import type { AccessExport, ExportDesign, ExportMacro, ExportModule, ExportQuery } from '../../shared/access-export';
 import type { AccessImportResult, ReportLine } from '../../shared/access-import';
 import type { Relation } from '../../shared/api';
 import { quoteIdent, sameName, type TableDesign } from '../../shared/field-types';
@@ -12,7 +12,11 @@ import { saveRelation } from '../db/relations';
 import { createTable } from '../db/schema';
 import { inTransaction, inTransactionAsync } from '../db/tx';
 import { accessDesign, stored } from '../links/access';
+import type { QueryCatalog } from '../../shared/query/bind';
+import { accessLinkedTables, relinkTables } from './access-links';
 import { importDesigns } from './access-designs';
+import { importMacros } from './access-macros';
+import { importModules } from './access-modules';
 import { importQueries } from './access-queries';
 import { withStructure } from './access-structure';
 
@@ -42,6 +46,13 @@ export function accessRelations(rows: MSysRelRow[], local: ReadonlyMap<string, s
   return { relations, skipped };
 }
 
+/** The closing line(s) of the report: what was not read, or nothing when everything was. */
+export function finalCodes(r: { macrosRead: boolean; designsRead: boolean; queriesRead: boolean }): string[] {
+  const { macrosRead, designsRead, queriesRead } = r;
+  return macrosRead ? (designsRead ? (queriesRead ? [] : ['noQueries']) : queriesRead ? ['noDesigns'] : ['noQueriesDesigns'])
+    : [designsRead ? (queriesRead ? 'macrosOnly' : 'designsOnly') : queriesRead ? 'formsOnly' : 'tablesOnly'];
+}
+
 export const PAGE = 1000;
 /** The page size: BASECRAFT_E2E_IMPORT_PAGE only under BASECRAFT_E2E=1 (so the e2e suite can reach Stop on a small file). */
 export const pageSize = () => (process.env.BASECRAFT_E2E === '1' ? Number(process.env.BASECRAFT_E2E_IMPORT_PAGE) || PAGE : PAGE);
@@ -55,7 +66,14 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
   /** The queries of the export folder (E3), saved after the tables in the same transaction. */
   queries?: ExportQuery[];
   /** The forms and reports of the export folder (E4), saved after the queries in the same transaction. */
-  designs?: ExportDesign[] }): Promise<AccessImportResult> {
+  designs?: ExportDesign[];
+  /** The macros of the export folder (E5), saved after the forms and reports in the same transaction. */
+  macros?: ExportMacro[];
+  /** The VBA modules of the export folder (E5), saved as commented Python after the macros; the code of the forms and reports comes with them. */
+  modules?: ExportModule[];
+  /** The linked tables of the file become links to their Access files (after the tables, before the queries). `frontEndPath`: this base's
+   *  file, `importedFile`: the Access file, `open`: its reader as links/access openAccess does, `catalog`: the session's, which resolves the links. */
+  relink?: { frontEndPath: string; importedFile: string; open: (path: string) => MDBReader; catalog?: QueryCatalog } }): Promise<AccessImportResult> {
   const read = d.tables.map((t) => ({ ...t, table: d.r.getTable(t.remote) }));
   const total = read.reduce((n, t) => n + t.table.rowCount, 0);
   const lines: ReportLine[] = [];
@@ -68,6 +86,14 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
   let forms: { name: string; remote: string }[] = [];
   let reports: { name: string; remote: string }[] = [];
   let designsRead = false;
+  const macroLinesOut: ReportLine[] = [];
+  let macros: { name: string; remote: string }[] = [];
+  let macrosOk = false;
+  let modulesOk = false;
+  let modules: { name: string; remote: string }[] = [];
+  let links: { name: string; remote: string }[] = [];
+  const linkLines: ReportLine[] = [];
+  const linked = d.relink ? accessLinkedTables(d.r) : [];
   try {
     await inTransactionAsync(d.front, async () => {
       for (const { name, remote, table } of read) {
@@ -124,10 +150,21 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
         for (const c of skipped) lines.push({ code: 'fieldSkipped', object: name, part: c });
         for (const [part, n] of lost) lines.push({ code: 'valuesLost', object: name, part, n });
       }
+      if (d.relink) {
+        // a savepoint of its own: a failure no table explains undoes the links only
+        try {
+          const l = inTransaction(d.front, () => relinkTables(d.front, d.relink!.frontEndPath, d.relink!.importedFile, linked, d.relink!.open));
+          links = l.links; linkLines.push(...l.lines);
+        } catch { // no link, and the tables stay: each linked table says so
+          for (const t of linked) linkLines.push({ code: 'tableLinked', object: t.name, reason: t.kind === 'access' ? 'cannotOpen' : 'otherSource' });
+        }
+      }
+      const known = [...d.tables, ...links.map((l) => ({ remote: l.remote, name: l.name }))];
+      const catalog = d.relink?.catalog;
       if (d.queries) {
         // a savepoint: a failure no query explains undoes the queries only, never the tables
         try {
-          const q = inTransaction(d.front, () => importQueries(d.front, d.queries!, d.tables));
+          const q = inTransaction(d.front, () => importQueries(d.front, d.queries!, known, catalog));
           queries = q.queries;
           queryLines.push(...q.lines);
           queriesRead = true;
@@ -138,10 +175,32 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
       if (d.designs) {
         // a savepoint of its own: a failure no object explains undoes the forms and reports only
         try {
-          const f = inTransaction(d.front, () => importDesigns(d.front, d.designs!, { tables: d.tables, queries }));
+          const f = inTransaction(d.front, () => importDesigns(d.front, d.designs!, { tables: known, queries }, catalog, { code: d.modules !== undefined }));
           forms = f.forms; reports = f.reports;
           designLines.push(...f.lines);
           designsRead = true;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'bc:cancelled') throw e;
+        }
+      }
+      if (d.macros || d.designs) {   // without the macros box the forms and reports still follow the names this import gave
+        // a savepoint of its own: a failure no macro explains undoes the macros (and the names they renamed) only
+        try {
+          const m = inTransaction(d.front, () => importMacros(d.front, d.macros ?? [], { tables: known, queries, forms, reports }));
+          macros = m.macros;
+          macroLinesOut.push(...m.lines);
+          macrosOk = true;
+        } catch (e) {
+          if (e instanceof Error && e.message === 'bc:cancelled') throw e;
+        }
+      }
+      if (d.modules) {
+        // a savepoint of its own: a failure no module explains undoes the modules only
+        try {
+          const m = inTransaction(d.front, () => importModules(d.front, d.modules!));
+          modules = m.modules;
+          macroLinesOut.push(...m.lines);
+          modulesOk = true;
         } catch (e) {
           if (e instanceof Error && e.message === 'bc:cancelled') throw e;
         }
@@ -151,7 +210,8 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
     if (e instanceof Error && e.message === 'bc:cancelled') return { ok: false, reason: 'cancelled' };
     throw e;
   }
-  for (const object of d.linked) lines.push({ code: 'tableLinked', object });
+  lines.push(...linkLines);
+  for (const object of d.linked) if (!linked.some((l) => sameName(l.name, object))) lines.push({ code: 'tableLinked', object });
 
   await d.tick({ done: total, total, finishing: true });
   let rows: MSysRelRow[] = [];
@@ -168,6 +228,8 @@ export async function importAccess(d: { front: DatabaseSync; r: MDBReader; jet3:
   }
   for (const s of skipped) lines.push({ code: 'relationIgnored', object: s.access, reason: s.reason });
   if (missing) lines.push({ code: 'structureNotRead' });
-  lines.push(...queryLines, ...designLines, { code: designsRead ? (queriesRead ? 'macrosOnly' : 'designsOnly') : queriesRead ? 'formsOnly' : 'tablesOnly' });
-  return { ok: true, tables: read.map((t) => ({ name: t.name, remote: t.remote, rows: t.table.rowCount })), queries, forms, reports, report: { source: d.source, lines } };
+  const macrosRead = (d.macros !== undefined || !!d.modules) && (d.macros === undefined || macrosOk) && (!d.modules || modulesOk);
+  const last = finalCodes({ macrosRead, designsRead, queriesRead });
+  lines.push(...queryLines, ...designLines, ...macroLinesOut, ...last.map((code) => ({ code }) as ReportLine));
+  return { ok: true, tables: read.map((t) => ({ name: t.name, remote: t.remote, rows: t.table.rowCount })), queries, forms, reports, macros, modules, links, report: { source: d.source, lines } };
 }

@@ -308,7 +308,11 @@ describe('review: argument forms measured on real Access macro text', () => {
     expect(comment(send('0', 'T', 'PDFFormat(*.pdf)', 'a@example.com'))).toEqual(['comment']);
     expect(comment(send('3', 'R', 'ExcelWorkbook(*.xlsx)', 'a@example.com'))).toEqual(['comment']);
     expect(comment(send('-1', '', '', 'a@example.com'))).toEqual(['comment']);
-    expect(comment(send('3', 'R', '', 'a@example.com'))).toEqual(['comment']);
+    // the wizard's mail-a-report button: no format (Access asks for one), no recipient, the message shown: PDF, an empty draft
+    const bare = send('3', 'R', '', '', '', '', '', '', '-1');
+    expect(bare.def.items).toEqual([{ k: 'action', action: 'EMailDatabaseObject', args: { ObjectType: 'report', ObjectName: 'R', OutputFormat: 'pdf' } }]);
+    expect([bare.notes, validateMacro(bare.def)]).toEqual([[], []]);
+    expect(comment(send('0', 'T', '', 'a@example.com'))).toEqual(['comment']);
   });
   it('OutputTo of an Excel workbook: the measured row converts to ExportWithFormatting; the others are comments or noted', () => {
     const out = (...r: string[]) => one('OutputTo', ...r);

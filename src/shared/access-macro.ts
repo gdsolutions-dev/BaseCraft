@@ -62,10 +62,10 @@ const MAP = new Map<string, { to: string; cols: Col[] }>([
   // OutputTo (object type 0 table / 1 query, format, file, auto start, template, encoding, quality): only the Excel workbook of a table or query; quality is ignored
   ...['OutputTo', 'ExportWithFormatting'].map((n): [string, { to: string; cols: Col[] }] => [n, { to: 'ExportWithFormatting', cols: [en('ObjectType', { 0: 'table', 1: 'query' }), raw('ObjectName'),
     { to: 'OutputFormat', t: 'excel', def: '' }, { to: 'OutputFile', t: 'xlsx' }, OUTPUT_AUTO_START, drop(), drop(), drop('0', '1')] }]),
-  // SendObject (object type, name, format, to, cc, bcc, subject, text, edit message, template): only a report as a PDF. Edit Message No (Access sends
+  // SendObject (object type, name, format, to, cc, bcc, subject, text, edit message, template): only a report as a PDF; a format left empty (Access asks the user for one) is PDF, the only one here. Edit Message No (Access sends
   // with no window) is noted: BaseCraft always opens a draft; so is a template file
   ...['SendObject', 'EMailDatabaseObject'].map((n): [string, { to: string; cols: Col[] }] => [n, { to: 'EMailDatabaseObject', cols: [en('ObjectType', { 3: 'report' }), raw('ObjectName'),
-    { to: 'OutputFormat', t: 'pdf', def: '' }, txt('To'), txt('Cc'), txt('Bcc'), txt('Subject'), txt('MessageText'),
+    { to: 'OutputFormat', t: 'pdf', def: 'PDFFormat(*.pdf)' }, txt('To'), txt('Cc'), txt('Bcc'), txt('Subject'), txt('MessageText'),
     { note: 'SendObject.EditMessage', quiet: ['-1', '1', 'yes', 'Yes', 'true', 'True'] }, { note: 'SendObject.TemplateFile', quiet: [] }] }]),
   ['GoToControl', { to: 'GoToControl', cols: [txt('ControlName')] }],
   ['GoToRecord', { to: 'GoToRecord', cols: [en('ObjectType', { '-1': '', 2: 'form' }, '-1'), raw('ObjectName'),

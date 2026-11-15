@@ -61,6 +61,7 @@ test('default value, validation rule and message: designer, datasheet, other lan
     await expect(cell(page, 2, 0)).toHaveText('1');
     await page.keyboard.type('Vis');
     await closeEditor(page, 'Tab');
+    await expect(cell(page, 2, 0)).toHaveAttribute('aria-selected', 'true');   // the selection moves to Qté just after the editor closes: a key pressed before goes to Article
     await page.keyboard.press('-');
     await expect(cellEditor(page)).toBeFocused();
     await page.keyboard.type('3');

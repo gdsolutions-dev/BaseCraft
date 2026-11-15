@@ -103,9 +103,19 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await expect.poll(async () => { const now = await shot(from, to); const same = now.equals(last); last = now; return same; }).toBe(true);
     return last;
   };
+  /** `dragEdge`, repeated until the grid takes it: a drag begun before the grid has the pointer (the sheet just opened, an editor just
+   *  closed) moves nothing, and every later offset of the test is then wrong. Seen on row 0 from Montant on (the cell borders move; the
+   *  pointer stays in the header). A drag that worked is seen by the inner poll, so it is never repeated. */
+  const resize = async (edge: number, to: number) => {
+    const before = await settled(colLeft(2), colLeft(2) + 300);
+    await expect(async () => {
+      await dragEdge(edge, to);
+      await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 300)).equals(before), { timeout: 3000 }).toBe(false);
+    }).toPass({ timeout: 20_000 });
+  };
   const narrow = async () => {   // Montant (41 px: the drag's own offset), then Le
-    await dragEdge(colLeft(3) - 1, colLeft(2) + 40);
-    await dragEdge(colLeft(2) + 40 + DEFAULT_COL_PX - 1, colLeft(2) + 80);
+    await resize(colLeft(3) - 1, colLeft(2) + 40);
+    await resize(colLeft(2) + 40 + DEFAULT_COL_PX - 1, colLeft(2) + 80);
   };
   try {
     await open(page, 'Commandes');
@@ -118,17 +128,17 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await expect(page.locator('#portal textarea')).toHaveValue(/^12345678,9/);
     await page.keyboard.press('Escape');
     const montantOn = await settled(colLeft(2), colLeft(2) + 41);   // selected
-    // widened: the value again. The drag can start before the grid takes the pointer back from the closed editor (nothing moves then):
-    // dragged again until the pixels change (a drag that worked is seen within the inner poll, so it is never repeated)
-    await expect(async () => {
-      await dragEdge(colLeft(2) + 41, colLeft(2) + 150);
-      await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn), { timeout: 3000 }).toBe(false);
-    }).toPass();
+    await resize(colLeft(2) + 41, colLeft(2) + 150);   // widened: the value again
+    await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
 
     // unticked, a datasheet opened afterwards shows the value (clipped on screen): not the #### drawn above
     await page.getByTestId('ribbon-tab-file').click();
     await openDbOptions(page);
     await page.getByTestId('opt-db-truncated').uncheck();
+    // the options page saves in the background and the datasheet reads the option when it opens: wait until the file holds it (the
+    // renderer publishes it in the same turn as the save's answer, before this read's answer)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect.poll(() => page.evaluate(() => (window as any).basecraft.base.startup().then((s: { checkTruncatedNumbers: boolean }) => s.checkTruncatedNumbers))).toBe(false);
     await page.getByTestId('bs-back').click();
     await page.getByTestId('doc-tab-close-Commandes').click();
     await page.getByTestId('modal-btn-no').click();   // the widths dragged: the layout is not saved

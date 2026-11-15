@@ -270,6 +270,7 @@ test('table datasheet: row height, frozen field, totals, bold and alignment are 
     await expect(cell(page, 0, 0)).toHaveText(ville);
     await close(page, 'Clients');
     await page.getByTestId('modal-btn-yes').click();
+    await expect(page.getByTestId('doc-tab-close-Clients')).toHaveCount(0);
     await open(page, 'Clients');
     await expect(cell(page, 0, 0)).toHaveText(ville);
     await page.getByTestId('cmd-moreRecords').click();

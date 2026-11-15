@@ -264,7 +264,7 @@ export function DatasheetView({ tab, active, readOnly, dispatch, source, params,
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => { if (!readOnly) setRefused(false); }, [readOnly]); // writable again (lock taken over)
   const notUpdatable = (!!shape?.src && !shape.src.info.updatable) || !!shape?.fixed; // a multi-table (or grouped…) query, a read-only link
-  const ro = readOnly || refused || notUpdatable;
+  const ro = readOnly || tab.openArgs?.dataMode === 'readOnly' /* E6: macro read-only data mode; the layout stays savable */ || refused || notUpdatable;
   const live = useRef({ tab, active, shape, sort, filter, selection, ro, readOnly, lookups, source, params });
   live.current = { tab, active, shape, sort, filter, selection, ro, readOnly, lookups, source, params };
   /** The order and filter of every page request (set in `live` before React renders: read right after an await). */

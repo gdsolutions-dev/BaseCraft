@@ -18,9 +18,9 @@ afterEach(() => { offs.splice(0).forEach((f) => f()); tempVars.clear() })
 function fake(name: string, over: Partial<FormInstance> = {}): FormInstance {
   const f: FormInstance = {
     name, tabId: `t-${name}`,
-    value: () => str('Dupont'), setValue: vi.fn(async () => {}), setProperty: vi.fn(), property: () => num(3), activeControl: () => 'Nom',
+    value: () => str('Dupont'), setValue: vi.fn(async () => {}), setProperty: vi.fn(), property: () => num(3), activeControl: () => 'Nom', newRecord: () => false, dirty: () => false, previousControl: () => null,
     goToRecord: vi.fn(async () => {}), goToControl: vi.fn(), applyFilter: vi.fn(async () => {}), showAllRecords: vi.fn(async () => {}),
-    find: vi.fn(async () => true), requery: vi.fn(async () => {}), saveRecord: vi.fn(async () => {}), undoRecord: vi.fn(),
+    find: vi.fn(async () => true), searchForRecord: vi.fn(async () => true), requery: vi.fn(async () => {}), saveRecord: vi.fn(async () => {}), undoRecord: vi.fn(),
     deleteRecord: vi.fn(async () => {}), refreshRecord: vi.fn(async () => {}), ...over,
   }
   offs.push(registerForm(f))

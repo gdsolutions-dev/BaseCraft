@@ -20,6 +20,19 @@ describe('canonical parser', () => {
     expect(() => parseCanonical('[Forms]![F]')).toThrow(expect.objectContaining({ code: 'badMember' }));
     expect(fieldRefs(parseCanonical('[Ville] = [TempVars]![Ville]'))).toEqual(['Ville']);
   });
+  it('[Form]! and [Screen]! members: parsed, serialised, French names; [Form] alone is a field', () => {
+    expect(parseCanonical('[Form]![Dirty]')).toEqual({ k: 'member', path: ['Form', 'Dirty'] });
+    expect(parseCanonical('[Screen]![PreviousControl]![Name]')).toEqual({ k: 'member', path: ['Screen', 'PreviousControl', 'Name'] });
+    expect(serialize(parseCanonical('[screen]![PreviousControl]![Name]'))).toBe('[Screen]![PreviousControl]![Name]');
+    expect(parseCanonical('[Formulaire]![NewRecord]')).toEqual({ k: 'member', path: ['Form', 'NewRecord'] });
+    expect(parseCanonical('[Écran]![ActiveControl]![Name]')).toEqual({ k: 'member', path: ['Screen', 'ActiveControl', 'Name'] });
+    expect(parseCanonical('[Form]')).toEqual({ k: 'id', name: 'Form' });
+    expect(parseCanonical('[Screen]![ActiveControl]')).toEqual({ k: 'member', path: ['Screen', 'ActiveControl'] });
+    expect(serialize(parseCanonical('[screen]![activecontrol]'))).toBe('[Screen]![ActiveControl]');
+    expect(parseCanonical('[Écran]![ActiveControl]')).toEqual({ k: 'member', path: ['Screen', 'ActiveControl'] });
+    expect(() => parseCanonical('[Screen]![PreviousControl]')).toThrow(expect.objectContaining({ code: 'badMember' }));
+    expect(() => parseCanonical('[Form]![a]![b]')).toThrow(expect.objectContaining({ code: 'badMember' }));
+  });
   it.each([
     ['1+2*3', '1 + 2 * 3'], ['-2^2', '-2 ^ 2'], ['[A] & "x" & [B]', '[A] & "x" & [B]'],
     ['a Mod 3 = 0 And Not [b]', '[a] Mod 3 = 0 And Not [b]'], ['"Il dit ""oui"""', '"Il dit ""oui"""'],
@@ -404,4 +417,10 @@ describe('`!` outside a query (E3: unchanged)', () => {
   it('[a]![b] in a plain expression', () => {
     expect(() => parseCanonical('[a]![b]')).toThrow(expect.objectContaining({ code: 'badMember' }));
   });
+});
+
+it('Form and Screen stay table names in qualified SQL', () => {
+  for (const [src, table, name] of [['[Form]![X]', 'Form', 'X'], ['[Formulaire]![Nom]', 'Formulaire', 'Nom'], ['Screen!X', 'Screen', 'X'], ['[Écran]![X]', 'Écran', 'X']] as const)
+    expect(parseCanonical(src, Q)).toEqual({ k: 'id', name, table });
+  expect(parseCanonical('[Form]![Dirty]')).toEqual({ k: 'member', path: ['Form', 'Dirty'] });
 });

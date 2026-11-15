@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { BaseFileError } from './db/file-format';
 import {
-  basePath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
+  basePath, excelOutputPath, bcError, resourceNamesArg, relationsListOptions, cells, definition, description, exportSource, fieldFilters, importPath, importPlan, linkPath, splitPath, accessPassword, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, unlockPath, linkKindOrUndefined, nameList, importSpec, importSpecOrNull, MAX_DEFINITION_CHARS, MAX_IMPORT_BYTES, MAX_PAGE_ROWS,
   lookupName, nameArg, MAX_RULE_CHARS, MAX_SORT_KEYS, objectKind, objectKindOrAll, pageRequest, relation, relationsLayout, columnWidths, saveRequest, sourcePageRequest, sourceRef, str,
   strOrNull, sheetLayoutArg, uint, rowRef, rowRefs, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, resourceNameArg, pictureDataUrlArg, iconBytes, sourceSaveRequest, autoLookupRequest, settingValue, expectedValues, MAX_EXPECTED_BYTES, clipboardText, hyperlinkUrl, nameChanges, propertyTargetsArg, chartDataRequest, reportBody, bareFileName, accessStructure, exportKeepDir, exportQueries, exportDesigns, exportMacros, exportRelink,
 } from './ipc-validate';
@@ -668,6 +668,14 @@ describe('Access import report (E1)', () => {
     expect(reportBody('x'.repeat(5_000_000))).toHaveLength(5_000_000);
     expect(() => reportBody('x'.repeat(5_000_001))).toThrow('bc:invalidArgument');
     expect(() => reportBody(1)).toThrow('bc:invalidArgument');
+  });
+  it('excelOutputPath: an absolute path ending in .xlsx, any case', () => {
+    const dir = process.platform === 'win32' ? 'C:/out/' : '/out/';
+    expect(excelOutputPath(`${dir}a.XLSX`)).toBe(`${dir}a.XLSX`);
+    expect(excelOutputPath(`${dir}Ventes 2026.xlsx`)).toBeTruthy();
+    for (const v of ['a.xlsx', 'out/a.xlsx', `${dir}a.txt`, `${dir}a.xlsx.txt`, `${dir}.xlsx`, dir, '', `${dir}a .xlsx`, `${dir}${'x'.repeat(1100)}.xlsx`, undefined, 3, ['x.xlsx']]) {
+      expect(() => excelOutputPath(v), String(v)).toThrow('bc:invalidArgument');
+    }
   });
   it('bareFileName: no folder', () => {
     expect(bareFileName('Ventes - rapport.txt')).toBe('Ventes - rapport.txt');

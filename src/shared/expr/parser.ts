@@ -299,10 +299,14 @@ class Parser {
       path.push(n.v);
     }
     // in SQL, `Table!Field` is `Table.Field` (Access writes it so); any other chain is a member or badMember
-    if (!root && this.opts.qualified && path.length === 2) return { k: 'id', name: path[1]!, table: t.v };
-    if (!root || path.length !== MEMBER_ROOTS[root].arity) {
+    // Form and Screen are macro-only roots: in SQL they stay table names
+    const macroOnly = root === 'Form' || root === 'Screen';
+    if ((!root || macroOnly) && this.opts.qualified && path.length === 2) return { k: 'id', name: path[1]!, table: t.v };
+    if (!root || (macroOnly && this.opts.qualified)
+      || (path.length !== MEMBER_ROOTS[root].arity && !(root === 'Screen' && path.length === 2 && path[1]!.toLowerCase() === 'activecontrol'))) {   // [Screen]![ActiveControl]: the control's value; PreviousControl needs its ![Name]
       throw new ExprSyntaxError('badMember', { start: t.start, end: this.toks[this.p - 1]!.end });
     }
+    if (root === 'Screen' && path.length === 2) path[1] = 'ActiveControl';   // the spelling typed is not kept
     return { k: 'member', path };
   }
 

@@ -211,9 +211,11 @@ const api: BasecraftApi = {
     exportPdf: (r) => ipcRenderer.invoke(CH.reportsExportPdf, r),
     print: (r) => ipcRenderer.invoke(CH.reportsPrint, r),
   },
+  forms: { printRecord: () => ipcRenderer.invoke(CH.formsPrintRecord) },
   exchange: {
     exportText: (src, spec, defaultName) => ipcRenderer.invoke(CH.exchangeExportText, src, spec, defaultName),
     exportExcel: (src, defaultName) => ipcRenderer.invoke(CH.exchangeExportExcel, src, defaultName),
+    exportExcelTo: (src, path) => ipcRenderer.invoke(CH.exchangeExportExcelTo, src, path),
     exportMarkup: (src, format, defaultName) => ipcRenderer.invoke(CH.exchangeExportMarkup, src, format, defaultName),
     savedList: () => ipcRenderer.invoke(CH.exchangeSavedList),
     saveSaved: (name, e) => ipcRenderer.invoke(CH.exchangeSavedSave, name, e),

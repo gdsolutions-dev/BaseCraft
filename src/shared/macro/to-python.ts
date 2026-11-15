@@ -70,8 +70,8 @@ function reference(e: Expr, c: Ctx): string | null {
   return null
 }
 
-const UNBOUND = new Set(['LocalVars', 'MacroError'].map(foldName))
-/** True when the tree refers to LocalVars or MacroError, which the engine binds but the bridge and docmd do not. */
+const UNBOUND = new Set(['LocalVars', 'MacroError', 'Form', 'Screen'].map(foldName))
+/** True when the tree refers to LocalVars, MacroError, Form or Screen, which the engine binds but the bridge and docmd do not. */
 function refersToUnbound(node: unknown): boolean {
   if (Array.isArray(node)) return node.some(refersToUnbound)
   if (typeof node !== 'object' || node === null) return false
@@ -88,7 +88,7 @@ function bridged(fn: string, e: Expr): string {
 function whereArg(raw: string): string {
   let e: Expr | undefined
   try { e = parseCanonical(raw, { functions: withUserFunctions() }) } catch (x) { if (!(x instanceof ExprSyntaxError)) throw x }
-  if (e ? refersToUnbound(e) : /\[\s*(LocalVars|MacroError)\s*\]\s*!/i.test(raw)) throw new Unconvertible()
+  if (e ? refersToUnbound(e) : /\[\s*(LocalVars|MacroError|Form|Screen)\s*\]\s*!/i.test(raw)) throw new Unconvertible()
   return lit(raw)
 }
 

@@ -1220,6 +1220,7 @@
       "Sqr": "数値の平方根を返します。",
       "Val": "テキストの先頭の数字を読み取り、対応する数値を返します。",
       "CStr": "値をテキストに変換します。",
+      "Str": "数値をテキストに変換します。0 または正の数の場合は先頭に空白が付きます。",
       "CInt": "値を整数に変換します。",
       "CLng": "値を長整数に変換します。",
       "CDbl": "値を浮動小数点数に変換します。",
@@ -1353,6 +1354,9 @@
       ],
       "CStr": [
         "式"
+      ],
+      "Str": [
+        "数値"
       ],
       "CInt": [
         "式"
@@ -2750,12 +2754,15 @@
       "ApplyFilter": "フィルターの適用",
       "CancelEvent": "イベントのキャンセル",
       "DeleteRecord": "レコードの削除",
+      "RunMenuCommand": "メニューコマンドの実行",
+      "ExportWithFormatting": "書式付きエクスポート",
       "FindRecord": "レコードの検索",
       "GoToControl": "コントロールの移動",
       "GoToRecord": "レコードの移動",
       "RefreshRecord": "レコードの更新",
       "Requery": "再クエリ",
       "SaveRecord": "レコードの保存",
+      "SearchForRecord": "レコード条件検索",
       "SetProperty": "プロパティの設定",
       "SetValue": "値の代入",
       "ShowAllRecords": "すべてのレコードを表示",
@@ -2795,6 +2802,9 @@
       "OnlyCurrentField": "現在のフィールドのみ検索",
       "FindFirst": "最初から検索",
       "ControlName": "コントロール名",
+      "Command": "コマンド",
+      "OutputFormat": "出力形式",
+      "OutputFile": "出力ファイル",
       "Record": "レコード",
       "Offset": "オフセット",
       "Property": "プロパティ",
@@ -2843,6 +2853,14 @@
       "WarningsOn": {
         "yes": "はい",
         "no": "いいえ"
+      },
+      "OutputFormat": { "excel": "Excel ブック (*.xlsx)" },
+      "Command": {
+        "selectRecord": "レコードを選択",
+        "copy": "コピー",
+        "paste": "貼り付け",
+        "print": "印刷",
+        "printSelection": "選択範囲を印刷"
       },
       "Record": {
         "previous": "前へ",
@@ -2942,7 +2960,11 @@
       "badReference": "「{{name}}」は開いているフォームのコントロールではありません。",
       "badValue": "値「{{name}}」はこのプロパティに適していません。",
       "findWhatTooLong": "検索するテキストが 255 文字を超えています。",
-      "saveDuringEvent": "このイベント (更新前、挿入前) の実行中は、レコードを保存または変更できません。"
+      "saveDuringEvent": "このイベント (更新前、挿入前) の実行中は、レコードを保存または変更できません。",
+      "commandUnavailable": "このコマンドまたはアクションは現在使用できません。",
+      "folderMissing": "出力ファイルのフォルダーが存在しません。",
+      "writeFailed": "出力ファイルを書き込めませんでした。別のプログラムで開かれている可能性があります。",
+      "readOnly": "フォームまたはレコードは読み取り専用です。"
     },
     "findRecord": {
       "notFound": "検索対象が見つかりませんでした。"

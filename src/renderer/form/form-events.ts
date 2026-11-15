@@ -21,7 +21,7 @@ const NO_INFO: SourceInfo = { fields: [], updatable: false, parameters: [] };
 const failed = (e: unknown): false => { console.error(e); return false; };
 
 /** What the running view does for a macro's form actions (the registered instance passes them on). */
-export type FormOps = Omit<FormInstance, 'name' | 'tabId' | 'value' | 'setProperty' | 'property' | 'activeControl'>;
+export type FormOps = Omit<FormInstance, 'name' | 'tabId' | 'value' | 'setProperty' | 'property' | 'activeControl' | 'previousControl' | 'newRecord' | 'dirty'>;
 /** Runtime properties (R9), by control name: a ControlDef property (`Visible`…) or its geometry (`left`…), as stored. */
 export type Overrides = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 const PROPS: Partial<Record<SettableProperty, string>> = { enabled: 'Enabled', visible: 'Visible', locked: 'Locked', foreColor: 'ForeColor', backColor: 'BackColor', caption: 'Caption' };
@@ -145,6 +145,8 @@ export class FormEvents {
   }
   /** The control holding the focus (the running view keeps it here). */
   focused: string | null = null;
+  /** The control that had the focus before `focused` (E6: [Screen]![PreviousControl]); kept while the focus is nowhere. */
+  previous: string | null = null;
   /** A runtime property as the Python objects read it: the override, else the stored property, else the geometry; throws bc:notFound||<name>. */
   property(control: string, p: SettableProperty): Value {
     const c = this.all.find((x) => sameName(x.name, control));

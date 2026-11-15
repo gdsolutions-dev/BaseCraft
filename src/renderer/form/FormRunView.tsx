@@ -12,7 +12,7 @@ import { effectiveProp } from '../../shared/design/properties';
 import { DocThemeProvider, useAppMode } from '../design/theme-context';
 import { design } from '../design/entry';   // null in BaseCraft Runtime: the layout question is a design one (saving goes through a design channel)
 import { toDisplay, type DisplayContext } from '../../shared/expr/localize';
-import { sameName, type FieldDef } from '../../shared/field-types';
+import { foldName, sameName, type FieldDef } from '../../shared/field-types';
 import { localeInfo } from '../../shared/locale-format';
 import { passThroughOf } from '../../shared/query/definition';
 import type { RecordSourceRef, SourceField, SourceInfo } from '../../shared/record-source';
@@ -42,7 +42,7 @@ import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
 import { fromStored, toStored } from '../../shared/expr/evaluate';
 import { infoOf, toText } from '../../shared/expr/library';
 import type { EventName } from '../../shared/design/events';
-import { buildCalcEnv, checkControlRule, controlDefaults, FAILED, Latest, unboundDefaults, type CalcResult } from './calc';
+import { buildCalcEnv, checkControlRule, controlDefaults, FAILED, Latest, parseExpr, unboundDefaults, type CalcResult } from './calc';
 import { boundField, controlTexts, isRichBox, isUnbound } from './control-values';
 import { richState, runRich, type RichState } from './rich-edit';
 import { Swatches } from '../datasheet/SheetColors';
@@ -54,13 +54,17 @@ import { callUserFunction } from '../python/expr-call';
 import { onUserFunctionsChanged } from '../python/user-function-names';
 import { formCancelled, formReady, memberValue, registerForm, type FindOptions, type FormInstance } from './form-instances';
 import './form-nav-menu';
+import { rowTest, searchStart } from './search-record';
+import { copiedRecord, copyRecord, pasteTargets } from './record-clipboard';
 import { FormRecords, type FormDataApi, type RecordError, type RecordEvents, type RecordSnapshot } from './record-controller';
 import { listOptions, loadRowSource, outOfList, rowOfText } from './row-source';
 import { controlEnabled, errorsByControl, layoutLabels, prop, tabSequence } from './run-model';
 import { SingleFormView } from './SingleFormView';
 import { ContinuousFormView } from './ContinuousFormView';
 import { FormDatasheet } from './FormDatasheet';
+import { PRINT_ALL, printAllRows, refuseDatasheet, withPrintMarks } from './print-record';
 import { allowsLayout, datasheetColumns, firstRun, initialView, openingMode, runViewFor, withColumnWidths } from './views';
+import { nextTrail, type Trail } from './focus-trail';
 import './form.css';
 
 const dataApi: FormDataApi = {
@@ -106,6 +110,10 @@ function instanceOf(name: string, tabId: string, hub: () => FormEvents | null): 
     value: (c) => { const h = hub(); if (!h) throw new ExprRuntimeError('unknownField', c); return h.value(c); },
     property: (c, p) => { const h = hub(); if (!h) throw new Error(`bc:notFound||${c}`); return p === 'value' ? h.value(c) : h.property(c, p); },
     activeControl: () => hub()?.focused ?? null,
+    previousControl: () => hub()?.previous ?? null,
+    selectRecord: () => ops().selectRecord(), copyRecord: () => ops().copyRecord(), pasteRecord: async () => ops().pasteRecord(), printRecord: async () => ops().printRecord(), printAll: async () => ops().printAll(),
+    newRecord: () => hub()?.records?.snapshot.isNew ?? false,
+    dirty: () => hub()?.records?.snapshot.dirty ?? false,   // each keystroke of a bound control is in the record's pending values
     setProperty: (c, p, v) => {
       const h = hub();
       if (!h) throw new Error('bc:actionNotRun');
@@ -118,6 +126,7 @@ function instanceOf(name: string, tabId: string, hub: () => FormEvents | null): 
     },
     setValue: async (c, v) => ops().setValue(c, v), goToControl: async (c) => ops().goToControl(c),
     applyFilter: async (w) => ops().applyFilter(w), showAllRecords: async () => ops().showAllRecords(), find: async (o) => ops().find(o),
+    searchForRecord: async (w, r) => ops().searchForRecord(w, r),
     requery: async (c) => ops().requery(c), saveRecord: async () => ops().saveRecord(), undoRecord: () => ops().undoRecord(),
     deleteRecord: async (w) => ops().deleteRecord(w), refreshRecord: async () => ops().refreshRecord(),
   };
@@ -292,6 +301,9 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const [viewId] = useState(() => `frun${++nextViewId}`);
   const [focused, setFocused] = useState<string | null>(null);
   hub.focused = focused;   // D2: Python's screen.active_control
+  const trail = useRef<Trail>({ now: null, prev: null });
+  trail.current = nextTrail(trail.current, focused);
+  hub.previous = trail.current.prev;
   const lastFocused = useRef<string | null>(null);   // the control that has (or last had) the focus: a subform's when it is in it
   const lastOwn = useRef<string | null>(null);       // the last of this form's own controls focused
   const [calc, setCalc] = useState<{ key: string; results: Record<string, CalcResult> }>({ key: '', results: {} });
@@ -317,6 +329,11 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const away = useRef<string | null>(null);            // that control, when the focus left the form from it (no Exit then)
   const leaving = useRef<Promise<boolean> | null>(null);   // the last control left: its events (false: it kept the focus)
   const updating = useRef(new Set<string>());          // controls whose update events are running (a save asked there raises them not again)
+  const selection = useRef<string | null>(null);        // E6b: the key of the record a macro selected (RunMenuCommand); it ends when the current record changes
+  const selectionSeen = useRef<string | null>(null);   // the record key last rendered: another one drops the selection
+  const [, setSelectedTick] = useState(0);
+  const [printRows, setPrintRows] = useState<number[] | null>(null);   // E6c: the records the print-only block renders while `print` runs
+  const printingAll = useRef(false);
   const inBefore = useRef(0);                          // a control's Before Update running: a save, a move… is refused (2115)
 
   const all = useMemo(() => doc.sections.flatMap((s) => flattenControls(s.controls)), [doc]);
@@ -1179,6 +1196,18 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       if (i !== here) await hub.goToRecord('goTo', i + 1);   // saved first; found in the current record: nothing saved (Access)
       return true;
     },
+    searchForRecord: async (where, record) => {
+      notInBefore();
+      must(await settle(), 'actionCancelled');
+      const s = records.snapshot, info = s.info;
+      if (!info) return false;
+      const test = rowTest(where, info.fields, base);   // the rows searched are the stored ones: an unsaved change of the current record is not seen (as find)
+      const here = s.isNew ? s.total : s.index;
+      const i = await records.find(test, searchStart(record, here, s.total));
+      if (i === null) return false;
+      if (i !== here) await hub.goToRecord('goTo', i + 1);   // saved first; the current record: nothing saved
+      return true;
+    },
     requery: async (n) => {
       if (!n) { notInBefore(); must(await refresh(true), 'actionCancelled'); return; }
       const c = named(n);
@@ -1190,6 +1219,54 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
     saveRecord: async () => { notInBefore(); must(await attempt(() => records.save()), 'saveRefused'); },
     undoRecord: () => { records.undoRecord(); clearTyped(); typedIn.current.clear(); setCalcTick((k) => k + 1); },
     // not deleted (On Delete cancelled, a record that cannot be deleted, refused): Access's 2501
+    selectRecord: () => { selection.current = selectionSeen.current = recKey(); setSelectedTick((k) => k + 1); },
+    copyRecord: () => {
+      const info = records.snapshot.info;
+      if (selection.current !== recKey() || !info) throw new Error('bc:commandUnavailable');
+      const values = new Map<string, Value>();
+      for (const c of all) { const f = boundField(c, info); if (f && !values.has(foldName(f.name))) values.set(foldName(f.name), hub.value(c.name)); }
+      copyRecord(values);
+    },
+    // each copied field a control of this form is bound to and the user could type in, set as typed (Before Insert fires, the update events do not)
+    pasteRecord: async () => {
+      const copied = copiedRecord();
+      if (selection.current !== recKey() || !copied) throw new Error('bc:commandUnavailable');
+      notInBefore();
+      const s = records.snapshot, info = s.info;
+      if (ro || !info || !s.editable) throw new Error('bc:readOnly');
+      const loc = infoOf(region);
+      let first = true;
+      for (const { f, v } of pasteTargets(all, s, info, copied)) {
+        if (!records.edit(f.name, toStored(f, v, loc))) { if (!first) records.undoRecord(); throw new Error('bc:readOnly'); }   // refused: no half-pasted record
+        first = false;
+      }
+      setCalcTick((k) => k + 1);
+    },
+    // the print CSS (form.css) shows only the marked form; the marks go in a finally, whatever happens (a second print while one runs is refused)
+    // Datasheet view: refused (Access prints the datasheet selection; deliberate deviation)
+    printRecord: async () => {
+      refuseDatasheet(view);
+      await withPrintMarks(root.current, () => api.forms.printRecord());
+    },
+    // every record: a print-only block (PrintAllRows) renders the detail once per record, its rows read first; it goes with the marks, in the same finally
+    printAll: async () => {
+      refuseDatasheet(view);
+      if (!records.snapshot.info || doc.recordSource === null) return withPrintMarks(root.current, () => api.forms.printRecord());   // unbound: the form as it is
+      if (printingAll.current) throw new Error('bc:commandUnavailable');
+      printingAll.current = true;
+      try {
+        await records.find(() => true, { from: -1, dir: 'down' });   // the count, read with the first page (nothing is rendered yet)
+        const rows = printAllRows(records.snapshot.total);   // the ceiling, before the other pages are read
+        await records.find(() => false, { from: -1, dir: 'down' });   // reads every page
+        if (rows.some((i) => !records.row(i))) throw new Error('bc:actionNotRun');   // a row missing from the cache: never blank records on paper
+        flushSync(() => setPrintRows(rows));
+        await new Promise<void>((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok())));   // laid out (images, charts) before the print
+        await withPrintMarks(root.current, () => api.forms.printRecord(), document.documentElement, PRINT_ALL);
+      } finally {
+        printingAll.current = false;
+        setPrintRows(null);
+      }
+    },
     deleteRecord: async (warnings) => { notInBefore(); must(await deleteRecord(warnings), 'actionCancelled'); },
     refreshRecord: async () => { notInBefore(); await records.reload(); setChartTick((k) => k + 1); },
   };
@@ -1409,7 +1486,8 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
       </div>
     );
   }
-  const x: RunCtx = { snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, labels, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, givenBack: (n) => givenBack.current === n, pages, setPage, lists, typed: typedTexts, setTyped, sub, chart: { source: doc.recordSource, params: records.sourceParams, version: snap.saves + chartTick },
+  if (selectionSeen.current !== shownKey) { selectionSeen.current = shownKey; selection.current = null; }
+  const x: RunCtx = { selected: selection.current === shownKey, snap, info, results, defaults: shownDefaults, display, t, focused, errors, stops, labels, id: (n) => `${viewId}-${n}`, edit, unbound, editUnbound, events, givenBack: (n) => givenBack.current === n, pages, setPage, lists, typed: typedTexts, setTyped, sub, chart: { source: doc.recordSource, params: records.sourceParams, version: snap.saves + chartTick },
     raise: raiseCtl, input, update };
   /** Another record, made current; then the focus on `n` there (the control clicked: already focused), else on the last control. */
   const goRow = (i: number, n?: string) => void userAttempt(() => records.goTo(i)).then((ok) => {
@@ -1514,8 +1592,8 @@ function FormRunnerBody({ tab, active, readOnly, doc, records, hub, region, name
   const nav = { messages, filter: filterState, onGo, onNew: () => void newRecord(), onToggleFilter: toggleFilter } as const;
   return (
     <>
-      {view === 'single' && <SingleFormView doc={shown} x={x} root={root} {...nav} />}
-      {view === 'continuous' && <ContinuousFormView doc={shown} x={x} rowCtx={rowCtx} root={root} onRow={(i) => goRow(i)} {...nav} />}
+      {view === 'single' && <SingleFormView doc={shown} x={x} root={root} printRows={printRows} rowCtx={rowCtx} {...nav} />}
+      {view === 'continuous' && <ContinuousFormView doc={shown} x={x} rowCtx={rowCtx} printRows={printRows} root={root} onRow={(i) => goRow(i)} {...nav} />}
       {view === 'datasheet' && (
         <FormDatasheet columns={columns} byName={byName} x={x} rowCtx={rowCtx} root={root} focusHook={focusHook} {...nav}
           ro={ro} locale={region} lang={lang} onRow={(i) => userAttempt(() => records.goTo(i))} onFocusControl={onFocusOf} onHeaderMenu={(control, at) => void filterMenu({ control, ...at })}

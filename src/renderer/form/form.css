@@ -49,6 +49,7 @@
 .frun-detail { display: flex; align-items: flex-start; }
 .frun-selector { flex: none; width: 18px; display: flex; align-items: flex-start; justify-content: center; padding-top: 4px; box-sizing: border-box;
   background: var(--bc-surface-2); border-right: 1px solid var(--bc-border); color: var(--bc-text-muted); }
+.frun-selector[data-selected="true"] { background: var(--bc-text-muted); color: var(--bc-surface-2); }   /* the record a macro selected */
 .frun-sel .frun-fixed .frun-section { margin-left: 18px; }   /* over the record selectors only */
 .frun-section { position: relative; flex: none; overflow: hidden; }
 .frun-section input, .frun-section textarea, .frun-section button { font: inherit; margin: 0; }
@@ -115,6 +116,7 @@ textarea.frun-text { --bc-iy: 2px; padding: 2px 4px; resize: none; }
   background: color-mix(in srgb, var(--bc-warning) 12%, var(--bc-surface)); color: var(--bc-text); border: 1px solid var(--bc-warning); }
 /* Continuous Forms: the rows placed in absolute (only the visible ones are in the DOM) */
 .frun-rows { position: relative; }
+.frun-printall { display: none; }   /* E6c: the print-only block of `print`: never on screen */
 .frun-row { position: absolute; left: 0; }
 /* the form's Datasheet view: the table datasheet's grid and error bar */
 .frun-sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -132,3 +134,34 @@ textarea.frun-text { --bc-iy: 2px; padding: 2px 4px; resize: none; }
 .frun-att-bar { display: flex; align-items: center; justify-content: space-between; font-size: 11px; padding: 0 2px; }
 .frun-att-nav { border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; display: inline-flex; }
 .frun-att-nav:disabled { opacity: .35; cursor: default; }
+
+/* E6b: print the current record (RunMenuCommand printSelection; `print` marks it "all", below). Active only while the renderer has marked the page
+   (html.bc-print-record) and the form (data-print-record): everything else is not printed, the form's ancestors give it
+   the page, and of the form the header, the current record's detail and the footer remain, from the top-left corner. */
+@media print {
+  /* the paper is white: the light palette (theme.css) whatever the theme, against the dark tokens and an inline user theme */
+  html.bc-print-record:root { color-scheme: light !important; --bc-bg: #f2f3f5 !important; --bc-surface: #ffffff !important; --bc-surface-2: #f7f8fa !important;
+    --bc-text: #1b1f27 !important; --bc-text-muted: #5f6775 !important; --bc-border: #e1e4e9 !important; --bc-accent: #3e63dd !important;
+    --bc-accent-contrast: #ffffff !important; --bc-danger: #c8261a !important; --bc-warning: #b45309 !important; }
+  html.bc-print-record body *:not(:has([data-print-record])):not([data-print-record]):not([data-print-record] *) { display: none !important; }
+  html.bc-print-record, html.bc-print-record body, html.bc-print-record :has([data-print-record]) {
+    display: block !important; position: static !important; overflow: visible !important; width: auto !important; height: auto !important;
+    min-height: 0 !important; max-height: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important;
+    transform: none !important; contain: none !important; filter: none !important; box-shadow: none !important; background: none !important;
+  }
+  html.bc-print-record [data-print-record] { background: none !important; display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html.bc-print-record [data-print-record] .frun-body { display: block !important; overflow: visible !important; height: auto !important; flex: none !important; }
+  html.bc-print-record [data-print-record] .frun-fixed { overflow: visible !important; }
+  html.bc-print-record [data-print-record] .frun-rows { position: static !important; height: auto !important; }
+  html.bc-print-record [data-print-record] .frun-row { position: static !important; }
+  html.bc-print-record [data-print-record] [data-row-other]:not(.frun-print-row),
+  html.bc-print-record [data-print-record] .frun-selector,
+  html.bc-print-record [data-print-record] .frun-message,
+  html.bc-print-record [data-print-record] .recnav { display: none !important; }
+  html.bc-print-record [data-print-record].frun-sel .frun-fixed .frun-section { margin-left: 0 !important; }
+  /* E6c: `print` (data-print-record="all"): the print-only block, one detail per record, replaces the body's detail; a record is not cut between two pages */
+  html.bc-print-record [data-print-record="all"] .frun-body { display: none !important; }
+  html.bc-print-record [data-print-record="all"] .frun-printall { display: block !important; }
+  html.bc-print-record [data-print-record="all"] .frun-print-row { display: block !important; break-inside: avoid; }
+}

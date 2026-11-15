@@ -1,7 +1,9 @@
 // Vérification des arguments venus du rendu (entrée non fiable) et traduction des erreurs en codes `bc:`.
 // Module pur, sans Electron : testé sous Node.
 import { statSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, posix, win32 } from 'node:path';
+import { isLocalAbsolute } from './trust';
+import type { ContentState } from '../shared/api';
 import {
   MAX_CRITERIA_CHARS, MAX_FILTERS, MAX_PRINT_HTML_CHARS, type FieldFilter, type NameChange, type ObjectKind, type PropertyItem, type PageRequest, type PrintRequest, type RowRef, type RecordSourceRef, type Relation, type RelationsLayout, type SaveTableRequest,
   type SourcePageRequest, type SourceSaveRequest, type QueryRef, type RunActionOptions, SETTING_KEYS, type AppSettings, type SettingKey, type LinkFileInfo,
@@ -537,6 +539,27 @@ export function exportSource(v: unknown): ExportSource {
   if (!isObj(v)) bad();
   const { sort, filter, params, where } = sourcePageRequest({ offset: 0, limit: 0, sort: v.sort, filter: v.filter, params: v.params, where: v.where });
   return { ref: sourceRef(v.ref), ...(params ? { params } : {}), ...(sort ? { sort } : {}), ...(filter ? { filter } : {}), ...(where !== undefined ? { where } : {}) };
+}
+/** E6b: the path an Excel export is written to with no dialog (ExportWithFormatting): a string, absolute, ending in .xlsx (any case). The folder's
+ *  existence and "not the open base" are the handler's (they need the disk and the open base). */
+export function excelOutputPath(v: unknown): string {
+  if (typeof v !== 'string' || v.length > 1024 || v.includes('\0') || !isAbsolute(v) || !/[^\\/]\.xlsx$/i.test(v)) bad();
+  return v;
+}
+/** E6b (macro ExportWithFormatting), the main-side guard rails on the path written, in this order: content enabled; a local absolute path (no device
+ *  path), at most 1024 characters, ending in .xlsx; on Windows a file name with no `:` (stream), no device name (con, nul, com1...), no trailing dot or
+ *  space; a network path is allowed (the content being enabled is the owner's decision); not a protected file (the open base). Returns the
+ *  normalised path. The folder's existence is the caller's (it needs the disk). */
+export function checkExcelTarget(path: string, o: { content: ContentState | undefined; protectedPaths: (string | undefined)[]; platform: NodeJS.Platform }): string {
+  if (o.content !== 'enabled') throw new Error('bc:contentDisabled');
+  const win = o.platform === 'win32', pp = win ? win32 : posix;
+  if (typeof path !== 'string' || path.length > 1024 || !isLocalAbsolute(path, o.platform) || (win && /^[\\/](?![\\/])/.test(path)) || !/[^\\/]\.xlsx$/i.test(path)) throw new Error('bc:invalidArgument');
+  const name = pp.basename(path);
+  if (win && (name.includes(':') || /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)$/i.test(name.split('.')[0].trim()) || /[. ]$/.test(name))) throw new Error('bc:invalidArgument');
+  const out = pp.normalize(path), key = (p: string) => (win || o.platform === 'darwin' ? pp.resolve(p).toLowerCase() : pp.resolve(p));
+  if (win && /^[\\/](?![\\/])/.test(out)) throw new Error('bc:invalidArgument');   // three backslashes normalise to a root-relative path
+  if (o.protectedPaths.some((p) => p && key(p) === key(out))) throw new Error('bc:invalidArgument');
+  return out;
 }
 export const exportSpec = (v: unknown): ExportTextSpec => validExportSpec(v) ?? bad();
 export const markupFormat = (v: unknown): 'xml' | 'html' => (v === 'xml' || v === 'html' ? v : bad());

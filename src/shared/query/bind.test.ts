@@ -456,6 +456,11 @@ it('a form reference in a criterion is a typed parameter', () => {
     .toEqual(['[Forms]![fclients]![Nom]', '[TempVars]![v]', '[Reports]![E]![C]']);
   expect(printSql(parseSql('SELECT * FROM Clients WHERE Nom = [Formulaires]![F]![C];'))).toContain('WHERE [Nom] = [Forms]![F]![C]');
 });
+it('a table named Form or Screen keeps its bang-qualified fields', () => {
+  const c: QueryCatalog = { ...cat, table: (n) => (n === 'Form' ? t('Form', [f('X', 'shortText')]) : cat.table(n)) };
+  const q = bindQuery(parseSql('SELECT [Form]![X] FROM [Form] WHERE Form!X = "a";'), c);
+  expect(q.params).toEqual([]);
+});
 it('LocalVars in a query is refused', () => {
   expect(() => b('SELECT * FROM Clients WHERE Nom = [LocalVars]![x];')).toThrow(expect.objectContaining({ code: 'memberNotAllowed' }));
   expect(() => b('SELECT [MacroError]![Number] FROM Clients;')).toThrow(expect.objectContaining({ code: 'memberNotAllowed', detail: '[MacroError]![Number]' }));

@@ -9,6 +9,7 @@ import { NavigationBar } from '../datasheet/NavigationBar';
 import { twipsToPx } from '../designer/units';
 import { type RunCtx, readOnlyNote } from './controls/run-ctx';
 import { FormSection } from './FormSection';
+import { PrintAllRows } from './PrintAllRows';
 import { useAnchored } from './use-anchored';
 
 export interface SingleFormProps {
@@ -16,9 +17,11 @@ export interface SingleFormProps {
   messages: string[];                     // errors on fields no control shows (form-message)
   filter: 'none' | 'on' | 'off';
   onGo(row: number): void; onNew(): void; onToggleFilter(): void;
+  printRows?: number[] | null;            // E6c: the records the print-only block renders while `print` runs
+  rowCtx?(i: number): RunCtx;             // another record's context (the print-only block)
 }
 
-export function SingleFormView({ doc: design, x, root, messages, filter, onGo, onNew, onToggleFilter }: SingleFormProps) {
+export function SingleFormView({ doc: design, x, root, messages, filter, onGo, onNew, onToggleFilter, printRows, rowCtx }: SingleFormProps) {
   const { t } = useTranslation();
   const body = useRef<HTMLDivElement>(null);
   const bound = design.recordSource !== null;   // an unbound form has no records: no selector, no navigation bar
@@ -35,7 +38,7 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
         {detail && (
           <div className="frun-detail">
             {selectors && (
-              <div className="frun-selector" data-testid="form-selector" style={{ height: twipsToPx(detail.height) }}>
+              <div className="frun-selector" data-testid="form-selector" data-selected={x.selected ? "true" : undefined} style={{ height: twipsToPx(detail.height) }}>
                 {snap.dirty
                   ? <span data-testid="form-dirty" title={t('form.dirty')}><Pencil className="ic ic-sm" aria-hidden /><span className="sr-only">{t('form.dirty')}</span></span>
                   : <ChevronRight className="ic ic-sm" aria-hidden />}
@@ -45,6 +48,7 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
           </div>
         )}
       </div>
+      {rowCtx && <PrintAllRows doc={doc} detail={detail} rows={printRows} x={x} rowCtx={rowCtx} width={width} />}
       {footer && <div className="frun-fixed"><FormSection doc={doc} section={footer} x={x} width={width} /></div>}
       {messages.length > 0 && (
         <div className="frun-message" role="alert" aria-label={t('form.message')} data-testid="form-message">

@@ -36,6 +36,9 @@ export interface MacroHost {
   step?(s: StepInfo): Promise<'step' | 'continue' | 'stopAll'>;
   locale: string; lang: 'fr' | 'en'; now(): Date;
   objectMember?(path: string[]): Value | Promise<Value>;   // [Forms]! / [Reports]! (absent: unknownField)
+  /** [MacroError]![Description] of an action's own refusal (`bc:<code>`, no parameter): its message in the user's language (absent or undefined: the detail). */
+  describe?(f: MacroFailure): string | undefined;
+  formMember?(path: string[], event?: EventContext): Value | Promise<Value>;   // [Form]! / [Screen]!: the form the run is for (absent: unknownField)
   callUser?(name: string, args: Value[]): Promise<Value>;   // D3: a Python function called from an expression (absent: badArgument)
   runCode?(name: string, args: Value[], event?: EventContext): Promise<void>;   // D2: calls a Python function (absent: RunCode is unknownAction)
   stopAll?(): void;                                 // StopAllMacros ends this run: the host ends the others too
@@ -216,12 +219,13 @@ function member(run: Run, frame: Frame, path: string[]): Value | Promise<Value> 
     case 'MacroError': {
       const e = run.error;
       if (sameName(key, 'Number')) return num(e?.number ?? 0);
-      if (sameName(key, 'Description')) return str(e ? e.detail ?? e.code : '');
+      if (sameName(key, 'Description')) return str(e ? run.host.describe?.(e) ?? e.detail ?? e.code : '');
       if (sameName(key, 'ActionName')) return str(e?.action ?? '');
       if (sameName(key, 'MacroName')) return str(e?.macro ?? '');
       return fail('unknownField');
     }
     case 'Forms': case 'Reports': return run.host.objectMember ? run.host.objectMember(path) : fail('unknownField');
+    case 'Form': case 'Screen': return run.host.formMember ? run.host.formMember(path, run.event) : fail('unknownField');
     default: return fail('unknownField');
   }
 }

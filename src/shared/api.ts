@@ -381,8 +381,10 @@ export const CH = {
   queriesCancel: 'bc:queries:cancel',
   reportsExportPdf: 'bc:reports:exportPdf',
   reportsPrint: 'bc:reports:print',
+  formsPrintRecord: 'bc:forms:printRecord', // E6b: prints the main window (the form marked by the renderer); no argument
   exchangeExportText: 'bc:exchange:exportText', // progress: importProgress
   exchangeExportExcel: 'bc:exchange:exportExcel',
+  exchangeExportExcelTo: 'bc:exchange:exportExcelTo',
   exchangeExportMarkup: 'bc:exchange:exportMarkup',
   exchangeSavedList: 'bc:exchange:savedList',
   exchangeSavedSave: 'bc:exchange:savedSave',
@@ -721,6 +723,9 @@ export interface BasecraftApi {
    *  path the user chose in the save dialog. Rejections: bc:fontMissing (an embedded face did not load: no PDF, no print),
    *  bc:writeFailed, bc:printFailed, bc:invalidArgument. Neither writes into the base: allowed on a read-only base. */
   reports: { exportPdf(r: PrintRequest): Promise<'saved' | 'canceled'>; print(r: PrintRequest): Promise<'printed' | 'canceled'> };
+  /** Prints the main window as the renderer marked it (a form's current record, or every record: `print`): system print dialog, backgrounds on.
+   *  Rejects bc:printFailed. */
+  forms: { printRecord(): Promise<'printed' | 'canceled'> };
   /** Exchanges (A6). exportText: the source's rows (a table or select query, with its parameters, sort and filter) to a text file
    *  at a path chosen in the save dialog (`defaultName` proposed; closing the dialog resolves { ok: false, reason: 'cancelled' }).
    *  Rejections: bc:writeFailed (the file already there is kept), bc:notFound, bc:missingParameter|…, bc:invalidArgument (also
@@ -731,6 +736,10 @@ export interface BasecraftApi {
      *  `warnings.truncated`; the sheet is named after `defaultName`). Above 1,048,575 rows: { ok: false, reason: 'tooManyRows' },
      *  before the save dialog. */
     exportExcel(src: ExportSource, defaultName: string): Promise<ExportResult>;
+    /** E6b, for the macro action ExportWithFormatting: as exportExcel at `path`, with no dialog; the sheet is named after the source. `path`: absolute,
+     *  ending in .xlsx, in an existing folder (never created), not the open base: else bc:invalidArgument, bc:folderMissing. Only while the
+     *  base's content is enabled (bc:contentDisabled). bc:writeFailed keeps the file already there. */
+    exportExcelTo(src: ExportSource, path: string): Promise<ExportResult>;
     /** As exportText, to an XML file in Access's data format or an HTML table (F1, F5); `defaultName` is the table or query name. */
     exportMarkup(src: ExportSource, format: 'xml' | 'html', defaultName: string): Promise<ExportResult>;
     /** F4: the saved exports of the base by name; save and delete write the base's options (read-only: bc:readOnly). */

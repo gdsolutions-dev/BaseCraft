@@ -1229,6 +1229,7 @@
       "Sqr": "Gibt die Quadratwurzel einer Zahl zurück.",
       "Val": "Liest die führenden Ziffern eines Textes und gibt die entsprechende Zahl zurück.",
       "CStr": "Konvertiert einen Wert in Text.",
+      "Str": "Wandelt eine Zahl in Text um, mit einem führenden Leerzeichen bei null oder positiven Zahlen.",
       "CInt": "Konvertiert einen Wert in eine Ganzzahl.",
       "CLng": "Konvertiert einen Wert in eine lange Ganzzahl.",
       "CDbl": "Konvertiert einen Wert in eine Gleitkommazahl.",
@@ -1362,6 +1363,9 @@
       ],
       "CStr": [
         "ausdruck"
+      ],
+      "Str": [
+        "zahl"
       ],
       "CInt": [
         "ausdruck"
@@ -2773,12 +2777,15 @@
       "ApplyFilter": "AnwendenFilter",
       "CancelEvent": "AbbrechenEreignis",
       "DeleteRecord": "LöschenDatensatz",
+      "RunMenuCommand": "MenübefehlAusführen",
+      "ExportWithFormatting": "ExportierenMitFormatierung",
       "FindRecord": "SuchenDatensatz",
       "GoToControl": "GeheZuSteuerelement",
       "GoToRecord": "GeheZuDatensatz",
       "RefreshRecord": "AktualisierenDatensatz",
       "Requery": "NeuAbfragen",
       "SaveRecord": "SpeichernDatensatz",
+      "SearchForRecord": "NachDatensatzSuchen",
       "SetProperty": "SetzenEigenschaft",
       "SetValue": "SetzenWert",
       "ShowAllRecords": "AnzeigenAlleDatensätze",
@@ -2818,6 +2825,9 @@
       "OnlyCurrentField": "Nur im aktuellen Feld suchen",
       "FindFirst": "Ersten suchen",
       "ControlName": "Steuerelementname",
+      "Command": "Befehl",
+      "OutputFormat": "Ausgabeformat",
+      "OutputFile": "Ausgabedatei",
       "Record": "Datensatz",
       "Offset": "Versatz",
       "Property": "Eigenschaft",
@@ -2866,6 +2876,14 @@
       "WarningsOn": {
         "yes": "Ja",
         "no": "Nein"
+      },
+      "OutputFormat": { "excel": "Excel-Arbeitsmappe (*.xlsx)" },
+      "Command": {
+        "selectRecord": "Datensatz markieren",
+        "copy": "Kopieren",
+        "paste": "Einfügen",
+        "print": "Drucken",
+        "printSelection": "Auswahl drucken"
       },
       "Record": {
         "previous": "Vorheriger",
@@ -2965,7 +2983,11 @@
       "badReference": "„{{name}}“ ist kein Steuerelement eines geöffneten Formulars.",
       "badValue": "Der Wert „{{name}}“ passt nicht zu dieser Eigenschaft.",
       "findWhatTooLong": "Der Suchtext ist länger als 255 Zeichen.",
-      "saveDuringEvent": "Der Datensatz kann nicht gespeichert oder geändert werden, solange dieses Ereignis (Vor Aktualisierung, Vor dem Einfügen) ausgeführt wird."
+      "saveDuringEvent": "Der Datensatz kann nicht gespeichert oder geändert werden, solange dieses Ereignis (Vor Aktualisierung, Vor dem Einfügen) ausgeführt wird.",
+      "commandUnavailable": "Der Befehl oder die Aktion ist zurzeit nicht verfügbar.",
+      "folderMissing": "Der Ordner der Ausgabedatei ist nicht vorhanden.",
+      "writeFailed": "Die Ausgabedatei konnte nicht geschrieben werden. Sie ist möglicherweise in einem anderen Programm geöffnet.",
+      "readOnly": "Das Formular oder der Datensatz ist schreibgeschützt."
     },
     "findRecord": {
       "notFound": "Der Suchbegriff wurde nicht gefunden."

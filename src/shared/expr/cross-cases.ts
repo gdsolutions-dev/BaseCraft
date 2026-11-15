@@ -71,7 +71,7 @@ export const CROSS_CASES: CrossCase[] = [
     'DatePart("h", [d])', 'DatePart("n", [d])', 'DatePart("s", [d])', 'DatePart("ww", [d])',
     'DateSerial(2026, [i], 31)', 'DateSerial(26, 1, 1)', 'TimeSerial([i], 30, 0)'),
   // outside the closed list, and types R14 does not mix
-  ...V('Format([d], "yyyy")', 'Val([txt])', 'CStr([n])', 'CDate([txt])', 'IsNumeric([txt])', 'IsDate([txt])', 'StrComp([txt], "dupont")'),
+  ...V('Format([d], "yyyy")', 'Val([txt])', 'CStr([n])', 'Str([n])', 'CDate([txt])', 'IsNumeric([txt])', 'IsDate([txt])', 'StrComp([txt], "dupont")'),
   ...C('[txt] * 2 > 0', '[d] = "31/10/2026 06:00:00"', '[txt]'),
   // criteria (the subject is the column filtered)
   ...K('n', '>2', '<=1.5', 'Between 1 And 3'), ...K('txt', 'Like "d*"', '"dupont"', 'Is Null', 'In ("été", "12")'),

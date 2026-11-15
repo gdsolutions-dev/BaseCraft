@@ -1229,6 +1229,7 @@
       "Sqr": "Retourneert de vierkantswortel van een getal.",
       "Val": "Leest de beginnende cijfers van een tekst en retourneert het bijbehorende getal.",
       "CStr": "Zet een waarde om in tekst.",
+      "Str": "Zet een getal om in tekst, met een voorloopspatie bij nul of een positief getal.",
       "CInt": "Zet een waarde om in een geheel getal.",
       "CLng": "Zet een waarde om in een lang geheel getal.",
       "CDbl": "Zet een waarde om in een getal met drijvende komma.",
@@ -1362,6 +1363,9 @@
       ],
       "CStr": [
         "expressie"
+      ],
+      "Str": [
+        "getal"
       ],
       "CInt": [
         "expressie"
@@ -2773,12 +2777,15 @@
       "ApplyFilter": "FilterToepassen",
       "CancelEvent": "GebeurtenisAnnuleren",
       "DeleteRecord": "RecordVerwijderen",
+      "RunMenuCommand": "MenuopdrachtUitvoeren",
+      "ExportWithFormatting": "ExporterenMetOpmaak",
       "FindRecord": "RecordZoeken",
       "GoToControl": "NaarBesturingselement",
       "GoToRecord": "NaarRecord",
       "RefreshRecord": "RecordVernieuwen",
       "Requery": "OpnieuwUitvoeren",
       "SaveRecord": "RecordOpslaan",
+      "SearchForRecord": "ZoekRecord",
       "SetProperty": "EigenschapInstellen",
       "SetValue": "WaardeInstellen",
       "ShowAllRecords": "AlleRecordsWeergeven",
@@ -2818,6 +2825,9 @@
       "OnlyCurrentField": "Alleen in huidig veld zoeken",
       "FindFirst": "Eerste zoeken",
       "ControlName": "Naam van besturingselement",
+      "Command": "Opdracht",
+      "OutputFormat": "Uitvoerindeling",
+      "OutputFile": "Uitvoerbestand",
       "Record": "Record",
       "Offset": "Verschuiving",
       "Property": "Eigenschap",
@@ -2866,6 +2876,14 @@
       "WarningsOn": {
         "yes": "Ja",
         "no": "Nee"
+      },
+      "OutputFormat": { "excel": "Excel-werkmap (*.xlsx)" },
+      "Command": {
+        "selectRecord": "Record selecteren",
+        "copy": "Kopiëren",
+        "paste": "Plakken",
+        "print": "Afdrukken",
+        "printSelection": "Selectie afdrukken"
       },
       "Record": {
         "previous": "Vorige",
@@ -2965,7 +2983,11 @@
       "badReference": "“{{name}}” is geen besturingselement van een geopend formulier.",
       "badValue": "De waarde “{{name}}” past niet bij deze eigenschap.",
       "findWhatTooLong": "De te zoeken tekst is langer dan 255 tekens.",
-      "saveDuringEvent": "Het record kan niet worden opgeslagen of gewijzigd terwijl deze gebeurtenis (Vóór bijwerken, Vóór invoegen) wordt uitgevoerd."
+      "saveDuringEvent": "Het record kan niet worden opgeslagen of gewijzigd terwijl deze gebeurtenis (Vóór bijwerken, Vóór invoegen) wordt uitgevoerd.",
+      "commandUnavailable": "De opdracht of actie is nu niet beschikbaar.",
+      "folderMissing": "De map van het uitvoerbestand bestaat niet.",
+      "writeFailed": "Het uitvoerbestand kon niet worden geschreven. Het is mogelijk geopend in een ander programma.",
+      "readOnly": "Het formulier of de record is alleen-lezen."
     },
     "findRecord": {
       "notFound": "Het gezochte item is niet gevonden."

@@ -19,7 +19,7 @@ const t = (key: string, params: Record<string, unknown> = {}) => i18n.t(key, par
 export const actionLabel = (name: string) => (i18n.exists(`macro.action.${name}`) ? t(`macro.action.${name}`) : name);
 
 /** The form actions' own refusals (B2): `bc:<code>` or `bc:<code>||<name>`. */
-const FORM_REFUSALS = new Set(['notOpen', 'noActiveForm', 'cantGoToRecord', 'cantFocus', 'saveRefused', 'propertyNotSupported', 'badReference', 'badValue', 'findWhatTooLong', 'saveDuringEvent']);
+const FORM_REFUSALS = new Set(['notOpen', 'noActiveForm', 'cantGoToRecord', 'cantFocus', 'saveRefused', 'propertyNotSupported', 'badReference', 'badValue', 'findWhatTooLong', 'saveDuringEvent', 'commandUnavailable', 'readOnly', 'folderMissing', 'writeFailed']);
 
 /** The failure's message: `macro.error.<code>`; an action's own refusal (`bc:<code>`) in its own words. */
 export function failureMessage(f: MacroFailure): string {
@@ -32,6 +32,7 @@ export function failureMessage(f: MacroFailure): string {
       if (f.cause instanceof PythonError) return pythonErrorText(f.cause.info);
       if (code === 'notFound') return t('macro.error.notFound', { name });
       if (code === 'runSqlSelect') return t('macro.error.runSqlSelect');
+      if (code === 'tooManyRows') return t('macro.error.actionFailed', { action, detail: t('exchange.tooManyRows', { limit: Number(name).toLocaleString(i18n.language) }) });
       if (code === 'actionCancelled' || code === 'actionNotRun') return t(`macro.error.${code}`, { action });
       if (code && FORM_REFUSALS.has(code)) return t('macro.error.actionFailed', { action, detail: t(`macro.error.${code}`, { name }) });
       if (code) { const m = errorMessage(f.cause ?? detail); return t('macro.error.actionFailed', { action, detail: t(m.key, m.params) }); }

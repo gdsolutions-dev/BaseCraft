@@ -101,6 +101,72 @@ describe('Access members written with a dot', () => {
   });
 });
 
+describe('the Command Button Wizard delete-record macro', () => {
+  const when = (condition: string, r: AccessMacroRow): AccessMacroRow => ({ ...r, condition });
+  const wizard = [row('OnError', '0'), row('GoToControl', '=[Screen].[PreviousControl].[Name]'), row('ClearMacroError'),
+    when('Not [Form].[NewRecord]', row('RunCommand', '223')), when('[Form].[NewRecord] And Not [Form].[Dirty]', row('Beep')),
+    when('[Form].[NewRecord] And [Form].[Dirty]', row('RunCommand', '292')), when('[MacroError]<>0', row('MsgBox', '=[MacroError].[Description]', '-1', '0'))];
+  const act = (action: string, args = {}) => ({ k: 'action', action, args });
+  it('converts to seven items with no comment and no note', () => {
+    const { def, notes } = convertAccessMacro(wizard);
+    expect(notes).toEqual([]);
+    expect(def.items).toEqual([act('OnError', { GoTo: 'next' }), act('GoToControl', { ControlName: '=[Screen]![PreviousControl]![Name]' }), act('ClearMacroError'),
+      { k: 'if', branches: [{ cond: 'Not [Form]![NewRecord]', items: [act('DeleteRecord')] }] },
+      { k: 'if', branches: [{ cond: '[Form]![NewRecord] And Not [Form]![Dirty]', items: [act('Beep')] }] },
+      { k: 'if', branches: [{ cond: '[Form]![NewRecord] And [Form]![Dirty]', items: [act('UndoRecord')] }] },
+      { k: 'if', branches: [{ cond: '[MacroError]![Number] <> 0', items: [act('MessageBox', { Beep: 'yes', Message: '=[MacroError]![Description]', Type: 'none' })] }] }]);
+    expect(validateMacro(def)).toEqual([]);
+  });
+  it('ActiveControl, and a string literal holding a member stays', () => {
+    const e = (s: string) => (convertAccessMacro([row('SetTempVar', 'V', s)]).def.items[0] as unknown as { args: { Expression: string } }).args.Expression;
+    expect(e('Screen.ActiveControl.Name')).toBe('[Screen]![ActiveControl]![Name]');
+    expect(e('"[Form].[Dirty]"&[Form].[Dirty]')).toBe('"[Form].[Dirty]" & [Form]![Dirty]');
+  });
+  it('exact spellings whatever the case; Form.Dirty without brackets', () => {
+    const e = (s: string) => (convertAccessMacro([row('SetTempVar', 'V', s)]).def.items[0] as unknown as { args: { Expression: string } }).args.Expression;
+    expect(e('[Screen].[ACTIVECONTROL].[Name]')).toBe('[Screen]![ActiveControl]![Name]');
+    expect(e('[SCREEN].[previouscontrol].[NAME]')).toBe('[Screen]![PreviousControl]![Name]');
+    expect(e('Form.Dirty')).toBe('[Form]![Dirty]');
+  });
+  it('a three-part [Form] chain and [Sub Form].[X] stay unconverted (comment item, actionComment note)', () => {
+    for (const x of ['[Form].[Ctl].[Value]', '[Sub Form].[X]']) {
+      const { def, notes } = convertAccessMacro([row('SetTempVar', 'V', x)]);
+      expect(def.items.map((i) => i.k)).toEqual(['comment']);
+      expect(notes).toEqual([{ code: 'actionComment', part: 'SetTempVar' }]);
+    }
+  });
+  it('only the members the engine reads: another [Form] / [Screen] member makes a comment item + note', () => {
+    for (const r of [{ ...row('Beep'), condition: '[Form].[Nom] Is Null' }, row('SetTempVar', 'V', '[Form].[Name]'), row('SetTempVar', 'V', '[Screen].[ActiveControl].[Tag]'), row('SetTempVar', 'V', '[Screen].[Foo]')]) {
+      const { def, notes } = convertAccessMacro([r]);
+      expect(def.items.map((i) => i.k)).toEqual(['comment']);
+      expect(notes.length).toBe(1);
+    }
+  });
+  it('the Combo Box Wizard find-a-record row converts, with [Screen]![ActiveControl] in the expression', () => {
+    const { def, notes } = convertAccessMacro([row('SearchForRecord', '-1', '', '2', '="[Id] = " & Str(Nz([Screen].[ActiveControl],0))')]);
+    expect(notes).toEqual([]);
+    expect(def.items).toEqual([{ k: 'action', action: 'SearchForRecord', args: { Record: 'first', WhereCondition: '="[Id] = " & Str(Nz([Screen]![ActiveControl], 0))' } }]);
+    expect(validateMacro(def)).toEqual([]);
+    const o = convertAccessMacro([row('SearchForRecord', '2', 'F', '1', '[Id] = 1')]).def.items[0] as unknown as { args: Record<string, string> };
+    expect(o.args).toMatchObject({ ObjectType: 'form', ObjectName: 'F', Record: 'next', WhereCondition: '[Id] = 1' });
+  });
+  it('[Screen].[ActiveControl] in a where argument is still not converted; [Screen].[PreviousControl] alone neither', () => {
+    for (const r of [row('ApplyFilter', '', '[Id]=[Screen].[ActiveControl]'), row('OpenForm', 'F', '0', '', '[Id]=[Screen].[ActiveControl]'), row('SetTempVar', 'V', '[Screen].[PreviousControl]')]) {
+      const { def, notes } = convertAccessMacro([r]);
+      expect(def.items.map((i) => i.k)).toEqual(['comment']);
+      expect(notes).toEqual([{ code: 'actionComment', part: r.action }]);
+    }
+  });
+  it('a where argument holding a Form or Screen member is not converted; SetValue Item on Form or Screen neither', () => {
+    for (const r of [row('ApplyFilter', '', '[Form].[X]=1'), row('OpenForm', 'F', '0', '', '[Screen].[ActiveControl].[Name]="a"'), row('SetValue', '[Form].[Dirty]', '0'), row('SetValue', '[Screen].[ActiveControl].[Name]', '0')]) {
+      const { def, notes } = convertAccessMacro([r]);
+      expect(def.items.map((i) => i.k)).toEqual(['comment']);
+      expect(notes).toEqual([{ code: 'actionComment', part: r.action }]);
+    }
+    expect(convertAccessMacro([row('ApplyFilter', '', '[X]=1')]).def.items.map((i) => i.k)).toEqual(['action']);
+  });
+});
+
 describe('object references', () => {
   const def: MacroDef = { formatVersion: '1.0', items: [
     { k: 'action', action: 'OpenForm', args: { FormName: 'F1' } },
@@ -116,6 +182,23 @@ describe('object references', () => {
   });
 });
 
+describe('the Command Button Wizard duplicate-record macro', () => {
+  const when = (condition: string, r: AccessMacroRow): AccessMacroRow => ({ ...r, condition });
+  const ok = '[MacroError]=0';
+  const wizard = [row('OnError', '0'), row('RunCommand', '50'), when(ok, row('RunCommand', '190')), when(ok, row('RunCommand', '28')), when(ok, row('RunCommand', '50')),
+    when(ok, row('RunCommand', '191')), when('[MacroError]<>0', row('MsgBox', '=[MacroError].[Description]', '-1', '0'))];
+  const act = (action: string, args = {}) => ({ k: 'action', action, args });
+  it('converts with no comment and no note', () => {
+    const { def, notes } = convertAccessMacro(wizard);
+    expect(notes).toEqual([]);
+    const run = (Command: string) => act('RunMenuCommand', { Command });
+    const guard = (...items: unknown[]) => ({ k: 'if', branches: [{ cond: '[MacroError]![Number] = 0', items }] });
+    expect(def.items).toEqual([act('OnError', { GoTo: 'next' }), run('selectRecord'), guard(run('copy')), guard(act('GoToRecord', { Record: 'new' })), guard(run('selectRecord')), guard(run('paste')),
+      { k: 'if', branches: [{ cond: '[MacroError]![Number] <> 0', items: [act('MessageBox', { Beep: 'yes', Message: '=[MacroError]![Description]', Type: 'none' })] }] }]);
+    expect(validateMacro(def)).toEqual([]);
+  });
+});
+
 describe('every entry of the mapping table', () => {
   // [row as Access writes it (action|arguments), expected BaseCraft action, expected arguments]
   const RAW: [string, string, Record<string, string>][] = [
@@ -128,12 +211,15 @@ describe('every entry of the mapping table', () => {
     ['MsgBox|Hi|Yes|0|T', 'MessageBox', { Message: 'Hi', Beep: 'yes', Type: 'none', Title: 'T' }], ['MessageBox|Hi|-1|0|', 'MessageBox', { Message: 'Hi', Beep: 'yes', Type: 'none' }],
     ['OnError|1|H', 'OnError', { GoTo: 'macroName', MacroName: 'H' }],
     ['OpenForm|F|0||[A]=1|-1|0', 'OpenForm', { FormName: 'F', View: 'form', WhereCondition: '[A] = 1', WindowMode: 'normal' }],
-    ['OpenQuery|Q|0|1', 'OpenQuery', { QueryName: 'Q', View: 'datasheet' }], ['OpenReport|R|2|||0', 'OpenReport', { ReportName: 'R', View: 'preview' }],
+    ['OpenQuery|Q|0|2', 'OpenQuery', { QueryName: 'Q', View: 'datasheet', DataMode: 'readOnly' }], ['OpenReport|R|2|||0', 'OpenReport', { ReportName: 'R', View: 'preview' }],
     ['OpenTable|T|1|', 'OpenTable', { TableName: 'T', View: 'design' }], ['Quit|1', 'Quit', {}], ['RemoveTempVar|V', 'RemoveTempVar', { Name: 'V' }],
     ['Requery|C', 'Requery', { ControlName: 'C' }], ['RunCode|Compute()', 'RunCode', { FunctionName: 'Compute()' }],
     ['RunMacro|M.S|2|', 'RunMacro', { MacroName: 'M.S', RepeatCount: '2' }], ['RunSQL|DELETE FROM T|-1', 'RunSQL', { SQLStatement: 'DELETE FROM T' }],
     ['SetLocalVar|V|1', 'SetLocalVar', { Name: 'V', Expression: '1' }], ['SetProperty|C|1|No', 'SetProperty', { ControlName: 'C', Property: 'visible', Value: 'No' }],
     ['SetTempVar|V|=1', 'SetTempVar', { Name: 'V', Expression: '1' }], ['SetValue|[A]|=2', 'SetValue', { Item: '[A]', Expression: '2' }],
+    ['OutputTo|0|T|ExcelWorkbook(*.xlsx)|C:/a.xlsx|0|||0', 'ExportWithFormatting', { ObjectType: 'table', ObjectName: 'T', OutputFormat: 'excel', OutputFile: 'C:/a.xlsx' }],
+    ['ExportWithFormatting|1|Q|ExcelWorkbook(*.xlsx)|C:/a.xlsx', 'ExportWithFormatting', { ObjectType: 'query', ObjectName: 'Q', OutputFormat: 'excel', OutputFile: 'C:/a.xlsx' }],
+    ['SearchForRecord|-1||2|[Id] = 1', 'SearchForRecord', { Record: 'first', WhereCondition: '[Id] = 1' }],
     ['SetWarnings|No', 'SetWarnings', { WarningsOn: 'no' }], ['ApplyFilter||[A]=1|', 'ApplyFilter', { WhereCondition: '[A] = 1' }],
   ];
   it('has a row for each entry', () => { expect(RAW.map((t) => t[0].split('|')[0]).sort()).toEqual([...ACCESS_ACTION_NAMES].sort()); });
@@ -144,9 +230,12 @@ describe('every entry of the mapping table', () => {
     expect(notes).toEqual([]);
     expect(validateMacro(def)).toEqual([]);
   });
-  it.each([['97', 'SaveRecord'], ['292', 'UndoRecord'], ['223', 'DeleteRecord'], ['28', 'GoToRecord'], ['58', 'CloseWindow'], ['186', 'CloseWindow']])(
+  it.each([['97', 'SaveRecord'], ['292', 'UndoRecord'], ['223', 'DeleteRecord'], ['50', 'RunMenuCommand'], ['190', 'RunMenuCommand'], ['191', 'RunMenuCommand'], ['340', 'RunMenuCommand'], ['28', 'GoToRecord'], ['58', 'CloseWindow'], ['186', 'CloseWindow']])(
     'RunCommand %s', (n, action) => { expect(convertAccessMacro([row('RunCommand', n)]).def.items).toMatchObject([{ k: 'action', action }]); });
-  it.each(['18', '50', '190', '191', '340', '4'])('RunCommand %s is a comment', (n) => {
+  it.each([['340', 'print'], ['590', 'printSelection']])('RunCommand %s is RunMenuCommand %s, without a note', (n, c) => {
+    expect(convertAccessMacro([row('RunCommand', n)])).toMatchObject({ def: { items: [{ k: 'action', action: 'RunMenuCommand', args: { Command: c } }] }, notes: [] });
+  });
+  it.each(['18', '4'])('RunCommand %s is a comment', (n) => {
     const { def, notes } = convertAccessMacro([row('RunCommand', n)]);
     expect(def.items).toEqual([{ k: 'comment', text: `RunCommand: ${n}` }]);
     expect(notes).toEqual([{ code: 'actionComment', part: 'RunCommand' }]);
@@ -194,13 +283,30 @@ describe('review: argument forms measured on real Access macro text', () => {
     expect(one('OpenForm', 'F', '0', '', '', '-1', '0').def.items).toEqual([{ k: 'action', action: 'OpenForm', args: { FormName: 'F', View: 'form', WindowMode: 'normal' } }]);
     expect(one('OpenForm', 'F', '0', '', '', '1', '0').def.items).toEqual([{ k: 'action', action: 'OpenForm', args: { FormName: 'F', View: 'form', DataMode: 'edit', WindowMode: 'normal' } }]);
   });
-  it('OpenQuery/OpenTable data mode: 1 or empty no note; other modes mapped with argumentDropped', () => {
+  it('OpenQuery/OpenTable data mode: 1 or empty no note, 2 is readOnly, 0 is mapped with argumentDropped', () => {
     expect(one('OpenQuery', 'Q', '0', '1').notes).toEqual([]);
     expect(one('OpenTable', 'T', '0').notes).toEqual([]);
     const q = one('OpenQuery', 'Q', '0', '2'), t = one('OpenTable', 'T', '0', '0');
-    expect(q.def.items).toEqual([{ k: 'action', action: 'OpenQuery', args: { QueryName: 'Q', View: 'datasheet' } }]);
-    expect(q.notes).toEqual([{ code: 'argumentDropped', part: 'OpenQuery.DataMode' }]);
+    expect(one('OpenTable', 'T', '0', '2').def.items).toEqual([{ k: 'action', action: 'OpenTable', args: { TableName: 'T', View: 'datasheet', DataMode: 'readOnly' } }]);
+    expect(q.def.items).toEqual([{ k: 'action', action: 'OpenQuery', args: { QueryName: 'Q', View: 'datasheet', DataMode: 'readOnly' } }]);
+    expect(q.notes).toEqual([]);
+    expect(t.def.items).toEqual([{ k: 'action', action: 'OpenTable', args: { TableName: 'T', View: 'datasheet' } }]);
     expect(t.notes).toEqual([{ code: 'argumentDropped', part: 'OpenTable.DataMode' }]);
+  });
+  it('OutputTo of an Excel workbook: the measured row converts to ExportWithFormatting; the others are comments or noted', () => {
+    const out = (...r: string[]) => one('OutputTo', ...r);
+    const ok = out('1', 'QVentes', 'ExcelWorkbook(*.xlsx)', 'C:/out/Ventes.xlsx', '0', '', '', '0');
+    expect(ok.def.items).toEqual([{ k: 'action', action: 'ExportWithFormatting', args: { ObjectType: 'query', ObjectName: 'QVentes', OutputFormat: 'excel', OutputFile: 'C:/out/Ventes.xlsx' } }]);
+    expect(ok.notes).toEqual([]);
+    expect(out('0', 'T', 'Excel Workbook (*.XLSX)', 'C:/a.XLSX').def.items).toMatchObject([{ k: 'action', action: 'ExportWithFormatting', args: { ObjectType: 'table' } }]);
+    expect(out('1', 'Q', 'ExcelWorkbook(*.xlsx)', 'C:/a.xlsx', '-1', '', '', '0').notes).toEqual([{ code: 'argumentDropped', part: 'OutputTo.AutoStart' }]);
+    expect(out('1', 'Q', 'ExcelWorkbook(*.xlsx)', '', '0').def.items).toMatchObject([{ k: 'action', action: 'ExportWithFormatting', args: { ObjectName: 'Q' } }]);   // no file: the save dialog
+    const comment = (r: ReturnType<typeof out>) => r.def.items.map((i) => i.k);
+    expect(comment(out('1', 'Q', 'PDFFormat(*.pdf)', 'C:/a.pdf', '0'))).toEqual(['comment']);
+    expect(comment(out('3', 'Q', 'ExcelWorkbook(*.xlsx)', 'C:/a.xlsx', '0'))).toEqual(['comment']);
+    expect(comment(out('1', 'Q', 'ExcelWorkbook(*.xlsx)', 'C:/a.txt', '0'))).toEqual(['comment']);
+    expect(comment(out('1', 'Q', 'ExcelWorkbook(*.xlsx)', 'C:/a.xlsx', '0', 'tpl.xlsx'))).toEqual(['comment']);
+    expect(comment(out('1', 'Q', 'ExcelWorkbook(*.xlsx)', 'C:/a.xlsx', '0', '', '65001'))).toEqual(['comment']);
   });
   it('SetLocalVar with False / True', () => {
     expect(one('SetLocalVar', 'V', 'False').def.items).toMatchObject([{ k: 'action', action: 'SetLocalVar', args: { Name: 'V' } }]);

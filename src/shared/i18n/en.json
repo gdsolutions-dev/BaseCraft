@@ -1206,6 +1206,7 @@
       "Sqr": "Returns the square root of a number.",
       "Val": "Reads the leading digits of a text and returns the matching number.",
       "CStr": "Converts a value to text.",
+      "Str": "Converts a number to text, with a leading space when it is zero or positive.",
       "CInt": "Converts a value to an integer.",
       "CLng": "Converts a value to a long integer.",
       "CDbl": "Converts a value to a floating-point number.",
@@ -1339,6 +1340,9 @@
       ],
       "CStr": [
         "expr"
+      ],
+      "Str": [
+        "number"
       ],
       "CInt": [
         "expr"
@@ -2742,12 +2746,15 @@
       "ApplyFilter": "ApplyFilter",
       "CancelEvent": "CancelEvent",
       "DeleteRecord": "DeleteRecord",
+      "RunMenuCommand": "RunMenuCommand",
+      "ExportWithFormatting": "ExportWithFormatting",
       "FindRecord": "FindRecord",
       "GoToControl": "GoToControl",
       "GoToRecord": "GoToRecord",
       "RefreshRecord": "RefreshRecord",
       "Requery": "Requery",
       "SaveRecord": "SaveRecord",
+      "SearchForRecord": "SearchForRecord",
       "SetProperty": "SetProperty",
       "SetValue": "SetValue",
       "ShowAllRecords": "ShowAllRecords",
@@ -2787,6 +2794,9 @@
       "OnlyCurrentField": "Search Only Current Field",
       "FindFirst": "Find First",
       "ControlName": "Control Name",
+      "Command": "Command",
+      "OutputFormat": "Output Format",
+      "OutputFile": "Output File",
       "Record": "Record",
       "Offset": "Offset",
       "Property": "Property",
@@ -2803,6 +2813,8 @@
       "GoTo": { "next": "Next", "macroName": "Macro Name", "fail": "Fail" },
       "WarningsOn": { "yes": "Yes", "no": "No" },
       "Record": { "previous": "Previous", "next": "Next", "first": "First", "last": "Last", "goTo": "Go To", "new": "New" },
+      "OutputFormat": { "excel": "Excel Workbook (*.xlsx)" },
+      "Command": { "selectRecord": "Select Record", "copy": "Copy", "paste": "Paste", "print": "Print", "printSelection": "Print Selection" },
       "Match": { "anywhere": "Any Part of Field", "whole": "Whole Field", "start": "Start of Field" },
       "MatchCase": { "yes": "Yes", "no": "No" },
       "Search": { "up": "Up", "down": "Down", "all": "All" },
@@ -2861,7 +2873,11 @@
       "badReference": "“{{name}}” is not a control of an open form.",
       "badValue": "The value “{{name}}” does not suit this property.",
       "findWhatTooLong": "The text to find is longer than 255 characters.",
-      "saveDuringEvent": "The record cannot be saved or changed while this event (Before Update, Before Insert) is running."
+      "saveDuringEvent": "The record cannot be saved or changed while this event (Before Update, Before Insert) is running.",
+      "commandUnavailable": "The command or action is not available now.",
+      "folderMissing": "The folder of the output file does not exist.",
+      "writeFailed": "The output file could not be written. It may be open in another program.",
+      "readOnly": "The form or the record is read-only."
     },
     "findRecord": {
       "notFound": "The search item was not found."

@@ -11,7 +11,7 @@ import { prop } from '../run-model';
 import { tipOf, type CtlProps, type RunnerApi } from './run-ctx';
 
 export function SubformCtl({ c, x, style }: CtlProps) {
-  const sub = x.sub;
+  const sub = x.print ? undefined : x.sub;   // a print row: a static frame, no registration, no query, no event
   const frame = useRef<HTMLDivElement>(null);
   const api = useRef<RunnerApi | null>(null);
   const wanted = useRef(false);   // entered while the master's record was being saved: its form takes the focus once read again
@@ -36,7 +36,8 @@ export function SubformCtl({ c, x, style }: CtlProps) {
 
   const info = x.info;
   let problem: 'missing' | 'recursive' | 'badLink' | null = null;
-  if (!sub) problem = 'missing';
+  if (x.print) problem = null;
+  else if (!sub) problem = 'missing';
   else if (sub.ancestors.length >= MAX_SUBFORM_DEPTH || sub.ancestors.some((a) => sameName(a, source))) problem = 'recursive';
   else if (masterF.length !== childF.length || (masterF.length > 0 && x.snap.status === 'ready' && (!info || masterF.some((n) => !info.fields.some((f) => sameName(f.name, n)))))) problem = 'badLink';
   // no Source Object yet: an empty frame, as Access; the master's source being read: empty until it is

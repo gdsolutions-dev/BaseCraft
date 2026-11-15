@@ -127,6 +127,18 @@ def Hello():
     expect(s.notes).toEqual([{ path: 'items[0]', action: 'StopAllMacros', kind: 'approx' }])
   })
 
+  it('RunMenuCommand is docmd.run_menu_command, as any catalogue action', () => {
+    const r = conv([A('RunMenuCommand', { Command: 'copy' })])
+    expect(r.source).toContain('docmd.run_menu_command(command="copy")')
+    expect(r.notes).toEqual([])
+  })
+
+  it('ExportWithFormatting is docmd.export_with_formatting, as any catalogue action', () => {
+    const r = conv([A('ExportWithFormatting', { ObjectType: 'query', ObjectName: 'QVentes', OutputFormat: 'excel', OutputFile: 'C:/out/Ventes.xlsx' })])
+    expect(r.source).toContain('docmd.export_with_formatting(object_type="query", object_name="QVentes", output_file="C:/out/Ventes.xlsx")')
+    expect(r.notes).toEqual([])
+  })
+
   it('guard: every catalogue action converts without a TODO', () => {
     for (const a of ACTIONS) {
       const args: Record<string, string> = {}
@@ -173,6 +185,13 @@ def Hello():
       expect(r.source).toContain('raise NotImplementedError')
     }
     expect(conv([A('OpenForm', { FormName: 'F', WhereCondition: '[Id] = [TempVars]![x]' })]).notes).toEqual([])
+  })
+
+  it('E6: [Form]! and [Screen]! are unbound, as LocalVars: a TODO', () => {
+    for (const w of ['[Id] = [Form]![Dirty]', '[Id] = [Screen]![PreviousControl]![Name]', '[Id] = [form] ! [NewRecord]']) {
+      expect(conv([A('OpenForm', { FormName: 'F', WhereCondition: w })]).notes, w).toEqual([{ path: 'items[0]', action: 'OpenForm', kind: 'todo' }])
+    }
+    expect(conv([{ k: 'if', branches: [{ cond: '[Form]![NewRecord]', items: [A('Beep')] }] }]).notes).toEqual([{ path: 'items[0]', action: 'If', kind: 'todo' }])
   })
 
   it('I3: local variables live in one dict per function; unset ones read Null', () => {

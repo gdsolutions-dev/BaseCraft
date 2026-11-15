@@ -10,6 +10,7 @@ import { NavigationBar } from '../datasheet/NavigationBar';
 import { twipsToPx } from '../designer/units';
 import { type RunCtx, readOnlyNote } from './controls/run-ctx';
 import { FormSection } from './FormSection';
+import { PrintAllRows } from './PrintAllRows';
 import { useAnchored } from './use-anchored';
 import type { SingleFormProps } from './SingleFormView';
 import { visibleRange } from './views';
@@ -22,7 +23,7 @@ export interface ContinuousFormProps extends SingleFormProps {
 /** What takes the focus on a click (its focus makes its row current, the form's goRow): the row's click leaves it alone. */
 const TAKES_FOCUS = 'input, textarea, button, label[for], [role="listbox"], [role="radio"], [role="tab"], [tabindex]:not([tabindex="-1"])';
 
-export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, filter, onGo, onNew, onToggleFilter, onRow }: ContinuousFormProps) {
+export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, filter, onGo, onNew, onToggleFilter, onRow, printRows }: ContinuousFormProps) {
   const { t } = useTranslation();
   const body = useRef<HTMLDivElement>(null);
   const bound = design.recordSource !== null;   // an unbound form: one row, no selector, no navigation bar
@@ -62,7 +63,7 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
   const selectorOf = (i: number) => {
     if (i !== current) return <div className="frun-selector" style={{ height: rowH }} />;
     return (
-      <div className="frun-selector is-current" data-testid="form-selector" style={{ height: rowH }}>
+      <div className="frun-selector is-current" data-testid="form-selector" data-selected={x.selected ? "true" : undefined} style={{ height: rowH }}>
         {snap.dirty
           ? <span data-testid="form-dirty" title={t('form.dirty')}><Pencil className="ic ic-sm" aria-hidden /><span className="sr-only">{t('form.dirty')}</span></span>
           : <ChevronRight className="ic ic-sm" aria-hidden />}
@@ -101,6 +102,7 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
           </div>
         )}
       </div>
+      <PrintAllRows doc={doc} detail={detail} rows={printRows} x={x} rowCtx={rowCtx} width={width} />
       {footer && <div className="frun-fixed"><FormSection doc={doc} section={footer} x={x} width={width} /></div>}
       {messages.length > 0 && (
         <div className="frun-message" role="alert" aria-label={t('form.message')} data-testid="form-message">

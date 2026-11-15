@@ -56,7 +56,7 @@ export const MS_DISCREPANCIES: Record<string, { ms: unknown[]; why: string }> = 
   '[txt] Like [txt]': { ms: ['bc:serverFunction|Like|sqlserver'], why: LIKECOL },
   'Space([i])': { ms: [' ', '  ', null, '   ', null, '', ' '.repeat(10), null, ' '.repeat(7)], why: SPACE },
   'String([i], "x")': { ms: ['x', 'xx', null, 'xxx', null, '', 'x'.repeat(10), null, 'x'.repeat(7)], why: SPACE },
-  ...Object.fromEntries(['Format', 'Val', 'CStr', 'CDate', 'IsNumeric', 'IsDate', 'StrComp']
+  ...Object.fromEntries(['Format', 'Val', 'CStr', 'Str', 'CDate', 'IsNumeric', 'IsDate', 'StrComp']
     .map((name) => [CROSS_CASES.find((c) => c.src.startsWith(`${name}(`))!.src, { ms: [`bc:serverFunction|${name}|sqlserver`], why: REFUSED }])),
 };
 

@@ -5,6 +5,7 @@
 // le registre des formulaires ouverts (form-instances).
 import { sectionName, type EventBinding } from '../../shared/design/events';
 import type { Value } from '../../shared/expr/ast';
+import type { CellInput } from '../../shared/coerce';
 import { evaluate, type EvalEnv } from '../../shared/expr/evaluate';
 import { bool, fail, num, str } from '../../shared/expr/library';
 import { parseCanonical } from '../../shared/expr/parser';
@@ -18,6 +19,7 @@ import { api } from '../bridge';
 import { i18n } from '../i18n';
 import { parseCm } from '../designer/units';
 import { formNamed, formOfTab, formOpening, memberValue, resolveObjectMember, whenFormOpened, type FormInstance, type RecordTarget, type SettableProperty } from '../form/form-instances';
+import { promptParameters } from '../query/prompt-parameters';
 import { runActionFlow } from '../query/run-action';
 import type { SectionEvent } from '../../shared/report/types';
 import { reportShown, whenReportShown } from '../report/report-events';
@@ -149,6 +151,8 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
     if (outcome === 'failed') throw new Error('bc:actionNotRun');
   };
 
+  /** OpenQuery / OpenTable's Data Mode as the open arguments (blank: none, the tab as it is, as OpenForm). */
+  const dataMode = (m: string | undefined): OpenArgs => (m ? { dataMode: m as OpenArgs['dataMode'] } : {});
   const namedForm = (name: string): FormInstance => { const f = formNamed(name); if (!f) throw notOpen(name); return f; };
   /** The form an action acts on: the event's form, else the active tab's (a dialog when one is open: it is the active tab, R12). */
   const currentForm = (event: EventContext | undefined): FormInstance => {
@@ -157,6 +161,23 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
     const f = tab && formOfTab(tab.id);
     if (!f) throw new Error('bc:noActiveForm');
     return f;
+  };
+
+  /** [Form]! (NewRecord, Dirty) and [Screen]! (PreviousControl, ActiveControl, then Name) of the form the macro runs for; anything
+   *  else, no such form or no such control: unknownField, so the macro fails (OnError decides) and nothing crashes. */
+  const formMember = (path: string[], event?: EventContext): Value => {
+    let f: FormInstance;
+    if (event?.object.kind === 'report') return fail('unknownField');   // a report has no [Form]: not the active tab's
+    try { f = currentForm(event); } catch { return fail('unknownField'); }
+    const [root, key = '', prop = ''] = path;
+    if (root === 'Form') return sameName(key, 'NewRecord') ? bool(f.newRecord()) : sameName(key, 'Dirty') ? bool(f.dirty()) : fail('unknownField');
+    if (!prop && sameName(key, 'ActiveControl')) {   // [Screen]![ActiveControl] alone: the active control's value
+      const a = f.activeControl();
+      if (a === null) return fail('unknownField');
+      try { return f.value(a); } catch { return fail('unknownField'); }
+    }
+    const c = sameName(key, 'PreviousControl') ? f.previousControl() : sameName(key, 'ActiveControl') ? f.activeControl() : null;
+    return c !== null && sameName(prop, 'Name') ? str(c) : fail('unknownField');   // no previous control: a failure, never an empty name
   };
 
   async function perform({ action, args, event }: ActionCall): Promise<void | 'stopAll'> {
@@ -202,9 +223,12 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
       case 'OpenQuery': {
         const name = await storedName('query', a.QueryName!);
         if (a.View === 'design') return open('query', name, 'design');
-        return isActionDefinition((await api.objects.get('query', name)).definition) ? actionQuery({ kind: 'query', name }) : open('query', name, 'run');
+        return isActionDefinition((await api.objects.get('query', name)).definition) ? actionQuery({ kind: 'query', name }) : open('query', name, 'run', dataMode(a.DataMode));
       }
-      case 'OpenTable': return open('table', await storedName('table', a.TableName!), a.View === 'design' ? 'design' : 'datasheet');
+      case 'OpenTable': {
+        const name = await storedName('table', a.TableName!);
+        return a.View === 'design' ? open('table', name, 'design') : open('table', name, 'datasheet', dataMode(a.DataMode));
+      }
       case 'CloseWindow': {
         const type = a.ObjectType ?? '', name = a.ObjectName ?? '';
         const tab = !type && !name ? d.active() : d.tabs().find((t) => isDoc(t, type as DocTab['kind'], name));
@@ -226,6 +250,23 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
         if (!q || isSelectBody(q)) throw new Error('bc:runSqlSelect');
         return actionQuery({ kind: 'sql', sql });
       }
+      // E6b: the workbook is written at OutputFile as Access's OutputTo does (the main process guards the path and the content); an empty
+      // OutputFile asks for it in the save dialog, the object's name proposed
+      case 'ExportWithFormatting': {
+        const kind = a.ObjectType === 'query' ? 'query' as const : 'table' as const;
+        const name = await storedName(kind, a.ObjectName ?? '');
+        let params: Record<string, CellInput> | undefined;
+        if (kind === 'query') {
+          const info = await api.sources.describe({ kind, name });   // an action query: bc:notSelectQuery
+          if (info.parameters.length) { const v = await promptParameters(d.modal, info.parameters, d.region()); if (v === null) throw cancelled(); params = v; }
+        }
+        const src = { ref: { kind, name }, ...(params ? { params } : {}) };
+        const file = (a.OutputFile ?? '').trim();
+        const r = file ? await api.exchange.exportExcelTo(src, file) : await api.exchange.exportExcel(src, name);
+        if (r.ok) return;
+        if (r.reason === 'tooManyRows') throw new Error(`bc:tooManyRows||${r.limit}`);
+        throw cancelled();
+      }
       case 'SetWarnings': warnings = a.WarningsOn === 'yes'; return;
       case 'GoToRecord': {
         const f = a.ObjectType === 'form' && a.ObjectName ? namedForm(a.ObjectName) : currentForm(event);
@@ -235,6 +276,11 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
         if (!/^[1-9]\d*$/.test(offset)) throw new Error('bc:cantGoToRecord');   // from 1
         return f.goToRecord(r, Number(offset));
       }
+      case 'SearchForRecord': {
+        const f = a.ObjectType === 'form' && a.ObjectName ? namedForm(a.ObjectName) : currentForm(event);
+        await f.searchForRecord(a.WhereCondition ?? '', (a.Record ?? 'first') as 'first');   // no match: no move, no failure
+        return;
+      }
       case 'GoToControl': return currentForm(event).goToControl(a.ControlName!);
       case 'ApplyFilter': return currentForm(event).applyFilter(a.WhereCondition!);
       case 'ShowAllRecords': return currentForm(event).showAllRecords();
@@ -242,6 +288,15 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
       case 'SaveRecord': return currentForm(event).saveRecord();
       case 'UndoRecord': return currentForm(event).undoRecord();
       case 'RefreshRecord': return currentForm(event).refreshRecord();
+      case 'RunMenuCommand': {
+        const f = currentForm(event);
+        if (a.Command === 'selectRecord') return f.selectRecord();
+        if (a.Command === 'copy') return f.copyRecord();
+        if (a.Command === 'paste') return f.pasteRecord();
+        if (a.Command === 'print') return f.printAll();
+        if (a.Command === 'printSelection') return f.printRecord();
+        throw new Error('bc:commandUnavailable');
+      }
       case 'DeleteRecord': return currentForm(event).deleteRecord(warnings);   // SetWarnings off: no confirmation
       case 'FindRecord': {
         const what = a.FindWhat ?? '';
@@ -294,6 +349,8 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
     runCode: runPythonFunction,   // D2: RunCode
     callUser: callUserFunction,   // D3: Python functions in conditions and expression arguments
     objectMember: resolveObjectMember,   // [Forms]! / [Reports]! in every run, an event's or not (R11)
+    formMember,   // E6: [Form]! / [Screen]!
+    describe: (f) => { const c = f.code === 'actionFailed' && !f.detail?.includes('|') ? bcErrorCode(f.detail) : null, k = `macro.error.${c}`; return c && i18n.exists(k) && !i18n.t(k, { skipInterpolation: true }).includes('{{') ? i18n.t(k) : undefined; },   // E6b: the code survives Electron's IPC prefix; a text with a parameter keeps the fallback   // E6b
     ...(opts.singleStep ? { step: (info: StepInfo) => askStep(d.modal, info) } : {}),   // Single Step: asked before each action
     locale: d.region().locale, lang: d.lang(), now: () => new Date(),
   };

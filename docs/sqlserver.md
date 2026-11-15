@@ -58,7 +58,7 @@ BaseCraft translates a query on linked SQL Server tables into one T-SQL statemen
 
 **Functions translated:** `IIf`, `Nz`, `IsNull`, `CBool`, `Len`, `Left`, `Right`, `Mid`, `Trim`, `LTrim`, `RTrim`, `UCase`, `LCase`, `InStr`, `Replace`, `Space`, `String`, `Round` (banker's rounding), `Int`, `Fix`, `Abs`, `Sgn`, `Sqr`, `CInt`, `CLng`, `CDbl`, `CCur`, `Date`, `Time`, `Now` (the workstation's clock), `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Weekday`, `DateAdd`, `DateDiff`, `DatePart`, `DateSerial`, `TimeSerial`, and the aggregates `Count`, `Sum`, `Avg`, `Min`, `Max`, `StDev`, `StDevP`, `Var`, `VarP`.
 
-**Functions refused:** `Format`, `Val`, `CStr`, `CDate`, `IsNumeric`, `IsDate`, `StrComp` (they depend on regional settings), `First`, `Last` (a server has no row order to take them by).
+**Functions refused:** `Format`, `Val`, `CStr`, `Str`, `CDate`, `IsNumeric`, `IsDate`, `StrComp` (they depend on regional settings), `First`, `Last` (a server has no row order to take them by).
 
 **Query shapes:** SELECT with inner and outer joins, WHERE, GROUP BY / HAVING, ORDER BY, DISTINCT, UNION [ALL], subqueries, parameters, and `TOP n` (ties kept, as Access). These are refused: `TOP n PERCENT`, Make-Table queries (create the table on the server, then fill it with an Append query).
 

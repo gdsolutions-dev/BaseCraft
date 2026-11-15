@@ -1220,6 +1220,7 @@
       "Sqr": "返回数字的平方根。",
       "Val": "读取文本开头的数字并返回对应的数值。",
       "CStr": "将值转换为文本。",
+      "Str": "将数字转换为文本；为零或正数时前面带一个空格。",
       "CInt": "将值转换为整数。",
       "CLng": "将值转换为长整数。",
       "CDbl": "将值转换为浮点数。",
@@ -1353,6 +1354,9 @@
       ],
       "CStr": [
         "表达式"
+      ],
+      "Str": [
+        "数字"
       ],
       "CInt": [
         "表达式"
@@ -2750,12 +2754,15 @@
       "ApplyFilter": "应用筛选",
       "CancelEvent": "取消事件",
       "DeleteRecord": "删除记录",
+      "RunMenuCommand": "运行菜单命令",
+      "ExportWithFormatting": "带格式导出",
       "FindRecord": "查找记录",
       "GoToControl": "转到控件",
       "GoToRecord": "转到记录",
       "RefreshRecord": "刷新记录",
       "Requery": "重新查询",
       "SaveRecord": "保存记录",
+      "SearchForRecord": "搜索记录",
       "SetProperty": "设置属性",
       "SetValue": "设置值",
       "ShowAllRecords": "显示所有记录",
@@ -2795,6 +2802,9 @@
       "OnlyCurrentField": "仅搜索当前字段",
       "FindFirst": "查找第一个",
       "ControlName": "控件名称",
+      "Command": "命令",
+      "OutputFormat": "输出格式",
+      "OutputFile": "输出文件",
       "Record": "记录",
       "Offset": "偏移量",
       "Property": "属性",
@@ -2843,6 +2853,14 @@
       "WarningsOn": {
         "yes": "是",
         "no": "否"
+      },
+      "OutputFormat": { "excel": "Excel 工作簿 (*.xlsx)" },
+      "Command": {
+        "selectRecord": "选择记录",
+        "copy": "复制",
+        "paste": "粘贴",
+        "print": "打印",
+        "printSelection": "打印所选内容"
       },
       "Record": {
         "previous": "上一条",
@@ -2942,7 +2960,11 @@
       "badReference": "“{{name}}”不是已打开窗体的控件。",
       "badValue": "值“{{name}}”不适用于此属性。",
       "findWhatTooLong": "要查找的文本超过 255 个字符。",
-      "saveDuringEvent": "在运行此事件（更新前、插入前）期间，无法保存或更改记录。"
+      "saveDuringEvent": "在运行此事件（更新前、插入前）期间，无法保存或更改记录。",
+      "commandUnavailable": "该命令或操作当前不可用。",
+      "folderMissing": "输出文件所在的文件夹不存在。",
+      "writeFailed": "无法写入输出文件。它可能已在其他程序中打开。",
+      "readOnly": "窗体或记录为只读。"
     },
     "findRecord": {
       "notFound": "未找到搜索项。"

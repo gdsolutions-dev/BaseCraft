@@ -216,6 +216,7 @@ describe('library', () => {
     ['Sgn(-3)', -1], ['Sgn(0)', 0], ['Sgn(2)', 1], ['Sgn(Null)', null],
     ['Sqr(9)', 3], ['Sqr(Null)', null], ['Sqr(0)', 0],
     ['Val("12abc")', 12], ['Val(" 1 2 3")', 123], ['Val("abc")', 0], ['Val("1.5e2")', 150], ['Val("1,5")', 1], ['Val(Null)', null],
+    ['Str(5)', ' 5'], ['Str(-2.5)', '-2.5'], ['Str(0)', ' 0'], ['Str(1.5)', ' 1.5'], ['Str(Null)', null], ['Str("7")', ' 7'], ['Str(True)', '-1'],
     ['CStr(1.5)', '1,5'], ['CStr(True)', 'True'], ['CStr(Null)', null], ['CStr(#2026-10-21 14:05:00#)', '21/10/2026 14:05:00'],
     ['CStr(#1899-12-30 14:05:00#)', '14:05:00'], ['CStr(0.1 + 0.2)', '0,30000000000000004'],
     ['CInt(2.5)', 2], ['CInt("3,5")', 4], ['CInt(Null)', null], ['CInt(-32768)', -32768],
@@ -273,7 +274,7 @@ describe('library', () => {
     ['CLng(3000000000)', 'overflow'], ['CDbl("x")', 'typeMismatch'], ['CDate("abc")', 'typeMismatch'], ['CBool("x")', 'typeMismatch'],
     ['DateAdd("x", 1, Date())', 'badArgument'], ['DateDiff("x", Date(), Date())', 'badArgument'], ['DatePart("x", Date())', 'badArgument'],
     ['DateSerial(10000, 1, 1)', 'overflow'], ['DateAdd("yyyy", 8000, Date())', 'overflow'], ['Year("abc")', 'typeMismatch'],
-    ['Left(1, "x")', 'typeMismatch'],
+    ['Left(1, "x")', 'typeMismatch'], ['Str("abc")', 'typeMismatch'],
   ])('%s fails with %s', async (src, code) => fails(src, code));
 });
 

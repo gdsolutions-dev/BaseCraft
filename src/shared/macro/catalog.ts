@@ -4,18 +4,20 @@
 // B2 appended the 13 form actions (R4), the `dataEntry` category and the `reference` argument type.
 
 export type ActionName = 'Beep' | 'ClearMacroError' | 'CloseDatabase' | 'CloseWindow' | 'MessageBox' | 'OnError' | 'OpenForm' | 'OpenQuery'
-  | 'OpenReport' | 'OpenTable' | 'Quit' | 'RemoveAllTempVars' | 'RemoveTempVar' | 'RunCode' | 'RunMacro' | 'RunSQL' | 'SetLocalVar' | 'SetTempVar'
+  | 'OpenReport' | 'OpenTable' | 'Quit' | 'RemoveAllTempVars' | 'RemoveTempVar' | 'RunCode' | 'RunMacro' | 'RunMenuCommand' | 'RunSQL' | 'SetLocalVar' | 'SetTempVar'
   | 'SetWarnings' | 'StopAllMacros' | 'StopMacro'
   | 'CreateRecord' | 'RaiseError' | 'RunDataMacro' | 'SetField'   // data macros only (T2): never in a UI macro
   | 'ApplyFilter'
   | 'CancelEvent'
   | 'DeleteRecord'
+  | 'ExportWithFormatting'
   | 'FindRecord'
   | 'GoToControl'
   | 'GoToRecord'
   | 'RefreshRecord'
   | 'Requery'
   | 'SaveRecord'
+  | 'SearchForRecord'
   | 'SetProperty'
   | 'SetValue'
   | 'ShowAllRecords'
@@ -51,6 +53,11 @@ export const ACTIONS: readonly ActionDef[] = [
     arg('ObjectName', 'objectName')]),
   act('CreateRecord', 'dataMacro', [arg('TableName', 'tableName', required), arg('Values', 'sql')]),   // T2: `Field = expression` per line (canonical)
   act('DeleteRecord', 'dataEntry'),
+  act('ExportWithFormatting', 'objects', [   // E6b: writes the workbook at OutputFile as Access's OutputTo does; unsafe (it writes a file)
+    arg('ObjectType', 'enum', { options: ['table', 'query'], default: 'table' }),
+    arg('ObjectName', 'text', required),
+    arg('OutputFormat', 'enum', { options: ['excel'], default: 'excel' }),
+    arg('OutputFile', 'text')], true),
   act('FindRecord', 'filter', [   // R4: no SearchAsFormatted
     arg('FindWhat', 'text', required),
     arg('Match', 'enum', { options: ['anywhere', 'whole', 'start'], default: 'whole' }),
@@ -76,9 +83,9 @@ export const ACTIONS: readonly ActionDef[] = [
     arg('WhereCondition', 'where'),
     arg('DataMode', 'enum', { options: ['', 'add', 'edit', 'readOnly'], default: '' }),
     arg('WindowMode', 'enum', { options: ['normal', 'dialog'], default: 'normal' })]),   // R4, R12
-  act('OpenQuery', 'filter', [arg('QueryName', 'queryName', required), view(['datasheet', 'design'])]),
+  act('OpenQuery', 'filter', [arg('QueryName', 'queryName', required), view(['datasheet', 'design']), arg('DataMode', 'enum', { options: ['', 'edit', 'readOnly'], default: '' })]),
   act('OpenReport', 'objects', [arg('ReportName', 'reportName', required), view(['preview', 'print', 'design']), arg('WhereCondition', 'where')]),   // R7
-  act('OpenTable', 'objects', [arg('TableName', 'tableName', required), view(['datasheet', 'design'])]),
+  act('OpenTable', 'objects', [arg('TableName', 'tableName', required), view(['datasheet', 'design']), arg('DataMode', 'enum', { options: ['', 'edit', 'readOnly'], default: '' })]),
   act('Quit', 'system'),   // R6
   act('RaiseError', 'dataMacro', [arg('ErrorNumber', 'number'), arg('ErrorDescription', 'text')]),
   act('RefreshRecord', 'filter'),
@@ -88,8 +95,14 @@ export const ACTIONS: readonly ActionDef[] = [
   act('RunCode', 'macro', [arg('FunctionName', 'functionCall', required)], true),
   act('RunDataMacro', 'dataMacro', [arg('MacroName', 'text', required)]),
   act('RunMacro', 'macro', [arg('MacroName', 'macroName', required), arg('RepeatCount', 'number'), arg('RepeatExpression', 'expression')]),
+  act('RunMenuCommand', 'macro', [arg('Command', 'enum', { options: ['selectRecord', 'copy', 'paste', 'print', 'printSelection'], ...required })]),   // E6b: the record commands of an Access macro's RunCommand; `print` prints every record of the form (header, each detail, footer; at most 5000), `printSelection` the current record
   act('RunSQL', 'filter', [arg('SQLStatement', 'sql', required)], true),
   act('SaveRecord', 'dataEntry'),
+  act('SearchForRecord', 'filter', [   // E6b: the form's records, filter and sort as shown; the Combo Box Wizard's find-a-record list
+    arg('ObjectType', 'objectType', { options: ['', 'form'], default: '' }),
+    arg('ObjectName', 'objectName'),
+    arg('Record', 'enum', { options: ['previous', 'next', 'first', 'last'], default: 'first' }),
+    arg('WhereCondition', 'text', required)]),
   act('SetField', 'dataMacro', [arg('Name', 'text', required), arg('Value', 'expression', required)]),
   act('SetLocalVar', 'macro', [arg('Name', 'text', required), arg('Expression', 'expression', required)]),
   act('SetProperty', 'objects', [   // R9

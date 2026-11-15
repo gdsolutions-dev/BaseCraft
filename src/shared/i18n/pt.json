@@ -1238,6 +1238,7 @@
       "Sqr": "Retorna a raiz quadrada de um número.",
       "Val": "Lê os dígitos iniciais de um texto e retorna o número correspondente.",
       "CStr": "Converte um valor em texto.",
+      "Str": "Converte um número em texto, com um espaço inicial se for zero ou positivo.",
       "CInt": "Converte um valor em um número inteiro.",
       "CLng": "Converte um valor em um inteiro longo.",
       "CDbl": "Converte um valor em um número de ponto flutuante.",
@@ -1371,6 +1372,9 @@
       ],
       "CStr": [
         "expr"
+      ],
+      "Str": [
+        "número"
       ],
       "CInt": [
         "expr"
@@ -2796,12 +2800,15 @@
       "ApplyFilter": "AplicarFiltro",
       "CancelEvent": "CancelarEvento",
       "DeleteRecord": "ExcluirRegistro",
+      "RunMenuCommand": "ExecutarComandoMenu",
+      "ExportWithFormatting": "ExportarComFormatação",
       "FindRecord": "LocalizarRegistro",
       "GoToControl": "IrParaControle",
       "GoToRecord": "IrParaRegistro",
       "RefreshRecord": "AtualizarRegistro",
       "Requery": "Reconsultar",
       "SaveRecord": "SalvarRegistro",
+      "SearchForRecord": "ProcurarRegistro",
       "SetProperty": "DefinirPropriedade",
       "SetValue": "DefinirValor",
       "ShowAllRecords": "MostrarTodosOsRegistros",
@@ -2841,6 +2848,9 @@
       "OnlyCurrentField": "Pesquisar Somente no Campo Atual",
       "FindFirst": "Localizar Primeiro",
       "ControlName": "Nome do Controle",
+      "Command": "Comando",
+      "OutputFormat": "Formato de saída",
+      "OutputFile": "Arquivo de saída",
       "Record": "Registro",
       "Offset": "Deslocamento",
       "Property": "Propriedade",
@@ -2889,6 +2899,14 @@
       "WarningsOn": {
         "yes": "Sim",
         "no": "Não"
+      },
+      "OutputFormat": { "excel": "Pasta de trabalho do Excel (*.xlsx)" },
+      "Command": {
+        "selectRecord": "Selecionar registro",
+        "copy": "Copiar",
+        "paste": "Colar",
+        "print": "Imprimir",
+        "printSelection": "Imprimir seleção"
       },
       "Record": {
         "previous": "Anterior",
@@ -2988,7 +3006,11 @@
       "badReference": "“{{name}}” não é um controle de um formulário aberto.",
       "badValue": "O valor “{{name}}” não é adequado para esta propriedade.",
       "findWhatTooLong": "O texto a localizar tem mais de 255 caracteres.",
-      "saveDuringEvent": "O registro não pode ser salvo nem alterado enquanto este evento (Antes de Atualizar, Antes de Inserir) está em execução."
+      "saveDuringEvent": "O registro não pode ser salvo nem alterado enquanto este evento (Antes de Atualizar, Antes de Inserir) está em execução.",
+      "commandUnavailable": "O comando ou a ação não está disponível neste momento.",
+      "folderMissing": "A pasta do arquivo de saída não existe.",
+      "writeFailed": "Não foi possível gravar o arquivo de saída. Ele pode estar aberto em outro programa.",
+      "readOnly": "O formulário ou o registro é somente leitura."
     },
     "findRecord": {
       "notFound": "O item pesquisado não foi encontrado."

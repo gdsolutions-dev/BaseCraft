@@ -3,7 +3,7 @@ import type { Expr, Value } from './ast';
 import { fromSerial, infoOf } from './library';
 import { toDecimal } from '../coerce';
 
-export type MemberRoot = 'Forms' | 'Reports' | 'TempVars' | 'LocalVars' | 'MacroError';
+export type MemberRoot = 'Forms' | 'Reports' | 'TempVars' | 'LocalVars' | 'MacroError' | 'Form' | 'Screen';
 
 /** Racine canonique -> nom français affiché et longueur de la chaîne (racine comprise). */
 export const MEMBER_ROOTS: Record<MemberRoot, { fr: string; arity: 2 | 3 }> = {
@@ -12,6 +12,8 @@ export const MEMBER_ROOTS: Record<MemberRoot, { fr: string; arity: 2 | 3 }> = {
   TempVars: { fr: 'VarTemp', arity: 2 },
   LocalVars: { fr: 'VarLocales', arity: 2 },
   MacroError: { fr: 'ErreurMacro', arity: 2 },
+  Form: { fr: 'Formulaire', arity: 2 },   // macros only: the form the macro runs for
+  Screen: { fr: 'Écran', arity: 3 },   // macros only: [Screen]![PreviousControl]![Name]; [Screen]![ActiveControl] alone too (the parser)
 };
 
 const fold = (s: string): string => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();

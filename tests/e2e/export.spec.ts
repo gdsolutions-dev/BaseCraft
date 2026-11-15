@@ -1,9 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sheetOf } from './fixtures/xlsx-fixture';
-import { launchApp, seedBase, seedReportsE2E, seedSalesE2E } from './helpers';
+import { saveObject } from '../../src/main/db/objects';
+import { seedSales } from '../../src/main/query/test-db';
+import { launchApp, SALES_QUERIES, seedBase, seedReportsE2E, seedSalesE2E } from './helpers';
 
 const fr = JSON.parse(readFileSync(join(__dirname, '../../src/shared/i18n/fr.json'), 'utf8'));
 const FR = { BASECRAFT_REGION: 'fr-FR' };
@@ -193,5 +195,60 @@ test('Print Preview › Excel exports the record source of the report', async ()
     expect(ws.rowCount).toBe(76);
   } finally {
     await app.close();
+  }
+});
+
+test('Macro ExportWithFormatting writes the workbook at its path with no dialog, replaces it, and fails on a missing folder or an untrusted base', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'basecraft-export-macro-'));
+  const out = join(dir, 'Ventes.xlsx');
+  const exportMacro = (file: string) => [{ k: 'action' as const, action: 'ExportWithFormatting', args: { ObjectType: 'query', ObjectName: 'QClientsLyon', OutputFormat: 'excel', OutputFile: file } }];
+  const base = () => seedBase('export-macro', (db) => {
+    seedSales(db);
+    for (const [q, sql] of SALES_QUERIES) saveObject(db, 'query', q, { formatVersion: '1.0', sql }, null);
+    for (const [name, file] of [['MExport', out], ['MAbsent', join(dir, 'absent', 'Ventes.xlsx')]] as const) {
+      const r = saveObject(db, 'macro', name, { formatVersion: '1.0', items: exportMacro(file) }, null);
+      if (!r.ok) throw new Error(r.reason);
+    }
+  });
+  const { app, page } = await launchApp({ args: [base()], env: FR });
+  try {
+    await page.getByTestId('nav-item-macro-MExport').dblclick();
+    await expect.poll(() => existsSync(out)).toBe(true);   // no dialog: BASECRAFT_E2E_EXPORT_PATH is not even set
+    await expect(page.getByTestId('modal')).toHaveCount(0);
+    let ws = await sheetOf(out);
+    expect(ws.name).toBe('QClientsLyon');
+    expect(ws.row(1)).toEqual(['N°', 'Nom', 'Ville']);
+    expect(ws.cell('B2')).toBe('Dupont');
+
+    writeFileSync(out, 'not a workbook');   // run again: the file is replaced
+    await page.getByTestId('nav-item-macro-MExport').dblclick();
+    await expect.poll(() => readFileSync(out).subarray(0, 2).toString()).toBe('PK');
+    ws = await sheetOf(out);
+    expect(ws.cell('B2')).toBe('Dupont');
+
+    await page.getByTestId('nav-item-macro-MAbsent').dblclick();   // the folder does not exist: never created
+    await expect(page.getByTestId('macro-failed-message')).toContainText(fr.macro.error.folderMissing);
+    await page.getByTestId('macro-failed-stop').click();
+    expect(existsSync(join(dir, 'absent'))).toBe(false);
+  } finally {
+    await app.close();
+  }
+
+  const fresh = mkdtempSync(join(tmpdir(), 'basecraft-export-macro-'));
+  const blocked = join(fresh, 'Ventes.xlsx');
+  const u = await launchApp({ args: [seedBase('export-macro-untrusted', (db) => {
+    seedSales(db);
+    saveObject(db, 'query', 'QClientsLyon', { formatVersion: '1.0', sql: SALES_QUERIES[1]![1] }, null);
+    const r = saveObject(db, 'macro', 'MExport', { formatVersion: '1.0', items: exportMacro(blocked) }, null);
+    if (!r.ok) throw new Error(r.reason);
+  })], env: FR, untrusted: true });
+  try {
+    await u.page.getByTestId('banner-dismiss-content').click();
+    await u.page.getByTestId('nav-item-macro-MExport').dblclick();
+    await expect(u.page.getByTestId('macro-failed-message')).toHaveText(fr.macro.error.blocked.replace('{{action}}', fr.macro.action.ExportWithFormatting));
+    await u.page.getByTestId('macro-failed-stop').click();
+    expect(existsSync(blocked)).toBe(false);
+  } finally {
+    await u.app.close();
   }
 });

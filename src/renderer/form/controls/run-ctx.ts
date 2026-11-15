@@ -19,6 +19,7 @@ import { twipsToPx } from '../../designer/units';
 import { controlStyle, prop, type ThemeCtx } from '../run-model';
 
 export interface RunCtx {
+  selected?: boolean;                    // E6b: the current record is the selected record (a macro's RunMenuCommand selectRecord)
   snap: RecordSnapshot;
   info: SourceInfo | null;
   results: Record<string, CalcResult>;   // the current record's calculated controls (empty until computed)
@@ -45,6 +46,7 @@ export interface RunCtx {
   typed: Record<string, string>;          // a bound combo's text typed that matched no row, by control name (its entry while it is the pending value)
   setTyped(name: string, text: string | undefined): void;
   sub?: SubformHost;                      // what the form's subform controls need from it (Task 11)
+  print?: boolean;                        // a row of the print-all block: no side effect (a subform and a chart are static frames)
   other?: boolean;                        // another row of Continuous Forms or the datasheet: shown, not current
   chart?: { source: RecordSourceRef | null; params?: Record<string, CellInput>; version: number };   // what the chart controls need: the form's own record source and its parameter values
 }

@@ -22,6 +22,25 @@ export interface FormInstance {
   property(control: string, p: SettableProperty): Value;
   /** D2: the name of the control holding the focus. */
   activeControl(): string | null;
+  /** E6: [Form]![NewRecord]: the current record is the new one (not saved yet). */
+  newRecord(): boolean;
+  /** E6: [Form]![Dirty]: the current record has an uncommitted change, a value being typed included. */
+  dirty(): boolean;
+  /** E6: [Screen]![PreviousControl]: the control that had the focus before the one that has it now (null: none). */
+  previousControl(): string | null;
+  /** E6b: the current record is the selected record (until the current record changes). */
+  selectRecord(): void;
+  /** E6b: the selected record's values go to the record clipboard; throws bc:commandUnavailable when no record is selected. */
+  copyRecord(): void;
+  /** E6b: the copied values go into the current record as typed entries (not saved); rejects bc:commandUnavailable (no selected
+   *  record, nothing copied), bc:readOnly. */
+  pasteRecord(): Promise<void>;
+  /** E6b: prints the current record (header, current detail, footer) through the system print dialog; rejects
+   *  bc:commandUnavailable while another print runs, bc:printFailed. A cancelled dialog resolves. */
+  printRecord(): Promise<void>;
+  /** E6c: prints every record of the form (header, the detail once per record in the form's order and filter, footer), as Access's Print; an unbound
+   *  form prints as printRecord; rejects bc:commandUnavailable for the datasheet view, more than 5000 records, or while another print runs. */
+  printAll(): Promise<void>;
   /** R9 (`value`: as setValue); throws bc:propertyNotSupported, bc:notFound||<name>. */
   setProperty(control: string, p: SettableProperty, v: Value): void | Promise<void>;
   /** Rejects bc:cantGoToRecord (Access 2105). */
@@ -32,6 +51,9 @@ export interface FormInstance {
   applyFilter(where: string): Promise<void>; showAllRecords(): Promise<void>;
   /** false: not found (Access shows a message, no failure). */
   find(o: FindOptions): Promise<boolean>;
+  /** E6b: moves to the first (last; next or previous from the current one) record of the form's records, filter and sort as shown, for which
+   *  the condition is true: false and no move when none. Rejects the expression's failure (does not parse, unknown field). */
+  searchForRecord(where: string, record: 'previous' | 'next' | 'first' | 'last'): Promise<boolean>;
   /** None: the form's records; a list: its rows; a subform: its records. */
   requery(control?: string): Promise<void>;
   /** A refused save rejects bc:saveRefused. A save, a move, a requery or a delete asked while a Before Update / Before Insert

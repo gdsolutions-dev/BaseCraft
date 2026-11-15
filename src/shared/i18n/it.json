@@ -1238,6 +1238,7 @@
       "Sqr": "Restituisce la radice quadrata di un numero.",
       "Val": "Legge le cifre iniziali di un testo e restituisce il numero corrispondente.",
       "CStr": "Converte un valore in testo.",
+      "Str": "Converte un numero in testo, con uno spazio iniziale se è zero o positivo.",
       "CInt": "Converte un valore in un intero.",
       "CLng": "Converte un valore in un intero lungo.",
       "CDbl": "Converte un valore in un numero a virgola mobile.",
@@ -1371,6 +1372,9 @@
       ],
       "CStr": [
         "espr"
+      ],
+      "Str": [
+        "numero"
       ],
       "CInt": [
         "espr"
@@ -2796,12 +2800,15 @@
       "ApplyFilter": "ApplicaFiltro",
       "CancelEvent": "AnnullaEvento",
       "DeleteRecord": "EliminaRecord",
+      "RunMenuCommand": "EseguiComandoMenu",
+      "ExportWithFormatting": "EsportaConFormattazione",
       "FindRecord": "TrovaRecord",
       "GoToControl": "VaiAControllo",
       "GoToRecord": "VaiARecord",
       "RefreshRecord": "AggiornaRecord",
       "Requery": "RieseguiQuery",
       "SaveRecord": "SalvaRecord",
+      "SearchForRecord": "CercaRecord",
       "SetProperty": "ImpostaProprietà",
       "SetValue": "ImpostaValore",
       "ShowAllRecords": "MostraTuttiRecord",
@@ -2841,6 +2848,9 @@
       "OnlyCurrentField": "Cerca solo nel campo corrente",
       "FindFirst": "Trova il primo",
       "ControlName": "Nome controllo",
+      "Command": "Comando",
+      "OutputFormat": "Formato di output",
+      "OutputFile": "File di output",
       "Record": "Record",
       "Offset": "Offset",
       "Property": "Proprietà",
@@ -2889,6 +2899,14 @@
       "WarningsOn": {
         "yes": "Sì",
         "no": "No"
+      },
+      "OutputFormat": { "excel": "Cartella di lavoro di Excel (*.xlsx)" },
+      "Command": {
+        "selectRecord": "Seleziona record",
+        "copy": "Copia",
+        "paste": "Incolla",
+        "print": "Stampa",
+        "printSelection": "Stampa selezione"
       },
       "Record": {
         "previous": "Precedente",
@@ -2988,7 +3006,11 @@
       "badReference": "“{{name}}” non è un controllo di una maschera aperta.",
       "badValue": "Il valore “{{name}}” non è adatto a questa proprietà.",
       "findWhatTooLong": "Il testo da trovare supera i 255 caratteri.",
-      "saveDuringEvent": "Il record non può essere salvato né modificato mentre è in esecuzione questo evento (Prima dell'aggiornamento, Prima dell'inserimento)."
+      "saveDuringEvent": "Il record non può essere salvato né modificato mentre è in esecuzione questo evento (Prima dell'aggiornamento, Prima dell'inserimento).",
+      "commandUnavailable": "Il comando o l'azione non è disponibile in questo momento.",
+      "folderMissing": "La cartella del file di output non esiste.",
+      "writeFailed": "Impossibile scrivere il file di output. Potrebbe essere aperto in un altro programma.",
+      "readOnly": "La maschera o il record è in sola lettura."
     },
     "findRecord": {
       "notFound": "L'elemento cercato non è stato trovato."

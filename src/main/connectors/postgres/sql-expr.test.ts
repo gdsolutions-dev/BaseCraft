@@ -44,7 +44,7 @@ describe('brief', () => {
   ('refuses %s', (src) => expect(() => v(src)).toThrow(/^bc:serverFunction\|\w+\|postgresql$/));
   it('every catalog function is either translated or refused, none unknown', () => {
     for (const f of FUNCTIONS) expect(PG_FUNCTIONS.has(f.name) !== PG_REFUSED.has(f.name)).toBe(true);
-    expect([PG_FUNCTIONS.size, PG_REFUSED.size]).toEqual([51, 9]);
+    expect([PG_FUNCTIONS.size, PG_REFUSED.size]).toEqual([51, 10]);
   });
   it('a condition used as a value is -1/0', () => expect(v('[n] > 1').sql).toBe('CASE WHEN "n" > $1::numeric THEN -1 WHEN NOT ("n" > $1::numeric) THEN 0 END'));
   it('identifiers are quoted exactly', () => expect(pgIdent('O"Brien 2026')).toBe('"O""Brien 2026"'));

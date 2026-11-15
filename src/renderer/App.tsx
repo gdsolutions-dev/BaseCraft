@@ -39,6 +39,7 @@ import { setNavLeaveTable } from './links/nav-menu-links';
 import './query/nav-menu-query'; // after the foundation's items (a later registration wins by id)
 import { setOpenTabs } from './query/run-action';
 import { hasDocumentView } from './shell/document-views';
+import { clearRecordClipboard } from './form/record-clipboard';
 import { clearTempVars, macroNamesWithSubs, runMacroByName, setMacroShell } from './macro/macro-shell';
 import { closeEmbeddedOf } from './macro/embedded';
 import { formCancelled, whenFormOpened } from './form/form-instances';
@@ -234,7 +235,7 @@ function Shell() {
   useEffect(() => {
     rawDispatch({ type: 'reset' });
     setNavSelection(null);
-    clearTempVars(); // TempVars live for the open base: closed, switched (Open, New, Save As)
+    clearRecordClipboard(); clearTempVars(); // the record clipboard and TempVars live for the open base: closed, switched (Open, New, Save As)
     formCancelled(); reportShown(null, false); // a macro waiting for a form or a preview of the base gone fails (never hangs)
     if (path) setBackstage(null);
     // R11: every opening starts from the base UI (the full UI; in BaseCraft Runtime, run mode) and the product's own title and icon; its own sequence runs next (below)

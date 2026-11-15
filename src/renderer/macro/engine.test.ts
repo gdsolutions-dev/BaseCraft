@@ -233,6 +233,25 @@ describe('events', () => {
       .toMatchObject({ ok: false, failure: { code: 'expression', detail: 'unknownField' } });   // no objectMember: unknownField
   });
 
+  it('[Form]! and [Screen]! go to the host formMember, with the running event', async () => {
+    const items: MacroItem[] = [{ k: 'if', branches: [{ cond: '[Form]![NewRecord]', items: [act('Beep')] }], else: [act('Quit')] }];
+    const h = host({ M: m(items) });
+    const seen: unknown[] = [];
+    h.formMember = (p, e) => { seen.push([p, e?.event]); return { t: 'bool', v: true }; };
+    await runMacro('M', h, { event: ev() }); expect(names(h)).toEqual(['Beep']); expect(seen).toEqual([[['Form', 'NewRecord'], 'BeforeUpdate']]);
+    const h2 = host({ M: m(items) }); h2.formMember = () => ({ t: 'bool', v: false });
+    await runMacro('M', h2); expect(names(h2)).toEqual(['Quit']);
+    const h3 = host({ M: m([act('MessageBox', { Message: '=[Screen]![PreviousControl]![Name]' })]) });
+    h3.formMember = (p) => str(p.join('!')); await runMacro('M', h3); expect(h3.calls[0]!.args.Message).toBe('Screen!PreviousControl!Name');
+  });
+
+  it('[Form]! without a host formMember is an unknown reference; OnError next goes on', async () => {
+    expect(await runMacro('M', host({ M: m([{ k: 'if', branches: [{ cond: '[Form]![Dirty]', items: [act('Beep')] }] }]) })))
+      .toMatchObject({ ok: false, failure: { code: 'expression', detail: 'unknownField' } });
+    const h = host({ M: m([act('OnError', { GoTo: 'next' }), { k: 'if', branches: [{ cond: '[Form]![Dirty]', items: [act('Beep')] }] }, act('Quit')]) });
+    expect(await runMacro('M', h)).toEqual({ ok: true }); expect(names(h)).toEqual(['Quit']);
+  });
+
   it('an embedded definition runs with its label', async () => {
     expect(await runMacroDef(m([act('ImportXML')]), 'FClients : B : OnClick', host({})))
       .toMatchObject({ ok: false, failure: { macro: 'FClients : B : OnClick', code: 'unknownAction' } });

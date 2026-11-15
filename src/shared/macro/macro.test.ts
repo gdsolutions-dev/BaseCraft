@@ -98,7 +98,7 @@ describe('macro definition', () => {
 
 describe('action catalogue', () => {
   it('catalogue: 38 actions, four unsafe, every label in both languages', () => {
-    expect(ACTIONS).toHaveLength(38); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['RunCode', 'RunSQL', 'SetValue', 'SetWarnings']);
+    expect(ACTIONS).toHaveLength(41); expect(ACTIONS.filter((a) => a.unsafe).map((a) => a.name)).toEqual(['ExportWithFormatting', 'RunCode', 'RunSQL', 'SetValue', 'SetWarnings']);
     for (const a of ACTIONS) for (const cat of [fr, en]) { expect(get(cat, `macro.action.${a.name}`)).toBeTruthy();
       for (const g of a.args) { expect(get(cat, `macro.arg.${g.name}`)).toBeTruthy(); for (const o of g.options ?? []) expect(get(cat, `macro.argValue.${g.name}.${o || 'empty'}`)).toBeTruthy(); } }
     expect(fr.macro.action.OpenForm).toBe('OuvrirFormulaire'); expect(actionDef('OpenReport')?.args.find((x) => x.name === 'View')?.default).toBe('preview');
@@ -106,7 +106,7 @@ describe('action catalogue', () => {
     expect(actionDef('GoToRecord')?.args.find((a) => a.name === 'Record')?.default).toBe('next'); });
   it('names are unique; every category, block and the unknown action have a label', () => {
     const names = ACTIONS.map((a) => a.name);
-    expect(new Set(names).size).toBe(38);
+    expect(new Set(names).size).toBe(41);
     for (const cat of [fr, en]) {
       for (const c of new Set(ACTIONS.map((a) => a.category))) expect(get(cat, `macro.category.${c}`), c).toBeTruthy();
       for (const b of ['comment', 'group', 'if', 'elseIf', 'else', 'submacro']) expect(get(cat, `macro.block.${b}`), b).toBeTruthy();
@@ -137,6 +137,9 @@ describe('action catalogue', () => {
     expect(sig('RefreshRecord')).toBe('filter');
     expect(sig('Requery')).toBe('filter ControlName:text');
     expect(sig('SaveRecord')).toBe('dataEntry');
+    expect(sig('RunMenuCommand')).toBe('macro Command:enum*');
+    expect(sig('ExportWithFormatting')).toBe('objects! ObjectType:enum=table ObjectName:text* OutputFormat:enum=excel OutputFile:text');
+    expect(actionDef('RunMenuCommand')?.args[0]?.options).toEqual(['selectRecord', 'copy', 'paste', 'print', 'printSelection']);
     expect(sig('SetProperty')).toBe('objects ControlName:text Property:enum=enabled Value:text');
     expect(sig('SetValue')).toBe('objects! Item:reference* Expression:expression*');
     expect(sig('ShowAllRecords')).toBe('filter');

@@ -1247,6 +1247,7 @@
       "Sqr": "Zwraca pierwiastek kwadratowy liczby.",
       "Val": "Odczytuje początkowe cyfry tekstu i zwraca odpowiadającą im liczbę.",
       "CStr": "Konwertuje wartość na tekst.",
+      "Str": "Zamienia liczbę na tekst, z wiodącą spacją dla zera lub liczby dodatniej.",
       "CInt": "Konwertuje wartość na liczbę całkowitą.",
       "CLng": "Konwertuje wartość na długą liczbę całkowitą.",
       "CDbl": "Konwertuje wartość na liczbę zmiennoprzecinkową.",
@@ -1380,6 +1381,9 @@
       ],
       "CStr": [
         "wyrażenie"
+      ],
+      "Str": [
+        "liczba"
       ],
       "CInt": [
         "wyrażenie"
@@ -2819,12 +2823,15 @@
       "ApplyFilter": "ZastosujFiltr",
       "CancelEvent": "AnulujZdarzenie",
       "DeleteRecord": "UsuńRekord",
+      "RunMenuCommand": "UruchomPolecenieMenu",
+      "ExportWithFormatting": "EksportujZFormatowaniem",
       "FindRecord": "ZnajdźRekord",
       "GoToControl": "PrzejdźDoFormantu",
       "GoToRecord": "PrzejdźDoRekordu",
       "RefreshRecord": "OdświeżRekord",
       "Requery": "PonówKwerendę",
       "SaveRecord": "ZapiszRekord",
+      "SearchForRecord": "SzukajRekordu",
       "SetProperty": "UstawWłaściwość",
       "SetValue": "UstawWartość",
       "ShowAllRecords": "PokażWszystkieRekordy",
@@ -2864,6 +2871,9 @@
       "OnlyCurrentField": "Szukaj tylko w bieżącym polu",
       "FindFirst": "Znajdź pierwszy",
       "ControlName": "Nazwa formantu",
+      "Command": "Polecenie",
+      "OutputFormat": "Format wyjściowy",
+      "OutputFile": "Plik wyjściowy",
       "Record": "Rekord",
       "Offset": "Przesunięcie",
       "Property": "Właściwość",
@@ -2912,6 +2922,14 @@
       "WarningsOn": {
         "yes": "Tak",
         "no": "Nie"
+      },
+      "OutputFormat": { "excel": "Skoroszyt programu Excel (*.xlsx)" },
+      "Command": {
+        "selectRecord": "Zaznacz rekord",
+        "copy": "Kopiuj",
+        "paste": "Wklej",
+        "print": "Drukuj",
+        "printSelection": "Drukuj zaznaczenie"
       },
       "Record": {
         "previous": "Poprzedni",
@@ -3011,7 +3029,11 @@
       "badReference": "„{{name}}” nie jest formantem otwartego formularza.",
       "badValue": "Wartość „{{name}}” nie pasuje do tej właściwości.",
       "findWhatTooLong": "Tekst do znalezienia jest dłuższy niż 255 znaków.",
-      "saveDuringEvent": "Rekordu nie można zapisać ani zmienić podczas wykonywania tego zdarzenia (Przed aktualizacją, Przed wstawieniem)."
+      "saveDuringEvent": "Rekordu nie można zapisać ani zmienić podczas wykonywania tego zdarzenia (Przed aktualizacją, Przed wstawieniem).",
+      "commandUnavailable": "Polecenie lub akcja nie jest teraz dostępna.",
+      "folderMissing": "Folder pliku wyjściowego nie istnieje.",
+      "writeFailed": "Nie można zapisać pliku wyjściowego. Może być otwarty w innym programie.",
+      "readOnly": "Formularz lub rekord jest tylko do odczytu."
     },
     "findRecord": {
       "notFound": "Nie znaleziono szukanego elementu."

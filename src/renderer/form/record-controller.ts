@@ -337,7 +337,7 @@ export class FormRecords {
 
   /** The index (in the form's order) of the first row passing `test`, read through the pages: after `from` going down, before
    *  it going up (none past either end), or from `from` itself wrapping around for 'all' (each row once). */
-  async find(test: (row: SqlValue[]) => boolean, o: { from: number; dir: 'up' | 'down' | 'all' }): Promise<number | null> {
+  async find(test: (row: SqlValue[]) => boolean | Promise<boolean>, o: { from: number; dir: 'up' | 'down' | 'all' }): Promise<number | null> {
     if (this.cache && !this.counted) await this.rowAt(0);
     const n = this.total;
     // ponytail: a linear scan (R13); a server-side locate when bases over 100,000 rows make it slow
@@ -346,7 +346,7 @@ export class FormRecords {
       if (i < 0 || i >= n) return null;
       const row = await this.rowAt(i);
       if (!row) return null;
-      if (test(row.values)) return i;
+      if (await test(row.values)) return i;
     }
     return null;
   }

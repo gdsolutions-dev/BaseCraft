@@ -393,6 +393,7 @@ export const LIBRARY: Record<string, LibFn> = {
     return Number.isNaN(n) ? num(0) : Number.isFinite(n) ? num(n) : fail('overflow');
   }),
   CStr: strict(([a], i) => str(toText(a, i))),
+  Str: strict(([a], i) => { const n = toNum(a, i); return str((n >= 0 ? ' ' : '') + numberToText(n, infoOf('en-US'))); }),   // VBA: a leading space for a sign, a point whatever the region
   CInt: strict(([a], i) => { const n = long(a, i); return n < -32768 || n > 32767 ? fail('overflow') : num(n); }),
   CLng: strict(([a], i) => num(long(a, i))),
   CDbl: strict(([a], i) => num(toNum(a, i))),

@@ -61,7 +61,7 @@ export async function replaceFile(path: string, data: Uint8Array, write: typeof 
 }
 
 /** E2E only: the URLs the print partition refused, and the print jobs answered without the system dialog. */
-const e2eLog = { blocked: [] as string[], printed: 0, html: '' /* the last document printed or exported */ };
+const e2eLog = { blocked: [] as string[], printed: 0, formsPrinted: 0, hold: undefined as Promise<void> | undefined /* a test's pause inside a form print */, html: '' /* the last document printed or exported */ };
 
 /** Serves bc-print on its own partition (never the main window's), refuses every permission and every other URL. After ready. */
 export function registerPrintProtocol(): void {
@@ -165,5 +165,23 @@ export function printDocument(req: PrintRequest): Promise<'printed' | 'canceled'
         reject(new Error('bc:printFailed'));
       }
     });
+  });
+}
+
+/** A form's current record: the main window itself, which the renderer has marked for print (print CSS shows only the form).
+ *  E2E: counted, no dialog. */
+export function printMainWindow(win: BrowserWindow): Promise<'printed' | 'canceled'> {
+  if (e2e()) { e2eLog.formsPrinted++; return Promise.resolve(e2eLog.hold).then(() => 'printed' as const); }
+  return new Promise((resolve, reject) => {
+    try {
+      win.webContents.print({ silent: false, printBackground: true }, (ok, reason) => {
+        if (ok) resolve('printed');
+        else if (/cancel/i.test(reason)) resolve('canceled');
+        else { console.error('print failed:', reason); reject(new Error('bc:printFailed')); }
+      });
+    } catch (e) {
+      console.error(e);
+      reject(new Error('bc:printFailed'));
+    }
   });
 }

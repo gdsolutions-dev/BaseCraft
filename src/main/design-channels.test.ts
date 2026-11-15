@@ -18,7 +18,7 @@ const DATA_CHANNELS: string[] = [
   CH.objectsList, CH.objectsGet,
   CH.sourcesDescribe, CH.sourcesPage, CH.sourcesSave, CH.sourcesAutoLookup, CH.chartsData,
   CH.queriesActionCount, CH.queriesRunAction, CH.queriesCancel,
-  CH.reportsExportPdf, CH.reportsPrint, CH.exchangeExportText, CH.exchangeExportExcel, CH.exchangeExportMarkup, CH.exchangeSavedList, CH.exchangeSavedSave, CH.exchangeSavedDelete,
+  CH.reportsExportPdf, CH.reportsPrint, CH.formsPrintRecord, CH.exchangeExportText, CH.exchangeExportExcel, CH.exchangeExportExcelTo, CH.exchangeExportMarkup, CH.exchangeSavedList, CH.exchangeSavedSave, CH.exchangeSavedDelete,
   CH.linksRefresh, CH.linksUnlock, CH.linksLogin, CH.linksLoginInfo, // C4 R10: the Runtime logs in
 ];
 

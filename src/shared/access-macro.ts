@@ -1,6 +1,7 @@
 // Converter of the text Access's SaveAsText writes for a macro (a `macros/<n>.txt` file or the inside of an `EmMacro` block) into a
 // BaseCraft macro definition, batch E5. Pure module: no database, no UI. What it cannot carry becomes a comment item, never a loss.
 import { parseAccessText } from './access-text';
+import { memberRoot } from './expr/members';
 import { parseCanonical, serialize } from './expr/parser';
 import { isValidObjectName, sameName } from './field-types';
 import { actionDef } from './macro/catalog';
@@ -36,7 +37,7 @@ export function parseAccessMacro(text: string): AccessMacroRow[] | null {
 // confirms OpenReport). A column with `to` becomes that BaseCraft argument; one without must hold Access's default (`ok`) or the action is a comment.
 // `def`: Access's own default of the argument (its stored form), taken for an empty value and emitted explicitly; an enumeration without one maps no empty value.
 // `note`: an argument BaseCraft has no place for whose value other than `ok`/empty is dropped with a note.
-interface Col { to?: string; def?: string; note?: string; t?: 'raw' | 'text' | 'expr' | 'ref' | 'where' | 'bool' | 'num' | 'call'; map?: Record<string, string>; ok?: string[] }
+interface Col { to?: string; quiet?: string[]; def?: string; note?: string; t?: 'raw' | 'text' | 'expr' | 'ref' | 'where' | 'bool' | 'num' | 'call' | 'excel' | 'xlsx'; map?: Record<string, string>; ok?: string[] }
 const raw = (to: string): Col => ({ to, t: 'raw' });
 const txt = (to: string): Col => ({ to, t: 'text' });
 const ex = (to: string): Col => ({ to, t: 'expr' });
@@ -46,7 +47,8 @@ const en = (to: string, map: Record<string, string>, def?: string): Col => ({ to
 const drop = (...ok: string[]): Col => ({ ok });   // '' (not set) is always Access's default too
 const OBJECT_TYPE = { '-1': '', 0: 'table', 1: 'query', 2: 'form', 3: 'report', 4: 'macro' };   // AcObjectType
 const VIEW = { 0: 'datasheet', 1: 'design' };   // AcView of OpenQuery / OpenTable (2, 3, 4… are views BaseCraft lacks)
-const dataMode = (part: string): Col => ({ note: part });   // OpenQuery / OpenTable: 1 (acEdit, the default) or empty is silent
+const dataMode = (part: string): Col => ({ to: 'DataMode', note: part });   // OpenQuery / OpenTable: 1 (acEdit, the default) or empty is silent, 2 is readOnly, 0 (add) is dropped with a note
+const OUTPUT_AUTO_START: Col = { note: 'OutputTo.AutoStart', quiet: ['0'] };   // OutputTo: 0 (no) or empty is silent, any other value is dropped with a note
 const none: Col[] = [];
 const MAP = new Map<string, { to: string; cols: Col[] }>([
   ['Beep', { to: 'Beep', cols: none }], ['CancelEvent', { to: 'CancelEvent', cols: none }], ['ClearMacroError', { to: 'ClearMacroError', cols: none }],
@@ -57,9 +59,14 @@ const MAP = new Map<string, { to: string; cols: Col[] }>([
   ['CloseWindow', { to: 'CloseWindow', cols: [en('ObjectType', OBJECT_TYPE, '-1'), raw('ObjectName'), drop('0')] }],
   ['FindRecord', { to: 'FindRecord', cols: [txt('FindWhat'), en('Match', { 0: 'anywhere', 1: 'whole', 2: 'start' }, '1'), bl('MatchCase', 'no'),
     en('Search', { 0: 'up', 1: 'down', 2: 'all' }, '2'), drop('0', 'no', 'false'), en('OnlyCurrentField', { '-1': 'yes', 0: 'no' }, '-1'), bl('FindFirst', 'yes')] }],
+  // OutputTo (object type 0 table / 1 query, format, file, auto start, template, encoding, quality): only the Excel workbook of a table or query; quality is ignored
+  ...['OutputTo', 'ExportWithFormatting'].map((n): [string, { to: string; cols: Col[] }] => [n, { to: 'ExportWithFormatting', cols: [en('ObjectType', { 0: 'table', 1: 'query' }), raw('ObjectName'),
+    { to: 'OutputFormat', t: 'excel', def: '' }, { to: 'OutputFile', t: 'xlsx' }, OUTPUT_AUTO_START, drop(), drop(), drop('0', '1')] }]),
   ['GoToControl', { to: 'GoToControl', cols: [txt('ControlName')] }],
   ['GoToRecord', { to: 'GoToRecord', cols: [en('ObjectType', { '-1': '', 2: 'form' }, '-1'), raw('ObjectName'),
     en('Record', { 0: 'previous', 1: 'next', 2: 'first', 3: 'last', 4: 'goTo', 5: 'new' }, '1'), { to: 'Offset', t: 'num' }] }],
+  ['SearchForRecord', { to: 'SearchForRecord', cols: [en('ObjectType', { '-1': '', 2: 'form' }, '-1'), raw('ObjectName'),
+    en('Record', { 0: 'previous', 1: 'next', 2: 'first', 3: 'last' }, '2'), txt('WhereCondition')] }],
   ['MsgBox', { to: 'MessageBox', cols: [txt('Message'), bl('Beep', 'yes'), en('Type', { 0: 'none' }, '0'), txt('Title')] }],   // icons: numbers not confirmed, so comment
   ['MessageBox', { to: 'MessageBox', cols: [txt('Message'), bl('Beep', 'yes'), en('Type', { 0: 'none' }, '0'), txt('Title')] }],
   ['OnError', { to: 'OnError', cols: [en('GoTo', { 0: 'next', 1: 'macroName', 2: 'fail' }, '0'), raw('MacroName')] }],   // GoTo 0/1/2: docs/analyse-access/actions-macro.md (MSACCESS.EXE strings), not a Microsoft page
@@ -89,17 +96,38 @@ export const ACCESS_ACTION_NAMES: string[] = [...MAP.keys()];
 // RunCommand: AcCommand number → action. AcCommand: https://learn.microsoft.com/en-us/office/vba/api/access.accommand (also in docs/analyse-access/actions-macro.md).
 const COMMANDS = new Map<string, { action: string; args?: Record<string, string> }>([
   ['97', { action: 'SaveRecord' }], ['292', { action: 'UndoRecord' }], ['223', { action: 'DeleteRecord' }],
+  ['50', { action: 'RunMenuCommand', args: { Command: 'selectRecord' } }], ['190', { action: 'RunMenuCommand', args: { Command: 'copy' } }],
+  ['191', { action: 'RunMenuCommand', args: { Command: 'paste' } }], ['340', { action: 'RunMenuCommand', args: { Command: 'print' } }], ['590', { action: 'RunMenuCommand', args: { Command: 'printSelection' } }],
   ['28', { action: 'GoToRecord', args: { Record: 'new' } }], ['58', { action: 'CloseWindow' }], ['186', { action: 'CloseWindow' }]]);
 
 // The canonical form of an Access expression, as E4 does for a control source; undefined when it does not read.
 // Access writes the members of MacroError / TempVars / LocalVars with a dot (or none: MacroError alone is its Number); BaseCraft's form is `[Root]![X]`.
-const ROOT_MEMBER = /"(?:[^"]|"")*"|(?<![\w\]!.])\[?(MacroError|TempVars|LocalVars)\]?(?:\.(?:\[([^\]]+)\]|(\w+))|(?![\w.!(]))/gi;
-const bang = (s: string): string => s.replace(ROOT_MEMBER, (m, root?: string, br?: string, w?: string) => {
+const ROOT_MEMBER = /"(?:[^"]|"")*"|(?<![\w\]!.])\[?(MacroError|TempVars|LocalVars|Form)\]?(?:\.(?:\[([^\]]+)\]|(\w+))|(?![\w.!(]))/gi;
+const SCREEN = /"(?:[^"]|"")*"|(?<![\w\]!.])\[?Screen\]?\.\[?(PreviousControl|ActiveControl)\]?(?:\.\[?(Name)\]?)?(?![\w\]])/gi;   // [Screen]![PreviousControl]![Name], [Screen]![ActiveControl](![Name])
+const bang = (s: string): string => s.replace(SCREEN, (m, a?: string, nm?: string) => a ? `[Screen]![${a.toLowerCase() === 'activecontrol' ? 'ActiveControl' : 'PreviousControl'}]${nm ? '![Name]' : ''}` : m).replace(ROOT_MEMBER, (m, root?: string, br?: string, w?: string) => {
   if (!root) return m;
-  const r = root.toLowerCase() === 'macroerror' ? 'MacroError' : root.toLowerCase() === 'tempvars' ? 'TempVars' : 'LocalVars', member = br ?? w;
+  const r = memberRoot(root)!, member = br ?? w;
   return member ? `[${r}]![${member}]` : r === 'MacroError' ? '[MacroError]![Number]' : m;
 });
-const canon = (s: string): string | undefined => { try { return serialize(parseCanonical(bang(s))); } catch { return undefined; } };
+// [Form] / [Screen] members: only the ones the macro runtime reads (formMember), with these exact spellings. SQL (a where argument)
+// and an assigned Item cannot carry them (plain). Any other member of these two roots: not convertible.
+const FORM_MEMBERS = ['NewRecord', 'Dirty'], SCREEN_MEMBERS = ['PreviousControl', 'ActiveControl'];
+function formScreenOk(n: unknown, plain: boolean): boolean {
+  if (Array.isArray(n)) return n.every((x) => formScreenOk(x, plain));
+  if (typeof n !== 'object' || n === null) return true;
+  const e = n as { k?: string; path?: string[] };
+  if (e.k === 'member' && e.path && (e.path[0] === 'Form' || e.path[0] === 'Screen')) {
+    if (plain) return false;
+    const [root, key = '', prop] = e.path;
+    const ok = (root === 'Form' ? FORM_MEMBERS : SCREEN_MEMBERS).find((m) => sameName(m, key));
+    const alone = root === 'Screen' && ok === 'ActiveControl' && e.path.length === 2;   // [Screen]![ActiveControl]: the control's value
+    if (!ok || (root === 'Form' ? e.path.length !== 2 : !alone && (e.path.length !== 3 || !prop || !sameName(prop, 'Name')))) return false;
+    e.path[1] = ok; if (root === 'Screen' && !alone) e.path[2] = 'Name';
+    return true;
+  }
+  return Object.values(n).every((x) => formScreenOk(x, plain));
+}
+const canon = (s: string, plain = false): string | undefined => { try { const e = parseCanonical(bang(s)); return formScreenOk(e, plain) ? serialize(e) : undefined; } catch { return undefined; } };
 const YES = ['yes', '-1', '1', 'true'], NO = ['no', '0', 'false'];
 
 // One argument value; undefined: not convertible; null: nothing to set.
@@ -112,8 +140,11 @@ function convertArg(c: Col, v: string): string | null | undefined {
       if (v.startsWith('=')) { const e = canon(v.slice(1)); return e === undefined ? undefined : `=${e}`; }
       return c.t === 'num' && !/^-?\d+(\.\d+)?$/.test(v) ? undefined : v;
     }
-    case 'expr': case 'ref': return canon(v.replace(/^=/, ''));
-    case 'where': return canon(v);
+    case 'expr': case 'ref': case 'where': {
+      return canon(c.t === 'where' ? v : v.replace(/^=/, ''), c.t === 'where' || c.t === 'ref');
+    }
+    case 'excel': return v.replace(/\s/g, '').toLowerCase() === 'excelworkbook(*.xlsx)' ? 'excel' : undefined;   // AcOutputFormat names the format by its filter text
+    case 'xlsx': return /\.xlsx$/i.test(v) ? v : undefined;   // a path the main process will write: only a workbook
     case 'call': return parsePythonCall(v) ? v : undefined;
     default: return v;
   }
@@ -130,7 +161,7 @@ function convertAction(row: AccessMacroRow, extra: MacroNote[]): MacroItem | und
   const args: Record<string, string> = {};
   for (let i = 0; i < entry.cols.length; i++) {
     const c = entry.cols[i], v = row.args[i] ?? '';
-    if (c.note) { if (v !== '' && v !== '1') extra.push({ code: 'argumentDropped', part: c.note }); continue; }
+    if (c.note) { if (c.to && v === '2') args[c.to!] = 'readOnly'; else if (v !== '' && !(c.quiet ?? ['1']).includes(v)) extra.push({ code: 'argumentDropped', part: c.note }); continue; }
     if (!c.to) { if (v !== '' && !(c.ok ?? []).includes(v.toLowerCase())) return undefined; continue; }
     const r = convertArg(c, v);
     if (r === undefined) return undefined;

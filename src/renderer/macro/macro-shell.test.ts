@@ -4,7 +4,7 @@ import { localeInfo } from '../../shared/locale-format';
 import type { MacroDef, MacroItem } from '../../shared/macro/model';
 import type { ModalApi } from '../shell/Modal';
 import type { DocTab } from '../state/app-state';
-import type { Value } from '../../shared/expr/ast';
+import { ExprRuntimeError, type Value } from '../../shared/expr/ast';
 import { bool, num, str } from '../../shared/expr/library';
 import type { EventBinding } from '../../shared/design/events';
 import { formCancelled, formReady, registerForm, type FormInstance } from '../form/form-instances';
@@ -28,9 +28,13 @@ let macros: Record<string, MacroDef> = {};
 const objects: Record<string, string[]> = { form: ['FClients'], report: ['Factures par client'], query: ['QSel', 'QMaj'] };
 const sql: Record<string, string> = { QSel: 'SELECT * FROM Clients;', QMaj: 'UPDATE Clients SET Ville = "x";' };
 const beep = vi.fn(async () => {});
+const exportExcelTo = vi.fn(async (..._: unknown[]): Promise<unknown> => ({ ok: true, rows: 1, warnings: { unmappable: 0, truncated: 0, ambiguous: 0 } }));
+const exportExcel = vi.fn(async (..._: unknown[]): Promise<unknown> => ({ ok: true, rows: 1, warnings: { unmappable: 0, truncated: 0, ambiguous: 0 } }));
 (globalThis as unknown as { window: { basecraft: Partial<BasecraftApi> } }).window = {
   basecraft: {
     app: { beep, getSettings: async () => ({ region: 'fr-FR', uiLanguage: 'fr' }) } as unknown as BasecraftApi['app'],
+    sources: { describe: async () => ({ parameters: [] }) } as unknown as BasecraftApi['sources'],
+    exchange: { exportExcelTo, exportExcel } as unknown as BasecraftApi['exchange'],
     tables: { list: async () => [{ name: 'Clients' }] } as unknown as BasecraftApi['tables'],
     objects: {
       list: async (kind?: string) => (kind === 'macro' ? Object.keys(macros) : objects[kind!] ?? []).map((name) => ({ name, kind })),
@@ -63,12 +67,13 @@ const perform = (c: ActionCall) => shellHost(d, { singleStep: false }).perform(c
 
 /** A form instance recording its calls. */
 type StubForm = FormInstance & { [K in 'setValue' | 'setProperty' | 'goToRecord' | 'goToControl' | 'applyFilter' | 'showAllRecords' | 'find' | 'requery'
-  | 'saveRecord' | 'undoRecord' | 'deleteRecord' | 'refreshRecord']: ReturnType<typeof vi.fn> };
+  | 'saveRecord' | 'undoRecord' | 'deleteRecord' | 'refreshRecord' | 'selectRecord' | 'copyRecord' | 'pasteRecord']: ReturnType<typeof vi.fn> };
 function stubForm(name: string, tabId = `t-${name}`): StubForm {
   return {
-    name, tabId, value: () => str('x'), setValue: vi.fn(async () => {}), setProperty: vi.fn(), goToRecord: vi.fn(async () => {}),
-    goToControl: vi.fn(), applyFilter: vi.fn(async () => {}), showAllRecords: vi.fn(async () => {}), find: vi.fn(async () => true),
+    name, tabId, newRecord: () => false, dirty: () => false, previousControl: () => null, value: () => str('x'), setValue: vi.fn(async () => {}), setProperty: vi.fn(), goToRecord: vi.fn(async () => {}),
+    goToControl: vi.fn(), applyFilter: vi.fn(async () => {}), showAllRecords: vi.fn(async () => {}), find: vi.fn(async () => true), searchForRecord: vi.fn(async () => true),
     requery: vi.fn(async () => {}), saveRecord: vi.fn(async () => {}), undoRecord: vi.fn(), deleteRecord: vi.fn(async () => {}), refreshRecord: vi.fn(async () => {}),
+    selectRecord: vi.fn(), copyRecord: vi.fn(), pasteRecord: vi.fn(async () => {}), printRecord: vi.fn(async () => {}), printAll: vi.fn(async () => {}),
   };
 }
 const offs: (() => void)[] = [];
@@ -131,6 +136,90 @@ describe('macro shell actions', () => {
     await perform(call('OpenQuery', { QueryName: 'QMaj', View: 'datasheet' }));
     expect(runActionFlow).toHaveBeenCalledWith({ kind: 'query', name: 'QMaj' }, expect.objectContaining({ warnings: true }));
     await expect(perform(call('OpenTable', { TableName: 'Absent', View: 'datasheet' }))).rejects.toThrow('bc:notFound||Absent');
+  });
+
+  it('OpenQuery and OpenTable with DataMode readOnly open the datasheet read-only; without it, as before', async () => {
+    await perform(call('OpenQuery', { QueryName: 'QSel', View: 'datasheet', DataMode: 'readOnly' }));
+    expect(d.dispatch).toHaveBeenLastCalledWith({ type: 'open', kind: 'query', name: 'QSel', mode: 'run', args: { dataMode: 'readOnly' } });
+    await perform(call('OpenQuery', { QueryName: 'QSel', View: 'datasheet', DataMode: '' }));
+    expect(d.dispatch).toHaveBeenLastCalledWith({ type: 'open', kind: 'query', name: 'QSel', mode: 'run' });
+    await perform(call('OpenTable', { TableName: 'clients', View: 'datasheet', DataMode: 'readOnly' }));
+    expect(d.dispatch).toHaveBeenLastCalledWith({ type: 'open', kind: 'table', name: 'Clients', mode: 'datasheet', args: { dataMode: 'readOnly' } });
+    await perform(call('OpenTable', { TableName: 'Clients', View: 'datasheet' }));
+    expect(d.dispatch).toHaveBeenLastCalledWith({ type: 'open', kind: 'table', name: 'Clients', mode: 'datasheet' });
+    await perform(call('OpenTable', { TableName: 'Clients', View: 'design', DataMode: 'readOnly' }));
+    expect(d.dispatch).toHaveBeenLastCalledWith({ type: 'open', kind: 'table', name: 'Clients', mode: 'design' });
+  });
+
+  it('RunMenuCommand selects, copies and pastes on the event form; no form fails as the other form actions do', async () => {
+    const f = open(stubForm('FCommandes'));
+    const ev = { event: ctx() };
+    await perform(call('RunMenuCommand', { Command: 'selectRecord' }, ev));
+    await perform(call('RunMenuCommand', { Command: 'copy' }, ev));
+    await perform(call('RunMenuCommand', { Command: 'paste' }, ev));
+    await perform(call('RunMenuCommand', { Command: 'printSelection' }, ev));
+    await perform(call('RunMenuCommand', { Command: 'print' }, ev));
+    expect([f.selectRecord.mock.calls.length, f.copyRecord.mock.calls.length, f.pasteRecord.mock.calls.length, f.printRecord.mock.calls.length, f.printAll.mock.calls.length]).toEqual([1, 1, 1, 1, 1]);   // print: every record; printSelection: the current one
+    await expect(perform(call('RunMenuCommand', { Command: 'cut' }, ev))).rejects.toThrow('bc:commandUnavailable');
+    const active = vi.spyOn(d, 'active').mockReturnValue(undefined as never);
+    await expect(perform(call('RunMenuCommand', { Command: 'copy' }))).rejects.toThrow('bc:noActiveForm');
+    active.mockRestore();
+  });
+
+  it('describe: [MacroError]![Description] of a form refusal is its message; any other failure keeps its detail', () => {
+    const h = shellHost(d, { singleStep: false });
+    const f = (code: 'actionFailed' | 'expression', detail?: string) => ({ macro: 'M', action: 'RunMenuCommand', raw: {}, code, number: 2004, detail });
+    expect(h.describe!(f('actionFailed', 'bc:commandUnavailable'))).toBe(i18n.t('macro.error.commandUnavailable'));
+    expect(h.describe!(f('actionFailed', "Error invoking remote method 'x': Error: bc:folderMissing"))).toBe(i18n.t('macro.error.folderMissing'));
+    expect(h.describe!(f('actionFailed', 'bc:notFound'))).toBeUndefined();   // its text takes a parameter
+    expect(h.describe!(f('actionFailed', 'bc:nothingLikeThis'))).toBeUndefined();
+    expect(h.describe!(f('actionFailed', 'bc:notOpen||F'))).toBeUndefined();
+    expect(h.describe!(f('expression', 'bc:commandUnavailable'))).toBeUndefined();
+  });
+
+  describe('formMember: [Form]! and [Screen]!', () => {
+    const member = async (path: string[], event?: EventContext) => shellHost(d, { singleStep: false }).formMember!(path, event);
+    const formWith = (o: { newRecord: boolean; dirty: boolean; previous: string | null; active: string | null }) =>
+      open({ ...stubForm('FCommandes'), newRecord: () => o.newRecord, dirty: () => o.dirty, previousControl: () => o.previous, activeControl: () => o.active });
+    it('reads the event form: the booleans and the control names', async () => {
+      formWith({ newRecord: true, dirty: false, previous: 'Nom', active: 'Bouton' });
+      expect(await member(['Form', 'NewRecord'], ctx())).toEqual(bool(true));
+      expect(await member(['Form', 'dirty'], ctx())).toEqual(bool(false));
+      expect(await member(['Screen', 'PreviousControl', 'Name'], ctx())).toEqual(str('Nom'));
+      expect(await member(['Screen', 'ActiveControl', 'Name'], ctx())).toEqual(str('Bouton'));
+    });
+    it('[Screen]![ActiveControl] alone is the value of the active control; none: unknownField, never Null', async () => {
+      const f = formWith({ newRecord: false, dirty: false, previous: null, active: 'Liste' });
+      (f as { value: unknown }).value = (c: string) => { if (c === 'Liste') return num(7); throw new Error('bc:notFound'); };
+      expect(await member(['Screen', 'ActiveControl'], ctx())).toEqual(num(7));
+      formWith({ newRecord: false, dirty: false, previous: null, active: null });
+      await expect(member(['Screen', 'ActiveControl'], ctx())).rejects.toMatchObject({ code: 'unknownField' });
+      // a button or a label has no value of its own: FormInstance.value throws unknownField (envValue), a failure here, never Null
+      const g = formWith({ newRecord: false, dirty: false, previous: null, active: 'Bouton' });
+      (g as { value: unknown }).value = () => { throw new ExprRuntimeError('unknownField', 'Bouton'); };
+      await expect(member(['Screen', 'ActiveControl'], ctx())).rejects.toMatchObject({ code: 'unknownField' });
+      await expect(member(['Screen', 'PreviousControl'], ctx())).rejects.toMatchObject({ code: 'unknownField' });
+    });
+    it('another member, a control without name (no previous one), no form: unknownField, never a crash', async () => {
+      formWith({ newRecord: false, dirty: false, previous: null, active: null });
+      for (const p of [['Form', 'Other'], ['Screen', 'PreviousControl', 'Name'], ['Screen', 'ActiveControl', 'Name'], ['Screen', 'Other', 'Name'], ['Screen', 'PreviousControl', 'Tag']]) {
+        await expect(member(p, ctx()), p.join('!')).rejects.toMatchObject({ code: 'unknownField' });
+      }
+      await expect(member(['Form', 'NewRecord'], ctx({ object: { kind: 'form', name: 'Absent' } }))).rejects.toMatchObject({ code: 'unknownField' });   // not open
+      await expect(member(['Form', 'NewRecord'])).rejects.toMatchObject({ code: 'unknownField' });   // no event: the active tab is a table
+    });
+    it('without an event, the active form', async () => {
+      const f = formWith({ newRecord: true, dirty: true, previous: null, active: null });
+      const act = vi.spyOn(d, 'active').mockReturnValue(tab(f.tabId, 'form', 'FCommandes'));
+      expect(await member(['Form', 'Dirty'])).toEqual(bool(true));
+      act.mockRestore();
+    });
+    it('a report event: unknownField, even with a form as the active tab', async () => {
+      const f = formWith({ newRecord: true, dirty: true, previous: null, active: null });
+      const act = vi.spyOn(d, 'active').mockReturnValue(tab(f.tabId, 'form', 'FCommandes'));
+      await expect(member(['Form', 'Dirty'], ctx({ object: { kind: 'report', name: 'R' } }))).rejects.toMatchObject({ code: 'unknownField' });
+      act.mockRestore();
+    });
   });
 
   it('RunSQL refuses a select', async () => {
@@ -318,6 +407,51 @@ describe('events and form actions', () => {
     expect(failureMessage(failure)).toBe(i18n.t('macro.error.eventTooDeep'));
     expect(await runEvent({ kind: 'embedded', def: m([act('Beep')]) }, ctx())).toBe(false);   // the counter came back down
     expect(beep).toHaveBeenCalledTimes(MAX_EVENT_DEPTH + 1);
+  });
+
+  it('ExportWithFormatting writes at OutputFile, or asks where with no file; cancel, too many rows and unknown objects fail', async () => {
+    exportExcelTo.mockClear(); exportExcel.mockClear();
+    const path = 'C:/out/Ventes.xlsx';
+    await perform(call('ExportWithFormatting', { ObjectType: 'query', ObjectName: 'qsel', OutputFormat: 'excel', OutputFile: path }));
+    expect(exportExcelTo).toHaveBeenCalledWith({ ref: { kind: 'query', name: 'QSel' } }, path);   // the stored spelling
+    await perform(call('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'clients', OutputFormat: 'excel', OutputFile: path }));
+    expect(exportExcelTo).toHaveBeenLastCalledWith({ ref: { kind: 'table', name: 'Clients' } }, path);
+    expect(exportExcel).not.toHaveBeenCalled();
+    await perform(call('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'Clients', OutputFormat: 'excel', OutputFile: '  ' }));   // the dialog, the object's name proposed
+    expect(exportExcel).toHaveBeenCalledWith({ ref: { kind: 'table', name: 'Clients' } }, 'Clients');
+    exportExcel.mockResolvedValueOnce({ ok: false, reason: 'cancelled' });
+    await expect(perform(call('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'Clients', OutputFile: '' }))).rejects.toThrow('bc:actionCancelled');
+    exportExcelTo.mockResolvedValueOnce({ ok: false, reason: 'tooManyRows', limit: 1048575 });
+    await expect(perform(call('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'Clients', OutputFile: path }))).rejects.toThrow('bc:tooManyRows||1048575');
+    exportExcelTo.mockRejectedValueOnce(new Error('bc:folderMissing'));
+    await expect(perform(call('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'Clients', OutputFile: path }))).rejects.toThrow('bc:folderMissing');
+    await expect(perform(call('ExportWithFormatting', { ObjectType: 'query', ObjectName: 'Absent', OutputFile: path }))).rejects.toThrow('bc:notFound');
+    expect(exportExcelTo).toHaveBeenCalledTimes(4);
+  });
+
+  it('ExportWithFormatting is refused while content is not enabled, as RunSQL is; its failures read in the user language', async () => {
+    macros = { M: m([act('ExportWithFormatting', { ObjectType: 'table', ObjectName: 'Clients', OutputFormat: 'excel', OutputFile: 'C:/out/a.xlsx' })]) };
+    exportExcelTo.mockClear();
+    enabled = false;
+    expect(await runMacroByName('M')).toMatchObject({ ok: false, failure: { code: 'blocked', action: 'ExportWithFormatting' } });
+    expect(exportExcelTo).not.toHaveBeenCalled();
+    enabled = true;
+    const f = (detail: string) => ({ macro: 'M', action: 'ExportWithFormatting', raw: {}, code: 'actionFailed' as const, number: 2501, detail });
+    expect(failureMessage(f('bc:folderMissing'))).toContain(i18n.t('macro.error.folderMissing'));
+    expect(failureMessage(f('bc:tooManyRows||1048575'))).toContain('Excel');
+  });
+
+  it('SearchForRecord asks the form of the event (or the named one) for the condition and the record', async () => {
+    const f = open(stubForm('FCommandes')), g = open(stubForm('FClients', 'a'));
+    const ev = { event: ctx({ object: { kind: 'form', name: 'FCommandes' } }) };
+    await perform(call('SearchForRecord', { ObjectType: '', Record: 'first', WhereCondition: '[Id] = 3' }, ev));
+    expect(f.searchForRecord).toHaveBeenCalledWith('[Id] = 3', 'first');
+    f.searchForRecord.mockResolvedValueOnce(false);
+    await expect(perform(call('SearchForRecord', { ObjectType: '', Record: 'next', WhereCondition: '[Id] = 4' }, ev))).resolves.toBeUndefined();   // no match: no failure
+    await perform(call('SearchForRecord', { ObjectType: 'form', ObjectName: 'fclients', Record: 'last', WhereCondition: '[Id] = 5' }, ev));
+    expect(g.searchForRecord).toHaveBeenCalledWith('[Id] = 5', 'last');
+    f.searchForRecord.mockRejectedValueOnce(new Error('bc:saveRefused'));
+    await expect(perform(call('SearchForRecord', { ObjectType: '', Record: 'first', WhereCondition: '[Id] = 3' }, ev))).rejects.toThrow('bc:saveRefused');
   });
 
   it('form actions reach the event\'s form, else the active tab\'s; none fails', async () => {

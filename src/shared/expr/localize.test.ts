@@ -21,6 +21,7 @@ describe('display <-> canonical', () => {
     expect(toCanonical('[VarTemp]![Ville] & "x"', FR)).toBe('[TempVars]![Ville] & "x"');
     expect(toCanonical('[TempVars]![a]', FR)).toBe('[TempVars]![a]');
     expect(toCanonical('VarTemp!a', EN)).toBe('[TempVars]![a]');
+    expect(toDisplay('[Form]![Dirty] And [Screen]![PreviousControl]![Name]', FR)).toBe('[Formulaire]![Dirty] Et [Écran]![PreviousControl]![Name]');
   });
   it('fr display -> canonical -> en display', () => {
     const c = toCanonical('VraiFaux([Qté]>1,5; "gros; ou pas"; "petit")', FR);

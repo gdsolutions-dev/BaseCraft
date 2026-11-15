@@ -1206,6 +1206,7 @@
       "Sqr": "Renvoie la racine carrée d'un nombre.",
       "Val": "Lit les chiffres au début d'un texte et renvoie le nombre correspondant.",
       "CStr": "Convertit une valeur en texte.",
+      "Str": "Convertit un nombre en texte, avec une espace initiale s'il est nul ou positif.",
       "CInt": "Convertit une valeur en entier.",
       "CLng": "Convertit une valeur en entier long.",
       "CDbl": "Convertit une valeur en nombre réel.",
@@ -1339,6 +1340,9 @@
       ],
       "CStr": [
         "expr"
+      ],
+      "Str": [
+        "nombre"
       ],
       "CInt": [
         "expr"
@@ -2742,12 +2746,15 @@
       "ApplyFilter": "AppliquerFiltre",
       "CancelEvent": "AnnulerÉvénement",
       "DeleteRecord": "SupprimerEnregistrement",
+      "RunMenuCommand": "ExécuterCommandeMenu",
+      "ExportWithFormatting": "ExporterAvecMiseEnForme",
       "FindRecord": "RechercherEnregistrement",
       "GoToControl": "AtteindreContrôle",
       "GoToRecord": "AtteindreEnregistrement",
       "RefreshRecord": "ActualiserEnregistrement",
       "Requery": "RéexécuterRequête",
       "SaveRecord": "SauvegarderEnregistrement",
+      "SearchForRecord": "ChercherEnregistrement",
       "SetProperty": "DéfinirPropriété",
       "SetValue": "DéfinirValeur",
       "ShowAllRecords": "AfficherTousEnreg",
@@ -2787,6 +2794,9 @@
       "OnlyCurrentField": "Champ actif uniquement",
       "FindFirst": "Trouver le premier",
       "ControlName": "Nom du contrôle",
+      "Command": "Commande",
+      "OutputFormat": "Format de sortie",
+      "OutputFile": "Fichier de sortie",
       "Record": "Enregistrement",
       "Offset": "Décalage",
       "Property": "Propriété",
@@ -2803,6 +2813,8 @@
       "GoTo": { "next": "Suivant", "macroName": "Nom de macro", "fail": "Échec" },
       "WarningsOn": { "yes": "Oui", "no": "Non" },
       "Record": { "previous": "Précédent", "next": "Suivant", "first": "Premier", "last": "Dernier", "goTo": "Atteindre", "new": "Nouveau" },
+      "OutputFormat": { "excel": "Classeur Excel (*.xlsx)" },
+      "Command": { "selectRecord": "Sélectionner l'enregistrement", "copy": "Copier", "paste": "Coller", "print": "Imprimer", "printSelection": "Imprimer la sélection" },
       "Match": { "anywhere": "N'importe où dans le champ", "whole": "Champ entier", "start": "Début de champ" },
       "MatchCase": { "yes": "Oui", "no": "Non" },
       "Search": { "up": "Vers le haut", "down": "Vers le bas", "all": "Tout" },
@@ -2861,7 +2873,11 @@
       "badReference": "« {{name}} » ne désigne pas un contrôle d'un formulaire ouvert.",
       "badValue": "La valeur « {{name}} » ne convient pas à cette propriété.",
       "findWhatTooLong": "Le texte recherché dépasse 255 caractères.",
-      "saveDuringEvent": "Impossible d'enregistrer ou de changer d'enregistrement pendant l'exécution de cet événement (Avant MAJ, Avant insertion)."
+      "saveDuringEvent": "Impossible d'enregistrer ou de changer d'enregistrement pendant l'exécution de cet événement (Avant MAJ, Avant insertion).",
+      "commandUnavailable": "La commande ou l'action n'est pas disponible actuellement.",
+      "folderMissing": "Le dossier du fichier de sortie n'existe pas.",
+      "writeFailed": "Le fichier de sortie n'a pas pu être écrit. Il est peut-être ouvert dans un autre programme.",
+      "readOnly": "Le formulaire ou l'enregistrement est en lecture seule."
     },
     "findRecord": {
       "notFound": "Élément recherché introuvable."

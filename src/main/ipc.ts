@@ -29,12 +29,12 @@ import { e2e, pickAttachmentPaths, pickAttachmentSavePath, pickExcelPath, pickEx
 import { compactOnClose, whileCompacting } from './compact-on-close';
 import { CloseVeto } from './close-veto';
 import {
-  basePath, cells, definition, exportSource, exportSpec, markupFormat, savedExport, savedImport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, exportRelink, exportMacros, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
+  basePath, excelOutputPath, checkExcelTarget, cells, definition, exportSource, exportSpec, markupFormat, savedExport, savedImport, fieldFilters, importPath, importPlan, importSpec, sheetOrNull, boolOrNull, importSpecOrNull, linkKindOrUndefined, linkPath, splitPath, reportBody, bareFileName, accessPassword, accessStructure, exportKeepDir, exportQueries, exportDesigns, exportRelink, exportMacros, odbcRequest, serverKey, serverKind, serverParams, migrateRequest, loginUser, bool, unlockPath, nameList, objectKind, objectKindOrAll, pageRequest, relation,
   relationsLayout, columnWidths, sheetLayoutArg, relationsListOptions, saveRequest, lookupName, nameArg, printRequest, sourcePageRequest, chartDataRequest, sourceRef, sourceSaveRequest, expectedValues, clipboardText, spellWords, hyperlinkUrl, autoLookupRequest, rowRef, rowRefs, description, queryRef, queryParams, runActionOptions, startupOptions, navOptionsArg, themeArg, themeApplyArgs, resourceNameArg, resourceNamesArg, pictureDataUrlArg, iconBytes, settingValue, nameChanges, propertyTargetsArg, dataMacrosArg, uint,
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { viaTemp } from './exchange/atomic-file';
-import { pdfFileName, printDocument, renderToPdf, replaceFile } from './report-print';
+import { pdfFileName, printDocument, printMainWindow, renderToPdf, replaceFile } from './report-print';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
 import { inBaseFolder, readLinkedPictures } from './linked-picture';
@@ -526,6 +526,25 @@ async function runExport(src: ReturnType<typeof exportSource>, spec: ReturnType<
   }
 }
 
+/** E6b (macro ExportWithFormatting): the Excel export with no dialog, at `path`. The guard rails are here, not in the renderer: the base's content is
+ *  enabled (as an action query), the path is absolute and ends in .xlsx, its folder exists (never created), it is not the open base's file. The
+ *  data process writes through a temporary file and renames it: the file already there is kept on failure. */
+async function runExportTo(src: ReturnType<typeof exportSource>, path: string): Promise<unknown> {
+  const h = host;
+  if (!h) throw new Error('bc:contentDisabled');
+  path = checkExcelTarget(path, { content: h.state.content, protectedPaths: [h.opened.path, h.state.path], platform: process.platform });
+  const folder = dirname(path);
+  if (!(await stat(folder).then((s) => s.isDirectory(), () => false))) throw new Error('bc:folderMissing');
+  if (importing) throw new Error('bc:invalidArgument');
+  importing = true;
+  try {
+    if ((await need().exportRowCount(src)) > MAX_EXCEL_ROWS) return { ok: false, reason: 'tooManyRows', limit: MAX_EXCEL_ROWS };
+    return await need().exportExcel(src, path, sheetName(src.ref.kind === 'table' || src.ref.kind === 'query' ? src.ref.name : ''));
+  } finally {
+    importing = false;
+  }
+}
+
 let stopSpell = (): void => {};
 /** Quit: ends the Windows spell checker child. */
 export const endSpell = (): void => stopSpell();
@@ -970,8 +989,10 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     return 'saved';
   });
   handle(CH.reportsPrint, (r) => printDocument(printRequest(r)));
+  handle(CH.formsPrintRecord, () => { const w = mainWindow(); if (!w) throw new Error('bc:printFailed'); return printMainWindow(w); });
   handle(CH.exchangeExportText, (s, spec, name) => runExport(exportSource(s), exportSpec(spec), lookupName(name)));
   handle(CH.exchangeExportExcel, (s, name) => runExport(exportSource(s), null, lookupName(name)));
+  handle(CH.exchangeExportExcelTo, (s, p) => runExportTo(exportSource(s), excelOutputPath(p)));
   handle(CH.exchangeExportMarkup, (s, format, name) => runExport(exportSource(s), null, lookupName(name), markupFormat(format)));
   // F4: the saved exports live in the base's options (the Runtime keeps them too, as it keeps the exports)
   handle(CH.exchangeSavedList, () => need().savedExports());

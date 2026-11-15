@@ -58,7 +58,7 @@ export const PG_DISCREPANCIES: Record<string, { pg: unknown[]; why: string }> = 
   '[txt] Like [txt]': { pg: ['bc:serverFunction|Like|postgresql'], why: LIKECOL },
   'Space([i])': { pg: [' ', '  ', null, '   ', '', '', ' '.repeat(10), null, ' '.repeat(7)], why: SPACE },
   'String([i], "x")': { pg: ['x', 'xx', null, 'xxx', '', '', 'x'.repeat(10), null, 'x'.repeat(7)], why: SPACE },
-  ...Object.fromEntries(['Format', 'Val', 'CStr', 'CDate', 'IsNumeric', 'IsDate', 'StrComp']
+  ...Object.fromEntries(['Format', 'Val', 'CStr', 'Str', 'CDate', 'IsNumeric', 'IsDate', 'StrComp']
     .map((name) => [CROSS_CASES.find((c) => c.src.startsWith(`${name}(`))!.src, { pg: [`bc:serverFunction|${name}|postgresql`], why: REFUSED }])),
 };
 

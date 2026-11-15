@@ -43,6 +43,10 @@ describe('appReducer', () => {
     const s2 = appReducer(s1, open());
     expect(s2.tabs[0]).toMatchObject({ openArgs: { where: '[Ville] = "Lyon"' }, reloadToken: 1 });
     expect(appReducer(init, open({ dataMode: 'add' })).tabs[0]).toMatchObject({ openArgs: { dataMode: 'add' }, reloadToken: 0 });
+    const ro = appReducer(appReducer(init, { type: 'open', kind: 'query', name: 'Q', mode: 'run' }), { type: 'open', kind: 'query', name: 'Q', mode: 'run', args: { dataMode: 'readOnly' } });
+    expect(ro.tabs[0].openArgs).toMatchObject({ dataMode: 'readOnly' });
+    expect(appReducer(ro, { type: 'open', kind: 'query', name: 'Q', mode: 'run', args: { dataMode: 'edit' } }).tabs[0].openArgs).toMatchObject({ dataMode: 'edit' });
+    expect(appReducer(ro, { type: 'open', kind: 'query', name: 'Q', mode: 'run' }).tabs[0].openArgs).toMatchObject({ dataMode: 'readOnly' });
     const design = appReducer(appReducer(init, { type: 'open', kind: 'form', name: 'F', mode: 'design' }), open({ where: '1' }));
     expect(design.tabs[0]).toMatchObject({ mode: 'run', openArgs: { where: '1' }, reloadToken: 0 }); // a new view reads anyway
   });

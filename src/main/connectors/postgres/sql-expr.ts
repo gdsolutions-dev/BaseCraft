@@ -365,7 +365,7 @@ const CALLS: Record<string, (e: Call, g: Gen) => F> = {
 /** The closed list's catalog functions (R14), for docs/postgresql.md. */
 export const PG_FUNCTIONS: ReadonlySet<string> = new Set([...Object.keys(CALLS), 'IsNull', 'CBool']);
 /** The catalog functions R14 refuses: locale-dependent, or no order to take first/last by. */
-export const PG_REFUSED: ReadonlySet<string> = new Set(['Format', 'Val', 'CStr', 'CDate', 'IsNumeric', 'IsDate', 'StrComp', 'First', 'Last']);
+export const PG_REFUSED: ReadonlySet<string> = new Set(['Format', 'Val', 'CStr', 'Str', 'CDate', 'IsNumeric', 'IsDate', 'StrComp', 'First', 'Last']);
 
 const plain = (f: F): PgFrag => ({ sql: f.sql, params: f.params });
 /** A value, R14's table; refusals: bc:serverFunction|<name>|postgresql. */

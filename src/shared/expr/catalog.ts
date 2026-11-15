@@ -7,7 +7,7 @@ export type FnCategory = 'text' | 'number' | 'date' | 'logic' | 'conversion' | '
 export interface FnInfo { name: string; fr: string; min: number; max: number; category: FnCategory; ret: FieldType | 'arg0' | 'arg1' }
 
 const RET = new Map(Object.entries({
-  shortText: 'Left Right Mid Trim LTrim RTrim UCase LCase Replace Space String Format CStr',
+  shortText: 'Left Right Mid Trim LTrim RTrim UCase LCase Replace Space String Format CStr Str',
   number: 'Len InStr StrComp Round Int Fix Abs Sgn Sqr Val CInt CLng CDbl Year Month Day Hour Minute Second Weekday DateDiff '
     + 'DatePart Count StDev StDevP Var VarP',
   currency: 'CCur',
@@ -30,7 +30,7 @@ export const FUNCTIONS: FnInfo[] = [
   f('text', 'StrComp', 'CompChaîne', 2, 3), f('text', 'Format', 'Format', 1, 2),
   f('number', 'Round', 'Arrondi', 1, 2), f('number', 'Int', 'Ent', 1), f('number', 'Fix', 'Tronque', 1),
   f('number', 'Abs', 'Abs', 1), f('number', 'Sgn', 'Signe', 1), f('number', 'Sqr', 'RacineCarrée', 1),
-  f('conversion', 'Val', 'Val', 1), f('conversion', 'CStr', 'CChaîne', 1), f('conversion', 'CInt', 'CEnt', 1),
+  f('conversion', 'Val', 'Val', 1), f('conversion', 'CStr', 'CChaîne', 1), f('conversion', 'Str', 'Str', 1), f('conversion', 'CInt', 'CEnt', 1),
   f('conversion', 'CLng', 'CEntLong', 1), f('conversion', 'CDbl', 'CRéel', 1), f('conversion', 'CCur', 'CMonétaire', 1),
   f('conversion', 'CDate', 'CDate', 1), f('conversion', 'CBool', 'CBool', 1),
   f('date', 'Date', 'Date', 0), f('date', 'Time', 'Temps', 0), f('date', 'Now', 'Maintenant', 0),

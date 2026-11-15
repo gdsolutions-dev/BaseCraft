@@ -1220,6 +1220,7 @@
       "Sqr": "숫자의 제곱근을 반환합니다.",
       "Val": "텍스트의 앞쪽 숫자를 읽어 해당하는 숫자를 반환합니다.",
       "CStr": "값을 텍스트로 변환합니다.",
+      "Str": "숫자를 텍스트로 변환합니다. 0 또는 양수이면 앞에 공백이 붙습니다.",
       "CInt": "값을 정수로 변환합니다.",
       "CLng": "값을 Long 정수로 변환합니다.",
       "CDbl": "값을 부동 소수점 숫자로 변환합니다.",
@@ -1353,6 +1354,9 @@
       ],
       "CStr": [
         "식"
+      ],
+      "Str": [
+        "숫자"
       ],
       "CInt": [
         "식"
@@ -2750,12 +2754,15 @@
       "ApplyFilter": "필터적용",
       "CancelEvent": "이벤트취소",
       "DeleteRecord": "레코드삭제",
+      "RunMenuCommand": "메뉴명령실행",
+      "ExportWithFormatting": "서식으로내보내기",
       "FindRecord": "레코드찾기",
       "GoToControl": "컨트롤로이동",
       "GoToRecord": "레코드로이동",
       "RefreshRecord": "레코드새로고침",
       "Requery": "다시쿼리",
       "SaveRecord": "레코드저장",
+      "SearchForRecord": "레코드조건찾기",
       "SetProperty": "속성설정",
       "SetValue": "값설정",
       "ShowAllRecords": "모든레코드표시",
@@ -2795,6 +2802,9 @@
       "OnlyCurrentField": "현재 필드만 검색",
       "FindFirst": "처음부터 찾기",
       "ControlName": "컨트롤 이름",
+      "Command": "명령",
+      "OutputFormat": "출력 형식",
+      "OutputFile": "출력 파일",
       "Record": "레코드",
       "Offset": "오프셋",
       "Property": "속성",
@@ -2843,6 +2853,14 @@
       "WarningsOn": {
         "yes": "예",
         "no": "아니요"
+      },
+      "OutputFormat": { "excel": "Excel 통합 문서 (*.xlsx)" },
+      "Command": {
+        "selectRecord": "레코드 선택",
+        "copy": "복사",
+        "paste": "붙여넣기",
+        "print": "인쇄",
+        "printSelection": "선택 영역 인쇄"
       },
       "Record": {
         "previous": "이전",
@@ -2942,7 +2960,11 @@
       "badReference": "“{{name}}”은(는) 열려 있는 양식의 컨트롤이 아닙니다.",
       "badValue": "값 “{{name}}”은(는) 이 속성에 적합하지 않습니다.",
       "findWhatTooLong": "찾을 텍스트가 255자를 초과합니다.",
-      "saveDuringEvent": "이 이벤트(업데이트 전, 삽입 전)가 실행되는 동안에는 레코드를 저장하거나 변경할 수 없습니다."
+      "saveDuringEvent": "이 이벤트(업데이트 전, 삽입 전)가 실행되는 동안에는 레코드를 저장하거나 변경할 수 없습니다.",
+      "commandUnavailable": "이 명령 또는 작업은 지금 사용할 수 없습니다.",
+      "folderMissing": "출력 파일의 폴더가 없습니다.",
+      "writeFailed": "출력 파일을 쓸 수 없습니다. 다른 프로그램에서 열려 있을 수 있습니다.",
+      "readOnly": "폼 또는 레코드가 읽기 전용입니다."
     },
     "findRecord": {
       "notFound": "검색 항목을 찾을 수 없습니다."

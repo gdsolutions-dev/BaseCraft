@@ -12,6 +12,11 @@ describe('member references', () => {
     expect(MEMBER_ROOTS.Reports.fr).toBe('États');
   });
 
+  it('roots Form and Screen', () => {
+    expect(MEMBER_ROOTS.Form).toEqual({ fr: 'Formulaire', arity: 2 });
+    expect(MEMBER_ROOTS.Screen).toEqual({ fr: 'Écran', arity: 3 });
+  });
+
   it('bare names and three-part chains parse', () => {
     expect(parseCanonical('TempVars!Total')).toEqual({ k: 'member', path: ['TempVars', 'Total'] });
     expect(parseCanonical('[Formulaires]![F]![C]')).toEqual({ k: 'member', path: ['Forms', 'F', 'C'] });

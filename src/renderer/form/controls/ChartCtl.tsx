@@ -73,11 +73,11 @@ export function ChartCtl({ c, x, style }: CtlProps) {
   const badLink = masterF.length !== childF.length;
   const key = JSON.stringify(values);
   // Une autre ligne (formulaire continu, feuille) ne charge rien : seul l'enregistrement courant dessine le graphique.
-  const req = useMemo(() => x.other ? null : chartRequest(readChartSpec(c.props), docSource, x.chart?.params, { master: masterF, child: childF, values }),
-    [c.props, docSource, x.chart?.params, x.other, masterF, childF, key]);   // eslint-disable-line react-hooks/exhaustive-deps -- les valeurs par leur texte
+  const req = useMemo(() => x.other || x.print ? null : chartRequest(readChartSpec(c.props), docSource, x.chart?.params, { master: masterF, child: childF, values }),
+    [c.props, docSource, x.chart?.params, x.other, x.print, masterF, childF, key]);   // eslint-disable-line react-hooks/exhaustive-deps -- les valeurs par leur texte
   const { data } = useChartData(req, x.chart?.version);
   const empty = !data || data.rows.length === 0;
-  if (x.other) return <div className="frun-chart" style={{ ...FRAME, ...style }} data-testid={`form-ctl-${c.name}`} />;
+  if (x.other || x.print) return <div className="frun-chart" style={{ ...FRAME, ...style }} data-testid={`form-ctl-${c.name}`} />;
   const hasSource = !!(docSource || readChartSpec(c.props).source);
   return (
     <div className="frun-chart" style={{ ...FRAME, ...style }} data-testid={`form-ctl-${c.name}`} {...tipOf(c)}>

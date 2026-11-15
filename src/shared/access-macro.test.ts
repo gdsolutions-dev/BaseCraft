@@ -219,6 +219,8 @@ describe('every entry of the mapping table', () => {
     ['SetTempVar|V|=1', 'SetTempVar', { Name: 'V', Expression: '1' }], ['SetValue|[A]|=2', 'SetValue', { Item: '[A]', Expression: '2' }],
     ['OutputTo|0|T|ExcelWorkbook(*.xlsx)|C:/a.xlsx|0|||0', 'ExportWithFormatting', { ObjectType: 'table', ObjectName: 'T', OutputFormat: 'excel', OutputFile: 'C:/a.xlsx' }],
     ['ExportWithFormatting|1|Q|ExcelWorkbook(*.xlsx)|C:/a.xlsx', 'ExportWithFormatting', { ObjectType: 'query', ObjectName: 'Q', OutputFormat: 'excel', OutputFile: 'C:/a.xlsx' }],
+    ['SendObject|3|R|PDFFormat(*.pdf)|a@example.com|b@example.com|c@example.com|S|T|-1|', 'EMailDatabaseObject', { ObjectType: 'report', ObjectName: 'R', OutputFormat: 'pdf', To: 'a@example.com', Cc: 'b@example.com', Bcc: 'c@example.com', Subject: 'S', MessageText: 'T' }],
+    ['EMailDatabaseObject|3|R|PDFFormat(*.pdf)|a@example.com', 'EMailDatabaseObject', { ObjectType: 'report', ObjectName: 'R', OutputFormat: 'pdf', To: 'a@example.com' }],
     ['SearchForRecord|-1||2|[Id] = 1', 'SearchForRecord', { Record: 'first', WhereCondition: '[Id] = 1' }],
     ['SetWarnings|No', 'SetWarnings', { WarningsOn: 'no' }], ['ApplyFilter||[A]=1|', 'ApplyFilter', { WhereCondition: '[A] = 1' }],
   ];
@@ -292,6 +294,21 @@ describe('review: argument forms measured on real Access macro text', () => {
     expect(q.notes).toEqual([]);
     expect(t.def.items).toEqual([{ k: 'action', action: 'OpenTable', args: { TableName: 'T', View: 'datasheet' } }]);
     expect(t.notes).toEqual([{ code: 'argumentDropped', part: 'OpenTable.DataMode' }]);
+  });
+  it('SendObject of a report as a PDF: EMailDatabaseObject with the five fields; Edit Message No and a template are noted; any other object or format is a comment', () => {
+    const send = (...r: string[]) => one('SendObject', ...r);
+    const ok = send('3', 'Factures', 'PDFFormat(*.pdf)', 'a@example.com; b@example.com', '', '', 'Mensuel', '="Bonjour" & " " & "Cordialement"', '-1', '');
+    expect(ok.def.items).toEqual([{ k: 'action', action: 'EMailDatabaseObject', args: { ObjectType: 'report', ObjectName: 'Factures', OutputFormat: 'pdf', To: 'a@example.com; b@example.com',
+      Subject: 'Mensuel', MessageText: '="Bonjour" & " " & "Cordialement"' } }]);
+    expect(ok.notes).toEqual([]);
+    expect(validateMacro(ok.def)).toEqual([]);
+    expect(send('3', 'R', 'pdf format (*.PDF)', 'a@example.com', '', '', '', '', '0', '').notes).toEqual([{ code: 'argumentDropped', part: 'SendObject.EditMessage' }]);
+    expect(send('3', 'R', 'PDFFormat(*.pdf)', 'a@example.com', '', '', '', '', '', 'tpl.rtf').notes).toEqual([{ code: 'argumentDropped', part: 'SendObject.TemplateFile' }]);
+    const comment = (r: ReturnType<typeof send>) => r.def.items.map((i) => i.k);
+    expect(comment(send('0', 'T', 'PDFFormat(*.pdf)', 'a@example.com'))).toEqual(['comment']);
+    expect(comment(send('3', 'R', 'ExcelWorkbook(*.xlsx)', 'a@example.com'))).toEqual(['comment']);
+    expect(comment(send('-1', '', '', 'a@example.com'))).toEqual(['comment']);
+    expect(comment(send('3', 'R', '', 'a@example.com'))).toEqual(['comment']);
   });
   it('OutputTo of an Excel workbook: the measured row converts to ExportWithFormatting; the others are comments or noted', () => {
     const out = (...r: string[]) => one('OutputTo', ...r);

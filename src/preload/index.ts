@@ -210,6 +210,7 @@ const api: BasecraftApi = {
   reports: {
     exportPdf: (r) => ipcRenderer.invoke(CH.reportsExportPdf, r),
     print: (r) => ipcRenderer.invoke(CH.reportsPrint, r),
+    mailPdf: (r, mail) => ipcRenderer.invoke(CH.reportsMailPdf, r, mail),
   },
   forms: { printRecord: () => ipcRenderer.invoke(CH.formsPrintRecord) },
   exchange: {

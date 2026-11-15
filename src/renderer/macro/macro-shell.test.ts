@@ -441,6 +441,25 @@ describe('events and form actions', () => {
     expect(failureMessage(f('bc:tooManyRows||1048575'))).toContain('Excel');
   });
 
+  it('EMailDatabaseObject lays the report out for a mail draft with the fields as given; an unknown report and a cancelled On Open fail; refused while content is not enabled', async () => {
+    outputSavedReport.mockClear();
+    const R = 'Factures par client';
+    await perform(call('EMailDatabaseObject', { ObjectType: 'report', ObjectName: 'factures PAR client', OutputFormat: 'pdf', To: 'a@example.com; b@example.com', Subject: 'Mensuel & co', MessageText: 'l1\r\nl2' }));
+    expect(outputSavedReport).toHaveBeenCalledWith(modal, R, { mail: { to: 'a@example.com; b@example.com', cc: '', bcc: '', subject: 'Mensuel & co', body: 'l1\r\nl2' } });   // the stored spelling
+    outputSavedReport.mockResolvedValueOnce(true);
+    await expect(perform(call('EMailDatabaseObject', { ObjectName: R }))).rejects.toThrow('bc:actionCancelled');
+    await expect(perform(call('EMailDatabaseObject', { ObjectName: 'Absent' }))).rejects.toThrow('bc:notFound');
+    outputSavedReport.mockClear();
+    macros = { M: m([act('EMailDatabaseObject', { ObjectType: 'report', ObjectName: R, OutputFormat: 'pdf', To: 'a@example.com' })]) };
+    enabled = false;
+    expect(await runMacroByName('M')).toMatchObject({ ok: false, failure: { code: 'blocked', action: 'EMailDatabaseObject' } });
+    expect(outputSavedReport).not.toHaveBeenCalled();
+    enabled = true;
+    const f = (detail: string) => ({ macro: 'M', action: 'EMailDatabaseObject', raw: {}, code: 'actionFailed' as const, number: 2501, detail });
+    expect(failureMessage(f('bc:mailUnavailable'))).toContain(i18n.t('macro.error.mailUnavailable'));
+    expect(failureMessage(f('bc:writeFailed'))).toContain(i18n.t('macro.error.writeFailed'));
+  });
+
   it('SearchForRecord asks the form of the event (or the named one) for the condition and the record', async () => {
     const f = open(stubForm('FCommandes')), g = open(stubForm('FClients', 'a'));
     const ev = { event: ctx({ object: { kind: 'form', name: 'FCommandes' } }) };

@@ -19,7 +19,7 @@ const t = (key: string, params: Record<string, unknown> = {}) => i18n.t(key, par
 export const actionLabel = (name: string) => (i18n.exists(`macro.action.${name}`) ? t(`macro.action.${name}`) : name);
 
 /** The form actions' own refusals (B2): `bc:<code>` or `bc:<code>||<name>`. */
-const FORM_REFUSALS = new Set(['notOpen', 'noActiveForm', 'cantGoToRecord', 'cantFocus', 'saveRefused', 'propertyNotSupported', 'badReference', 'badValue', 'findWhatTooLong', 'saveDuringEvent', 'commandUnavailable', 'readOnly', 'folderMissing', 'writeFailed']);
+const FORM_REFUSALS = new Set(['notOpen', 'noActiveForm', 'cantGoToRecord', 'cantFocus', 'saveRefused', 'propertyNotSupported', 'badReference', 'badValue', 'findWhatTooLong', 'saveDuringEvent', 'commandUnavailable', 'readOnly', 'folderMissing', 'writeFailed', 'mailUnavailable']);
 
 /** The failure's message: `macro.error.<code>`; an action's own refusal (`bc:<code>`) in its own words. */
 export function failureMessage(f: MacroFailure): string {

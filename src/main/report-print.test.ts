@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { printRequest } from './ipc-validate';
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pdfFileName, replaceFile, resolvePrintRequest } from './report-print';
+import { clearMailDrafts, pdfFileName, replaceFile, resolvePrintRequest } from './report-print';
 
 vi.mock('electron', () => ({}));
 
@@ -78,4 +78,15 @@ describe('replaceFile (final review I2)', () => {
     }
     chmodSync(path, 0o666);
   });
+});
+
+// E6d: at start only the mail-draft folders older than an hour go; a young one (another running instance's) and anything else stay
+it('clearMailDrafts removes the old draft folders only', async () => {
+  const temp = mkdtempSync(join(tmpdir(), 'bc-mailclear-'));
+  for (const n of ['BaseCraft-mail-old', 'BaseCraft-mail-young', 'Other']) { mkdirSync(join(temp, n)); writeFileSync(join(temp, n, 'a.pdf'), 'x'); }
+  writeFileSync(join(temp, 'BaseCraft-mail-file'), 'x');
+  const old = new Date(Date.now() - 2 * 3_600_000);
+  utimesSync(join(temp, 'BaseCraft-mail-old'), old, old);
+  await clearMailDrafts(temp);
+  expect(readdirSync(temp).sort()).toEqual(['BaseCraft-mail-file', 'BaseCraft-mail-young', 'Other']);
 });

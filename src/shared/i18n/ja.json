@@ -2756,6 +2756,7 @@
       "DeleteRecord": "レコードの削除",
       "RunMenuCommand": "メニューコマンドの実行",
       "ExportWithFormatting": "書式付きエクスポート",
+      "EMailDatabaseObject": "データベースオブジェクトのメール送信",
       "FindRecord": "レコードの検索",
       "GoToControl": "コントロールの移動",
       "GoToRecord": "レコードの移動",
@@ -2805,6 +2806,11 @@
       "Command": "コマンド",
       "OutputFormat": "出力形式",
       "OutputFile": "出力ファイル",
+      "To": "宛先",
+      "Cc": "Cc",
+      "Bcc": "Bcc",
+      "Subject": "件名",
+      "MessageText": "メッセージ テキスト",
       "Record": "レコード",
       "Offset": "オフセット",
       "Property": "プロパティ",
@@ -2854,7 +2860,7 @@
         "yes": "はい",
         "no": "いいえ"
       },
-      "OutputFormat": { "excel": "Excel ブック (*.xlsx)" },
+      "OutputFormat": { "excel": "Excel ブック (*.xlsx)", "pdf": "PDF 形式 (*.pdf)" },
       "Command": {
         "selectRecord": "レコードを選択",
         "copy": "コピー",
@@ -2964,6 +2970,7 @@
       "commandUnavailable": "このコマンドまたはアクションは現在使用できません。",
       "folderMissing": "出力ファイルのフォルダーが存在しません。",
       "writeFailed": "出力ファイルを書き込めませんでした。別のプログラムで開かれている可能性があります。",
+      "mailUnavailable": "メール プログラムを開けませんでした。PDF は表示されたフォルダーにあります。",
       "readOnly": "フォームまたはレコードは読み取り専用です。"
     },
     "findRecord": {

@@ -139,6 +139,12 @@ def Hello():
     expect(r.notes).toEqual([])
   })
 
+  it('EMailDatabaseObject is docmd.e_mail_database_object, as any catalogue action', () => {
+    const r = conv([A('EMailDatabaseObject', { ObjectType: 'report', ObjectName: 'R', OutputFormat: 'pdf', To: 'a@example.com', Subject: 'S' })])
+    expect(r.source).toContain('docmd.e_mail_database_object(object_name="R", to="a@example.com", subject="S")')
+    expect(r.notes).toEqual([])
+  })
+
   it('guard: every catalogue action converts without a TODO', () => {
     for (const a of ACTIONS) {
       const args: Record<string, string> = {}

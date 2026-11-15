@@ -2802,6 +2802,7 @@
       "DeleteRecord": "EliminarRegistro",
       "RunMenuCommand": "EjecutarComandoMenú",
       "ExportWithFormatting": "ExportarConFormato",
+      "EMailDatabaseObject": "EnviarObjetoBaseDeDatos",
       "FindRecord": "BuscarRegistro",
       "GoToControl": "IrAControl",
       "GoToRecord": "IrARegistro",
@@ -2851,6 +2852,11 @@
       "Command": "Comando",
       "OutputFormat": "Formato de salida",
       "OutputFile": "Archivo de salida",
+      "To": "Para",
+      "Cc": "CC",
+      "Bcc": "CCO",
+      "Subject": "Asunto",
+      "MessageText": "Texto del mensaje",
       "Record": "Registro",
       "Offset": "Desplazamiento",
       "Property": "Propiedad",
@@ -2900,7 +2906,7 @@
         "yes": "Sí",
         "no": "No"
       },
-      "OutputFormat": { "excel": "Libro de Excel (*.xlsx)" },
+      "OutputFormat": { "excel": "Libro de Excel (*.xlsx)", "pdf": "Formato PDF (*.pdf)" },
       "Command": {
         "selectRecord": "Seleccionar registro",
         "copy": "Copiar",
@@ -3010,6 +3016,7 @@
       "commandUnavailable": "El comando o la acción no está disponible en este momento.",
       "folderMissing": "La carpeta del archivo de salida no existe.",
       "writeFailed": "No se pudo escribir el archivo de salida. Puede estar abierto en otro programa.",
+      "mailUnavailable": "No se pudo abrir ningún programa de correo. El PDF está en la carpeta mostrada.",
       "readOnly": "El formulario o el registro es de solo lectura."
     },
     "findRecord": {

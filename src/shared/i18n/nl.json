@@ -2779,6 +2779,7 @@
       "DeleteRecord": "RecordVerwijderen",
       "RunMenuCommand": "MenuopdrachtUitvoeren",
       "ExportWithFormatting": "ExporterenMetOpmaak",
+      "EMailDatabaseObject": "DatabaseobjectVerzenden",
       "FindRecord": "RecordZoeken",
       "GoToControl": "NaarBesturingselement",
       "GoToRecord": "NaarRecord",
@@ -2828,6 +2829,11 @@
       "Command": "Opdracht",
       "OutputFormat": "Uitvoerindeling",
       "OutputFile": "Uitvoerbestand",
+      "To": "Aan",
+      "Cc": "Cc",
+      "Bcc": "Bcc",
+      "Subject": "Onderwerp",
+      "MessageText": "Berichttekst",
       "Record": "Record",
       "Offset": "Verschuiving",
       "Property": "Eigenschap",
@@ -2877,7 +2883,7 @@
         "yes": "Ja",
         "no": "Nee"
       },
-      "OutputFormat": { "excel": "Excel-werkmap (*.xlsx)" },
+      "OutputFormat": { "excel": "Excel-werkmap (*.xlsx)", "pdf": "PDF-indeling (*.pdf)" },
       "Command": {
         "selectRecord": "Record selecteren",
         "copy": "Kopiëren",
@@ -2987,6 +2993,7 @@
       "commandUnavailable": "De opdracht of actie is nu niet beschikbaar.",
       "folderMissing": "De map van het uitvoerbestand bestaat niet.",
       "writeFailed": "Het uitvoerbestand kon niet worden geschreven. Het is mogelijk geopend in een ander programma.",
+      "mailUnavailable": "Er kon geen e-mailprogramma worden geopend. De pdf staat in de getoonde map.",
       "readOnly": "Het formulier of de record is alleen-lezen."
     },
     "findRecord": {

@@ -2779,6 +2779,7 @@
       "DeleteRecord": "LöschenDatensatz",
       "RunMenuCommand": "MenübefehlAusführen",
       "ExportWithFormatting": "ExportierenMitFormatierung",
+      "EMailDatabaseObject": "DatenbankobjektPerEMailSenden",
       "FindRecord": "SuchenDatensatz",
       "GoToControl": "GeheZuSteuerelement",
       "GoToRecord": "GeheZuDatensatz",
@@ -2828,6 +2829,11 @@
       "Command": "Befehl",
       "OutputFormat": "Ausgabeformat",
       "OutputFile": "Ausgabedatei",
+      "To": "An",
+      "Cc": "Cc",
+      "Bcc": "Bcc",
+      "Subject": "Betreff",
+      "MessageText": "Nachrichtentext",
       "Record": "Datensatz",
       "Offset": "Versatz",
       "Property": "Eigenschaft",
@@ -2877,7 +2883,7 @@
         "yes": "Ja",
         "no": "Nein"
       },
-      "OutputFormat": { "excel": "Excel-Arbeitsmappe (*.xlsx)" },
+      "OutputFormat": { "excel": "Excel-Arbeitsmappe (*.xlsx)", "pdf": "PDF-Format (*.pdf)" },
       "Command": {
         "selectRecord": "Datensatz markieren",
         "copy": "Kopieren",
@@ -2987,6 +2993,7 @@
       "commandUnavailable": "Der Befehl oder die Aktion ist zurzeit nicht verfügbar.",
       "folderMissing": "Der Ordner der Ausgabedatei ist nicht vorhanden.",
       "writeFailed": "Die Ausgabedatei konnte nicht geschrieben werden. Sie ist möglicherweise in einem anderen Programm geöffnet.",
+      "mailUnavailable": "Es konnte kein E-Mail-Programm geöffnet werden. Die PDF-Datei befindet sich im angezeigten Ordner.",
       "readOnly": "Das Formular oder der Datensatz ist schreibgeschützt."
     },
     "findRecord": {

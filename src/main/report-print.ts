@@ -1,11 +1,12 @@
 // Export PDF et impression d'un état : une fenêtre de travail cachée par tâche, sur la partition bc-print, qui ne charge que
 // le document (en mémoire) et les polices embarquées (liste blanche). Jamais montrée ni focalisée ; aucun script de page ;
 // aucune requête hors bc-print. Une police embarquée qui ne se charge pas arrête tout (bc:fontMissing) : jamais de repli.
-import { app, BrowserWindow, session, type WebContents } from 'electron';
+import { app, BrowserWindow, session, shell, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrintRequest } from '../shared/api';
+import { mailtoUrl, type MailDraft } from './mailto';
 import { FONT_FILES } from '../shared/fonts';
 
 export const PRINT_SCHEME = 'bc-print';
@@ -61,7 +62,7 @@ export async function replaceFile(path: string, data: Uint8Array, write: typeof 
 }
 
 /** E2E only: the URLs the print partition refused, and the print jobs answered without the system dialog. */
-const e2eLog = { blocked: [] as string[], printed: 0, formsPrinted: 0, hold: undefined as Promise<void> | undefined /* a test's pause inside a form print */, html: '' /* the last document printed or exported */ };
+const e2eLog = { blocked: [] as string[], printed: 0, formsPrinted: 0, hold: undefined as Promise<void> | undefined /* a test's pause inside a form print */, html: '' /* the last document printed or exported */, mail: undefined as { url: string; pdf: string } | undefined /* the last mail draft */ };
 
 /** Serves bc-print on its own partition (never the main window's), refuses every permission and every other URL. After ready. */
 export function registerPrintProtocol(): void {
@@ -146,6 +147,42 @@ export function renderToPdf(req: PrintRequest): Promise<Buffer> {
   return withPrintWindow(req, (wc) => wc.printToPDF({
     pageSize: 'A4', landscape: req.landscape, printBackground: true, preferCSSPageSize: true, margins: { top: 0, bottom: 0, left: 0, right: 0 },
   }));
+}
+
+/** E6d (macro EMailDatabaseObject): the report as a PDF in <temp>/BaseCraft-mail/<random folder>/<report name>.pdf, then a new message in the user's
+ *  mail program (mailto:, recipient, subject and text filled), then the PDF shown in its folder: the user drags it into the message. Nothing is sent
+ *  by BaseCraft. Rejects bc:writeFailed (PDF), bc:fontMissing…; bc:mailUnavailable once the PDF is shown, when no mail program opened. E2E: nothing is
+ *  opened, the URL and the PDF path are logged. */
+export async function mailPdf(req: PrintRequest, mail: MailDraft): Promise<void> {
+  let url: string;
+  try { url = mailtoUrl(mail); } catch { throw new Error('bc:invalidArgument'); }   // a lone surrogate in a field
+  if (url.length > 2000) throw new Error('bc:invalidArgument');   // recipients and subject alone are too long for a mail link
+  const pdf = await renderToPdf(req);
+  let file: string;
+  try {
+    // a folder of its own made by mkdtemp: the user's alone (0700), never one somebody else prepared in a shared temp folder
+    file = join(await mkdtemp(join(app.getPath('temp'), MAIL_PREFIX)), pdfFileName(req.name));
+    await replaceFile(file, pdf);
+  } catch (e) {
+    console.error(e);
+    throw new Error('bc:writeFailed');
+  }
+  if (e2e()) { e2eLog.mail = { url, pdf: file }; return; }
+  const opened = await shell.openExternal(url).then(() => true, () => false);
+  shell.showItemInFolder(file);
+  if (!opened) throw new Error('bc:mailUnavailable');
+}
+
+const MAIL_PREFIX = 'BaseCraft-mail-';
+/** At application start: the draft folders older than an hour go (best effort; a younger one may be another running BaseCraft's, its PDF
+ *  not attached yet). Only real folders named by the prefix: a link planted there is left alone.
+ *  ponytail: a draft's PDF lives until a start more than an hour later; a mail program may still hold one until then. */
+export async function clearMailDrafts(temp = app.getPath('temp'), now = Date.now()): Promise<void> {
+  for (const d of await readdir(temp, { withFileTypes: true }).catch(() => [])) {
+    if (!d.isDirectory() || !d.name.startsWith(MAIL_PREFIX)) continue;
+    const p = join(temp, d.name);
+    if (await stat(p).then((s) => now - s.mtimeMs > 3_600_000, () => false)) await rm(p, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /** The system print dialog. E2E: the document is loaded and its fonts checked, then 'printed' without any dialog. */

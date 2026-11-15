@@ -37,7 +37,7 @@ export function parseAccessMacro(text: string): AccessMacroRow[] | null {
 // confirms OpenReport). A column with `to` becomes that BaseCraft argument; one without must hold Access's default (`ok`) or the action is a comment.
 // `def`: Access's own default of the argument (its stored form), taken for an empty value and emitted explicitly; an enumeration without one maps no empty value.
 // `note`: an argument BaseCraft has no place for whose value other than `ok`/empty is dropped with a note.
-interface Col { to?: string; quiet?: string[]; def?: string; note?: string; t?: 'raw' | 'text' | 'expr' | 'ref' | 'where' | 'bool' | 'num' | 'call' | 'excel' | 'xlsx'; map?: Record<string, string>; ok?: string[] }
+interface Col { to?: string; quiet?: string[]; def?: string; note?: string; t?: 'raw' | 'text' | 'expr' | 'ref' | 'where' | 'bool' | 'num' | 'call' | 'excel' | 'pdf' | 'xlsx'; map?: Record<string, string>; ok?: string[] }
 const raw = (to: string): Col => ({ to, t: 'raw' });
 const txt = (to: string): Col => ({ to, t: 'text' });
 const ex = (to: string): Col => ({ to, t: 'expr' });
@@ -62,6 +62,11 @@ const MAP = new Map<string, { to: string; cols: Col[] }>([
   // OutputTo (object type 0 table / 1 query, format, file, auto start, template, encoding, quality): only the Excel workbook of a table or query; quality is ignored
   ...['OutputTo', 'ExportWithFormatting'].map((n): [string, { to: string; cols: Col[] }] => [n, { to: 'ExportWithFormatting', cols: [en('ObjectType', { 0: 'table', 1: 'query' }), raw('ObjectName'),
     { to: 'OutputFormat', t: 'excel', def: '' }, { to: 'OutputFile', t: 'xlsx' }, OUTPUT_AUTO_START, drop(), drop(), drop('0', '1')] }]),
+  // SendObject (object type, name, format, to, cc, bcc, subject, text, edit message, template): only a report as a PDF. Edit Message No (Access sends
+  // with no window) is noted: BaseCraft always opens a draft; so is a template file
+  ...['SendObject', 'EMailDatabaseObject'].map((n): [string, { to: string; cols: Col[] }] => [n, { to: 'EMailDatabaseObject', cols: [en('ObjectType', { 3: 'report' }), raw('ObjectName'),
+    { to: 'OutputFormat', t: 'pdf', def: '' }, txt('To'), txt('Cc'), txt('Bcc'), txt('Subject'), txt('MessageText'),
+    { note: 'SendObject.EditMessage', quiet: ['-1', '1', 'yes', 'Yes', 'true', 'True'] }, { note: 'SendObject.TemplateFile', quiet: [] }] }]),
   ['GoToControl', { to: 'GoToControl', cols: [txt('ControlName')] }],
   ['GoToRecord', { to: 'GoToRecord', cols: [en('ObjectType', { '-1': '', 2: 'form' }, '-1'), raw('ObjectName'),
     en('Record', { 0: 'previous', 1: 'next', 2: 'first', 3: 'last', 4: 'goTo', 5: 'new' }, '1'), { to: 'Offset', t: 'num' }] }],
@@ -144,6 +149,7 @@ function convertArg(c: Col, v: string): string | null | undefined {
       return canon(c.t === 'where' ? v : v.replace(/^=/, ''), c.t === 'where' || c.t === 'ref');
     }
     case 'excel': return v.replace(/\s/g, '').toLowerCase() === 'excelworkbook(*.xlsx)' ? 'excel' : undefined;   // AcOutputFormat names the format by its filter text
+    case 'pdf': return v.replace(/\s/g, '').toLowerCase() === 'pdfformat(*.pdf)' ? 'pdf' : undefined;
     case 'xlsx': return /\.xlsx$/i.test(v) ? v : undefined;   // a path the main process will write: only a workbook
     case 'call': return parsePythonCall(v) ? v : undefined;
     default: return v;

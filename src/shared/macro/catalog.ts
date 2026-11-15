@@ -10,6 +10,7 @@ export type ActionName = 'Beep' | 'ClearMacroError' | 'CloseDatabase' | 'CloseWi
   | 'ApplyFilter'
   | 'CancelEvent'
   | 'DeleteRecord'
+  | 'EMailDatabaseObject'
   | 'ExportWithFormatting'
   | 'FindRecord'
   | 'GoToControl'
@@ -53,6 +54,11 @@ export const ACTIONS: readonly ActionDef[] = [
     arg('ObjectName', 'objectName')]),
   act('CreateRecord', 'dataMacro', [arg('TableName', 'tableName', required), arg('Values', 'sql')]),   // T2: `Field = expression` per line (canonical)
   act('DeleteRecord', 'dataEntry'),
+  act('EMailDatabaseObject', 'objects', [   // E6d: Access's SendObject; a report as a PDF and a mail draft (the user attaches the file); nothing is sent; unsafe (it writes a file, opens the mail program)
+    arg('ObjectType', 'enum', { options: ['report'], default: 'report' }),
+    arg('ObjectName', 'text', required),
+    arg('OutputFormat', 'enum', { options: ['pdf'], default: 'pdf' }),
+    arg('To', 'text'), arg('Cc', 'text'), arg('Bcc', 'text'), arg('Subject', 'text'), arg('MessageText', 'text')], true),
   act('ExportWithFormatting', 'objects', [   // E6b: writes the workbook at OutputFile as Access's OutputTo does; unsafe (it writes a file)
     arg('ObjectType', 'enum', { options: ['table', 'query'], default: 'table' }),
     arg('ObjectName', 'text', required),

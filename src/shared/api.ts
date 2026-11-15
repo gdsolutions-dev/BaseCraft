@@ -381,6 +381,7 @@ export const CH = {
   queriesCancel: 'bc:queries:cancel',
   reportsExportPdf: 'bc:reports:exportPdf',
   reportsPrint: 'bc:reports:print',
+  reportsMailPdf: 'bc:reports:mailPdf',
   formsPrintRecord: 'bc:forms:printRecord', // E6b: prints the main window (the form marked by the renderer); no argument
   exchangeExportText: 'bc:exchange:exportText', // progress: importProgress
   exchangeExportExcel: 'bc:exchange:exportExcel',
@@ -722,7 +723,14 @@ export interface BasecraftApi {
   /** Rendered in a hidden window that loads nothing but the document and the embedded fonts. exportPdf writes only to the
    *  path the user chose in the save dialog. Rejections: bc:fontMissing (an embedded face did not load: no PDF, no print),
    *  bc:writeFailed, bc:printFailed, bc:invalidArgument. Neither writes into the base: allowed on a read-only base. */
-  reports: { exportPdf(r: PrintRequest): Promise<'saved' | 'canceled'>; print(r: PrintRequest): Promise<'printed' | 'canceled'> };
+  reports: {
+    exportPdf(r: PrintRequest): Promise<'saved' | 'canceled'>; print(r: PrintRequest): Promise<'printed' | 'canceled'>;
+    /** E6d, for the macro action EMailDatabaseObject: the report as a PDF in a temporary folder, a new message opened in the mail program
+     *  (`mail`: recipients separated by ; or , , subject and text; strings within 2000 / 2000 / 2000 / 500 / 10000 characters, no control character
+     *  but line breaks in `body`: else bc:invalidArgument), the PDF shown in its folder for the user to attach. Nothing is sent. Only while the
+     *  base's content is enabled (bc:contentDisabled). bc:writeFailed (the PDF), bc:mailUnavailable (no mail program opened; the PDF is shown anyway). */
+    mailPdf(r: PrintRequest, mail: { to: string; cc: string; bcc: string; subject: string; body: string }): Promise<void>;
+  };
   /** Prints the main window as the renderer marked it (a form's current record, or every record: `print`): system print dialog, backgrounds on.
    *  Rejects bc:printFailed. */
   forms: { printRecord(): Promise<'printed' | 'canceled'> };

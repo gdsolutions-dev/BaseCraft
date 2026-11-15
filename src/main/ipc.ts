@@ -34,7 +34,8 @@ import {
 } from './ipc-validate';
 import type { ImportTexts } from './import/text-import';
 import { viaTemp } from './exchange/atomic-file';
-import { pdfFileName, printDocument, printMainWindow, renderToPdf, replaceFile } from './report-print';
+import { clearMailDrafts, mailPdf, pdfFileName, printDocument, printMainWindow, renderToPdf, replaceFile } from './report-print';
+import { mailDraft } from './mailto';
 import { setWindowIcon } from './window-icon';
 import { addRecentFile, dialogDir, lastBaseToOpen, loadSettings, saveSettings, type AppSettings } from './settings';
 import { inBaseFolder, readLinkedPictures } from './linked-picture';
@@ -552,6 +553,7 @@ export const endSpell = (): void => stopSpell();
 export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
   app.on('quit', () => { for (const d of tempDirs) rmSync(d, { recursive: true, force: true }); });
   mainWindow = getMainWindow;
+  void clearMailDrafts();
   dir = app.getPath('userData');
   settings = loadSettings(dir);
   approvals = new ApprovalStore(join(dir, 'trust.json'));
@@ -989,6 +991,12 @@ export function registerIpc(getMainWindow: () => BrowserWindow | null): void {
     return 'saved';
   });
   handle(CH.reportsPrint, (r) => printDocument(printRequest(r)));
+  // E6d (macro EMailDatabaseObject): a PDF in the temp folder and a mail draft; unsafe as an action query: only while the content is enabled
+  handle(CH.reportsMailPdf, async (r, mail) => {
+    if (host?.state.content !== 'enabled') throw new Error('bc:contentDisabled');   // before anything else
+    const req = printRequest(r), draft = mailDraft(mail);
+    await mailPdf(req, draft);
+  });
   handle(CH.formsPrintRecord, () => { const w = mainWindow(); if (!w) throw new Error('bc:printFailed'); return printMainWindow(w); });
   handle(CH.exchangeExportText, (s, spec, name) => runExport(exportSource(s), exportSpec(spec), lookupName(name)));
   handle(CH.exchangeExportExcel, (s, name) => runExport(exportSource(s), null, lookupName(name)));

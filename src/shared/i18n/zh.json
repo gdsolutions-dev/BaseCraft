@@ -2756,6 +2756,7 @@
       "DeleteRecord": "删除记录",
       "RunMenuCommand": "运行菜单命令",
       "ExportWithFormatting": "带格式导出",
+      "EMailDatabaseObject": "通过电子邮件发送数据库对象",
       "FindRecord": "查找记录",
       "GoToControl": "转到控件",
       "GoToRecord": "转到记录",
@@ -2805,6 +2806,11 @@
       "Command": "命令",
       "OutputFormat": "输出格式",
       "OutputFile": "输出文件",
+      "To": "收件人",
+      "Cc": "抄送",
+      "Bcc": "密送",
+      "Subject": "主题",
+      "MessageText": "邮件正文",
       "Record": "记录",
       "Offset": "偏移量",
       "Property": "属性",
@@ -2854,7 +2860,7 @@
         "yes": "是",
         "no": "否"
       },
-      "OutputFormat": { "excel": "Excel 工作簿 (*.xlsx)" },
+      "OutputFormat": { "excel": "Excel 工作簿 (*.xlsx)", "pdf": "PDF 格式 (*.pdf)" },
       "Command": {
         "selectRecord": "选择记录",
         "copy": "复制",
@@ -2964,6 +2970,7 @@
       "commandUnavailable": "该命令或操作当前不可用。",
       "folderMissing": "输出文件所在的文件夹不存在。",
       "writeFailed": "无法写入输出文件。它可能已在其他程序中打开。",
+      "mailUnavailable": "无法打开任何邮件程序。PDF 位于所显示的文件夹中。",
       "readOnly": "窗体或记录为只读。"
     },
     "findRecord": {

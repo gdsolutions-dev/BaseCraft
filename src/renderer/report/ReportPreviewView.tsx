@@ -101,6 +101,8 @@ export async function layoutEnv(): Promise<LayoutEnv> {
 /** « Entrer une valeur de paramètre » for a report's record source (C3), checked in the region of the settings. */
 export const askParameters = (modal: ModalApi): AskParameters => async (ps) => promptParameters(modal, ps, localeInfo((await api.app.getSettings()).region));
 
+export type MailFields = Parameters<typeof api.reports.mailPdf>[1];
+
 /** One print or export at a time, from the pane or the preview: a request while one runs is ignored (final review M8). */
 let outputting = false;
 export const outputBusy = (): boolean => outputting;
@@ -131,7 +133,7 @@ function OutputProgress({ job, close }: { job: Promise<unknown>; close(v: 'done'
  *  box and cannot be cancelled. A loading failure shows its report.<code> text, the others their dialog.error text; an
  *  AbortError (Cancel on a parameter prompt) ends it without a message. */
 export async function outputReport(modal: ModalApi, name: string,
-  report: LaidOutReport | ((signal: AbortSignal, ready: () => void) => Promise<LaidOutReport>), to: 'pdf' | 'printer') {
+  report: LaidOutReport | ((signal: AbortSignal, ready: () => void) => Promise<LaidOutReport>), to: 'pdf' | 'printer' | { mail: MailFields }) {
   if (outputting) return;
   outputting = true;
   try {
@@ -148,11 +150,13 @@ export async function outputReport(modal: ModalApi, name: string,
     } else r = report;
     const req = printRequestFor(r, name);
     if (to === 'printer') await api.reports.print(req);
+    else if (typeof to === 'object') await api.reports.mailPdf(req, to.mail);   // E6d: the PDF and a mail draft, no message afterwards
     else if (await api.reports.exportPdf(req) === 'saved') {
       await modal.confirm({ titleKey: 'ribbon.cmd.exportPdf', messageKey: 'report.pdfSaved', buttons: ['ok'] });
     }
   } catch (e) {
     if ((e as Error | null)?.name === 'AbortError') return;   // canceled in the progress box
+    if (typeof to === 'object') throw e;   // a macro (EMailDatabaseObject): the action fails with it
     // bc:fontMissing, bc:writeFailed, bc:printFailed; bc:notFound… for a report laid out here; tooLarge, tooManyPages
     const m = e instanceof ReportLoadError ? { key: `report.${e.code}`, params: {} } : dialogError(e);
     await modal.confirm({ titleKey: 'dialog.errorTitle', messageKey: m.key, params: m.params, buttons: ['ok'] });
@@ -163,7 +167,7 @@ export async function outputReport(modal: ModalApi, name: string,
 
 /** Print or PDF of a report that is not open (the Navigation Pane, OpenReport's Print): laid out with its events, On Close
  *  once it is printed or exported; true when its On Open or On No Data cancelled it (nothing is printed, no message). */
-export async function outputSavedReport(modal: ModalApi, name: string, to: 'pdf' | 'printer', where?: string): Promise<boolean> {
+export async function outputSavedReport(modal: ModalApi, name: string, to: 'pdf' | 'printer' | { mail: MailFields }, where?: string): Promise<boolean> {
   let ev: ReportEvents | undefined, cancelled = false;
   await outputReport(modal, name, async (signal, ready) => {
     try {

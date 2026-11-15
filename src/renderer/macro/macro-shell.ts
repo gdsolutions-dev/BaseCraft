@@ -267,6 +267,13 @@ export function shellHost(d: MacroShellDeps, opts: { singleStep: boolean }): Mac
         if (r.reason === 'tooManyRows') throw new Error(`bc:tooManyRows||${r.limit}`);
         throw cancelled();
       }
+      // E6d: the report as a PDF and a mail draft (the main process guards the content and the fields); nothing is sent
+      case 'EMailDatabaseObject': {
+        const name = await storedName('report', a.ObjectName ?? '');
+        const mail = { to: a.To ?? '', cc: a.Cc ?? '', bcc: a.Bcc ?? '', subject: a.Subject ?? '', body: a.MessageText ?? '' };
+        if (await outputSavedReport(d.modal, name, { mail })) throw cancelled();
+        return;
+      }
       case 'SetWarnings': warnings = a.WarningsOn === 'yes'; return;
       case 'GoToRecord': {
         const f = a.ObjectType === 'form' && a.ObjectName ? namedForm(a.ObjectName) : currentForm(event);

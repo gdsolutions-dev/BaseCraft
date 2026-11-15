@@ -2825,6 +2825,7 @@
       "DeleteRecord": "UsuńRekord",
       "RunMenuCommand": "UruchomPolecenieMenu",
       "ExportWithFormatting": "EksportujZFormatowaniem",
+      "EMailDatabaseObject": "WyślijObiektBazyDanych",
       "FindRecord": "ZnajdźRekord",
       "GoToControl": "PrzejdźDoFormantu",
       "GoToRecord": "PrzejdźDoRekordu",
@@ -2874,6 +2875,11 @@
       "Command": "Polecenie",
       "OutputFormat": "Format wyjściowy",
       "OutputFile": "Plik wyjściowy",
+      "To": "Do",
+      "Cc": "DW",
+      "Bcc": "UDW",
+      "Subject": "Temat",
+      "MessageText": "Tekst wiadomości",
       "Record": "Rekord",
       "Offset": "Przesunięcie",
       "Property": "Właściwość",
@@ -2923,7 +2929,7 @@
         "yes": "Tak",
         "no": "Nie"
       },
-      "OutputFormat": { "excel": "Skoroszyt programu Excel (*.xlsx)" },
+      "OutputFormat": { "excel": "Skoroszyt programu Excel (*.xlsx)", "pdf": "Format PDF (*.pdf)" },
       "Command": {
         "selectRecord": "Zaznacz rekord",
         "copy": "Kopiuj",
@@ -3033,6 +3039,7 @@
       "commandUnavailable": "Polecenie lub akcja nie jest teraz dostępna.",
       "folderMissing": "Folder pliku wyjściowego nie istnieje.",
       "writeFailed": "Nie można zapisać pliku wyjściowego. Może być otwarty w innym programie.",
+      "mailUnavailable": "Nie można otworzyć programu pocztowego. Plik PDF znajduje się w wyświetlonym folderze.",
       "readOnly": "Formularz lub rekord jest tylko do odczytu."
     },
     "findRecord": {

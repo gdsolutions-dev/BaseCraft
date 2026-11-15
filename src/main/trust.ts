@@ -2,7 +2,7 @@
 // read, never written) or this user's approvals (<userData>/trust.json, tied to db_uuid + fingerprint). Nothing read from the
 // base itself decides trust.
 import { readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, sep } from 'node:path';
+import { dirname, isAbsolute, posix, sep, win32 } from 'node:path';
 import type { ContentState } from '../shared/api';
 import type { ActiveContent } from './db/active-content';
 
@@ -50,7 +50,7 @@ export function inTrustedFolder(file: string, cfg: TrustConfig, platform: NodeJS
 /** The user's own trusted locations (workstation settings), refused unless they are absolute local paths: no relative path, no
  *  device path (\\?\, \\.\, /dev, /proc, /sys). */
 export function isLocalAbsolute(p: string, platform: NodeJS.Platform): boolean {
-  if (p === '' || p.includes('\0') || !isAbsolute(p)) return false;
+  if (p === '' || p.includes('\0') || !(platform === 'win32' ? win32 : posix).isAbsolute(p)) return false;   // the given platform's rule, not the host's
   return platform === 'win32' ? !/^[\\/]{2}[?.][\\/]/.test(p) : !/^\/(dev|proc|sys)(\/|$)/.test(p);
 }
 

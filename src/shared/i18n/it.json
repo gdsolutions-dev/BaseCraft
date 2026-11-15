@@ -2802,6 +2802,7 @@
       "DeleteRecord": "EliminaRecord",
       "RunMenuCommand": "EseguiComandoMenu",
       "ExportWithFormatting": "EsportaConFormattazione",
+      "EMailDatabaseObject": "InviaOggettoDatabase",
       "FindRecord": "TrovaRecord",
       "GoToControl": "VaiAControllo",
       "GoToRecord": "VaiARecord",
@@ -2851,6 +2852,11 @@
       "Command": "Comando",
       "OutputFormat": "Formato di output",
       "OutputFile": "File di output",
+      "To": "A",
+      "Cc": "Cc",
+      "Bcc": "Ccn",
+      "Subject": "Oggetto",
+      "MessageText": "Testo del messaggio",
       "Record": "Record",
       "Offset": "Offset",
       "Property": "Proprietà",
@@ -2900,7 +2906,7 @@
         "yes": "Sì",
         "no": "No"
       },
-      "OutputFormat": { "excel": "Cartella di lavoro di Excel (*.xlsx)" },
+      "OutputFormat": { "excel": "Cartella di lavoro di Excel (*.xlsx)", "pdf": "Formato PDF (*.pdf)" },
       "Command": {
         "selectRecord": "Seleziona record",
         "copy": "Copia",
@@ -3010,6 +3016,7 @@
       "commandUnavailable": "Il comando o l'azione non è disponibile in questo momento.",
       "folderMissing": "La cartella del file di output non esiste.",
       "writeFailed": "Impossibile scrivere il file di output. Potrebbe essere aperto in un altro programma.",
+      "mailUnavailable": "Impossibile aprire un programma di posta. Il PDF si trova nella cartella mostrata.",
       "readOnly": "La maschera o il record è in sola lettura."
     },
     "findRecord": {

@@ -118,8 +118,12 @@ test('a too-narrow number column shows ####, copy gives the value; unticked, the
     await expect(page.locator('#portal textarea')).toHaveValue(/^12345678,9/);
     await page.keyboard.press('Escape');
     const montantOn = await settled(colLeft(2), colLeft(2) + 41);   // selected
-    await dragEdge(colLeft(2) + 41, colLeft(2) + 150);   // widened: the value again (polled: the grid redraws after the drag)
-    await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn)).toBe(false);
+    // widened: the value again. The drag can start before the grid takes the pointer back from the closed editor (nothing moves then):
+    // dragged again until the pixels change (a drag that worked is seen within the inner poll, so it is never repeated)
+    await expect(async () => {
+      await dragEdge(colLeft(2) + 41, colLeft(2) + 150);
+      await expect.poll(async () => (await shot(colLeft(2), colLeft(2) + 41)).equals(montantOn), { timeout: 3000 }).toBe(false);
+    }).toPass();
 
     // unticked, a datasheet opened afterwards shows the value (clipped on screen): not the #### drawn above
     await page.getByTestId('ribbon-tab-file').click();

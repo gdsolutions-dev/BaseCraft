@@ -1,7 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { sheetOf } from './fixtures/xlsx-fixture';
 import { saveObject } from '../../src/main/db/objects';
 import { seedSales } from '../../src/main/query/test-db';
@@ -248,6 +248,47 @@ test('Macro ExportWithFormatting writes the workbook at its path with no dialog,
     await expect(u.page.getByTestId('macro-failed-message')).toHaveText(fr.macro.error.blocked.replace('{{action}}', fr.macro.action.ExportWithFormatting));
     await u.page.getByTestId('macro-failed-stop').click();
     expect(existsSync(blocked)).toBe(false);
+  } finally {
+    await u.app.close();
+  }
+});
+
+test('Macro EMailDatabaseObject saves the report as a PDF and prepares a mail draft (nothing opened, nothing sent); refused on an untrusted base', async () => {
+  const mailed = (app: ElectronApplication) => app.evaluate(() => (globalThis as unknown as { __bcPrintE2E: { mail?: { url: string; pdf: string } } }).__bcPrintE2E.mail);
+  const items = [{ k: 'action' as const, action: 'EMailDatabaseObject', args: { ObjectType: 'report', ObjectName: 'Factures par client', OutputFormat: 'pdf',
+    To: 'a@example.com; b@example.com', Subject: 'Factures & co: été', MessageText: '="Bonjour' + '\n' + 'Cordialement" & ""' } }];
+  const base = (name: string) => seedBase(name, (db) => {
+    seedReportsE2E(db);
+    const r = saveObject(db, 'macro', 'MMail', { formatVersion: '1.0', items }, null);
+    if (!r.ok) throw new Error(r.reason);
+  });
+  const { app, page } = await launchApp({ args: [base('mail-macro')], env: FR });
+  let pdf = '';
+  try {
+    await page.getByTestId('nav-item-macro-MMail').dblclick();
+    await expect.poll(() => mailed(app)).toBeTruthy();
+    const mail = (await mailed(app))!;
+    pdf = mail.pdf;
+    expect(pdf.startsWith(join(tmpdir(), 'BaseCraft-mail'))).toBe(true);
+    expect(basename(pdf)).toBe('Factures par client.pdf');
+    expect(readFileSync(pdf).subarray(0, 4).toString()).toBe('%PDF');
+    expect(mail.url.startsWith('mailto:a%40example.com,b%40example.com?')).toBe(true);
+    const u = new URL(mail.url);
+    expect(decodeURIComponent(u.pathname)).toBe('a@example.com,b@example.com');
+    expect(u.searchParams.get('subject')).toBe('Factures & co: été');
+    expect(u.searchParams.get('body')).toBe('Bonjour\r\nCordialement');
+    await expect(page.getByTestId('macro-failed-message')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+
+  const u = await launchApp({ args: [base('mail-macro-untrusted')], env: FR, untrusted: true });
+  try {
+    await u.page.getByTestId('banner-dismiss-content').click();
+    await u.page.getByTestId('nav-item-macro-MMail').dblclick();
+    await expect(u.page.getByTestId('macro-failed-message')).toHaveText(fr.macro.error.blocked.replace('{{action}}', fr.macro.action.EMailDatabaseObject));
+    await u.page.getByTestId('macro-failed-stop').click();
+    expect(await mailed(u.app)).toBeUndefined();
   } finally {
     await u.app.close();
   }

@@ -107,10 +107,13 @@ let owner: HTMLElement | null = null; // the grid that had the focus or a click 
  *  with « Champ entier » is Glide's; « é » and the like open the editor through openEditorWith (Glide's types ASCII only). */
 export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKeysEnv>): () => void {
   const held = useRef<KeyboardEvent[]>([]), releasing = useRef(false), replayed = useRef(new WeakSet<Event>()), moving = useRef(false);
+  // the cell a key move has just left: the selection is React state, read back one render later; until it has changed the held keys wait
+  // (typed at once they went, now and then, into the cell left)
+  const left = useRef<Item | null>(null);
   /** Once the row is saved: the characters held go to the selected cell in one go (its editor opened by them), then Enter or Tab as typed. */
   const release = () => {
     const w = wrap.current, keys = held.current;
-    if (!w || !keys.length || releasing.current) return;
+    if (!w || !keys.length || releasing.current) { if (!keys.length) left.current = null; return; }
     if (document.querySelector('[aria-modal="true"]')) { keys.length = 0; return; }
     releasing.current = true;   // the keys typed from now on queue behind these   // the save was refused: nothing is typed on the row back
     const inGrid = (a: Element | null): a is Element => !!a && w.contains(a) && a.closest('[data-testid="data-grid-canvas"]') !== null;
@@ -126,7 +129,12 @@ export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKey
       setTimeout(() => go(), 20);   // ponytail: a fixed gap; Glide gives no event when a move is done; then wait for the cell reached
     };
     const go = (tries = 0) => {   // tries: up to 2 s (a row save, then Glide's focus)   // the grid renders unlocked, then Glide focuses the cell
-      const at = document.activeElement, c = env.current?.selected()?.cell;
+      const at = document.activeElement, c = env.current?.selected()?.cell, from = left.current;
+      if (from && c && c[0] === from[0] && c[1] === from[1]) {   // the move is not there yet; never there (the row's save was refused): the keys are dropped, not typed in the cell left
+        if (tries < 400) setTimeout(() => go(tries + 1), 5); else { keys.length = 0; left.current = null; releasing.current = false; }
+        return;
+      }
+      left.current = null;
       if (!(inGrid(at) && !env.current?.busy?.() && (!c || at.getAttribute('data-testid') === `glide-cell-${c[0] + 1}-${c[1]}`)) && tries < 400) { setTimeout(() => go(tries + 1), 5); return; }   // the selected cell focused
       let text = '';
       while (keys[0]?.key.length === 1) text += keys.shift()!.key;
@@ -195,10 +203,10 @@ export function useEditKeys(wrap: RefObject<HTMLElement>, env: RefObject<EditKey
       const move = (): void => {
         if (m.to === 'field') {
           const n = nextCell([at[0], at[1]], m.dir, g.cols(), g.rows(), m.stopAtEnds);
-          if (n) g.moveTo(n); else if (!m.stopAtEnds) g.pastEnd?.(m.dir);
+          if (n) { if (n[0] !== at[0] || n[1] !== at[1]) left.current = [at[0], at[1]]; g.moveTo(n); } else if (!m.stopAtEnds) g.pastEnd?.(m.dir);
         } else if (m.to === 'record') {
           const row = at[1] + m.dir;
-          if (row >= 0 && row < g.rows()) g.moveTo([at[0], row]);
+          if (row >= 0 && row < g.rows()) { left.current = [at[0], at[1]]; g.moveTo([at[0], row]); }
         }
       };
       // an open editor: saved first, one timeout later (after the timeouts of the keys typed just before, as the commit fix);

@@ -117,6 +117,25 @@ test('table datasheet: a burst across two fields (Tab inside) typed with no dela
   } finally { await app.close(); }
 });
 
+// the new record, its first editor opened by a click: what is typed right after Tab goes to the next field, never back into the field
+// left (the keys held during the move wait until the selection has left the cell)
+test('table datasheet: on the new record, a value typed right after Tab goes to the next field', async () => {
+  const { app, page } = await launchApp({ args: [people()] });
+  try {
+    await page.getByTestId('nav-item-Gens').dblclick();
+    const sheet = page.locator('[data-testid="datasheet"]:visible');
+    const b = (await sheet.getByTestId('data-grid-canvas').boundingBox())!;
+    await page.mouse.click(b.x + colLeft(1) + 20, b.y + 34 + 3 * 30 + 15);   // the new-record row, Nom
+    await expect(page.getByTestId('grid-editor-portal').locator('textarea')).toBeFocused();
+    await page.keyboard.type('Vis');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('7');
+    await page.keyboard.press('Tab');
+    await expect(sheet.getByTestId('glide-cell-2-3')).toHaveText('Vis');
+    await expect(sheet.getByTestId('glide-cell-3-3')).toHaveText('7');
+  } finally { await app.close(); }
+});
+
 test("a form's Datasheet view: a burst across two fields with no delay is kept", async () => {
   const { app, page } = await launchApp({ args: [seedBase('fx-b3b-form', (db) => {
     createTable(db, t('Gens', [f('N°', 'autoNumber'), f('Nom', 'shortText'), f('Ville', 'shortText')]));

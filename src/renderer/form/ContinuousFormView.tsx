@@ -111,7 +111,7 @@ export function ContinuousFormView({ doc: design, x, rowCtx, root, messages, fil
       )}
       {nav && (
         <NavigationBar current={snap.status === 'ready' ? snap.index : null} count={snap.total} canAdd={snap.canAdd}
-          filter={filter} onGo={onGo} onNew={onNew} onToggleFilter={onToggleFilter} note={readOnlyNote(x)} />
+          filter={filter} onGo={onGo} onNew={onNew} onToggleFilter={onToggleFilter} note={readOnlyNote(x)} busy={snap.busy} />
       )}
     </div>
   );

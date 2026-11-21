@@ -57,7 +57,7 @@ export function SingleFormView({ doc: design, x, root, messages, filter, onGo, o
       )}
       {nav && (
         <NavigationBar current={snap.status === 'ready' ? snap.index : null} count={snap.total} canAdd={snap.canAdd}
-          filter={filter} onGo={onGo} onNew={onNew} onToggleFilter={onToggleFilter} note={readOnlyNote(x)} />
+          filter={filter} onGo={onGo} onNew={onNew} onToggleFilter={onToggleFilter} note={readOnlyNote(x)} busy={snap.busy} />
       )}
     </div>
   );

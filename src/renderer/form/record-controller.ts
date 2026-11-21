@@ -103,6 +103,7 @@ export class FormRecords {
   private looked = Object.create(null) as Record<string, SqlValue>;   // AutoLookup's values (R4): shown over `values`, never written
   private shown: SqlValue[] | null = null;  // `values` with `looked` over them (null: none), one array until either changes
   private reloads = 0;   // reloads placing the record again (counted in `moving` too)
+  private kept: { total: number; n: number } | null = null;   // the count as it was, shown while reloads read it again
   private reloading: Promise<boolean> | null = null;   // the last of them: a move asked meanwhile waits for the count it reads
   private readonly lookups = new Lookups();   // AutoLookups by link: a save waits for them, a failure stops it
   private pending = Object.create(null) as Record<string, CellInput>; // no prototype: a field may be named __proto__
@@ -166,7 +167,7 @@ export class FormRecords {
 
   get snapshot(): RecordSnapshot {
     return (this.snap ??= {
-      status: this.status, error: this.error, info: this.info, total: this.total, index: this.index, isNew: this.isNew,
+      status: this.status, error: this.error, info: this.info, total: this.kept?.total ?? this.total, index: this.index, isNew: this.isNew,
       rowid: this.isNew ? NaN : this.rowid, values: this.shown ?? this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
       editable: this.editable, busy: this.moving > this.reloads, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
       sort: this.sort, filter: this.filter, refusedByEvent: this.refusedByEvent, appliedFilter: this.applied,
@@ -224,8 +225,16 @@ export class FormRecords {
     this.emit();
   }
 
+  /** A move asked while the rows are read again waits for their count, busy meanwhile (the view's buttons wait with it). */
+  private async reloaded(): Promise<void> {
+    if (!this.reloading) return;
+    this.begin();
+    this.emit();   // begin tells only the first of the moves: the reload is one already, and it is not busy
+    try { await this.reloading; } finally { this.end(); }
+  }
+
   async goTo(index: number): Promise<boolean> {
-    if (this.reloading) await this.reloading;
+    if (this.reloading) await this.reloaded();   // no extra turn without one: type-ahead takes the keys at once
     if (!this.info || index < 0 || index > (this.canAdd ? this.total : this.total - 1)) return false;
     return this.userMove(index);
   }
@@ -235,7 +244,7 @@ export class FormRecords {
   last(): Promise<boolean> { return this.goTo(this.total - 1); }
 
   async newRecord(): Promise<boolean> {
-    if (this.reloading) await this.reloading;
+    if (this.reloading) await this.reloaded();   // no extra turn without one: type-ahead takes the keys at once
     if (!this.canAdd) return false;
     return this.userMove(this.total);
   }
@@ -373,8 +382,9 @@ export class FormRecords {
     this.notInBefore();
     if (this.saving) await this.saving;
     if (this.dirty) {
+      const free = this.keepTotal();
       this.rebuild();
-      try { await this.rowAt(0); } catch { return false; }   // the count (a failed page shows as the form's error)
+      try { await this.rowAt(0); } catch { return false; } finally { free(); }   // the count (a failed page shows as the form's error)
       if (this.isNew) this.index = this.total;
       this.emit();
       return true;
@@ -386,12 +396,21 @@ export class FormRecords {
     if (this.moving > this.reloads || this.dirty) return false;
     const at = this.isNew ? this.total : this.index;
     const isNew = this.isNew;
+    const free = this.keepTotal();
     this.rebuild();
     // not a move: the record stays editable while the rows are read; an entry typed meanwhile drops the placing (edit)
     this.reloads++;
-    const run = this.place(isNew ? Number.MAX_SAFE_INTEGER : at, !isNew).finally(() => { this.reloads--; if (this.reloading === run) this.reloading = null; this.emit(); });
+    const run = this.place(isNew ? Number.MAX_SAFE_INTEGER : at, !isNew).finally(() => { free(); this.reloads--; if (this.reloading === run) this.reloading = null; this.emit(); });
     this.reloading = run;
     return run;
+  }
+
+  /** The count stays as it was, for the view, while a reload reads the rows again: a count of 0 turned the navigation buttons
+   *  off for that time (a click then was lost) and showed « of 0 ». Returns what ends it. */
+  private keepTotal(): () => void {
+    const k = (this.kept ??= { total: this.total, n: 0 });
+    k.n++;
+    return () => { if (--k.n === 0 && this.kept === k) this.kept = null; };
   }
 
   addLeaveHook(fn: () => Promise<boolean>): () => void {
@@ -411,7 +430,7 @@ export class FormRecords {
 
   private get ro(): boolean { return this.opts.readOnly || this.opts.dataMode === 'readOnly' || this.refused; }
   /** A record that exists: not the new record, nor the blank of a source with no records and no additions. */
-  private get onRow(): boolean { return !this.isNew && (this.index < this.total || this.reloads > 0); }   // a reload counts the rows again: the record it started on is still there
+  private get onRow(): boolean { return !this.isNew && this.index < (this.kept?.total ?? this.total); }
   private get editable(): boolean {
     const i = this.info;
     return !!i && !this.ro && this.moving <= this.reloads && i.updatable && (this.isNew ? this.opts.allowAdditions : this.opts.allowEdits && this.onRow && !Number.isNaN(this.rowid));

@@ -627,6 +627,43 @@ describe('reload in the background (the refresh interval) against what the user 
     expect(await g).toBe(true); await m;
     expect(r.snapshot).toMatchObject({ index: 1, dirty: false, busy: false });
   });
+  it('a move asked while the rows are read again shows busy at once (its buttons wait: a second Next is not computed from the same record)', async () => {
+    const r = await opened(); const open = gated();
+    const m = r.reload(); await tick();
+    const g = r.next(); await tick();
+    expect(r.snapshot).toMatchObject({ busy: true, editable: false, index: 0 });
+    open(); expect(await g).toBe(true); await m;
+    expect(r.snapshot).toMatchObject({ index: 1, busy: false });
+    expect(await r.next()).toBe(true); expect(r.snapshot.index).toBe(2);
+  });
+  it('a move asked while the rows are read again tells its listeners it is busy (the view had read the snapshot of the reload)', async () => {
+    const r = await opened(); const open = gated();
+    const busy: boolean[] = []; r.subscribe(() => busy.push(r.snapshot.busy));
+    const m = r.reload(); await tick();
+    expect(r.snapshot.busy).toBe(false);
+    const g = r.newRecord(); await tick();
+    expect(busy.at(-1)).toBe(true); expect(r.edit('Nom', 'x')).toBe(false);
+    open(); expect(await g).toBe(true); await m;
+    expect(busy.at(-1)).toBe(false); expect(r.snapshot).toMatchObject({ isNew: true, busy: false, editable: true });
+  });
+  it('the count stays as it was while the rows are read again (0 would turn the navigation buttons off: a click is lost)', async () => {
+    const r = await opened(); const open = gated();
+    const totals: number[] = []; r.subscribe(() => totals.push(r.snapshot.total));
+    const m = r.reload(); await tick();
+    expect(r.snapshot.total).toBe(3);
+    api.rows.push([4, 'Arnaud', 'Lille']); api.rowids.push(4);
+    open(); await m;
+    expect(r.snapshot.total).toBe(4); expect(totals).not.toContain(0);
+  });
+  it('a record being edited: the count stays and more can be typed while the rows are counted again', async () => {
+    const r = await opened(); await r.goTo(1); r.edit('Nom', 'x'); const open = gated();
+    const totals: number[] = []; r.subscribe(() => totals.push(r.snapshot.total));
+    const m = r.reload(); await tick();
+    expect(r.snapshot).toMatchObject({ total: 3, editable: true, index: 1 });
+    expect(r.edit('Ville', 'y')).toBe(true);
+    open(); await m;
+    expect(r.snapshot).toMatchObject({ total: 3, index: 1, pending: { Nom: 'x', Ville: 'y' } }); expect(totals).not.toContain(0);
+  });
   it('a move the user asked for while the rows are read again wins', async () => {
     const r = await opened(); const open = gated();
     const m = r.reload(); await tick();

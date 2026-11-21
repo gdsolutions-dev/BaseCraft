@@ -294,7 +294,7 @@ export function FormDatasheet(p: FormDatasheetProps) {
         </div>
       )}
       <NavigationBar current={snap.status === 'ready' ? current : null} count={snap.total} canAdd={snap.canAdd}
-        filter={p.filter} onGo={p.onGo} onNew={p.onNew} onToggleFilter={p.onToggleFilter} note={readOnlyNote(x)} />
+        filter={p.filter} onGo={p.onGo} onNew={p.onNew} onToggleFilter={p.onToggleFilter} note={readOnlyNote(x)} busy={snap.busy} />
     </div>
   );
 }

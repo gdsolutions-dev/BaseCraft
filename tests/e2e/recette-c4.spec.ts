@@ -167,7 +167,8 @@ test('C4 acceptance: link PostgreSQL tables, a parameter query on the server, a 
       await a.page.getByTestId('modal-input').fill('lyon');
       await a.page.getByTestId('modal-btn-ok').click();
       await expect(count(a.page)).toHaveText('2');
-      expect([await cell(a.page, 0, 0).textContent(), await cell(a.page, 0, 1).textContent()].sort()).toEqual(['Dupont', 'Martin']);
+      // the count is known before the rows are drawn (a slow server): the cells are read until they are there
+      await expect.poll(async () => [await cell(a.page, 0, 0).textContent(), await cell(a.page, 0, 1).textContent()].sort()).toEqual(['Dupont', 'Martin']);
       const after = await stats();
       if (after === null) test.info().annotations.push({ type: 'pg_stat_statements', description: 'absent: step 2 is checked in the server log (manual validation)' });
       else {

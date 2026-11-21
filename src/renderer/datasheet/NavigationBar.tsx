@@ -18,9 +18,12 @@ interface Props {
   onToggleFilter(): void;
   /** Why records cannot be added or changed (a query that is not updatable). */
   note?: string;
+  /** A move under way (a form): the buttons' targets are counted from the record it will leave, so a press meanwhile is not
+   *  taken (aria-disabled: no greying, the focus stays). ponytail: dropped, not queued; queue relative moves if a slow server needs it. */
+  busy?: boolean;
 }
 
-export function NavigationBar({ current, count, more = false, canAdd, filter, onGo, onNew, onToggleFilter, note }: Props) {
+export function NavigationBar({ current, count, more = false, canAdd, filter, onGo, onNew, onToggleFilter, note, busy = false }: Props) {
   const { t } = useTranslation();
   const shown = current === null ? '' : String(current + 1);
   const [draft, setDraft] = useState(shown);
@@ -33,7 +36,7 @@ export function NavigationBar({ current, count, more = false, canAdd, filter, on
   };
   const btn = (key: string, Icon: LucideIcon, row: number | null, testid?: string) => (
     <button className="iconbtn" aria-label={t(`datasheet.nav.${key}`)} title={t(`datasheet.nav.${key}`)} data-testid={testid}
-      disabled={row === null || row === current} onClick={() => row !== null && onGo(row)}>
+      disabled={row === null || row === current} aria-disabled={busy || undefined} onClick={() => { if (!busy && row !== null) onGo(row); }}>
       <Icon className="ic" aria-hidden />
     </button>
   );
@@ -54,7 +57,7 @@ export function NavigationBar({ current, count, more = false, canAdd, filter, on
       </span>
       {btn('next', ChevronRight, current === null ? (last === null ? null : 0) : current + 1 < count + (more ? 1 : 0) ? current + 1 : null)}
       {btn('last', ChevronLast, last)}
-      <button className="iconbtn" aria-label={t('datasheet.nav.new')} title={t('datasheet.nav.new')} data-testid="nav-new" disabled={!canAdd} onClick={onNew}>
+      <button className="iconbtn" aria-label={t('datasheet.nav.new')} title={t('datasheet.nav.new')} data-testid="nav-new" disabled={!canAdd} aria-disabled={busy || undefined} onClick={() => { if (!busy) onNew(); }}>
         <Plus className="ic" aria-hidden />
       </button>
       <button className={`recnav-filter${filter === 'on' ? ' is-on' : ''}`} data-testid="nav-filtered" aria-pressed={filter === 'on'}

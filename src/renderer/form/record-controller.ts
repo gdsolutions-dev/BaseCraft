@@ -102,6 +102,8 @@ export class FormRecords {
   private original: SqlValue[] | null = null;   // C3 R8: `values` at the record's first edit (then the saved values), what an update expects
   private looked = Object.create(null) as Record<string, SqlValue>;   // AutoLookup's values (R4): shown over `values`, never written
   private shown: SqlValue[] | null = null;  // `values` with `looked` over them (null: none), one array until either changes
+  private reloads = 0;   // reloads placing the record again (counted in `moving` too)
+  private reloading: Promise<boolean> | null = null;   // the last of them: a move asked meanwhile waits for the count it reads
   private readonly lookups = new Lookups();   // AutoLookups by link: a save waits for them, a failure stops it
   private pending = Object.create(null) as Record<string, CellInput>; // no prototype: a field may be named __proto__
   private errors: RecordError[] = [];
@@ -166,7 +168,7 @@ export class FormRecords {
     return (this.snap ??= {
       status: this.status, error: this.error, info: this.info, total: this.total, index: this.index, isNew: this.isNew,
       rowid: this.isNew ? NaN : this.rowid, values: this.shown ?? this.values, pending: { ...this.pending }, dirty: this.dirty, errors: [...this.errors, ...this.controlErrors],
-      editable: this.editable, busy: this.moving > 0, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
+      editable: this.editable, busy: this.moving > this.reloads, canAdd: this.canAdd, canDelete: this.canDelete, writeError: this.writeError, refused: this.refused, saves: this.saves,
       sort: this.sort, filter: this.filter, refusedByEvent: this.refusedByEvent, appliedFilter: this.applied,
     });
   }
@@ -188,6 +190,7 @@ export class FormRecords {
     const before = this.opts.events?.beforeInsert;
     const first = this.isNew && !this.dirty && !opts?.silent && before;
     if (!Object.keys(this.pending).length) this.original = this.values;
+    if (this.reloads) this.nav++;   // the rows being read again in the background: this record stays as it is, its entry kept
     this.pending[f.name] = input;
     this.refusedByEvent = false;
     this.emit();
@@ -222,6 +225,7 @@ export class FormRecords {
   }
 
   async goTo(index: number): Promise<boolean> {
+    if (this.reloading) await this.reloading;
     if (!this.info || index < 0 || index > (this.canAdd ? this.total : this.total - 1)) return false;
     return this.userMove(index);
   }
@@ -231,6 +235,7 @@ export class FormRecords {
   last(): Promise<boolean> { return this.goTo(this.total - 1); }
 
   async newRecord(): Promise<boolean> {
+    if (this.reloading) await this.reloading;
     if (!this.canAdd) return false;
     return this.userMove(this.total);
   }
@@ -376,10 +381,17 @@ export class FormRecords {
     }
     // the same place may now be another record: the subforms are saved first, under the record they were typed for
     for (const h of [...this.hooks]) if (!(await h())) return false;
+    // a move under way (the user's: it began while this waited for the save) or an entry begun meanwhile: not overtaken, not wiped
+    // ponytail: that refresh is skipped, the next one (the refresh interval) reads the rows
+    if (this.moving > this.reloads || this.dirty) return false;
     const at = this.isNew ? this.total : this.index;
     const isNew = this.isNew;
     this.rebuild();
-    return this.place(isNew ? Number.MAX_SAFE_INTEGER : at, !isNew);
+    // not a move: the record stays editable while the rows are read; an entry typed meanwhile drops the placing (edit)
+    this.reloads++;
+    const run = this.place(isNew ? Number.MAX_SAFE_INTEGER : at, !isNew).finally(() => { this.reloads--; if (this.reloading === run) this.reloading = null; this.emit(); });
+    this.reloading = run;
+    return run;
   }
 
   addLeaveHook(fn: () => Promise<boolean>): () => void {
@@ -399,10 +411,10 @@ export class FormRecords {
 
   private get ro(): boolean { return this.opts.readOnly || this.opts.dataMode === 'readOnly' || this.refused; }
   /** A record that exists: not the new record, nor the blank of a source with no records and no additions. */
-  private get onRow(): boolean { return !this.isNew && this.index < this.total; }
+  private get onRow(): boolean { return !this.isNew && (this.index < this.total || this.reloads > 0); }   // a reload counts the rows again: the record it started on is still there
   private get editable(): boolean {
     const i = this.info;
-    return !!i && !this.ro && !this.moving && i.updatable && (this.isNew ? this.opts.allowAdditions : this.opts.allowEdits && this.onRow && !Number.isNaN(this.rowid));
+    return !!i && !this.ro && this.moving <= this.reloads && i.updatable && (this.isNew ? this.opts.allowAdditions : this.opts.allowEdits && this.onRow && !Number.isNaN(this.rowid));
   }
   private get canAdd(): boolean {
     return !!this.info && !this.ro && !this.declined && this.info.updatable && this.opts.allowAdditions && this.link?.values !== null;

@@ -601,6 +601,41 @@ describe('reload (back on the tab)', () => {
   });
 });
 
+describe('reload in the background (the refresh interval) against what the user does meanwhile', () => {
+  const gated = () => { const gate = deferred(); const real = api.page; api.page = async (...a: Parameters<typeof real>) => { await gate.promise; return real(...a); }; return () => { api.page = real; gate.resolve(); }; };
+  it('an entry typed while the rows are read again is taken and kept', async () => {
+    const r = await opened(); const open = gated();
+    const m = r.reload(); await tick();
+    expect(r.snapshot).toMatchObject({ busy: false, editable: true });
+    expect(r.edit('Nom', 'x')).toBe(true);
+    open(); await m;
+    expect(r.snapshot).toMatchObject({ index: 0, pending: { Nom: 'x' }, dirty: true, busy: false });
+    expect(await r.save()).toBe(true); expect(api.updates).toEqual([['Clients', 1, { Nom: 'x' }]]);
+  });
+  it('the new record: an entry typed while the rows are read again is kept', async () => {
+    const r = await opened(); await r.newRecord(); const open = gated();
+    const m = r.reload(); await tick();
+    expect(r.edit('Nom', 'x')).toBe(true);
+    open(); await m;
+    expect(r.snapshot).toMatchObject({ isNew: true, pending: { Nom: 'x' }, dirty: true });
+  });
+  it('a move the user asked for is not overtaken by a reload begun during its save', async () => {
+    const r = await opened(); r.edit('Nom', 'x'); const release = hold('update');
+    const g = r.next(); await tick();
+    const m = r.reload(); await tick();
+    release();
+    expect(await g).toBe(true); await m;
+    expect(r.snapshot).toMatchObject({ index: 1, dirty: false, busy: false });
+  });
+  it('a move the user asked for while the rows are read again wins', async () => {
+    const r = await opened(); const open = gated();
+    const m = r.reload(); await tick();
+    const g = r.next(); await tick();
+    open(); expect(await g).toBe(true); await m;
+    expect(r.snapshot).toMatchObject({ index: 1, busy: false });
+  });
+});
+
 describe('type-ahead (keys typed while a move asked by the user is under way)', () => {
   const results = (r: FormRecords) => { const got: { text: string; applied: boolean }[] = []; r.setTypeAheadHandler((x) => got.push(x)); return got; };
   it('nothing is taken outside a user move', async () => {

@@ -1,5 +1,5 @@
-import { _electron, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { copyFileSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { _electron, expect, test, type ElectronApplication, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -11,9 +11,52 @@ import { seedSales, seedSalesRelation } from '../../src/main/query/test-db';
 import { createTable } from '../../src/main/db/schema';
 import { FACTURES_FIELDS, FACTURES_REPORT, FACTURES_ROWS } from '../../src/shared/report/fixtures/factures';
 
+/** What a failed test's windows showed (the CI keeps test-results/ of a failed run): a failure seen only there is otherwise
+ *  without a trace of the screen. Each window is captured when the test closes its app, and shortly before the test's time
+ *  runs out (a test that times out never reaches its close). Written before the outcome is known, since a failed test stops
+ *  its worker at once; a test that passed has its captures removed at the next launch, or when the worker ends. */
+const captures = new Map<TestInfo, { from: number; files: string[] }>();
+function dropPassed(running?: TestInfo): void {
+  for (const [info, c] of captures) {
+    if (info === running) continue;
+    captures.delete(info);
+    if (info.status !== info.expectedStatus) continue;
+    try {
+      for (const f of c.files) rmSync(f, { force: true });
+      rmdirSync(info.outputDir); // refused while the test's own files are there
+    } catch { /* left: a stray capture of a test that passed */ }
+  }
+}
+process.on('exit', () => dropPassed());
+function captureOnFailure(app: ElectronApplication, from: number): void {
+  let info: TestInfo;
+  try { info = test.info(); } catch { return; } // not in a test
+  dropPassed(info);
+  const c = captures.get(info) ?? { from, files: [] };
+  captures.set(info, c);
+  const shoot = async (label: string) => {
+    for (const w of app.windows()) {
+      const file = info.outputPath(`${label}-${c.files.length + 1}.png`);
+      c.files.push(file);
+      await w.screenshot({ path: file, timeout: 3000 }).catch(() => { /* closed already, or not answering */ });
+    }
+  };
+  // ponytail: the test's start is taken as its first launch; a setup of more than 3 s before it and the capture comes too late
+  const timer = setInterval(() => {
+    if (captures.get(info) !== c) return clearInterval(timer); // the test is over, its app was never closed
+    if (info.timeout <= 0 || Date.now() < c.from + info.timeout - 3000) return;
+    clearInterval(timer);
+    void shoot('at-timeout');
+  }, 500);
+  timer.unref();
+  const close = app.close.bind(app);
+  app.close = async () => { clearInterval(timer); await shoot('at-close'); await close(); };
+}
+
 export async function launchApp(
   opts: { args?: string[]; env?: Record<string, string>; userDataDir?: string; untrusted?: boolean; waitOpen?: boolean; runtime?: boolean; enterMovesDown?: boolean } = {},
 ): Promise<{ app: ElectronApplication; page: Page; userDataDir: string }> {
+  const from = Date.now();
   const userDataDir = opts.userDataDir ?? mkdtempSync(join(tmpdir(), 'basecraft-'));
   // Bases seeded in the temporary folder are trusted (their active content is enabled), unless `untrusted`: nothing is then.
   const trust: Record<string, string> = {};
@@ -37,6 +80,7 @@ export async function launchApp(
     args: [opts.runtime ? 'out-runtime' : '.', ...(opts.args ?? [])], // runtime: the Runtime build, out-runtime (npm run build:runtime)
     env,
   });
+  captureOnFailure(app, from);
   // waitOpen false: a startup that quits at once (AutoExec = Quit) can close the window under these steps; that is not a failure.
   let page = undefined as unknown as Page;
   try {
